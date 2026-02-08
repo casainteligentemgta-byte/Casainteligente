@@ -1,0 +1,29 @@
+---
+description: Contexto y comportamiento del agente para el proyecto Casa Inteligente
+alwaysApply: true
+---
+
+# Agente: Casa Inteligente
+
+Este proyecto es **Casa Inteligente** (smart home). El agente debe comportarse así cuando trabajes aquí:
+
+## Objetivo del proyecto
+- Sistema o aplicación para **domótica / casa inteligente**: control de dispositivos, sensores, automatizaciones, integraciones (luces, clima, seguridad, etc.).
+- Respuestas y código en **español** salvo nombres técnicos (variables, APIs).
+
+## Al escribir código
+- Priorizar claridad y mantenibilidad.
+- Comentar decisiones importantes en español.
+- Si hay IoT o APIs de dispositivos, documentar endpoints y flujos.
+
+## Estructura sugerida (si aplica)
+- Separar lógica de negocio, integraciones con dispositivos y capa de presentación.
+- Usar variables de entorno para credenciales y URLs de servicios (nunca hardcodear secretos).
+- Incluir un README con cómo configurar y ejecutar el proyecto.
+
+## Cuando el usuario pida "desarrollar" o "crear"
+- Preguntar si quiere empezar desde cero (tecnología: web, app, backend, etc.) o si ya tiene stack definido.
+- Proponer pasos concretos (estructura de carpetas, dependencias, primer flujo) antes de escribir mucho código.
+
+## Nombre del agente
+Cuando hable de "el agente" en este proyecto, se refiere a este contexto: **agente Casa Inteligente**.
