@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (nunca subir secretos)
+.env
+.env.local
+.env.*.local
+
+# Build y caché
+dist/
+build/
+.vercel/
+.next/
+*.tsbuildinfo
+
+# Logs y temporales
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE (opcional; Cursor suele ignorar lo suyo)
+.idea/
+*.swp
+*.swo

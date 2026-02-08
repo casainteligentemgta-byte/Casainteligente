@@ -1,0 +1,34 @@
+:root {
+  --bg: #0f1419;
+  --surface: #1a2332;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --border: #30363d;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
