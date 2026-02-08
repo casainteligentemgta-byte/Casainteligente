@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { crearEmpresa } from './actions';
 
-const campos = [
+const campos: { name: string; label: string; required?: boolean }[] = [
   { name: 'nombre', label: 'Nombre', required: true },
   { name: 'cif', label: 'CIF / NIF' },
   { name: 'direccion', label: 'Dirección' },
@@ -11,7 +11,7 @@ const campos = [
   { name: 'codigo_postal', label: 'Código postal' },
   { name: 'telefono', label: 'Teléfono' },
   { name: 'email', label: 'Email' },
-] as const;
+];
 
 export default function FormNuevaEmpresa() {
   const [abierto, setAbierto] = useState(false);
@@ -64,12 +64,12 @@ export default function FormNuevaEmpresa() {
             Nueva empresa
           </h2>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {campos.map(({ name, label, required }) => (
+            {campos.map(({ name, label, required: isRequired }) => (
               <label key={name} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                 <span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>{label}</span>
                 <input
                   name={name}
-                  required={required}
+                  required={!!isRequired}
                   type={name === 'email' ? 'email' : 'text'}
                   style={{
                     padding: '0.4rem 0.5rem',
