@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -44,7 +44,7 @@ function CategoryBadge({ cat }: { cat: string | null }) {
     );
 }
 
-export default function VentasPage() {
+function VentasContent() {
     const searchParams = useSearchParams();
     const [items, setItems] = useState<LineItem[]>([]);
     const [globalMargin, setGlobalMargin] = useState(20);
@@ -817,5 +817,13 @@ export default function VentasPage() {
         }
       `}</style>
         </div>
+    );
+}
+
+export default function VentasPage() {
+    return (
+        <Suspense>
+            <VentasContent />
+        </Suspense>
     );
 }
