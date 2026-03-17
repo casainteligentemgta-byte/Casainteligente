@@ -18,36 +18,51 @@ export default function InventarioView() {
   useEffect(() => {
     const fetchInventario = async () => {
       setIsLoading(true);
-      const { data, error } = await supabase
+
+      // Primero, buscamos nuestra tabla maestra de productos reales:
+      const { data: productosBase, error: errorProd } = await supabase
+        .from('tb_productos_base')
+        .select('*');
+
+      // Segundo, buscamos las existencias guardadas (por si hubieran)
+      const { data: inventarioExistente, error: errorInv } = await supabase
         .from('tb_inventario')
-        .select('*')
-        .order('nombre', { ascending: true });
-        
-      if (!error && data) {
-        setInventario(data);
+        .select('*');
+
+      let combinedData: any[] = [];
+
+      if (!errorProd && productosBase) {
+         // Hacemos un merge: usamos el maestro como base y le pegamos el stock/costo del inventario si existe.
+         combinedData = productosBase.map(prod => {
+            const stockData = inventarioExistente?.find(inv => inv.sku === prod.modelo_sku) || {};
+            return {
+               id_producto: prod.id,
+               id_inventario: stockData.id || null, // ID para registrar compras
+               nombre: `${prod.marca} ${prod.modelo_sku} - ${prod.categoria}`,
+               sku: prod.modelo_sku,
+               stock_actual: stockData.stock_actual || 0,
+               stock_minimo: stockData.stock_minimo || 5, // Default mockeado a 5 de minimo
+               costo_promedio: stockData.costo_promedio || prod.costo_usd || 0,
+               precio_venta: prod.precio_lista || 0
+            };
+         });
       }
+
+      setInventario(combinedData.sort((a, b) => a.nombre.localeCompare(b.nombre)));
       setIsLoading(false);
     };
 
     fetchInventario();
 
+    // Podemos simplificar o quitar la subscripción si no la re-escribimos enteramente para la tabla maestra
+    // o podemos suscribirnos solo a tb_inventario
     const channel = supabase
       .channel('realtime_inventario_changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tb_inventario' },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setInventario((prev) => [...prev, payload.new as any]);
-          } else if (payload.eventType === 'UPDATE') {
-            setInventario((prev) =>
-              prev.map((item) => (item.id === payload.new.id ? payload.new : item))
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setInventario((prev) =>
-              prev.filter((item) => item.id !== payload.old.id)
-            );
-          }
+           fetchInventario(); // For simplicity due to the join, just refetch
         }
       )
       .subscribe();
