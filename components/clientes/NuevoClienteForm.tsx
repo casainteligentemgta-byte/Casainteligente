@@ -233,7 +233,7 @@ function MapWidget({
                             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
                             <circle cx="12" cy="10" r="3" />
                         </svg>
-                        <p style={{ fontSize: '11px', color: 'var(--label-tertiary)', fontWeight: 600, textTransform: 'uppercase', tracking: '0.05em' }}>
+                        <p style={{ fontSize: '11px', color: 'var(--label-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Ubicación no establecida
                         </p>
                     </div>
