@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { Search, Plus, LoaderCircle, AlertCircle } from 'lucide-react';
+import { Search, Plus, Loader2, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function InventarioView() {
@@ -94,7 +94,7 @@ export default function InventarioView() {
         <div>
           <h1 className="text-2xl font-bold dark:text-white flex items-center gap-2">
             Inventario en Tiempo Real
-            {isLoading && <LoaderCircle className="w-5 h-5 animate-spin text-blue-500" />}
+            {isLoading && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Gestiona existencias de "Casa Inteligente" y registra compras.</p>
         </div>
@@ -241,7 +241,7 @@ export default function InventarioView() {
                   disabled={savingCompra}
                   className="flex-1 px-4 py-2.5 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/30 transition-all disabled:opacity-50 flex justify-center items-center gap-2"
                 >
-                  {savingCompra ? <LoaderCircle className="w-5 h-5 animate-spin" /> : 'Procesar Compra'}
+                  {savingCompra ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Procesar Compra'}
                 </button>
               </div>
             </form>
