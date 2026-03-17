@@ -1,54 +1,39 @@
-# Casa Inteligente
+# Casa Inteligente APP - Security & Domotics Management
 
-Proyecto para sistema de **casa inteligente** (domótica): control de dispositivos, sensores y automatizaciones.
+## Setup
 
-## Stack
+1.  **Install Dependencies**: (Done)
+    `npm install`
 
-- **Next.js 14** (App Router) + TypeScript
-- **Supabase** (base de datos, auth, APIs)
-- Deploy en **Vercel**; código en **GitHub**
+2.  **Environment Variables**:
+    Copy `.env.example` to `.env.local` and fill in your Supabase details.
+    
+    ```bash
+    cp .env.example .env.local
+    ```
 
-## Cómo ejecutar
+    Required variables:
+    - `NEXT_PUBLIC_SUPABASE_URL`
+    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-1. Instalar dependencias:
-   ```bash
-   npm install
-   ```
-2. Copiar variables de entorno:
-   ```bash
-   cp .env.example .env.local
-   ```
-   Rellena en `.env.local` los valores de tu proyecto Supabase (Project URL y anon key).
-3. Arrancar en desarrollo:
-   ```bash
-   npm run dev
-   ```
-   Abre [http://localhost:3000](http://localhost:3000).
+3.  **Run Development Server**:
+    
+    ```bash
+    npm run dev
+    ```
 
-Para producción: `npm run build` y `npm start`.
+    Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-## Estado
+## Features
 
-Estructura Next.js lista. El agente de Cursor está configurado en `.cursor/rules/`.
+- **Projects Dashboard**: Kanban board with drag-and-drop project management.
+- **Budget ROI**: Real-time margin calculation on project cards.
+- **Supabase Integration**: Server Actions for data fetching and updates.
+- **UI**: Built with Tailwind CSS and Shadcn/UI components.
 
-## Ver la app en Vercel (GitHub + Supabase)
+## Structure
 
-Para que la página se vea en Vercel con GitHub y Supabase configurados, sigue **en este orden** la guía (ahí está el paso a paso):
-
-- **[docs/INTERCONEXION-CURSOR-VERCEL-GITHUB-SUPABASE.md](docs/INTERCONEXION-CURSOR-VERCEL-GITHUB-SUPABASE.md)** — sección *"Para ver la página en Vercel (orden recomendado)"*.
-
-Importante: añade las variables **NEXT_PUBLIC_SUPABASE_URL** y **NEXT_PUBLIC_SUPABASE_ANON_KEY** en Vercel **antes** del primer Deploy, para que el build no falle.
-
-## Estructura relevante
-
-- `app/` — App Router: `layout.tsx`, `page.tsx`, `dispositivos/page.tsx`
-- `lib/supabase/` — Cliente Supabase para navegador (`client.ts`) y servidor (`server.ts`)
-- Variables de entorno en `.env.local` (ver `.env.example`)
-
-## Próximos pasos
-
-1. **Crear la tabla en Supabase**: en el SQL Editor de tu proyecto, ejecuta el contenido de `supabase/migrations/001_dispositivos.sql`. La página **Dispositivos** ya está conectada y listará los datos.
-2. Añadir autenticación (Supabase Auth) si hace falta.
-3. Habitaciones, automatizaciones o protocolos (Wi‑Fi, MQTT, etc.).
-
-Abre este proyecto en Cursor y pide al agente que te guíe con el desarrollo.
+- `/app`: Next.js App Router pages and API actions.
+- `/components`: UI components (Shadcn) and Dashboard features.
+- `/lib`: Utilities and Supabase clients.
+- `/types`: TypeScript interfaces.

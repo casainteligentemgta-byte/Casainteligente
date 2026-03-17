@@ -1,34 +1,332 @@
-:root {
-  --bg: #0f1419;
-  --surface: #1a2332;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --accent: #58a6ff;
-  --success: #3fb950;
-  --border: #30363d;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@layer base {
+  :root {
+    /* Apple iOS Color System */
+    --ios-blue: #007AFF;
+    --ios-blue-dark: #0062CC;
+    --ios-blue-light: #1C3A5E;
+    --ios-green: #34C759;
+    --ios-orange: #FF9500;
+    --ios-red: #FF3B30;
+    --ios-purple: #AF52DE;
+    --ios-teal: #5AC8FA;
+    --ios-indigo: #5856D6;
+
+    /* Backgrounds — DARK MODE */
+    --bg-primary: #000000;
+    --bg-secondary: #1C1C1E;
+    --bg-tertiary: #2C2C2E;
+    --bg-grouped: #1C1C1E;
+
+    /* Labels — DARK MODE */
+    --label-primary: #FFFFFF;
+    --label-secondary: #EBEBF5CC;
+    --label-tertiary: #EBEBF560;
+    --label-quaternary: #EBEBF530;
+
+    /* Separators */
+    --separator: rgba(84, 84, 88, 0.65);
+    --separator-opaque: #38383A;
+
+    /* Glass — DARK */
+    --glass-bg: rgba(28, 28, 30, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.40);
+
+    /* Radius */
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
+    --radius-full: 9999px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.4);
+
+    /* Tailwind compat */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 211 100% 50%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 0 0% 17%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 17%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 17%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 0 0% 22%;
+    --input: 0 0% 22%;
+    --ring: 211 100% 50%;
+    --radius: 0.875rem;
+  }
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--label-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+    letter-spacing: -0.01em;
+  }
 }
 
-html,
-body {
-  max-width: 100vw;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
-}
+@layer utilities {
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
+  /* Glass morphism */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
 
-a:hover {
-  text-decoration: underline;
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+  }
+
+  /* iOS card */
+  .ios-card {
+    background: #FFFFFF;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  .ios-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-1px);
+  }
+
+  .ios-card:active {
+    transform: scale(0.98);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* iOS Button */
+  .ios-btn-primary {
+    background: var(--ios-blue);
+    color: white;
+    border-radius: var(--radius-full);
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+    padding: 16px 32px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow: 0 4px 16px rgba(0, 122, 255, 0.35);
+  }
+
+  .ios-btn-primary:hover {
+    background: var(--ios-blue-dark);
+    box-shadow: 0 6px 24px rgba(0, 122, 255, 0.45);
+    transform: translateY(-1px);
+  }
+
+  .ios-btn-primary:active {
+    transform: scale(0.97);
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+  }
+
+  /* iOS Input */
+  .ios-input {
+    background: var(--bg-secondary);
+    border: 1.5px solid transparent;
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    font-size: 16px;
+    color: var(--label-primary);
+    transition: all 0.2s ease;
+    width: 100%;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .ios-input:focus {
+    background: #FFFFFF;
+    border-color: var(--ios-blue);
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+  }
+
+  .ios-input::placeholder {
+    color: var(--label-tertiary);
+  }
+
+  /* Segment Control */
+  .segment-control {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 3px;
+    display: flex;
+    gap: 2px;
+  }
+
+  .segment-option {
+    flex: 1;
+    padding: 8px 16px;
+    border-radius: calc(var(--radius-md) - 2px);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--label-secondary);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    text-align: center;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+  }
+
+  .segment-option.active {
+    background: #FFFFFF;
+    color: var(--label-primary);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10), 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Status badges */
+  .badge-active {
+    background: rgba(52, 199, 89, 0.12);
+    color: #1A7F3C;
+    border: 1px solid rgba(52, 199, 89, 0.25);
+  }
+
+  .badge-inactive {
+    background: rgba(255, 59, 48, 0.10);
+    color: #C0392B;
+    border: 1px solid rgba(255, 59, 48, 0.20);
+  }
+
+  .badge-pending {
+    background: rgba(255, 149, 0, 0.12);
+    color: #B8620A;
+    border: 1px solid rgba(255, 149, 0, 0.25);
+  }
+
+  /* RIF type badges */
+  .rif-v {
+    background: rgba(0, 122, 255, 0.12);
+    color: var(--ios-blue);
+    border: 1.5px solid rgba(0, 122, 255, 0.25);
+  }
+
+  .rif-j {
+    background: rgba(255, 149, 0, 0.12);
+    color: #B8620A;
+    border: 1.5px solid rgba(255, 149, 0, 0.25);
+  }
+
+  .rif-e {
+    background: rgba(52, 199, 89, 0.12);
+    color: #1A7F3C;
+    border: 1.5px solid rgba(52, 199, 89, 0.25);
+  }
+
+  /* Animations */
+  .fade-in {
+    animation: fadeIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  .slide-up {
+    animation: slideUp 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  .stagger-1 {
+    animation-delay: 0.05s;
+    opacity: 0;
+  }
+
+  .stagger-2 {
+    animation-delay: 0.10s;
+    opacity: 0;
+  }
+
+  .stagger-3 {
+    animation-delay: 0.15s;
+    opacity: 0;
+  }
+
+  .stagger-4 {
+    animation-delay: 0.20s;
+    opacity: 0;
+  }
+
+  .stagger-5 {
+    animation-delay: 0.25s;
+    opacity: 0;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 0px;
+  }
+
+  /* Safe area */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
 }
