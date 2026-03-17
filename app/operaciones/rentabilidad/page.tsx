@@ -94,7 +94,7 @@ export default function AnálisisRentabilidad() {
               <Tooltip 
                 cursor={{fill: '#f1f5f9', opacity: 0.1}}
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                formatter={(value: number) => [formatCurrency(value), "Utilidad"]}
+                formatter={(value: any) => [formatCurrency(value as number), "Utilidad"]}
               />
               <Bar dataKey="Utilidad" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50} />
             </BarChart>
