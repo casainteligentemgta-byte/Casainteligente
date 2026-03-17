@@ -1,47 +1,55 @@
-'use client';
-
-import { useState, useMemo } from 'react';
-import { Search, Filter, Plus, User, Building2, ChevronRight, Crown } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, Filter, Plus, User, Building2, ChevronRight, Crown, Loader2 } from 'lucide-react';
 import ClienteDrawer from '@/components/clientes/ClienteDrawer';
-
-const CLIENTES_MOCK = [
-  { 
-    id: 'c1', 
-    nombre: 'Constructora Atlas S.A.', 
-    tipo: 'Empresa', 
-    email: 'compras@atlas.com', 
-    telefono: '+525512345678',
-    direccion: 'Av. Reforma 222, CDMX',
-    proyectos: [
-      { id: 'p1', nombre: 'Torre Central - Domótica', estado: 'Ejecucion', costo: 850000 },
-      { id: 'p2', nombre: 'Oficinas Atlas - Redes', estado: 'Finalizado', costo: 600000 },
-    ]
-  },
-  { 
-    id: 'c2', 
-    nombre: 'Roberto Medina', 
-    tipo: 'Residencial', 
-    email: 'roberto.m@email.com', 
-    telefono: '+525598765432',
-    direccion: 'Bosques de las Lomas, Casa 45',
-    proyectos: [
-      { id: 'p3', nombre: 'Casa Medina - CCTV y Audio', estado: 'Cotizacion', costo: 125000 },
-    ]
-  },
-];
+import { createClient } from '@/lib/supabase/client';
 
 const UMBRAL_PREMIUM = 500000;
 
 export default function ClientesCRMView() {
-  const [clientes, setClientes] = useState(CLIENTES_MOCK);
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('Todos');
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any | null>(null);
 
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadClientes() {
+      setIsLoading(true);
+      const { data: cData, error: cError } = await supabase
+        .from('tb_clientes')
+        .select(`
+          *,
+          proyectos:tb_proyectos(*)
+        `);
+      
+      if (!cError && cData) {
+        const formated = cData.map(c => ({
+           id: c.id,
+           nombre: c.nombre,
+           tipo: c.tipo,
+           email: c.email || 'N/A',
+           telefono: c.telefono || 'N/A',
+           direccion: c.direccion || 'N/A',
+           proyectos: (c.proyectos || []).map((p: any) => ({
+             id: p.id,
+             nombre: p.nombre || 'Proyecto S/N',
+             estado: p.estado_obra || 'Cotizacion',
+             costo: p.total_venta || 0
+           }))
+        }));
+        setClientes(formated);
+      }
+      setIsLoading(false);
+    }
+    loadClientes();
+  }, [supabase]);
+
   const clientesFiltrados = useMemo(() => {
     return clientes.filter(c => {
-      const matchSearch = c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          c.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchSearch = (c.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (c.email || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchTipo = filtroTipo === 'Todos' || c.tipo === filtroTipo;
       return matchSearch && matchTipo;
     });
@@ -51,8 +59,11 @@ export default function ClientesCRMView() {
     <div className="space-y-6 animate-fade-in md:p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold dark:text-white">Directorio de Clientes</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Gestiona relaciones, proyectos e inversiones.</p>
+          <h1 className="text-3xl font-bold dark:text-white flex items-center gap-3">
+            Directorio de Clientes
+            {isLoading && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Gestiona relaciones, proyectos e inversiones de la BD real.</p>
         </div>
         <button className="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-5 py-2.5 rounded-xl font-semibold shadow-md transition-all flex items-center gap-2">
           <Plus className="w-5 h-5" />
@@ -85,11 +96,18 @@ export default function ClientesCRMView() {
         </div>
       </div>
 
+      {!isLoading && clientesFiltrados.length === 0 && (
+         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl text-center shadow-sm">
+           <h3 className="text-xl font-bold dark:text-white mb-2">No tienes clientes registrados</h3>
+           <p className="text-slate-500 dark:text-slate-400">Migra tu base de datos de SharePoint o añade uno nuevo.</p>
+         </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4">
         {clientesFiltrados.map((cliente) => {
           const dineroGenerado = cliente.proyectos
-             .filter(p => p.estado === 'Finalizado')
-             .reduce((total, p) => total + p.costo, 0);
+             .filter((p: any) => p.estado === 'Finalizado')
+             .reduce((total: number, p: any) => total + p.costo, 0);
           
           const isPremium = dineroGenerado >= UMBRAL_PREMIUM;
 
@@ -102,7 +120,7 @@ export default function ClientesCRMView() {
               `}
             >
               <div className="flex items-center gap-5">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center border-4 relative
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center border-4 relative shrink-0
                   ${isPremium ? 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30' : 
                    cliente.tipo === 'Empresa' ? 'bg-indigo-100 text-indigo-600 border-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-900/20' : 
                                                 'bg-emerald-100 text-emerald-600 border-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/20'}
@@ -115,16 +133,16 @@ export default function ClientesCRMView() {
                   )}
                 </div>
                 
-                <div>
-                  <h3 className={`text-xl font-bold transition-colors flex items-center gap-2
+                <div className="min-w-0">
+                  <h3 className={`text-xl font-bold transition-colors flex flex-wrap items-center gap-2 truncate
                     ${isPremium ? 'text-amber-700 dark:text-amber-400 group-hover:text-amber-600' : 'text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400'}
                   `}>
-                    {cliente.nombre}
+                    <span className="truncate max-w-[200px] sm:max-w-none">{cliente.nombre}</span>
                     {isPremium && <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-xs px-2 py-0.5 rounded-full font-bold tracking-wide uppercase">Premium</span>}
                   </h3>
                   <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
                     <span className="font-medium bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">{cliente.tipo}</span>
-                    <span>{cliente.email}</span>
+                    <span className="truncate hidden sm:block">{cliente.email}</span>
                   </div>
                 </div>
               </div>
