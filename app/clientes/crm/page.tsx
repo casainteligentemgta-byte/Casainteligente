@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, Plus, User, Building2, ChevronRight, Crown, Loader2 } from 'lucide-react';
 import ClienteDrawer from '@/components/clientes/ClienteDrawer';
