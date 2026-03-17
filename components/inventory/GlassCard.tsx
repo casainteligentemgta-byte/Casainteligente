@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { ReactNode } from 'react';
 
 interface GlassCardProps {
-    children: ReactNode;
+    children?: ReactNode;
     className?: string;
     delay?: number;
 }
