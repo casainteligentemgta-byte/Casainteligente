@@ -477,10 +477,6 @@ export default function PreviewPage() {
                                 <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginBottom: '4px' }}>
                                     NOTAS / CONDICIONES DEL PRESUPUESTO
                                 </p>
-                                <p className="no-print" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.45, marginBottom: '8px', maxWidth: '420px' }}>
-                                    Puedes escribirlas primero en <strong>Ventas</strong> (bloque &quot;Notas / Condiciones&quot;) antes de abrir la vista previa, o editarlas aquí.
-                                    {!isDemo && ' Se guardan en este navegador al escribir (localStorage).'}
-                                </p>
                                 <textarea
                                     className="preview-notas-field"
                                     value={data.notas ?? ''}
