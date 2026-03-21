@@ -40,17 +40,25 @@ export default function DashboardPage() {
                             Dashboard
                         </h1>
                     </div>
-                    <div
-                        className="flex items-center justify-center rounded-full font-bold text-white"
-                        style={{
-                            width: '44px', height: '44px',
-                            background: 'linear-gradient(135deg, #007AFF, #5856D6)',
-                            fontSize: '16px',
-                            boxShadow: '0 4px 12px rgba(0,122,255,0.35)',
-                            flexShrink: 0,
-                        }}
-                    >
-                        CI
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href="/nexus"
+                            className="rounded-full px-3 py-1.5 text-xs font-semibold text-[#00F2FE] ring-1 ring-[rgba(0,242,254,0.35)] hover:bg-[rgba(0,242,254,0.1)]"
+                        >
+                            Nexus
+                        </Link>
+                        <div
+                            className="flex items-center justify-center rounded-full font-bold text-white"
+                            style={{
+                                width: '44px', height: '44px',
+                                background: 'linear-gradient(135deg, #007AFF, #5856D6)',
+                                fontSize: '16px',
+                                boxShadow: '0 4px 12px rgba(0,122,255,0.35)',
+                                flexShrink: 0,
+                            }}
+                        >
+                            CI
+                        </div>
                     </div>
                 </div>
             </div>

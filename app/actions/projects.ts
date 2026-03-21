@@ -50,7 +50,27 @@ export async function getProjects(): Promise<{ data: Project[] | null, error: an
             return { data: MOCK_PROJECTS, error: null }
         }
 
-        return { data: data as Project[], error: null }
+        // budgets usa subtotal/total_cost; la UI (ProjectCard) espera sale_price/cost_price
+        const mapped = (data ?? []).map((row: Record<string, unknown>) => {
+            const b = row.budget as Record<string, unknown> | null | undefined
+            const sale = (row.sale_price as number | undefined) ?? (b?.subtotal as number | undefined) ?? (b?.sale_price as number | undefined) ?? 0
+            const cost = (row.cost_price as number | undefined) ?? (b?.total_cost as number | undefined) ?? (b?.cost_price as number | undefined) ?? 0
+            const budgetId = (row.budget_id as string | undefined) ?? (b?.id as string | undefined)
+            return {
+                ...row,
+                budget: b
+                    ? {
+                        id: String(b.id ?? budgetId ?? ''),
+                        sale_price: Number(sale),
+                        cost_price: Number(cost),
+                    }
+                    : sale > 0 || cost > 0
+                      ? { id: budgetId ?? '', sale_price: Number(sale), cost_price: Number(cost) }
+                      : undefined,
+            } as Project
+        })
+
+        return { data: mapped, error: null }
     } catch (e) {
         return { data: MOCK_PROJECTS, error: null }
     }

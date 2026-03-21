@@ -3,7 +3,7 @@
 --
 -- Ejecuta este script en Supabase SQL Editor una sola vez.
 -- Requisitos previos:
--- - 002_empresas.sql
+-- - 008_empresas.sql (o empresas ya creada manualmente)
 -- - 003_productos.sql
 -- - 005_personas.sql
 --

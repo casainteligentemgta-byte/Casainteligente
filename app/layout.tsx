@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import IOSNavBar from "@/components/IOSNavBar";
+import AppChrome from "@/components/AppChrome";
 
 const inter = Inter({
     subsets: ["latin"],
     variable: "--font-sans",
+    display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+    subsets: ["latin"],
+    variable: "--font-nexus-mono",
     display: "swap",
 });
 
@@ -21,12 +27,12 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="es" suppressHydrationWarning>
-            <body className={inter.variable} style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif' }}>
+            <body
+                className={`${inter.variable} ${jetbrainsMono.variable}`}
+                style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif' }}
+            >
                 <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
-                    <main className="pb-24">
-                        {children}
-                    </main>
-                    <IOSNavBar />
+                    <AppChrome>{children}</AppChrome>
                 </div>
             </body>
         </html>

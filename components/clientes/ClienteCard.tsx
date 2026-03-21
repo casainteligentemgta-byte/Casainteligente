@@ -19,7 +19,8 @@ interface Cliente {
     movil?: string;
     direccion?: string;
     initials: string;
-    color: string;
+    /** Hex; si falta, la tarjeta usa #007AFF */
+    color?: string;
     imagen?: string;
 }
 
@@ -67,8 +68,9 @@ function AvatarCircle({ initials, color, categoria, imagen }: { initials: string
 
 // ── Mini tarjeta modal ──────────────────────────────────────────────
 function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
-    const status = statusConfig[cliente.status];
-    const tipo = tipoConfig[cliente.tipo];
+    const status = statusConfig[cliente.status] ?? statusConfig.activo;
+    const tipo = tipoConfig[cliente.tipo] ?? tipoConfig.V;
+    const accent = cliente.color ?? '#007AFF';
     return (
         <div
             onClick={onClose}
@@ -101,7 +103,7 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
 
                 {/* Header */}
                 <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <AvatarCircle initials={cliente.initials} color={cliente.color} categoria={cliente.categoria} imagen={cliente.imagen} />
+                    <AvatarCircle initials={cliente.initials} color={accent} categoria={cliente.categoria} imagen={cliente.imagen} />
                     <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: tipo.bg, color: tipo.text, border: `1px solid ${tipo.border}` }}>
@@ -175,8 +177,9 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
 
 // ── Main Card ──────────────────────────────────────────────────────
 export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; onDelete?: (id: string) => void }) {
-    const status = statusConfig[cliente.status];
-    const tipo = tipoConfig[cliente.tipo];
+    const status = statusConfig[cliente.status] ?? statusConfig.activo;
+    const tipo = tipoConfig[cliente.tipo] ?? tipoConfig.V;
+    const accent = cliente.color ?? '#007AFF';
     const [showModal, setShowModal] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -214,11 +217,11 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
             >
                 {/* Top accent line */}
                 <div className="absolute top-0 left-0 right-0 h-px"
-                    style={{ background: `linear-gradient(90deg, transparent, ${cliente.color}40, transparent)` }} />
+                    style={{ background: `linear-gradient(90deg, transparent, ${accent}40, transparent)` }} />
 
                 {/* Main info row */}
                 <div className="flex items-center gap-4 px-4 pt-4 pb-3">
-                    <AvatarCircle initials={cliente.initials} color={cliente.color} categoria={cliente.categoria} imagen={cliente.imagen} />
+                    <AvatarCircle initials={cliente.initials} color={accent} categoria={cliente.categoria} imagen={cliente.imagen} />
 
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
@@ -273,7 +276,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
 
                     {/* Presupuesto — botón destacado full width */}
                     <Link
-                        href={`/ventas?cliente=${encodeURIComponent(cliente.nombre)}&rif=${encodeURIComponent(cliente.rif)}`}
+                        href={`/ventas?customerId=${encodeURIComponent(cliente.id)}`}
                         style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                             width: '100%', padding: '11px 0',

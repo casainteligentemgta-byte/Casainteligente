@@ -7,32 +7,80 @@ import { createClient } from '@/lib/supabase/client';
 
 const FILTERS = ['Todos', 'Personas', 'Empresas', 'Activos', 'Pendientes', 'Inactivos'];
 
+type ClienteTipoCard = 'V' | 'J' | 'E';
+type ClienteStatusCard = 'activo' | 'inactivo' | 'pendiente';
+
+function colorPorId(id: string): string {
+    const paleta = ['#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#FF9500', '#00C7BE', '#34C759'];
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h += id.charCodeAt(i);
+    return paleta[h % paleta.length];
+}
+
+/** La tabla `customers.tipo` puede ser "empresa" o letra RIF; ClienteCard espera V | J | E */
+function normalizarTipo(tipoRaw: string | null | undefined, categoria: 'personal' | 'empresa'): ClienteTipoCard {
+    const t = (tipoRaw || '').trim().toUpperCase();
+    if (t === 'V' || t === 'J' || t === 'E') return t;
+    if (categoria === 'empresa') return 'J';
+    return 'V';
+}
+
+function normalizarStatus(s: string | null | undefined): ClienteStatusCard {
+    const v = (s || 'activo').toLowerCase();
+    if (v === 'inactivo' || v === 'pendiente' || v === 'activo') return v;
+    return 'activo';
+}
+
 export default function ClientesPage() {
     const [search, setSearch] = useState('');
     const [filtro, setFiltro] = useState('Todos');
     const [lista, setLista] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     const fetchClientes = useCallback(async () => {
         setLoading(true);
+        setFetchError(null);
         const supabase = createClient();
         const { data, error } = await supabase
             .from('customers')
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (!error && data) {
-            // Mapear campos de la DB a los que espera el componente
-            const mapped = data.map(c => ({
-                ...c,
-                // Si falta initials, generarlo
-                initials: c.nombre.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
-                categoria: (c.tipo || '').toLowerCase() === 'empresa' ? 'empresa' : 'personal',
-                status: c.status || 'activo',
-                telefono: c.movil || '',
-                direccion: c.direccion || '',
-                imagen: c.imagen || null
-            }));
+        if (error) {
+            setFetchError(error.message);
+            setLista([]);
+            setLoading(false);
+            return;
+        }
+
+        if (data) {
+            const mapped = data.map((c: Record<string, unknown>) => {
+                const nombreSafe = (typeof c.nombre === 'string' && c.nombre.trim()) ? c.nombre.trim() : 'Sin nombre';
+                const partes = nombreSafe.split(/\s+/).filter(Boolean);
+                const initials =
+                    partes.map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??';
+                const tipoStr = typeof c.tipo === 'string' ? c.tipo : '';
+                const categoria = tipoStr.toLowerCase() === 'empresa' ? 'empresa' : 'personal';
+                const tipoLetra = normalizarTipo(tipoStr, categoria);
+                const idStr = String(c.id ?? '');
+
+                return {
+                    ...c,
+                    nombre: nombreSafe,
+                    rif: typeof c.rif === 'string' ? c.rif : '',
+                    email: typeof c.email === 'string' ? c.email : '',
+                    tipo: tipoLetra,
+                    categoria,
+                    status: normalizarStatus(typeof c.status === 'string' ? c.status : undefined),
+                    telefono: typeof c.movil === 'string' ? c.movil : '',
+                    movil: typeof c.movil === 'string' ? c.movil : undefined,
+                    direccion: typeof c.direccion === 'string' ? c.direccion : '',
+                    imagen: c.imagen || null,
+                    initials,
+                    color: colorPorId(idStr),
+                };
+            });
             setLista(mapped);
         }
         setLoading(false);
@@ -43,11 +91,12 @@ export default function ClientesPage() {
     }, [fetchClientes]);
 
     const filtered = lista.filter(c => {
+        const nombreLc = (c.nombre || '').toLowerCase();
         const matchSearch = search.trim() === '' ||
-            c.nombre.toLowerCase().includes(search.toLowerCase()) ||
-            c.rif?.toLowerCase().includes(search.toLowerCase()) ||
-            (c.email?.toLowerCase().includes(search.toLowerCase())) ||
-            (c.movil?.includes(search));
+            nombreLc.includes(search.toLowerCase()) ||
+            (c.rif && String(c.rif).toLowerCase().includes(search.toLowerCase())) ||
+            (c.email && String(c.email).toLowerCase().includes(search.toLowerCase())) ||
+            (c.movil && String(c.movil).includes(search));
 
         const matchFiltro =
             filtro === 'Todos' ? true :
@@ -72,6 +121,42 @@ export default function ClientesPage() {
             alert('Error al borrar: ' + error.message);
         }
     };
+
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '48px 20px', paddingBottom: '100px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', fontSize: '15px' }}>Cargando clientes…</p>
+            </div>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '24px 20px 100px' }}>
+                <div style={{
+                    maxWidth: '480px', margin: '0 auto', padding: '20px', borderRadius: '16px',
+                    background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.35)', color: 'white',
+                }}>
+                    <p style={{ fontWeight: 700, marginBottom: '8px' }}>No se pudo cargar clientes</p>
+                    <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '12px' }}>{fetchError}</p>
+                    <p style={{ fontSize: '13px', opacity: 0.75, lineHeight: 1.5 }}>
+                        Revisa que exista la tabla <code style={{ color: '#FF9500' }}>customers</code> en Supabase y que{' '}
+                        <code style={{ color: '#FF9500' }}>.env.local</code> tenga URL y anon key correctos.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => fetchClientes()}
+                        style={{
+                            marginTop: '16px', padding: '10px 18px', borderRadius: '12px', border: 'none',
+                            background: '#007AFF', color: 'white', fontWeight: 600, cursor: 'pointer',
+                        }}
+                    >
+                        Reintentar
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '100px' }}>

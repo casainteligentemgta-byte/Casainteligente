@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -12,6 +12,16 @@ interface LineItem {
     qty: number;
     unitPrice: number;
     discount: number;
+}
+
+/** Fila mínima de `customers` para el selector de presupuesto */
+interface CustomerPickerRow {
+    id: string;
+    nombre: string | null;
+    rif: string | null;
+    movil: string | null;
+    email: string | null;
+    direccion: string | null;
 }
 
 const MARGIN_PRESETS = [0, 10, 15, 20, 25, 30];
@@ -52,24 +62,91 @@ function VentasContent() {
     const [clientRif, setClientRif] = useState('');
     const [clientPhone, setClientPhone] = useState('');
     const [clientEmail, setClientEmail] = useState('');
+    const [clientDireccion, setClientDireccion] = useState('');
     const [customerId, setCustomerId] = useState<string | null>(null);
+    const [customers, setCustomers] = useState<CustomerPickerRow[]>([]);
+    const [customersLoading, setCustomersLoading] = useState(true);
+    const [customerQuery, setCustomerQuery] = useState('');
+    const legacyParamsResolved = useRef(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    const applyCustomer = useCallback((c: CustomerPickerRow) => {
+        setCustomerId(c.id);
+        setClientName((c.nombre || '').trim() || 'Sin nombre');
+        setClientRif((c.rif || '').trim());
+        setClientPhone((c.movil || '').trim());
+        setClientEmail((c.email || '').trim());
+        setClientDireccion((c.direccion || '').trim());
+    }, []);
+
+    const clearCustomer = useCallback(() => {
+        setCustomerId(null);
+        setClientName('');
+        setClientRif('');
+        setClientPhone('');
+        setClientEmail('');
+        setClientDireccion('');
+        setCustomerQuery('');
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        const supabase = createClient();
+        setCustomersLoading(true);
+        supabase
+            .from('customers')
+            .select('id,nombre,rif,movil,email,direccion')
+            .order('nombre', { ascending: true, nullsFirst: false })
+            .then(({ data, error }) => {
+                if (cancelled) return;
+                setCustomersLoading(false);
+                if (!error && data) setCustomers(data as CustomerPickerRow[]);
+                else setCustomers([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    /** Enlaces antiguos ?cliente=&rif= → fila en `customers` */
+    useEffect(() => {
+        if (legacyParamsResolved.current) return;
+        const budgetId = searchParams.get('id');
+        const cId = searchParams.get('customerId');
+        if (budgetId || cId) {
+            legacyParamsResolved.current = true;
+            return;
+        }
+        if (customers.length === 0) return;
+
+        const nombre = searchParams.get('cliente');
+        const rif = searchParams.get('rif');
+        if (!nombre?.trim() && !rif?.trim()) {
+            legacyParamsResolved.current = true;
+            return;
+        }
+
+        const norm = (s: string | null) => (s || '').trim().toLowerCase();
+        const matched =
+            (rif?.trim() && customers.find((c) => norm(c.rif) === norm(rif))) ||
+            (nombre?.trim() && customers.find((c) => norm(c.nombre) === norm(nombre))) ||
+            null;
+
+        if (matched) applyCustomer(matched);
+        legacyParamsResolved.current = true;
+    }, [customers, searchParams, applyCustomer]);
+
     // Pre-cargar datos desde query params
     useEffect(() => {
         const id = searchParams.get('id');
         const cId = searchParams.get('customerId');
-        const nombre = searchParams.get('cliente');
-        const rif = searchParams.get('rif');
 
         if (id) setBudgetId(id);
         if (cId) setCustomerId(cId);
-        if (nombre) setClientName(nombre);
-        if (rif) setClientRif(rif);
 
         const supabase = createClient();
 
@@ -87,14 +164,25 @@ function VentasContent() {
                         setNotes(data.notes || '');
                         setShowZelle(data.show_zelle !== false); // Default to true if undefined
 
-                        // Si hay customer_id, buscar sus datos completos si no los tenemos
                         if (data.customer_id) {
-                            supabase.from('customers').select('movil, email').eq('id', data.customer_id).single().then(({ data: c }) => {
-                                if (c) {
-                                    setClientPhone(c.movil || '');
-                                    setClientEmail(c.email || '');
-                                }
-                            });
+                            supabase
+                                .from('customers')
+                                .select('movil, email, direccion, nombre, rif')
+                                .eq('id', data.customer_id)
+                                .single()
+                                .then(({ data: c }) => {
+                                    if (c) {
+                                        setClientPhone((c.movil as string) || '');
+                                        setClientEmail((c.email as string) || '');
+                                        setClientDireccion((c.direccion as string) || '');
+                                        if (c.nombre) setClientName(String(c.nombre));
+                                        if (c.rif) setClientRif(String(c.rif));
+                                    }
+                                });
+                        } else {
+                            setClientPhone('');
+                            setClientEmail('');
+                            setClientDireccion('');
                         }
 
                         // Mapear items de la DB al estado local
@@ -112,14 +200,14 @@ function VentasContent() {
 
         // Si tenemos ID de cliente pero no datos cargados, buscarlos
         if (cId) {
-            supabase.from('customers').select('*').eq('id', cId).single().then(({ data }) => {
-                if (data) {
-                    setClientName(data.nombre || '');
-                    setClientRif(data.rif || '');
-                    setClientPhone(data.movil || '');
-                    setClientEmail(data.email || '');
-                }
-            });
+            supabase
+                .from('customers')
+                .select('id,nombre,rif,movil,email,direccion')
+                .eq('id', cId)
+                .single()
+                .then(({ data }) => {
+                    if (data) applyCustomer(data as CustomerPickerRow);
+                });
         }
 
         const prodIds = searchParams.get('productos');
@@ -148,10 +236,23 @@ function VentasContent() {
                     });
             }
         }
-    }, [searchParams, globalMargin]);
+    }, [searchParams, globalMargin, applyCustomer]);
+
+    const filteredCustomers = useMemo(() => {
+        const q = customerQuery.trim().toLowerCase();
+        if (!q) return customers;
+        return customers.filter(
+            (c) =>
+                (c.nombre || '').toLowerCase().includes(q) ||
+                (c.rif || '').toLowerCase().includes(q) ||
+                (c.movil || '').includes(q) ||
+                (c.email || '').toLowerCase().includes(q) ||
+                (c.direccion || '').toLowerCase().includes(q),
+        );
+    }, [customers, customerQuery]);
 
     const handleSaveBudget = async () => {
-        if (!clientName) return alert('Por favor, ingresa el nombre del cliente');
+        if (!customerId) return alert('Selecciona un cliente de la lista (Clientes).');
         if (items.length === 0) return alert('El presupuesto está vacío');
 
         setSaving(true);
@@ -347,20 +448,28 @@ function VentasContent() {
 
             <div style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
 
-                {/* ── Client Name ── */}
+                {/* ── Cliente (solo desde tabla `customers`) ── */}
                 <div style={{ ...glass, padding: '16px', marginBottom: '16px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-                        Cliente
-                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                            Cliente
+                        </label>
+                        <Link
+                            href="/clientes"
+                            style={{ fontSize: '11px', fontWeight: 600, color: '#007AFF', textDecoration: 'none' }}
+                        >
+                            Gestionar clientes →
+                        </Link>
+                    </div>
 
-                    {/* Badge si viene pre-cargado */}
-                    {clientRif && (
+                    {customerId ? (
                         <div style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                            gap: '12px',
                             background: 'rgba(52,199,89,0.08)', border: '1px solid rgba(52,199,89,0.2)',
-                            borderRadius: '12px', padding: '10px 14px', marginBottom: '10px',
+                            borderRadius: '12px', padding: '12px 14px',
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', minWidth: 0 }}>
                                 <div style={{
                                     width: '32px', height: '32px', borderRadius: '8px',
                                     background: 'rgba(52,199,89,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -370,35 +479,106 @@ function VentasContent() {
                                         <circle cx="12" cy="7" r="4" stroke="#34C759" strokeWidth="2" />
                                     </svg>
                                 </div>
-                                <div>
-                                    <p style={{ color: '#34C759', fontSize: '13px', fontWeight: 700 }}>{clientName}</p>
-                                    <p style={{ color: 'rgba(52,199,89,0.6)', fontSize: '11px', marginTop: '1px' }}>{clientRif}</p>
+                                <div style={{ minWidth: 0 }}>
+                                    <p style={{ color: '#34C759', fontSize: '14px', fontWeight: 700 }}>{clientName}</p>
+                                    {clientRif ? (
+                                        <p style={{ color: 'rgba(52,199,89,0.75)', fontSize: '11px', marginTop: '4px' }}>RIF {clientRif}</p>
+                                    ) : null}
+                                    {clientPhone ? (
+                                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>{clientPhone}</p>
+                                    ) : null}
+                                    {clientEmail ? (
+                                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px', wordBreak: 'break-all' }}>{clientEmail}</p>
+                                    ) : null}
+                                    {clientDireccion ? (
+                                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', marginTop: '4px', lineHeight: 1.35 }}>{clientDireccion}</p>
+                                    ) : null}
                                 </div>
                             </div>
                             <button
-                                onClick={() => { setClientName(''); setClientRif(''); }}
+                                type="button"
+                                onClick={clearCustomer}
                                 style={{
                                     background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)',
-                                    borderRadius: '8px', padding: '4px 10px',
+                                    borderRadius: '8px', padding: '6px 10px',
                                     color: '#FF3B30', fontSize: '11px', fontWeight: 600,
-                                    cursor: 'pointer', fontFamily: 'inherit',
+                                    cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
                                 }}
                             >
                                 Cambiar
                             </button>
                         </div>
+                    ) : (
+                        <>
+                            <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginBottom: '10px', lineHeight: 1.4 }}>
+                                Elige un cliente registrado. Los datos (RIF, teléfono, correo, dirección) se usarán en la vista previa y al guardar.
+                            </p>
+                            <input
+                                type="search"
+                                value={customerQuery}
+                                onChange={(e) => setCustomerQuery(e.target.value)}
+                                placeholder="Buscar por nombre, RIF, teléfono o correo…"
+                                disabled={customersLoading}
+                                style={{
+                                    width: '100%',
+                                    marginBottom: '10px',
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    color: 'var(--label-primary)',
+                                    fontSize: '14px',
+                                    fontFamily: 'inherit',
+                                    outline: 'none',
+                                }}
+                            />
+                            {customersLoading ? (
+                                <p style={{ fontSize: '13px', color: 'var(--label-secondary)' }}>Cargando clientes…</p>
+                            ) : customers.length === 0 ? (
+                                <p style={{ fontSize: '13px', color: 'var(--label-secondary)' }}>
+                                    No hay clientes.{' '}
+                                    <Link href="/clientes" style={{ color: '#34C759', fontWeight: 600 }}>Crear uno en Clientes</Link>
+                                </p>
+                            ) : (
+                                <div style={{
+                                    maxHeight: '220px',
+                                    overflowY: 'auto',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                }}>
+                                    {filteredCustomers.length === 0 ? (
+                                        <p style={{ padding: '14px', fontSize: '13px', color: 'var(--label-secondary)' }}>Sin coincidencias.</p>
+                                    ) : (
+                                        filteredCustomers.map((c) => (
+                                            <button
+                                                key={c.id}
+                                                type="button"
+                                                onClick={() => applyCustomer(c)}
+                                                style={{
+                                                    display: 'block',
+                                                    width: '100%',
+                                                    textAlign: 'left',
+                                                    padding: '10px 12px',
+                                                    border: 'none',
+                                                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                                    background: 'transparent',
+                                                    cursor: 'pointer',
+                                                    fontFamily: 'inherit',
+                                                }}
+                                            >
+                                                <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '14px', fontWeight: 600 }}>
+                                                    {(c.nombre || '').trim() || 'Sin nombre'}
+                                                </span>
+                                                <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '2px' }}>
+                                                    {[c.rif, c.movil, c.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
+                                                </span>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </>
                     )}
-
-                    <input
-                        type="text"
-                        value={clientName}
-                        onChange={e => setClientName(e.target.value)}
-                        placeholder={clientRif ? 'Editar nombre...' : 'Nombre del cliente o empresa...'}
-                        style={{
-                            width: '100%', background: 'transparent', border: 'none', outline: 'none',
-                            color: 'var(--label-primary)', fontSize: '16px', fontFamily: 'inherit', fontWeight: 500,
-                        }}
-                    />
                 </div>
 
                 {/* ── Product Search ── */}
@@ -587,13 +767,16 @@ function VentasContent() {
                 {/* ── Notes ── */}
                 {items.length > 0 && (
                     <div style={{ ...glass, padding: '16px', marginBottom: '20px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
                             Notas / Condiciones
                         </label>
+                        <p style={{ fontSize: '11px', color: 'var(--label-secondary)', opacity: 0.85, marginBottom: '8px', lineHeight: 1.4 }}>
+                            Se envían a la vista previa e impresión. También puedes completar o corregir el texto en la pantalla de <strong>Vista previa</strong> antes de imprimir o compartir.
+                        </p>
                         <textarea
                             value={notes}
                             onChange={e => setNotes(e.target.value)}
-                            placeholder="Condiciones de pago, tiempo de entrega, garantía..."
+                            placeholder="Condiciones de pago, tiempo de entrega, garantía, detalles del sitio…"
                             rows={3}
                             style={{
                                 width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none',
@@ -732,12 +915,17 @@ function VentasContent() {
                             </button>
                             <button
                                 onClick={() => {
+                                    if (!customerId) {
+                                        alert('Selecciona un cliente de la lista antes de abrir la vista previa.');
+                                        return;
+                                    }
                                     // Guardar datos en localStorage y navegar a preview
                                     const presupuesto = {
                                         cliente: clientName,
                                         rif: clientRif,
                                         telefono: clientPhone,
                                         email: clientEmail,
+                                        direccion: clientDireccion,
                                         notas: notes,
                                         items: items.map(i => ({
                                             nombre: i.product.nombre,

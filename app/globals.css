@@ -6,6 +6,17 @@
 
 @layer base {
   :root {
+    /* Nexus Home · Neon-Glass */
+    --nexus-bg-base: #0a0b10;
+    --nexus-cyan: #00f2fe;
+    --nexus-green: #00ff41;
+    --nexus-gold: #ffd700;
+    --nexus-text-muted: rgba(255, 255, 255, 0.72);
+    --nexus-text-dim: rgba(255, 255, 255, 0.45);
+    --color-primary-glow: rgba(0, 242, 254, 0.55);
+    --nexus-glass-border: 1px solid rgba(255, 255, 255, 0.1);
+    --nexus-blur: blur(20px);
+
     /* Apple iOS Color System */
     --ios-blue: #007AFF;
     --ios-blue-dark: #0062CC;
@@ -328,5 +339,20 @@
   /* Safe area */
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  /* Nexus: panel con vidrio estándar */
+  .nexus-glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: var(--nexus-blur);
+    -webkit-backdrop-filter: var(--nexus-blur);
+    border: var(--nexus-glass-border);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  }
+
+  .nexus-glow-border {
+    box-shadow:
+      0 0 0 1px rgba(0, 242, 254, 0.2),
+      0 0 28px -8px var(--color-primary-glow);
   }
 }

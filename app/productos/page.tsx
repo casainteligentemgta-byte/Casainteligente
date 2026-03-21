@@ -18,6 +18,8 @@ interface Product {
     cantidad: number | null;
     imagen: string | null;
     ubicacion?: string | null;
+    manual_instrucciones?: string | null;
+    manual_documento_url?: string | null;
 }
 
 const CATEGORIAS_COMERCIALES = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network'];
@@ -204,18 +206,65 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
                     background: '#1C1C1E', borderRadius: '32px 32px 0 0',
                     padding: '30px 24px 50px',
                     boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
                 }}
             >
                 <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', margin: '0 auto 20px' }} />
+                {product.imagen ? (
+                    <img
+                        src={product.imagen}
+                        alt=""
+                        style={{
+                            width: '100%',
+                            maxHeight: '200px',
+                            objectFit: 'contain',
+                            borderRadius: '16px',
+                            marginBottom: '16px',
+                            background: 'rgba(0,0,0,0.4)',
+                        }}
+                    />
+                ) : null}
                 <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 800, marginBottom: '8px' }}>{product.nombre}</h2>
-                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', marginBottom: '24px' }}>{product.descripcion}</p>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>{product.descripcion || 'Sin descripción.'}</p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
                     <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '16px' }}>
                         <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px', fontWeight: 700 }}>PRECIO VENTA</p>
                         <p style={{ color: '#34C759', fontSize: '24px', fontWeight: 800, marginTop: '4px' }}>${fmt(product.precio)}</p>
                     </div>
                 </div>
+
+                {(product.manual_instrucciones || product.manual_documento_url) ? (
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700, marginBottom: '10px' }}>MANUAL E INSTRUCCIONES</p>
+                        {product.manual_documento_url ? (
+                            <a
+                                href={product.manual_documento_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    display: 'inline-block',
+                                    marginBottom: '12px',
+                                    padding: '10px 16px',
+                                    borderRadius: '12px',
+                                    background: 'rgba(0,122,255,0.2)',
+                                    color: '#5AC8FA',
+                                    fontSize: '14px',
+                                    fontWeight: 700,
+                                    textDecoration: 'none',
+                                }}
+                            >
+                                📄 Abrir manual (PDF)
+                            </a>
+                        ) : null}
+                        {product.manual_instrucciones ? (
+                            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13px', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                                {product.manual_instrucciones}
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </div>
     );

@@ -1,45 +1,55 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-interface PreviewItem {
-    nombre: string;
-    categoria: string | null;
-    qty: number;
-    unitPrice: number;
-    discount: number;
-    costo: number | null;
-}
-
-interface Presupuesto {
-    cliente: string;
-    rif: string;
-    notas: string;
-    items: PreviewItem[];
-    subtotal: number;
-    totalCost: number;
-    totalProfit: number;
-    marginPct: number;
-    showZelle: boolean;
-    fecha: string;
-    numero: string;
-}
+import Link from 'next/link';
+import { PRESUPUESTO_BRAND, textoMetodosPago } from '@/lib/presupuesto/brand';
+import { DEMO_PRESUPUESTO } from '@/lib/presupuesto/demo-data';
+import type { PresupuestoVista } from '@/lib/presupuesto/types';
 
 function fmt(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function lineTotal(item: PreviewItem) {
+function lineTotal(item: PresupuestoVista['items'][0]) {
     return item.unitPrice * (1 - item.discount / 100) * item.qty;
 }
 
 export default function PreviewPage() {
-    const [data, setData] = useState<Presupuesto | null>(null);
+    const [data, setData] = useState<PresupuestoVista | null>(null);
+    const [isDemo, setIsDemo] = useState(false);
 
     useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('demo') === '1') {
+            setData({ ...DEMO_PRESUPUESTO });
+            setIsDemo(true);
+            return;
+        }
         const raw = localStorage.getItem('presupuesto_preview');
-        if (raw) setData(JSON.parse(raw));
+        if (raw) {
+            try {
+                setData(JSON.parse(raw) as PresupuestoVista);
+            } catch {
+                setData(null);
+            }
+        }
     }, []);
+
+    /** Actualiza notas en el documento y en localStorage (flujo real desde Ventas). */
+    function setNotasPresupuesto(notas: string) {
+        setData((prev) => {
+            if (!prev) return prev;
+            const next = { ...prev, notas };
+            if (!isDemo) {
+                try {
+                    localStorage.setItem('presupuesto_preview', JSON.stringify(next));
+                } catch {
+                    /* ignorar cuota / privado */
+                }
+            }
+            return next;
+        });
+    }
 
     if (!data) {
         return (
@@ -48,10 +58,23 @@ export default function PreviewPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'Inter, -apple-system, sans-serif',
             }}>
-                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
+                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', maxWidth: '320px', padding: '20px' }}>
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
-                    <p style={{ fontSize: '16px' }}>No hay presupuesto para mostrar.</p>
-                    <p style={{ fontSize: '13px', marginTop: '8px' }}>Ve a Ventas y presiona "Vista previa".</p>
+                    <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.7)' }}>No hay presupuesto para mostrar.</p>
+                    <p style={{ fontSize: '13px', marginTop: '8px' }}>Ve a Ventas y presiona &quot;Vista previa&quot;, o abre el ejemplo:</p>
+                    <Link
+                        href="/ventas/preview?demo=1"
+                        style={{
+                            display: 'inline-block', marginTop: '16px', padding: '12px 20px',
+                            background: 'linear-gradient(135deg, #007AFF, #5856D6)', borderRadius: '12px',
+                            color: 'white', fontSize: '14px', fontWeight: 700, textDecoration: 'none',
+                        }}
+                    >
+                        Ver presupuesto de ejemplo
+                    </Link>
+                    <p style={{ fontSize: '11px', marginTop: '20px', lineHeight: 1.5 }}>
+                        Para editar el diseño: <code style={{ color: '#007AFF' }}>lib/presupuesto/brand.ts</code> (marca) y este archivo <code style={{ color: '#007AFF' }}>app/ventas/preview/page.tsx</code> (layout).
+                    </p>
                 </div>
             </div>
         );
@@ -69,6 +92,23 @@ export default function PreviewPage() {
             paddingBottom: '40px',
         }}>
 
+            {/* Modo demo: cómo editar el diseño */}
+            {isDemo && (
+                <div className="no-print" style={{
+                    background: 'linear-gradient(90deg, rgba(0,122,255,0.2), rgba(88,86,214,0.15))',
+                    borderBottom: '1px solid rgba(0,122,255,0.25)',
+                    padding: '10px 20px', fontSize: '12px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5,
+                }}>
+                    <strong style={{ color: '#5AC8FA' }}>Modo ejemplo (local)</strong>
+                    {' · '}Datos en <code style={{ fontSize: '11px', color: '#FF9500' }}>lib/presupuesto/demo-data.ts</code>
+                    {' · '}Marca y textos legales: <code style={{ fontSize: '11px', color: '#34C759' }}>lib/presupuesto/brand.ts</code>
+                    {' · '}Vista impresa/PDF: <code style={{ fontSize: '11px', color: '#AF52DE' }}>lib/presupuesto/html-impresion.ts</code>
+                    <span style={{ display: 'block', marginTop: '6px', opacity: 0.75 }}>
+                        Las <strong>notas</strong> puedes editarlas abajo en esta pantalla (solo en memoria en modo ejemplo). Tras cambiar código en Cursor, recarga (F5).
+                    </span>
+                </div>
+            )}
+
             {/* ── Toolbar (no se imprime) ── */}
             <div className="no-print" style={{
                 position: 'sticky', top: 0, zIndex: 50,
@@ -79,21 +119,40 @@ export default function PreviewPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <button
-                        onClick={() => window.close()}
-                        style={{
-                            background: 'rgba(255,255,255,0.08)', border: 'none',
-                            borderRadius: '10px', padding: '8px 14px',
-                            color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600,
-                            cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                        }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Volver
-                    </button>
+                    {isDemo ? (
+                        <Link
+                            href="/presupuestos"
+                            style={{
+                                background: 'rgba(255,255,255,0.08)', border: 'none',
+                                borderRadius: '10px', padding: '8px 14px',
+                                color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600,
+                                cursor: 'pointer', fontFamily: 'inherit',
+                                display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none',
+                            }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            Volver
+                        </Link>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => window.close()}
+                            style={{
+                                background: 'rgba(255,255,255,0.08)', border: 'none',
+                                borderRadius: '10px', padding: '8px 14px',
+                                color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600,
+                                cursor: 'pointer', fontFamily: 'inherit',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                            }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            Volver
+                        </button>
+                    )}
                     <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
                         Presupuesto {data.numero}
                     </span>
@@ -101,7 +160,8 @@ export default function PreviewPage() {
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <button
                         onClick={() => {
-                            const text = `PRESUPUESTO CASA INTELIGENTE, C.A.\nNro: ${data.numero}\nFecha: ${data.fecha}\nCliente: ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n${'─'.repeat(50)}\n${data.items.map(i => `${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n${'─'.repeat(50)}\nTOTAL: $${fmt(data.subtotal)}`;
+                            const notasBloque = data.notas?.trim() ? `\nNotas: ${data.notas.trim()}\n` : '';
+                            const text = `PRESUPUESTO ${PRESUPUESTO_BRAND.nombreLegal}\nNro: ${data.numero}\nFecha: ${data.fecha}\nCliente: ${data.cliente} ${data.rif ? `(${data.rif})` : ''}${notasBloque}${'─'.repeat(50)}\n${data.items.map(i => `${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n${'─'.repeat(50)}\nTOTAL: $${fmt(data.subtotal)}`;
                             navigator.clipboard.writeText(text);
                         }}
                         style={{
@@ -120,8 +180,9 @@ export default function PreviewPage() {
                     </button>
                     <button
                         onClick={() => {
-                            const text = `*PRESUPUESTO CASA INTELIGENTE, C.A.*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*\n\n_Generado por Casa Inteligente APP_`;
-                            const phone = (data as any).telefono ? (data as any).telefono.replace(/\D/g, '') : '';
+                            const notasWa = data.notas?.trim() ? `\n*Notas:* ${data.notas.trim()}\n` : '';
+                            const text = `*PRESUPUESTO ${PRESUPUESTO_BRAND.nombreLegal}*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}${notasWa}\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*\n\n_Generado por Casa Inteligente APP_`;
+                            const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
                             window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
                         }}
                         style={{
@@ -196,25 +257,41 @@ export default function PreviewPage() {
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                             {/* Logo + empresa */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                <div style={{
-                                    width: '52px', height: '52px', borderRadius: '14px',
-                                    background: 'linear-gradient(135deg, #007AFF, #0055CC)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    boxShadow: '0 4px 16px rgba(0,122,255,0.4)',
-                                    flexShrink: 0,
-                                }}>
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M9 22V12h6v10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <circle cx="12" cy="8" r="1.5" fill="white" />
-                                    </svg>
+                                <div
+                                    style={{
+                                        width: '52px',
+                                        height: '52px',
+                                        borderRadius: '14px',
+                                        overflow: 'hidden',
+                                        flexShrink: 0,
+                                        boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                                        border: '1px solid rgba(255,255,255,0.14)',
+                                        // Mismo tono que el header: el blanco del PNG se funde (multiply) y desaparece el halo
+                                        background: '#0A1628',
+                                        isolation: 'isolate',
+                                    }}
+                                    title="Casa Inteligente"
+                                >
+                                    <img
+                                        src="/logo-casa-inteligente.png"
+                                        alt="Casa Inteligente — cerebro, laberinto y puerta"
+                                        width={52}
+                                        height={52}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            display: 'block',
+                                            mixBlendMode: 'multiply',
+                                        }}
+                                    />
                                 </div>
                                 <div>
                                     <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-                                        CASA INTELIGENTE, C.A.
+                                        {PRESUPUESTO_BRAND.nombreLegal}
                                     </h2>
                                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '3px', letterSpacing: '0.5px' }}>
-                                        Security & Domotics · RIF J-12345678-9
+                                        {PRESUPUESTO_BRAND.tagline} RIF {PRESUPUESTO_BRAND.rifEmpresa}
                                     </p>
                                 </div>
                             </div>
@@ -259,20 +336,17 @@ export default function PreviewPage() {
                                             </div>
 
                                             {/* Teléfono */}
-                                            {data.items[0] && ( // Usamos una pequeña verificación o podrías pasar movil/email en el objeto del localStorage
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <div style={{ width: '20px', display: 'flex', justifyContent: 'center' }}>
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                                                            <line x1="12" y1="18" x2="12.01" y2="18" />
-                                                        </svg>
-                                                    </div>
-                                                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
-                                                        {/* Recuperados del localStorage si los añadimos */}
-                                                        {(data as any).telefono || 'Teléfono no disp.'}
-                                                    </span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ width: '20px', display: 'flex', justifyContent: 'center' }}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                                                        <line x1="12" y1="18" x2="12.01" y2="18" />
+                                                    </svg>
                                                 </div>
-                                            )}
+                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
+                                                    {data.telefono || 'Teléfono no disp.'}
+                                                </span>
+                                            </div>
 
                                             {/* Email */}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -283,9 +357,23 @@ export default function PreviewPage() {
                                                     </svg>
                                                 </div>
                                                 <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
-                                                    {(data as any).email || 'Correo no especificado'}
+                                                    {data.email || 'Correo no especificado'}
                                                 </span>
                                             </div>
+
+                                            {data.direccion ? (
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                    <div style={{ width: '20px', display: 'flex', justifyContent: 'center', flexShrink: 0, paddingTop: '2px' }}>
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                                                            <circle cx="12" cy="10" r="3" />
+                                                        </svg>
+                                                    </div>
+                                                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.35 }}>
+                                                        {data.direccion}
+                                                    </span>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </>
                                 ) : (
@@ -373,8 +461,7 @@ export default function PreviewPage() {
                                 CONDICIONES:
                             </p>
                             <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: '380px' }}>
-                                Los precios aquí descritos tienen una vigencia de 3 días hábiles; el cliente debe abonar
-                                el 80% del costo total del presupuesto, el resto mediante valuaciones del mismo.
+                                {PRESUPUESTO_BRAND.condicionesDefault.replace(/\s+/g, ' ').trim()}
                             </p>
                             {data.showZelle !== false && (
                                 <>
@@ -382,18 +469,41 @@ export default function PreviewPage() {
                                         MÉTODO DE PAGO:
                                     </p>
                                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
-                                        Zelle: casainteligentemgta@gmail.com · 0412-2117270 · 0414-7937270
+                                        {textoMetodosPago()}
                                     </p>
                                 </>
                             )}
-                            {data.notas && (
-                                <>
-                                    <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
-                                        NOTAS:
-                                    </p>
-                                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>{data.notas}</p>
-                                </>
-                            )}
+                            <div style={{ marginTop: '12px' }}>
+                                <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                                    NOTAS / CONDICIONES DEL PRESUPUESTO
+                                </p>
+                                <p className="no-print" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.45, marginBottom: '8px', maxWidth: '420px' }}>
+                                    Puedes escribirlas primero en <strong>Ventas</strong> (bloque &quot;Notas / Condiciones&quot;) antes de abrir la vista previa, o editarlas aquí.
+                                    {!isDemo && ' Se guardan en este navegador al escribir (localStorage).'}
+                                </p>
+                                <textarea
+                                    className="preview-notas-field"
+                                    value={data.notas ?? ''}
+                                    onChange={(e) => setNotasPresupuesto(e.target.value)}
+                                    placeholder="Ej.: plazo de entrega, horario de instalación, exclusiones…"
+                                    rows={4}
+                                    style={{
+                                        width: '100%',
+                                        maxWidth: '420px',
+                                        boxSizing: 'border-box',
+                                        fontSize: '11px',
+                                        lineHeight: 1.6,
+                                        color: 'rgba(255,255,255,0.85)',
+                                        background: 'rgba(255,255,255,0.06)',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        borderRadius: '8px',
+                                        padding: '10px 12px',
+                                        fontFamily: 'inherit',
+                                        resize: 'vertical',
+                                        outline: 'none',
+                                    }}
+                                />
+                            </div>
                         </div>
 
                         {/* Totales */}
@@ -474,8 +584,9 @@ export default function PreviewPage() {
 
                         <button
                             onClick={() => {
-                                const text = `*PRESUPUESTO CASA INTELIGENTE, C.A.*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*`;
-                                const phone = (data as any).telefono ? (data as any).telefono.replace(/\D/g, '') : '';
+                                const notasWa2 = data.notas?.trim() ? `\n*Notas:* ${data.notas.trim()}\n` : '';
+                                const text = `*PRESUPUESTO ${PRESUPUESTO_BRAND.nombreLegal}*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}${notasWa2}\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*`;
+                                const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
                                 window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
                             }}
                             style={{
@@ -499,6 +610,15 @@ export default function PreviewPage() {
                     .no-print { display: none !important; }
                     body { background: #0A0A0F !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                     @page { margin: 0; size: A4; }
+                    textarea.preview-notas-field {
+                        border: none !important;
+                        background: transparent !important;
+                        padding: 0 !important;
+                        resize: none !important;
+                        color: rgba(255,255,255,0.45) !important;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
                 }
             `}</style>
         </div>

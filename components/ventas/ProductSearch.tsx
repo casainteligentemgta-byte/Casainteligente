@@ -14,6 +14,9 @@ export interface Product {
     costo: number | null;
     precio: number | null;
     utilidad: number | null;
+    imagen?: string | null;
+    manual_instrucciones?: string | null;
+    manual_documento_url?: string | null;
 }
 
 interface ProductSearchProps {
@@ -41,7 +44,9 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
 
         let queryBuilder = supabase
             .from('products')
-            .select('id, external_id, nombre, categoria, modelo, marca, descripcion, costo, precio, utilidad');
+            .select(
+                'id, external_id, nombre, categoria, modelo, marca, descripcion, costo, precio, utilidad, imagen, manual_instrucciones, manual_documento_url',
+            );
 
         if (cat !== 'Todos') {
             queryBuilder = queryBuilder.eq('categoria', cat);
@@ -257,20 +262,35 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                             }}
                             onMouseEnter={() => setActiveIndex(i)}
                         >
-                            {/* Category dot */}
-                            <div style={{
-                                width: '36px',
-                                height: '36px',
-                                borderRadius: '10px',
-                                background: `${getCategoryColor(p.categoria)}22`,
-                                border: `1px solid ${getCategoryColor(p.categoria)}44`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                            }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCategoryColor(p.categoria) }} />
-                            </div>
+                            {p.imagen ? (
+                                <img
+                                    src={p.imagen}
+                                    alt=""
+                                    style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '10px',
+                                        objectFit: 'cover',
+                                        flexShrink: 0,
+                                    }}
+                                />
+                            ) : (
+                                <div
+                                    style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '10px',
+                                        background: `${getCategoryColor(p.categoria)}22`,
+                                        border: `1px solid ${getCategoryColor(p.categoria)}44`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCategoryColor(p.categoria) }} />
+                                </div>
+                            )}
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ color: 'white', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {p.nombre}
