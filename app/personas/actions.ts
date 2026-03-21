@@ -1,10 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 export async function crearPersona(formData: FormData) {
-  const supabase = await createClient();
+  const supabase = createClient(cookies());
   const { error } = await supabase.from('personas').insert({
     nombre: formData.get('nombre') as string,
     apellidos: (formData.get('apellidos') as string) || null,

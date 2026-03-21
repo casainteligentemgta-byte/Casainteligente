@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 type ResultadoConteo = {
@@ -12,7 +13,7 @@ type ResultadoConteo = {
  */
 async function contar(tabla: string): Promise<ResultadoConteo> {
   try {
-    const supabase = await createClient();
+    const supabase = createClient(cookies());
     const { count, error } = await supabase
       .from(tabla)
       .select('id', { count: 'exact', head: true });

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import type { Persona } from '@/types/persona';
 import FormNuevaPersona from './FormNuevaPersona';
@@ -8,7 +9,7 @@ export default async function PersonasPage() {
   let error: string | null = null;
 
   try {
-    const supabase = await createClient();
+    const supabase = createClient(cookies());
     const { data, error: supaError } = await supabase
       .from('personas')
       .select(
