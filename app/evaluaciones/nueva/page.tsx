@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+// Opt out of static prerendering — this page uses useSearchParams()
+export const dynamic = 'force-dynamic';
+
+
 export default function NuevaEvaluacionPage() {
     const router = useRouter();
     const searchParams = useSearchParams();

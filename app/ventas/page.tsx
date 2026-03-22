@@ -7,6 +7,9 @@ import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
 import ClientSearch, { Customer } from '@/components/ventas/ClientSearch';
 
+// Opt out of static prerendering — page uses useSearchParams()
+export const dynamic = 'force-dynamic';
+
 interface LineItem {
     id: string;
     product: Product;
