@@ -14,12 +14,14 @@ import {
     Truck,
     ShieldCheck,
     History,
+    Settings2,
     MoreVertical,
+    Trash2,
     ArrowUpRight,
     ArrowDownRight,
     Share2
 } from 'lucide-react';
-import { InventoryItem, UnitType } from '@/types/inventory';
+import { InventoryItem } from '@/types/inventory';
 import Link from 'next/link';
 
 export default function InventoryMasterPage() {
@@ -33,6 +35,7 @@ export default function InventoryMasterPage() {
         totalItems: 0,
         quarantineCount: 0
     });
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const supabase = createClient();
 
@@ -95,6 +98,28 @@ export default function InventoryMasterPage() {
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
     };
 
+    /** Elimina un ítem del maestro global_inventory (irreversible). */
+    const deleteMaterial = async (id: string, label: string) => {
+        if (!confirm(`¿Eliminar del inventario?\n\n${label}\n\nEsta acción no se puede deshacer.`)) return;
+        setDeletingId(id);
+        try {
+            const { error } = await supabase.from('global_inventory').delete().eq('id', id);
+            if (error) {
+                if (error.code === '23503' || error.message?.includes('foreign key')) {
+                    alert(
+                        'No se puede borrar: hay movimientos, compras u otros registros vinculados a este material. Elimina o ajusta esos datos primero en la base de datos.'
+                    );
+                } else {
+                    alert(error.message || 'Error al borrar');
+                }
+                return;
+            }
+            await fetchInventory();
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-black text-white p-6 pb-24 font-sans">
             {/* Header Section */}
@@ -108,6 +133,12 @@ export default function InventoryMasterPage() {
                         <button className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-3 rounded-2xl font-bold hover:bg-zinc-800 transition-all">
                             <History size={18} />
                             <span className="hidden sm:inline">Kardex</span>
+                        </button>
+                    </Link>
+                    <Link href="/almacen/maestros">
+                        <button className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-3 rounded-2xl font-bold hover:bg-zinc-800 transition-all">
+                            <Settings2 size={18} />
+                            <span className="hidden sm:inline">Maestros</span>
                         </button>
                     </Link>
                     <button
@@ -217,7 +248,7 @@ export default function InventoryMasterPage() {
                             <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Stock Real</th>
                             <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Costo Promedio</th>
                             <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Última Compra</th>
-                            <th className="p-5"></th>
+                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500 text-right">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/50">
@@ -302,12 +333,29 @@ export default function InventoryMasterPage() {
                                         )}
                                     </td>
                                     <td className="p-5 text-right w-10">
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-1 justify-end items-center">
                                             <Link href={`/almacen/editar/${item.id}`}>
-                                                <button className="p-2 text-zinc-600 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
+                                                <button
+                                                    type="button"
+                                                    title="Editar"
+                                                    className="p-2 text-zinc-600 hover:text-white hover:bg-zinc-800 rounded-lg transition-all"
+                                                >
                                                     <ChevronRight size={20} />
                                                 </button>
                                             </Link>
+                                            <button
+                                                type="button"
+                                                title="Eliminar del inventario"
+                                                disabled={deletingId === item.id}
+                                                onClick={() => deleteMaterial(item.id, item.name)}
+                                                className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-40"
+                                            >
+                                                {deletingId === item.id ? (
+                                                    <span className="inline-block w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    <Trash2 size={18} />
+                                                )}
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>

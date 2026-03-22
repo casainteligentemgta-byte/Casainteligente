@@ -1,4 +1,5 @@
-export type UnitType = 'UND' | 'M3' | 'KG' | 'L' | 'M' | 'M2';
+/** Código de unidad almacenado en global_inventory.unit (catálogo inventory_units). */
+export type UnitType = string;
 
 export interface MaterialCategory {
     id: string;
@@ -19,6 +20,9 @@ export interface InventoryItem {
     reorder_point: number;
     average_weighted_cost: number;
     location: string | null;
+    deposit_id?: string | null;
+    furniture_id?: string | null;
+    shelf_number?: number | null;
     image_url: string | null;
     last_purchase_date: string | null;
     last_purchase_price: number | null;
