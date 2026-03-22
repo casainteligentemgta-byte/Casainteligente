@@ -183,7 +183,7 @@ export default function NuevoEmpleadoPage() {
             <div style={{ display: 'flex', gap: '6px', marginBottom: '28px', flexWrap: 'wrap' }}>
                 {SECTIONS.map((sec, i) => (
                     <button key={sec} onClick={() => setSection(i)} style={{
-                        padding: '8px 14px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                        padding: '8px 14px', borderRadius: '10px', cursor: 'pointer',
                         fontSize: '13px', fontWeight: 600, fontFamily: 'inherit',
                         background: section === i ? 'rgba(0,174,239,0.2)' : 'rgba(255,255,255,0.04)',
                         color: section === i ? '#00AEEF' : 'rgba(255,255,255,0.45)',
