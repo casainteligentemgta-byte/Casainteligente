@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     description: "Sistema de Gestión de Clientes · Security & Domotics",
 };
 
+/** Sin esto, `next build` intenta prerender rutas que crean cliente Supabase y falla si faltan env (p. ej. Vercel sin variables). */
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
     children,
 }: Readonly<{
