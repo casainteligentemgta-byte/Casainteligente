@@ -131,7 +131,6 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// Max body size para PDFs e imágenes grandes
-export const config = {
-    api: { bodyParser: false }
-};
+// Route Segment Config — Next.js 14.2+ (App Router)
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 60s timeout para PDFs grandes
