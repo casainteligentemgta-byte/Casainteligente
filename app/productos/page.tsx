@@ -16,7 +16,7 @@ interface Product {
     precio: number | null;
     utilidad: number | null;
     cantidad: number | null;
-    imagen: string | null;
+    image_url: string | null;
     ubicacion?: string | null;
 }
 
@@ -48,10 +48,10 @@ function ProductAvatar({ product }: { product: Product }) {
     const color = CAT_COLORS[cat]?.dot ?? '#8E8E93';
     const initials = (product.nombre || '??').slice(0, 2).toUpperCase();
 
-    if (product.imagen) {
+    if (product.image_url) {
         return (
             <img
-                src={product.imagen}
+                src={product.image_url}
                 alt={product.nombre}
                 style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover', flexShrink: 0 }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

@@ -1,0 +1,172 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+    pending:   { label: 'Esperando',   bg: 'rgba(255,214,10,0.12)', text: '#FFD60A' },
+    started:   { label: 'En Progreso', bg: 'rgba(0,174,239,0.12)',  text: '#00AEEF' },
+    completed: { label: 'Completada',  bg: 'rgba(52,199,89,0.12)',  text: '#34C759' },
+    expired:   { label: 'Expirada',    bg: 'rgba(255,59,48,0.12)',  text: '#FF3B30' },
+};
+
+const SEMAFORO_COLOR: Record<string, string> = {
+    verde: '#34C759', amarillo: '#FFD60A', rojo: '#FF3B30',
+};
+
+export default function EvaluacionesPage() {
+    const router = useRouter();
+    const [evaluaciones, setEvaluaciones] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+
+    useEffect(() => {
+        load();
+        // Refresh each 30s for live status
+        const iv = setInterval(load, 30_000);
+        return () => clearInterval(iv);
+    }, []);
+
+    async function load() {
+        const supabase = createClient();
+        const { data } = await supabase
+            .from('evaluaciones')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(100);
+        setEvaluaciones(data || []);
+        setLoading(false);
+    }
+
+    const filtered = evaluaciones.filter(e =>
+        e.employee_name.toLowerCase().includes(search.toLowerCase())
+    );
+
+    const stats = {
+        total:     evaluaciones.length,
+        pending:   evaluaciones.filter(e => e.status === 'pending').length,
+        completed: evaluaciones.filter(e => e.status === 'completed').length,
+        risk:      evaluaciones.filter(e => e.semaforo === 'rojo').length,
+    };
+
+    const glass = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', backdropFilter: 'blur(20px)' };
+
+    return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg-primary,#0A0A0F)', fontFamily: 'Inter,-apple-system,sans-serif', color: 'white', padding: '24px', paddingBottom: '100px' }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '28px' }}>
+                <div>
+                    <h1 style={{ fontSize: '28px', fontWeight: 900, margin: '0 0 4px 0', background: 'linear-gradient(135deg,#FFD60A,#FF9500)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                        Evaluaciones de Élite
+                    </h1>
+                    <p style={{ margin: 0, color: 'rgba(255,255,255,0.35)', fontSize: '14px' }}>
+                        Sistema DISC + Dark Triad · Dashboard del CEO
+                    </p>
+                </div>
+                <button
+                    onClick={() => router.push('/evaluaciones/nueva')}
+                    style={{ padding: '12px 20px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#FFD60A,#FF9500)', color: '#000', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '14px', boxShadow: '0 4px 16px rgba(255,214,10,0.3)' }}>
+                    ⚡ Nueva Evaluación
+                </button>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '12px', marginBottom: '24px' }}>
+                {[
+                    { label: 'Total', value: stats.total, color: 'rgba(255,255,255,0.7)' },
+                    { label: 'Enviadas', value: stats.pending, color: '#FFD60A' },
+                    { label: 'Completadas', value: stats.completed, color: '#34C759' },
+                    { label: '🔴 Alto Riesgo', value: stats.risk, color: '#FF3B30' },
+                ].map(s => (
+                    <div key={s.label} style={{ ...glass, padding: '16px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '28px', fontWeight: 900, color: s.color }}>{s.value}</div>
+                        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', marginTop: '4px' }}>{s.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Search */}
+            <input
+                type="text"
+                placeholder="🔍  Buscar candidato…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '13px 18px', color: 'white', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: '20px' }}
+            />
+
+            {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}>
+                    <div style={{ width: '40px', height: '40px', border: '3px solid rgba(255,214,10,0.2)', borderTopColor: '#FFD60A', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
+                </div>
+            ) : filtered.length === 0 ? (
+                <div style={{ ...glass, padding: '60px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎯</div>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', margin: 0 }}>No hay evaluaciones registradas aún</p>
+                    <button onClick={() => router.push('/evaluaciones/nueva')} style={{ marginTop: '20px', padding: '12px 24px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#FFD60A,#FF9500)', color: '#000', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
+                        Crear la primera evaluación
+                    </button>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {filtered.map(ev => {
+                        const sc = STATUS_CONFIG[ev.status] ?? STATUS_CONFIG.pending;
+                        const sf = ev.semaforo ? SEMAFORO_COLOR[ev.semaforo] : null;
+                        const isCompleted = ev.status === 'completed';
+                        return (
+                            <div key={ev.id} style={{ ...glass, padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                                        <span style={{ fontSize: '16px', fontWeight: 700 }}>{ev.employee_name}</span>
+                                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', background: sc.bg, color: sc.text }}>
+                                            {sc.label}
+                                        </span>
+                                        {sf && (
+                                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', background: `${sf}20`, color: sf }}>
+                                                {ev.semaforo === 'verde' ? '🟢 Recomendado' : ev.semaforo === 'amarillo' ? '🟡 Condicional' : '🔴 Alto Riesgo'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
+                                        Creada: {new Date(ev.created_at).toLocaleString('es-VE')}
+                                        {ev.tab_changes > 0 && <span style={{ marginLeft: '10px', color: '#FF9500' }}>⚠️ {ev.tab_changes} cambio(s) de ventana</span>}
+                                    </div>
+                                    {isCompleted && (
+                                        <div style={{ marginTop: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                            {['D','I','S','C'].map(dim => (
+                                                <span key={dim} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }}>
+                                                    {dim}:{ev[`disc_${dim.toLowerCase()}`]}
+                                                </span>
+                                            ))}
+                                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: `${sf}15`, color: sf || 'white', fontWeight: 700 }}>
+                                                Riesgo: {ev.risk_score?.toFixed(1)}%
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                    {isCompleted ? (
+                                        <Link
+                                            href={`/evaluaciones/${ev.id}/reporte`}
+                                            style={{ padding: '10px 16px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#FFD60A,#FF9500)', color: '#000', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '13px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                            📊 Ver Reporte
+                                        </Link>
+                                    ) : (
+                                        <Link
+                                            href={`/evaluaciones/${ev.id}/reporte`}
+                                            style={{ padding: '10px 16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '13px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                            🕐 Monitorear
+                                        </Link>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}

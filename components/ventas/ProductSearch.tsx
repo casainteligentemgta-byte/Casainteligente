@@ -14,6 +14,7 @@ export interface Product {
     costo: number | null;
     precio: number | null;
     utilidad: number | null;
+    image_url: string | null;
 }
 
 interface ProductSearchProps {
@@ -32,16 +33,11 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
     const supabase = createClient();
 
     const search = useCallback(async (q: string, cat: string) => {
-        if (q.trim().length < 2 && cat === 'Todos') {
-            setResults([]);
-            setOpen(false);
-            return;
-        }
         setLoading(true);
 
         let queryBuilder = supabase
             .from('products')
-            .select('id, external_id, nombre, categoria, modelo, marca, descripcion, costo, precio, utilidad');
+            .select('*');
 
         if (cat !== 'Todos') {
             queryBuilder = queryBuilder.eq('categoria', cat);
@@ -188,9 +184,15 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                     ref={inputRef}
                     type="text"
                     value={query}
-                    onChange={e => setQuery(e.target.value)}
+                    onChange={e => {
+                        setQuery(e.target.value);
+                        setOpen(true);
+                    }}
                     onKeyDown={handleKeyDown}
-                    onFocus={() => query.length >= 2 && setOpen(true)}
+                    onFocus={() => {
+                        setOpen(true);
+                        search(query, selectedCategory);
+                    }}
                     placeholder="Buscar producto por nombre, marca o modelo..."
                     style={{
                         flex: 1,
@@ -257,20 +259,29 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                             }}
                             onMouseEnter={() => setActiveIndex(i)}
                         >
-                            {/* Category dot */}
-                            <div style={{
-                                width: '36px',
-                                height: '36px',
-                                borderRadius: '10px',
-                                background: `${getCategoryColor(p.categoria)}22`,
-                                border: `1px solid ${getCategoryColor(p.categoria)}44`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                            }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCategoryColor(p.categoria) }} />
-                            </div>
+                            {/* Avatar */}
+                            {p.image_url ? (
+                                <img
+                                    src={p.image_url}
+                                    style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }}
+                                    alt={p.nombre}
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                            ) : (
+                                <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    background: `${getCategoryColor(p.categoria)}22`,
+                                    border: `1px solid ${getCategoryColor(p.categoria)}44`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCategoryColor(p.categoria) }} />
+                                </div>
+                            )}
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ color: 'white', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {p.nombre}
@@ -296,7 +307,7 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                 </div>
             )}
 
-            {open && query.length >= 2 && results.length === 0 && !loading && (
+            {open && query.length > 0 && results.length === 0 && !loading && (
                 <div ref={dropdownRef} style={{
                     position: 'absolute',
                     top: 'calc(100% + 8px)',

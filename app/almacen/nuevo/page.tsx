@@ -1,253 +1,256 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { GlassCard } from '@/components/inventory/GlassCard';
-import {
-    ArrowLeft,
-    Save,
-    Package,
-    Tag,
-    Hash,
-    MapPin,
-    Droplets,
-    Wrench,
-    Fuel,
-    Truck,
-    ShieldCheck as ShieldSafe
-} from 'lucide-react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-const CATEGORIES = [
-    { id: 'her', name: 'Herramientas', icon: Wrench },
-    { id: 'mat', name: 'Materiales', icon: Package },
-    { id: 'maq', name: 'Maquinaria', icon: Truck },
-    { id: 'com', name: 'Combustibles', icon: Fuel },
-    { id: 'epp', name: 'EPP', icon: ShieldSafe },
-];
+const CATEGORIES = ['Domótica', 'Seguridad', 'Iluminación', 'Sensores', 'Automatización', 'Herramientas', 'Cables', 'Accesorios', 'Otros'];
+const UNITS = ['UND', 'MTR', 'KG', 'LT', 'CJ', 'M2', 'PAR', 'SET', 'KIT'];
 
-export default function NewInventoryItemPage() {
-    const [item, setItem] = useState({
-        sap_code: '',
-        name: '',
-        category_id: 'her',
-        unit: 'UND',
-        reorder_point: 0,
-        location: '',
-        // Tool-specific
-        brand: '',
-        model: '',
-        serial_number: '',
-        last_purchase_date: '',
-        status: 'OPERATIVO',
-        observations: '',
-    });
-    const [loading, setLoading] = useState(false);
+interface FormData {
+    name: string;
+    sap_code: string;
+    category_name: string;
+    unit: string;
+    stock_available: string;
+    reorder_point: string;
+    alert_threshold: string;
+    average_weighted_cost: string;
+    location: string;
+    image_url: string;
+    supplier_name: string;
+    supplier_contact: string;
+    description: string;
+}
+
+const EMPTY: FormData = {
+    name: '', sap_code: '', category_name: 'Domótica', unit: 'UND',
+    stock_available: '0', reorder_point: '5', alert_threshold: '5',
+    average_weighted_cost: '0', location: '', image_url: '',
+    supplier_name: '', supplier_contact: '', description: '',
+};
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+    return (
+        <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                {label} {required && <span style={{ color: '#FF3B30' }}>*</span>}
+            </label>
+            {children}
+        </div>
+    );
+}
+
+const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 16px',
+    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px', color: 'white', fontFamily: 'Inter,sans-serif',
+    fontWeight: 500, fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+};
+
+export default function NuevoItemPage() {
+    const [form, setForm] = useState<FormData>(EMPTY);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
     const router = useRouter();
-    const supabase = createClient();
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    function set(key: keyof FormData, val: string) {
+        setForm(f => ({ ...f, [key]: val }));
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        setLoading(true);
+        if (!form.name.trim()) { setError('El nombre del producto es obligatorio.'); return; }
+        setSaving(true); setError('');
 
-        try {
-            const { error } = await supabase
-                .from('global_inventory')
-                .insert([{
-                    ...item,
-                    stock_available: item.category_id === 'her' ? 1 : 0, // Tools usually start with 1 if registered individually
-                    stock_quarantine: 0,
-                    average_weighted_cost: 0,
-                    last_purchase_date: item.last_purchase_date || null
-                }]);
+        const supabase = createClient();
+        const payload = {
+            name: form.name.trim(),
+            sap_code: form.sap_code.trim() || null,
+            category_name: form.category_name,
+            unit: form.unit,
+            stock_available: parseFloat(form.stock_available) || 0,
+            stock_quarantine: 0,
+            reorder_point: parseFloat(form.reorder_point) || 5,
+            alert_threshold: parseInt(form.alert_threshold) || 5,
+            average_weighted_cost: parseFloat(form.average_weighted_cost) || 0,
+            last_purchase_price: parseFloat(form.average_weighted_cost) || null,
+            location: form.location.trim() || null,
+            image_url: form.image_url.trim() || null,
+            supplier_name: form.supplier_name.trim() || null,
+            supplier_contact: form.supplier_contact.trim() || null,
+            description: form.description.trim() || null,
+            is_active: true,
+        };
 
-            if (error) throw error;
-            router.push('/almacen');
-        } catch (error) {
-            console.error('Error creating item:', error);
-            alert('Error al crear el material/herramienta');
-        } finally {
-            setLoading(false);
+        const { data, error: err } = await supabase.from('global_inventory').insert(payload).select().single();
+
+        if (err) {
+            setError(err.message);
+            setSaving(false);
+            return;
         }
-    };
+
+        // Register initial movement if stock > 0
+        if (payload.stock_available > 0) {
+            await supabase.from('inventory_movements').insert({
+                material_id: data.id,
+                movement_type_code: '101',
+                quantity: payload.stock_available,
+                previous_stock: 0,
+                new_stock: payload.stock_available,
+                reason: 'stock_inicial',
+                notes: 'Stock inicial al crear el producto',
+                performed_by: 'Admin',
+            });
+        }
+
+        router.push('/almacen');
+    }
+
+    const glass = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '20px', backdropFilter: 'blur(20px)' };
 
     return (
-        <div className="min-h-screen bg-black text-white p-6 pb-24 font-sans">
-            <div className="max-w-2xl mx-auto">
-                {/* Header */}
-                <div className="flex items-center gap-4 mb-8">
-                    <Link href="/almacen">
-                        <button className="p-3 bg-zinc-900 border border-zinc-800 rounded-2xl hover:bg-zinc-800 transition-all">
-                            <ArrowLeft size={20} />
-                        </button>
-                    </Link>
-                    <div>
-                        <h1 className="text-3xl font-black tracking-tighter">ALTA DE ACTIVO</h1>
-                        <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Maestro de Inventario & Herramental</p>
-                    </div>
+        <div style={{ minHeight: '100vh', background: '#0A0A0F', fontFamily: 'Inter,-apple-system,sans-serif', color: 'white', padding: '20px', paddingBottom: '80px' }}>
+            <style>{`* { box-sizing:border-box; } input::placeholder,textarea::placeholder { color:rgba(255,255,255,0.2); } select option { background:#111; }`}</style>
+
+            {/* Header */}
+            <div style={{ maxWidth: '680px', margin: '0 auto' }}>
+                <div style={{ marginBottom: '28px' }}>
+                    <Link href="/almacen" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)', textDecoration: 'none', fontWeight: 600 }}>← Inventario</Link>
+                    <h1 style={{ margin: '8px 0 4px 0', fontSize: '28px', fontWeight: 900, letterSpacing: '-0.5px' }}>Nuevo Producto</h1>
+                    <p style={{ margin: 0, fontSize: '13px', color: 'rgba(255,255,255,0.3)' }}>Agrega un ítem al inventario de Casa Inteligente</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <GlassCard className="p-8">
-                        <div className="grid grid-cols-1 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Nombre / Descripción</label>
-                                <div className="relative">
-                                    <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
-                                    <input
-                                        type="text"
-                                        required
-                                        value={item.name}
-                                        onChange={(e) => setItem({ ...item, name: e.target.value })}
-                                        placeholder="Ej: Taladro Percutor Milwaukee 18V"
-                                        className="w-full bg-black border border-zinc-800 rounded-xl py-4 pl-12 pr-4 font-bold outline-none focus:bg-white focus:text-black focus:border-blue-500 transition-all text-lg"
-                                    />
-                                </div>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                    {/* ── Datos básicos ── */}
+                    <div style={{ ...glass, padding: '24px' }}>
+                        <p style={{ margin: '0 0 20px 0', fontSize: '11px', fontWeight: 700, color: '#FFD60A', textTransform: 'uppercase', letterSpacing: '1px' }}>📦 Datos Básicos</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+                            <Field label="Nombre del producto" required>
+                                <input
+                                    type="text" required placeholder="Ej: Control Remoto Universal Z-Wave"
+                                    value={form.name} onChange={e => set('name', e.target.value)}
+                                    style={inputStyle}
+                                />
+                            </Field>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                                <Field label="Código SAP / SKU">
+                                    <input type="text" placeholder="DOM-001" value={form.sap_code} onChange={e => set('sap_code', e.target.value)} style={inputStyle} />
+                                </Field>
+                                <Field label="Ubicación (pasillo/estante)">
+                                    <input type="text" placeholder="A-01" value={form.location} onChange={e => set('location', e.target.value)} style={inputStyle} />
+                                </Field>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Categoría Principal</label>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {CATEGORIES.map((cat) => {
-                                        const Icon = cat.icon;
-                                        const isActive = item.category_id === cat.id;
-                                        return (
-                                            <button
-                                                key={cat.id}
-                                                type="button"
-                                                onClick={() => setItem({ ...item, category_id: cat.id })}
-                                                className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${isActive
-                                                    ? 'border-blue-600 bg-blue-600/10 text-white'
-                                                    : 'border-zinc-800 bg-zinc-900/50 text-zinc-500 hover:border-zinc-700'
-                                                    }`}
-                                            >
-                                                <Icon size={20} />
-                                                <span className="text-[9px] font-black uppercase tracking-tighter">{cat.name}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                                <Field label="Categoría" required>
+                                    <select value={form.category_name} onChange={e => set('category_name', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                                        {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                                    </select>
+                                </Field>
+                                <Field label="Unidad de medida" required>
+                                    <select value={form.unit} onChange={e => set('unit', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                                        {UNITS.map(u => <option key={u}>{u}</option>)}
+                                    </select>
+                                </Field>
                             </div>
 
-                            {/* Conditional fields for Tools */}
-                            {item.category_id === 'her' && (
-                                <div className="bg-white/5 p-6 rounded-2xl border border-white/10 space-y-6">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest ml-1">Marca</label>
-                                            <input
-                                                type="text"
-                                                value={item.brand}
-                                                onChange={(e) => setItem({ ...item, brand: e.target.value })}
-                                                placeholder="Ej: Milwaukee"
-                                                className="w-full bg-black border border-zinc-800 rounded-xl p-3 font-bold outline-none focus:border-blue-500"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest ml-1">Modelo</label>
-                                            <input
-                                                type="text"
-                                                value={item.model}
-                                                onChange={(e) => setItem({ ...item, model: e.target.value })}
-                                                placeholder="Ej: 2804-20"
-                                                className="w-full bg-black border border-zinc-800 rounded-xl p-3 font-bold outline-none focus:border-blue-500"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest ml-1">Número de Serial</label>
-                                            <input
-                                                type="text"
-                                                value={item.serial_number}
-                                                onChange={(e) => setItem({ ...item, serial_number: e.target.value })}
-                                                placeholder="S/N: XXXXXXXX"
-                                                className="w-full bg-black border border-zinc-800 rounded-xl p-3 font-bold outline-none focus:border-blue-500"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest ml-1">Estatus</label>
-                                            <select
-                                                value={item.status}
-                                                onChange={(e) => setItem({ ...item, status: e.target.value })}
-                                                className="w-full bg-black border border-zinc-800 rounded-xl p-3 font-bold outline-none focus:bg-white focus:text-black focus:border-blue-500 transition-all"
-                                            >
-                                                <option value="OPERATIVO" className="text-black">OPERATIVO</option>
-                                                <option value="EN REPARACION" className="text-black">EN REPARACIÓN</option>
-                                                <option value="BAJA" className="text-black">FUERA DE SERVICIO (BAJA)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest ml-1">Fecha de Ingreso/Compra</label>
-                                        <input
-                                            type="date"
-                                            value={item.last_purchase_date}
-                                            onChange={(e) => setItem({ ...item, last_purchase_date: e.target.value })}
-                                            className="w-full bg-black border border-zinc-800 rounded-xl p-3 font-bold outline-none focus:border-blue-500"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest ml-1">Observaciones Técnicas</label>
-                                        <textarea
-                                            value={item.observations}
-                                            onChange={(e) => setItem({ ...item, observations: e.target.value })}
-                                            rows={3}
-                                            placeholder="Detalles sobre el estado, accesorios incluidos..."
-                                            className="w-full bg-black border border-zinc-800 rounded-xl p-3 font-bold outline-none focus:bg-white focus:text-black focus:border-blue-500 resize-none transition-all"
-                                        />
-                                    </div>
-                                </div>
-                            )}
+                            <Field label="Descripción">
+                                <textarea
+                                    rows={2} placeholder="Descripción breve del producto, uso o especificaciones..."
+                                    value={form.description} onChange={e => set('description', e.target.value)}
+                                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+                                />
+                            </Field>
+                        </div>
+                    </div>
 
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Código Interno / SAP</label>
-                                    <div className="relative">
-                                        <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
-                                        <input
-                                            type="text"
-                                            value={item.sap_code}
-                                            onChange={(e) => setItem({ ...item, sap_code: e.target.value })}
-                                            placeholder="Ej: HER-001"
-                                            className="w-full bg-black border border-zinc-800 rounded-xl py-4 pl-12 pr-4 font-bold outline-none focus:border-white transition-all"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Ubicación (Pasillo/Estante)</label>
-                                    <div className="relative">
-                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
-                                        <input
-                                            type="text"
-                                            value={item.location}
-                                            onChange={(e) => setItem({ ...item, location: e.target.value })}
-                                            placeholder="Ej: Taller 1 - Estante A"
-                                            className="w-full bg-black border border-zinc-800 rounded-xl py-4 pl-12 pr-4 font-bold outline-none focus:border-white transition-all"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                    {/* ── Stock & costos ── */}
+                    <div style={{ ...glass, padding: '24px' }}>
+                        <p style={{ margin: '0 0 20px 0', fontSize: '11px', fontWeight: 700, color: '#34C759', textTransform: 'uppercase', letterSpacing: '1px' }}>📊 Stock & Costos</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '14px' }}>
+                            <Field label="Stock inicial" required>
+                                <input type="number" min="0" step="0.01" value={form.stock_available} onChange={e => set('stock_available', e.target.value)} style={inputStyle} />
+                            </Field>
+                            <Field label="Punto de reorden">
+                                <input type="number" min="0" step="0.01" value={form.reorder_point} onChange={e => set('reorder_point', e.target.value)} style={inputStyle} />
+                            </Field>
+                            <Field label="Umbral de alerta">
+                                <input type="number" min="0" value={form.alert_threshold} onChange={e => set('alert_threshold', e.target.value)} style={inputStyle} />
+                            </Field>
+                            <Field label="Costo prom. (USD)">
+                                <input type="number" min="0" step="0.01" value={form.average_weighted_cost} onChange={e => set('average_weighted_cost', e.target.value)} style={inputStyle} />
+                            </Field>
                         </div>
 
-                        <div className="mt-10">
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg hover:bg-zinc-200 transition-all shadow-xl shadow-white/5 disabled:opacity-50 flex items-center justify-center gap-3"
-                            >
-                                {loading ? (
-                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
-                                ) : (
-                                    <>
-                                        <Save size={24} />
-                                        CREAR MATERIAL
-                                    </>
-                                )}
+                        {/* Visual preview */}
+                        {(parseFloat(form.stock_available) > 0 || parseFloat(form.average_weighted_cost) > 0) && (
+                            <div style={{ marginTop: '16px', padding: '14px 18px', background: 'rgba(52,199,89,0.06)', border: '1px solid rgba(52,199,89,0.2)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                                <div>
+                                    <p style={{ margin: '0 0 2px 0', fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 700, textTransform: 'uppercase' }}>Valor inicial en inventario</p>
+                                    <p style={{ margin: 0, fontSize: '20px', fontWeight: 900, color: '#34C759' }}>
+                                        ${(parseFloat(form.stock_available || '0') * parseFloat(form.average_weighted_cost || '0')).toFixed(2)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p style={{ margin: '0 0 2px 0', fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 700, textTransform: 'uppercase' }}>Alerta cuando baje de</p>
+                                    <p style={{ margin: 0, fontSize: '20px', fontWeight: 900, color: '#FF9500' }}>
+                                        {form.reorder_point} {form.unit}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Proveedor ── */}
+                    <div style={{ ...glass, padding: '24px' }}>
+                        <p style={{ margin: '0 0 20px 0', fontSize: '11px', fontWeight: 700, color: '#00AEEF', textTransform: 'uppercase', letterSpacing: '1px' }}>🏭 Proveedor</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                            <Field label="Nombre del proveedor">
+                                <input type="text" placeholder="TechDistrib CA" value={form.supplier_name} onChange={e => set('supplier_name', e.target.value)} style={inputStyle} />
+                            </Field>
+                            <Field label="Contacto / Teléfono">
+                                <input type="text" placeholder="+58 412 000 0000" value={form.supplier_contact} onChange={e => set('supplier_contact', e.target.value)} style={inputStyle} />
+                            </Field>
+                        </div>
+                    </div>
+
+                    {/* ── Imagen ── */}
+                    <div style={{ ...glass, padding: '24px' }}>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '11px', fontWeight: 700, color: '#FF9500', textTransform: 'uppercase', letterSpacing: '1px' }}>🖼 Imagen</p>
+                        <Field label="URL de imagen (opcional)">
+                            <input type="url" placeholder="https://..." value={form.image_url} onChange={e => set('image_url', e.target.value)} style={inputStyle} />
+                        </Field>
+                        {form.image_url && (
+                            <div style={{ marginTop: '12px', width: '80px', height: '80px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                <img src={form.image_url} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Error */}
+                    {error && (
+                        <div style={{ padding: '14px 18px', background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.3)', borderRadius: '12px', color: '#FF3B30', fontWeight: 700, fontSize: '13px' }}>
+                            ⚠️ {error}
+                        </div>
+                    )}
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <Link href="/almacen" style={{ flex: 1 }}>
+                            <button type="button" style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '15px' }}>
+                                Cancelar
                             </button>
-                        </div>
-                    </GlassCard>
+                        </Link>
+                        <button type="submit" disabled={saving} style={{ flex: 2, padding: '16px', borderRadius: '16px', border: 'none', background: saving ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg,#FFD60A,#FF9500)', color: saving ? 'rgba(255,255,255,0.3)' : '#000', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 900, fontSize: '15px' }}>
+                            {saving ? '⏳ Guardando…' : '✅ Agregar al Inventario'}
+                        </button>
+                    </div>
+
                 </form>
             </div>
         </div>

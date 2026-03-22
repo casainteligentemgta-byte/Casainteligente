@@ -70,6 +70,17 @@ const navItems = [
             </svg>
         ),
     },
+    {
+        href: '/empleados',
+        label: 'Empleados',
+        icon: (active: boolean) => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={active ? '#FFD60A' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="9" cy="7" r="4" stroke={active ? '#FFD60A' : '#8E8E93'} strokeWidth="2" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={active ? '#FFD60A' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        ),
+    },
 ];
 
 export default function IOSNavBar() {
@@ -89,7 +100,7 @@ export default function IOSNavBar() {
             <div className="flex items-center justify-around px-2 pt-2 pb-2">
                 {navItems.map((item) => {
                     const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-                    const activeColor = item.label === 'Conta' ? '#5856D6' : (item.label === 'Inventario' ? '#FF2D55' : (item.label === 'Productos' ? '#FF9500' : (item.label === 'Ventas' ? '#34C759' : '#007AFF')));
+                    const activeColor = item.label === 'Conta' ? '#5856D6' : (item.label === 'Inventario' ? '#FF2D55' : (item.label === 'Productos' ? '#FF9500' : (item.label === 'Ventas' ? '#34C759' : (item.label === 'Empleados' ? '#FFD60A' : '#007AFF'))));
 
                     return (
                         <Link

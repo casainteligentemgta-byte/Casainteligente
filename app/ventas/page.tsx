@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
+import ClientSearch, { Customer } from '@/components/ventas/ClientSearch';
 
 interface LineItem {
     id: string;
@@ -58,6 +59,7 @@ function VentasContent() {
     const [showZelle, setShowZelle] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [budgetNumber, setBudgetNumber] = useState('500');
 
     // Pre-cargar datos desde query params
     useEffect(() => {
@@ -85,9 +87,9 @@ function VentasContent() {
                         setClientRif(data.customer_rif || '');
                         setCustomerId(data.customer_id);
                         setNotes(data.notes || '');
-                        setShowZelle(data.show_zelle !== false); // Default to true if undefined
+                        setShowZelle(data.show_zelle !== false);
+                        if (data.budget_number) setBudgetNumber(String(data.budget_number));
 
-                        // Si hay customer_id, buscar sus datos completos si no los tenemos
                         if (data.customer_id) {
                             supabase.from('customers').select('movil, email').eq('id', data.customer_id).single().then(({ data: c }) => {
                                 if (c) {
@@ -97,7 +99,6 @@ function VentasContent() {
                             });
                         }
 
-                        // Mapear items de la DB al estado local
                         const loadedItems = (data.items as any[]).map(item => ({
                             id: `${item.product_id}-${Math.random()}`,
                             product: item.product_data,
@@ -107,6 +108,14 @@ function VentasContent() {
                         }));
                         setItems(loadedItems);
                     }
+                });
+        } else {
+            // Auto-numerar desde 500 + cantidad de presupuestos existentes
+            supabase
+                .from('budgets')
+                .select('id', { count: 'exact', head: true })
+                .then(({ count }) => {
+                    setBudgetNumber(String(500 + (count || 0) + 1));
                 });
         }
 
@@ -389,15 +398,23 @@ function VentasContent() {
                         </div>
                     )}
 
-                    <input
-                        type="text"
+                    <ClientSearch
                         value={clientName}
-                        onChange={e => setClientName(e.target.value)}
-                        placeholder={clientRif ? 'Editar nombre...' : 'Nombre del cliente o empresa...'}
-                        style={{
-                            width: '100%', background: 'transparent', border: 'none', outline: 'none',
-                            color: 'var(--label-primary)', fontSize: '16px', fontFamily: 'inherit', fontWeight: 500,
+                        onChange={(val) => {
+                            setClientName(val);
+                            if (val === '') {
+                                setClientRif('');
+                                setCustomerId(null);
+                            }
                         }}
+                        onSelect={(customer) => {
+                            setClientName(customer.nombre);
+                            setClientRif(customer.rif || '');
+                            setClientPhone(customer.movil || '');
+                            setClientEmail(customer.email || '');
+                            setCustomerId(customer.id);
+                        }}
+                        placeholder={clientRif ? 'Editar nombre...' : 'Nombre del cliente o empresa...'}
                     />
                 </div>
 
@@ -495,6 +512,13 @@ function VentasContent() {
                                         }}>
                                             {idx + 1}
                                         </div>
+                                        {item.product.image_url && (
+                                            <img 
+                                                src={item.product.image_url} 
+                                                alt={item.product.nombre} 
+                                                style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
+                                            />
+                                        )}
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                                                 <CategoryBadge cat={item.product.categoria} />
@@ -581,6 +605,28 @@ function VentasContent() {
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {/* ── Número de Presupuesto ── */}
+                {items.length > 0 && (
+                    <div style={{ ...glass, padding: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                            Nº Presupuesto
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', padding: '6px 12px', flex: 1 }}>
+                            <span style={{ color: 'var(--label-secondary)', fontSize: '14px', fontWeight: 600 }}>PR-</span>
+                            <input
+                                type="text"
+                                value={budgetNumber}
+                                onChange={e => setBudgetNumber(e.target.value.replace(/\D/g, ''))}
+                                style={{
+                                    background: 'transparent', border: 'none', outline: 'none',
+                                    color: '#00AEEF', fontSize: '16px', fontWeight: 700,
+                                    fontFamily: 'inherit', width: '80px',
+                                }}
+                            />
+                        </div>
                     </div>
                 )}
 
@@ -746,6 +792,7 @@ function VentasContent() {
                                             unitPrice: i.unitPrice,
                                             discount: i.discount,
                                             costo: i.product.costo,
+                                            image_url: i.product.image_url,
                                         })),
                                         subtotal,
                                         totalCost,
@@ -753,7 +800,7 @@ function VentasContent() {
                                         marginPct,
                                         showZelle,
                                         fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-                                        numero: budgetId ? `P-${budgetId.slice(0, 4)}` : `P-${Math.floor(Math.random() * 900) + 100}`,
+                                        numero: `PR-${budgetNumber}`,
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
                                     window.open('/ventas/preview', '_blank');
@@ -804,6 +851,66 @@ function VentasContent() {
                             Limpiar presupuesto
                         </button>
                     </div>
+                )}
+
+                {/* ── FAB Vista Previa (Flotante) ── */}
+                {items.length > 0 && (
+                    <button
+                        onClick={() => {
+                            // Guardar datos en localStorage y navegar
+                            const presupuesto = {
+                                cliente: clientName,
+                                rif: clientRif,
+                                telefono: clientPhone,
+                                email: clientEmail,
+                                notas: notes,
+                                items: items.map(i => ({
+                                    nombre: i.product.nombre,
+                                    categoria: i.product.categoria,
+                                    qty: i.qty,
+                                    unitPrice: i.unitPrice,
+                                    discount: i.discount,
+                                    costo: i.product.costo,
+                                    image_url: i.product.image_url,
+                                })),
+                                subtotal,
+                                totalCost,
+                                totalProfit,
+                                marginPct,
+                                showZelle,
+                                fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
+                                numero: `PR-${budgetNumber}`,
+                            };
+                            localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
+                            window.open('/ventas/preview', '_blank');
+                        }}
+                        style={{
+                            position: 'fixed',
+                            bottom: '30px',
+                            right: '30px',
+                            zIndex: 100,
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '32px',
+                            background: 'linear-gradient(135deg, #00AEEF, #0077D4)',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: 'none',
+                            boxShadow: '0 8px 32px rgba(0, 174, 239, 0.4)',
+                            cursor: 'pointer',
+                            transition: 'transform 0.2s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05) translateY(-4px)'}
+                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1) translateY(0)'}
+                        title="Ver Vista Previa"
+                    >
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </button>
                 )}
             </div>
 

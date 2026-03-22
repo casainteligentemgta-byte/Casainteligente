@@ -9,6 +9,7 @@ interface PreviewItem {
     unitPrice: number;
     discount: number;
     costo: number | null;
+    image_url?: string | null;
 }
 
 interface Presupuesto {
@@ -23,6 +24,8 @@ interface Presupuesto {
     showZelle: boolean;
     fecha: string;
     numero: string;
+    telefono?: string;
+    email?: string;
 }
 
 function fmt(n: number) {
@@ -49,91 +52,108 @@ export default function PreviewPage() {
                 fontFamily: 'Inter, -apple-system, sans-serif',
             }}>
                 <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
                     <p style={{ fontSize: '16px' }}>No hay presupuesto para mostrar.</p>
-                    <p style={{ fontSize: '13px', marginTop: '8px' }}>Ve a Ventas y presiona "Vista previa".</p>
+                    <p style={{ fontSize: '13px', marginTop: '8px' }}>Ve a Ventas y genera una vista previa.</p>
                 </div>
             </div>
         );
     }
 
-    const totalItems = data.items.reduce((s, i) => s + i.qty, 0);
-    const descuento = 0; // puede extenderse
+    const descuento = 0; // Se puede calcular si hay descuentos globales
+    const total = data.subtotal - descuento;
 
     return (
         <div style={{
             minHeight: '100vh',
-            background: '#0A0A0F',
+            background: 'var(--bg-primary, #0A0A0F)',
             fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
             color: 'white',
-            paddingBottom: '40px',
+            paddingBottom: '80px',
         }}>
+
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap');
+            `}</style>
 
             {/* ── Toolbar (no se imprime) ── */}
             <div className="no-print" style={{
                 position: 'sticky', top: 0, zIndex: 50,
-                background: 'rgba(10,10,15,0.9)',
+                background: 'rgba(10,10,15,0.85)',
                 backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 borderBottom: '1px solid rgba(255,255,255,0.08)',
-                padding: '12px 20px',
+                padding: '16px 24px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button
                         onClick={() => window.close()}
                         style={{
                             background: 'rgba(255,255,255,0.08)', border: 'none',
-                            borderRadius: '10px', padding: '8px 14px',
-                            color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600,
+                            borderRadius: '12px', padding: '10px 16px',
+                            color: 'rgba(255,255,255,0.8)', fontSize: '14px', fontWeight: 600,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '6px',
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            transition: 'background 0.2s',
                         }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                             <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                         Volver
                     </button>
-                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
-                        Presupuesto {data.numero}
+                    <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }} />
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px', fontWeight: 500 }}>
+                        Vista Previa: <strong style={{ color: 'white', fontWeight: 700 }}>PR-{data.numero}</strong>
                     </span>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '12px' }}>
                     <button
                         onClick={() => {
-                            const text = `PRESUPUESTO CASA INTELIGENTE, C.A.\nNro: ${data.numero}\nFecha: ${data.fecha}\nCliente: ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n${'─'.repeat(50)}\n${data.items.map(i => `${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n${'─'.repeat(50)}\nTOTAL: $${fmt(data.subtotal)}`;
+                            const text = `PRESUPUESTO CASA INTELIGENTE, C.A.\nNro: ${data.numero}\nFecha: ${data.fecha}\nCliente: ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n${'-'.repeat(40)}\n${data.items.map(i => `${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n${'-'.repeat(40)}\nTOTAL: $${fmt(data.subtotal)}`;
                             navigator.clipboard.writeText(text);
+                            alert("Texto copiado al portapapeles");
                         }}
                         style={{
-                            background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
-                            borderRadius: '12px', padding: '10px 18px',
-                            color: '#007AFF', fontSize: '13px', fontWeight: 600,
+                            background: 'transparent', border: '1px solid rgba(0,174,239,0.4)',
+                            borderRadius: '12px', padding: '10px 20px',
+                            color: '#00AEEF', fontSize: '14px', fontWeight: 600,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '6px',
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            transition: 'all 0.2s'
                         }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,174,239,0.1)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <rect x="9" y="9" width="13" height="13" rx="2" stroke="#007AFF" strokeWidth="2" />
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="#007AFF" strokeWidth="2" />
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
+                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2" />
                         </svg>
-                        Copiar
+                        Copiar Info
                     </button>
                     <button
                         onClick={() => {
-                            const text = `*PRESUPUESTO CASA INTELIGENTE, C.A.*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*\n\n_Generado por Casa Inteligente APP_`;
-                            const phone = (data as any).telefono ? (data as any).telefono.replace(/\D/g, '') : '';
+                            const text = `*COTIZACIÓN CASA INTELIGENTE*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*\n\n_Generado por Casa Inteligente_`;
+                            const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
                             window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
                         }}
                         style={{
                             background: '#25D366', border: 'none',
-                            borderRadius: '12px', padding: '10px 18px',
-                            color: 'white', fontSize: '13px', fontWeight: 700,
+                            borderRadius: '12px', padding: '10px 20px',
+                            color: 'white', fontSize: '14px', fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            boxShadow: '0 4px 12px rgba(37,211,102,0.3)',
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            boxShadow: '0 4px 14px rgba(37,211,102,0.3)',
+                            transition: 'transform 0.2s'
                         }}
+                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                        onMouseLeave={e => e.currentTarget.style.transform = 'none'}
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984 0 1.758.459 3.474 1.33 4.982L2 22l5.167-1.357a9.945 9.945 0 004.845 1.259h.004c5.507 0 9.99-4.478 9.991-9.984 0-2.667-1.037-5.176-2.922-7.062A9.92 9.92 0 0012.012 2z" />
                         </svg>
                         WhatsApp
@@ -141,355 +161,217 @@ export default function PreviewPage() {
                     <button
                         onClick={() => window.print()}
                         style={{
-                            background: 'rgba(255,255,255,0.08)', borderRadius: '12px', padding: '10px 18px',
-                            border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '13px',
-                            fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
-                        }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-                            <rect x="6" y="14" width="12" height="8" rx="1" />
-                        </svg>
-                        PDF
-                    </button>
-                    <button
-                        onClick={() => {
-                            // Simple text download fallback or just print
-                            window.print();
-                        }}
-                        style={{
-                            background: 'linear-gradient(135deg, #FF9500, #FF6B00)',
-                            border: 'none', borderRadius: '12px', padding: '10px 20px',
-                            color: 'white', fontSize: '13px', fontWeight: 700,
+                            background: 'linear-gradient(135deg, #00AEEF, #0077D4)',
+                            border: 'none', borderRadius: '12px', padding: '10px 24px',
+                            color: 'white', fontSize: '14px', fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            boxShadow: '0 4px 16px rgba(255,149,0,0.4)',
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            boxShadow: '0 4px 16px rgba(0,174,239,0.4)',
+                            transition: 'transform 0.2s'
                         }}
+                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                        onMouseLeave={e => e.currentTarget.style.transform = 'none'}
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                            <rect x="6" y="14" width="12" height="8"></rect>
                         </svg>
-                        Descargar
+                        Imprimir / PDF
                     </button>
                 </div>
             </div>
 
-            {/* ── Documento ── */}
+            {/* ── Document Container (A4 Proportions, Pinterest UI) ── */}
             <div style={{
-                maxWidth: '800px', margin: '32px auto 0',
+                maxWidth: '850px',
+                margin: '40px auto',
                 padding: '0 20px',
+                display: 'flex',
+                justifyContent: 'center'
             }}>
-                <div style={{
-                    background: 'linear-gradient(160deg, #111118 0%, #0D0D14 100%)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '24px',
-                    overflow: 'hidden',
-                    boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
+                <div className="printable-document" style={{
+                    width: '100%',
+                    background: '#FFFFFF',
+                    boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    flexDirection: 'row',
+                    color: '#1C1C1E',
+                    minHeight: '1122px', // Approx A4 height
                 }}>
-
-                    {/* ── Header del documento ── */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, #0D1B2A 0%, #0A1628 100%)',
-                        padding: '28px 32px 24px',
-                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    
+                    {/* ── Left Sidebar ── */}
+                    <div className="sidebar" style={{ 
+                        width: '280px', 
+                        background: '#ECECF1', // Light gray like the Pinterest image
+                        padding: '28px 30px 40px 30px', 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        flexShrink: 0
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                            {/* Logo + empresa */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                <div style={{
-                                    width: '52px', height: '52px', borderRadius: '14px',
-                                    background: 'linear-gradient(135deg, #007AFF, #0055CC)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    boxShadow: '0 4px 16px rgba(0,122,255,0.4)',
-                                    flexShrink: 0,
-                                }}>
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M9 22V12h6v10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <circle cx="12" cy="8" r="1.5" fill="white" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-                                        CASA INTELIGENTE, C.A.
-                                    </h2>
-                                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '3px', letterSpacing: '0.5px' }}>
-                                        Security & Domotics · RIF J-12345678-9
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Fecha + número */}
-                            <div style={{ textAlign: 'right' }}>
-                                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px' }}>{data.fecha}</p>
-                                <div style={{
-                                    background: 'linear-gradient(135deg, #007AFF, #5856D6)',
-                                    borderRadius: '10px', padding: '6px 14px',
-                                    display: 'inline-block',
-                                }}>
-                                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'white', letterSpacing: '0.3px' }}>
-                                        Presupuesto Nro. {data.numero}
-                                    </span>
-                                </div>
+                        {/* Logo Casa Inteligente */}
+                        <div style={{ marginBottom: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                            <img
+                                src="/logo-original.jpg"
+                                alt="Casa Inteligente Logo"
+                                style={{
+                                    width: '114px',
+                                    height: '114px',
+                                    objectFit: 'contain',
+                                    mixBlendMode: 'multiply',
+                                    borderRadius: '16px',
+                                }}
+                            />
+                            <div style={{ marginTop: '0px' }}>
+                                <h1 style={{ fontSize: '18px', fontWeight: 900, color: '#111111', margin: 0, letterSpacing: '0.5px' }}>CASA INTELIGENTE</h1>
+                                <p style={{ fontSize: '10px', color: '#0088CC', fontWeight: 700, margin: '4px 0 0 0', letterSpacing: '1.5px', textTransform: 'uppercase' }}>TECNOLOGÍA Y SEGURIDAD</p>
                             </div>
                         </div>
 
-                        {/* Cliente */}
-                        <div style={{ marginTop: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {data.cliente ? (
-                                    <>
-                                        <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>
-                                            {data.cliente.toUpperCase()}
-                                        </h1>
+                        {/* Invoice To */}
+                        <div style={{ marginBottom: '40px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#333333', marginBottom: '8px', borderBottom: '1px solid #D4D4D8', paddingBottom: '4px' }}>Preparado para</h3>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: 0 }}>{data.cliente || 'Cliente no especificado'}</p>
+                            {data.rif && <p style={{ fontSize: '11px', color: '#52525B', margin: '4px 0 0 0' }}>{data.rif}</p>}
+                            {data.telefono && (
+                                <p style={{ fontSize: '11px', color: '#52525B', margin: '6px 0 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#52525B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+                                    </svg>
+                                    {data.telefono}
+                                </p>
+                            )}
+                            {data.email && (
+                                <p style={{ fontSize: '11px', color: '#52525B', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#52525B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                                    </svg>
+                                    {data.email}
+                                </p>
+                            )}
+                        </div>
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                            {/* RIF / ID */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{ width: '20px', display: 'flex', justifyContent: 'center' }}>
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <rect x="3" y="4" width="18" height="16" rx="2" />
-                                                        <circle cx="9" cy="10" r="2" />
-                                                        <path d="M15 8h2M15 12h2M7 16h10" />
-                                                    </svg>
-                                                </div>
-                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>
-                                                    {data.rif || 'Sin identificación'}
-                                                </span>
-                                            </div>
+                        {/* Invoice Details */}
+                        <div style={{ marginBottom: '40px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#333333', marginBottom: '8px', borderBottom: '1px solid #D4D4D8', paddingBottom: '4px' }}>Presupuesto Detallado</h3>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 2px 0' }}>Presupuesto Nº:</p>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: '0 0 12px 0' }}>PR-{data.numero}</p>
+                            
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 2px 0' }}>Fecha:</p>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: 0 }}>{data.fecha}</p>
+                        </div>
 
-                                            {/* Teléfono */}
-                                            {data.items[0] && ( // Usamos una pequeña verificación o podrías pasar movil/email en el objeto del localStorage
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <div style={{ width: '20px', display: 'flex', justifyContent: 'center' }}>
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                                                            <line x1="12" y1="18" x2="12.01" y2="18" />
-                                                        </svg>
-                                                    </div>
-                                                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
-                                                        {/* Recuperados del localStorage si los añadimos */}
-                                                        {(data as any).telefono || 'Teléfono no disp.'}
-                                                    </span>
-                                                </div>
+                        {/* Payment Method */}
+                        {data.showZelle !== false && (
+                        <div style={{ marginBottom: '40px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#333333', marginBottom: '8px', borderBottom: '1px solid #D4D4D8', paddingBottom: '4px' }}>Métodos de Pago</h3>
+                            
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: '#18181B', margin: '0 0 2px 0' }}>Zelle:</p>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 10px 0' }}>casainteligentemgta@gmail.com</p>
+                            
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: '#18181B', margin: '0 0 2px 0' }}>Banesco:</p>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 1px 0' }}>Cta. Corriente Nº 01340563388563303880</p>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 1px 0' }}>Luis Vicente Mata</p>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 10px 0' }}>C.I. V-13848186</p>
+
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: '#18181B', margin: '0 0 2px 0' }}>Teléfonos:</p>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0' }}>0412-2117270</p>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0' }}>0414-7937270</p>
+                        </div>
+                        )}
+
+                        {/* Total Due Banner */}
+                        <div style={{ marginBottom: '40px', marginTop: 'auto' }}>
+                            <p style={{ fontSize: '13px', color: '#52525B', marginBottom: '6px' }}>Total Pagar</p>
+                            <p style={{ fontSize: '22px', fontWeight: 800, color: '#333333', margin: 0 }}>USD: ${fmt(total)}</p>
+                        </div>
+
+                        {/* Office address */}
+                        <div>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#333333', marginBottom: '8px', borderBottom: '1px solid #D4D4D8', paddingBottom: '4px' }}>Oficina</h3>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 2px 0' }}>Isla de Margarita, Venezuela</p>
+                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 2px 0' }}>RIF J-407035258</p>
+                        </div>
+                    </div>
+
+                    {/* ── Right Content ── */}
+                    <div style={{ flex: 1, padding: '60px 50px 50px 50px', display: 'flex', flexDirection: 'column' }}>
+
+
+                        {/* TABLE */}
+                        <div style={{ width: '100%', marginBottom: '40px' }}>
+                            {/* Table Header */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 85px 50px 85px', background: '#F4F4F5', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#333333' }}>Descripciones</div>
+                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#333333', textAlign: 'right' }}>Precio Unit.</div>
+                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#333333', textAlign: 'right' }}>Cant.</div>
+                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#333333', textAlign: 'right' }}>Total</div>
+                            </div>
+
+                            {/* Table Rows */}
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                {data.items.map((item, idx) => (
+                                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 85px 50px 85px', padding: '12px 12px', borderBottom: idx === data.items.length - 1 ? 'none' : '1px solid #F4F4F5' }}>
+                                        <div style={{ paddingRight: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            {item.image_url && (
+                                                <img 
+                                                    src={item.image_url} 
+                                                    alt={item.nombre} 
+                                                    style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0, border: '1px solid #E5E7EB' }}
+                                                />
                                             )}
-
-                                            {/* Email */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{ width: '20px', display: 'flex', justifyContent: 'center' }}>
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                                                        <polyline points="22,6 12,13 2,6" />
-                                                    </svg>
-                                                </div>
-                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
-                                                    {(data as any).email || 'Correo no especificado'}
-                                                </span>
+                                            <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                                                <p style={{ fontSize: '12px', fontWeight: 600, color: '#18181B', margin: '0 0 4px 0', wordBreak: 'break-word', lineHeight: '1.4' }}>{item.nombre}</p>
+                                                {item.categoria && <p style={{ fontSize: '10px', color: '#A1A1AA', margin: 0 }}>{item.categoria}</p>}
                                             </div>
                                         </div>
-                                    </>
-                                ) : (
-                                    <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>Información de cliente no disponible</p>
-                                )}
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Total Pagar</p>
-                                <p style={{ fontSize: '40px', fontWeight: 800, color: '#34C759', letterSpacing: '-0.04em', lineHeight: 1 }}>
-                                    <span style={{ fontSize: '20px', fontWeight: 600 }}>$</span>
-                                    {fmt(data.subtotal)}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ── Tabla de productos ── */}
-                    <div style={{ padding: '0' }}>
-                        {/* Encabezado tabla */}
-                        <div style={{
-                            display: 'grid', gridTemplateColumns: '1fr 100px 60px 110px',
-                            padding: '12px 32px',
-                            background: 'linear-gradient(90deg, rgba(0,122,255,0.25), rgba(88,86,214,0.15))',
-                            borderBottom: '1px solid rgba(0,122,255,0.2)',
-                        }}>
-                            {['Descripción', 'Precio', 'Cant', 'SubTotal'].map((h, i) => (
-                                <span key={h} style={{
-                                    fontSize: '11px', fontWeight: 700, color: 'white',
-                                    letterSpacing: '0.5px', textTransform: 'uppercase',
-                                    textAlign: i > 0 ? 'right' : 'left',
-                                }}>
-                                    {h}
-                                </span>
-                            ))}
-                        </div>
-
-                        {/* Filas */}
-                        {data.items.map((item, idx) => {
-                            const total = lineTotal(item);
-                            return (
-                                <div key={idx} style={{
-                                    display: 'grid', gridTemplateColumns: '1fr 100px 60px 110px',
-                                    padding: '14px 32px',
-                                    borderBottom: '1px solid rgba(255,255,255,0.04)',
-                                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)',
-                                    transition: 'background 0.15s',
-                                }}>
-                                    <div>
-                                        <p style={{ fontSize: '13px', fontWeight: 500, color: 'white', lineHeight: 1.3 }}>
-                                            {item.nombre}
-                                            {item.qty > 1 && (
-                                                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginLeft: '6px' }}>
-                                                    (x{item.qty})
-                                                </span>
-                                            )}
-                                        </p>
-                                        {item.categoria && (
-                                            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>{item.categoria}</p>
-                                        )}
+                                        <div style={{ fontSize: '12px', color: '#52525B', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                            ${fmt(item.unitPrice)}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#52525B', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                            {item.qty >= 10 ? item.qty : `0${item.qty}`}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#333333', textAlign: 'right', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                            ${fmt(lineTotal(item))}
+                                        </div>
                                     </div>
-                                    <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textAlign: 'right', alignSelf: 'center' }}>
-                                        ${fmt(item.unitPrice)}
-                                    </p>
-                                    <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textAlign: 'right', alignSelf: 'center' }}>
-                                        {item.qty}
-                                    </p>
-                                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'white', textAlign: 'right', alignSelf: 'center' }}>
-                                        ${fmt(total)}
-                                    </p>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* ── Footer: condiciones + totales ── */}
-                    <div style={{
-                        display: 'grid', gridTemplateColumns: '1fr auto',
-                        gap: '24px', padding: '24px 32px',
-                        borderTop: '1px solid rgba(255,255,255,0.06)',
-                        background: 'rgba(0,0,0,0.2)',
-                    }}>
-                        {/* Condiciones */}
-                        <div>
-                            <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginBottom: '8px' }}>
-                                CONDICIONES:
-                            </p>
-                            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: '380px' }}>
-                                Los precios aquí descritos tienen una vigencia de 3 días hábiles; el cliente debe abonar
-                                el 80% del costo total del presupuesto, el resto mediante valuaciones del mismo.
-                            </p>
-                            {data.showZelle !== false && (
-                                <>
-                                    <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
-                                        MÉTODO DE PAGO:
-                                    </p>
-                                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
-                                        Zelle: casainteligentemgta@gmail.com · 0412-2117270 · 0414-7937270
-                                    </p>
-                                </>
-                            )}
-                            {data.notas && (
-                                <>
-                                    <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
-                                        NOTAS:
-                                    </p>
-                                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>{data.notas}</p>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Totales */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
-                            {[
-                                { label: 'SUB-Total', value: `$${fmt(data.subtotal)}`, highlight: false },
-                                { label: 'Descuento', value: `$${fmt(descuento)}`, highlight: false },
-                                { label: 'Items', value: data.items.length.toString(), highlight: false },
-                                { label: 'Artículos', value: totalItems.toString(), highlight: false },
-                            ].map(row => (
-                                <div key={row.label} style={{
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    border: '1px solid rgba(255,255,255,0.08)',
-                                    borderRadius: '10px', padding: '10px 14px',
-                                }}>
-                                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>{row.label}</span>
-                                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>{row.value}</span>
-                                </div>
-                            ))}
-
-                            {/* Total grande */}
-                            <div style={{
-                                background: 'linear-gradient(135deg, rgba(52,199,89,0.2), rgba(52,199,89,0.08))',
-                                border: '1px solid rgba(52,199,89,0.3)',
-                                borderRadius: '12px', padding: '12px 14px',
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                marginTop: '4px',
-                            }}>
-                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#34C759' }}>TOTAL</span>
-                                <span style={{ fontSize: '18px', fontWeight: 800, color: '#34C759' }}>${fmt(data.subtotal)}</span>
+                                ))}
                             </div>
                         </div>
-                    </div>
 
-                    {/* ── Action Buttons Footer (Mobile Friendly) ── */}
-                    <div className="no-print" style={{
-                        padding: '24px 32px',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: '12px',
-                        background: 'rgba(255,255,255,0.02)',
-                        borderTop: '1px solid rgba(255,255,255,0.05)',
-                    }}>
-                        <button
-                            onClick={() => window.print()}
-                            style={{
-                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: '16px', padding: '16px 12px',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                                color: 'white', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-                            }}
-                        >
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2">
-                                <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-                                <rect x="6" y="14" width="12" height="8" rx="1" />
-                            </svg>
-                            Imprimir
-                        </button>
+                        {/* TOTALS */}
+                        <div style={{ alignSelf: 'flex-end', width: '320px', marginBottom: '60px' }}>
+                            <div style={{ height: '2px', background: '#F4F4F5', marginBottom: '16px' }}></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                                <span style={{ fontSize: '13px', color: '#52525B' }}>Sub Total</span>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>${fmt(data.subtotal)}</span>
+                            </div>
+                            {descuento > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                                <span style={{ fontSize: '13px', color: '#52525B' }}>Descuento</span>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>-${fmt(descuento)}</span>
+                            </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #E4E4E7' }}>
+                                <span style={{ fontSize: '13px', color: '#52525B' }}>Impuestos (Exento)</span>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>$0.00</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '2px solid #333333' }}>
+                                <span style={{ fontSize: '15px', fontWeight: 700, color: '#333333' }}>GRAN TOTAL</span>
+                                <span style={{ fontSize: '15px', fontWeight: 700, color: '#333333' }}>${fmt(total)}</span>
+                            </div>
+                        </div>
 
-                        <button
-                            onClick={() => {
-                                // Simple PDF trigger using print
-                                window.print();
-                            }}
-                            style={{
-                                background: 'rgba(255,149,0,0.15)', border: '1px solid rgba(255,149,0,0.3)',
-                                borderRadius: '16px', padding: '16px 12px',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                                color: '#FF9500', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-                            }}
-                        >
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FF9500" strokeWidth="2">
-                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                            </svg>
-                            Descargar
-                        </button>
-
-                        <button
-                            onClick={() => {
-                                const text = `*PRESUPUESTO CASA INTELIGENTE, C.A.*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*`;
-                                const phone = (data as any).telefono ? (data as any).telefono.replace(/\D/g, '') : '';
-                                window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
-                            }}
-                            style={{
-                                background: 'rgba(52,199,89,0.15)', border: '1px solid rgba(52,199,89,0.3)',
-                                borderRadius: '16px', padding: '16px 12px',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                                color: '#34C759', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-                            }}
-                        >
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984 0 1.758.459 3.474 1.33 4.982L2 22l5.167-1.357a9.945 9.945 0 004.845 1.259h.004c5.507 0 9.99-4.478 9.991-9.984 0-2.667-1.037-5.176-2.922-7.062A9.92 9.92 0 0012.012 2z" />
-                            </svg>
-                            WhatsApp
-                        </button>
+                        {/* FOOTER */}
+                        <div style={{ marginTop: 'auto', width: '100%' }}>
+                            <h3 style={{ fontSize: '18px', fontWeight: 500, color: '#A1A1AA', margin: '0 0 16px 0' }}>
+                                Gracias <br/><span style={{ color: '#00AEEF' }}>Por Preferirnos !</span>
+                            </h3>
+                            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#333333', margin: '0 0 8px 0' }}>Términos & Condiciones</h4>
+                            <p style={{ fontSize: '11px', color: '#71717A', margin: 0, lineHeight: 1.5, width: '100%', textAlign: 'justify' }}>
+                                {data.notas ? data.notas : 'Los precios descritos tienen vigencia de 3 días hábiles. Requerido anticipo del 80% para iniciar, saldo contra valuaciones. Materiales e insumos sujetos a disponibilidad en inventario.'}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -497,8 +379,9 @@ export default function PreviewPage() {
             <style>{`
                 @media print {
                     .no-print { display: none !important; }
-                    body { background: #0A0A0F !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    @page { margin: 0; size: A4; }
+                    body { background: #FFFFFF !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; }
+                    .printable-document { box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; min-height: auto !important; }
+                    @page { margin: 0; size: A4 portrait; }
                 }
             `}</style>
         </div>

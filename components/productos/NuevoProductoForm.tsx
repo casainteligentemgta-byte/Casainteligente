@@ -9,6 +9,9 @@ const CATEGORIAS = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 
 export default function NuevoProductoForm({ initialData, isEditing }: { initialData?: any; isEditing?: boolean }) {
     const router = useRouter();
     const [saving, setSaving] = useState(false);
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image_url || null);
+
     const [form, setForm] = useState({
         nombre: initialData?.nombre || '',
         categoria: initialData?.categoria || '',
@@ -18,6 +21,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         costo: initialData?.costo?.toString() || '',
         precio: initialData?.precio?.toString() || '',
         cantidad: initialData?.cantidad?.toString() || '',
+        image_url: initialData?.image_url || null,
     });
 
     const utilidad = form.costo && form.precio
@@ -28,12 +32,42 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         ? (((parseFloat(form.precio) - parseFloat(form.costo)) / parseFloat(form.precio)) * 100).toFixed(1)
         : null;
 
-    const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+    const set = (k: string, v: string | null) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+        }
+    };
 
     const handleSave = async () => {
         if (!form.nombre.trim()) return alert('El nombre es obligatorio');
         setSaving(true);
         const supabase = createClient();
+
+        let uploadedImageUrl = form.image_url;
+
+        // Subir la imagen si hay una nueva
+        if (imageFile) {
+            const fileExt = imageFile.name.split('.').pop();
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('productos')
+                .upload(fileName, imageFile, { cacheControl: '3600', upsert: false });
+
+            if (uploadError) {
+                alert('Fallo al subir imagen: ' + uploadError.message + '. Asegúrate de que el bucket "productos" exista.');
+                setSaving(false);
+                return;
+            }
+
+            if (uploadData) {
+                const { data: { publicUrl } } = supabase.storage.from('productos').getPublicUrl(uploadData.path);
+                uploadedImageUrl = publicUrl;
+            }
+        }
 
         const productData = {
             nombre: form.nombre.trim(),
@@ -45,6 +79,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
             precio: form.precio ? parseFloat(form.precio) : null,
             utilidad: form.costo && form.precio ? parseFloat(form.precio) - parseFloat(form.costo) : null,
             cantidad: form.cantidad ? parseInt(form.cantidad) : 0,
+            image_url: uploadedImageUrl,
         };
 
         let error;
@@ -57,7 +92,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         }
 
         setSaving(false);
-        if (error) { alert('Error al guardar: ' + error.message); return; }
+        if (error) { alert('Error al guardar en BD: ' + error.message + '\n¿Añadiste la columna image_url?'); return; }
 
         router.push('/productos');
         router.refresh();
@@ -85,6 +120,40 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
 
     return (
         <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+            {/* ── Image Upload ── */}
+            <div style={{ ...fieldBox, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                <label style={{ ...labelStyle, textAlign: 'center', marginBottom: '12px' }}>Foto del Producto</label>
+                
+                <div 
+                    onClick={() => document.getElementById('imageUpload')?.click()}
+                    style={{
+                        width: '120px', height: '120px', borderRadius: '16px', margin: '0 auto',
+                        background: imagePreview ? `url(${imagePreview}) center/cover` : 'rgba(255,255,255,0.05)',
+                        border: '2px dashed rgba(255,255,255,0.2)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', transition: 'all 0.2s',
+                    }}
+                >
+                    {!imagePreview && (
+                        <>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.5, marginBottom: '8px' }}>
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+                                <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></circle>
+                            </svg>
+                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Tocar para foto</span>
+                        </>
+                    )}
+                </div>
+                <input 
+                    id="imageUpload"
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment" /* Activa la cámara en móviles */
+                    onChange={handleImageChange} 
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} 
+                />
+            </div>
+
             {/* Form content */}
             <div style={fieldBox}>
                 <label style={labelStyle}>Nombre del Producto *</label>
