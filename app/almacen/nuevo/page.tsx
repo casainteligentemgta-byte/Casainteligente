@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -54,6 +54,31 @@ export default function NuevoItemPage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const router = useRouter();
+
+    // ── Foto upload ──
+    const [fotoMode, setFotoMode] = useState<'opciones' | 'url'>('opciones');
+    const [fotoUploading, setFotoUploading] = useState(false);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+
+    async function handleFotoFile(file: File) {
+        if (!file) return;
+        setFotoUploading(true);
+        // Show local preview immediately
+        const preview = URL.createObjectURL(file);
+        set('image_url', preview);
+        try {
+            const supabase = createClient();
+            const ext = file.name.split('.').pop() ?? 'jpg';
+            const path = `inventario/${Date.now()}.${ext}`;
+            const { error: upErr } = await supabase.storage.from('media').upload(path, file, { upsert: true });
+            if (!upErr) {
+                const { data } = supabase.storage.from('media').getPublicUrl(path);
+                set('image_url', data.publicUrl);
+            }
+        } finally {
+            setFotoUploading(false);
+        }
+    }
 
     function set(key: keyof FormData, val: string) {
         setForm(f => ({ ...f, [key]: val }));
@@ -221,15 +246,57 @@ export default function NuevoItemPage() {
 
                     {/* ── Imagen ── */}
                     <div style={{ ...glass, padding: '24px' }}>
-                        <p style={{ margin: '0 0 16px 0', fontSize: '11px', fontWeight: 700, color: '#FF9500', textTransform: 'uppercase', letterSpacing: '1px' }}>🖼 Imagen</p>
-                        <Field label="URL de imagen (opcional)">
-                            <input type="url" placeholder="https://..." value={form.image_url} onChange={e => set('image_url', e.target.value)} style={inputStyle} />
-                        </Field>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '11px', fontWeight: 700, color: '#FF9500', textTransform: 'uppercase', letterSpacing: '1px' }}>🖼 Foto del Producto</p>
+
+                        {/* Preview */}
                         {form.image_url && (
-                            <div style={{ marginTop: '12px', width: '80px', height: '80px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <div style={{ position: 'relative', width: '100%', height: '160px', borderRadius: '14px', overflow: 'hidden', marginBottom: '14px', border: '1px solid rgba(255,255,255,0.1)' }}>
                                 <img src={form.image_url} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                {fotoUploading && (
+                                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <span style={{ fontSize: '12px', color: '#FFD60A', fontWeight: 700 }}>⏳ Subiendo...</span>
+                                    </div>
+                                )}
+                                <button type="button" onClick={() => set('image_url', '')} style={{ position: 'absolute', top: '8px', right: '8px', padding: '4px 10px', border: 'none', borderRadius: '8px', background: 'rgba(255,59,48,0.8)', color: 'white', fontFamily: 'inherit', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}>✕ Quitar</button>
                             </div>
                         )}
+
+                        {/* Mode: opciones */}
+                        {fotoMode === 'opciones' && !form.image_url && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                                {/* Cámara + Galería (input sin capture = muestra ambos en móvil) */}
+                                <button type="button" onClick={() => photoInputRef.current?.click()}
+                                    style={{ padding: '16px 8px', borderRadius: '14px', border: '1px solid rgba(0,174,239,0.3)', background: 'rgba(0,174,239,0.06)', cursor: 'pointer', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>📷</div>
+                                    <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#00AEEF' }}>Cámara / Galería</p>
+                                </button>
+                                <button type="button" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*,application/pdf'; i.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if(f) handleFotoFile(f); }; i.click(); }}
+                                    style={{ padding: '16px 8px', borderRadius: '14px', border: '1px solid rgba(123,97,255,0.3)', background: 'rgba(123,97,255,0.06)', cursor: 'pointer', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>📁</div>
+                                    <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#7B61FF' }}>Archivos</p>
+                                </button>
+                                <button type="button" onClick={() => setFotoMode('url')}
+                                    style={{ padding: '16px 8px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', cursor: 'pointer', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>🔗</div>
+                                    <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>URL</p>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Mode: URL */}
+                        {fotoMode === 'url' && (
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <input type="url" placeholder="https://..." value={form.image_url}
+                                    onChange={e => set('image_url', e.target.value)}
+                                    style={{ ...inputStyle, flex: 1 }} />
+                                <button type="button" onClick={() => { set('image_url',''); setFotoMode('opciones'); }}
+                                    style={{ padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '12px' }}>✕</button>
+                            </div>
+                        )}
+
+                        {/* Hidden input — sin capture para mostrar cámara Y galería en móvil */}
+                        <input ref={photoInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleFotoFile(f); e.target.value = ''; }} />
                     </div>
 
                     {/* Error */}
