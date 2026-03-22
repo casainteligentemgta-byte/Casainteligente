@@ -1,14 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-// Opt out of static prerendering — this page uses useSearchParams()
-export const dynamic = 'force-dynamic';
-
-
-export default function NuevaEvaluacionPage() {
+function NuevaEvaluacionContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const preselectedId = searchParams.get('empleadoId');
@@ -182,5 +178,17 @@ export default function NuevaEvaluacionPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function NuevaEvaluacionPage() {
+    return (
+        <Suspense fallback={
+            <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontFamily: 'Inter,sans-serif' }}>
+                Cargando…
+            </div>
+        }>
+            <NuevaEvaluacionContent />
+        </Suspense>
     );
 }
