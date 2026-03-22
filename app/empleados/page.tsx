@@ -102,7 +102,7 @@ export default function EmpleadosPage() {
                 </div>
                 {['all','activo','inactivo','permiso','vacaciones'].map(s => (
                     <button key={s} onClick={() => setFilterStatus(s)} style={{
-                        padding: '12px 18px', borderRadius: '14px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit',
+                        padding: '12px 18px', borderRadius: '14px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit',
                         background: filterStatus === s ? 'rgba(0,174,239,0.2)' : 'rgba(255,255,255,0.04)',
                         color: filterStatus === s ? '#00AEEF' : 'rgba(255,255,255,0.5)',
                         border: filterStatus === s ? '1px solid rgba(0,174,239,0.4)' : '1px solid rgba(255,255,255,0.08)',
