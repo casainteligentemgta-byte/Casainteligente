@@ -28,7 +28,7 @@ const MOCK_PROJECTS: Project[] = [
     }
 ]
 
-export async function getProjects(): Promise<{ data: Project[] | null, error: any }> {
+export async function getProjects(): Promise<{ data: Project[] | null, error: string | null }> {
     const cookieStore = cookies()
 
     // Si no hay credenciales de Supabase configuradas, devuelve datos simulados (mock)

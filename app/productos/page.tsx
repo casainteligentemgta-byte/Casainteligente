@@ -4,21 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-
-interface Product {
-    id: number;
-    nombre: string;
-    categoria: string | null;
-    modelo: string | null;
-    marca: string | null;
-    descripcion: string | null;
-    costo: number | null;
-    precio: number | null;
-    utilidad: number | null;
-    cantidad: number | null;
-    image_url: string | null;
-    ubicacion?: string | null;
-}
+import type { Product } from '@/types';
 
 const CATEGORIAS_COMERCIALES = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network'];
 const CATEGORIAS_INTERNAS = ['Herramientas', 'Insumos', 'Consumibles', 'Materiales'];

@@ -15,3 +15,8 @@ export interface Project {
     description?: string
     installation_address?: string
 }
+
+export type { Customer, CustomerTipo, CustomerStatus, CustomerListItem, CustomerCategoriaUi } from './customer'
+export type { Employee, EmployeeEstatus, EmployeeStudy, EmployeeExperience, EmployeeCourse, EmployeeReference, EmployeeAffiliation } from './employee'
+export type { Product } from './product'
+export type { Evaluacion, EvaluacionStatus, Semaforo, DominantDisc } from './evaluacion'

@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import { createClient } from '@/lib/supabase/client';
+import type { CustomerListItem } from '@/types';
 
 const FILTERS = ['Todos', 'Personas', 'Empresas', 'Activos', 'Pendientes', 'Inactivos'];
 
 export default function ClientesPage() {
     const [search, setSearch] = useState('');
     const [filtro, setFiltro] = useState('Todos');
-    const [lista, setLista] = useState<any[]>([]);
+    const [lista, setLista] = useState<CustomerListItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchClientes = useCallback(async () => {

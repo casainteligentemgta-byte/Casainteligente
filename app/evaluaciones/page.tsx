@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import type { Evaluacion } from '@/types';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
     pending:   { label: 'Esperando',   bg: 'rgba(255,214,10,0.12)', text: '#FFD60A' },
@@ -18,7 +19,7 @@ const SEMAFORO_COLOR: Record<string, string> = {
 
 export default function EvaluacionesPage() {
     const router = useRouter();
-    const [evaluaciones, setEvaluaciones] = useState<any[]>([]);
+    const [evaluaciones, setEvaluaciones] = useState<Evaluacion[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
@@ -131,14 +132,14 @@ export default function EvaluacionesPage() {
                                         )}
                                     </div>
                                     <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
-                                        Creada: {new Date(ev.created_at).toLocaleString('es-VE')}
+                                        Creada: {ev.created_at ? new Date(ev.created_at).toLocaleString('es-VE') : '—'}
                                         {ev.tab_changes > 0 && <span style={{ marginLeft: '10px', color: '#FF9500' }}>⚠️ {ev.tab_changes} cambio(s) de ventana</span>}
                                     </div>
                                     {isCompleted && (
                                         <div style={{ marginTop: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                            {['D','I','S','C'].map(dim => (
+                                            {(['d','i','s','c'] as const).map(dim => (
                                                 <span key={dim} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }}>
-                                                    {dim}:{ev[`disc_${dim.toLowerCase()}`]}
+                                                    {dim.toUpperCase()}:{ev[`disc_${dim}` as keyof typeof ev]}
                                                 </span>
                                             ))}
                                             <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: `${sf}15`, color: sf || 'white', fontWeight: 700 }}>
