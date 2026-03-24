@@ -323,7 +323,7 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                 }}>
                     <div style={{ fontSize: '32px', marginBottom: '8px' }}>🔍</div>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Sin resultados para "{query}"</div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Sin resultados para &ldquo;{query}&rdquo;</div>
                 </div>
             )}
 

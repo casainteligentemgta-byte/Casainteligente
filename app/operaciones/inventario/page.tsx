@@ -111,7 +111,7 @@ export default function InventarioView() {
             Inventario en Tiempo Real
             {isLoading && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Gestiona existencias de "Casa Inteligente" y registra compras.</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Gestiona existencias de &ldquo;Casa Inteligente&rdquo; y registra compras.</p>
         </div>
         
         <button 

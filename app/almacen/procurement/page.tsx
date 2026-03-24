@@ -455,7 +455,7 @@ export default function ProcurementPage() {
                                         {/* Gemini description (reference) */}
                                         {mode === 'review' && item.description && (
                                             <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>
-                                                🤖 IA detectó: <em>"{item.description}"</em>
+                                                🤖 IA detectó: <em>&ldquo;{item.description}&rdquo;</em>
                                             </p>
                                         )}
                                     </div>

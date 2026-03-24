@@ -40,7 +40,7 @@ export default function ComprasPage() {
                     <div style={{ textAlign: 'center', marginTop: '80px', color: 'rgba(255,255,255,0.2)' }}>
                         <div style={{ fontSize: '64px', marginBottom: '16px' }}>🧾</div>
                         <p style={{ fontSize: '18px', fontWeight: 700 }}>No hay compras registradas</p>
-                        <p style={{ fontSize: '14px', marginTop: '4px' }}>Toca el botón "+" para subir tu primera factura.</p>
+                        <p style={{ fontSize: '14px', marginTop: '4px' }}>Toca el botón &ldquo;+&rdquo; para subir tu primera factura.</p>
                     </div>
                 ) : (
                     <div style={{ display: 'grid', gap: '12px' }}>
