@@ -56,6 +56,22 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'No se recibió ningún archivo.' }, { status: 400 });
         }
 
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+        if (file.size > MAX_FILE_SIZE) {
+            return NextResponse.json(
+                { error: 'El archivo excede el límite de 10 MB.' },
+                { status: 413 }
+            );
+        }
+
+        const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+        if (file.type && !ALLOWED_TYPES.includes(file.type)) {
+            return NextResponse.json(
+                { error: 'Tipo de archivo no soportado. Usa JPEG, PNG, WebP, GIF o PDF.' },
+                { status: 415 }
+            );
+        }
+
         // Convert file to base64
         const bytes = await file.arrayBuffer();
         const base64 = Buffer.from(bytes).toString('base64');
@@ -101,7 +117,7 @@ export async function POST(req: NextRequest) {
             const errText = await geminiRes.text();
             console.error('Gemini API error:', errText);
             return NextResponse.json(
-                { error: `Error de Gemini API: ${geminiRes.status}`, detail: errText },
+                { error: `Error de Gemini API (${geminiRes.status}). Intenta de nuevo.` },
                 { status: 502 }
             );
         }
@@ -122,10 +138,10 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ success: true, data: parsed });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('scan-invoice error:', err);
         return NextResponse.json(
-            { error: err.message ?? 'Error interno del servidor.' },
+            { error: 'Error interno del servidor.' },
             { status: 500 }
         );
     }
