@@ -31,8 +31,39 @@ export async function GET(
       { status: 404 },
     );
   }
+  // Si la columna `numero_correlativo` no existe aún, calculamos un correlativo temporal.
+  let numero_correlativo_override: number | null = null;
+  try {
+    const raw = (budget as any).numero_correlativo as unknown;
+    const correlativoNum =
+      typeof raw === 'number'
+        ? raw
+        : typeof raw === 'string'
+          ? Number(raw)
+          : null;
+    const correlativoMissing = correlativoNum == null || Number.isNaN(correlativoNum);
 
-  const html = buildPresupuestoPrintHtml({ ...budget, id });
+    if (correlativoMissing) {
+      const { data: allBudgets } = await supabase
+        .from('budgets')
+        .select('id,created_at')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
+
+      if (allBudgets && Array.isArray(allBudgets)) {
+        const idx = allBudgets.findIndex((b: any) => String(b.id) === id);
+        if (idx >= 0) numero_correlativo_override = 500 + idx;
+      }
+    }
+  } catch {
+    /* ignorar */
+  }
+
+  const html = buildPresupuestoPrintHtml({
+    ...budget,
+    id,
+    ...(numero_correlativo_override != null ? { numero_correlativo: numero_correlativo_override } : {}),
+  });
 
   return new NextResponse(html, {
     status: 200,

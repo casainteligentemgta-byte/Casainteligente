@@ -27,7 +27,7 @@ function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function getPresupuestoNumero(b: Budget) {
+function getPresupuestoNumero(b: Budget, fallback?: number) {
     const raw = b.numero_correlativo;
     const n =
         typeof raw === 'number'
@@ -36,6 +36,7 @@ function getPresupuestoNumero(b: Budget) {
                 ? Number(raw)
                 : null;
     if (n != null && !Number.isNaN(n)) return `P-${n}`;
+    if (fallback != null && !Number.isNaN(fallback)) return `P-${fallback}`;
     return `P-${b.id.slice(0, 8).toUpperCase()}`;
 }
 
@@ -47,6 +48,7 @@ export default function PresupuestosPage() {
     const [sortBy, setSortBy] = useState<'fecha' | 'nomenclatura'>('fecha');
     const [searchTerm, setSearchTerm] = useState('');
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
+    const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
 
     const fetchBudgets = async () => {
         setLoading(true);
@@ -58,23 +60,47 @@ export default function PresupuestosPage() {
 
         const { data, error } = await query;
         if (!error && data) {
+            // Si la migración no se aplicó en la BD todavía, `numero_correlativo` puede no existir.
+            // En ese caso asignamos correlativos en memoria empezando en 500 (por fecha asc + id asc).
+            const fallbackMap: Record<string, number> = {};
+            const needsFallback = data.some((b) => b.numero_correlativo == null);
+            if (needsFallback) {
+                const ordered = [...data].sort((a, b) => {
+                    const da = new Date(a.created_at).getTime();
+                    const db = new Date(b.created_at).getTime();
+                    if (da !== db) return da - db;
+                    return a.id.localeCompare(b.id);
+                });
+                ordered.forEach((b, idx) => {
+                    fallbackMap[b.id] = 500 + idx;
+                });
+                setFallbackById(fallbackMap);
+            }
+
+            const getNumeroOrden = (b: Budget) => {
+                const raw = b.numero_correlativo;
+                const n =
+                    typeof raw === 'number'
+                        ? raw
+                        : typeof raw === 'string'
+                            ? Number(raw)
+                            : null;
+                if (n != null && !Number.isNaN(n)) return n;
+                return fallbackMap[b.id] ?? 500;
+            };
+
             let sorted = [...data];
             if (sortBy === 'fecha') {
                 sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
             } else {
-                sorted.sort((a, b) => {
-                    const na = Number(a.numero_correlativo ?? NaN);
-                    const nb = Number(b.numero_correlativo ?? NaN);
-                    if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-                    return a.id.localeCompare(b.id);
-                });
+                sorted.sort((a, b) => getNumeroOrden(a) - getNumeroOrden(b));
             }
 
             if (searchTerm) {
                 sorted = sorted.filter(b =>
                     b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     b.customer_rif.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    getPresupuestoNumero(b).toLowerCase().includes(searchTerm.toLowerCase())
+                    getPresupuestoNumero(b, fallbackMap[b.id]).toLowerCase().includes(searchTerm.toLowerCase())
                 );
             }
             setBudgets(sorted);
@@ -109,7 +135,7 @@ export default function PresupuestosPage() {
     };
 
     const handleShare = (b: Budget) => {
-        const text = `*PRESUPUESTO CASA INTELIGENTE*\nCliente: ${b.customer_name}\nTotal: $${formatUSD(b.subtotal)}\nNro: ${getPresupuestoNumero(b)}`;
+                    const text = `*PRESUPUESTO CASA INTELIGENTE*\nCliente: ${b.customer_name}\nTotal: $${formatUSD(b.subtotal)}\nNro: ${getPresupuestoNumero(b, fallbackById[b.id])}`;
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
@@ -249,7 +275,7 @@ export default function PresupuestosPage() {
                                             </h3>
                                         </div>
                                         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginBottom: '8px' }}>
-                                            {b.customer_rif} · <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{getPresupuestoNumero(b)}</span>
+                                            {b.customer_rif} · <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{getPresupuestoNumero(b, fallbackById[b.id])}</span>
                                         </p>
                                         <div style={{
                                             ...STATUS_COLORS[b.status],

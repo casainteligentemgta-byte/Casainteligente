@@ -186,11 +186,44 @@ export default function PreviewPage() {
                         }
                     }
                     if (cancelled) return;
+
+                    // Si la columna `numero_correlativo` no existe aún en la BD,
+                    // calculamos un correlativo temporal en memoria para mostrar P-500+.
+                    let numeroOverride: string | null = null;
+                    try {
+                        const raw = (budget as any).numero_correlativo as unknown;
+                        const correlativoNum =
+                            typeof raw === 'number'
+                                ? raw
+                                : typeof raw === 'string'
+                                    ? Number(raw)
+                                    : null;
+                        const correlativoMissing = correlativoNum == null || Number.isNaN(correlativoNum);
+
+                        if (correlativoMissing) {
+                            const { data: allBudgets } = await supabase
+                                .from('budgets')
+                                .select('id,created_at')
+                                .order('created_at', { ascending: true })
+                                .order('id', { ascending: true });
+
+                            if (allBudgets && Array.isArray(allBudgets)) {
+                                const idx = allBudgets.findIndex((b: any) => String(b.id) === idParam);
+                                if (idx >= 0) numeroOverride = `P-${500 + idx}`;
+                            }
+                        }
+                    } catch {
+                        /* sin override */
+                    }
+
                     const payload = budgetRowToPreviewPayload(budget as Record<string, unknown>, {
                         telefono,
                         email,
                         direccion,
                     });
+                    if (numeroOverride) {
+                        payload.numero = numeroOverride;
+                    }
                     const vista = normalizePresupuestoVista(payload);
                     setData(vista);
                     setIsDemo(false);
@@ -516,7 +549,8 @@ export default function PreviewPage() {
                                             height: '100%',
                                             objectFit: 'cover',
                                             display: 'block',
-                                            mixBlendMode: 'multiply',
+                                            mixBlendMode: 'normal',
+                                            filter: 'brightness(1.08) contrast(1.05)',
                                         }}
                                     />
                                 </div>
