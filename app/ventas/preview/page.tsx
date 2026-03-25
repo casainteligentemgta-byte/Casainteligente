@@ -36,6 +36,14 @@ function budgetRowToPreviewPayload(
     });
     const id = String(budget.id ?? '');
     const created = budget.created_at ? new Date(String(budget.created_at)) : new Date();
+    const correlativoRaw = (budget as any).numero_correlativo as unknown;
+    const correlativoNum =
+        typeof correlativoRaw === 'number'
+            ? correlativoRaw
+            : typeof correlativoRaw === 'string'
+                ? Number(correlativoRaw)
+                : null;
+
     return {
         cliente: budget.customer_name ?? '',
         rif: budget.customer_rif ?? '',
@@ -47,7 +55,12 @@ function budgetRowToPreviewPayload(
         marginPct: Number(budget.margin_pct) || 0,
         showZelle: budget.show_zelle !== false,
         fecha: created.toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-        numero: id ? `P-${id.slice(0, 4)}` : 'P-—',
+        numero:
+            correlativoNum != null && !Number.isNaN(correlativoNum)
+                ? `P-${correlativoNum}`
+                : id
+                    ? `P-${id.slice(0, 4)}`
+                    : 'P-—',
         telefono: extra.telefono,
         email: extra.email,
         direccion: extra.direccion,
@@ -491,11 +504,21 @@ export default function PreviewPage() {
                                         justifyContent: 'center',
                                     }}
                                     title="Casa Inteligente"
-                                    aria-hidden
                                 >
-                                    <span style={{ fontSize: '15px', fontWeight: 800, color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.06em' }}>
-                                        CI
-                                    </span>
+                                    <img
+                                        className="logo-casa-inteligente"
+                                        src="/logo-casa-inteligente.png"
+                                        alt="Casa Inteligente"
+                                        width={52}
+                                        height={52}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            display: 'block',
+                                            mixBlendMode: 'multiply',
+                                        }}
+                                    />
                                 </div>
                                 <div>
                                     <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
@@ -812,7 +835,7 @@ export default function PreviewPage() {
 
             <style>{`
                 /* Nunca mostrar fotos de producto dentro del documento (ni extensiones ni HTML residual). */
-                .presupuesto-sin-fotos-producto img,
+                .presupuesto-sin-fotos-producto img:not(.logo-casa-inteligente),
                 .presupuesto-sin-fotos-producto picture {
                     display: none !important;
                     width: 0 !important;

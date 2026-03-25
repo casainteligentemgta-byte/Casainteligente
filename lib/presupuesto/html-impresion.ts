@@ -21,6 +21,7 @@ export type BudgetRow = {
   items?: unknown;
   created_at?: string | null;
   id?: string;
+  numero_correlativo?: number | null;
 };
 
 function escapeHtml(s: string) {
@@ -75,7 +76,12 @@ export function sanitizeBudgetItemsForPrint(raw: unknown): BudgetItemJson[] {
 export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
   const { impresion: c } = PRESUPUESTO_BRAND;
   const items = sanitizeBudgetItemsForPrint(budget.items);
-  const idShort = (budget.id ?? '').slice(0, 8).toUpperCase();
+  const numeroCorrelativo =
+    budget.numero_correlativo != null ? Number(budget.numero_correlativo) : null;
+  const idShort =
+    numeroCorrelativo != null && !Number.isNaN(numeroCorrelativo)
+      ? String(numeroCorrelativo)
+      : (budget.id ?? '').slice(0, 8).toUpperCase();
   const fecha = budget.created_at
     ? new Date(budget.created_at).toLocaleDateString('es', {
         day: 'numeric',
@@ -128,6 +134,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       padding-bottom: 14px; margin-bottom: 18px;
     }
     .brand-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 4px; color: ${c.texto}; }
+    .logo-casa-inteligente { width: 56px; height: 56px; object-fit: cover; border-radius: 14px; margin-bottom: 6px; }
     .brand-sub { font-size: 10px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.06em; }
     .badge {
       background: ${c.acento}; color: #fff; font-weight: 700; font-size: 11px;
@@ -169,6 +176,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
   <div class="sheet">
     <div class="top">
       <div>
+        <img src="/logo-casa-inteligente.png" alt="" class="logo-casa-inteligente" />
         <h1 class="brand-name">${escapeHtml(PRESUPUESTO_BRAND.nombreLegal)}</h1>
         <p class="brand-sub">${escapeHtml(PRESUPUESTO_BRAND.tagline)} RIF ${escapeHtml(PRESUPUESTO_BRAND.rifEmpresa)}</p>
       </div>

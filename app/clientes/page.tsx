@@ -5,7 +5,10 @@ import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import { createClient } from '@/lib/supabase/client';
 
-const FILTERS = ['Todos', 'Personas', 'Empresas', 'Activos', 'Pendientes', 'Inactivos'];
+// En clientes solo mostramos clasificación por tipo:
+// - Personas naturales
+// - Personas jurídicas (empresas)
+const FILTERS = ['Personas', 'Empresas'];
 
 type ClienteTipoCard = 'V' | 'J' | 'E';
 type ClienteStatusCard = 'activo' | 'inactivo' | 'pendiente';
@@ -33,7 +36,7 @@ function normalizarStatus(s: string | null | undefined): ClienteStatusCard {
 
 export default function ClientesPage() {
     const [search, setSearch] = useState('');
-    const [filtro, setFiltro] = useState('Todos');
+    const [filtro, setFiltro] = useState('Personas');
     const [lista, setLista] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -99,17 +102,12 @@ export default function ClientesPage() {
             (c.movil && String(c.movil).includes(search));
 
         const matchFiltro =
-            filtro === 'Todos' ? true :
-                filtro === 'Personas' ? c.categoria === 'personal' :
-                    filtro === 'Empresas' ? c.categoria === 'empresa' :
-                        filtro === 'Activos' ? c.status === 'activo' :
-                            filtro === 'Pendientes' ? c.status === 'pendiente' :
-                                filtro === 'Inactivos' ? c.status === 'inactivo' : true;
+            filtro === 'Personas' ? c.categoria === 'personal' : c.categoria === 'empresa';
 
         return matchSearch && matchFiltro;
     });
 
-    const activos = lista.filter(c => c.status === 'activo').length;
+    const personasCount = lista.filter(c => c.categoria === 'personal').length;
     const empresasCount = lista.filter(c => c.categoria === 'empresa').length;
 
     const handleDelete = async (id: string) => {
@@ -187,7 +185,8 @@ export default function ClientesPage() {
                             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'white', lineHeight: 1 }}>Clientes</h1>
                             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
                                 {filtered.length} de {lista.length} registros
-                                {filtro !== 'Todos' ? ` · ${filtro}` : ''}
+                                {' · '}
+                                {filtro}
                                 {search ? ` · "${search}"` : ''}
                             </p>
                         </div>
@@ -273,7 +272,7 @@ export default function ClientesPage() {
                 {[
                     { label: 'Total', value: lista.length, color: '#007AFF', bg: 'rgba(0,122,255,0.08)', border: 'rgba(0,122,255,0.15)' },
                     { label: 'Empresas', value: empresasCount, color: '#FF9500', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.15)' },
-                    { label: 'Activos', value: activos, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
+                    { label: 'Personas', value: personasCount, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                 ].map(s => (
                     <div key={s.label} style={{
                         background: s.bg, border: `1px solid ${s.border}`,
@@ -294,9 +293,9 @@ export default function ClientesPage() {
                         <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
                             Prueba con otro término o filtro
                         </p>
-                        {(search || filtro !== 'Todos') && (
+                                {(search || filtro !== 'Personas') && (
                             <button
-                                onClick={() => { setSearch(''); setFiltro('Todos'); }}
+                                        onClick={() => { setSearch(''); setFiltro('Personas'); }}
                                 style={{
                                     marginTop: '16px', padding: '10px 20px', borderRadius: '12px',
                                     background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',

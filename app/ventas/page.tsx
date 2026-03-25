@@ -18,6 +18,9 @@ interface LineItem {
     qty: number;
     unitPrice: number;
     discount: number;
+    // Asignación interna (uso empresa / garantía): qué artículo del inventario y serial reservó esta línea.
+    inventoryItemIds?: (string | null)[];
+    serialNumbers?: (string | null)[];
 }
 
 /** Fila mínima de `customers` para el selector de presupuesto */
@@ -79,6 +82,21 @@ function VentasContent() {
     const [showZelle, setShowZelle] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    type InventoryCandidate = {
+        id: string;
+        name: string;
+        serial_number: string | null;
+        location: string | null;
+        sap_code: string | null;
+    };
+
+    // Modal para asignar seriales (uso interno).
+    const [serialModalOpen, setSerialModalOpen] = useState(false);
+    const [serialModalLineId, setSerialModalLineId] = useState<string | null>(null);
+    const [serialModalLoading, setSerialModalLoading] = useState(false);
+    const [serialCandidates, setSerialCandidates] = useState<InventoryCandidate[]>([]);
+    const [serialSelectedIds, setSerialSelectedIds] = useState<string[]>([]);
 
     const applyCustomer = useCallback((c: CustomerPickerRow) => {
         setCustomerId(c.id);
@@ -204,6 +222,12 @@ function VentasContent() {
                                 qty: item.qty,
                                 unitPrice: item.unit_price,
                                 discount: item.discount || 0,
+                                inventoryItemIds: Array.isArray(item.inventory_item_ids)
+                                    ? (item.inventory_item_ids as unknown[]).map((x) => (x == null ? null : String(x)))
+                                    : [],
+                                serialNumbers: Array.isArray(item.serial_numbers)
+                                    ? (item.serial_numbers as unknown[]).map((x) => (x == null ? null : String(x)))
+                                    : [],
                             };
                         });
                         setItems(loadedItems);
@@ -235,10 +259,12 @@ function VentasContent() {
                         if (!error && data) {
                             const newItems = data.map((p: Product) => ({
                                 id: `${p.id}-${Math.random().toString(36).substr(2, 9)}`,
-                                product: p,
+                                product: stripProductImage(p),
                                 qty: 1,
                                 unitPrice: parseFloat(((p.precio ?? 0) * (1 + globalMargin / 100)).toFixed(2)),
                                 discount: 0,
+                                inventoryItemIds: [],
+                                serialNumbers: [],
                             }));
                             setItems(prev => {
                                 const existingIds = prev.map(i => i.product.id);
@@ -283,6 +309,8 @@ function VentasContent() {
                     qty: i.qty,
                     unit_price: i.unitPrice,
                     discount: i.discount,
+                    inventory_item_ids: i.inventoryItemIds ?? [],
+                    serial_numbers: i.serialNumbers ?? [],
                 };
             }),
             subtotal: subtotal,
@@ -322,9 +350,26 @@ function VentasContent() {
     const addProduct = (product: Product) => {
         const existing = items.find(i => i.product.id === product.id);
         if (existing) {
+            const newQty = existing.qty + 1;
             setItems(prev => prev.map(i =>
                 i.product.id === product.id
-                    ? { ...i, qty: i.qty + 1, product: stripProductImage(product) }
+                    ? {
+                        ...i,
+                        qty: newQty,
+                        product: stripProductImage(product),
+                        inventoryItemIds: (() => {
+                            const cur = i.inventoryItemIds ?? [];
+                            const next = cur.slice(0, newQty);
+                            while (next.length < newQty) next.push(null);
+                            return next;
+                        })(),
+                        serialNumbers: (() => {
+                            const cur = i.serialNumbers ?? [];
+                            const next = cur.slice(0, newQty);
+                            while (next.length < newQty) next.push(null);
+                            return next;
+                        })(),
+                    }
                     : i
             ));
             return;
@@ -337,12 +382,25 @@ function VentasContent() {
             qty: 1,
             unitPrice: parseFloat(withMargin.toFixed(2)),
             discount: 0,
+            inventoryItemIds: [],
+            serialNumbers: [],
         }]);
     };
 
     const updateQty = (id: string, qty: number) => {
         if (qty < 1) return;
-        setItems(prev => prev.map(i => i.id === id ? { ...i, qty } : i));
+        setItems(prev =>
+            prev.map((i) => {
+                if (i.id !== id) return i;
+                const invCur = i.inventoryItemIds ?? [];
+                const snCur = i.serialNumbers ?? [];
+                const invNext = invCur.slice(0, qty);
+                const snNext = snCur.slice(0, qty);
+                while (invNext.length < qty) invNext.push(null);
+                while (snNext.length < qty) snNext.push(null);
+                return { ...i, qty, inventoryItemIds: invNext, serialNumbers: snNext };
+            })
+        );
     };
 
     const updatePrice = (id: string, price: number) => {
@@ -355,6 +413,70 @@ function VentasContent() {
 
     const removeItem = (id: string) => {
         setItems(prev => prev.filter(i => i.id !== id));
+    };
+
+    const openSerialModalForLine = async (line: LineItem) => {
+        setSerialModalLineId(line.id);
+        setSerialModalOpen(true);
+        setSerialModalLoading(true);
+        setSerialCandidates([]);
+        setSerialSelectedIds((line.inventoryItemIds ?? []).filter((x): x is string => Boolean(x)));
+
+        try {
+            const supabase = createClient();
+            const productName = line.product.nombre;
+            const { data, error } = await supabase
+                .from('global_inventory')
+                .select('id,name,serial_number,location,sap_code')
+                .ilike('name', `%${productName}%`)
+                .limit(250);
+
+            if (error) throw error;
+
+            const candidates = (data ?? [])
+                .filter((r: any) => typeof r?.serial_number === 'string' && r.serial_number.trim() !== '')
+                .map((r: any) => ({
+                    id: String(r.id),
+                    name: String(r.name ?? ''),
+                    serial_number: String(r.serial_number),
+                    location: (r.location ?? null) as string | null,
+                    sap_code: (r.sap_code ?? null) as string | null,
+                }));
+
+            setSerialCandidates(candidates);
+            setSerialModalLoading(false);
+        } catch (err: any) {
+            setSerialModalLoading(false);
+            alert(err?.message ?? 'Error al cargar seriales del inventario');
+        }
+    };
+
+    const toggleSerialSelection = (inventoryId: string) => {
+        setSerialSelectedIds((prev) => {
+            if (prev.includes(inventoryId)) return prev.filter((id) => id !== inventoryId);
+            return [...prev, inventoryId];
+        });
+    };
+
+    const applySerialSelection = () => {
+        if (!serialModalLineId) return;
+        const byId = new Map(serialCandidates.map((c) => [c.id, c.serial_number]));
+        const nextSerials = serialSelectedIds.map((id) => byId.get(id) ?? null);
+        setItems((prev) =>
+            prev.map((li) => {
+                if (li.id !== serialModalLineId) return li;
+                const nextQty = serialSelectedIds.length;
+                const qtySafe = nextQty >= 1 ? nextQty : 1;
+                return {
+                    ...li,
+                    qty: qtySafe,
+                    inventoryItemIds: serialSelectedIds.slice(0, qtySafe),
+                    serialNumbers: nextSerials.slice(0, qtySafe),
+                };
+            })
+        );
+        setSerialModalOpen(false);
+        setSerialModalLineId(null);
     };
 
     const applyGlobalMargin = (margin: number) => {
@@ -768,6 +890,30 @@ function VentasContent() {
                                             <span style={{ color: '#FF9500', fontSize: '13px' }}>%</span>
                                         </div>
 
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => openSerialModalForLine(item)}
+                                                style={{
+                                                    background: 'rgba(142,142,147,0.12)',
+                                                    border: '1px solid rgba(142,142,147,0.25)',
+                                                    color: 'rgba(255,255,255,0.85)',
+                                                    borderRadius: '10px',
+                                                    height: '34px',
+                                                    padding: '0 12px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '12px',
+                                                    fontWeight: 700,
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                Seriales
+                                            </button>
+                                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                                                {(item.inventoryItemIds ?? []).filter((x): x is string => Boolean(x)).length}/{item.qty}
+                                            </span>
+                                        </div>
+
                                         {/* Line total */}
                                         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                                             <div style={{ color: '#34C759', fontSize: '16px', fontWeight: 700 }}>${formatUSD(total)}</div>
@@ -779,6 +925,171 @@ function VentasContent() {
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {/* ── Seriales Modal (uso interno) ── */}
+                {serialModalOpen && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            background: 'rgba(0,0,0,0.6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 2000,
+                            padding: '18px',
+                        }}
+                        onMouseDown={(e) => {
+                            if (e.currentTarget === e.target) {
+                                setSerialModalOpen(false);
+                                setSerialModalLineId(null);
+                            }
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: 'min(720px, 100%)',
+                                background: 'rgba(10,10,10,0.95)',
+                                border: '1px solid rgba(255,255,255,0.10)',
+                                borderRadius: '18px',
+                                boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    padding: '14px 16px',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '10px',
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontSize: '14px', fontWeight: 900, color: 'white' }}>Asignar seriales</div>
+                                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
+                                        Solo seriales con valor en inventario
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSerialModalOpen(false);
+                                        setSerialModalLineId(null);
+                                    }}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'rgba(255,255,255,0.8)',
+                                        cursor: 'pointer',
+                                        fontSize: '18px',
+                                        lineHeight: 1,
+                                    }}
+                                    aria-label="Cerrar"
+                                >
+                                    ×
+                                </button>
+                            </div>
+
+                            <div style={{ padding: '14px 16px', maxHeight: '55vh', overflow: 'auto' }}>
+                                {serialModalLoading ? (
+                                    <div style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>Cargando seriales…</div>
+                                ) : serialCandidates.length === 0 ? (
+                                    <div style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
+                                        No se encontraron seriales para este producto en `global_inventory`.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        {serialCandidates.map((c) => {
+                                            const checked = serialSelectedIds.includes(c.id);
+                                            return (
+                                                <label
+                                                    key={c.id}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'flex-start',
+                                                        gap: '10px',
+                                                        padding: '12px',
+                                                        borderRadius: '14px',
+                                                        border: '1px solid rgba(255,255,255,0.08)',
+                                                        background: checked ? 'rgba(0,122,255,0.12)' : 'transparent',
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleSerialSelection(c.id)}
+                                                        style={{ marginTop: '4px' }}
+                                                    />
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ color: 'white', fontWeight: 900, fontSize: '13px' }}>{c.serial_number}</div>
+                                                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>
+                                                            {c.sap_code ? `SAP: ${c.sap_code} · ` : ''}
+                                                            {c.location ? `Ubicación: ${c.location}` : 'Sin ubicación'}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div
+                                style={{
+                                    padding: '14px 16px',
+                                    borderTop: '1px solid rgba(255,255,255,0.08)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '10px',
+                                }}
+                            >
+                                <div style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 800, fontSize: '12px' }}>
+                                    Seleccionados: {serialSelectedIds.length}
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSerialModalOpen(false);
+                                            setSerialModalLineId(null);
+                                        }}
+                                        style={{
+                                            padding: '10px 14px',
+                                            borderRadius: '12px',
+                                            background: 'rgba(255,255,255,0.06)',
+                                            border: '1px solid rgba(255,255,255,0.10)',
+                                            color: 'rgba(255,255,255,0.85)',
+                                            cursor: 'pointer',
+                                            fontWeight: 900,
+                                        }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={applySerialSelection}
+                                        disabled={serialSelectedIds.length === 0}
+                                        style={{
+                                            padding: '10px 14px',
+                                            borderRadius: '12px',
+                                            background: serialSelectedIds.length === 0 ? 'rgba(52,199,89,0.2)' : '#34C759',
+                                            border: 'none',
+                                            color: 'black',
+                                            cursor: serialSelectedIds.length === 0 ? 'not-allowed' : 'pointer',
+                                            fontWeight: 1000,
+                                        }}
+                                    >
+                                        Aplicar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
