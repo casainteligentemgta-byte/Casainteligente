@@ -43,7 +43,7 @@
 
 Orden y descripción de migraciones (incl. Nexus / CRM): ver **[docs/NEXUS-MIGRACIONES.md](docs/NEXUS-MIGRACIONES.md)**.
 
-- **Fotos y manuales de productos:** aplica `supabase/migrations/012_products_manual_storage.sql` (columnas `manual_instrucciones`, `manual_documento_url` y bucket Storage **`product-media`**). Sin esto, la subida desde **Productos → Nuevo/Editar** mostrará error hasta crear el bucket y políticas.
+- **Fotos y manuales de productos:** lo más rápido es pegar en SQL Editor **`supabase/sql_editor_storage_fotos_productos.sql`** (crea **`product-media`** y **`productos`** + políticas anon/authenticated). Alternativa por migraciones: `012`, `018`, `019`. Opcional: `NEXT_PUBLIC_SUPABASE_PRODUCT_MEDIA_BUCKET` en `.env.local`.
 
 - Presupuesto imprimible (HTML A4 claro): `GET /api/budgets/[id]/pdf`
 - Guía visual del documento: **[docs/PRESUPUESTO-DISENO.md](docs/PRESUPUESTO-DISENO.md)** · marca en `lib/presupuesto/brand.ts`

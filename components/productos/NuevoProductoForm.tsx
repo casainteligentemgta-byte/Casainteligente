@@ -43,6 +43,14 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
 
     const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+    /** Evita que "12,50" se convierta en 12 con parseFloat (coma decimal). */
+    function parseMoney(raw: string): number | null {
+        const t = raw.trim().replace(/\s/g, '').replace(',', '.');
+        if (t === '') return null;
+        const n = parseFloat(t);
+        return Number.isFinite(n) ? n : null;
+    }
+
     async function onImageFile(file: File | null) {
         if (!file) return;
         setMediaError(null);
@@ -50,9 +58,14 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         const { url, error } = await uploadProductImage(supabase, file);
         setUploadingImage(false);
         if (error || !url) {
-            setMediaError(
+            const base =
                 error ||
-                    'No se pudo subir la imagen. ¿Aplicaste la migración 012 y existe el bucket product-media en Supabase?',
+                'No se pudo subir la imagen. En Supabase → SQL Editor ejecuta supabase/sql_editor_storage_fotos_productos.sql (buckets product-media y productos).';
+            setMediaError(
+                [
+                    base.startsWith('Fallo al subir') ? base : `Fallo al subir imagen: ${base}`,
+                    'Puedes guardar o actualizar el producto sin foto y volver a editar más tarde para subir la imagen o pegar la URL.',
+                ].join('\n\n'),
             );
             return;
         }
@@ -66,7 +79,11 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         const { url, error } = await uploadProductManualPdf(supabase, file);
         setUploadingManual(false);
         if (error || !url) {
-            setMediaError(error || 'No se pudo subir el PDF.');
+            setMediaError(
+                [error || 'No se pudo subir el PDF.', 'Puedes guardar el producto sin PDF y añadirlo después al editar.'].join(
+                    '\n\n',
+                ),
+            );
             return;
         }
         set('manual_documento_url', url);
@@ -77,25 +94,47 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         setSaving(true);
         setMediaError(null);
 
+        const costoN = parseMoney(form.costo);
+        const precioN = parseMoney(form.precio);
+
+        // imagen / manual: vacío → null en BD (producto válido sin URL; se puede completar después)
+        const imagenVal = form.imagen.trim() || null;
         const productData = {
             nombre: form.nombre.trim(),
             categoria: form.categoria || null,
             marca: form.marca || null,
             modelo: form.modelo || null,
             descripcion: form.descripcion || null,
-            costo: form.costo ? parseFloat(form.costo) : null,
-            precio: form.precio ? parseFloat(form.precio) : null,
-            utilidad: form.costo && form.precio ? parseFloat(form.precio) - parseFloat(form.costo) : null,
+            costo: costoN,
+            precio: precioN,
+            utilidad:
+                costoN != null && precioN != null ? precioN - costoN : null,
             cantidad: form.cantidad ? parseInt(form.cantidad, 10) : 0,
-            imagen: form.imagen.trim() || null,
+            imagen: imagenVal,
             manual_instrucciones: form.manual_instrucciones.trim() || null,
             manual_documento_url: form.manual_documento_url.trim() || null,
         };
 
         let error;
-        if (isEditing && initialData?.id) {
-            const res = await supabase.from('products').update(productData).eq('id', initialData.id);
+        if (isEditing && initialData?.id != null) {
+            // `products.id` es bigint; unificar tipo para .eq (string desde URL vs number desde Supabase)
+            const rowId =
+                typeof initialData.id === 'string'
+                    ? initialData.id
+                    : String(initialData.id);
+            const res = await supabase
+                .from('products')
+                .update(productData)
+                .eq('id', rowId)
+                .select('id');
             error = res.error;
+            if (!error && (!res.data || res.data.length === 0)) {
+                setSaving(false);
+                alert(
+                    'No se actualizó ninguna fila. Si usas sesión iniciada en Supabase, aplica la migración 017_products_rls_authenticated.sql (políticas para rol authenticated en products).',
+                );
+                return;
+            }
         } else {
             const res = await supabase.from('products').insert([productData]);
             error = res.error;
@@ -213,11 +252,16 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                 />
             </div>
 
-            {/* Foto: galería o cámara (móvil) */}
+            {/* Foto: galería o cámara (móvil) — opcional; guardar sin imagen y completar luego */}
             <div style={fieldBox}>
-                <label style={labelStyle}>Foto del producto</label>
+                <label style={labelStyle}>Foto del producto (opcional)</label>
                 <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
-                    Sube una imagen desde archivos o toma una foto con la cámara (en el móvil el botón &quot;Cámara&quot; abre la cámara trasera).
+                    <strong style={{ color: 'var(--label-primary)' }}>No hace falta imagen para guardar.</strong> Puedes crear o
+                    actualizar el producto solo con nombre y datos, y cuando tengas la foto (o Storage listo) vuelves a editar y
+                    subes la imagen o pegas la URL.
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
+                    Sube desde archivos o usa la cámara (en el móvil &quot;Cámara&quot; abre la trasera).
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
                     <button
@@ -272,12 +316,16 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                         Sin imagen aún
                     </div>
                 )}
-                <label style={{ ...labelStyle, marginTop: '12px', marginBottom: '4px' }}>O pegar URL de imagen</label>
+                <label style={{ ...labelStyle, marginTop: '12px', marginBottom: '4px' }}>
+                    O pegar URL de imagen (opcional; déjalo vacío si aún no tienes)
+                </label>
                 <input
-                    type="url"
+                    type="text"
+                    inputMode="url"
+                    autoComplete="off"
                     value={form.imagen}
                     onChange={(e) => set('imagen', e.target.value)}
-                    placeholder="https://…"
+                    placeholder="https://… (vacío = sin foto por ahora)"
                     style={{ ...inputStyle, fontSize: '14px' }}
                 />
             </div>
@@ -485,6 +533,18 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                 />
             </div>
 
+            <p
+                style={{
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.45)',
+                    textAlign: 'center',
+                    marginBottom: '10px',
+                    lineHeight: 1.5,
+                }}
+            >
+                Solo el <strong style={{ color: 'rgba(255,255,255,0.7)' }}>nombre</strong> es obligatorio. Sin imagen el producto
+                se guarda igual; luego puedes editarlo y añadir foto o URL.
+            </p>
             <button
                 onClick={handleSave}
                 disabled={saving || !form.nombre.trim()}

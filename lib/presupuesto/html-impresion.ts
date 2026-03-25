@@ -3,9 +3,10 @@
  * Misma información de marca que la vista previa oscura (`lib/presupuesto/brand.ts`).
  */
 import { PRESUPUESTO_BRAND, textoMetodosPago } from '@/lib/presupuesto/brand';
+import { lineaPresupuestoTitulo, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
 
 export type BudgetItemJson = {
-  product_data?: { nombre?: string; categoria?: string | null };
+  product_data?: { nombre?: string; categoria?: string | null; descripcion?: string | null };
   qty?: number;
   unit_price?: number;
   discount?: number;
@@ -41,10 +42,39 @@ function lineTotal(item: BudgetItemJson) {
   return qty * up * (1 - d);
 }
 
+/**
+ * Normaliza ítems guardados en `budgets.items`: solo texto y cifras para impresión,
+ * sin `imagen` ni otros campos que pudieran usarse en plantillas viejas.
+ */
+export function sanitizeBudgetItemsForPrint(raw: unknown): BudgetItemJson[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((row) => {
+    const r = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+    const pdIn =
+      r.product_data && typeof r.product_data === 'object'
+        ? (r.product_data as Record<string, unknown>)
+        : {};
+    const nombreRaw = pdIn.nombre;
+    const nombreBase =
+      typeof nombreRaw === 'string'
+        ? nombreRaw
+        : nombreRaw != null && String(nombreRaw).trim() !== ''
+          ? String(nombreRaw)
+          : '';
+    const nombre = tituloPresupuestoPlano(nombreBase) || 'Ítem';
+    return {
+      qty: Number(r.qty) || 0,
+      unit_price: Number(r.unit_price) || 0,
+      discount: Number(r.discount) || 0,
+      product_data: { nombre, categoria: null, descripcion: null },
+    };
+  });
+}
+
 /** Genera documento A4 claro alineado con docs/PRESUPUESTO-DISENO.md */
 export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
   const { impresion: c } = PRESUPUESTO_BRAND;
-  const items = Array.isArray(budget.items) ? (budget.items as BudgetItemJson[]) : [];
+  const items = sanitizeBudgetItemsForPrint(budget.items);
   const idShort = (budget.id ?? '').slice(0, 8).toUpperCase();
   const fecha = budget.created_at
     ? new Date(budget.created_at).toLocaleDateString('es', {
@@ -56,16 +86,12 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
 
   const rows = items
     .map((it) => {
-      const nombre = it.product_data?.nombre ?? 'Ítem';
-      const cat = it.product_data?.categoria;
+      const nombre = lineaPresupuestoTitulo(it.product_data?.nombre, 'Ítem');
       const qty = it.qty ?? 0;
       const up = it.unit_price ?? 0;
       const sub = lineTotal(it);
-      const catHtml = cat
-        ? `<div class="muted" style="font-size:9px;margin-top:2px">${escapeHtml(cat)}</div>`
-        : '';
       return `<tr>
-        <td><strong>${escapeHtml(nombre)}</strong>${catHtml}</td>
+        <td><strong>${escapeHtml(nombre)}</strong></td>
         <td class="num">${fmt(up)}</td>
         <td class="num">${qty}</td>
         <td class="num"><strong>${fmt(sub)}</strong></td>
@@ -121,6 +147,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     }
     th:nth-child(n+2), td.num { text-align: right; }
     td { padding: 10px 8px; border-bottom: 1px solid ${c.borde}; vertical-align: top; }
+    table td img, table td picture { display: none !important; width: 0 !important; height: 0 !important; }
     tr:nth-child(even) td { background: #f8fafc; }
     .footer-grid { display: grid; grid-template-columns: 1fr 200px; gap: 20px; margin-top: 8px; }
     .legal h4 { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: ${c.textoMuted}; margin: 0 0 6px; }

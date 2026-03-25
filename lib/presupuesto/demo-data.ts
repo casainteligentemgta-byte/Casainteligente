@@ -6,7 +6,8 @@ function lineTotal(item: { unitPrice: number; discount: number; qty: number }) {
 
 const items: PresupuestoVista['items'] = [
   {
-    nombre: 'Cámara IP 4MP domo',
+    nombre: 'CÁMARA IP 4MP DOMO',
+    descripcion: 'VISIÓN NOCTURNA Y POE — INCLUYE SOPORTE',
     categoria: 'Cámaras IP',
     qty: 4,
     unitPrice: 89.5,
@@ -14,7 +15,8 @@ const items: PresupuestoVista['items'] = [
     costo: 52,
   },
   {
-    nombre: 'NVR 8 canales',
+    nombre: 'nvr 8 canales',
+    descripcion: 'grabación en red, acceso remoto',
     categoria: 'C.C.T.V',
     qty: 1,
     unitPrice: 320,
@@ -22,7 +24,8 @@ const items: PresupuestoVista['items'] = [
     costo: 210,
   },
   {
-    nombre: 'Mano de obra instalación',
+    nombre: 'MANO DE OBRA INSTALACIÓN',
+    descripcion: null,
     categoria: 'Servicio',
     qty: 1,
     unitPrice: 450,

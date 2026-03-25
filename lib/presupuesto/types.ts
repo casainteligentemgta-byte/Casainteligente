@@ -2,6 +2,8 @@
 export interface PresupuestoVistaItem {
   nombre: string;
   categoria: string | null;
+  /** Descripción corta del producto (opcional, sin imagen en el documento). */
+  descripcion?: string | null;
   qty: number;
   unitPrice: number;
   discount: number;

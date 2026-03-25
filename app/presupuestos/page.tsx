@@ -266,6 +266,25 @@ export default function PresupuestosPage() {
                                         ✏️ Editar
                                     </button>
                                     <button
+                                        type="button"
+                                        onClick={() =>
+                                            window.open(
+                                                `/ventas/preview?id=${encodeURIComponent(b.id)}`,
+                                                '_blank',
+                                                'noopener,noreferrer',
+                                            )
+                                        }
+                                        style={{
+                                            minWidth: '44px', background: 'rgba(88,86,214,0.12)', color: '#A78BFA',
+                                            border: 'none', borderRadius: '10px', padding: '10px',
+                                            fontSize: '16px', fontWeight: 600, cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}
+                                        title="Vista previa del documento"
+                                    >
+                                        📄
+                                    </button>
+                                    <button
                                         onClick={() => handleShare(b)}
                                         style={{
                                             width: '44px', background: 'rgba(52,199,89,0.1)', color: '#34C759',

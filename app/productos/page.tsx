@@ -45,21 +45,11 @@ function fmt(n: number | null) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Sin foto: el presupuesto y listados comerciales muestran solo identidad por categoría/iniciales. */
 function ProductAvatar({ product }: { product: Product }) {
     const cat = product.categoria ?? '';
     const color = CAT_COLORS[cat]?.dot ?? '#8E8E93';
     const initials = (product.nombre || '??').slice(0, 2).toUpperCase();
-
-    if (product.imagen) {
-        return (
-            <img
-                src={product.imagen}
-                alt={product.nombre}
-                style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover', flexShrink: 0 }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-        );
-    }
 
     return (
         <div style={{

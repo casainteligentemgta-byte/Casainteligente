@@ -14,6 +14,14 @@ export function PresupuestoToolbar() {
         </Link>
         <button
           type="button"
+          onClick={() => window.open('/ventas/preview?demo=1', '_blank', 'noopener,noreferrer')}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          title="Abrir vista previa oscura"
+        >
+          Previsualizar
+        </button>
+        <button
+          type="button"
           onClick={() => window.print()}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
         >

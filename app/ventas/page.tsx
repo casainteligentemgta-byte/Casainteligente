@@ -6,6 +6,12 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
 
+/** En el presupuesto no usamos foto del catálogo (evita miniaturas en listas / datos sensibles). */
+function stripProductImage(p: Product): Product {
+    const { imagen: _omit, ...rest } = p;
+    return rest as Product;
+}
+
 interface LineItem {
     id: string;
     product: Product;
@@ -185,14 +191,21 @@ function VentasContent() {
                             setClientDireccion('');
                         }
 
-                        // Mapear items de la DB al estado local
-                        const loadedItems = (data.items as any[]).map(item => ({
-                            id: `${item.product_id}-${Math.random()}`,
-                            product: item.product_data,
-                            qty: item.qty,
-                            unitPrice: item.unit_price,
-                            discount: item.discount || 0
-                        }));
+                        // Mapear items de la DB al estado local (sin foto: presupuesto solo usa título y datos de precio)
+                        const loadedItems = (data.items as any[]).map((item) => {
+                            const pd =
+                                item.product_data && typeof item.product_data === 'object'
+                                    ? item.product_data
+                                    : {};
+                            const { imagen: _omitImg, ...productSinImagen } = pd as Record<string, unknown> & { imagen?: unknown };
+                            return {
+                                id: `${item.product_id}-${Math.random()}`,
+                                product: productSinImagen as unknown as Product,
+                                qty: item.qty,
+                                unitPrice: item.unit_price,
+                                discount: item.discount || 0,
+                            };
+                        });
                         setItems(loadedItems);
                     }
                 });
@@ -262,13 +275,16 @@ function VentasContent() {
             customer_name: clientName,
             customer_rif: clientRif,
             customer_id: customerId || null,
-            items: items.map(i => ({
-                product_id: i.product.id,
-                product_data: i.product,
-                qty: i.qty,
-                unit_price: i.unitPrice,
-                discount: i.discount
-            })),
+            items: items.map((i) => {
+                const { imagen: _omitImg, ...productSinImagen } = i.product;
+                return {
+                    product_id: i.product.id,
+                    product_data: productSinImagen,
+                    qty: i.qty,
+                    unit_price: i.unitPrice,
+                    discount: i.discount,
+                };
+            }),
             subtotal: subtotal,
             total_cost: totalCost,
             total_profit: totalProfit,
@@ -307,7 +323,9 @@ function VentasContent() {
         const existing = items.find(i => i.product.id === product.id);
         if (existing) {
             setItems(prev => prev.map(i =>
-                i.product.id === product.id ? { ...i, qty: i.qty + 1 } : i
+                i.product.id === product.id
+                    ? { ...i, qty: i.qty + 1, product: stripProductImage(product) }
+                    : i
             ));
             return;
         }
@@ -315,7 +333,7 @@ function VentasContent() {
         const withMargin = basePrice * (1 + globalMargin / 100);
         setItems(prev => [...prev, {
             id: `${product.id}-${Date.now()}`,
-            product,
+            product: stripProductImage(product),
             qty: 1,
             unitPrice: parseFloat(withMargin.toFixed(2)),
             discount: 0,
@@ -927,9 +945,10 @@ function VentasContent() {
                                         email: clientEmail,
                                         direccion: clientDireccion,
                                         notas: notes,
-                                        items: items.map(i => ({
+                                        items: items.map((i) => ({
                                             nombre: i.product.nombre,
-                                            categoria: i.product.categoria,
+                                            categoria: null,
+                                            descripcion: null,
                                             qty: i.qty,
                                             unitPrice: i.unitPrice,
                                             discount: i.discount,
@@ -944,7 +963,10 @@ function VentasContent() {
                                         numero: budgetId ? `P-${budgetId.slice(0, 4)}` : `P-${Math.floor(Math.random() * 900) + 100}`,
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
-                                    window.open('/ventas/preview', '_blank');
+                                    const previewPath = budgetId
+                                        ? `/ventas/preview?id=${encodeURIComponent(budgetId)}`
+                                        : '/ventas/preview';
+                                    window.open(previewPath, '_blank', 'noopener,noreferrer');
                                 }}
                                 style={{
                                     flex: 1,

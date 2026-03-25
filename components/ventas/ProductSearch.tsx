@@ -262,35 +262,22 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                             }}
                             onMouseEnter={() => setActiveIndex(i)}
                         >
-                            {p.imagen ? (
-                                <img
-                                    src={p.imagen}
-                                    alt=""
-                                    style={{
-                                        width: '40px',
-                                        height: '40px',
-                                        borderRadius: '10px',
-                                        objectFit: 'cover',
-                                        flexShrink: 0,
-                                    }}
-                                />
-                            ) : (
-                                <div
-                                    style={{
-                                        width: '36px',
-                                        height: '36px',
-                                        borderRadius: '10px',
-                                        background: `${getCategoryColor(p.categoria)}22`,
-                                        border: `1px solid ${getCategoryColor(p.categoria)}44`,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCategoryColor(p.categoria) }} />
-                                </div>
-                            )}
+                            <div
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    background: `${getCategoryColor(p.categoria)}22`,
+                                    border: `1px solid ${getCategoryColor(p.categoria)}44`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}
+                                aria-hidden
+                            >
+                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCategoryColor(p.categoria) }} />
+                            </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ color: 'white', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {p.nombre}
