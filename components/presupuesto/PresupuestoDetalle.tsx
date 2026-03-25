@@ -85,7 +85,7 @@ export function PresupuestoDetalle() {
               CASA INTELIGENTE, C.A.
             </h1>
             <p className="mt-1 text-xs font-medium leading-snug text-slate-500">
-              {PRESUPUESTO_BRAND.tagline} RIF {PRESUPUESTO_BRAND.rifEmpresa}
+              RIF {PRESUPUESTO_BRAND.rifEmpresa}
             </p>
           </div>
         </div>

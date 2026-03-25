@@ -559,7 +559,7 @@ export default function PreviewPage() {
                                         {PRESUPUESTO_BRAND.nombreLegal}
                                     </h2>
                                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '3px', letterSpacing: '0.5px' }}>
-                                        {PRESUPUESTO_BRAND.tagline} RIF {PRESUPUESTO_BRAND.rifEmpresa}
+                                        RIF {PRESUPUESTO_BRAND.rifEmpresa}
                                     </p>
                                 </div>
                             </div>

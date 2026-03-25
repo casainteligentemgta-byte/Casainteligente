@@ -178,7 +178,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       <div>
         <img src="/logo-casa-inteligente.png" alt="" class="logo-casa-inteligente" />
         <h1 class="brand-name">${escapeHtml(PRESUPUESTO_BRAND.nombreLegal)}</h1>
-        <p class="brand-sub">${escapeHtml(PRESUPUESTO_BRAND.tagline)} RIF ${escapeHtml(PRESUPUESTO_BRAND.rifEmpresa)}</p>
+        <p class="brand-sub">RIF ${escapeHtml(PRESUPUESTO_BRAND.rifEmpresa)}</p>
       </div>
       <div>
         <div class="fecha">${escapeHtml(fecha)}</div>

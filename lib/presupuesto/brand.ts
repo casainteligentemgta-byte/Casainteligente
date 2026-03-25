@@ -4,7 +4,8 @@
  */
 export const PRESUPUESTO_BRAND = {
   nombreLegal: 'CASA INTELIGENTE, C.A.',
-  tagline: 'Ingeniería para el confort de tu Familia.',
+  // Slogan debajo del logo (si se desea volver a mostrar, edítalo aquí)
+  tagline: '',
   /** RIF de la empresa */
   rifEmpresa: 'J-407035258',
   /** Texto bajo el logo en documentos */
