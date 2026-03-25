@@ -188,7 +188,7 @@ export default function PreviewPage() {
                     if (cancelled) return;
 
                     // Si la columna `numero_correlativo` no existe aún en la BD,
-                    // calculamos un correlativo temporal en memoria para mostrar P-500+.
+                    // calculamos un correlativo temporal (sin listar toda la tabla) para mostrar P-500+.
                     let numeroOverride: string | null = null;
                     try {
                         const raw = (budget as any).numero_correlativo as unknown;
@@ -201,15 +201,22 @@ export default function PreviewPage() {
                         const correlativoMissing = correlativoNum == null || Number.isNaN(correlativoNum);
 
                         if (correlativoMissing) {
-                            const { data: allBudgets } = await supabase
-                                .from('budgets')
-                                .select('id,created_at')
-                                .order('created_at', { ascending: true })
-                                .order('id', { ascending: true });
+                            const createdAt = (budget as any).created_at as string | null | undefined;
+                            if (createdAt) {
+                                const { count: beforeCount } = await supabase
+                                    .from('budgets')
+                                    .select('id', { count: 'exact', head: true })
+                                    .lt('created_at', createdAt);
 
-                            if (allBudgets && Array.isArray(allBudgets)) {
-                                const idx = allBudgets.findIndex((b: any) => String(b.id) === idParam);
-                                if (idx >= 0) numeroOverride = `P-${500 + idx}`;
+                                const { count: sameEarlierCount } = await supabase
+                                    .from('budgets')
+                                    .select('id', { count: 'exact', head: true })
+                                    .eq('created_at', createdAt)
+                                    .lt('id', idParam);
+
+                                const a = typeof beforeCount === 'number' ? beforeCount : 0;
+                                const b = typeof sameEarlierCount === 'number' ? sameEarlierCount : 0;
+                                numeroOverride = `P-${500 + a + b}`;
                             }
                         }
                     } catch {
