@@ -173,6 +173,16 @@ export const nexusProjectMilestones = pgTable('nexus_project_milestones', {
   completedAt: timestamp('completed_at', { withTimezone: true }),
 });
 
+/* ─── Reclutamiento inteligente (sesión + estado JSON) ───────── */
+
+export const recruitmentSessions = pgTable('recruitment_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** Estado serializado (turnos, análisis, eventos anti-fraude, scoring acumulado) */
+  state: jsonb('state').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 /* ─── Relaciones (Drizzle Query) ───────────────── */
 
 export const nexusClientsRelations = relations(nexusClients, ({ many }) => ({

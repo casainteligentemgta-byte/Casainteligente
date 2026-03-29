@@ -11,17 +11,21 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const isNexus = pathname?.startsWith('/nexus') ?? false;
   /** Vista previa del presupuesto: pantalla completa sin dock ni distracciones (y sin caché de miniaturas en otros módulos). */
   const isPresupuestoPreview = pathname === '/ventas/preview';
+  /** Entrevista candidato: pantalla completa sin dock (anti-distracción). */
+  const isRecruitmentCandidate = pathname === '/reclutamiento';
 
   return (
     <>
       <div
         className={
-          isNexus || isPresupuestoPreview ? 'min-h-screen' : 'min-h-screen pb-24'
+          isNexus || isPresupuestoPreview || isRecruitmentCandidate
+            ? 'min-h-screen'
+            : 'min-h-screen pb-24'
         }
       >
         {children}
       </div>
-      {!isNexus && !isPresupuestoPreview ? <IOSNavBar /> : null}
+      {!isNexus && !isPresupuestoPreview && !isRecruitmentCandidate ? <IOSNavBar /> : null}
     </>
   );
 }

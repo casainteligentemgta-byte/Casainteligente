@@ -20,6 +20,8 @@ export interface InventoryItem {
     reorder_point: number;
     average_weighted_cost: number;
     location: string | null;
+    /** FK opcional a `products.id` (catálogo comercial); prioridad para miniatura en listados. */
+    product_id?: number | null;
     deposit_id?: string | null;
     furniture_id?: string | null;
     shelf_number?: number | null;

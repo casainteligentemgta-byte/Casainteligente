@@ -23,6 +23,49 @@ interface ProductSearchProps {
     onSelect: (product: Product) => void;
 }
 
+function ProductRowThumb({ imagen, categoryColor }: { imagen: string | null | undefined; categoryColor: string }) {
+    const [failed, setFailed] = useState(false);
+    const url = typeof imagen === 'string' ? imagen.trim() : '';
+    if (url && !failed) {
+        return (
+            <img
+                src={url}
+                alt=""
+                width={36}
+                height={36}
+                onError={() => setFailed(true)}
+                style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                    border: `1px solid ${categoryColor}44`,
+                    background: 'rgba(0,0,0,0.35)',
+                }}
+            />
+        );
+    }
+    return (
+        <div
+            style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                background: `${categoryColor}22`,
+                border: `1px solid ${categoryColor}44`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+            }}
+            aria-hidden
+        >
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: categoryColor }} />
+        </div>
+    );
+}
+
 export default function ProductSearch({ onSelect }: ProductSearchProps) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<Product[]>([]);
@@ -262,22 +305,7 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                             }}
                             onMouseEnter={() => setActiveIndex(i)}
                         >
-                            <div
-                                style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '10px',
-                                    background: `${getCategoryColor(p.categoria)}22`,
-                                    border: `1px solid ${getCategoryColor(p.categoria)}44`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexShrink: 0,
-                                }}
-                                aria-hidden
-                            >
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getCategoryColor(p.categoria) }} />
-                            </div>
+                            <ProductRowThumb imagen={p.imagen} categoryColor={getCategoryColor(p.categoria)} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ color: 'white', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {p.nombre}

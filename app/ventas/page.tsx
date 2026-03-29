@@ -6,10 +6,29 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
 
-/** En el presupuesto no usamos foto del catálogo (evita miniaturas en listas / datos sensibles). */
-function stripProductImage(p: Product): Product {
-    const { imagen: _omit, ...rest } = p;
-    return rest as Product;
+/** Miniatura en líneas del presupuesto (solo UI; al guardar en BD se omite `imagen` en `product_data`). */
+function LineItemProductThumb({ imagen }: { imagen?: string | null }) {
+    const [failed, setFailed] = useState(false);
+    const url = typeof imagen === 'string' ? imagen.trim() : '';
+    if (!url || failed) return null;
+    return (
+        <img
+            src={url}
+            alt=""
+            width={44}
+            height={44}
+            onError={() => setFailed(true)}
+            style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                objectFit: 'cover',
+                flexShrink: 0,
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(0,0,0,0.35)',
+            }}
+        />
+    );
 }
 
 interface LineItem {
@@ -259,7 +278,7 @@ function VentasContent() {
                         if (!error && data) {
                             const newItems = data.map((p: Product) => ({
                                 id: `${p.id}-${Math.random().toString(36).substr(2, 9)}`,
-                                product: stripProductImage(p),
+                                product: p,
                                 qty: 1,
                                 unitPrice: parseFloat(((p.precio ?? 0) * (1 + globalMargin / 100)).toFixed(2)),
                                 discount: 0,
@@ -356,7 +375,7 @@ function VentasContent() {
                     ? {
                         ...i,
                         qty: newQty,
-                        product: stripProductImage(product),
+                        product,
                         inventoryItemIds: (() => {
                             const cur = i.inventoryItemIds ?? [];
                             const next = cur.slice(0, newQty);
@@ -378,7 +397,7 @@ function VentasContent() {
         const withMargin = basePrice * (1 + globalMargin / 100);
         setItems(prev => [...prev, {
             id: `${product.id}-${Date.now()}`,
-            product: stripProductImage(product),
+            product,
             qty: 1,
             unitPrice: parseFloat(withMargin.toFixed(2)),
             discount: 0,
@@ -815,6 +834,7 @@ function VentasContent() {
                                         }}>
                                             {idx + 1}
                                         </div>
+                                        <LineItemProductThumb imagen={item.product.imagen} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                                                 <CategoryBadge cat={item.product.categoria} />

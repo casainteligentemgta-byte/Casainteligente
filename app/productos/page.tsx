@@ -45,11 +45,36 @@ function fmt(n: number | null) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Sin foto: el presupuesto y listados comerciales muestran solo identidad por categoría/iniciales. */
+/** Miniatura en catálogo: foto del producto si hay URL válida; si no, identidad por categoría/iniciales. */
 function ProductAvatar({ product }: { product: Product }) {
     const cat = product.categoria ?? '';
     const color = CAT_COLORS[cat]?.dot ?? '#8E8E93';
     const initials = (product.nombre || '??').slice(0, 2).toUpperCase();
+    const [imgFailed, setImgFailed] = useState(false);
+    const src = product.imagen?.trim();
+
+    if (src && !imgFailed) {
+        return (
+            <div
+                style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '14px',
+                    flexShrink: 0,
+                    overflow: 'hidden',
+                    border: `1.5px solid ${color}44`,
+                    background: 'rgba(0,0,0,0.35)',
+                }}
+            >
+                <img
+                    src={src}
+                    alt=""
+                    onError={() => setImgFailed(true)}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+            </div>
+        );
+    }
 
     return (
         <div style={{

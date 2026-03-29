@@ -24,6 +24,63 @@ import {
 import { InventoryItem } from '@/types/inventory';
 import Link from 'next/link';
 
+/** Coincide nombres entre inventario y catálogo comercial (`products.nombre`). */
+function normalizeInventoryName(name: string): string {
+    return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function buildCatalogImageLookup(
+    rows: { nombre: string | null; imagen: string | null }[] | null | undefined,
+): Record<string, string> {
+    const lookup: Record<string, string> = {};
+    for (const row of rows ?? []) {
+        const key = normalizeInventoryName(String(row.nombre ?? ''));
+        if (!key) continue;
+        const u = typeof row.imagen === 'string' ? row.imagen.trim() : '';
+        if (!u) continue;
+        if (lookup[key] === undefined) lookup[key] = u;
+    }
+    return lookup;
+}
+
+/** Prioridad: `image_url` → foto vía `product_id` → coincidencia de nombre con catálogo. */
+function InventoryListThumb({
+    imageUrl,
+    catalogUrlFromProduct,
+    catalogUrlFromName,
+}: {
+    imageUrl: string | null | undefined;
+    catalogUrlFromProduct?: string | null;
+    catalogUrlFromName?: string | null;
+}) {
+    const [failed, setFailed] = useState(false);
+    const resolved =
+        (imageUrl?.trim() ||
+            catalogUrlFromProduct?.trim() ||
+            catalogUrlFromName?.trim() ||
+            '') ||
+        '';
+
+    useEffect(() => {
+        setFailed(false);
+    }, [resolved]);
+
+    return (
+        <div className="w-12 h-12 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center shrink-0">
+            {resolved && !failed ? (
+                <img
+                    src={resolved}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={() => setFailed(true)}
+                />
+            ) : (
+                <Package className="text-zinc-700" size={20} />
+            )}
+        </div>
+    );
+}
+
 export default function InventoryMasterPage() {
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -36,6 +93,10 @@ export default function InventoryMasterPage() {
         quarantineCount: 0
     });
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    /** `products.imagen` por nombre normalizado (fallback si no hay `product_id`). */
+    const [catalogImagenByName, setCatalogImagenByName] = useState<Record<string, string>>({});
+    /** `products.imagen` por `products.id` cuando el ítem tiene `product_id`. */
+    const [catalogImagenByProductId, setCatalogImagenByProductId] = useState<Record<number, string>>({});
 
     const supabase = createClient();
 
@@ -46,19 +107,56 @@ export default function InventoryMasterPage() {
     const fetchInventory = async () => {
         setLoading(true);
         try {
-            let query = supabase.from('global_inventory').select('*');
+            const invQuery = supabase.from('global_inventory').select('*').order('name');
 
             if (activeCategory !== 'Todos') {
                 // Assuming we join with categories or have category names here
                 // For now, let's just fetch all or filter if we had categories
             }
 
-            const { data, error } = await query.order('name');
+            const [invRes, prodRes] = await Promise.all([
+                invQuery,
+                supabase.from('products').select('nombre, imagen').not('imagen', 'is', null),
+            ]);
 
-            if (error) throw error;
+            if (invRes.error) throw invRes.error;
 
-            const inventoryItems = data as InventoryItem[];
+            const inventoryItems = invRes.data as InventoryItem[];
             setItems(inventoryItems);
+
+            if (!prodRes.error && prodRes.data) {
+                setCatalogImagenByName(buildCatalogImageLookup(prodRes.data));
+            } else {
+                console.warn('Catálogo products (imagen):', prodRes.error?.message);
+                setCatalogImagenByName({});
+            }
+
+            const linkedIds = Array.from(
+                new Set(
+                    inventoryItems
+                        .map((row) => (row.product_id != null ? Number(row.product_id) : NaN))
+                        .filter((n) => Number.isFinite(n) && n > 0),
+                ),
+            );
+            if (linkedIds.length > 0) {
+                const { data: byIdRows, error: byIdErr } = await supabase
+                    .from('products')
+                    .select('id, imagen')
+                    .in('id', linkedIds);
+                if (!byIdErr && byIdRows) {
+                    const map: Record<number, string> = {};
+                    for (const r of byIdRows) {
+                        const id = Number(r.id);
+                        const u = typeof r.imagen === 'string' ? r.imagen.trim() : '';
+                        if (Number.isFinite(id) && u) map[id] = u;
+                    }
+                    setCatalogImagenByProductId(map);
+                } else {
+                    setCatalogImagenByProductId({});
+                }
+            } else {
+                setCatalogImagenByProductId({});
+            }
 
             // Calculate stats
             const totalVal = inventoryItems.reduce((acc, item) =>
@@ -273,13 +371,17 @@ export default function InventoryMasterPage() {
                                 <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
                                     <td className="p-5">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center shrink-0">
-                                                {item.image_url ? (
-                                                    <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <Package className="text-zinc-700" size={20} />
-                                                )}
-                                            </div>
+                                            <InventoryListThumb
+                                                imageUrl={item.image_url}
+                                                catalogUrlFromProduct={
+                                                    item.product_id != null
+                                                        ? catalogImagenByProductId[Number(item.product_id)]
+                                                        : undefined
+                                                }
+                                                catalogUrlFromName={
+                                                    catalogImagenByName[normalizeInventoryName(item.name)]
+                                                }
+                                            />
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <span className="text-[9px] font-black bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded border border-blue-500/20 uppercase">

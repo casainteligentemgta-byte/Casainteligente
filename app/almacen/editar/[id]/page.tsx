@@ -28,6 +28,14 @@ type Furniture = {
 type Category = { id: string; name: string };
 type UnitRow = { id: string; code: string; name: string; active: boolean; sort_order: number };
 
+type CatalogProductRow = {
+  id: number;
+  nombre: string;
+  marca: string | null;
+  modelo: string | null;
+  imagen: string | null;
+};
+
 type InventoryEditItem = {
   id: string;
   sap_code: string | null;
@@ -39,6 +47,8 @@ type InventoryEditItem = {
   reorder_point: number;
   average_weighted_cost: number;
   location: string | null;
+  /** FK opcional a `products.id` (migración 024). */
+  product_id: number | null;
   deposit_id: string | null;
   furniture_id: string | null;
   shelf_number: number | null;
@@ -73,6 +83,8 @@ export default function EditInventoryItemPage() {
 
   const [item, setItem] = useState<InventoryEditItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState<CatalogProductRow[]>([]);
+  const [productSearch, setProductSearch] = useState('');
 
   const furnitureForDeposit = useMemo(() => {
     if (!item?.deposit_id) return [];
@@ -104,6 +116,16 @@ export default function EditInventoryItemPage() {
     setUnits((u.data ?? []) as UnitRow[]);
   }, [supabase]);
 
+  const loadCatalogProducts = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id,nombre,marca,modelo,imagen')
+      .order('nombre');
+    if (!error && data) {
+      setCatalogProducts(data as CatalogProductRow[]);
+    }
+  }, [supabase]);
+
   const fetchItem = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -121,6 +143,10 @@ export default function EditInventoryItemPage() {
       return;
     }
 
+    const rawPid = (data as { product_id?: unknown }).product_id;
+    const product_id =
+      rawPid != null && rawPid !== '' && !Number.isNaN(Number(rawPid)) ? Number(rawPid) : null;
+
     const normalized: InventoryEditItem = {
       id: String(data.id),
       sap_code: data.sap_code ?? null,
@@ -132,6 +158,7 @@ export default function EditInventoryItemPage() {
       reorder_point: Number(data.reorder_point ?? 0),
       average_weighted_cost: Number(data.average_weighted_cost ?? 0),
       location: data.location ?? null,
+      product_id,
       deposit_id: data.deposit_id ?? null,
       furniture_id: data.furniture_id ?? null,
       shelf_number: data.shelf_number ?? null,
@@ -150,9 +177,10 @@ export default function EditInventoryItemPage() {
   useEffect(() => {
     void (async () => {
       await loadMasters();
+      await loadCatalogProducts();
       await fetchItem();
     })();
-  }, [loadMasters, fetchItem]);
+  }, [loadMasters, loadCatalogProducts, fetchItem]);
 
   // Si el usuario cambia depósito, limpiamos furniture_id si ya no pertenece.
   useEffect(() => {
@@ -167,6 +195,32 @@ export default function EditInventoryItemPage() {
 
   const selectedCategory = categories.find((c) => c.id === item?.category_id);
   const isHerramientas = selectedCategory?.name.toLowerCase().includes('herramient') ?? false;
+
+  const filteredCatalogProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    let list = catalogProducts;
+    if (q) {
+      list = catalogProducts.filter(
+        (p) =>
+          p.nombre.toLowerCase().includes(q) ||
+          (p.marca ?? '').toLowerCase().includes(q) ||
+          (p.modelo ?? '').toLowerCase().includes(q),
+      );
+    }
+    const pid = item?.product_id;
+    if (pid != null) {
+      const sel = catalogProducts.find((p) => p.id === pid);
+      if (sel && !list.some((p) => p.id === pid)) {
+        list = [sel, ...list];
+      }
+    }
+    return list;
+  }, [catalogProducts, productSearch, item?.product_id]);
+
+  const selectedCatalogProduct = useMemo(
+    () => (item?.product_id != null ? catalogProducts.find((p) => p.id === item.product_id) : null),
+    [catalogProducts, item?.product_id],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,6 +249,7 @@ export default function EditInventoryItemPage() {
         serial_number: item.serial_number?.trim() ? item.serial_number.trim() : null,
         status: isHerramientas ? item.status ?? null : null,
         observations: item.observations?.trim() ? item.observations.trim() : null,
+        product_id: item.product_id ?? null,
         // Mantener sap_code, image_url: no es necesario tocarlos si no se envían en payload.
       };
 
@@ -292,6 +347,59 @@ export default function EditInventoryItemPage() {
                     className="w-full bg-black border border-zinc-800 rounded-xl py-4 pl-12 pr-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
                     required
                   />
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-4">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                  Producto del catálogo (opcional)
+                </label>
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  Enlaza este material con un ítem de <span className="text-zinc-400">Productos</span> para usar su foto en
+                  inventario sin depender de que el nombre coincida.
+                </p>
+                <input
+                  type="search"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Buscar por nombre, marca o modelo…"
+                  className="w-full bg-black border border-zinc-800 rounded-xl py-3 px-4 font-bold text-sm outline-none focus:border-blue-500/50 transition-all"
+                />
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <select
+                    value={item.product_id != null ? String(item.product_id) : ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setItem((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              product_id: v === '' ? null : Number(v),
+                            }
+                          : prev,
+                      );
+                    }}
+                    className="w-full sm:flex-1 bg-black border border-zinc-800 rounded-xl py-3 px-4 font-bold text-sm outline-none focus:bg-white focus:text-black focus:border-white transition-all"
+                  >
+                    <option value="">Sin enlace al catálogo</option>
+                    {filteredCatalogProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                        {p.marca ? ` · ${p.marca}` : ''}
+                        {p.modelo ? ` · ${p.modelo}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedCatalogProduct?.imagen?.trim() ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider">Vista</span>
+                      <img
+                        src={selectedCatalogProduct.imagen.trim()}
+                        alt=""
+                        className="h-14 w-14 rounded-lg object-cover border border-zinc-700 bg-black"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
