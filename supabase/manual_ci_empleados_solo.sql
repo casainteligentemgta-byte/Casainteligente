@@ -73,3 +73,27 @@ create policy "ci_empleados_select_auth" on public.ci_empleados for select to au
 create policy "ci_empleados_insert_auth" on public.ci_empleados for insert to authenticated with check (true);
 create policy "ci_empleados_update_auth" on public.ci_empleados for update to authenticated using (true) with check (true);
 create policy "ci_empleados_delete_auth" on public.ci_empleados for delete to authenticated using (true);
+
+-- Invitaciones con token (POST /api/talento/generar-link)
+create table if not exists public.ci_examenes (
+  id uuid primary key default gen_random_uuid(),
+  empleado_id uuid not null references public.ci_empleados (id) on delete cascade,
+  token text not null unique,
+  expira_at timestamptz not null,
+  usado_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_ci_examenes_token on public.ci_examenes (token);
+create index if not exists idx_ci_examenes_empleado on public.ci_examenes (empleado_id);
+
+alter table public.ci_examenes enable row level security;
+
+alter table public.ci_examenes
+  add column if not exists fin_at timestamptz;
+
+alter table public.ci_examenes
+  add column if not exists respuestas_json jsonb;
+
+alter table public.ci_examenes
+  add column if not exists completado boolean not null default false;

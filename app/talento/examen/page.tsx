@@ -1,20 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import ExamenTimer from '@/components/ExamenTimer';
 import { generarExamenAdaptativo, PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
 import { formatDocumentoCedulaVE, type PrefijoCedulaVE } from '@/lib/talento/documento';
 import type { RolExamen } from '@/types/talento';
 
 const DURACION_SEG = 15 * 60;
 
-function fmtMmSs(total: number) {
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
+function ExamenTalentoPageInner() {
+  const searchParams = useSearchParams();
+  const urlToken = searchParams.get('token');
 
-export default function ExamenTalentoPage() {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [docPrefijo, setDocPrefijo] = useState<PrefijoCedulaVE>('V');
@@ -24,7 +23,6 @@ export default function ExamenTalentoPage() {
   const [rolExamen, setRolExamen] = useState<RolExamen | ''>('');
   const [fase, setFase] = useState<'datos' | 'examen' | 'fin'>('datos');
   const [examenInicio, setExamenInicio] = useState<number | null>(null);
-  const [restante, setRestante] = useState(DURACION_SEG);
   const [expirado, setExpirado] = useState(false);
   const [pers, setPers] = useState<Record<string, number>>({});
   const [log, setLog] = useState<Record<string, number>>({});
@@ -37,34 +35,105 @@ export default function ExamenTalentoPage() {
     motivo?: string;
   } | null>(null);
 
+  const [empleadoInvId, setEmpleadoInvId] = useState<string | null>(null);
+  const [examenInvToken, setExamenInvToken] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [mensajeCierreTiempo, setMensajeCierreTiempo] = useState<string | null>(null);
+
+  const persRef = useRef(pers);
+  const logRef = useRef(log);
+  persRef.current = pers;
+  logRef.current = log;
+
+  const onTimerFinish = useCallback(async () => {
+    setExpirado(true);
+    setMensajeCierreTiempo(null);
+    const token = (examenInvToken ?? urlToken ?? '').trim();
+    if (!token) return;
+    try {
+      const res = await fetch('/api/talento/examen/finalizar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          respuestas_personalidad: persRef.current,
+          respuestas_logica: logRef.current,
+        }),
+      });
+      const data = (await res.json()) as { error?: string; mensaje?: string };
+      if (res.ok) {
+        setMensajeCierreTiempo(
+          typeof data.mensaje === 'string' ? data.mensaje : 'Evaluación parcial registrada por tiempo.',
+        );
+      } else {
+        setError(data.error || 'No se pudo registrar el cierre por tiempo');
+      }
+    } catch {
+      setError('No se pudo conectar al registrar el cierre por tiempo');
+    }
+  }, [examenInvToken, urlToken]);
+
+  useEffect(() => {
+    if (!urlToken) {
+      setInviteError(null);
+      setEmpleadoInvId(null);
+      setExamenInvToken(null);
+      return;
+    }
+    let cancelled = false;
+    setInviteError(null);
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/talento/examen/invitacion?token=${encodeURIComponent(urlToken)}`,
+        );
+        const data = (await res.json()) as {
+          error?: string;
+          nombre_completo?: string;
+          telefono?: string | null;
+          rol_examen?: string;
+          rol_buscado?: string | null;
+          empleado_id?: string;
+          examen_token?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          setInviteError(data.error || 'Invitación no válida');
+          setEmpleadoInvId(null);
+          setExamenInvToken(null);
+          return;
+        }
+        setNombre(data.nombre_completo ?? '');
+        setTelefono((data.telefono ?? '').trim());
+        setRolBuscado((data.rol_buscado ?? '').trim());
+        if (data.rol_examen === 'programador' || data.rol_examen === 'tecnico') {
+          setRolExamen(data.rol_examen);
+        }
+        setEmpleadoInvId(data.empleado_id ?? null);
+        setExamenInvToken(data.examen_token ?? null);
+      } catch {
+        if (!cancelled) setInviteError('No se pudo validar el enlace');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [urlToken]);
+
   const examen = useMemo(
     () => (rolExamen ? generarExamenAdaptativo(rolExamen) : null),
     [rolExamen],
   );
 
-  useEffect(() => {
-    if (fase !== 'examen' || examenInicio == null || expirado) return;
-    const t = window.setInterval(() => {
-      const transcurrido = Math.floor((Date.now() - examenInicio) / 1000);
-      const rest = Math.max(0, DURACION_SEG - transcurrido);
-      setRestante(rest);
-      if (rest <= 0) {
-        setExpirado(true);
-        window.clearInterval(t);
-      }
-    }, 500);
-    return () => window.clearInterval(t);
-  }, [fase, examenInicio, expirado]);
-
   const iniciarExamen = () => {
     if (!nombre.trim() || !rolBuscado.trim() || !rolExamen) return;
     setError(null);
+    setMensajeCierreTiempo(null);
     setExpirado(false);
     setPers({});
     setLog({});
     const start = Date.now();
     setExamenInicio(start);
-    setRestante(DURACION_SEG);
     setFase('examen');
   };
 
@@ -86,6 +155,9 @@ export default function ExamenTalentoPage() {
           examen_inicio_at: new Date(examenInicio).toISOString(),
           respuestas_personalidad: pers,
           respuestas_logica: log,
+          ...(empleadoInvId && examenInvToken
+            ? { empleado_id: empleadoInvId, examen_token: examenInvToken }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -118,6 +190,8 @@ export default function ExamenTalentoPage() {
     telefono,
     pers,
     log,
+    empleadoInvId,
+    examenInvToken,
   ]);
 
   const semaforoColor =
@@ -138,6 +212,17 @@ export default function ExamenTalentoPage() {
         20 ítems de personalidad (1–5) y 5 de lógica según rol. Tiempo máximo:{' '}
         <strong className="text-zinc-300">15 minutos</strong>. Al expirar, el envío se bloquea.
       </p>
+
+      {inviteError && (
+        <p className="text-sm text-amber-400/95 mb-4 rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
+          Enlace: {inviteError}
+        </p>
+      )}
+      {empleadoInvId && examenInvToken && !inviteError && (
+        <p className="text-xs text-emerald-400/90 mb-4 rounded-xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-2">
+          Invitación cargada: los datos se guardarán en tu registro existente al enviar.
+        </p>
+      )}
 
       {fase === 'datos' && (
         <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-6">
@@ -239,6 +324,14 @@ export default function ExamenTalentoPage() {
         </div>
       )}
 
+      {fase === 'examen' && examen && examenInicio != null && (
+        <ExamenTimer
+          resetKey={examenInicio}
+          expiraEnSegundos={DURACION_SEG}
+          onFinish={() => void onTimerFinish()}
+        />
+      )}
+
       {fase === 'examen' && examen && (
         <div className="space-y-6">
           <div
@@ -247,10 +340,16 @@ export default function ExamenTalentoPage() {
             }`}
           >
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Tiempo restante</p>
-              <p className="text-2xl font-mono font-bold text-white">{fmtMmSs(restante)}</p>
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Tiempo</p>
+              <p className="text-sm text-zinc-300">
+                {expirado
+                  ? 'Tiempo agotado — envío bloqueado.'
+                  : 'Cuenta regresiva fija arriba a la derecha (15:00 → 00:00).'}
+              </p>
+              {expirado && mensajeCierreTiempo && (
+                <p className="text-sm text-emerald-400/95 mt-2 max-w-md">{mensajeCierreTiempo}</p>
+              )}
             </div>
-            {expirado && <p className="text-sm text-red-400 font-medium">Tiempo agotado — envío bloqueado.</p>}
           </div>
 
           <section>
@@ -343,5 +442,17 @@ export default function ExamenTalentoPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ExamenTalentoPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-3xl mx-auto px-4 py-10 text-zinc-400 text-sm">Cargando examen…</div>
+      }
+    >
+      <ExamenTalentoPageInner />
+    </Suspense>
   );
 }

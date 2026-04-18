@@ -11,6 +11,7 @@ import {
   estadoContratacionFromTripode,
   semaforoDbFromTripode,
 } from '@/lib/talento/semaphore';
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
 import type { RolExamen } from '@/types/talento';
 
@@ -36,17 +37,92 @@ export async function POST(req: Request) {
       respuestas_logica?: Record<string, number>;
       color_disc?: string | null;
       rol_buscado?: string | null;
+      empleado_id?: string;
+      examen_token?: string;
     };
 
     const nombre = (body.nombre_completo ?? '').trim();
-    const rol = body.rol_examen;
-    const rolBuscado = (body.rol_buscado ?? '').trim() || null;
     const inicioIso = body.examen_inicio_at;
     const rp = body.respuestas_personalidad ?? {};
     const rl = body.respuestas_logica ?? {};
 
-    if (!nombre || (rol !== 'programador' && rol !== 'tecnico')) {
-      return NextResponse.json({ error: 'nombre y rol_examen válidos requeridos' }, { status: 400 });
+    const inviteEmpId = (body.empleado_id ?? '').trim();
+    const inviteTok = (body.examen_token ?? '').trim();
+    if ((inviteEmpId && !inviteTok) || (!inviteEmpId && inviteTok)) {
+      return NextResponse.json(
+        { error: 'empleado_id y examen_token deben enviarse juntos (flujo invitación)' },
+        { status: 400 },
+      );
+    }
+
+    let rol: RolExamen;
+    let rolBuscado: string | null = (body.rol_buscado ?? '').trim() || null;
+    let empleadoIdUpdate: string | null = null;
+    let examenTokenMark: string | null = null;
+
+    if (inviteEmpId && inviteTok) {
+      const admin = supabaseAdminForRoute();
+      if (!admin.ok) return admin.response;
+
+      const { data: inv, error: invErr } = await admin.client
+        .from('ci_examenes')
+        .select('empleado_id, expira_at, usado_at, completado')
+        .eq('token', inviteTok)
+        .eq('empleado_id', inviteEmpId)
+        .maybeSingle();
+
+      if (invErr || !inv) {
+        return NextResponse.json({ error: 'Invitación inválida' }, { status: 403 });
+      }
+      const invR = inv as { expira_at: string; usado_at: string | null; completado?: boolean };
+      if (invR.completado) {
+        return NextResponse.json(
+          { error: 'La evaluación ya se cerró por tiempo. No se puede enviar el examen completo.' },
+          { status: 409 },
+        );
+      }
+      if (invR.usado_at) {
+        return NextResponse.json({ error: 'Esta invitación ya fue utilizada' }, { status: 409 });
+      }
+      if (Date.now() > new Date(invR.expira_at).getTime()) {
+        return NextResponse.json({ error: 'Invitación expirada' }, { status: 410 });
+      }
+
+      const { data: empRow, error: empErr } = await admin.client
+        .from('ci_empleados')
+        .select('rol_examen, rol_buscado')
+        .eq('id', inviteEmpId)
+        .maybeSingle();
+
+      if (empErr || !empRow) {
+        return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 });
+      }
+      const emp = empRow as { rol_examen: string; rol_buscado: string | null };
+      if (emp.rol_examen !== 'programador' && emp.rol_examen !== 'tecnico') {
+        return NextResponse.json({ error: 'Rol de examen inválido en invitación' }, { status: 500 });
+      }
+      rol = emp.rol_examen as RolExamen;
+      if (!rolBuscado) {
+        rolBuscado = (emp.rol_buscado ?? '').trim() || null;
+      }
+      if (!rolBuscado) {
+        return NextResponse.json({ error: 'rol_buscado requerido' }, { status: 400 });
+      }
+      empleadoIdUpdate = inviteEmpId;
+      examenTokenMark = inviteTok;
+    } else {
+      const r = body.rol_examen;
+      if (r !== 'programador' && r !== 'tecnico') {
+        return NextResponse.json({ error: 'nombre y rol_examen válidos requeridos' }, { status: 400 });
+      }
+      rol = r;
+      if (!rolBuscado) {
+        return NextResponse.json({ error: 'rol_buscado requerido (rol o puesto al que aplica)' }, { status: 400 });
+      }
+    }
+
+    if (!nombre) {
+      return NextResponse.json({ error: 'nombre_completo requerido' }, { status: 400 });
     }
 
     if (!inicioIso) {
@@ -113,12 +189,14 @@ export async function POST(req: Request) {
       examen_completado_at: new Date().toISOString(),
     };
 
-    const { data: rowRaw, error } = await supabase
-      .from('ci_empleados')
-      // Tipos generated de Supabase no incluyen ci_* aún
-      .insert(insertRow as never)
-      .select('id')
-      .single();
+    const { data: rowRaw, error } = empleadoIdUpdate
+      ? await supabase
+          .from('ci_empleados')
+          .update(insertRow as never)
+          .eq('id', empleadoIdUpdate)
+          .select('id')
+          .single()
+      : await supabase.from('ci_empleados').insert(insertRow as never).select('id').single();
 
     if (error) {
       console.error('[talento examen]', error);
@@ -131,6 +209,17 @@ export async function POST(req: Request) {
     const data = rowRaw as { id: string } | null;
     if (!data) {
       return NextResponse.json({ error: 'No se pudo guardar el examen' }, { status: 500 });
+    }
+
+    if (empleadoIdUpdate && examenTokenMark) {
+      const adminMark = supabaseAdminForRoute();
+      if (adminMark.ok) {
+        await adminMark.client
+          .from('ci_examenes')
+          .update({ usado_at: new Date().toISOString() } as never)
+          .eq('token', examenTokenMark)
+          .eq('empleado_id', empleadoIdUpdate);
+      }
     }
 
     return NextResponse.json({
