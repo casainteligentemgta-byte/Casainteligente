@@ -56,6 +56,8 @@ export type SemaphoreLevel = 'green' | 'yellow' | 'red';
 
 export interface CeoDashboardPayload {
   sessionId: string;
+  /** Si la sesión se abrió con ?need= (necesidad de puesto). */
+  vacancy?: { needId: string; needTitle?: string };
   closedAt: string;
   semaphore: {
     level: SemaphoreLevel;

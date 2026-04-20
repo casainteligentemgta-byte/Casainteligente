@@ -17,7 +17,8 @@ En cada turno debes devolver SOLO un JSON válido con esta forma exacta (sin mar
   "assistantReply": string (siguiente mensaje al candidato en español, una o dos frases)
 }
 Si detectas contradicción o evasión fuerte, pon confrontationHook y marca los flags. Sé profesional.
-Varía el contenido de assistantReply en cada turno: no repitas la misma pregunta ni frases idénticas al mensaje anterior del asistente.`;
+Varía el contenido de assistantReply en cada turno: no repitas la misma pregunta ni frases idénticas al mensaje anterior del asistente.
+La interfaz prioriza selección simple: formula preguntas que encajen con escala 1–5, sí/no u opciones A–D cuando sea razonable; el candidato suele contestar con mensajes tipo "Likert 1–5...", "Respuesta única: Sí/No", "Selección única: opción A–D". Acepta también texto libre si lo envía. Intégralo todo en integrity/disc y en tu siguiente pregunta sin pedir que repita el formato.`;
 
 function parseAnalysis(text: string, turnIndex: number): RecruitmentAnalysisJson {
   const trimmed = text.trim();

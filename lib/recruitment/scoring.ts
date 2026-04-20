@@ -61,6 +61,9 @@ export function buildCeoPayload(
 
   return {
     sessionId: state.id,
+    ...(state.needId
+      ? { vacancy: { needId: state.needId, ...(state.needTitle ? { needTitle: state.needTitle } : {}) } }
+      : {}),
     closedAt: new Date().toISOString(),
     semaphore: sem,
     disc,

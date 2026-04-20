@@ -73,11 +73,20 @@ export async function saveSession(state: RecruitmentSessionState): Promise<void>
   memory.set(state.id, { ...state });
 }
 
-export async function createSession(id?: string): Promise<RecruitmentSessionState> {
+export async function createSession(
+  id?: string,
+  opts?: { needId?: string; needTitle?: string },
+): Promise<RecruitmentSessionState> {
   const sid = id ?? randomUUID();
   const now = Date.now();
   const state = createInitialSession(sid, now, RECRUITMENT_SESSION_TTL_MS);
-  state.history.push({ role: 'assistant', content: RECRUITMENT_OPENING_LINE, at: now });
+  if (opts?.needId) state.needId = opts.needId;
+  if (opts?.needTitle) state.needTitle = opts.needTitle;
+  const opening =
+    opts?.needTitle?.trim() != null && opts.needTitle.trim().length > 0
+      ? `${RECRUITMENT_OPENING_LINE} — Vacante: ${opts.needTitle.trim()}.`
+      : RECRUITMENT_OPENING_LINE;
+  state.history.push({ role: 'assistant', content: opening, at: now });
   await saveSession(state);
   return state;
 }

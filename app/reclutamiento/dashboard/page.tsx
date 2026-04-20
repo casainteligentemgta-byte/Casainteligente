@@ -11,6 +11,7 @@ import {
 import { hasSupabaseCeoSession } from '@/lib/recruitment/ceo-auth-server';
 import CeoLoginForm from './CeoLoginForm';
 import CeoLogoutButton from './CeoLogoutButton';
+import NeedProtocolSection from './NeedProtocolSection';
 
 type PageProps = { searchParams: { session?: string; key?: string } };
 
@@ -69,6 +70,8 @@ export default async function ReclutamientoDashboardPage({ searchParams }: PageP
           Configúrala en producción.
         </p>
       ) : null}
+
+      <NeedProtocolSection />
 
       <p className="text-sm text-zinc-400 mb-6">
         Pega el ID de sesión que te comparte el candidato al terminar (query{' '}

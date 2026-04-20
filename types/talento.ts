@@ -22,3 +22,14 @@ export interface ExamenGenerado {
   personalidad: PreguntaPersonalidad[];
   logica: PreguntaLogica[];
 }
+
+/** Pregunta tipo test para UI móvil paso a paso (`ExamenMovil`). */
+export interface PreguntaExamenMovilOpcion {
+  texto: string;
+}
+
+export interface PreguntaExamenMovil {
+  id: string;
+  pregunta: string;
+  opciones: PreguntaExamenMovilOpcion[];
+}

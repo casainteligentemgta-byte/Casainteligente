@@ -6,6 +6,9 @@ import type {
 
 export interface RecruitmentSessionState {
   id: string;
+  /** Si la sesión nació desde una necesidad de puesto (dashboard). */
+  needId?: string;
+  needTitle?: string;
   createdAt: number;
   expiresAt: number;
   currentBlock: number;

@@ -183,6 +183,15 @@ export const recruitmentSessions = pgTable('recruitment_sessions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** Necesidad de puesto (protocolo de reclutamiento asociado vía ?need= en /reclutamiento). */
+export const recruitmentNeeds = pgTable('recruitment_needs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  notes: text('notes'),
+  protocolActive: boolean('protocol_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 /* ─── Relaciones (Drizzle Query) ───────────────── */
 
 export const nexusClientsRelations = relations(nexusClients, ({ many }) => ({

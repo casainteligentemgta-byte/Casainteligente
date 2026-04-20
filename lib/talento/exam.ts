@@ -1,4 +1,10 @@
-import type { ExamenGenerado, PreguntaLogica, PreguntaPersonalidad, RolExamen } from '@/types/talento';
+import type {
+  ExamenGenerado,
+  PreguntaExamenMovil,
+  PreguntaLogica,
+  PreguntaPersonalidad,
+  RolExamen,
+} from '@/types/talento';
 
 /** 20 ítems fijos (Likert 1–5): estabilidad emocional, trabajo en equipo, integridad operativa. */
 export const PREGUNTAS_PERSONALIDAD: PreguntaPersonalidad[] = [
@@ -115,6 +121,30 @@ export function generarExamenAdaptativo(rol: RolExamen): ExamenGenerado {
     personalidad: PREGUNTAS_PERSONALIDAD,
     logica,
   };
+}
+
+/** Convierte ítems de lógica del examen al formato de `ExamenMovil` (opciones con `{ texto }`). */
+export function logicaAPreguntasMovil(logica: PreguntaLogica[]): PreguntaExamenMovil[] {
+  return logica.map((q) => ({
+    id: q.id,
+    pregunta: q.texto,
+    opciones: q.opciones.map((texto) => ({ texto })),
+  }));
+}
+
+/** Convierte respuestas por texto de vuelta a índices de opción (para `respuestas_logica`). */
+export function respuestasMovilALogica(
+  logica: PreguntaLogica[],
+  porTexto: Record<string, string>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const q of logica) {
+    const t = porTexto[q.id];
+    if (typeof t !== 'string') continue;
+    const idx = q.opciones.indexOf(t);
+    if (idx >= 0) out[q.id] = idx;
+  }
+  return out;
 }
 
 export function puntajePersonalidad(respuestas: Record<string, number>): number {

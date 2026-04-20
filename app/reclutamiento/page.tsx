@@ -1,18 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { RECRUITMENT_OPENING_LINE } from '@/lib/recruitment/constants';
 import type { RecruitmentClientEvent } from '@/types/recruitment';
+import QuickSelectReplies from '@/components/reclutamiento/QuickSelectReplies';
 import SessionShareBar from './SessionShareBar';
 
 type ChatLine = { role: 'user' | 'assistant'; content: string };
 
-const RECRUITMENT_SESSION_STORAGE_KEY = 'casa_inteligente_recruitment_session_v1';
+const RECRUITMENT_SESSION_STORAGE_KEY = 'casa_inteligente_recruitment_session_v2';
 
-type StoredSession = { sessionId: string; expiresAt: number };
+type StoredSession = {
+  sessionId: string;
+  expiresAt: number;
+  needId: string | null;
+  openingLine?: string;
+};
 
 function isValidSessionUuid(s: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
+function normalizeNeedId(raw: string | null): string | null {
+  if (!raw?.trim()) return null;
+  const t = raw.trim();
+  return isValidSessionUuid(t) ? t : null;
 }
 
 function readStoredSession(): StoredSession | null {
@@ -24,7 +37,12 @@ function readStoredSession(): StoredSession | null {
     if (!parsed?.sessionId || typeof parsed.expiresAt !== 'number') return null;
     if (!isValidSessionUuid(parsed.sessionId)) return null;
     if (parsed.expiresAt <= Date.now()) return null;
-    return { sessionId: parsed.sessionId.trim(), expiresAt: parsed.expiresAt };
+    return {
+      sessionId: parsed.sessionId.trim(),
+      expiresAt: parsed.expiresAt,
+      needId: parsed.needId ?? null,
+      openingLine: parsed.openingLine,
+    };
   } catch {
     return null;
   }
@@ -47,25 +65,72 @@ function clearStoredRecruitmentSession() {
   pendingSessionPromise = null;
 }
 
-/** Una sola petición POST en paralelo (Strict Mode) y reutilización al recargar la pestaña. */
-let pendingSessionPromise: Promise<StoredSession> | null = null;
+let pendingSessionPromise: Promise<StoredSession & { openingLine: string }> | null = null;
 
-function getOrCreateRecruitmentSession(): Promise<StoredSession> {
+function getOrCreateRecruitmentSession(needId: string | null): Promise<StoredSession & { openingLine: string }> {
+  const wantNeed = needId ?? null;
   const cached = readStoredSession();
-  if (cached) return Promise.resolve(cached);
-  if (!pendingSessionPromise) {
-    pendingSessionPromise = (async () => {
-      const res = await fetch('/api/recruitment/session', { method: 'POST' });
-      if (!res.ok) throw new Error('session_create_failed');
-      const data = (await res.json()) as StoredSession;
-      writeStoredSession(data);
-      return data;
-    })();
+  if (
+    cached &&
+    (cached.needId ?? null) === wantNeed &&
+    cached.expiresAt > Date.now()
+  ) {
+    return Promise.resolve({
+      ...cached,
+      openingLine: cached.openingLine ?? RECRUITMENT_OPENING_LINE,
+    });
   }
+  if (cached && (cached.needId ?? null) !== wantNeed) {
+    clearStoredRecruitmentSession();
+  }
+
+  if (pendingSessionPromise) return pendingSessionPromise;
+
+  pendingSessionPromise = (async () => {
+    try {
+      const res = await fetch('/api/recruitment/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(wantNeed ? { needId: wantNeed } : {}),
+      });
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string; hint?: string };
+        throw new Error([err.error, err.hint].filter(Boolean).join(' — ') || 'session_create_failed');
+      }
+      const data = (await res.json()) as {
+        sessionId: string;
+        expiresAt: number;
+        openingLine?: string;
+        needId?: string | null;
+      };
+      const openingLine = data.openingLine ?? RECRUITMENT_OPENING_LINE;
+      const stored: StoredSession = {
+        sessionId: data.sessionId,
+        expiresAt: data.expiresAt,
+        needId: wantNeed,
+        openingLine,
+      };
+      writeStoredSession(stored);
+      return { ...stored, openingLine };
+    } finally {
+      pendingSessionPromise = null;
+    }
+  })();
+
   return pendingSessionPromise;
 }
 
-export default function ReclutamientoPage() {
+function ReclutamientoPageInner() {
+  const searchParams = useSearchParams();
+  const rawNeed = searchParams.get('need');
+  const needFromUrl = normalizeNeedId(rawNeed);
+  const needInvalid = rawNeed != null && rawNeed.trim() !== '' && needFromUrl === null;
+
+  const needRef = useRef<string | null>(null);
+  useEffect(() => {
+    needRef.current = needFromUrl;
+  }, [needFromUrl]);
+
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [lines, setLines] = useState<ChatLine[]>([]);
@@ -74,6 +139,8 @@ export default function ReclutamientoPage() {
   const [error, setError] = useState<string | null>(null);
   const [fraudWarning, setFraudWarning] = useState<string | null>(null);
   const [sessionComplete, setSessionComplete] = useState(false);
+  /** Texto libre colapsado por defecto: la fase guiada prioriza selección simple. */
+  const [freeTextOpen, setFreeTextOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const renewSessionAfterStaleOrMissing = useCallback(async (): Promise<boolean> => {
@@ -81,12 +148,14 @@ export default function ReclutamientoPage() {
     setSessionId(null);
     setExpiresAt(null);
     setSessionComplete(false);
+    setFreeTextOpen(false);
     setFraudWarning(null);
     setLines([{ role: 'assistant', content: RECRUITMENT_OPENING_LINE }]);
     try {
-      const fresh = await getOrCreateRecruitmentSession();
+      const fresh = await getOrCreateRecruitmentSession(needRef.current);
       setSessionId(fresh.sessionId);
       setExpiresAt(fresh.expiresAt);
+      setLines([{ role: 'assistant', content: fresh.openingLine }]);
       setError(null);
       return true;
     } catch {
@@ -130,23 +199,25 @@ export default function ReclutamientoPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void getOrCreateRecruitmentSession()
+    void getOrCreateRecruitmentSession(needFromUrl)
       .then((data) => {
         if (!cancelled) {
           setSessionId(data.sessionId);
           setExpiresAt(data.expiresAt);
-          setLines([{ role: 'assistant', content: RECRUITMENT_OPENING_LINE }]);
+          setLines([{ role: 'assistant', content: data.openingLine }]);
+          setError(null);
         }
       })
-      .catch(() => {
+      .catch((e: unknown) => {
         if (!cancelled) {
-          setError('No se pudo iniciar la sesión. Recarga la página.');
+          const msg = e instanceof Error ? e.message : 'Error al iniciar sesión';
+          setError(msg);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [needFromUrl]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -183,47 +254,54 @@ export default function ReclutamientoPage() {
     };
   }, [sessionId, pushEvents]);
 
-  async function send() {
-    const text = input.trim();
-    if (!text || !sessionId || loading || sessionComplete) return;
-    setInput('');
-    setError(null);
-    setLines((prev) => [...prev, { role: 'user', content: text }]);
-    setLoading(true);
-    try {
-      const res = await fetch('/api/recruitment/turn', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: text }),
-      });
-      const data = (await res.json()) as {
-        assistantMessage?: string;
-        error?: string;
-        hint?: string;
-        sessionComplete?: boolean;
-      };
-      if (!res.ok) {
-        const shouldRenewSession =
-          data.error === 'sesión no encontrada' ||
-          data.error === 'expired' ||
-          res.status === 410;
-        if (shouldRenewSession) {
-          await renewSessionAfterStaleOrMissing();
+  const sendMessage = useCallback(
+    async (text: string) => {
+      const t = text.trim();
+      if (!t || !sessionId || loading || sessionComplete) return;
+      setInput('');
+      setError(null);
+      setLines((prev) => [...prev, { role: 'user', content: t }]);
+      setLoading(true);
+      try {
+        const res = await fetch('/api/recruitment/turn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, message: t }),
+        });
+        const data = (await res.json()) as {
+          assistantMessage?: string;
+          error?: string;
+          hint?: string;
+          sessionComplete?: boolean;
+        };
+        if (!res.ok) {
+          const shouldRenewSession =
+            data.error === 'sesión no encontrada' ||
+            data.error === 'expired' ||
+            res.status === 410;
+          if (shouldRenewSession) {
+            await renewSessionAfterStaleOrMissing();
+            return;
+          }
+          const msg = [data.error, data.hint].filter(Boolean).join(' — ');
+          setError(msg || 'Error al enviar');
           return;
         }
-        const msg = [data.error, data.hint].filter(Boolean).join(' — ');
-        setError(msg || 'Error al enviar');
-        return;
+        if (data.assistantMessage) {
+          setLines((prev) => [...prev, { role: 'assistant', content: data.assistantMessage! }]);
+        }
+        if (data.sessionComplete) setSessionComplete(true);
+      } catch {
+        setError('No se pudo conectar. Revisa tu red.');
+      } finally {
+        setLoading(false);
       }
-      if (data.assistantMessage) {
-        setLines((prev) => [...prev, { role: 'assistant', content: data.assistantMessage! }]);
-      }
-      if (data.sessionComplete) setSessionComplete(true);
-    } catch {
-      setError('No se pudo conectar. Revisa tu red.');
-    } finally {
-      setLoading(false);
-    }
+    },
+    [sessionId, loading, sessionComplete, renewSessionAfterStaleOrMissing],
+  );
+
+  async function send() {
+    await sendMessage(input);
   }
 
   const minsLeft =
@@ -236,11 +314,30 @@ export default function ReclutamientoPage() {
         style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.35)' }}
       >
         <h1 className="text-lg font-semibold text-white">Reclutamiento — fase guiada</h1>
-        <p className="text-xs text-zinc-400 mt-1 max-w-prose">
+        <p className="text-xs text-zinc-300 mt-1 max-w-prose">
+          Responde con selección simple: botones abajo (escala 1–5, Sí/No o A–D). El texto libre es
+          opcional.
+        </p>
+        <p className="text-[11px] text-zinc-500 mt-2 max-w-prose">
           Esta sesión puede registrar cambios de foco, copiar/pegar y tiempo de respuesta con fines de
           integridad del proceso. Al continuar aceptas este tratamiento conforme a la política de la
           empresa.
         </p>
+        {needFromUrl ? (
+          <p className="text-[11px] text-emerald-300/90 mt-2">
+            Protocolo activo: vacante vinculada (ID {needFromUrl.slice(0, 8)}…).
+          </p>
+        ) : (
+          <p className="text-[11px] text-zinc-500 mt-2">
+            Modo abierto (sin vacante). Para asociar al puesto, abre el enlace que envía RRHH con{' '}
+            <code className="text-zinc-400">?need=</code>.
+          </p>
+        )}
+        {needInvalid ? (
+          <p className="text-[11px] text-amber-400 mt-2">
+            El parámetro <code className="text-amber-200">need</code> no es un UUID válido; se ignora.
+          </p>
+        ) : null}
         {sessionId ? (
           <p className="text-[10px] text-zinc-500 mt-2 font-mono break-all">ID sesión: {sessionId}</p>
         ) : null}
@@ -277,29 +374,90 @@ export default function ReclutamientoPage() {
         </p>
       ) : null}
 
-      <div className="shrink-0 p-4 border-t border-zinc-800 flex gap-2 safe-bottom">
-        <input
-          className="flex-1 rounded-xl bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white placeholder:text-zinc-500"
-          placeholder="Escribe tu respuesta…"
-          value={input}
-          disabled={loading || !sessionId || sessionComplete}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => void send()}
-          disabled={loading || !sessionId || sessionComplete}
-          className="rounded-xl px-4 py-2 text-sm font-medium bg-blue-600 text-white disabled:opacity-40"
-        >
-          {loading ? '…' : 'Enviar'}
-        </button>
-      </div>
+      {/* Pie fijo: selección simple como vía principal; texto libre colapsado. */}
+      <footer
+        className="shrink-0 border-t border-zinc-800/90 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm safe-bottom"
+        style={{ boxShadow: '0 -8px 24px rgba(0,0,0,0.35)' }}
+      >
+        {!sessionComplete ? (
+          <QuickSelectReplies
+            disabled={loading || !sessionId}
+            sessionReady={!!sessionId}
+            onSend={(msg) => void sendMessage(msg)}
+          />
+        ) : null}
+        {!sessionComplete ? (
+          freeTextOpen ? (
+            <div className="px-4 pb-2 pt-0 space-y-2">
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 rounded-xl bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white placeholder:text-zinc-500"
+                  placeholder="Escribe tu respuesta libre…"
+                  value={input}
+                  disabled={loading || !sessionId || sessionComplete}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                  aria-label="Respuesta libre al cuestionario"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => void send()}
+                  disabled={loading || !sessionId || sessionComplete}
+                  className="rounded-xl px-4 py-2 text-sm font-medium bg-blue-600 text-white disabled:opacity-40 shrink-0"
+                >
+                  {loading ? '…' : 'Enviar'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFreeTextOpen(false);
+                  setInput('');
+                }}
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+              >
+                Cerrar y usar solo selección simple
+              </button>
+            </div>
+          ) : (
+            <div className="px-4 pb-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setFreeTextOpen(true)}
+                disabled={loading || !sessionId || sessionComplete}
+                className="text-xs text-sky-300/95 hover:text-sky-200 underline underline-offset-2 disabled:opacity-40"
+              >
+                Escribir respuesta libre (opcional)
+              </button>
+            </div>
+          )
+        ) : null}
+        {sessionId ? (
+          <div className="px-4 pb-3 pt-0">
+            <SessionShareBar sessionId={sessionId} />
+          </div>
+        ) : null}
+      </footer>
     </div>
+  );
+}
+
+export default function ReclutamientoPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-zinc-400 text-sm" style={{ background: 'var(--bg-primary)' }}>
+          Cargando reclutamiento…
+        </div>
+      }
+    >
+      <ReclutamientoPageInner />
+    </Suspense>
   );
 }
