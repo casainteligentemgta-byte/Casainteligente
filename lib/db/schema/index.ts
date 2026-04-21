@@ -173,6 +173,13 @@ export const nexusProjectMilestones = pgTable('nexus_project_milestones', {
   completedAt: timestamp('completed_at', { withTimezone: true }),
 });
 
+/* ─── Talento / obras (columnas mínimas para joins con reclutamiento) ─ */
+
+export const ciObras = pgTable('ci_obras', {
+  id: uuid('id').primaryKey(),
+  nombre: text('nombre').notNull(),
+});
+
 /* ─── Reclutamiento inteligente (sesión + estado JSON) ───────── */
 
 export const recruitmentSessions = pgTable('recruitment_sessions', {
@@ -189,6 +196,12 @@ export const recruitmentNeeds = pgTable('recruitment_needs', {
   title: text('title').notNull(),
   notes: text('notes'),
   protocolActive: boolean('protocol_active').default(true).notNull(),
+  cargoCodigo: text('cargo_codigo'),
+  cargoNombre: text('cargo_nombre'),
+  cargoNivel: integer('cargo_nivel'),
+  tipoVacante: text('tipo_vacante'),
+  /** FK a `ci_obras` (proyecto de obra); obligatorio al crear vacante vía API. */
+  proyectoId: uuid('proyecto_id').references(() => ciObras.id, { onDelete: 'restrict' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

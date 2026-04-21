@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
+import SimularLiquidacionConstruccion from '@/components/dashboard/SimularLiquidacionConstruccion';
 import { createClient } from '@/lib/supabase/server';
 
 type ResultadoConteo = {
@@ -229,6 +230,13 @@ export default async function DashboardPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section style={{ marginTop: '2rem' }}>
+        <h2 style={{ fontSize: '1rem', color: 'var(--muted)', marginBottom: '0.75rem' }}>
+          Construcción — liquidación
+        </h2>
+        <SimularLiquidacionConstruccion />
       </section>
     </main>
   );

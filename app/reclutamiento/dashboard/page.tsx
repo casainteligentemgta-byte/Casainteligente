@@ -11,6 +11,7 @@ import {
 import { hasSupabaseCeoSession } from '@/lib/recruitment/ceo-auth-server';
 import CeoLoginForm from './CeoLoginForm';
 import CeoLogoutButton from './CeoLogoutButton';
+import MonitorReclutamiento from './MonitorReclutamiento';
 import NeedProtocolSection from './NeedProtocolSection';
 
 type PageProps = { searchParams: { session?: string; key?: string } };
@@ -44,7 +45,7 @@ export default async function ReclutamientoDashboardPage({ searchParams }: PageP
 
   if (showLogin) {
     return (
-      <div className="min-h-screen px-4 py-8 max-w-lg mx-auto" style={{ background: 'var(--bg-primary)' }}>
+      <div className="min-h-screen px-4 py-8 max-w-3xl mx-auto" style={{ background: 'var(--bg-primary)' }}>
         <h1 className="text-xl font-semibold text-white mb-2">Reclutamiento — vista CEO</h1>
         <CeoLoginForm />
         <p className="text-sm">
@@ -57,10 +58,18 @@ export default async function ReclutamientoDashboardPage({ searchParams }: PageP
   }
 
   return (
-    <div className="min-h-screen px-4 py-8 max-w-lg mx-auto" style={{ background: 'var(--bg-primary)' }}>
-      <div className="flex items-start justify-between gap-4 mb-2">
+    <div className="min-h-screen px-4 py-8 max-w-3xl mx-auto" style={{ background: 'var(--bg-primary)' }}>
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
         <h1 className="text-xl font-semibold text-white">Reclutamiento — vista CEO</h1>
-        {needsGate ? <CeoLogoutButton /> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/proyectos/nuevo"
+            className="rounded-xl border border-zinc-600 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+          >
+            Nuevo proyecto
+          </Link>
+          {needsGate ? <CeoLogoutButton /> : null}
+        </div>
       </div>
 
       {!needsGate ? (
@@ -72,6 +81,8 @@ export default async function ReclutamientoDashboardPage({ searchParams }: PageP
       ) : null}
 
       <NeedProtocolSection />
+
+      <MonitorReclutamiento />
 
       <p className="text-sm text-zinc-400 mb-6">
         Pega el ID de sesión que te comparte el candidato al terminar (query{' '}
