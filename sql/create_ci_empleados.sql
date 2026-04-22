@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.ci_empleados (
     nombres                 TEXT NOT NULL,
     celular                 TEXT NOT NULL,
     cargo                   TEXT NOT NULL,
+    email                   TEXT,
     token                   TEXT UNIQUE NOT NULL,
     
     -- Estado del proceso de reclutamiento
@@ -39,6 +40,10 @@ CREATE POLICY "ci_empleados_admin_all"
 CREATE POLICY "ci_empleados_public_read"
     ON public.ci_empleados FOR SELECT TO anon
     USING (true);
+
+CREATE POLICY "ci_empleados_public_update"
+    ON public.ci_empleados FOR UPDATE TO anon
+    USING (true) WITH CHECK (true);
 
 -- Trigger para updated_at
 CREATE OR REPLACE FUNCTION update_ci_empleados_updated_at()
