@@ -140,7 +140,7 @@ export default function EvaluacionesPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {filtered.map(ev => {
                         const sc = STATUS_CONFIG[ev.status] ?? STATUS_CONFIG.pending;
-                        const sf = ev.semaforo ? SEMAFORO_COLOR[ev.semaforo] : null;
+                        const sf = ev.semaforo ? SEMAFORO_COLOR[ev.semaforo] : undefined;
                         const isCompleted = ev.status === 'completed';
                         return (
                             <div key={ev.id} style={{ ...glass, padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
@@ -150,7 +150,8 @@ export default function EvaluacionesPage() {
                                         <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', background: sc.bg, color: sc.text }}>
                                             {sc.label}
                                         </span>
-                                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', background: `${sf}20`, color: sf }}>
+                                        {sf && (
+                                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', background: `${sf}20`, color: sf }}>
                                                 {ev.semaforo === 'verde' ? '🟢 Recomendado' : ev.semaforo === 'amarillo' ? '🟡 Condicional' : '🔴 Alto Riesgo'}
                                             </span>
                                         )}

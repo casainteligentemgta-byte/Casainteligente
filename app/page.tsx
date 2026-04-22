@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 export default function DashboardPage() {
     const [productCount, setProductCount] = useState<number | null>(null);
     const [clientCount, setClientCount] = useState<number | null>(null);
+    const [projectCount, setProjectCount] = useState<number | null>(null);
 
     useEffect(() => {
         const supabase = createClient();
@@ -16,6 +17,9 @@ export default function DashboardPage() {
         // Contar clientes
         supabase.from('customers').select('id', { count: 'exact', head: true })
             .then(({ count }) => setClientCount(count ?? 0));
+        // Contar proyectos
+        supabase.from('ci_proyectos').select('id', { count: 'exact', head: true })
+            .then(({ count }) => setProjectCount(count ?? 0));
     }, []);
 
     const now = new Date();
@@ -122,27 +126,28 @@ export default function DashboardPage() {
                 </div>
 
                 {/* ── Proyectos ── */}
-                <div
-                    className="rounded-2xl p-4"
-                    style={{
-                        background: 'rgba(255,149,0,0.08)',
-                        border: '1px solid rgba(255,149,0,0.15)',
-                        boxShadow: '0 4px 20px rgba(255,149,0,0.08)',
-                    }}
-                >
-                    <div className="flex items-start justify-between mb-3">
-                        <span style={{ fontSize: '24px' }}>🏗️</span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                            style={{ background: 'rgba(255,149,0,0.15)', color: '#FF9500' }}>
-                            +3
-                        </span>
-                    </div>
-                    <p className="font-bold" style={{ fontSize: '26px', color: 'var(--label-primary)', letterSpacing: '-0.03em' }}>
-                        18
-                    </p>
-                    <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--label-secondary)' }}>
-                        Proyectos
-                    </p>
+                <div style={{ position: 'relative' }}>
+                    <Link
+                        href="/operaciones/proyectos"
+                        className="rounded-2xl p-4 transition-all duration-150 active:scale-95"
+                        style={{
+                            background: 'rgba(90,200,250,0.10)',
+                            border: '1px solid rgba(90,200,250,0.2)',
+                            textDecoration: 'none', display: 'block',
+                            boxShadow: '0 4px 20px rgba(90,200,250,0.12)',
+                        }}
+                    >
+                        <div className="flex items-start justify-between mb-3">
+                            <span style={{ fontSize: '24px' }}>🏗️</span>
+                            <div style={{ width: '28px', height: '28px' }} />
+                        </div>
+                        <p className="font-bold" style={{ fontSize: '26px', color: '#5AC8FA', letterSpacing: '-0.03em' }}>
+                            {projectCount ?? '—'}
+                        </p>
+                        <p className="text-sm font-medium mt-0.5" style={{ color: '#5AC8FA', opacity: 0.7 }}>
+                            Proyectos
+                        </p>
+                    </Link>
                 </div>
 
                 {/* ── Productos ── */}
