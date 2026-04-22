@@ -15,6 +15,7 @@ export interface Product {
     precio: number | null;
     utilidad: number | null;
     image_url: string | null;
+    imagen: string | null;
 }
 
 interface ProductSearchProps {
@@ -260,9 +261,9 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                             onMouseEnter={() => setActiveIndex(i)}
                         >
                             {/* Avatar */}
-                            {p.image_url ? (
+                            {p.image_url || p.imagen ? (
                                 <img
-                                    src={p.image_url}
+                                    src={p.image_url || p.imagen || ''}
                                     style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }}
                                     alt={p.nombre}
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

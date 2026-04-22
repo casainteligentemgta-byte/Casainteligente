@@ -18,6 +18,7 @@ export default function NuevoProyectoDrawer({ onClose, onSuccess }: NuevoProyect
   const [clientes, setClientes] = useState<any[]>([]);
   const [isFetchingClientes, setIsFetchingClientes] = useState(true);
   const [searchCliente, setSearchCliente] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
   
   const [formData, setFormData] = useState({
     nombre: '',
@@ -39,18 +40,24 @@ export default function NuevoProyectoDrawer({ onClose, onSuccess }: NuevoProyect
 
   async function fetchClientes() {
     setIsFetchingClientes(true);
-    const { data, error } = await supabase
-      .from('customers')
-      .select('id, first_name, last_name, company_name')
-      .order('company_name', { ascending: true });
-    
-    if (data) setClientes(data);
-    setIsFetchingClientes(false);
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, nombre')
+        .order('nombre', { ascending: true });
+      
+      if (error) throw error;
+      if (data) setClientes(data);
+    } catch (error) {
+      console.error('Error fetching clientes:', error);
+    } finally {
+      setIsFetchingClientes(false);
+    }
   }
 
   const clientesFiltrados = clientes.filter(c => 
-    `${c.first_name} ${c.last_name} ${c.company_name}`.toLowerCase().includes(searchCliente.toLowerCase())
-  ).slice(0, 5);
+    (c.nombre || '').toLowerCase().includes(searchCliente.toLowerCase())
+  ).slice(0, 10); // Aumentar a 10 para mejor visibilidad
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,32 +129,46 @@ export default function NuevoProyectoDrawer({ onClose, onSuccess }: NuevoProyect
               <input 
                 type="text" 
                 placeholder="Buscar cliente..."
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 dark:bg-slate-900 dark:border-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all dark:text-white mb-2"
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 dark:bg-slate-900 dark:border-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all dark:text-white mb-1"
                 value={searchCliente}
                 onChange={(e) => setSearchCliente(e.target.value)}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setTimeout(() => setIsFocused(false), 200)}
               />
               
-              {searchCliente && clientesFiltrados.length > 0 && (
-                <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                  {clientesFiltrados.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className={`w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between transition-colors
-                        ${formData.customer_id === c.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'dark:text-slate-300'}
-                      `}
-                      onClick={() => {
-                        setFormData({ ...formData, customer_id: c.id });
-                        setSearchCliente(c.company_name || `${c.first_name} ${c.last_name}`);
-                      }}
-                    >
-                      <div>
-                        <p className="font-bold">{c.company_name || 'Particular'}</p>
-                        <p className="text-xs opacity-70">{c.first_name} {c.last_name}</p>
-                      </div>
-                      {formData.customer_id === c.id && <Check className="w-4 h-4" />}
-                    </button>
-                  ))}
+              {/* Sugerencias de Clientes */}
+              {(isFocused || searchCliente !== '' || isFetchingClientes) && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden max-h-[250px] overflow-y-auto animate-in fade-in zoom-in duration-200">
+                  {isFetchingClientes ? (
+                    <div className="p-4 flex items-center justify-center gap-2 text-slate-500">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Cargando clientes...</span>
+                    </div>
+                  ) : clientesFiltrados.length > 0 ? (
+                    clientesFiltrados.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between transition-colors
+                          ${formData.customer_id === c.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'dark:text-slate-300'}
+                        `}
+                        onClick={() => {
+                          setFormData({ ...formData, customer_id: c.id });
+                          setSearchCliente(c.nombre);
+                        }}
+                      >
+                        <div>
+                          <p className="font-bold text-sm">{c.nombre}</p>
+                          <p className="text-[10px] opacity-70">ID: {c.id.slice(0, 8)}</p>
+                        </div>
+                        {formData.customer_id === c.id && <Check className="w-4 h-4" />}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-slate-500 text-sm italic">
+                      No se encontraron coincidencias
+                    </div>
+                  )}
                 </div>
               )}
             </div>

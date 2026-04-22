@@ -32,7 +32,7 @@ export default function ProyectosPage() {
       .from('ci_proyectos')
       .select(`
         *,
-        cliente_info:customers(first_name, last_name, company_name)
+        cliente_info:customers(nombre)
       `)
       .order('created_at', { ascending: false });
 
@@ -45,7 +45,7 @@ export default function ProyectosPage() {
   const proyectosFiltrados = useMemo(() => {
     return proyectos.filter(p => {
       const matchSearch = (p.nombre || p.nombre_proyecto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (p.cliente_info?.company_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+                          (p.cliente_info?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchEstado = filtroEstado === 'Todos' || p.estado === filtroEstado.toLowerCase();
       return matchSearch && matchEstado;
     });
@@ -204,10 +204,10 @@ export default function ProyectosPage() {
               <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs">
-                    {p.cliente_info?.company_name?.[0] || 'C'}
+                    {p.cliente_info?.nombre?.[0] || 'C'}
                   </div>
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
-                    {p.cliente_info?.company_name || 'Cliente Genérico'}
+                    {p.cliente_info?.nombre || 'Cliente Genérico'}
                   </span>
                 </div>
                 <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 uppercase">
@@ -244,7 +244,7 @@ export default function ProyectosPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-sm font-medium">
-                    {p.cliente_info?.company_name || '—'}
+                    {p.cliente_info?.nombre || '—'}
                   </td>
                   <td className="px-6 py-4 text-slate-500 dark:text-slate-500 text-sm truncate max-w-[200px]">
                     {p.ubicacion_texto || '—'}

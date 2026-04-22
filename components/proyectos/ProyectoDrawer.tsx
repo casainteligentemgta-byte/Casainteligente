@@ -115,12 +115,12 @@ export default function ProyectoDrawer({ proyecto, onClose }: ProyectoDrawerProp
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between group">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/20">
-                  {proyecto.cliente_info?.company_name?.[0] || 'C'}
+                  {proyecto.cliente_info?.nombre?.[0] || 'C'}
                 </div>
                 <div>
-                  <h4 className="font-bold dark:text-white">{proyecto.cliente_info?.company_name || 'Cliente Genérico'}</h4>
-                  <p className="text-sm text-slate-500">
-                    {proyecto.cliente_info?.first_name} {proyecto.cliente_info?.last_name}
+                  <h4 className="font-bold dark:text-white">{proyecto.cliente_info?.nombre || 'Cliente Genérico'}</h4>
+                  <p className="text-sm text-slate-500 italic">
+                    Cliente del proyecto
                   </p>
                 </div>
               </div>

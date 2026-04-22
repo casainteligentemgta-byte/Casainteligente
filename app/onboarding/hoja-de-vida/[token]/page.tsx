@@ -20,7 +20,8 @@ import {
     Heart,
     Flag,
     Dna,
-    Wallet
+    Wallet,
+    Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
