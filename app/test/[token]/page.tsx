@@ -159,34 +159,34 @@ export default function TestPage() {
     const gmaIdx = current - QUESTIONS.length;
     const supabase = createClient();
 
-    // ── Cargar evaluación ─────────────────────────────────────
+    // ── Cargar prospecto y evaluación ──────────────────────────
     useEffect(() => {
         async function load() {
-            const { data } = await supabase
-                .from('evaluaciones').select('*').eq('token', token).single();
-            if (!data) { setPhaseSync('expired'); return; }
-            if (data.status === 'completed') { setPhaseSync('done'); setEvalData(data); return; }
-            if (data.status === 'expired' || data.disqualified) { setPhaseSync('expired'); return; }
-
-            const now = Date.now();
-            if (data.status === 'pending') {
-                if (now > new Date(data.link_expires_at).getTime()) {
-                    await supabase.from('evaluaciones').update({ status: 'expired' }).eq('token', token);
-                    setPhaseSync('expired'); return;
-                }
-                const testDeadline = new Date(now + 15 * 60 * 1000).toISOString();
-                await supabase.from('evaluaciones').update({
-                    status: 'started', started_at: new Date(now).toISOString(), test_deadline: testDeadline,
-                }).eq('token', token);
-                setTimeLeft(900);
-            } else if (data.status === 'started') {
-                const remaining = Math.max(0, Math.floor((new Date(data.test_deadline).getTime() - now) / 1000));
-                if (remaining === 0) { submitAnswers([], [], true, 'Tiempo agotado', data); return; }
-                setTimeLeft(remaining);
+            // 1. Cargar prospecto
+            const { data: prospecto } = await supabase
+                .from('ci_prospectos').select('*').eq('token', token).single();
+            
+            if (!prospecto) { setPhaseSync('expired'); return; }
+            if (prospecto.estado === 'completado' || prospecto.estado === 'descartado') { 
+                setPhaseSync('done'); return; 
             }
 
-            setEvalData(data);
+            // 2. Cargar o crear evaluación vinculada
+            const { data: evalData } = await supabase
+                .from('ci_evaluaciones').select('*').eq('prospecto_id', prospecto.id).single();
+            
+            if (!evalData) {
+                // Si no existe, la creamos (fallback por si falló el onboarding step)
+                await supabase.from('ci_evaluaciones').insert({
+                    prospecto_id: prospecto.id,
+                    puntaje: 0,
+                    respuestas: {}
+                });
+            }
+
+            setEvalData({ ...evalData, prospecto });
             setPhaseSync('active');
+            setTimeLeft(900); // 15 minutos base
         }
         load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,26 +263,20 @@ export default function TestPage() {
         if (submittingRef.current) return;
         submittingRef.current = true;
 
-        // Verificar deadline server-side antes de guardar
-        if (!autoTimeout && evData?.test_deadline) {
-            const deadline = new Date(evData.test_deadline).getTime();
-            if (Date.now() > deadline + 5000) {
-                // Fuera de tiempo — rechazar submission
-                await supabase.from('evaluaciones').update({ status: 'expired' }).eq('token', token);
-                setPhaseSync('expired'); return;
-            }
-        }
-
         const scores = computeScores(pAnswers, gAnswers);
         const disqualified = !!reason && reason.includes('ventana');
-        await supabase.from('evaluaciones').update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            answers: pAnswers,
-            disqualified,
-            disqualification_reason: reason,
-            ...scores,
-        }).eq('token', token);
+        
+        // 1. Guardar en ci_evaluaciones
+        await supabase.from('ci_evaluaciones').update({
+            puntaje: scores.risk_score, // o el que prefieras
+            respuestas: { pAnswers, gAnswers, ...scores },
+            fecha_completado: new Date().toISOString()
+        }).eq('prospecto_id', evData.prospecto.id);
+
+        // 2. Actualizar estado del prospecto
+        await supabase.from('ci_prospectos').update({
+            estado: disqualified ? 'descartado' : 'completado'
+        }).eq('id', evData.prospecto.id);
 
         setPhaseSync(disqualified ? 'disqualified' : 'done');
     }, [token, supabase]);
@@ -497,34 +491,69 @@ export default function TestPage() {
 
             {/* ── Fixed bottom navigation ── */}
             <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000, padding: '14px 20px', background: 'rgba(10,10,15,0.97)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', gap: '10px' }}>
-                    <button
-                        onClick={() => setCurrent(Math.max(0, current - 1))}
-                        disabled={current === 0}
-                        style={{ padding: '14px 18px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: current === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)', cursor: current === 0 ? 'default' : 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '16px' }}>
-                        ←
-                    </button>
-
-                    {current < TOTAL_Q - 1 ? (
-                        <button
-                            onClick={() => { if (currentAnswer >= 0) setCurrent(current + 1); }}
-                            style={{ 
-                                flex: 1, padding: '14px', borderRadius: '14px', border: 'none', 
-                                background: currentAnswer >= 0 ? (isGMA ? 'linear-gradient(135deg,#00AEEF,#34C759)' : 'linear-gradient(135deg,#FFD60A,#FF9500)') : 'rgba(255,255,255,0.1)', 
-                                color: currentAnswer >= 0 ? '#000' : 'rgba(255,255,255,0.3)', 
-                                cursor: currentAnswer >= 0 ? 'pointer' : 'not-allowed', 
-                                opacity: currentAnswer >= 0 ? 1 : 0.6,
-                                fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', transition: 'all 0.2s' 
-                            }}>
-                            Siguiente →
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => submitAnswers(answers, gmaAnswers, false, null, evalData)}
-                            style={{ flex: 1, padding: '14px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#34C759,#30D158)', color: 'white', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', boxShadow: '0 4px 20px rgba(52,199,89,0.35)' }}>
-                            ✅ Terminar y enviar
-                        </button>
+                <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {currentAnswer < 0 && (
+                        <div style={{ fontSize: '12px', color: '#FFD60A', textAlign: 'center', fontWeight: 600, animation: 'pulse 2s infinite' }}>
+                            ⚠️ Selecciona una opción para habilitar el botón
+                        </div>
                     )}
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                            onClick={() => {
+                                setCurrent(Math.max(0, current - 1));
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            disabled={current === 0}
+                            style={{ 
+                                padding: '16px 20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', 
+                                background: 'rgba(255,255,255,0.03)', 
+                                color: current === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)', 
+                                cursor: current === 0 ? 'default' : 'pointer', 
+                                fontFamily: 'inherit', fontWeight: 700, fontSize: '18px',
+                                transition: 'all 0.2s'
+                            }}>
+                            ←
+                        </button>
+
+                        {current < TOTAL_Q - 1 ? (
+                            <button
+                                onClick={() => { 
+                                    if (currentAnswer >= 0) {
+                                        setCurrent(current + 1);
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }
+                                }}
+                                style={{ 
+                                    flex: 1, padding: '16px', borderRadius: '16px', border: 'none', 
+                                    background: currentAnswer >= 0 
+                                        ? (isGMA ? 'linear-gradient(135deg,#00AEEF,#34C759)' : 'linear-gradient(135deg,#FFD60A,#FF9500)') 
+                                        : 'rgba(255,255,255,0.05)', 
+                                    color: currentAnswer >= 0 ? '#000' : 'rgba(255,255,255,0.2)', 
+                                    cursor: currentAnswer >= 0 ? 'pointer' : 'not-allowed', 
+                                    opacity: currentAnswer >= 0 ? 1 : 0.7,
+                                    boxShadow: currentAnswer >= 0 ? '0 8px 32px rgba(255,214,10,0.25)' : 'none',
+                                    fontFamily: 'inherit', fontWeight: 900, fontSize: '17px', 
+                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' 
+                                }}>
+                                Siguiente Pregunta →
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => submitAnswers(answers, gmaAnswers, false, null, evalData)}
+                                disabled={currentAnswer < 0}
+                                style={{ 
+                                    flex: 1, padding: '16px', borderRadius: '16px', border: 'none', 
+                                    background: currentAnswer >= 0 ? 'linear-gradient(135deg,#34C759,#30D158)' : 'rgba(255,255,255,0.05)', 
+                                    color: currentAnswer >= 0 ? '#000' : 'rgba(255,255,255,0.2)', 
+                                    cursor: currentAnswer >= 0 ? 'pointer' : 'not-allowed', 
+                                    fontFamily: 'inherit', fontWeight: 900, fontSize: '17px', 
+                                    boxShadow: currentAnswer >= 0 ? '0 8px 32px rgba(52,199,89,0.3)' : 'none',
+                                    transition: 'all 0.3s'
+                                }}>
+                                ✅ Finalizar Evaluación
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
