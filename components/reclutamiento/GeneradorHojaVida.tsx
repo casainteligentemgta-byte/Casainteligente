@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { MessageSquare, Link as LinkIcon, User, Briefcase, Phone, Sparkles, CheckCircle2, Copy, X, FileText } from 'lucide-react';
+import { MessageSquare, Link as LinkIcon, User, Briefcase, Phone, Sparkles, CheckCircle2, Copy, X, FileText, Mail } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function GeneradorHojaVida({ onClose }: { onClose?: () => void }) {
