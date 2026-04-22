@@ -33,7 +33,7 @@ export default function EvaluacionesPage() {
         const supabase = createClient();
         const { data } = await supabase
             .from('evaluaciones')
-            .select('*')
+            .select('*, employees(celular)')
             .order('created_at', { ascending: false })
             .limit(100);
         setEvaluaciones(data || []);
@@ -148,6 +148,17 @@ export default function EvaluacionesPage() {
                                     )}
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                    {ev.employees?.celular && (
+                                        <a 
+                                            href={`https://wa.me/${ev.employees.celular.replace(/\D/g,'')}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{ padding: '10px', borderRadius: '12px', border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.1)', color: '#25D366', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            title="Contactar por WhatsApp"
+                                        >
+                                            💬
+                                        </a>
+                                    )}
                                     {isCompleted ? (
                                         <Link
                                             href={`/evaluaciones/${ev.id}/reporte`}

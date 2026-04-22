@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 const statusColors: Record<string, { bg: string; text: string }> = {
@@ -13,6 +14,13 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 
 const NIVELES_COLOR: Record<string, string> = {
     Excelente: '#34C759', Bueno: '#00AEEF', Regular: '#FF9500', Bajo: '#FF3B30', Ninguno: 'rgba(255,255,255,0.2)',
+};
+
+const EVAL_STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+    pending:   { label: 'Esperando',   bg: 'rgba(255,214,10,0.12)', text: '#FFD60A' },
+    started:   { label: 'En Progreso', bg: 'rgba(0,174,239,0.12)',  text: '#00AEEF' },
+    completed: { label: 'Completada',  bg: 'rgba(52,199,89,0.12)',  text: '#34C759' },
+    expired:   { label: 'Expirada',    bg: 'rgba(255,59,48,0.12)',  text: '#FF3B30' },
 };
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string | number | null | undefined }) {
@@ -32,14 +40,23 @@ export default function EmpleadoDetailPage() {
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
     const [emp, setEmp] = useState<any>(null);
+    const [evaluations, setEvaluations] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
 
     useEffect(() => {
         async function load() {
             const supabase = createClient();
-            const { data } = await supabase.from('employees').select('*').eq('id', id).single();
-            setEmp(data);
+            const { data: eData } = await supabase.from('employees').select('*').eq('id', id).single();
+            setEmp(eData);
+
+            const { data: evData } = await supabase
+                .from('evaluaciones')
+                .select('*')
+                .eq('employee_id', id)
+                .order('created_at', { ascending: false });
+            setEvaluations(evData || []);
+
             setLoading(false);
         }
         load();
@@ -53,7 +70,7 @@ export default function EmpleadoDetailPage() {
     }
 
     const glass = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', backdropFilter: 'blur(20px)' };
-    const TABS = ['Resumen', 'Formación', 'Experiencia', 'Conocimientos', 'Médico', 'Vehículo', 'Referencias'];
+    const TABS = ['Resumen', 'Formación', 'Experiencia', 'Conocimientos', 'Médico', 'Vehículo', 'Referencias', 'Evaluaciones'];
 
     if (loading) return <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter,sans-serif' }}>Cargando…</div>;
     if (!emp) return <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter,sans-serif' }}>Empleado no encontrado</div>;
@@ -372,6 +389,74 @@ export default function EmpleadoDetailPage() {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* TAB: Evaluaciones */}
+            {activeTab === 7 && (
+                <div style={{ ...glass, padding: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#FFD60A' }}>Historial de Evaluaciones</h3>
+                        {emp.celular && (
+                            <a 
+                                href={`https://wa.me/${emp.celular.replace(/\D/g,'')}`} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '10px', background: 'rgba(37,211,102,0.1)', color: '#25D366', textDecoration: 'none', fontSize: '13px', fontWeight: 700, border: '1px solid rgba(37,211,102,0.2)' }}
+                            >
+                                💬 WhatsApp
+                            </a>
+                        )}
+                    </div>
+
+                    {evaluations.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '16px' }}>
+                            <p style={{ color: 'rgba(255,255,255,0.3)', margin: 0 }}>No hay evaluaciones registradas para este candidato.</p>
+                            <button onClick={() => router.push(`/evaluaciones/nueva?empleadoId=${id}`)} style={{ marginTop: '16px', background: 'none', border: '1px solid #FFD60A', color: '#FFD60A', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                                Enviar primera evaluación
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {evaluations.map(ev => {
+                                const sc = EVAL_STATUS_CONFIG[ev.status] ?? EVAL_STATUS_CONFIG.pending;
+                                const isCompleted = ev.status === 'completed';
+                                return (
+                                    <div key={ev.id} style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                                                <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '8px', background: sc.bg, color: sc.text, textTransform: 'uppercase' }}>
+                                                    {sc.label}
+                                                </span>
+                                                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
+                                                    {new Date(ev.created_at).toLocaleDateString('es-VE')} {new Date(ev.created_at).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                            {isCompleted && ev.semaforo && (
+                                                <div style={{ fontSize: '13px', fontWeight: 600, color: ev.semaforo === 'rojo' ? '#FF3B30' : ev.semaforo === 'amarillo' ? '#FFD60A' : '#34C759' }}>
+                                                    {ev.semaforo === 'rojo' ? '🔴 Alto Riesgo' : ev.semaforo === 'amarillo' ? '🟡 Condicional' : '🟢 Recomendado'}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            {isCompleted ? (
+                                                <Link 
+                                                    href={`/evaluaciones/${ev.id}/reporte`}
+                                                    style={{ padding: '8px 16px', borderRadius: '10px', background: 'linear-gradient(135deg,#FFD60A,#FF9500)', color: '#000', fontWeight: 700, fontSize: '13px', textDecoration: 'none' }}
+                                                >
+                                                    📊 Ver Reporte
+                                                </Link>
+                                            ) : (
+                                                <span style={{ padding: '8px 16px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', fontSize: '13px', fontWeight: 600 }}>
+                                                    En espera...
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>

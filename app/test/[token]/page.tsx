@@ -13,27 +13,28 @@ interface POption { text: string; disc: Dim; dark: DarkType | null; darkScore: n
 interface PQuestion { id: number; scenario: string; options: POption[] }
 
 const QUESTIONS: PQuestion[] = [
-    { id: 1, scenario: 'Un colega comete un error que afecta directamente tu proyecto. ¿Cuál es tu primera reacción?', options: [{ text: 'Lo confronto directamente para que resuelva el problema de inmediato.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Busco la manera de motivarlo y apoyarlo para superar el error.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo ayudo a corregirlo juntos, sin hacer drama del asunto.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Documento el error cuidadosamente y lo reporto a quien corresponde.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 2, scenario: '¿Cuál de estas frases te describe mejor en el contexto profesional?', options: [{ text: '"Nací para liderar; los demás necesitan ser dirigidos."', disc: 'D', dark: 'NAR', darkScore: 2 }, { text: '"La vida y el trabajo son mejores cuando los disfrutamos en equipo."', disc: 'I', dark: null, darkScore: 0 }, { text: '"Prefiero estar seguro antes que arrepentido."', disc: 'S', dark: null, darkScore: 0 }, { text: '"Los datos no mienten; las emociones sí."', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 3, scenario: 'Cometiste un error que perjudicó al equipo. ¿Qué haces?', options: [{ text: 'Lo asumo de inmediato y propongo una solución concreta.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Lo reconozco abiertamente y me disculpo con el grupo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Necesito analizar bien si realmente fue mi responsabilidad.', disc: 'S', dark: 'IRR', darkScore: 2 }, { text: 'Lo proceso en privado y luego hablo cuando tenga claridad.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 4, scenario: 'Te ofrecen un cargo de mayor jerarquía con más responsabilidad. ¿Qué haces?', options: [{ text: 'Lo acepto sin dudarlo; es lo que me corresponde y merezco.', disc: 'D', dark: 'NAR', darkScore: 1 }, { text: 'Lo acepto con entusiasmo y lo celebro con el equipo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo evalúo con calma para asegurarme de estar verdaderamente preparado.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Analizo los requisitos, el sueldo y las condiciones antes de decidir.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 5, scenario: 'Un cliente te presiona con insultos durante una reunión. ¿Cuál es tu reacción?', options: [{ text: 'Le digo claramente lo que pienso, sin filtros innecesarios.', disc: 'D', dark: 'PSY', darkScore: 1 }, { text: 'Intento calmarlo con empatía y un toque de humor positivo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Me mantengo calmado y busco una solución práctica al problema.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Escalo el caso con evidencia documentada a quien corresponde.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 6, scenario: '¿Cómo describes tu relación personal con las normas y procedimientos de la empresa?', options: [{ text: 'Son guías, no límites absolutos; el resultado manda.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Dependen del contexto; la flexibilidad es clave.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Las respeto porque dan orden y estabilidad al trabajo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Son fundamentales para garantizar calidad y consistencia.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 7, scenario: 'Descubres que un compañero ha tomado crédito público por tu trabajo. ¿Qué haces?', options: [{ text: 'Lo confronto directamente frente al equipo o supervisor.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Hablo con él en privado con actitud positiva y busco acuerdo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo dejo pasar para no generar un conflicto innecesario.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Presento evidencia documentada de mi autoría al supervisor.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 8, scenario: 'Describe tu estilo cuando enfrentas una situación de presión extrema en el trabajo.', options: [{ text: 'Me activo automáticamente y tomo el control de la situación.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Mantengo el ánimo del equipo elevado; el ambiente lo es todo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Me mantengo sereno y sigo el plan establecido paso a paso.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Priorizo tareas racionalmente y gestiono los recursos disponibles.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 9, scenario: 'Si pudieras cambiar algo de tu trayectoria laboral anterior, ¿qué cambiarías?', options: [{ text: 'Absolutamente nada; cada decisión que tomé fue la correcta.', disc: 'D', dark: 'NAR', darkScore: 2 }, { text: 'Hubiera construido mejores redes de contacto y relaciones estratégicas.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Hubiera sido más proactivo al proponer nuevas ideas.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Hubiera documentado con mayor rigurosidad los procesos y resultados.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 10, scenario: '¿Cuál es tu postura frente a pedir ayuda cuando te atascas en un problema?', options: [{ text: 'Prefiero agotarme resolviendo solo antes de pedirla.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Es completamente natural; fortalece las relaciones del equipo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'La pido cuando genuinamente la necesito, sin problema alguno.', disc: 'S', dark: null, darkScore: 0 }, { text: 'La pido con datos específicos sobre el punto exacto del bloqueo.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 11, scenario: 'Un proyecto en el que participaste fracasa. Internamente, ¿a qué lo atribuyes?', options: [{ text: 'A decisiones erróneas tomadas por el liderazgo superior.', disc: 'D', dark: 'IRR', darkScore: 2 }, { text: 'A falta de comunicación y motivación grupal.', disc: 'I', dark: null, darkScore: 0 }, { text: 'A circunstancias externas que nadie podía controlar.', disc: 'S', dark: 'IRR', darkScore: 1 }, { text: 'A fallas específicas en la planificación y ejecución del plan.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 12, scenario: 'Tu supervisor te da una crítica directa sobre tu desempeño. ¿Cómo reaccionas internamente?', options: [{ text: 'La escucho pero filtro solo lo que considero útil para mí.', disc: 'D', dark: null, darkScore: 0 }, { text: 'La recibo bien si la percibo como constructiva y bien intencionada.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Me afecta un poco emocionalmente, pero intento mejorar.', disc: 'S', dark: null, darkScore: 0 }, { text: 'La analizo objetivamente buscando datos concretos de mejora.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 13, scenario: 'Para ti, ¿qué significa el éxito profesional en su definición más honesta?', options: [{ text: 'Ganar, superar a los demás y ser reconocido como el mejor.', disc: 'D', dark: 'NAR', darkScore: 1 }, { text: 'Lograr metas importantes mientras disfruto el proceso con otros.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Tener estabilidad, paz y contribuir al bienestar colectivo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Alcanzar resultados medibles con la más alta calidad posible.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 14, scenario: 'Descubres con certeza que un colega de confianza está cometiendo fraude interno. ¿Qué haces?', options: [{ text: 'Lo confronto directamente y le exijo que se detenga.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Hablo con él en privado para entender qué lo llevó a esa situación.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo reporto discretamente al supervisor siguiendo el protocolo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'No es mi rol vigilar a otros; me enfoco exclusivamente en mis resultados.', disc: 'C', dark: 'PSY', darkScore: 3 }] },
-    { id: 15, scenario: 'Se genera un conflicto serio dentro de tu equipo de trabajo. ¿Cuál es tu rol?', options: [{ text: 'Tomo el control de la situación y dicto la solución más eficiente.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Facilito el diálogo activo para que las partes lleguen a un acuerdo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Escucho a todos los involucrados y busco el consenso del grupo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Analizo los hechos objetivamente y propongo una solución basada en datos.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 16, scenario: 'Tu supervisor te asigna una tarea importante fuera de tu rol habitual. ¿Qué haces?', options: [{ text: 'La ejecuto si me conviene estratégicamente; la delego o ignoro si no.', disc: 'D', dark: 'IRR', darkScore: 1 }, { text: 'La acepto con buena actitud; puede ser una oportunidad de crecimiento.', disc: 'I', dark: null, darkScore: 0 }, { text: 'La realizo sin reclamos; soy parte del equipo y eso implica flexibilidad.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Consulto formalmente si está dentro del alcance de mi cargo antes de proceder.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 17, scenario: '¿Qué tan importante es para ti el reconocimiento público de tus logros profesionales?', options: [{ text: 'Es fundamental; merezco que todos sepan exactamente lo que logré.', disc: 'D', dark: 'NAR', darkScore: 3 }, { text: 'Me gusta mucho y además motiva e inspira a mi equipo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'No es necesario; prefiero que el trabajo bien hecho hable solo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Prefiero métricas claras de desempeño antes que reconocimiento público.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 18, scenario: 'Un miembro de tu equipo muestra bajo rendimiento de forma persistente. ¿Cuál es tu enfoque?', options: [{ text: 'Le comunico firmemente que debe mejorar o habrá consecuencias directas.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Busco entender qué le ocurre personalmente y lo motivo activamente.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo apoyo con recursos, tiempo y retroalimentación continua y paciente.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Escalo el caso formalmente a Recursos Humanos con datos de desempeño.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 19, scenario: 'Define tu postura honesta frente a las normas éticas de la organización.', options: [{ text: 'Las sigo cuando tienen sentido práctico para los resultados del negocio.', disc: 'D', dark: 'PSY', darkScore: 2 }, { text: 'Las respeto genuinamente y las promuevo activamente en mi equipo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Son parte de la cultura organizacional que realmente valoro.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Son absolutamente no negociables para mí en cualquier contexto.', disc: 'C', dark: null, darkScore: 0 }] },
-    { id: 20, scenario: 'Estás en una situación de altísima tensión laboral. ¿Cuál es tu primer movimiento?', options: [{ text: 'Actuar rápido y con decisión, aunque implique asumir riesgos inmediatos.', disc: 'D', dark: 'PSY', darkScore: 1 }, { text: 'Comunicar la situación de inmediato para activar y coordinar al equipo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Mantener la calma conscientemente y evitar reacciones impulsivas.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Evaluar metódicamente todas las variables disponibles antes de actuar.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 1, scenario: 'Un compañero comete un error que te afecta. ¿Qué es lo primero que haces?', options: [{ text: 'Lo busco de inmediato para que lo arregle ahora mismo.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Le doy ánimos y lo ayudo para que se sienta mejor.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo ayudamos a arreglarlo entre los dos sin pelear.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Anoto el fallo con detalle y aviso a mi jefe de inmediato.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 2, scenario: '¿Qué frase te describe mejor en el trabajo?', options: [{ text: '"Yo nací para mandar; los demás necesitan que alguien los guíe."', disc: 'D', dark: 'NAR', darkScore: 2 }, { text: '"El trabajo es mejor cuando todos nos llevamos bien en equipo."', disc: 'I', dark: null, darkScore: 0 }, { text: '"Prefiero estar seguro de algo antes que equivocarme."', disc: 'S', dark: null, darkScore: 0 }, { text: '"Los números dicen la verdad; las emociones no."', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 3, scenario: 'Cometiste un error que perjudicó al equipo. ¿Qué haces?', options: [{ text: 'Lo reconozco rápido y busco una solución de una vez.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Pido perdón a todos y admito que me equivoqué.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Primero reviso bien si de verdad toda la culpa fue mía.', disc: 'S', dark: 'IRR', darkScore: 2 }, { text: 'Lo pienso a solas y luego hablo cuando esté más tranquilo.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 4, scenario: 'Te ofrecen un puesto más alto con más mando. ¿Qué haces?', options: [{ text: 'Lo acepto sin dudar; es lo que me merezco por ser el mejor.', disc: 'D', dark: 'NAR', darkScore: 1 }, { text: 'Lo acepto feliz y lo celebro con mis compañeros.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo pienso con calma para ver si de verdad estoy listo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Reviso bien cuánto voy a ganar y qué tendré que hacer antes de decir sí.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 5, scenario: 'Un cliente se pone pesado y te insulta en una reunión. ¿Qué haces?', options: [{ text: 'Le digo las cosas claras y no me quedo callado.', disc: 'D', dark: 'PSY', darkScore: 1 }, { text: 'Trato de calmarlo con buena cara y algún comentario positivo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Me quedo tranquilo y busco cómo resolver el problema rápido.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Anoto todo lo que pasó y paso el reporte a mi superior.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 6, scenario: '¿Qué piensas de las reglas de la empresa?', options: [{ text: 'Son solo guías; lo más importante es dar resultados.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Hay que ser flexibles; a veces las reglas cambian.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Las sigo porque dan orden y tranquilidad al trabajo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Son lo más importante para que el trabajo salga siempre bien.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 7, scenario: 'Un compañero dice que él hizo algo que en verdad hiciste tú. ¿Qué haces?', options: [{ text: 'Lo confronto delante de todos o hablo con el jefe.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Hablo con él a solas con buena actitud para arreglarlo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'No digo nada para evitar peleas innecesarias.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Le enseño pruebas a mi jefe de que el trabajo fue mío.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 8, scenario: '¿Cómo te pones cuando hay muchísima presión en el trabajo?', options: [{ text: 'Me activo rápido y tomo el mando de la situación.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Trato de que todos sigan con buen ánimo; el ambiente importa.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Me quedo calmado y sigo el plan paso a paso.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Pienso qué es lo más urgente y ordeno bien mis tareas.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 9, scenario: 'Si pudieras cambiar algo de tus trabajos anteriores, ¿qué sería?', options: [{ text: 'Nada; todas las decisiones que tomé estuvieron bien.', disc: 'D', dark: 'NAR', darkScore: 2 }, { text: 'Hubiera hecho más amigos y conocidos importantes.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Hubiera dado más ideas nuevas de mi parte.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Hubiera anotado mejor cómo se hacían todos los procesos.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 10, scenario: '¿Qué haces cuando no sabes cómo resolver un problema?', options: [{ text: 'Trato de resolverlo yo solo aunque me canse mucho.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Pido ayuda rápido; para eso está el equipo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Pido ayuda solo si de verdad veo que no puedo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Pido ayuda explicando exactamente en qué parte me trabé.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 11, scenario: 'Un proyecto en el que trabajaste sale mal. ¿Por qué crees que pasó?', options: [{ text: 'Por malas decisiones de los jefes de arriba.', disc: 'D', dark: 'IRR', darkScore: 2 }, { text: 'Porque no nos comunicamos bien ni nos motivamos.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Por cosas de afuera que nadie podía controlar.', disc: 'S', dark: 'IRR', darkScore: 1 }, { text: 'Porque el plan no se hizo o no se siguió bien.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 12, scenario: 'Tu jefe te dice que algo hiciste mal. ¿Cómo te sientes por dentro?', options: [{ text: 'Lo escucho, pero solo me quedo con lo que me sirve a mí.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Me lo tomo bien si veo que me lo dice para ayudar.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Me pongo un poco triste, pero trato de mejorar.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Lo analizo con calma para ver exactamente en qué mejorar.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 13, scenario: 'Para ti, ¿qué es tener éxito en el trabajo?', options: [{ text: 'Ganar siempre, ser mejor que los demás y que me feliciten.', disc: 'D', dark: 'NAR', darkScore: 1 }, { text: 'Lograr metas grandes mientras la paso bien con otros.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Tener un trabajo estable, tranquilo y ayudar a todos.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Dar resultados perfectos y de la mejor calidad.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 14, scenario: 'Te enteras de que un compañero de confianza está robando dinero a la empresa. ¿Qué haces?', options: [{ text: 'Lo enfrento cara a cara y le digo que pare ya mismo.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Hablo con él a solas para ver por qué lo está haciendo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Aviso a mi jefe con cuidado siguiendo las reglas.', disc: 'S', dark: null, darkScore: 0 }, { text: 'No es mi problema vigilar a otros; yo solo hago mi trabajo.', disc: 'C', dark: 'PSY', darkScore: 3 }] },
+    { id: 15, scenario: 'Hay una pelea fuerte entre tus compañeros de equipo. ¿Qué haces tú?', options: [{ text: 'Tomo el control y digo cuál es la solución más rápida.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Ayudo a que hablen para que se arreglen entre ellos.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Escucho a todos y trato de que todos estemos de acuerdo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Miro los hechos sin elegir bando y propongo una solución lógica.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 16, scenario: 'Tu jefe te pide hacer algo que no te toca hacer normalmente. ¿Qué haces?', options: [{ text: 'Lo hago solo si me conviene; si no, busco a otro o no lo hago.', disc: 'D', dark: 'IRR', darkScore: 1 }, { text: 'Lo acepto con buena cara; puede ser bueno para aprender.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo hago sin quejarme; somos un equipo y hay que ayudar.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Pregunto primero si eso de verdad me toca hacerlo a mí.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 17, scenario: '¿Qué tan importante es para ti que te feliciten delante de todos?', options: [{ text: 'Es muy importante; me gusta que todos sepan lo que logré.', disc: 'D', dark: 'NAR', darkScore: 3 }, { text: 'Me gusta mucho y además motiva a mis compañeros.', disc: 'I', dark: null, darkScore: 0 }, { text: 'No hace falta; prefiero que mi buen trabajo se vea solo.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Prefiero que me den datos reales de mi trabajo antes que felicitaciones.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 18, scenario: 'Un compañero de tu equipo trabaja muy mal siempre. ¿Qué haces?', options: [{ text: 'Le digo firme que debe mejorar o tendrá problemas.', disc: 'D', dark: null, darkScore: 0 }, { text: 'Trato de ver si tiene problemas personales y lo animo.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Lo ayudo con paciencia y le enseño cómo hacerlo mejor.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Le aviso formalmente a Recursos Humanos con pruebas de su mal trabajo.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 19, scenario: '¿Qué piensas de portarse bien y ser honesto en el trabajo?', options: [{ text: 'Lo hago cuando es bueno para los resultados del negocio.', disc: 'D', dark: 'PSY', darkScore: 2 }, { text: 'Lo hago de verdad y trato de que mi equipo también lo haga.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Es parte de la forma de ser de la empresa y me gusta.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Para mí eso no se discute; siempre hay que ser honesto.', disc: 'C', dark: null, darkScore: 0 }] },
+    { id: 20, scenario: 'Estás en un momento de mucho nerviosismo en el trabajo. ¿Qué es lo primero que haces?', options: [{ text: 'Actuar rápido y decidir algo aunque sea arriesgado.', disc: 'D', dark: 'PSY', darkScore: 1 }, { text: 'Avisar rápido a todos para que nos organicemos juntos.', disc: 'I', dark: null, darkScore: 0 }, { text: 'Tratar de estar tranquilo y no hacer cosas sin pensar.', disc: 'S', dark: null, darkScore: 0 }, { text: 'Revisar bien toda la información antes de hacer nada.', disc: 'C', dark: null, darkScore: 0 }] },
 ];
+
 
 // ══════════════════════════════════════════════════════════════
 // EJE Z — 5 Preguntas de Razonamiento Lógico (GMA)
@@ -44,28 +45,28 @@ interface GMAQuestion { id: number; text: string; options: string[]; correct: nu
 const GMA_QUESTIONS: GMAQuestion[] = [
     {
         id: 21, correct: 1,
-        text: 'Observa la secuencia y selecciona el número que completa el patrón:\n2 → 4 → 8 → 16 → ___',
+        text: '¿Qué número sigue en esta lista?\n2 → 4 → 8 → 16 → ___',
         options: ['24', '32', '18', '28'],
     },
     {
         id: 22, correct: 1,
-        text: 'Si todos los Gerentes son Líderes, y algunos Líderes son Intuitivos, ¿qué se puede afirmar con certeza?',
-        options: ['Todos los Gerentes son Intuitivos.', 'Algunos Gerentes podrían ser Intuitivos.', 'Ningún Gerente es Intuitivo.', 'Todos los Intuitivos son Gerentes.'],
+        text: 'Si todas las manzanas son frutas, y algunas frutas son rojas, ¿qué podemos decir que es verdad siempre?',
+        options: ['Todas las manzanas son rojas.', 'Algunas manzanas podrían ser rojas.', 'Ninguna manzana es roja.', 'Todas las frutas son manzanas.'],
     },
     {
         id: 23, correct: 2,
-        text: 'Completa la analogía de magnitud:\nHora → Día → Semana  /  Centímetro → Metro → ___',
-        options: ['Décima de centímetro', 'Milímetro', 'Kilómetro', 'Tonelada'],
+        text: 'Si Hora es a Día, lo que Centímetro es a...',
+        options: ['Regla', 'Lápiz', 'Metro', 'Kilo'],
     },
     {
         id: 24, correct: 3,
-        text: 'En un equipo de 20 personas, el 35% son mujeres. ¿Cuántos hombres hay en el equipo?',
-        options: ['7', '8', '12', '13'],
+        text: 'En un grupo de 20 personas, 7 son mujeres. ¿Cuántos hombres hay?',
+        options: ['7', '10', '12', '13'],
     },
     {
         id: 25, correct: 2,
-        text: 'La afirmación "Los buenos empleados nunca cometen errores" es falsa.\n¿Cuál es su negación lógica correcta?',
-        options: ['Los buenos empleados siempre cometen errores.', 'Todos los empleados cometen errores.', 'Algunos buenos empleados cometen errores.', 'Los malos empleados son buenos trabajadores.'],
+        text: 'Si te dicen que "Es mentira que todos los días llueve", ¿qué significa eso de verdad?',
+        options: ['Que nunca llueve.', 'Que siempre sale el sol.', 'Que algunos días no llueve.', 'Que mañana va a llover.'],
     },
 ];
 
@@ -310,7 +311,7 @@ export default function TestPage() {
     if (phase === 'loading') return (
         <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', color: 'white', fontFamily: 'Inter,sans-serif' }}>
             <div style={{ width: '48px', height: '48px', border: '4px solid rgba(255,214,10,0.15)', borderTopColor: '#FFD60A', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-            <p style={{ color: 'rgba(255,255,255,0.35)', margin: 0, fontSize: '14px' }}>Verificando acceso seguro…</p>
+            <p style={{ color: 'rgba(255,255,255,0.35)', margin: 0, fontSize: '14px' }}>Cargando tu examen...</p>
             <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
         </div>
     );
@@ -318,9 +319,9 @@ export default function TestPage() {
     if (phase === 'expired') return (
         <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px', textAlign: 'center', fontFamily: 'Inter,sans-serif', color: 'white' }}>
             <div style={{ fontSize: '72px', marginBottom: '24px' }}>🔒</div>
-            <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#FF3B30', marginBottom: '12px' }}>Proceso Cerrado</h1>
+            <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#FF3B30', marginBottom: '12px' }}>Enlace vencido</h1>
             <p style={{ color: 'rgba(255,255,255,0.4)', maxWidth: '400px', lineHeight: 1.8, fontSize: '15px' }}>
-                El enlace de acceso ha expirado o ya no es válido.<br />Contacta a <strong style={{ color: 'white' }}>CASA INTELIGENTE</strong> para solicitar un nuevo proceso.
+                El tiempo para entrar se acabó o ya usaste este enlace.<br />Habla con la empresa para pedir uno nuevo.
             </p>
             <div style={{ marginTop: '40px', padding: '14px 28px', borderRadius: '14px', background: 'rgba(255,59,48,0.08)', border: '1px solid rgba(255,59,48,0.2)', fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
                 🔐 Sistema de Seguridad — CASA INTELIGENTE
@@ -331,12 +332,12 @@ export default function TestPage() {
     if (phase === 'disqualified') return (
         <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px', textAlign: 'center', fontFamily: 'Inter,sans-serif', color: 'white' }}>
             <div style={{ fontSize: '72px', marginBottom: '24px' }}>🚫</div>
-            <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#FF3B30', marginBottom: '12px' }}>Evaluación Descalificada</h1>
+            <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#FF3B30', marginBottom: '12px' }}>Examen cancelado</h1>
             <p style={{ color: 'rgba(255,255,255,0.5)', maxWidth: '440px', lineHeight: 1.8, fontSize: '15px' }}>
-                Se detectó que abandonaste la ventana de evaluación <strong style={{ color: '#FF3B30' }}>en más de una ocasión</strong>. Por integridad del proceso, tu participación ha sido invalidada automáticamente.
+                Saliste de la pantalla del examen <strong style={{ color: '#FF3B30' }}>2 veces</strong>. Por seguridad, no puedes seguir con la prueba.
             </p>
             <p style={{ marginTop: '16px', color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
-                Este evento ha sido registrado y notificado al equipo de selección de CASA INTELIGENTE.
+                Esto ya fue avisado al equipo de Casa Inteligente.
             </p>
             <div style={{ marginTop: '40px', padding: '14px 28px', borderRadius: '14px', background: 'rgba(255,59,48,0.08)', border: '1px solid rgba(255,59,48,0.2)', fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>
                 ⚠️ Descalificación registrada · CASA INTELIGENTE
@@ -347,12 +348,12 @@ export default function TestPage() {
     if (phase === 'done') return (
         <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px', textAlign: 'center', fontFamily: 'Inter,sans-serif', color: 'white' }}>
             <div style={{ fontSize: '72px', marginBottom: '24px' }}>🎯</div>
-            <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#34C759', marginBottom: '12px' }}>¡Evaluación Completada!</h1>
+            <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#34C759', marginBottom: '12px' }}>¡Listo! Terminaste</h1>
             <p style={{ color: 'rgba(255,255,255,0.4)', maxWidth: '400px', lineHeight: 1.8, fontSize: '15px' }}>
-                Gracias por tu tiempo. El equipo de CASA INTELIGENTE analizará tu perfil y se pondrá en contacto contigo a la brevedad.
+                Gracias por tu tiempo. Ya guardamos tus respuestas y pronto te avisaremos qué sigue.
             </p>
             <div style={{ marginTop: '40px', padding: '14px 28px', borderRadius: '14px', background: 'rgba(52,199,89,0.08)', border: '1px solid rgba(52,199,89,0.2)', fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
-                ✅ Evaluación registrada exitosamente · CASA INTELIGENTE
+                ✅ Examen enviado con éxito · CASA INTELIGENTE
             </div>
         </div>
     );
@@ -363,21 +364,21 @@ export default function TestPage() {
             <div style={{ maxWidth: '420px', width: '100%', background: 'rgba(255,59,48,0.08)', border: '2px solid rgba(255,59,48,0.4)', borderRadius: '24px', padding: '40px', textAlign: 'center' }}>
                 <div style={{ fontSize: '56px', marginBottom: '16px' }}>⚠️</div>
                 <h2 style={{ fontSize: '22px', fontWeight: 900, color: '#FF3B30', marginBottom: '12px' }}>
-                    PRIMERA ADVERTENCIA
+                    ¡CUIDADO!
                 </h2>
                 <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.8, marginBottom: '8px' }}>
-                    Detectamos que <strong style={{ color: 'white' }}>saliste de esta ventana</strong> durante la evaluación.
+                    Vimos que <strong style={{ color: 'white' }}>saliste de esta pantalla</strong>. No lo hagas de nuevo.
                 </p>
                 <p style={{ fontSize: '14px', color: '#FF9500', lineHeight: 1.7, marginBottom: '28px' }}>
-                    ⛔ Si lo haces una segunda vez, serás <strong>descalificado automáticamente</strong> y el evento quedará registrado en tu expediente.
+                    ⛔ Si sales otra vez, el examen <strong style={{ color: '#FF3B30' }}>se cerrará solo</strong> y perderás tu oportunidad.
                 </p>
                 <button
                     onClick={() => setPhaseSync('active')}
                     style={{ padding: '14px 36px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#FF3B30,#FF9500)', color: 'white', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', width: '100%' }}>
-                    Entiendo — Continuar Evaluación
+                    Entendido, seguir con el examen
                 </button>
                 <p style={{ marginTop: '16px', fontSize: '12px', color: 'rgba(255,255,255,0.25)' }}>
-                    Advertencia 1 de 2 · El cronómetro sigue corriendo
+                    Aviso 1 de 2. El tiempo sigue pasando.
                 </p>
             </div>
         </div>
@@ -400,7 +401,7 @@ export default function TestPage() {
                     <div>
                         <div style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '1px', textTransform: 'uppercase' }}>CASA INTELIGENTE</div>
                         <div style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.55)' }}>
-                            {isGMA ? '🧠 Lógica' : '🧩 Perfil'} · {current + 1}/{TOTAL_Q}
+                            {isGMA ? '🧠 Parte 2: Lógica' : '🧩 Parte 1: Escenarios'} · {current + 1}/{TOTAL_Q}
                         </div>
                     </div>
 
@@ -413,7 +414,7 @@ export default function TestPage() {
                         }}>
                             {formatTime(timeLeft)}
                         </div>
-                        {urgent && <div style={{ fontSize: '9px', fontWeight: 800, color: '#FF3B30', letterSpacing: '0.5px' }}>⚠️ TIEMPO CRÍTICO</div>}
+                        {urgent && <div style={{ fontSize: '9px', fontWeight: 800, color: '#FF3B30', letterSpacing: '0.5px' }}>⚠️ ¡POCO TIEMPO!</div>}
                     </div>
 
                     {/* Progress */}
@@ -428,14 +429,14 @@ export default function TestPage() {
                 {/* Section transition banner */}
                 {current === QUESTIONS.length && (
                     <div style={{ maxWidth: '640px', margin: '8px auto 0', padding: '8px 14px', background: 'rgba(0,174,239,0.1)', borderRadius: '10px', border: '1px solid rgba(0,174,239,0.25)', fontSize: '12px', color: '#00AEEF', fontWeight: 600, textAlign: 'center' }}>
-                        🧠 Segunda Sección: Razonamiento Lógico — 5 ejercicios · Continúa con la misma concentración
+                        🧠 Ahora siguen 5 preguntas de lógica. ¡Tú puedes!
                     </div>
                 )}
 
                 {/* Strike warning bar */}
                 {strikes > 0 && (
                     <div style={{ maxWidth: '640px', margin: '6px auto 0', padding: '6px 12px', background: 'rgba(255,59,48,0.12)', borderRadius: '8px', fontSize: '12px', color: '#FF3B30', fontWeight: 600 }}>
-                        ⚠️ Salida de ventana detectada: {strikes}/2 — {strikes >= 2 ? 'Proceso cerrado' : 'Una más y serás descalificado'}
+                        ⚠️ Saliste de la pantalla: {strikes}/2 — {strikes >= 2 ? 'Cerrando...' : '¡Si lo haces de nuevo pierdes el examen!'}
                     </div>
                 )}
             </div>
@@ -448,7 +449,7 @@ export default function TestPage() {
                     borderRadius: '20px', padding: '28px', marginBottom: '20px',
                 }}>
                     <div style={{ fontSize: '11px', fontWeight: 700, color: isGMA ? '#00AEEF' : '#FFD60A', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '12px' }}>
-                        {isGMA ? `Ejercicio de Lógica ${gmaIdx + 1}` : `Escenario Laboral ${current + 1}`}
+                        {isGMA ? `Pregunta de lógica ${gmaIdx + 1}` : `Situación de trabajo ${current + 1}`}
                     </div>
                     <p style={{ fontSize: '17px', fontWeight: 600, lineHeight: 1.7, color: 'rgba(255,255,255,0.92)', margin: 0, whiteSpace: 'pre-line' }}>
                         {isGMA ? (question as GMAQuestion).text : (question as PQuestion).scenario}
@@ -495,7 +496,7 @@ export default function TestPage() {
             </div>
 
             {/* ── Fixed bottom navigation ── */}
-            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '14px 20px', background: 'rgba(10,10,15,0.97)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000, padding: '14px 20px', background: 'rgba(10,10,15,0.97)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', gap: '10px' }}>
                     <button
                         onClick={() => setCurrent(Math.max(0, current - 1))}
@@ -506,15 +507,22 @@ export default function TestPage() {
 
                     {current < TOTAL_Q - 1 ? (
                         <button
-                            onClick={() => setCurrent(current + 1)}
-                            style={{ flex: 1, padding: '14px', borderRadius: '14px', border: 'none', background: currentAnswer >= 0 ? (isGMA ? 'linear-gradient(135deg,#00AEEF,#34C759)' : 'linear-gradient(135deg,#FFD60A,#FF9500)') : 'rgba(255,255,255,0.07)', color: currentAnswer >= 0 ? '#000' : 'rgba(255,255,255,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', transition: 'all 0.2s' }}>
+                            onClick={() => { if (currentAnswer >= 0) setCurrent(current + 1); }}
+                            style={{ 
+                                flex: 1, padding: '14px', borderRadius: '14px', border: 'none', 
+                                background: currentAnswer >= 0 ? (isGMA ? 'linear-gradient(135deg,#00AEEF,#34C759)' : 'linear-gradient(135deg,#FFD60A,#FF9500)') : 'rgba(255,255,255,0.1)', 
+                                color: currentAnswer >= 0 ? '#000' : 'rgba(255,255,255,0.3)', 
+                                cursor: currentAnswer >= 0 ? 'pointer' : 'not-allowed', 
+                                opacity: currentAnswer >= 0 ? 1 : 0.6,
+                                fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', transition: 'all 0.2s' 
+                            }}>
                             Siguiente →
                         </button>
                     ) : (
                         <button
                             onClick={() => submitAnswers(answers, gmaAnswers, false, null, evalData)}
                             style={{ flex: 1, padding: '14px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#34C759,#30D158)', color: 'white', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', boxShadow: '0 4px 20px rgba(52,199,89,0.35)' }}>
-                            ✅ Enviar Evaluación
+                            ✅ Terminar y enviar
                         </button>
                     )}
                 </div>

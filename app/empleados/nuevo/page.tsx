@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -8,6 +8,7 @@ const SECTIONS = ['Personales', 'Laboral', 'Estudios', 'Experiencia', 'Cursos', 
 
 const NIVELES = ['Excelente', 'Bueno', 'Regular', 'Bajo', 'Ninguno'];
 const SANGRE = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
+const CASA_INTELIGENTE_ID = '5607a881-e65e-493b-ab06-d129d50fe9e2';
 const ESTADOS_CIVIL = ['Soltero/a','Casado/a','Divorciado/a','Viudo/a','Unión Libre'];
 const ESTADOS_VE = ['Amazonas','Anzoátegui','Apure','Aragua','Barinas','Bolívar','Carabobo','Cojedes','Delta Amacuro','Distrito Capital','Falcón','Guárico','Lara','Mérida','Miranda','Monagas','Nueva Esparta','Portuguesa','Sucre','Táchira','Trujillo','Vargas','Yaracuy','Zulia'];
 const DISPONIBILIDAD = ['Tiempo Completo','Medio Tiempo','Por Horas','A Destajo'];
@@ -22,6 +23,20 @@ export default function NuevoEmpleadoPage() {
     const router = useRouter();
     const [section, setSection] = useState(0);
     const [saving, setSaving] = useState(false);
+    const [organizationId, setOrganizationId] = useState<string | null>(CASA_INTELIGENTE_ID);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
+
+    useEffect(() => {
+        async function getOrg() {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                console.log('User found:', user.id);
+                setUserEmail(user.email || 'Sin email');
+            }
+        }
+        getOrg();
+    }, []);
 
     // — Personales —
     const [nombres, setNombres] = useState('');
@@ -136,7 +151,11 @@ export default function NuevoEmpleadoPage() {
         if (!nombres || !apellidos || !cedula) return alert('Nombre, Apellido y C.I. son obligatorios');
         setSaving(true);
         const supabase = createClient();
+
+        let finalOrgId = organizationId || CASA_INTELIGENTE_ID;
+
         const payload = {
+            organization_id: finalOrgId,
             nombres, apellidos, cedula, rif, fecha_nacimiento: fechaNacimiento || null,
             estado_civil: estadoCivil, nacionalidad, hijos: parseInt(hijos) || 0,
             direccion, ciudad, estado, telefono_habitacion: telHabitacion, celular, email, foto_url: fotoUrl || null,
@@ -162,7 +181,11 @@ export default function NuevoEmpleadoPage() {
         };
         const { error } = await supabase.from('employees').insert([payload]);
         setSaving(false);
-        if (error) return alert('Error al guardar: ' + error.message);
+        if (error) {
+            console.error('Error details:', error);
+            // Show the raw error message to the user for debugging
+            return alert('Error de Base de Datos: ' + error.message);
+        }
         router.push('/empleados');
     }
 
@@ -177,6 +200,9 @@ export default function NuevoEmpleadoPage() {
                 <h1 style={{ fontSize: '26px', fontWeight: 800, margin: 0, background: 'linear-gradient(135deg,#fff,rgba(255,255,255,0.6))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                     Nuevo Empleado
                 </h1>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', margin: '4px 0 0 0' }}>
+                    Usuario: {userEmail || 'Cargando...'} | Org: {organizationId || 'No detectada'}
+                </p>
             </div>
 
             {/* Section Tabs */}

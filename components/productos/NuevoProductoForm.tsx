@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -11,6 +11,9 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
     const [saving, setSaving] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image_url || null);
+    const [codigoSugerido, setCodigoSugerido] = useState<string | null>(null);
+    const [buscandoCodigo, setBuscandoCodigo] = useState(false);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const [form, setForm] = useState({
         nombre: initialData?.nombre || '',
@@ -33,6 +36,58 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         : null;
 
     const set = (k: string, v: string | null) => setForm(f => ({ ...f, [k]: v }));
+
+    // Busca el siguiente correlativo para un prefijo de 3+ letras
+    const buscarSiguienteCodigo = useCallback(async (prefijo: string) => {
+        if (prefijo.length < 3) {
+            setCodigoSugerido(null);
+            return;
+        }
+        setBuscandoCodigo(true);
+        const supabase = createClient();
+        const prefijoUpper = prefijo.toUpperCase();
+        const { data } = await supabase
+            .from('products')
+            .select('modelo')
+            .ilike('modelo', `${prefijoUpper}%`)
+            .not('modelo', 'is', null)
+            .order('modelo', { ascending: false });
+
+        if (data && data.length > 0) {
+            // Extraer el mayor número correlativo existente
+            let maxNum = 0;
+            data.forEach(({ modelo }) => {
+                if (!modelo) return;
+                // Busca dígitos al final del código (ej: CAM-004 → 4, CAM004 → 4)
+                const match = modelo.match(/(\d+)$/);
+                if (match) {
+                    const n = parseInt(match[1], 10);
+                    if (n > maxNum) maxNum = n;
+                }
+            });
+            const siguiente = maxNum + 1;
+            // Detectar separador y padding del último código
+            const ultimoCodigo = data[0].modelo || '';
+            const separador = ultimoCodigo.includes('-') ? '-' : '';
+            const matchPad = ultimoCodigo.match(/(\d+)$/);
+            const padding = matchPad ? matchPad[1].length : 3;
+            const numStr = String(siguiente).padStart(padding, '0');
+            setCodigoSugerido(`${prefijoUpper}${separador}${numStr}`);
+        } else {
+            // No existe ninguno con ese prefijo → empieza en 001
+            setCodigoSugerido(`${prefijoUpper}-001`);
+        }
+        setBuscandoCodigo(false);
+    }, []);
+
+    const handleModeloChange = (value: string) => {
+        set('modelo', value);
+        setCodigoSugerido(null);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            buscarSiguienteCodigo(value);
+        }, 400);
+    };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -184,10 +239,45 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                     <input type="text" value={form.marca} onChange={e => set('marca', e.target.value)}
                         placeholder="HIKVISION..." style={inputStyle} />
                 </div>
-                <div style={{ ...fieldBox, marginBottom: 0 }}>
-                    <label style={labelStyle}>Modelo</label>
-                    <input type="text" value={form.modelo} onChange={e => set('modelo', e.target.value)}
-                        placeholder="DS-2CD..." style={inputStyle} />
+                <div style={{ ...fieldBox, marginBottom: 0, position: 'relative' }}>
+                    <label style={labelStyle}>Código / Modelo SAP</label>
+                    <input
+                        type="text"
+                        value={form.modelo}
+                        onChange={e => handleModeloChange(e.target.value)}
+                        placeholder="Ej: CAM → auto-completa"
+                        style={inputStyle}
+                    />
+                    {/* Sugerencia de correlativo */}
+                    {buscandoCodigo && (
+                        <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '4px', display: 'block' }}>
+                            Buscando...
+                        </span>
+                    )}
+                    {!buscandoCodigo && codigoSugerido && codigoSugerido !== form.modelo && (
+                        <button
+                            type="button"
+                            onClick={() => { set('modelo', codigoSugerido); setCodigoSugerido(null); }}
+                            style={{
+                                marginTop: '6px',
+                                background: 'rgba(255,149,0,0.15)',
+                                border: '1px solid rgba(255,149,0,0.4)',
+                                borderRadius: '8px',
+                                padding: '4px 10px',
+                                color: '#FF9500',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                            }}
+                        >
+                            <span>⚡</span>
+                            <span>Siguiente: <strong>{codigoSugerido}</strong></span>
+                            <span style={{ opacity: 0.6, fontSize: '10px' }}>Toca para usar</span>
+                        </button>
+                    )}
                 </div>
             </div>
 

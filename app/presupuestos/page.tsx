@@ -210,7 +210,9 @@ export default function PresupuestosPage() {
                     </div>
                 ) : (
                     <div style={{ display: 'grid', gap: '12px' }}>
-                        {budgets.map(b => (
+                        {budgets.map(b => {
+                            const statusColor = STATUS_COLORS[b.status as keyof typeof STATUS_COLORS] || { bg: 'rgba(142,142,147,0.15)', text: '#8E8E93', label: b.status || 'Desconocido', icon: '❓' };
+                            return (
                             <div key={b.id} style={{ ...glass, padding: '16px', position: 'relative' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <div style={{ flex: 1 }}>
@@ -223,12 +225,12 @@ export default function PresupuestosPage() {
                                             {b.customer_rif} · <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>P-{new String(b.id).slice(0, 8).toUpperCase()}</span>
                                         </p>
                                         <div style={{
-                                            ...STATUS_COLORS[b.status],
+                                            ...statusColor,
                                             fontSize: '11px', fontWeight: 700, padding: '4px 10px',
                                             borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', width: 'fit-content'
                                         }}>
-                                            <span>{STATUS_COLORS[b.status].icon}</span>
-                                            <span>{STATUS_COLORS[b.status].label}</span>
+                                            <span>{statusColor.icon}</span>
+                                            <span>{statusColor.label}</span>
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
@@ -293,7 +295,8 @@ export default function PresupuestosPage() {
                                     </button>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
