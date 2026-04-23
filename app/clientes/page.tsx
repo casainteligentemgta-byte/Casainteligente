@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import { createClient } from '@/lib/supabase/client';
 
-const FILTERS = ['Todos', 'Personas', 'Empresas', 'Activos', 'Pendientes', 'Inactivos'];
+const FILTERS = ['Todos', 'Personas', 'Empresas'];
 
 export default function ClientesPage() {
     const [search, setSearch] = useState('');
@@ -23,16 +23,26 @@ export default function ClientesPage() {
 
         if (!error && data) {
             // Mapear campos de la DB a los que espera el componente
-            const mapped = data.map(c => ({
-                ...c,
-                // Si falta initials, generarlo
-                initials: c.nombre.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
-                categoria: (c.tipo || '').toLowerCase() === 'empresa' ? 'empresa' : 'personal',
-                status: c.status || 'activo',
-                telefono: c.movil || '',
-                direccion: c.direccion || '',
-                imagen: c.imagen || null
-            }));
+            const mapped = data.map(c => {
+                const nombre = c.nombre || 'Sin Nombre';
+                const initials = nombre
+                    .split(' ')
+                    .filter(Boolean)
+                    .map((n: string) => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase() || '??';
+
+                return {
+                    ...c,
+                    nombre,
+                    initials,
+                    categoria: (c.tipo || '').toLowerCase() === 'empresa' ? 'empresa' : 'personal',
+                    telefono: c.movil || '',
+                    direccion: c.direccion || '',
+                    imagen: c.imagen || null
+                };
+            });
             setLista(mapped);
         }
         setLoading(false);
@@ -52,15 +62,12 @@ export default function ClientesPage() {
         const matchFiltro =
             filtro === 'Todos' ? true :
                 filtro === 'Personas' ? c.categoria === 'personal' :
-                    filtro === 'Empresas' ? c.categoria === 'empresa' :
-                        filtro === 'Activos' ? c.status === 'activo' :
-                            filtro === 'Pendientes' ? c.status === 'pendiente' :
-                                filtro === 'Inactivos' ? c.status === 'inactivo' : true;
+                    filtro === 'Empresas' ? c.categoria === 'empresa' : true;
 
         return matchSearch && matchFiltro;
     });
 
-    const activos = lista.filter(c => c.status === 'activo').length;
+    const personasCount = lista.filter(c => c.categoria === 'personal').length;
     const empresasCount = lista.filter(c => c.categoria === 'empresa').length;
 
     const handleDelete = async (id: string) => {
@@ -187,8 +194,8 @@ export default function ClientesPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', padding: '16px 16px 8px' }}>
                 {[
                     { label: 'Total', value: lista.length, color: '#007AFF', bg: 'rgba(0,122,255,0.08)', border: 'rgba(0,122,255,0.15)' },
+                    { label: 'Personas', value: personasCount, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                     { label: 'Empresas', value: empresasCount, color: '#FF9500', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.15)' },
-                    { label: 'Activos', value: activos, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                 ].map(s => (
                     <div key={s.label} style={{
                         background: s.bg, border: `1px solid ${s.border}`,

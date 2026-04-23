@@ -51,7 +51,7 @@ function CategoryBadge({ cat }: { cat: string | null }) {
 function VentasContent() {
     const searchParams = useSearchParams();
     const [items, setItems] = useState<LineItem[]>([]);
-    const [globalMargin, setGlobalMargin] = useState(20);
+    const [globalMargin, setGlobalMargin] = useState(0);
     const [clientName, setClientName] = useState('');
     const [clientRif, setClientRif] = useState('');
     const [clientPhone, setClientPhone] = useState('');

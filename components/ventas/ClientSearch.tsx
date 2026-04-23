@@ -94,92 +94,195 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
 
     return (
         <div style={{ position: 'relative', width: '100%' }}>
-            <input
-                ref={inputRef}
-                type="text"
-                value={value}
-                onChange={e => {
-                    onChange(e.target.value);
-                    setOpen(true);
-                }}
-                onKeyDown={handleKeyDown}
-                onFocus={() => {
-                    setOpen(true);
-                    search(value);
-                }}
-                placeholder={placeholder || 'Nombre del cliente o empresa...'}
-                style={{
-                    width: '100%', background: 'transparent', border: 'none', outline: 'none',
-                    color: 'var(--label-primary)', fontSize: '16px', fontFamily: 'inherit', fontWeight: 500,
-                }}
-            />
-
-            {open && results.length > 0 && (
-                <div
-                    ref={dropdownRef}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={value}
+                    onChange={e => {
+                        onChange(e.target.value);
+                        setOpen(true);
+                    }}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => {
+                        setOpen(true);
+                        search(value);
+                    }}
+                    placeholder={placeholder || 'Nombre del cliente o empresa...'}
                     style={{
-                        position: 'absolute',
-                        top: 'calc(100% + 12px)',
-                        left: 0,
-                        right: 0,
-                        zIndex: 1000,
-                        background: 'rgba(28,28,30,0.95)',
-                        backdropFilter: 'blur(30px)',
-                        WebkitBackdropFilter: 'blur(30px)',
-                        border: '1px solid rgba(255,255,255,0.12)',
-                        borderRadius: '16px',
-                        overflow: 'hidden',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-                        maxHeight: '300px',
-                        overflowY: 'auto',
+                        flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                        color: 'var(--label-primary)', fontSize: '16px', fontFamily: 'inherit', fontWeight: 500,
+                    }}
+                />
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (open) {
+                            setOpen(false);
+                        } else {
+                            setOpen(true);
+                            search(value);
+                            inputRef.current?.blur();
+                        }
+                    }}
+                    style={{
+                        background: 'none', border: 'none', padding: '4px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'rgba(255,255,255,0.3)', transition: 'transform 0.2s',
+                        transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
                     }}
                 >
-                    <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
-                            {loading ? 'Buscando...' : `${results.length} resultado${results.length !== 1 ? 's' : ''}`}
-                        </span>
-                    </div>
-                    {results.map((c, i) => (
-                        <button
-                            key={c.id}
-                            onClick={() => handleSelect(c)}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                width: '100%',
-                                padding: '12px 14px',
-                                background: i === activeIndex ? 'rgba(0,122,255,0.15)' : 'transparent',
-                                border: 'none',
-                                borderBottom: i < results.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={() => setActiveIndex(i)}
-                        >
-                            <div style={{
-                                width: '36px', height: '36px', borderRadius: '10px',
-                                background: 'rgba(52,199,89,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#34C759" strokeWidth="2" strokeLinecap="round" />
-                                    <circle cx="12" cy="7" r="4" stroke="#34C759" strokeWidth="2" />
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </button>
+            </div>
+
+            {open && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 2000,
+                        background: 'rgba(0,0,0,0.6)',
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px',
+                    }}
+                    onClick={() => setOpen(false)}
+                >
+                    <div
+                        ref={dropdownRef}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            width: '100%',
+                            maxWidth: '500px',
+                            maxHeight: '80vh',
+                            background: 'rgba(28,28,30,0.98)',
+                            backdropFilter: 'blur(40px)',
+                            WebkitBackdropFilter: 'blur(40px)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '24px',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 30px 90px rgba(0,0,0,0.7)',
+                            animation: 'modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        }}
+                    >
+                        {/* Header */}
+                        <div style={{
+                            padding: '16px 20px',
+                            borderBottom: '1px solid rgba(255,255,255,0.08)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: '32px', height: '32px', borderRadius: '10px',
+                                    background: 'rgba(0,122,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                        <circle cx="9" cy="7" r="4" stroke="#007AFF" strokeWidth="2" />
+                                        <path d="M2 21c0-4 3-7 7-7s7 3 7 7" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                </div>
+                                <span style={{ color: 'white', fontWeight: 700, fontSize: '15px' }}>Seleccionar Cliente</span>
+                            </div>
+                            <button
+                                onClick={() => setOpen(false)}
+                                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', color: 'white' }}
+                            >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                                 </svg>
+                            </button>
+                        </div>
+
+                        {/* Search Input in Modal */}
+                        <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.03)' }}>
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '12px', padding: '10px 14px'
+                            }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5" strokeLinecap="round">
+                                    <circle cx="11" cy="11" r="7" />
+                                    <path d="M21 21l-4.35-4.35" />
+                                </svg>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={value}
+                                    onChange={e => onChange(e.target.value)}
+                                    placeholder="Buscar por nombre o RIF..."
+                                    style={{
+                                        flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                                        color: 'white', fontSize: '15px', fontFamily: 'inherit'
+                                    }}
+                                />
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: 'white', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {c.nombre}
+                        </div>
+
+                        {/* Results list */}
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                            {loading ? (
+                                <div style={{ padding: '40px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+                                    Buscando clientes...
                                 </div>
-                                <div style={{ display: 'flex', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
-                                    {c.rif && <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>{c.rif}</span>}
-                                    {c.movil && <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>· {c.movil}</span>}
+                            ) : results.length === 0 ? (
+                                <div style={{ padding: '40px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>👤</div>
+                                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>No se encontraron resultados</p>
                                 </div>
-                            </div>
-                        </button>
-                    ))}
+                            ) : (
+                                results.map((c, i) => (
+                                    <button
+                                        key={c.id}
+                                        onClick={() => handleSelect(c)}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '14px',
+                                            width: '100%', padding: '14px 20px',
+                                            background: i === activeIndex ? 'rgba(0,122,255,0.12)' : 'transparent',
+                                            border: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                            cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s'
+                                        }}
+                                        onMouseEnter={() => setActiveIndex(i)}
+                                    >
+                                        <div style={{
+                                            width: '40px', height: '40px', borderRadius: '12px',
+                                            background: 'rgba(52,199,89,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                        }}>
+                                            <span style={{ color: '#34C759', fontWeight: 800, fontSize: '14px' }}>{c.nombre[0].toUpperCase()}</span>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ color: 'white', fontSize: '15px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {c.nombre}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
+                                                {c.rif && <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>{c.rif}</span>}
+                                                {c.movil && <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>· {c.movil}</span>}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
+            <style>{`
+                @keyframes modalSlideUp {
+                    from { transform: translateY(30px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+            `}</style>
         </div>
     );
 }
