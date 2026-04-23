@@ -94,41 +94,34 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
 
     return (
         <div style={{ position: 'relative', width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div 
+                onClick={() => {
+                    setOpen(true);
+                    search(value);
+                }}
+                style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    cursor: 'pointer',
+                    width: '100%'
+                }}
+            >
                 <input
                     ref={inputRef}
+                    readOnly
                     type="text"
                     value={value}
-                    onChange={e => {
-                        onChange(e.target.value);
-                        setOpen(true);
-                    }}
-                    onKeyDown={handleKeyDown}
-                    onFocus={() => {
-                        setOpen(true);
-                        search(value);
-                    }}
                     placeholder={placeholder || 'Nombre del cliente o empresa...'}
                     style={{
                         flex: 1, background: 'transparent', border: 'none', outline: 'none',
                         color: 'var(--label-primary)', fontSize: '16px', fontFamily: 'inherit', fontWeight: 500,
+                        cursor: 'pointer'
                     }}
                 />
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (open) {
-                            setOpen(false);
-                        } else {
-                            setOpen(true);
-                            search(value);
-                            inputRef.current?.blur();
-                        }
-                    }}
+                <div
                     style={{
-                        background: 'none', border: 'none', padding: '4px', cursor: 'pointer',
+                        background: 'none', border: 'none', padding: '4px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: 'rgba(255,255,255,0.3)', transition: 'transform 0.2s',
                         transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -137,7 +130,7 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                         <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                </button>
+                </div>
             </div>
 
             {open && (

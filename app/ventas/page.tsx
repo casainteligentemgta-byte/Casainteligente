@@ -63,6 +63,7 @@ function VentasContent() {
     const [showSummary, setShowSummary] = useState(false);
     const [saving, setSaving] = useState(false);
     const [budgetNumber, setBudgetNumber] = useState('500');
+    const [status, setStatus] = useState('pendiente');
 
     // Pre-cargar datos desde query params
     useEffect(() => {
@@ -92,6 +93,7 @@ function VentasContent() {
                         setNotes(data.notes || '');
                         setShowZelle(data.show_zelle !== false);
                         if (data.budget_number) setBudgetNumber(String(data.budget_number));
+                        if (data.status) setStatus(data.status);
 
                         if (data.customer_id) {
                             supabase.from('customers').select('movil, email').eq('id', data.customer_id).single().then(({ data: c }) => {
@@ -186,7 +188,8 @@ function VentasContent() {
             margin_pct: marginPct,
             notes: notes,
             show_zelle: showZelle,
-            status: 'pendiente'
+            status: status,
+            budget_number: budgetNumber
         };
 
         let res;
@@ -611,6 +614,40 @@ function VentasContent() {
                     </div>
                 )}
 
+                {/* ── Estado del Presupuesto ── */}
+                {items.length > 0 && (
+                    <div style={{ ...glass, padding: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                            Estado
+                        </label>
+                        <select
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                            style={{
+                                background: 'rgba(255,255,255,0.06)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '10px',
+                                padding: '8px 12px',
+                                color: 'white',
+                                fontSize: '14px',
+                                outline: 'none',
+                                fontFamily: 'inherit',
+                                flex: 1,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <option value="pendiente" style={{ color: 'black' }}>Pendiente</option>
+                            <option value="enviado" style={{ color: 'black' }}>Enviado</option>
+                            <option value="aprobado" style={{ color: 'black' }}>Aprobado</option>
+                            <option value="no_aprobado" style={{ color: 'black' }}>No Aprobado</option>
+                            <option value="cobrado" style={{ color: 'black' }}>Cobrado</option>
+                            <option value="pagado" style={{ color: 'black' }}>Pagado</option>
+                            <option value="rechazado" style={{ color: 'black' }}>Rechazado</option>
+                            <option value="archivado" style={{ color: 'black' }}>Archivado</option>
+                        </select>
+                    </div>
+                )}
+
                 {/* ── Número de Presupuesto ── */}
                 {items.length > 0 && (
                     <div style={{ ...glass, padding: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -803,7 +840,7 @@ function VentasContent() {
                                         marginPct,
                                         showZelle,
                                         fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-                                        numero: `PR-${budgetNumber}`,
+                                        numero: budgetNumber,
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
                                     window.open('/ventas/preview', '_blank');
@@ -882,7 +919,7 @@ function VentasContent() {
                                 marginPct,
                                 showZelle,
                                 fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-                                numero: `PR-${budgetNumber}`,
+                                numero: budgetNumber,
                             };
                             localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
                             window.open('/ventas/preview', '_blank');

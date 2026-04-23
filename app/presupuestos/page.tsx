@@ -17,7 +17,9 @@ interface Budget {
 
 const STATUS_COLORS = {
     pendiente: { bg: 'rgba(255,149,0,0.15)', text: '#FF9500', label: 'Pendiente', icon: '⏳' },
+    enviado: { bg: 'rgba(0,122,255,0.15)', text: '#007AFF', label: 'Enviado', icon: '📤' },
     aprobado: { bg: 'rgba(52,199,89,0.15)', text: '#34C759', label: 'Aprobado', icon: '✅' },
+    cobrado: { bg: 'rgba(175,82,222,0.15)', text: '#AF52DE', label: 'Cobrado', icon: '💰' },
     rechazado: { bg: 'rgba(255,59,48,0.15)', text: '#FF3B30', label: 'Rechazado', icon: '❌' },
     archivado: { bg: 'rgba(142,142,147,0.15)', text: '#8E8E93', label: 'Archivado', icon: '📁' },
 };
@@ -40,8 +42,7 @@ export default function PresupuestosPage() {
         const supabase = createClient();
         let query = supabase.from('budgets').select('*');
 
-        if (filter === 'pendiente') query = query.eq('status', 'pendiente');
-        if (filter === 'archivado') query = query.eq('status', 'archivado');
+        if (filter !== 'todos') query = query.eq('status', filter);
 
         const { data, error } = await query;
         if (!error && data) {
@@ -157,8 +158,8 @@ export default function PresupuestosPage() {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                            {['todos', 'pendiente', 'archivado'].map((f: any) => (
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', flex: 1 }}>
+                            {['todos', 'pendiente', 'enviado', 'aprobado', 'cobrado', 'archivado'].map((f: any) => (
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
@@ -171,7 +172,7 @@ export default function PresupuestosPage() {
                                         whiteSpace: 'nowrap'
                                     }}
                                 >
-                                    {f === 'todos' ? 'Todos' : f === 'pendiente' ? 'Pendientes' : 'Archivados'}
+                                    {f === 'todos' ? 'Todos' : f.charAt(0).toUpperCase() + f.slice(1) + 's'}
                                 </button>
                             ))}
                         </div>
@@ -246,9 +247,20 @@ export default function PresupuestosPage() {
                                     borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px'
                                 }}>
                                     <button
+                                        onClick={() => router.push(`/ventas/preview?id=${b.id}`)}
+                                        style={{
+                                            flex: 1, background: 'rgba(255,255,255,0.1)', color: 'white',
+                                            border: 'none', borderRadius: '10px', padding: '10px',
+                                            fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                                        }}
+                                    >
+                                        👁️ Previsualizar
+                                    </button>
+                                    <button
                                         onClick={() => router.push(`/ventas?id=${b.id}`)}
                                         style={{
-                                            flex: 1.5, background: 'rgba(0,122,255,0.1)', color: '#007AFF',
+                                            flex: 1, background: 'rgba(0,122,255,0.1)', color: '#007AFF',
                                             border: 'none', borderRadius: '10px', padding: '10px',
                                             fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'

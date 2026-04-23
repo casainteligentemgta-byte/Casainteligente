@@ -1,6 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { pdf } from '@react-pdf/renderer';
+import { BudgetPDF } from '@/components/pdf/BudgetPDF';
 
 interface PreviewItem {
     nombre: string;
@@ -36,13 +40,117 @@ function lineTotal(item: PreviewItem) {
     return item.unitPrice * (1 - item.discount / 100) * item.qty;
 }
 
-export default function PreviewPage() {
+function PreviewContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const [data, setData] = useState<Presupuesto | null>(null);
+    const [loading, setLoading] = useState(true);
+    const budgetId = searchParams.get('id');
+
+    const markAsSent = async () => {
+        if (!budgetId) return;
+        const supabase = createClient();
+        await supabase.from('budgets').update({ status: 'enviado' }).eq('id', budgetId);
+    };
 
     useEffect(() => {
-        const raw = localStorage.getItem('presupuesto_preview');
-        if (raw) setData(JSON.parse(raw));
-    }, []);
+        const fetchData = async () => {
+            setLoading(true);
+            if (budgetId) {
+                const supabase = createClient();
+                const { data: b, error } = await supabase
+                    .from('budgets')
+                    .select('*')
+                    .eq('id', budgetId)
+                    .single();
+                
+                if (!error && b) {
+                    setData({
+                        cliente: b.customer_name,
+                        rif: b.customer_rif,
+                        notas: b.notes,
+                        items: (b.items as any[]).map(i => ({
+                            nombre: i.product_data.nombre,
+                            categoria: i.product_data.categoria,
+                            qty: i.qty,
+                            unitPrice: i.unit_price,
+                            discount: i.discount,
+                            costo: i.product_data.costo,
+                            image_url: i.product_data.image_url,
+                        })),
+                        subtotal: b.subtotal,
+                        totalCost: b.total_cost,
+                        totalProfit: b.total_profit,
+                        marginPct: b.margin_pct,
+                        showZelle: b.show_zelle,
+                        fecha: new Date(b.created_at).toLocaleDateString(),
+                        numero: b.budget_number || b.id.slice(0, 8),
+                    });
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // Fallback to localStorage
+            const raw = localStorage.getItem('presupuesto_preview');
+            if (raw) setData(JSON.parse(raw));
+            setLoading(false);
+        };
+
+        fetchData();
+    }, [budgetId]);
+
+    const handleSharePDF = async (method: 'whatsapp' | 'email') => {
+        if (!data) return;
+        
+        try {
+            // Generate PDF Blob
+            const blob = await pdf(<BudgetPDF data={data} />).toBlob();
+            const file = new File([blob], `Presupuesto_PR-${data.numero}.pdf`, { type: 'application/pdf' });
+
+            // Check if Web Share API is available and supports files
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: `Presupuesto Casa Inteligente - PR-${data.numero}`,
+                    text: `Hola, adjunto presupuesto PR-${data.numero} por un total de $${fmt(data.subtotal)}.`
+                });
+                markAsSent();
+            } else {
+                // Fallback for Desktop or unsupported browsers
+                if (method === 'whatsapp') {
+                    const text = `*COTIZACIÓN CASA INTELIGENTE*\n\n*Nro:* ${data.numero}\n*TOTAL: $${fmt(data.subtotal)}*\n\nPuedes verla aquí: ${window.location.href}`;
+                    const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
+                    window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
+                } else {
+                    const subject = `Presupuesto Casa Inteligente - ${data.cliente}`;
+                    const body = `Hola, adjunto presupuesto Nro PR-${data.numero} por un total de $${fmt(data.subtotal)}.\n\nPuedes verlo aquí: ${window.location.href}`;
+                    window.open(`mailto:${data.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+                }
+                
+                // Also offer to download the PDF
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Presupuesto_PR-${data.numero}.pdf`;
+                link.click();
+                
+                markAsSent();
+                alert("En PC, el PDF se ha descargado. Por favor, adjúntalo manualmente en WhatsApp/Email.");
+            }
+        } catch (error) {
+            console.error("Error sharing:", error);
+            alert("No se pudo compartir el PDF directamente. Se enviará el mensaje de texto.");
+        }
+    };
+
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                <p>Cargando presupuesto...</p>
+            </div>
+        );
+    }
 
     if (!data) {
         return (
@@ -89,7 +197,7 @@ export default function PreviewPage() {
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button
-                        onClick={() => window.close()}
+                        onClick={() => router.back()}
                         style={{
                             background: 'rgba(255,255,255,0.08)', border: 'none',
                             borderRadius: '12px', padding: '10px 16px',
@@ -98,8 +206,6 @@ export default function PreviewPage() {
                             display: 'flex', alignItems: 'center', gap: '8px',
                             transition: 'background 0.2s',
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                             <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -114,46 +220,44 @@ export default function PreviewPage() {
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button
                         onClick={() => {
-                            const text = `PRESUPUESTO CASA INTELIGENTE, C.A.\nNro: ${data.numero}\nFecha: ${data.fecha}\nCliente: ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n${'-'.repeat(40)}\n${data.items.map(i => `${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n${'-'.repeat(40)}\nTOTAL: $${fmt(data.subtotal)}`;
-                            navigator.clipboard.writeText(text);
-                            alert("Texto copiado al portapapeles");
+                            const url = window.location.href;
+                            navigator.clipboard.writeText(url);
+                            alert("Link copiado al portapapeles");
                         }}
                         style={{
-                            background: 'transparent', border: '1px solid rgba(0,174,239,0.4)',
-                            borderRadius: '12px', padding: '10px 20px',
-                            color: '#00AEEF', fontSize: '14px', fontWeight: 600,
+                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '12px', padding: '10px 16px',
+                            color: 'white', fontSize: '13px', fontWeight: 600,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            transition: 'all 0.2s'
+                            display: 'flex', alignItems: 'center', gap: '6px'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,174,239,0.1)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2" />
-                        </svg>
-                        Copiar Info
+                        🔗 Link
                     </button>
                     <button
-                        onClick={() => {
-                            const text = `*COTIZACIÓN CASA INTELIGENTE*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}\n\n${data.items.map(i => `• ${i.qty}x ${i.nombre} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*\n\n_Generado por Casa Inteligente_`;
-                            const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
-                            window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
+                        onClick={() => handleSharePDF('email')}
+                        style={{
+                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '12px', padding: '10px 16px',
+                            color: 'white', fontSize: '13px', fontWeight: 600,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', gap: '6px'
                         }}
+                    >
+                        📧 Email
+                    </button>
+                    <button
+                        onClick={() => handleSharePDF('whatsapp')}
                         style={{
                             background: '#25D366', border: 'none',
-                            borderRadius: '12px', padding: '10px 20px',
-                            color: 'white', fontSize: '14px', fontWeight: 700,
+                            borderRadius: '12px', padding: '10px 16px',
+                            color: 'white', fontSize: '13px', fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
                             display: 'flex', alignItems: 'center', gap: '8px',
                             boxShadow: '0 4px 14px rgba(37,211,102,0.3)',
-                            transition: 'transform 0.2s'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'none'}
                     >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984 0 1.758.459 3.474 1.33 4.982L2 22l5.167-1.357a9.945 9.945 0 004.845 1.259h.004c5.507 0 9.99-4.478 9.991-9.984 0-2.667-1.037-5.176-2.922-7.062A9.92 9.92 0 0012.012 2z" />
                         </svg>
                         WhatsApp
@@ -162,22 +266,13 @@ export default function PreviewPage() {
                         onClick={() => window.print()}
                         style={{
                             background: 'linear-gradient(135deg, #00AEEF, #0077D4)',
-                            border: 'none', borderRadius: '12px', padding: '10px 24px',
-                            color: 'white', fontSize: '14px', fontWeight: 700,
+                            border: 'none', borderRadius: '12px', padding: '10px 16px',
+                            color: 'white', fontSize: '13px', fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            boxShadow: '0 4px 16px rgba(0,174,239,0.4)',
-                            transition: 'transform 0.2s'
+                            display: 'flex', alignItems: 'center', gap: '6px',
                         }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'none'}
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                            <rect x="6" y="14" width="12" height="8"></rect>
-                        </svg>
-                        Imprimir / PDF
+                        🖨️ PDF
                     </button>
                 </div>
             </div>
@@ -321,8 +416,8 @@ export default function PreviewPage() {
                                                 />
                                             )}
                                             <div style={{ overflow: 'hidden', minWidth: 0 }}>
-                                                <p style={{ fontSize: '12px', fontWeight: 600, color: '#18181B', margin: '0 0 4px 0', wordBreak: 'break-word', lineHeight: '1.4' }}>{item.nombre}</p>
-                                                {item.categoria && <p style={{ fontSize: '10px', color: '#A1A1AA', margin: 0 }}>{item.categoria}</p>}
+                                                <p style={{ fontSize: '12px', fontWeight: 600, color: '#18181B', margin: '0 0 4px 0', wordBreak: 'break-word', lineHeight: '1.4' }}>{item.nombre ? item.nombre.charAt(0).toUpperCase() + item.nombre.slice(1) : ''}</p>
+                                                {item.categoria && <p style={{ fontSize: '10px', color: '#A1A1AA', margin: 0 }}>{item.categoria ? item.categoria.charAt(0).toUpperCase() + item.categoria.slice(1) : ''}</p>}
                                             </div>
                                         </div>
                                         <div style={{ fontSize: '12px', color: '#52525B', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -385,5 +480,13 @@ export default function PreviewPage() {
                 }
             `}</style>
         </div>
+    );
+}
+
+export default function PreviewPage() {
+    return (
+        <Suspense fallback={<div>Cargando...</div>}>
+            <PreviewContent />
+        </Suspense>
     );
 }

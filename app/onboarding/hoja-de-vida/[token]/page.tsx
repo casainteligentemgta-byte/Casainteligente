@@ -108,7 +108,7 @@ export default function HojaVidaOnboarding() {
             // 2. Update candidate status
             const { error: eError } = await supabase
                 .from('ci_empleados')
-                .update({ estado_proceso: 'completado' })
+                .update({ estado_proceso: 'en_evaluacion' })
                 .eq('id', candidate.id);
 
             if (eError) throw eError;
