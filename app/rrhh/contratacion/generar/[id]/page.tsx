@@ -51,13 +51,14 @@ export default function GenerarContrato({ params }: { params: { id: string } }) 
 
       if (error) throw error;
       
-      const hojaVida = data.ci_hojas_vida?.[0] || {};
+      const responseData = data as any;
+      const hojaVida = responseData.ci_hojas_vida?.[0] || {};
       
       setFormData(prev => ({
         ...prev,
-        nombre: data.nombres,
-        telefono: data.celular,
-        cargo: data.cargo,
+        nombre: responseData.nombres,
+        telefono: responseData.celular,
+        cargo: responseData.cargo,
         direccion: hojaVida.direccion || '',
         cedula: '', // Cédula debe ser llenada manualmente si no se tiene
       }));
