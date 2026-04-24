@@ -38,6 +38,33 @@ export default function EmpleadosPage() {
             {/* ── Menu Grid ── */}
             <div className="px-5 grid grid-cols-1 gap-4 mb-6">
 
+                {/* ── Directorio de Empleados ── */}
+                <Link
+                    href="/empleados"
+                    className="rounded-2xl p-5 transition-all duration-150 active:scale-95 flex items-center justify-between"
+                    style={{
+                        background: 'rgba(0,174,239,0.10)',
+                        border: '1px solid rgba(0,174,239,0.2)',
+                        textDecoration: 'none',
+                        boxShadow: '0 4px 20px rgba(0,174,239,0.12)',
+                    }}
+                >
+                    <div>
+                        <div className="flex items-center mb-1">
+                            <span style={{ fontSize: '24px', marginRight: '8px' }}>👤</span>
+                            <h2 className="font-bold" style={{ fontSize: '20px', color: '#00AEEF', letterSpacing: '-0.02em' }}>
+                                Directorio de Empleados
+                            </h2>
+                        </div>
+                        <p className="text-sm font-medium" style={{ color: '#00AEEF', opacity: 0.8 }}>
+                            Lista activa y perfiles del personal
+                        </p>
+                    </div>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00AEEF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 18l6-6-6-6" />
+                    </svg>
+                </Link>
+
                 {/* ── Lista de Empleos / Cargos ── */}
                 <Link
                     href="/rrhh/trabajadores/empleados/cargos"

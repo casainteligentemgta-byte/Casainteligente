@@ -40,8 +40,8 @@ const mainItems = [
         ),
     },
     {
-        href: '/empleados',
-        label: 'Empleados',
+        href: '/rrhh',
+        label: 'RRHH',
         color: '#FFD60A',
         icon: (active: boolean) => (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
