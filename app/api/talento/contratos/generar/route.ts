@@ -78,19 +78,34 @@ export async function POST(req: Request) {
       fechaEmision,
     });
 
-    const { data: ctrRaw, error: e3 } = await supabase
+    const baseInsert = {
+      empleado_id: empId,
+      monto_acordado_usd: monto,
+      porcentaje_inicial: pct,
+      texto_legal: texto,
+    } as const;
+
+    let ctrRaw: unknown = null;
+    let e3: { message: string } | null = null;
+
+    const intentoObra = await supabase
       .from('ci_contratos_empleado_obra')
-      .insert(
-        {
-          empleado_id: empId,
-          obra_id: obraId,
-          monto_acordado_usd: monto,
-          porcentaje_inicial: pct,
-          texto_legal: texto,
-        } as never,
-      )
+      .insert({ ...baseInsert, obra_id: obraId } as never)
       .select('id')
       .single();
+
+    ctrRaw = intentoObra.data;
+    e3 = intentoObra.error;
+
+    if (e3 && /obra_id/i.test(e3.message)) {
+      const intentoProyecto = await supabase
+        .from('ci_contratos_empleado_obra')
+        .insert({ ...baseInsert, proyecto_id: obraId } as never)
+        .select('id')
+        .single();
+      ctrRaw = intentoProyecto.data;
+      e3 = intentoProyecto.error;
+    }
 
     if (e3) {
       console.error(e3);

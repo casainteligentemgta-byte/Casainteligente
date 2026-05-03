@@ -180,6 +180,12 @@ export const ciObras = pgTable('ci_obras', {
   nombre: text('nombre').notNull(),
 });
 
+/** Módulo integral de proyectos (columnas mínimas para FK desde recruitment_needs). */
+export const ciProyectos = pgTable('ci_proyectos', {
+  id: uuid('id').primaryKey(),
+  nombre: text('nombre').notNull(),
+});
+
 /* ─── Reclutamiento inteligente (sesión + estado JSON) ───────── */
 
 export const recruitmentSessions = pgTable('recruitment_sessions', {
@@ -200,8 +206,12 @@ export const recruitmentNeeds = pgTable('recruitment_needs', {
   cargoNombre: text('cargo_nombre'),
   cargoNivel: integer('cargo_nivel'),
   tipoVacante: text('tipo_vacante'),
-  /** FK a `ci_obras` (proyecto de obra); obligatorio al crear vacante vía API. */
+  /** FK a `ci_obras` (obra Talento); opcional si se usa `proyecto_modulo_id`. */
   proyectoId: uuid('proyecto_id').references(() => ciObras.id, { onDelete: 'restrict' }),
+  /** FK a `ci_proyectos` (módulo integral). */
+  proyectoModuloId: uuid('proyecto_modulo_id').references(() => ciProyectos.id, { onDelete: 'set null' }),
+  alertaPresupuestoIgnorada: boolean('alerta_presupuesto_ignorada').default(false).notNull(),
+  notasAutorizacion: text('notas_autorizacion'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

@@ -9,6 +9,8 @@ import {
 import { hasSupabaseCeoSession } from '@/lib/recruitment/ceo-auth-server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+export const dynamic = 'force-dynamic';
+
 type Row = {
   id: string;
   token: string;
@@ -25,54 +27,68 @@ type Row = {
  * Requiere misma autenticación que el dashboard (cookie CEO, Supabase user o clave pública si no hay puerta).
  */
 export async function GET(req: Request) {
-  const cookieStore = cookies();
-  const authorized = verifyRecruitmentCeoAuthorized({
-    req,
-    cookieVal: cookieStore.get(recruitmentCeoCookieName())?.value,
-    hasSupabaseUser: await hasSupabaseCeoSession(),
-  });
-
-  if (!authorized && (ceoSecretConfigured() || recruitmentAllowSupabaseUser())) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
-
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) {
-    return NextResponse.json({
-      candidatos: [],
-      hint: 'Configure SUPABASE_SERVICE_ROLE_KEY para listar invitaciones.',
+  try {
+    const cookieStore = await cookies();
+    const authorized = verifyRecruitmentCeoAuthorized({
+      req,
+      cookieVal: cookieStore.get(recruitmentCeoCookieName())?.value,
+      hasSupabaseUser: await hasSupabaseCeoSession(),
     });
+
+    if (!authorized && (ceoSecretConfigured() || recruitmentAllowSupabaseUser())) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const admin = supabaseAdminForRoute();
+    if (!admin.ok) {
+      return NextResponse.json({
+        candidatos: [],
+        hint: 'Configure SUPABASE_SERVICE_ROLE_KEY para listar invitaciones.',
+      });
+    }
+
+    const { data, error } = await admin.client
+      .from('ci_examenes')
+      .select(
+        'id, token, expira_at, usado_at, completado, created_at, empleado_id, ci_empleados(nombre_completo, rol_buscado)',
+      )
+      .eq('completado', false)
+      .order('created_at', { ascending: false })
+      .limit(80);
+
+    if (error) {
+      console.error('[candidatos-examen]', error);
+      return NextResponse.json({ candidatos: [], error: error.message });
+    }
+
+    const rows = (data ?? []) as unknown as Row[];
+
+    const candidatos = rows.map((r) => {
+      const emp = r.ci_empleados;
+      return {
+        id: r.id,
+        empleadoId: r.empleado_id,
+        nombre: emp?.nombre_completo ?? '—',
+        cargo: emp?.rol_buscado?.trim() || 'Sin cargo indicado',
+        token: r.token,
+        expiraAt: r.expira_at,
+        creadoAt: r.created_at,
+        usadoAt: r.usado_at,
+      };
+    });
+
+    return NextResponse.json({ candidatos });
+  } catch (e) {
+    if (
+      typeof e === 'object' &&
+      e !== null &&
+      'digest' in e &&
+      (e as { digest?: string }).digest === 'DYNAMIC_SERVER_USAGE'
+    ) {
+      throw e;
+    }
+    console.error('[candidatos-examen] fatal', e);
+    const msg = e instanceof Error ? e.message : 'Error interno';
+    return NextResponse.json({ candidatos: [], error: msg });
   }
-
-  const { data, error } = await admin.client
-    .from('ci_examenes')
-    .select(
-      'id, token, expira_at, usado_at, completado, created_at, empleado_id, ci_empleados(nombre_completo, rol_buscado)',
-    )
-    .eq('completado', false)
-    .order('created_at', { ascending: false })
-    .limit(80);
-
-  if (error) {
-    console.error('[candidatos-examen]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  const rows = (data ?? []) as unknown as Row[];
-
-  const candidatos = rows.map((r) => {
-    const emp = r.ci_empleados;
-    return {
-      id: r.id,
-      empleadoId: r.empleado_id,
-      nombre: emp?.nombre_completo ?? '—',
-      cargo: emp?.rol_buscado?.trim() || 'Sin cargo indicado',
-      token: r.token,
-      expiraAt: r.expira_at,
-      creadoAt: r.created_at,
-      usadoAt: r.usado_at,
-    };
-  });
-
-  return NextResponse.json({ candidatos });
 }

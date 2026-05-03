@@ -2,6 +2,7 @@ import type {
   ConfrontationRecord,
   RecruitmentAnalysisJson,
   RecruitmentClientEvent,
+  RecruitmentCvDraft,
 } from '@/types/recruitment';
 
 export interface RecruitmentSessionState {
@@ -23,6 +24,8 @@ export interface RecruitmentSessionState {
   closed: boolean;
   closeReason?: 'expired' | 'fraud' | 'completed' | 'timeout_inactivity';
   whatsappNotified?: boolean;
+  /** Datos de hoja de vida rellenados en /reclutamiento?need= (persistidos con la sesión). */
+  cvDraft?: RecruitmentCvDraft;
 }
 
 export function createInitialSession(id: string, now: number, ttlMs: number): RecruitmentSessionState {

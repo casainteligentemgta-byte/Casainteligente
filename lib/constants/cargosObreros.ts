@@ -2,6 +2,9 @@
  * Tabulador «Nivel / Oficio / Denominación» de la Convención Colectiva de la Construcción
  * (GOE N° 6.752 Extraordinario, 2023). Cláusula 3 y tabulador anexo.
  * Códigos normalizados con punto (ej. 1.1, 2.10, 5.26).
+ *
+ * Requisitos (instrucción, experiencia, conocimientos, tareas) cuando existan en la referencia
+ * de gaceta del proyecto: `requisitosOficiosGaceta.ts` y la sección del dashboard de reclutamiento.
  */
 
 export type TipoVacante = 'obrero_basico' | 'obrero_especializado';

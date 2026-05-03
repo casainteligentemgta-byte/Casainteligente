@@ -10,18 +10,32 @@ interface Budget {
     customer_name: string;
     customer_rif: string;
     subtotal: number;
-    status: 'pendiente' | 'aprobado' | 'rechazado' | 'archivado';
+    status: 'no_enviado' | 'enviado' | 'aprobado' | 'no_aprobado' | 'cobrado' | 'pagado';
     show_zelle?: boolean;
     numero_correlativo?: number | string | null;
     created_at: string;
 }
 
-const STATUS_COLORS = {
-    pendiente: { bg: 'rgba(255,149,0,0.15)', text: '#FF9500', label: 'Pendiente', icon: '⏳' },
+type ClasificacionPresupuesto =
+    | 'no_enviado'
+    | 'enviado'
+    | 'aprobado'
+    | 'no_aprobado'
+    | 'cobrado'
+    | 'pagado';
+
+const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text: string; label: string; icon: string }> = {
+    no_enviado: { bg: 'rgba(148,163,184,0.15)', text: '#94A3B8', label: 'No enviado', icon: '📭' },
+    enviado: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6', label: 'Enviado', icon: '📨' },
     aprobado: { bg: 'rgba(52,199,89,0.15)', text: '#34C759', label: 'Aprobado', icon: '✅' },
-    rechazado: { bg: 'rgba(255,59,48,0.15)', text: '#FF3B30', label: 'Rechazado', icon: '❌' },
-    archivado: { bg: 'rgba(142,142,147,0.15)', text: '#8E8E93', label: 'Archivado', icon: '📁' },
+    no_aprobado: { bg: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'No aprobado', icon: '⛔' },
+    cobrado: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: 'Cobrado', icon: '💰' },
+    pagado: { bg: 'rgba(16,185,129,0.15)', text: '#10B981', label: 'Pagado', icon: '💸' },
 };
+
+function clasificarPresupuesto(b: Budget): ClasificacionPresupuesto {
+    return b.status;
+}
 
 function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,10 +58,18 @@ export default function PresupuestosPage() {
     const router = useRouter();
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'todos' | 'pendiente' | 'archivado'>('todos');
+    const [filter, setFilter] = useState<'todos' | ClasificacionPresupuesto>('todos');
     const [sortBy, setSortBy] = useState<'fecha' | 'nomenclatura'>('fecha');
     const [searchTerm, setSearchTerm] = useState('');
-    const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
+    const [stats, setStats] = useState({
+        total: 0,
+        noEnviado: 0,
+        enviado: 0,
+        aprobados: 0,
+        noAprobados: 0,
+        cobrados: 0,
+        pagados: 0,
+    });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
 
     const fetchBudgets = async () => {
@@ -55,8 +77,7 @@ export default function PresupuestosPage() {
         const supabase = createClient();
         let query = supabase.from('budgets').select('*');
 
-        if (filter === 'pendiente') query = query.eq('status', 'pendiente');
-        if (filter === 'archivado') query = query.eq('status', 'archivado');
+        if (filter !== 'todos') query = query.eq('status', filter);
 
         const { data, error } = await query;
         if (!error && data) {
@@ -108,9 +129,12 @@ export default function PresupuestosPage() {
             // Calculate stats from all data
             const s = {
                 total: data.reduce((acc, b) => acc + b.subtotal, 0),
-                pending: data.filter(b => b.status === 'pendiente').length,
-                approved: data.filter(b => b.status === 'aprobado').length,
-                rejected: data.filter(b => b.status === 'rechazado').length,
+                noEnviado: data.filter(b => b.status === 'no_enviado').length,
+                enviado: data.filter(b => b.status === 'enviado').length,
+                aprobados: data.filter(b => b.status === 'aprobado').length,
+                noAprobados: data.filter(b => b.status === 'no_aprobado').length,
+                cobrados: data.filter(b => b.status === 'cobrado').length,
+                pagados: data.filter(b => b.status === 'pagado').length,
             };
             setStats(s);
         }
@@ -121,7 +145,7 @@ export default function PresupuestosPage() {
         fetchBudgets();
     }, [filter, sortBy, searchTerm]);
 
-    const updateStatus = async (id: string, status: string) => {
+    const updateStatus = async (id: string, status: ClasificacionPresupuesto) => {
         const supabase = createClient();
         const { error } = await supabase.from('budgets').update({ status }).eq('id', id);
         if (!error) fetchBudgets();
@@ -185,13 +209,39 @@ export default function PresupuestosPage() {
                         <p style={{ color: 'white', fontSize: '20px', fontWeight: 800, marginTop: '4px' }}>${formatUSD(stats.total)}</p>
                     </div>
                     <div style={{ ...glass, padding: '16px', background: 'linear-gradient(135deg, rgba(52,199,89,0.1) 0%, rgba(0,0,0,0) 100%)' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>Aprobados</p>
-                        <p style={{ color: '#34C759', fontSize: '20px', fontWeight: 800, marginTop: '4px' }}>{stats.approved}</p>
+                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>Pagados</p>
+                        <p style={{ color: '#34C759', fontSize: '20px', fontWeight: 800, marginTop: '4px' }}>{stats.pagados}</p>
                     </div>
                 </div>
 
                 {/* Search and Sort Bar */}
                 <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ ...glass, padding: '12px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Clasificación de presupuestos
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => (
+                                <span
+                                    key={k}
+                                    style={{
+                                        ...CLASIFICACION_COLORS[k],
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        padding: '4px 10px',
+                                        borderRadius: '999px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                    }}
+                                >
+                                    <span>{CLASIFICACION_COLORS[k].icon}</span>
+                                    <span>{CLASIFICACION_COLORS[k].label}</span>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
                     <div style={{ position: 'relative' }}>
                         <input
                             type="text"
@@ -213,7 +263,7 @@ export default function PresupuestosPage() {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                            {['todos', 'pendiente', 'archivado'].map((f: any) => (
+                            {(['todos', 'no_enviado', 'enviado', 'aprobado', 'no_aprobado', 'cobrado', 'pagado'] as const).map((f) => (
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
@@ -226,7 +276,19 @@ export default function PresupuestosPage() {
                                         whiteSpace: 'nowrap'
                                     }}
                                 >
-                                    {f === 'todos' ? 'Todos' : f === 'pendiente' ? 'Pendientes' : 'Archivados'}
+                                    {f === 'todos'
+                                        ? 'Todos'
+                                        : f === 'no_enviado'
+                                            ? 'No enviado'
+                                            : f === 'enviado'
+                                                ? 'Enviado'
+                                                : f === 'aprobado'
+                                                    ? 'Aprobado'
+                                                    : f === 'no_aprobado'
+                                                        ? 'No aprobado'
+                                                        : f === 'cobrado'
+                                                            ? 'Cobrado'
+                                                            : 'Pagado'}
                                 </button>
                             ))}
                         </div>
@@ -278,12 +340,19 @@ export default function PresupuestosPage() {
                                             {b.customer_rif} · <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{getPresupuestoNumero(b, fallbackById[b.id])}</span>
                                         </p>
                                         <div style={{
-                                            ...STATUS_COLORS[b.status],
-                                            fontSize: '11px', fontWeight: 700, padding: '4px 10px',
-                                            borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', width: 'fit-content'
+                                            ...CLASIFICACION_COLORS[clasificarPresupuesto(b)],
+                                            marginTop: '6px',
+                                            fontSize: '11px',
+                                            fontWeight: 700,
+                                            padding: '4px 10px',
+                                            borderRadius: '8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            width: 'fit-content'
                                         }}>
-                                            <span>{STATUS_COLORS[b.status].icon}</span>
-                                            <span>{STATUS_COLORS[b.status].label}</span>
+                                            <span>{CLASIFICACION_COLORS[clasificarPresupuesto(b)].icon}</span>
+                                            <span>{CLASIFICACION_COLORS[clasificarPresupuesto(b)].label}</span>
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
@@ -340,19 +409,6 @@ export default function PresupuestosPage() {
                                     >
                                         📲
                                     </button>
-                                    <div style={{ width: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
-                                    <button
-                                        onClick={() => updateStatus(b.id, b.status === 'archivado' ? 'pendiente' : 'archivado')}
-                                        style={{
-                                            width: '44px', background: 'rgba(255,255,255,0.05)', color: 'white',
-                                            border: 'none', borderRadius: '10px', padding: '10px',
-                                            fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                        }}
-                                        title={b.status === 'archivado' ? 'Desarchivar' : 'Archivar'}
-                                    >
-                                        {b.status === 'archivado' ? '📁' : '📦'}
-                                    </button>
                                     <button
                                         onClick={() => deleteBudget(b.id)}
                                         style={{
@@ -365,6 +421,39 @@ export default function PresupuestosPage() {
                                     >
                                         🗑️
                                     </button>
+                                </div>
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '6px',
+                                    marginTop: '10px',
+                                    flexWrap: 'wrap',
+                                }}>
+                                    {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => {
+                                        const active = b.status === k;
+                                        return (
+                                            <button
+                                                key={k}
+                                                type="button"
+                                                onClick={() => updateStatus(b.id, k)}
+                                                style={{
+                                                    background: active ? CLASIFICACION_COLORS[k].bg : 'rgba(255,255,255,0.04)',
+                                                    color: active ? CLASIFICACION_COLORS[k].text : 'rgba(255,255,255,0.65)',
+                                                    border: active ? `1px solid ${CLASIFICACION_COLORS[k].text}55` : '1px solid rgba(255,255,255,0.08)',
+                                                    borderRadius: '999px',
+                                                    padding: '6px 10px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                }}
+                                            >
+                                                <span>{CLASIFICACION_COLORS[k].icon}</span>
+                                                <span>{CLASIFICACION_COLORS[k].label}</span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))}

@@ -72,8 +72,8 @@ export default function MonitorReclutamiento({ candidatos: candidatosProp }: Mon
         setCandidatosApi([]);
         return;
       }
-      setError(null);
       setCandidatosApi(data.candidatos ?? []);
+      setError(data.error ?? null);
     } catch {
       setError('Error de red');
       setCandidatosApi([]);
@@ -121,14 +121,14 @@ export default function MonitorReclutamiento({ candidatos: candidatosProp }: Mon
   const vacioApi = !modoControlado && !cargando && !error && candidatosApi.length === 0;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mt-8 max-w-full w-full min-w-0">
-      <div className="p-4 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
-        <h3 className="font-bold text-slate-800">Candidatos en Evaluación (15 min)</h3>
+    <div className="mt-8 max-w-full min-w-0 rounded-2xl border border-white/10 bg-zinc-900/50 shadow-lg backdrop-blur-xl">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 p-4">
+        <h3 className="font-bold text-white">Candidatos en evaluación (15 min)</h3>
         {!modoControlado ? (
           <button
             type="button"
             onClick={() => void cargar()}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700"
+            className="text-xs font-bold text-sky-400 hover:text-sky-300"
           >
             Actualizar
           </button>
@@ -136,20 +136,20 @@ export default function MonitorReclutamiento({ candidatos: candidatosProp }: Mon
       </div>
 
       {!modoControlado && cargando ? (
-        <p className="p-4 text-sm text-slate-500">Cargando…</p>
+        <p className="p-4 text-sm text-zinc-400">Cargando…</p>
       ) : !modoControlado && error ? (
-        <p className="p-4 text-sm text-red-600">{error}</p>
+        <p className="p-4 text-sm text-red-400">{error}</p>
       ) : vacioControlado || vacioApi ? (
-        <p className="p-4 text-sm text-slate-500">No hay candidatos en evaluación.</p>
+        <p className="p-4 text-sm text-zinc-500">No hay candidatos en evaluación.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm min-w-[520px]">
-            <thead className="bg-slate-50">
+          <table className="w-full min-w-[520px] text-left text-sm">
+            <thead className="border-b border-white/10 bg-black/30">
               <tr>
-                <th className="p-4">Candidato / Cargo</th>
-                <th className="p-4">Tiempo Restante</th>
-                <th className="p-4 text-center">Avance</th>
-                <th className="p-4 text-right">Acciones</th>
+                <th className="p-4 font-semibold text-zinc-400">Candidato / cargo</th>
+                <th className="p-4 font-semibold text-zinc-400">Tiempo restante</th>
+                <th className="p-4 text-center font-semibold text-zinc-400">Avance</th>
+                <th className="p-4 text-right font-semibold text-zinc-400">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -192,30 +192,30 @@ function FilaCandidatoControlado({
 }) {
   const busy = c.empleadoId != null && accionId === c.empleadoId;
   return (
-    <tr className="border-b border-slate-50 hover:bg-slate-50">
+    <tr className="border-b border-white/5 transition hover:bg-white/[0.03]">
       <td className="p-4">
-        <div className="font-bold text-slate-900">{c.nombre}</div>
-        <div className="text-xs text-slate-400">{c.cargo}</div>
+        <div className="font-bold text-white">{c.nombre}</div>
+        <div className="text-xs text-zinc-500">{c.cargo}</div>
       </td>
       <td className="p-4">
-        <span className={c.expirado ? 'text-red-500 font-bold' : 'text-blue-600'}>
+        <span className={c.expirado ? 'font-bold text-red-400' : 'font-medium text-sky-400'}>
           {c.expirado ? 'EXPIRADO' : c.timer}
         </span>
       </td>
       <td className="p-4">
-        <div className="w-full bg-slate-100 h-1.5 rounded-full max-w-[160px] mx-auto">
-          <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${c.progreso}%` }} />
+        <div className="mx-auto h-1.5 w-full max-w-[160px] rounded-full bg-zinc-800">
+          <div className="h-1.5 rounded-full bg-sky-500" style={{ width: `${c.progreso}%` }} />
         </div>
       </td>
-      <td className="p-4 text-right whitespace-nowrap">
+      <td className="whitespace-nowrap p-4 text-right">
         {c.expirado && onSegundaOportunidad ? (
           <button
             type="button"
             disabled={busy}
             onClick={onSegundaOportunidad}
-            className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-yellow-200 disabled:opacity-50"
+            className="rounded-lg bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-200 hover:bg-amber-500/30 disabled:opacity-50"
           >
-            {busy ? '…' : 'Dar 2da Oportunidad'}
+            {busy ? '…' : 'Dar 2da oportunidad'}
           </button>
         ) : null}
         {c.token ? (
@@ -223,13 +223,13 @@ function FilaCandidatoControlado({
             href={`/talento/examen?token=${encodeURIComponent(c.token)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-2 text-blue-600 font-bold text-xs hover:underline inline-block"
+            className="ml-2 inline-block text-xs font-bold text-sky-400 hover:underline"
           >
-            Ver Respuestas
+            Ver respuestas
           </a>
         ) : (
-          <button type="button" className="ml-2 text-blue-600 font-bold text-xs">
-            Ver Respuestas
+          <button type="button" className="ml-2 text-xs font-bold text-zinc-600">
+            Ver respuestas
           </button>
         )}
       </td>
@@ -252,42 +252,42 @@ function FilaCandidatoApi({
   const busy = accionId === c.empleadoId;
 
   return (
-    <tr className="border-b border-slate-50 hover:bg-slate-50">
+    <tr className="border-b border-white/5 transition hover:bg-white/[0.03]">
       <td className="p-4">
-        <div className="font-bold text-slate-900">{c.nombre}</div>
-        <div className="text-xs text-slate-400">{c.cargo}</div>
+        <div className="font-bold text-white">{c.nombre}</div>
+        <div className="text-xs text-zinc-500">{c.cargo}</div>
       </td>
       <td className="p-4">
-        <span className={expirado ? 'text-red-500 font-bold' : 'text-blue-600'}>
+        <span className={expirado ? 'font-bold text-red-400' : 'font-medium text-sky-400'}>
           {expirado ? 'EXPIRADO' : timer}
         </span>
       </td>
       <td className="p-4">
-        <div className="w-full bg-slate-100 h-1.5 rounded-full max-w-[160px] mx-auto">
+        <div className="mx-auto h-1.5 w-full max-w-[160px] rounded-full bg-zinc-800">
           <div
-            className={`h-1.5 rounded-full ${expirado ? 'bg-red-500' : 'bg-blue-500'}`}
+            className={`h-1.5 rounded-full ${expirado ? 'bg-red-500' : 'bg-sky-500'}`}
             style={{ width: `${progreso}%` }}
           />
         </div>
       </td>
-      <td className="p-4 text-right whitespace-nowrap">
+      <td className="whitespace-nowrap p-4 text-right">
         {expirado ? (
           <button
             type="button"
             disabled={busy}
             onClick={onSegundaOportunidad}
-            className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-yellow-200 disabled:opacity-50"
+            className="rounded-lg bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-200 hover:bg-amber-500/30 disabled:opacity-50"
           >
-            {busy ? '…' : 'Dar 2da Oportunidad'}
+            {busy ? '…' : 'Dar 2da oportunidad'}
           </button>
         ) : null}
         <a
           href={`/talento/examen?token=${encodeURIComponent(c.token)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-2 text-blue-600 font-bold text-xs hover:underline inline-block"
+          className="ml-2 inline-block text-xs font-bold text-sky-400 hover:underline"
         >
-          Ver Respuestas
+          Ver respuestas
         </a>
       </td>
     </tr>

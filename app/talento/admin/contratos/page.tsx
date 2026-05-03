@@ -19,6 +19,7 @@ export default function ContratosAdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [lastContratoId, setLastContratoId] = useState<string | null>(null);
 
   useEffect(() => {
     let c = true;
@@ -40,6 +41,7 @@ export default function ContratosAdminPage() {
   async function generar() {
     setErr(null);
     setTexto(null);
+    setLastContratoId(null);
     setSaving(true);
     try {
       const res = await fetch('/api/talento/contratos/generar', {
@@ -57,6 +59,7 @@ export default function ContratosAdminPage() {
         setErr(data.error || 'Error');
         return;
       }
+      setLastContratoId(data.id as string);
       setTexto(data.texto_legal as string);
     } catch {
       setErr('Error de red');
@@ -149,7 +152,17 @@ export default function ContratosAdminPage() {
 
       {texto && (
         <div className="mt-8 rounded-2xl border border-zinc-800 bg-black/60 p-6">
-          <h2 className="text-sm font-semibold text-zinc-300 mb-4">Vista previa</h2>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-300">Vista previa</h2>
+            {lastContratoId ? (
+              <Link
+                href={`/talento/admin/contratos/preview/${lastContratoId}`}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
+              >
+                Abrir vista legal
+              </Link>
+            ) : null}
+          </div>
           <pre className="text-xs text-zinc-400 whitespace-pre-wrap font-mono leading-relaxed max-h-[480px] overflow-y-auto">
             {texto}
           </pre>

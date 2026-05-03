@@ -1,11 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 export async function crearProducto(formData: FormData) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient();
 
   const precioRaw = (formData.get('precio') as string) ?? '';
   const precio = precioRaw.replace(',', '.');

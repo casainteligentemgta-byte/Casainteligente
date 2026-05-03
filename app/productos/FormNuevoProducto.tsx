@@ -47,7 +47,7 @@ export default function FormNuevoProducto() {
             padding: '1rem',
             background: 'var(--surface)',
             borderRadius: '8px',
-            border: '1px solid var(--border)',
+            border: '1px solid hsl(var(--border))',
           }}
         >
           <h2 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>
@@ -65,7 +65,7 @@ export default function FormNuevoProducto() {
                 style={{
                   padding: '0.4rem 0.5rem',
                   background: 'var(--bg)',
-                  border: '1px solid var(--border)',
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '6px',
                   color: 'inherit',
                 }}
@@ -83,7 +83,7 @@ export default function FormNuevoProducto() {
                 style={{
                   padding: '0.4rem 0.5rem',
                   background: 'var(--bg)',
-                  border: '1px solid var(--border)',
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '6px',
                   color: 'inherit',
                 }}
@@ -98,7 +98,7 @@ export default function FormNuevoProducto() {
                 style={{
                   padding: '0.4rem 0.5rem',
                   background: 'var(--bg)',
-                  border: '1px solid var(--border)',
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '6px',
                   color: 'inherit',
                   resize: 'vertical',
@@ -133,7 +133,7 @@ export default function FormNuevoProducto() {
                 style={{
                   padding: '0.4rem 0.75rem',
                   background: 'transparent',
-                  border: '1px solid var(--border)',
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '6px',
                   color: 'inherit',
                   cursor: 'pointer',

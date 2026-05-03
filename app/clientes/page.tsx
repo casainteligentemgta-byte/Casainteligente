@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
+import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
+
+const CUSTOMERS_LOAD_TIMEOUT_MS = 22_000;
 
 // En clientes solo mostramos clasificación por tipo:
 // - Personas naturales
@@ -44,20 +47,56 @@ export default function ClientesPage() {
     const fetchClientes = useCallback(async () => {
         setLoading(true);
         setFetchError(null);
-        const supabase = createClient();
-        const { data, error } = await supabase
-            .from('customers')
-            .select('*')
-            .order('created_at', { ascending: false });
+        try {
+            let supabase: ReturnType<typeof createClient>;
+            try {
+                supabase = createClient();
+            } catch (e: unknown) {
+                setFetchError(e instanceof Error ? e.message : 'No se pudo iniciar Supabase (revisa .env.local).');
+                setLista([]);
+                return;
+            }
 
-        if (error) {
-            setFetchError(error.message);
-            setLista([]);
-            setLoading(false);
-            return;
-        }
+            let data: Record<string, unknown>[] | null = null;
+            let error: { message: string } | null = null;
 
-        if (data) {
+            const first = await withTimeout(
+                Promise.resolve(
+                    supabase
+                        .from('customers')
+                        .select('*')
+                        .order('created_at', { ascending: false }),
+                ),
+                CUSTOMERS_LOAD_TIMEOUT_MS,
+                'Lectura de customers (*)',
+            );
+            if (first.error) {
+                const second = await withTimeout(
+                    Promise.resolve(
+                        supabase
+                            .from('customers')
+                            .select('id,nombre,rif,email,movil,tipo,status,direccion,imagen,created_at,updated_at')
+                            .order('created_at', { ascending: false }),
+                    ),
+                    CUSTOMERS_LOAD_TIMEOUT_MS,
+                    'Lectura de customers (columnas base)',
+                );
+                data = (second.data ?? null) as Record<string, unknown>[] | null;
+                error = second.error;
+                if (error) {
+                    setFetchError(`${first.error.message} · ${error.message}`);
+                    setLista([]);
+                    return;
+                }
+            } else {
+                data = (first.data ?? null) as Record<string, unknown>[] | null;
+            }
+
+            if (!data || data.length === 0) {
+                setLista([]);
+                return;
+            }
+
             const mapped = data.map((c: Record<string, unknown>) => {
                 const nombreSafe = (typeof c.nombre === 'string' && c.nombre.trim()) ? c.nombre.trim() : 'Sin nombre';
                 const partes = nombreSafe.split(/\s+/).filter(Boolean);
@@ -85,8 +124,12 @@ export default function ClientesPage() {
                 };
             });
             setLista(mapped);
+        } catch (e: unknown) {
+            setFetchError(e instanceof Error ? e.message : 'Error inesperado al cargar clientes.');
+            setLista([]);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => {
@@ -111,7 +154,13 @@ export default function ClientesPage() {
     const empresasCount = lista.filter(c => c.categoria === 'empresa').length;
 
     const handleDelete = async (id: string) => {
-        const supabase = createClient();
+        let supabase: ReturnType<typeof createClient>;
+        try {
+            supabase = createClient();
+        } catch {
+            alert('No se pudo conectar a Supabase. Revisa .env.local.');
+            return;
+        }
         const { error } = await supabase.from('customers').delete().eq('id', id);
         if (!error) {
             setLista(prev => prev.filter(c => c.id !== id));
@@ -289,22 +338,40 @@ export default function ClientesPage() {
                 {filtered.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                         <div style={{ fontSize: '40px', marginBottom: '12px' }}>👥</div>
-                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>Sin resultados</p>
-                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
-                            Prueba con otro término o filtro
-                        </p>
+                        {lista.length === 0 ? (
+                            <>
+                                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>
+                                    No hay clientes en la base
+                                </p>
+                                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', marginTop: '8px', lineHeight: 1.5 }}>
+                                    Crea el primero con el botón <strong style={{ color: 'rgba(255,255,255,0.55)' }}>+</strong> arriba a la
+                                    derecha.
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>Sin resultados</p>
+                                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
+                                    Hay {lista.length} en total; prueba otro término o filtro.
+                                </p>
                                 {(search || filtro !== 'Personas') && (
-                            <button
-                                        onClick={() => { setSearch(''); setFiltro('Personas'); }}
-                                style={{
-                                    marginTop: '16px', padding: '10px 20px', borderRadius: '12px',
-                                    background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
-                                    color: '#007AFF', fontSize: '14px', fontWeight: 600,
-                                    cursor: 'pointer', fontFamily: 'inherit',
-                                }}
-                            >
-                                Limpiar filtros
-                            </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearch('');
+                                            setFiltro('Personas');
+                                        }}
+                                        style={{
+                                            marginTop: '16px', padding: '10px 20px', borderRadius: '12px',
+                                            background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
+                                            color: '#007AFF', fontSize: '14px', fontWeight: 600,
+                                            cursor: 'pointer', fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        Limpiar filtros
+                                    </button>
+                                )}
+                            </>
                         )}
                     </div>
                 ) : (

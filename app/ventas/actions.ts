@@ -1,14 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 
 /**
  * Crea una venta sencilla con una sola línea (producto + cantidad).
  */
 export async function crearVenta(formData: FormData) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient();
 
   const clienteRef = (formData.get('cliente_ref') as string) ?? '';
   const productoId = formData.get('producto_id') as string;

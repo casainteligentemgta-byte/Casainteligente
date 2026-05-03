@@ -12,7 +12,12 @@ const globalForDb = globalThis as unknown as {
 function createClient() {
   if (!conn) return null;
   if (!globalForDb.nexusSql) {
-    globalForDb.nexusSql = postgres(conn, { max: 5, prepare: false });
+    try {
+      globalForDb.nexusSql = postgres(conn, { max: 5, prepare: false });
+    } catch (e) {
+      console.error('[lib/db] postgres() no pudo inicializarse (revisa DATABASE_URL)', e);
+      return null;
+    }
   }
   return globalForDb.nexusSql;
 }

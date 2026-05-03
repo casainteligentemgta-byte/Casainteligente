@@ -88,3 +88,14 @@ export interface RecruitmentClientEvent {
   at: number;
   meta?: Record<string, unknown>;
 }
+
+/** Borrador de hoja de vida guardado en `recruitment_sessions.state` (flujo ?need=). */
+export interface RecruitmentCvDraft {
+  nombreCompleto: string;
+  cedula: string;
+  telefono?: string;
+  talla_camisa: string;
+  talla_botas: string;
+  cedula_foto_url?: string | null;
+  savedAt: number;
+}

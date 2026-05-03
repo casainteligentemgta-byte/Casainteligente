@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import { Project, ProjectStatus } from '@/types'
 
 const MOCK_PROJECTS: Project[] = [
@@ -29,15 +28,13 @@ const MOCK_PROJECTS: Project[] = [
 ]
 
 export async function getProjects(): Promise<{ data: Project[] | null, error: any }> {
-    const cookieStore = cookies()
-
     // Si no hay credenciales de Supabase configuradas, devuelve datos simulados (mock)
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         console.warn("Faltan credenciales de Supabase. Devolviendo datos de prueba.")
         return { data: MOCK_PROJECTS, error: null }
     }
 
-    const supabase = createClient(cookieStore)
+    const supabase = await createClient()
 
     try {
         const { data, error } = await supabase
@@ -77,14 +74,12 @@ export async function getProjects(): Promise<{ data: Project[] | null, error: an
 }
 
 export async function updateProjectStatus(projectId: string, newStatus: ProjectStatus) {
-    const cookieStore = cookies()
-
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
         console.log(`[MOCK] Proyecto ${projectId} actualizado a ${newStatus}`)
         return { error: null }
     }
 
-    const supabase = createClient(cookieStore)
+    const supabase = await createClient()
 
     const { error } = await supabase
         .from('projects')

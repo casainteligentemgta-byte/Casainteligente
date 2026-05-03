@@ -49,7 +49,7 @@ export default function FormNuevaVenta({ empresas, personas, productos }: Props)
             style={{
               padding: '0.4rem 0.5rem',
               background: 'var(--bg)',
-              border: '1px solid var(--border)',
+              border: '1px solid hsl(var(--border))',
               borderRadius: '6px',
               color: 'inherit',
             }}
@@ -84,7 +84,7 @@ export default function FormNuevaVenta({ empresas, personas, productos }: Props)
             style={{
               padding: '0.4rem 0.5rem',
               background: 'var(--bg)',
-              border: '1px solid var(--border)',
+              border: '1px solid hsl(var(--border))',
               borderRadius: '6px',
               color: 'inherit',
             }}
@@ -110,7 +110,7 @@ export default function FormNuevaVenta({ empresas, personas, productos }: Props)
             style={{
               padding: '0.4rem 0.5rem',
               background: 'var(--bg)',
-              border: '1px solid var(--border)',
+              border: '1px solid hsl(var(--border))',
               borderRadius: '6px',
               color: 'inherit',
             }}
@@ -130,7 +130,7 @@ export default function FormNuevaVenta({ empresas, personas, productos }: Props)
             style={{
               padding: '0.4rem 0.5rem',
               background: 'var(--bg)',
-              border: '1px solid var(--border)',
+              border: '1px solid hsl(var(--border))',
               borderRadius: '6px',
               color: 'inherit',
             }}
@@ -145,7 +145,7 @@ export default function FormNuevaVenta({ empresas, personas, productos }: Props)
             style={{
               padding: '0.4rem 0.5rem',
               background: 'var(--bg)',
-              border: '1px solid var(--border)',
+              border: '1px solid hsl(var(--border))',
               borderRadius: '6px',
               color: 'inherit',
               resize: 'vertical',

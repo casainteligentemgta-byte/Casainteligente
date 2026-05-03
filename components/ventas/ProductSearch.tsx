@@ -130,10 +130,10 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
 
     const handleSelect = (product: Product) => {
         onSelect(product);
-        setQuery('');
-        setResults([]);
+        // Mantener la palabra de búsqueda para seguir agregando ítems del mismo criterio; solo se borra con la X.
         setOpen(false);
         setActiveIndex(-1);
+        requestAnimationFrame(() => inputRef.current?.focus());
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -238,7 +238,9 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    onFocus={() => query.length >= 2 && setOpen(true)}
+                    onFocus={() => {
+                        if (query.trim().length >= 2 && results.length > 0) setOpen(true);
+                    }}
                     placeholder="Buscar producto por nombre, marca o modelo..."
                     style={{
                         flex: 1,
@@ -251,7 +253,18 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
                     }}
                 />
                 {query && (
-                    <button onClick={() => { setQuery(''); setResults([]); setOpen(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'rgba(255,255,255,0.4)', display: 'flex' }}>
+                    <button
+                        type="button"
+                        aria-label="Borrar búsqueda"
+                        title="Borrar búsqueda"
+                        onClick={() => {
+                            setQuery('');
+                            setResults([]);
+                            setOpen(false);
+                            setActiveIndex(-1);
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'rgba(255,255,255,0.4)', display: 'flex' }}
+                    >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                             <circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.15)" />
                             <path d="M8 8l8 8M16 8l-8 8" stroke="white" strokeWidth="1.8" strokeLinecap="round" />

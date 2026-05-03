@@ -60,13 +60,16 @@ export async function POST(req: Request) {
   const supabase = admin.client;
 
   const token = randomUUID();
-  const expiraAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  /** Ventana amplia: onboarding por WhatsApp puede tardar días; el examen sigue limitado a 15 min en UI al iniciar. */
+  const expiraAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: empleado, error: errEmp } = await supabase
     .from('ci_empleados')
     .insert({
       nombre_completo: nombre,
       telefono: whatsapp || null,
+      token_registro: token,
+      estado_proceso: 'pendiente_cv',
       rol_examen: rolExamen,
       rol_buscado: rolBuscado,
       respuestas_personalidad: {},
@@ -101,9 +104,11 @@ export async function POST(req: Request) {
   }
 
   const examUrl = `${baseUrl}/talento/examen?token=${encodeURIComponent(token)}`;
+  const onboardingUrl = `${baseUrl}/reclutamiento/onboarding/${encodeURIComponent(token)}`;
 
   return NextResponse.json({
     url: examUrl,
+    onboarding_url: onboardingUrl,
     expira_at: expiraAt,
     empleado_id: row.id,
     token,

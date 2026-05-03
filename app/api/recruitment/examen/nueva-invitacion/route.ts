@@ -10,12 +10,14 @@ import {
 import { hasSupabaseCeoSession } from '@/lib/recruitment/ceo-auth-server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST: nueva invitación (token 15 min) para un empleado existente — «2da oportunidad».
  * Body: { empleadoId: uuid }
  */
 export async function POST(req: Request) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const authorized = verifyRecruitmentCeoAuthorized({
     req,
     cookieVal: cookieStore.get(recruitmentCeoCookieName())?.value,
@@ -76,7 +78,7 @@ export async function POST(req: Request) {
 
   if (errExa) {
     console.error('[nueva-invitacion]', errExa);
-    return NextResponse.json({ error: errExa.message }, { status: 500 });
+    return NextResponse.json({ error: errExa.message }, { status: 422 });
   }
 
   const url = `${baseUrl}/talento/examen?token=${encodeURIComponent(token)}`;

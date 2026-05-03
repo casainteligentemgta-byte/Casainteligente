@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import type { Persona } from '@/types/persona';
 import FormNuevaPersona from './FormNuevaPersona';
@@ -9,7 +8,7 @@ export default async function PersonasPage() {
   let error: string | null = null;
 
   try {
-    const supabase = createClient(cookies());
+    const supabase = await createClient();
     const { data, error: supaError } = await supabase
       .from('personas')
       .select(
@@ -53,7 +52,7 @@ export default async function PersonasPage() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                  <tr style={{ borderBottom: '1px solid hsl(var(--border))', textAlign: 'left' }}>
                     <th style={{ padding: '0.5rem 0.75rem', color: 'var(--muted)', fontWeight: 600 }}>
                       Nombre
                     </th>
@@ -76,7 +75,7 @@ export default async function PersonasPage() {
                 </thead>
                 <tbody>
                   {personas.map((p) => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <tr key={p.id} style={{ borderBottom: '1px solid hsl(var(--border))' }}>
                       <td style={{ padding: '0.5rem 0.75rem' }}>{p.nombre}</td>
                       <td style={{ padding: '0.5rem 0.75rem', color: 'var(--muted)' }}>
                         {p.apellidos ?? '—'}

@@ -15,6 +15,11 @@ import {
   DIAS_LABORABLES_MES_PRORRATEO_BONO_ASISTENCIA,
   formatoVES,
 } from '@/lib/nomina/compensacionDiaria';
+import { apiUrl, assertHttpOrigin } from '@/lib/http/apiUrl';
+import {
+  loadOpcionesProyectoReclutamiento,
+  type OpcionProyectoReclutamiento,
+} from '@/lib/proyectos/proyectosUnificados';
 
 type NeedRow = {
   id: string;
@@ -26,11 +31,10 @@ type NeedRow = {
   cargoNivel: number | null;
   tipoVacante: string | null;
   proyectoId: string | null;
+  proyectoModuloId?: string | null;
   proyectoNombre: string | null;
   createdAt: string;
 };
-
-type ObraOption = { id: string; nombre: string };
 
 /** Estado alineado a `recruitment_needs` y a columnas homónimas en `ci_empleados`. */
 export type NecesidadServicioPayload = {
@@ -53,13 +57,14 @@ export default function NeedProtocolSection() {
   const [notes, setNotes] = useState('');
   const [cargoCodigo, setCargoCodigo] = useState('');
   const [busqueda, setBusqueda] = useState('');
-  const [proyectoId, setProyectoId] = useState('');
-  const [proyectos, setProyectos] = useState<ObraOption[]>([]);
+  const [proyectoKey, setProyectoKey] = useState('');
+  const [proyectoOpciones, setProyectoOpciones] = useState<OpcionProyectoReclutamiento[]>([]);
   const [loadingProyectos, setLoadingProyectos] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastCreated, setLastCreated] = useState<NeedRow | null>(null);
   const [needs, setNeeds] = useState<NeedRow[]>([]);
+  const [needsLoadHint, setNeedsLoadHint] = useState<string | null>(null);
 
   const cargosFiltrados = useMemo(() => {
     const q = busqueda.trim();
@@ -92,9 +97,27 @@ export default function NeedProtocolSection() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/recruitment/needs');
-      const data = (await res.json()) as { needs?: NeedRow[]; error?: string };
-      if (res.ok && data.needs) setNeeds(data.needs);
+      const res = await fetch(apiUrl('/api/recruitment/needs'));
+      const raw = await res.text();
+      let data: { needs?: NeedRow[]; error?: string } = {};
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        setNeeds([]);
+        setNeedsLoadHint(
+          res.status === 404
+            ? `API no encontrada (404). Abre ${apiUrl('/api/recruitment/needs')} en el navegador.`
+            : 'Respuesta de la API no válida.',
+        );
+        return;
+      }
+      if (res.ok) {
+        setNeeds(data.needs ?? []);
+        setNeedsLoadHint(data.error ?? null);
+      } else {
+        setNeeds([]);
+        setNeedsLoadHint(data.error ?? 'No se pudieron cargar las vacantes');
+      }
     } catch {
       /* ignore */
     }
@@ -103,15 +126,14 @@ export default function NeedProtocolSection() {
   const loadProyectos = useCallback(async () => {
     setLoadingProyectos(true);
     try {
-      const { data, error: err } = await supabase
-        .from('ci_obras')
-        .select('id,nombre')
-        .eq('estado', 'activa')
-        .order('nombre');
-      if (!err && data) setProyectos(data as ObraOption[]);
-      else setProyectos([]);
+      const { opciones } = await loadOpcionesProyectoReclutamiento(supabase, { soloObrasActivas: true });
+      setProyectoOpciones(opciones);
+      setProyectoKey((k) => {
+        if (k && opciones.some((o) => o.key === k)) return k;
+        return opciones[0]?.key ?? '';
+      });
     } catch {
-      setProyectos([]);
+      setProyectoOpciones([]);
     } finally {
       setLoadingProyectos(false);
     }
@@ -136,21 +158,41 @@ export default function NeedProtocolSection() {
   async function crear(e: React.FormEvent) {
     e.preventDefault();
     const t = title.trim();
-    if (!t || !payloadSupabase || !proyectoId) return;
+    if (!t || !payloadSupabase || !proyectoKey) return;
+    const sel = proyectoOpciones.find((o) => o.key === proyectoKey);
+    if (!sel) return;
+    const originErr = assertHttpOrigin();
+    if (originErr) {
+      setError(originErr);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/recruitment/needs', {
+      const res = await fetch(apiUrl('/api/recruitment/needs'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: t,
           notes: notes.trim() || undefined,
-          proyecto_id: proyectoId,
+          ...(sel.proyectoObraId
+            ? { proyecto_id: sel.proyectoObraId }
+            : { proyecto_modulo_id: sel.proyectoModuloId }),
           ...payloadSupabase,
         }),
       });
-      const data = (await res.json()) as NeedRow & { error?: string; hint?: string };
+      const raw = await res.text();
+      let data: NeedRow & { error?: string; hint?: string } = {} as NeedRow & { error?: string; hint?: string };
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : ({} as typeof data);
+      } catch {
+        setError(
+          res.status === 404
+            ? `HTTP 404 sin JSON. Prueba abrir: ${apiUrl('/api/recruitment/needs')}`
+            : `Respuesta no JSON (HTTP ${res.status}).`,
+        );
+        return;
+      }
       if (!res.ok) {
         setError([data.error, (data as { hint?: string }).hint].filter(Boolean).join(' — ') || 'Error');
         return;
@@ -182,36 +224,38 @@ export default function NeedProtocolSection() {
 
       <form onSubmit={(e) => void crear(e)} className="space-y-3">
         <div>
-          <label className="block text-[10px] uppercase tracking-wide text-zinc-500 mb-1">
-            Proyecto (obra) *
-          </label>
+          <label className="block text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Proyecto *</label>
           {loadingProyectos ? (
-            <p className="text-xs text-zinc-500 py-2">Cargando proyectos desde Supabase…</p>
-          ) : proyectos.length === 0 ? (
+            <p className="text-xs text-zinc-500 py-2">Cargando proyectos…</p>
+          ) : proyectoOpciones.length === 0 ? (
             <p className="text-xs text-amber-400/95 leading-relaxed rounded-xl border border-amber-700/40 bg-amber-950/20 px-3 py-2">
-              No hay obras activas en <code className="text-amber-200">ci_obras</code>.{' '}
-              <Link href="/proyectos/nuevo" className="text-sky-400 font-medium hover:underline">
-                Crear proyecto
+              No hay proyectos (integral) ni obras Talento activas. Crea uno en{' '}
+              <Link href="/proyectos/modulo/nuevo" className="text-sky-400 font-medium hover:underline">
+                Nuevo proyecto
               </Link>{' '}
-              antes de registrar vacantes.
+              o en{' '}
+              <Link href="/proyectos/nuevo" className="text-sky-400 font-medium hover:underline">
+                + Obra (Talento)
+              </Link>
+              .
             </p>
           ) : (
             <select
               required
-              value={proyectoId}
-              onChange={(e) => setProyectoId(e.target.value)}
+              value={proyectoKey}
+              onChange={(e) => setProyectoKey(e.target.value)}
               className="w-full rounded-xl bg-zinc-950 border border-zinc-600 px-3 py-2.5 text-sm text-white min-h-[2.75rem]"
             >
               <option value="">Selecciona el proyecto…</option>
-              {proyectos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
+              {proyectoOpciones.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.etiqueta}
                 </option>
               ))}
             </select>
           )}
           <p className="mt-1 text-[11px] text-zinc-600">
-            Cada vacante queda vinculada a un <code className="text-zinc-400">proyecto_id</code> en la base de datos.
+            Misma lista unificada que en Proyectos: Integral (módulo) o Talento (obra activa).
           </p>
         </div>
 
@@ -313,7 +357,7 @@ export default function NeedProtocolSection() {
 
         <button
           type="submit"
-          disabled={loading || !title.trim() || !payloadSupabase || !proyectoId || loadingProyectos}
+          disabled={loading || !title.trim() || !payloadSupabase || !proyectoKey || loadingProyectos}
           className="w-full sm:w-auto rounded-xl px-4 py-2 text-sm font-medium bg-emerald-700 text-white disabled:opacity-40"
         >
           {loading ? 'Guardando…' : 'Registrar y activar protocolo'}
@@ -321,6 +365,7 @@ export default function NeedProtocolSection() {
       </form>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {needsLoadHint ? <p className="text-xs text-amber-400/90 mb-2">{needsLoadHint}</p> : null}
 
       {lastCreated?.id ? (
         <div className="rounded-xl border border-emerald-600/40 bg-emerald-950/20 p-3 text-xs space-y-2">
@@ -331,11 +376,18 @@ export default function NeedProtocolSection() {
               {lastCreated.tipoVacante ? ` · ${lastCreated.tipoVacante}` : ''})
             </p>
           ) : null}
-          {lastCreated.proyectoId ? (
+          {lastCreated.proyectoId || lastCreated.proyectoModuloId ? (
             <p className="text-zinc-400">
               Proyecto:{' '}
               <span className="text-zinc-200">
-                {proyectos.find((p) => p.id === lastCreated.proyectoId)?.nombre ?? lastCreated.proyectoId}
+                {proyectoOpciones.find(
+                  (o) =>
+                    (lastCreated.proyectoId && o.proyectoObraId === lastCreated.proyectoId) ||
+                    (lastCreated.proyectoModuloId && o.proyectoModuloId === lastCreated.proyectoModuloId),
+                )?.etiqueta ??
+                  lastCreated.proyectoNombre ??
+                  lastCreated.proyectoId ??
+                  lastCreated.proyectoModuloId}
               </span>
             </p>
           ) : null}
@@ -359,6 +411,8 @@ export default function NeedProtocolSection() {
                   </span>
                 ) : n.proyectoId ? (
                   <span className="text-zinc-600 text-[10px]">Proyecto: {n.proyectoId}</span>
+                ) : n.proyectoModuloId ? (
+                  <span className="text-zinc-600 text-[10px]">Proyecto (módulo): {n.proyectoModuloId}</span>
                 ) : null}
                 {n.cargoNombre ? (
                   <span className="text-zinc-500">

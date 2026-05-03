@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import AppChrome from "@/components/AppChrome";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import AppChrome from "@/components/AppChrome";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -31,10 +31,14 @@ export default function RootLayout({
     return (
         <html lang="es" suppressHydrationWarning>
             <body
-                className={`${inter.variable} ${jetbrainsMono.variable}`}
-                style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif' }}
+                className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased text-[var(--label-primary)]`}
             >
-                <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
+                <div
+                    className="min-h-screen app-root-bg"
+                    style={{
+                        backgroundColor: 'var(--bg-primary)',
+                    }}
+                >
                     <AppChrome>{children}</AppChrome>
                 </div>
             </body>

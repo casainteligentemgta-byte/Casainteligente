@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 import { buildPresupuestoPrintHtml } from '@/lib/presupuesto/html-impresion';
 
 /**
@@ -16,8 +15,7 @@ export async function GET(
     return NextResponse.json({ error: 'Falta id' }, { status: 400 });
   }
 
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore);
+  const supabase = await createClient();
 
   const { data: budget, error } = await supabase
     .from('budgets')

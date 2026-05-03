@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* Inter lo carga next/font en layout.tsx (evita segundo request a Google y mejora la primera pintura). */
 
 @layer base {
   :root {
@@ -83,6 +83,15 @@
     --input: 0 0% 22%;
     --ring: 211 100% 50%;
     --radius: 0.875rem;
+
+    /*
+     * Alias para estilos inline legacy.
+     * Sin esto, `var(--muted)` / `var(--surface)` / `var(--accent)` quedan vacíos
+     * y el texto o fondos no se ven bien sobre el tema oscuro.
+     */
+    --muted: var(--label-secondary);
+    --surface: var(--bg-secondary);
+    --accent: var(--ios-blue);
   }
 }
 
@@ -101,9 +110,34 @@
   body {
     background-color: var(--bg-primary);
     color: var(--label-primary);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
+    font-family: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+      sans-serif;
     font-feature-settings: 'kern' 1, 'liga' 1;
     letter-spacing: -0.01em;
+  }
+
+  /* Fondo principal: evita negro plano y da profundidad coherente con el dock iOS */
+  .app-root-bg {
+    background-image:
+      radial-gradient(ellipse 130% 90% at 50% -25%, rgba(0, 122, 255, 0.14), transparent 55%),
+      radial-gradient(ellipse 70% 55% at 100% 40%, rgba(88, 86, 214, 0.1), transparent 50%),
+      radial-gradient(ellipse 60% 50% at 0% 80%, rgba(0, 242, 254, 0.06), transparent 45%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  /* Listas nativas de oficios: refuerzo de contraste donde el SO ignora clases en <option>. */
+  select.ci-select-tabulador {
+    color-scheme: dark;
+    background-color: #09090b;
+    color: #fafafa;
+  }
+
+  select.ci-select-tabulador option {
+    background-color: #09090b;
+    color: #fafafa;
   }
 }
 
@@ -355,4 +389,12 @@
       0 0 0 1px rgba(0, 242, 254, 0.2),
       0 0 28px -8px var(--color-primary-glow);
   }
+}
+
+/*
+ * Leaflet + Tailwind preflight: `img { max-width: 100% }` rompe tiles, iconos y sombras del mapa
+ * (mapa “raro” o en blanco en dev). Restringido al contenedor Leaflet.
+ */
+.leaflet-container img {
+  max-width: none !important;
 }

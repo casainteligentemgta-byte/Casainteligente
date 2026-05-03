@@ -53,23 +53,32 @@ const navItems = [
         ),
     },
     {
+        href: '/proyectos/modulo',
+        label: 'Proyectos',
+        icon: (active: boolean) => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" stroke={active ? '#F59E0B' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? 'rgba(245,158,11,0.12)' : 'none'} />
+            </svg>
+        ),
+    },
+    {
+        href: '/reclutamiento/dashboard',
+        label: 'Reclutamiento',
+        icon: (active: boolean) => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="9" cy="7" r="4" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        ),
+    },
+    {
         href: '/talento',
         label: 'Talento+',
         icon: (active: boolean) => (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" stroke={active ? '#38BDF8' : '#8E8E93'} strokeWidth="2" strokeLinejoin="round" />
                 <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke={active ? '#38BDF8' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-        ),
-    },
-    {
-        href: '/reclutamiento/dashboard',
-        label: 'Talento',
-        icon: (active: boolean) => (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="9" cy="7" r="4" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" />
-                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
         ),
     },
@@ -93,30 +102,56 @@ const navItems = [
     },
 ];
 
+function navItemActive(pathname: string, href: string): boolean {
+    if (pathname === href) return true;
+    if (href === '/') return false;
+    if (href === '/reclutamiento/dashboard') return pathname.startsWith('/reclutamiento');
+    return pathname.startsWith(href);
+}
+
 export default function IOSNavBar() {
     const pathname = usePathname();
 
     return (
         <nav
-            className="fixed bottom-0 left-0 right-0 z-50 safe-bottom no-print"
+            className="fixed bottom-0 left-0 right-0 z-50 safe-bottom no-print mx-auto max-w-lg px-2 pb-1 sm:max-w-3xl"
             style={{
-                background: 'rgba(28, 28, 30, 0.85)',
-                backdropFilter: 'blur(25px) saturate(200%)',
-                WebkitBackdropFilter: 'blur(25px) saturate(200%)',
-                borderTop: '0.5px solid rgba(255, 255, 255, 0.1)',
-                paddingBottom: 'env(safe-area-inset-bottom)'
+                background: 'rgba(22, 22, 24, 0.82)',
+                backdropFilter: 'blur(28px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+                borderRadius: '18px 18px 0 0',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderBottom: 'none',
+                boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.35)',
+                paddingBottom: 'env(safe-area-inset-bottom)',
             }}
         >
-            <div className="flex items-center justify-around px-2 pt-2 pb-2">
+            <div className="overflow-x-auto scrollbar-hide">
+                <div className="flex min-w-max items-center gap-0.5 px-1 pb-1.5 pt-2">
                 {navItems.map((item) => {
-                    const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-                    const activeColor = item.label === 'Conta' ? '#5856D6' : (item.label === 'Inventario' ? '#FF2D55' : (item.label === 'Productos' ? '#FF9500' : (item.label === 'Ventas' ? '#34C759' : '#007AFF')));
+                    const isActive = navItemActive(pathname, item.href);
+                    const activeColor =
+                        item.label === 'Conta'
+                            ? '#5856D6'
+                            : item.label === 'Inventario'
+                                ? '#FF2D55'
+                                : item.label === 'Productos'
+                                    ? '#FF9500'
+                                    : item.label === 'Proyectos'
+                                        ? '#F59E0B'
+                                        : item.label === 'Reclutamiento'
+                                            ? '#0EA5E9'
+                                            : item.label === 'Talento+'
+                                                ? '#38BDF8'
+                                                : item.label === 'Ventas'
+                                                    ? '#34C759'
+                                                    : '#007AFF';
 
                     return (
                         <Link
                             key={item.href}
                             href={item.href}
-                            className="flex flex-col items-center gap-1 min-w-[64px] py-1 px-1 transition-all duration-150 active:scale-90"
+                            className="flex flex-col items-center gap-1 min-w-[62px] py-1 px-1 transition-all duration-150 active:scale-90"
                             style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
                             <div className="transition-transform duration-150">
@@ -131,6 +166,7 @@ export default function IOSNavBar() {
                         </Link>
                     );
                 })}
+                </div>
             </div>
         </nav>
     );

@@ -160,7 +160,7 @@ export default function SimularLiquidacionConstruccion() {
       style={{
         marginTop: '1.5rem',
         padding: '1.25rem',
-        border: '1px solid var(--border)',
+        border: '1px solid hsl(var(--border))',
         borderRadius: '10px',
         background: 'var(--surface)',
       }}
@@ -270,7 +270,7 @@ export default function SimularLiquidacionConstruccion() {
               padding: '0.75rem',
               background: 'var(--bg)',
               borderRadius: '6px',
-              border: '1px solid var(--border)',
+              border: '1px solid hsl(var(--border))',
             }}
           >
             {JSON.stringify(
@@ -320,7 +320,7 @@ export default function SimularLiquidacionConstruccion() {
 const inp: CSSProperties = {
   padding: '0.45rem 0.5rem',
   borderRadius: '6px',
-  border: '1px solid var(--border)',
+  border: '1px solid hsl(var(--border))',
   background: 'var(--bg)',
   color: 'inherit',
 };
@@ -338,7 +338,7 @@ const btnPrimary: CSSProperties = {
 const btnSecondary: CSSProperties = {
   padding: '0.5rem 1rem',
   borderRadius: '8px',
-  border: '1px solid var(--border)',
+  border: '1px solid hsl(var(--border))',
   background: 'var(--bg)',
   color: 'inherit',
   fontWeight: 600,

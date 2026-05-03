@@ -38,7 +38,9 @@ export function buildCeoPayload(
   state: RecruitmentSessionState,
   analyses: RecruitmentAnalysisJson[],
 ): CeoDashboardPayload {
-  const analysis = last(analyses) ?? null;
+  const analysesSafe = Array.isArray(analyses) ? analyses : [];
+  const records = Array.isArray(state.confrontations) ? state.confrontations : [];
+  const analysis = last(analysesSafe) ?? null;
   const integrity = analysis?.integrity ?? {
     riskScore: 0.35,
     dimensions: { operativa: 0.35, honestidad: 0.35, consistencia: 0.35 },
@@ -47,13 +49,17 @@ export function buildCeoPayload(
     dominant: 'mixed' as const,
     scores: { D: 0.25, I: 0.25, S: 0.25, C: 0.25 },
   };
-  const confrontations = state.confrontations.length;
-  const sem = semaphoreFrom(integrity.riskScore, confrontations);
+  const confrontations = records.length;
+  const risk =
+    typeof integrity.riskScore === 'number' && !Number.isNaN(integrity.riskScore)
+      ? integrity.riskScore
+      : 0.35;
+  const sem = semaphoreFrom(risk, confrontations);
 
   const summaryParts: string[] = [];
-  const admitted = state.confrontations.filter((c) => c.outcome === 'admitio').length;
-  const doubled = state.confrontations.filter((c) => c.outcome === 'redoblo').length;
-  const evasion = state.confrontations.filter((c) => c.outcome === 'evasion').length;
+  const admitted = records.filter((c) => c.outcome === 'admitio').length;
+  const doubled = records.filter((c) => c.outcome === 'redoblo').length;
+  const evasion = records.filter((c) => c.outcome === 'evasion').length;
   if (admitted) summaryParts.push(`${admitted} confrontación(es) con admisión`);
   if (doubled) summaryParts.push(`${doubled} re-doble`);
   if (evasion) summaryParts.push(`${evasion} evasión(es)`);
@@ -69,13 +75,13 @@ export function buildCeoPayload(
     disc,
     integrity,
     gma: {
-      scoreOutOf5: gmaScoreFromAnalyses(analyses),
+      scoreOutOf5: gmaScoreFromAnalyses(analysesSafe),
       disclaimer: 'GMA es apoyo; no sustituye pruebas psicométricas validadas.',
     },
     honesty: {
       confrontations,
       summary,
-      records: state.confrontations as ConfrontationRecord[],
+      records: records as ConfrontationRecord[],
     },
     lastAnalysis: analysis,
   };

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { RECRUITMENT_OPENING_LINE } from '@/lib/recruitment/constants';
 import type { RecruitmentClientEvent } from '@/types/recruitment';
 import QuickSelectReplies from '@/components/reclutamiento/QuickSelectReplies';
+import ReclutamientoHojaVidaBlock from '@/components/reclutamiento/ReclutamientoHojaVidaBlock';
 import SessionShareBar from './SessionShareBar';
 
 type ChatLine = { role: 'user' | 'assistant'; content: string };
@@ -67,6 +68,17 @@ function clearStoredRecruitmentSession() {
 
 let pendingSessionPromise: Promise<StoredSession & { openingLine: string }> | null = null;
 
+/** Evita `res.json()` con cuerpo vacío (502/HTML) → "Unexpected end of JSON input". */
+async function readFetchJson<T extends Record<string, unknown>>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text.trim()) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
 function getOrCreateRecruitmentSession(needId: string | null): Promise<StoredSession & { openingLine: string }> {
   const wantNeed = needId ?? null;
   const cached = readStoredSession();
@@ -93,16 +105,25 @@ function getOrCreateRecruitmentSession(needId: string | null): Promise<StoredSes
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(wantNeed ? { needId: wantNeed } : {}),
       });
-      if (!res.ok) {
-        const err = (await res.json()) as { error?: string; hint?: string };
-        throw new Error([err.error, err.hint].filter(Boolean).join(' — ') || 'session_create_failed');
-      }
-      const data = (await res.json()) as {
-        sessionId: string;
-        expiresAt: number;
+      const data = await readFetchJson<{
+        sessionId?: string;
+        expiresAt?: number;
         openingLine?: string;
         needId?: string | null;
-      };
+        error?: string;
+        hint?: string;
+      }>(res);
+      if (!res.ok) {
+        throw new Error(
+          [data.error, data.hint].filter(Boolean).join(' — ') ||
+            `session_create_failed (HTTP ${res.status})`,
+        );
+      }
+      if (!data.sessionId || typeof data.expiresAt !== 'number') {
+        throw new Error(
+          'La API de sesión devolvió un cuerpo vacío o no JSON. Revisa /api/recruitment/session y la red.',
+        );
+      }
       const openingLine = data.openingLine ?? RECRUITMENT_OPENING_LINE;
       const stored: StoredSession = {
         sessionId: data.sessionId,
@@ -172,12 +193,12 @@ function ReclutamientoPageInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, events }),
       });
-      const data = (await res.json()) as {
+      const data = await readFetchJson<{
         warning?: string;
         closed?: boolean;
         reason?: string;
         error?: string;
-      };
+      }>(res);
       if (data.warning) setFraudWarning(data.warning);
       if (!res.ok) {
         if (data.reason === 'fraud') {
@@ -268,12 +289,12 @@ function ReclutamientoPageInner() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, message: t }),
         });
-        const data = (await res.json()) as {
+        const data = await readFetchJson<{
           assistantMessage?: string;
           error?: string;
           hint?: string;
           sessionComplete?: boolean;
-        };
+        }>(res);
         if (!res.ok) {
           const shouldRenewSession =
             data.error === 'sesión no encontrada' ||
@@ -350,6 +371,9 @@ function ReclutamientoPageInner() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {needFromUrl && !needInvalid && sessionId && !sessionComplete ? (
+          <ReclutamientoHojaVidaBlock sessionId={sessionId} needId={needFromUrl} />
+        ) : null}
         {lines.map((line, i) => (
           <div
             key={`${i}-${line.role}`}

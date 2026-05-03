@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
 
@@ -138,18 +139,34 @@ function VentasContent() {
 
     useEffect(() => {
         let cancelled = false;
-        const supabase = createClient();
         setCustomersLoading(true);
-        supabase
-            .from('customers')
-            .select('id,nombre,rif,movil,email,direccion')
-            .order('nombre', { ascending: true, nullsFirst: false })
-            .then(({ data, error }) => {
+        (async () => {
+            try {
+                let supabase: ReturnType<typeof createClient>;
+                try {
+                    supabase = createClient();
+                } catch {
+                    return;
+                }
+                const { data, error } = await withTimeout(
+                    Promise.resolve(
+                        supabase
+                            .from('customers')
+                            .select('id,nombre,rif,movil,email,direccion')
+                            .order('nombre', { ascending: true, nullsFirst: false }),
+                    ),
+                    22_000,
+                    'Clientes (ventas)',
+                );
                 if (cancelled) return;
-                setCustomersLoading(false);
                 if (!error && data) setCustomers(data as CustomerPickerRow[]);
                 else setCustomers([]);
-            });
+            } catch {
+                if (!cancelled) setCustomers([]);
+            } finally {
+                if (!cancelled) setCustomersLoading(false);
+            }
+        })();
         return () => {
             cancelled = true;
         };
@@ -316,7 +333,7 @@ function VentasContent() {
         setSaving(true);
         const supabase = createClient();
 
-        const budgetData = {
+        const budgetDataBase = {
             customer_name: clientName,
             customer_rif: clientRif,
             customer_id: customerId || null,
@@ -338,16 +355,16 @@ function VentasContent() {
             margin_pct: marginPct,
             notes: notes,
             show_zelle: showZelle,
-            status: 'pendiente'
         };
 
         let res;
         if (budgetId) {
             res = await supabase
                 .from('budgets')
-                .update(budgetData)
+                .update(budgetDataBase)
                 .eq('id', budgetId);
         } else {
+            const budgetData = { ...budgetDataBase, status: 'no_enviado' };
             res = await supabase
                 .from('budgets')
                 .insert([budgetData])

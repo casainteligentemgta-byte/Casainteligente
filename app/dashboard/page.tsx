@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import SimularLiquidacionConstruccion from '@/components/dashboard/SimularLiquidacionConstruccion';
 import { createClient } from '@/lib/supabase/server';
 
@@ -14,7 +13,7 @@ type ResultadoConteo = {
  */
 async function contar(tabla: string): Promise<ResultadoConteo> {
   try {
-    const supabase = createClient(cookies());
+    const supabase = await createClient();
     const { count, error } = await supabase
       .from(tabla)
       .select('id', { count: 'exact', head: true });
@@ -80,6 +79,7 @@ export default async function DashboardPage() {
     { label: 'Clientes', href: '/clientes', desc: 'Personas y empresas' },
     { label: 'Productos', href: '/productos', desc: 'Catálogo y precios' },
     { label: 'Ventas', href: '/ventas', desc: 'Nuevas ventas y listado' },
+    { label: 'Proyectos', href: '/proyectos/modulo', desc: 'Modulo integral con visitas' },
   ];
 
   return (
@@ -108,7 +108,7 @@ export default async function DashboardPage() {
             padding: '0.5rem 1rem',
             background: 'var(--surface)',
             borderRadius: '8px',
-            border: '1px solid var(--border)',
+            border: '1px solid hsl(var(--border))',
             color: 'inherit',
             textDecoration: 'none',
             fontSize: '0.9rem',
@@ -181,7 +181,7 @@ export default async function DashboardPage() {
                 padding: '1rem',
                 background: 'var(--surface)',
                 borderRadius: '8px',
-                border: '1px solid var(--border)',
+                border: '1px solid hsl(var(--border))',
                 textDecoration: 'none',
                 color: 'inherit',
               }}
@@ -219,7 +219,7 @@ export default async function DashboardPage() {
                   padding: '0.75rem 1rem',
                   background: 'var(--surface)',
                   borderRadius: '8px',
-                  border: '1px solid var(--border)',
+                  border: '1px solid hsl(var(--border))',
                   color: 'inherit',
                   textDecoration: 'none',
                 }}
