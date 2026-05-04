@@ -18,7 +18,7 @@ export async function POST(_req: Request, context: { params: { id: string } }) {
 
   const { data: row, error: sel } = await sb.client
     .from('ci_contratos_empleado_obra')
-    .select('id, estado_contrato')
+    .select('id, estado_contrato, obrero_aceptacion_contrato_at')
     .eq('id', id)
     .maybeSingle();
 
@@ -27,15 +27,27 @@ export async function POST(_req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: sel.message }, { status: 500 });
   }
 
-  const r = row as { id: string; estado_contrato?: string | null } | null;
+  const r = row as {
+    id: string;
+    estado_contrato?: string | null;
+    obrero_aceptacion_contrato_at?: string | null;
+  } | null;
   if (!r) {
     return NextResponse.json({ error: 'Contrato no encontrado' }, { status: 404 });
   }
 
   const estado = (r.estado_contrato ?? '').trim();
-  if (estado !== 'firmado_electronico') {
+  const aceptObrero = r.obrero_aceptacion_contrato_at != null;
+  const listoParaFirmaFisica = estado === 'firmado_electronico' || (estado === 'generado' && aceptObrero);
+  if (!listoParaFirmaFisica) {
     return NextResponse.json(
-      { error: `El contrato no está pendiente de firma física (estado actual: ${estado || '—'}).` },
+      {
+        error: `El contrato no está listo para confirmar firma física (estado: ${estado || '—'}). ${
+          estado === 'generado' && !aceptObrero
+            ? 'El obrero debe aceptar el contrato en la web antes de imprimir y firmar en físico.'
+            : ''
+        }`.trim(),
+      },
       { status: 409 },
     );
   }

@@ -17,6 +17,18 @@ type SitioResuelto = {
   ubicacion: string | null;
 };
 
+function trimBase(u: string): string {
+  return u.trim().replace(/\/$/, '');
+}
+
+function publicBaseFromPostReq(req: Request): string {
+  const origin = trimBase(req.headers.get('origin') ?? '');
+  if (origin && /^https?:\/\//i.test(origin)) return origin;
+  const env = trimBase(process.env.NEXT_PUBLIC_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '');
+  if (env && /^https?:\/\//i.test(env)) return env;
+  return '';
+}
+
 async function resolverSitioObraOProyecto(supabase: SupabaseClient, sitioId: string): Promise<SitioResuelto | null> {
   const { data: ob } = await supabase.from('ci_obras').select('nombre,ubicacion').eq('id', sitioId).maybeSingle();
   if (ob) {
@@ -205,9 +217,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudo crear el contrato' }, { status: 500 });
     }
 
+    const { data: tr } = await supabase.from('ci_empleados').select('token_registro').eq('id', empId).maybeSingle();
+    const regTok = String((tr as { token_registro?: string | null } | null)?.token_registro ?? '').trim();
+    const base = publicBaseFromPostReq(req);
+    const contrato_portal_obrero_url =
+      base && regTok ? `${base}/registro/contrato-laboral/${ctr.id}?token=${encodeURIComponent(regTok)}` : null;
+
     return NextResponse.json({
       id: ctr.id,
       texto_legal: texto,
+      contrato_portal_obrero_url,
       laboral: {
         ...laboralInsert,
         salario_basico_diario_ves: salarioVes,

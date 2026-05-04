@@ -436,6 +436,22 @@ function ExamenTalentoPageInner() {
           {resultado.motivo && (
             <p className="text-zinc-400 text-sm mt-4 max-w-md mx-auto leading-relaxed">{resultado.motivo}</p>
           )}
+          {resultado.estado === 'aprobado' ? (
+            <div className="mt-8 max-w-lg mx-auto rounded-xl border border-emerald-600/30 bg-emerald-950/20 px-4 py-4 text-left">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300/90">Contrato laboral</p>
+              <p className="mt-2 text-sm text-zinc-300 leading-relaxed">
+                Con evaluación favorable, el siguiente paso es el <strong className="text-white">contrato de trabajo</strong>:
+                RRHH lo generará en el sistema y te compartirá un enlace para revisarlo en PDF,{' '}
+                <strong className="text-white">aceptarlo de forma electrónica</strong> y luego{' '}
+                <strong className="text-white">imprimirlo y firmarlo en físico</strong> (firma autógrafa y huella), según
+                las instrucciones del equipo.
+              </p>
+              <p className="mt-2 text-[11px] text-zinc-500">
+                Ruta pública (cuando te envíen el enlace):{' '}
+                <code className="text-zinc-400">/registro/contrato-laboral/[id]?token=…</code>
+              </p>
+            </div>
+          ) : null}
           <Link href="/talento" className="mt-8 inline-block text-sky-400 text-sm hover:underline">
             Volver al hub
           </Link>
