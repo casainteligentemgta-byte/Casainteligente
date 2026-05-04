@@ -48,6 +48,9 @@ export type GacetaPostulacionFormState = {
   instruccionTecnica: boolean;
   instruccionSuperior: boolean;
   profesionActual: string;
+  /** Actividad gremial / sindical (planilla Gaceta). */
+  sindicatoOrganizacion: string;
+  sindicatoCargo: string;
   antecedentes: AntecedentesPenalesPostulacion;
   examenMedico: boolean;
   tipoSangre: string;
@@ -96,6 +99,8 @@ export function initialGacetaPostulacionForm(): GacetaPostulacionFormState {
     instruccionTecnica: false,
     instruccionSuperior: false,
     profesionActual: '',
+    sindicatoOrganizacion: '',
+    sindicatoCargo: '',
     antecedentes: { tiene: '', expedidoPor: '', lugar: '', fechaExpedicion: '' },
     examenMedico: false,
     tipoSangre: '',
@@ -108,6 +113,6 @@ export function initialGacetaPostulacionForm(): GacetaPostulacionFormState {
     tallaBragas: '',
     tallaBotas: '',
     familiares: [emptyFamiliarPostulacion()],
-    experiencia: [emptyExperienciaPostulacion()],
+    experiencia: [emptyExperienciaPostulacion(), emptyExperienciaPostulacion()],
   };
 }

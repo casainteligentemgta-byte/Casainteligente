@@ -18,7 +18,10 @@ type ObraRow = {
   fecha_inicio: string | null;
   fecha_entrega_prometida: string;
   notas: string | null;
+  entidad_id?: string | null;
 };
+
+type EntidadOpt = { id: string; nombre: string; rif: string | null };
 
 export default function EditarObraTalentoPage({ params }: { params: { proyectoId: string } }) {
   const id = String(params?.proyectoId ?? '').trim();
@@ -38,6 +41,15 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaEntrega, setFechaEntrega] = useState('');
   const [notas, setNotas] = useState('');
+  const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
+  const [entidadId, setEntidadId] = useState('');
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+      setEntidades((data ?? []) as EntidadOpt[]);
+    })();
+  }, [supabase]);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -71,6 +83,7 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
       r.fecha_entrega_prometida ? String(r.fecha_entrega_prometida).slice(0, 10) : '',
     );
     setNotas((r.notas ?? '').trim());
+    setEntidadId(r.entidad_id ? String(r.entidad_id) : '');
   }, [supabase, id]);
 
   useEffect(() => {
@@ -82,6 +95,10 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
     const n = nombre.trim();
     if (!n || !fechaEntrega) {
       setError('Nombre y fecha de entrega son obligatorios.');
+      return;
+    }
+    if (!entidadId.trim()) {
+      setError('Selecciona el patrono / empresa ejecutora.');
       return;
     }
     setSaving(true);
@@ -104,6 +121,7 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
         fecha_inicio: fechaInicio.trim() || null,
         fecha_entrega_prometida: fechaEntrega,
         notas: notas.trim() || null,
+        entidad_id: entidadId.trim(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -165,6 +183,29 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
             <div>
               <label className={labelClass}>Ubicación</label>
               <input value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Patrono / empresa ejecutora *</label>
+              <p className="mt-0.5 text-[11px] text-zinc-500">
+                <Link href="/configuracion/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
+                  Gestionar entidades
+                </Link>
+              </p>
+              <select
+                required
+                value={entidadId}
+                onChange={(e) => setEntidadId(e.target.value)}
+                className={fieldClass}
+                style={{ colorScheme: 'dark' }}
+              >
+                <option value="">— Selecciona patrono —</option>
+                {entidades.map((en) => (
+                  <option key={en.id} value={en.id} className="bg-zinc-900">
+                    {en.nombre}
+                    {en.rif ? ` · ${en.rif}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className={labelClass}>Cliente (texto)</label>

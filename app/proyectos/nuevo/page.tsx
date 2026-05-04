@@ -179,6 +179,36 @@ function ProyectoNuevoPageContent() {
     [budgets, budgetId],
   );
 
+  type EntidadOpt = { id: string; nombre: string; rif: string | null };
+  const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
+  const [entidadId, setEntidadId] = useState('');
+  const [entidadesHint, setEntidadesHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data, error: entErr } = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+        if (cancelled) return;
+        if (entErr) {
+          setEntidades([]);
+          setEntidadesHint('No se cargaron entidades. Revisa migración 063 en Supabase.');
+          return;
+        }
+        setEntidadesHint(null);
+        setEntidades((data ?? []) as EntidadOpt[]);
+      } catch {
+        if (!cancelled) {
+          setEntidades([]);
+          setEntidadesHint('No se pudieron cargar entidades.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
   useEffect(() => {
     let cancelled = false;
     setRefsError(null);
@@ -368,6 +398,10 @@ function ProyectoNuevoPageContent() {
       setError('La fecha de fin debe ser igual o posterior a la de inicio.');
       return;
     }
+    if (!entidadId.trim()) {
+      setError('Selecciona el patrono / empresa ejecutora del proyecto.');
+      return;
+    }
     if (!budgetId) {
       setError('Selecciona un presupuesto ya creado (número P-…).');
       return;
@@ -438,6 +472,7 @@ function ProyectoNuevoPageContent() {
       payload.notas = `Personal requerido (tabulador GOE 6.752):\n${notasPersonal}`;
     }
     payload.presupuesto_ves = presNum;
+    payload.entidad_id = entidadId.trim();
 
     const { data, error: err } = await supabase
       .from('ci_obras')
@@ -448,9 +483,11 @@ function ProyectoNuevoPageContent() {
     setLoading(false);
     if (err) {
       setError(
-        err.message.includes('presupuesto_ves') || err.message.includes('column')
-          ? `${err.message} — Ejecuta la migración 034 en Supabase (columna presupuesto_ves).`
-          : err.message,
+        err.message.includes('entidad_id')
+          ? `${err.message} — Ejecuta la migración 071_ci_obras_entidad_patrono.sql en Supabase.`
+          : err.message.includes('presupuesto_ves') || err.message.includes('column')
+            ? `${err.message} — Ejecuta la migración 034 en Supabase (columna presupuesto_ves).`
+            : err.message,
       );
       return;
     }
@@ -645,6 +682,32 @@ function ProyectoNuevoPageContent() {
               className={fieldClass}
               placeholder="Dirección o ciudad"
             />
+          </div>
+
+          <div>
+            <label className={labelClass}>Patrono / empresa ejecutora *</label>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+              Quien contrata o ejecuta la obra (razón social).{' '}
+              <Link href="/configuracion/entidades" className="font-semibold text-sky-400 hover:text-sky-300">
+                Gestionar entidades
+              </Link>
+            </p>
+            <select
+              required
+              value={entidadId}
+              onChange={(e) => setEntidadId(e.target.value)}
+              style={{ colorScheme: 'dark' }}
+              className={fieldClass}
+            >
+              <option value="">— Selecciona patrono —</option>
+              {entidades.map((en) => (
+                <option key={en.id} value={en.id} className="bg-zinc-900 text-white">
+                  {en.nombre}
+                  {en.rif ? ` · ${en.rif}` : ''}
+                </option>
+              ))}
+            </select>
+            {entidadesHint ? <p className="mt-1 text-[11px] text-amber-300/95">{entidadesHint}</p> : null}
           </div>
 
           <div ref={clienteMenuRef} className="relative">

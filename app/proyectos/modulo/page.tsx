@@ -30,6 +30,8 @@ type ProyectoRow = {
   origen: ProyectoOrigen;
   /** Filas en `ci_obra_empleados` por obra (Talento). `null` en Integral (sin tabla de cuadrilla en ese id). */
   obrerosContratados: number | null;
+  entidad_id?: string | null;
+  patrono_nombre?: string | null;
 };
 
 function customerName(r: ProyectoRow): string {
@@ -112,13 +114,13 @@ export default function ModuloProyectosPage() {
           Promise.resolve(
             supabase
               .from('ci_proyectos')
-              .select('id,nombre,estado,ubicacion_texto,moneda,monto_aproximado,customer_id,created_at')
+              .select('id,nombre,estado,ubicacion_texto,moneda,monto_aproximado,customer_id,created_at,entidad_id')
               .order('created_at', { ascending: false }),
           ),
           Promise.resolve(
             supabase
               .from('ci_obras')
-              .select('id,nombre,ubicacion,cliente,estado,created_at,precio_venta_usd')
+              .select('id,nombre,ubicacion,cliente,estado,created_at,precio_venta_usd,entidad_id')
               .order('created_at', { ascending: false }),
           ),
         ]),
@@ -128,17 +130,20 @@ export default function ModuloProyectosPage() {
 
       if (stale()) return;
 
-      let modRows: Omit<ProyectoRow, 'customer_name' | 'origen' | 'obrerosContratados'>[] = [];
+      let modRows: Omit<ProyectoRow, 'customer_name' | 'origen' | 'obrerosContratados' | 'patrono_nombre'>[] = [];
 
       if (!pRes.error) {
-        modRows = (pRes.data ?? []) as Omit<ProyectoRow, 'customer_name' | 'origen' | 'obrerosContratados'>[];
+        modRows = (pRes.data ?? []) as Omit<
+          ProyectoRow,
+          'customer_name' | 'origen' | 'obrerosContratados' | 'patrono_nombre'
+        >[];
       } else {
         const msg = pRes.error?.message ?? 'Error al leer ci_proyectos.';
         const pMin = await withTimeout(
           Promise.resolve(
             supabase
               .from('ci_proyectos')
-              .select('id,nombre,estado,created_at')
+              .select('id,nombre,estado,created_at,entidad_id')
               .order('created_at', { ascending: false }),
           ),
           22_000,
@@ -146,18 +151,19 @@ export default function ModuloProyectosPage() {
         );
         if (stale()) return;
         if (!pMin.error && pMin.data?.length) {
-          modRows = (pMin.data as Array<{ id: string; nombre: string; estado: string; created_at: string }>).map(
-            (r) => ({
-              id: r.id,
-              nombre: r.nombre ?? 'Sin nombre',
-              estado: r.estado ?? 'nuevo',
-              ubicacion_texto: '—',
-              moneda: 'USD',
-              monto_aproximado: 0,
-              customer_id: '',
-              created_at: r.created_at,
-            }),
-          );
+          modRows = (
+            pMin.data as Array<{ id: string; nombre: string; estado: string; created_at: string; entidad_id?: string | null }>
+          ).map((r) => ({
+            id: r.id,
+            nombre: r.nombre ?? 'Sin nombre',
+            estado: r.estado ?? 'nuevo',
+            ubicacion_texto: '—',
+            moneda: 'USD',
+            monto_aproximado: 0,
+            customer_id: '',
+            created_at: r.created_at,
+            entidad_id: r.entidad_id ?? null,
+          }));
           avisoIntegralMsg = `Módulo integral: ${msg} (listado mínimo: id, nombre, estado).`;
         } else {
           avisoIntegralMsg = `Módulo integral: no se pudieron cargar filas (${msg}).`;
@@ -173,6 +179,7 @@ export default function ModuloProyectosPage() {
         created_at: string;
         precio_venta_usd?: number | null;
         presupuesto_ves?: number | null;
+        entidad_id?: string | null;
       };
 
       let obrasRaw: ObraRow[] = [];
@@ -210,6 +217,7 @@ export default function ModuloProyectosPage() {
               ...o,
               precio_venta_usd: null,
               presupuesto_ves: null,
+              entidad_id: null,
             }));
             avisoObrasMsg = `Obras (Talento): ${msg} (sin columna de monto en esta base).`;
           } else {
@@ -234,11 +242,36 @@ export default function ModuloProyectosPage() {
         );
       }
 
+      const entidadIds = Array.from(
+        new Set(
+          [
+            ...modRows.map((r) => String(r.entidad_id ?? '').trim()),
+            ...obrasRaw.map((o) => String(o.entidad_id ?? '').trim()),
+          ].filter(Boolean),
+        ),
+      );
+      let patronoPorId: Record<string, string> = {};
+      if (entidadIds.length > 0) {
+        const { data: entRows } = await withTimeout(
+          Promise.resolve(supabase.from('ci_entidades').select('id,nombre').in('id', entidadIds)),
+          22_000,
+          'Entidades (patronos)',
+        );
+        if (stale()) return;
+        patronoPorId = Object.fromEntries(
+          ((entRows ?? []) as { id: string; nombre: string | null }[]).map((e) => [
+            e.id,
+            (e.nombre ?? '').trim() || 'Sin nombre',
+          ]),
+        );
+      }
+
       const desdeModulo: ProyectoRow[] = modRows.map((r) => ({
         ...r,
         origen: 'modulo' as const,
         customer_name: byId[r.customer_id] || null,
         obrerosContratados: null,
+        patrono_nombre: r.entidad_id ? patronoPorId[String(r.entidad_id)] ?? null : null,
       }));
 
       const obraIds = obrasRaw.map((o) => o.id);
@@ -261,6 +294,8 @@ export default function ModuloProyectosPage() {
         customer_name: (o.cliente ?? '').trim() || null,
         origen: 'obra_talento' as const,
         obrerosContratados: porObra[o.id] ?? 0,
+        entidad_id: o.entidad_id ?? null,
+        patrono_nombre: o.entidad_id ? patronoPorId[String(o.entidad_id)] ?? null : null,
       }));
 
       const merged = [...desdeModulo, ...desdeObra].sort((a, b) => {
@@ -309,7 +344,8 @@ export default function ModuloProyectosPage() {
     return items.filter((r) => {
       const nom = (r.nombre ?? '').toLowerCase();
       const ubi = (r.ubicacion_texto ?? '').toLowerCase();
-      return nom.includes(n) || ubi.includes(n) || customerName(r).toLowerCase().includes(n);
+      const pat = (r.patrono_nombre ?? '').toLowerCase();
+    return nom.includes(n) || ubi.includes(n) || customerName(r).toLowerCase().includes(n) || pat.includes(n);
     });
   }, [items, q]);
 
@@ -383,7 +419,7 @@ export default function ModuloProyectosPage() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por proyecto, cliente o ubicación…"
+            placeholder="Buscar por proyecto, cliente, patrono o ubicación…"
             style={moduloProyectosInput}
           />
         </div>
@@ -435,6 +471,12 @@ export default function ModuloProyectosPage() {
                         <h2 style={{ color: 'white', fontSize: '17px', fontWeight: 700, margin: 0 }}>{r.nombre}</h2>
                         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', marginTop: '6px', marginBottom: 0 }}>
                           {customerName(r)}
+                        </p>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
+                          Patrono:{' '}
+                          <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.82)' }}>
+                            {r.patrono_nombre?.trim() || 'No asignado'}
+                          </span>
                         </p>
                         <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
                           {r.ubicacion_texto}

@@ -13,6 +13,10 @@ import {
   initialGacetaPostulacionForm,
   type GacetaPostulacionFormState,
 } from '@/lib/registro/gacetaPostulacionTypes';
+import {
+  captacionFormJsonSchema,
+  captacionStep4Schema,
+} from '@/lib/registro/captacionPlanillaSchema';
 import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
 import { createClient } from '@/lib/supabase/client';
 
@@ -24,7 +28,8 @@ const inputClass =
   'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-[#FF9500] focus:ring-1 focus:ring-[#FF9500]/40';
 const labelClass = 'block text-[10px] font-bold uppercase tracking-wide text-zinc-500';
 
-const STEPS = ['Personal', 'Educación', 'Salud y medidas', 'Familiares', 'Experiencia', 'Firma digital'] as const;
+const STEPS_FULL = ['Personal', 'Educación', 'Salud y medidas', 'Familiares', 'Experiencia', 'Firma digital'] as const;
+const STEPS_CAPTACION = ['Personal', 'Educación', 'Salud y medidas', 'Familiares', 'Experiencia'] as const;
 
 type NeedLoaded = {
   id: string;
@@ -47,9 +52,21 @@ function parseOptionalNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
+export default function RegistroPorNeedCliente({
+  needId: needIdProp,
+  captacionToken: captacionTokenProp,
+}: {
+  needId?: string;
+  captacionToken?: string;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
+
+  const needId = (needIdProp ?? '').trim();
+  const captacionToken = (captacionTokenProp ?? '').trim();
+  const captacionMode = Boolean(captacionToken);
+  const STEP_LABELS = useMemo(() => (captacionMode ? STEPS_CAPTACION : STEPS_FULL), [captacionMode]);
+  const lastStepIndex = STEP_LABELS.length - 1;
 
   const [metaPhase, setMetaPhase] = useState<'loading' | 'ready' | 'closed' | 'error'>('loading');
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -67,10 +84,54 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
   }, [need]);
 
   useEffect(() => {
+    if (!needId && !captacionToken) {
+      setMetaPhase('error');
+      setMetaError('Enlace de registro no válido.');
+      return;
+    }
+
     let alive = true;
     (async () => {
       setMetaPhase('loading');
       setMetaError(null);
+
+      if (captacionToken) {
+        const res = await fetch(`/api/reclutamiento/captacion-meta?token=${encodeURIComponent(captacionToken)}`, {
+          cache: 'no-store',
+        });
+        const j = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          need?: NeedLoaded;
+          proyectoNombre?: string;
+        };
+        if (!alive) return;
+        if (!res.ok) {
+          if (res.status === 410) {
+            setMetaPhase('closed');
+            setMetaError(null);
+            return;
+          }
+          setMetaPhase('error');
+          setMetaError(j.message ?? j.error ?? 'No se pudo validar el enlace.');
+          return;
+        }
+        if (!j.need) {
+          setMetaPhase('error');
+          setMetaError('Respuesta inválida del servidor.');
+          return;
+        }
+        setNeed(j.need);
+        if (j.need.protocol_active === false) {
+          setMetaPhase('closed');
+          return;
+        }
+        setProyectoNombre((j.proyectoNombre ?? '').trim());
+        setMetaPhase('ready');
+        return;
+      }
+
       const { data: row, error } = await supabase
         .from('recruitment_needs')
         .select('id,title,cargo_nombre,cargo_codigo,cargo_nivel,tipo_vacante,protocol_active,proyecto_modulo_id')
@@ -103,7 +164,7 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
     return () => {
       alive = false;
     };
-  }, [needId, supabase]);
+  }, [needId, captacionToken, supabase]);
 
   const setF = useCallback(<K extends keyof GacetaPostulacionFormState>(key: K, value: GacetaPostulacionFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -124,14 +185,14 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
     if (i === 2) {
       if (!form.antecedentes.tiene) return 'Indica si tiene antecedentes penales (sí / no).';
     }
-    if (i === 5) {
+    if (i === 5 && !captacionMode) {
       if (!firma) return 'Dibuja y pulsa «Guardar firma» antes de enviar la postulación.';
     }
     return null;
   }
 
   async function onSubmit() {
-    for (let s = 0; s < STEPS.length; s++) {
+    for (let s = 0; s < STEP_LABELS.length; s++) {
       const err = validarPaso(s);
       if (err) {
         toast.error(err);
@@ -140,15 +201,33 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
       }
     }
 
+    if (captacionMode) {
+      const p4 = captacionStep4Schema.safeParse({ familiares: form.familiares, experiencia: form.experiencia });
+      if (!p4.success) {
+        const msg = p4.error.flatten().formErrors[0] ?? 'Revisa familiares y al menos dos empleos anteriores.';
+        toast.error(msg);
+        setStep(3);
+        return;
+      }
+      const { fotoPerfilFile: _fp, fotoCedulaFile: _fc, ...formJson } = form;
+      const parsed = captacionFormJsonSchema.safeParse(formJson);
+      if (!parsed.success) {
+        toast.error('Revisa los datos del formulario antes de enviar.');
+        setStep(0);
+        return;
+      }
+    }
+
     if (!need) return;
     setEnviando(true);
     try {
+      const needRowId = need.id;
       const stagingId = crypto.randomUUID();
       let fotoPerfil = '';
       let fotoCedula = '';
       if (form.fotoPerfilFile) {
         const up = await uploadTalentoPublicFile(supabase, {
-          needId,
+          needId: needRowId,
           stagingId,
           kind: 'perfil',
           file: form.fotoPerfilFile,
@@ -161,7 +240,7 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
       }
       if (form.fotoCedulaFile) {
         const up = await uploadTalentoPublicFile(supabase, {
-          needId,
+          needId: needRowId,
           stagingId,
           kind: 'cedula',
           file: form.fotoCedulaFile,
@@ -171,6 +250,37 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
           return;
         }
         fotoCedula = up.publicUrl;
+      }
+
+      if (captacionMode) {
+        const res = await fetch('/api/reclutamiento/captacion-completar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: captacionToken,
+            form: {
+              ...form,
+              fotoPerfilFile: undefined,
+              fotoCedulaFile: undefined,
+            },
+            fotoPerfilUrl: fotoPerfil,
+            fotoCedulaUrl: fotoCedula,
+            firma: firma
+              ? { dataUrl: firma.dataUrl, eventId: firma.eventId, capturedAtIso: firma.capturedAtIso }
+              : undefined,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { error?: string; hint?: string; empleadoId?: string };
+        if (!res.ok) {
+          toast.error(body.error ?? 'No se pudo completar la captación automática.');
+          if (body.hint) toast.message(String(body.hint));
+          return;
+        }
+        toast.success('Planilla enviada. PDF generado; pendiente de firma / revisión.');
+        router.push(
+          `/registro/exito?empleadoId=${encodeURIComponent(body.empleadoId ?? '')}&cedula=${encodeURIComponent(form.cedula.trim())}`,
+        );
+        return;
       }
 
       const hoja = buildHojaVidaFromGacetaForm(form, { fotoPerfil, fotoCedula: fotoCedula }, cargoEtiqueta);
@@ -205,7 +315,7 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
       const est = parseOptionalNum(form.estatura);
 
       const insertPayload: Record<string, unknown> = {
-        recruitment_need_id: needId,
+        recruitment_need_id: needRowId,
         proyecto_modulo_id: need.proyecto_modulo_id,
         cargo_codigo: need.cargo_codigo,
         cargo_nombre: need.cargo_nombre,
@@ -273,12 +383,16 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
         return;
       }
 
-      const { data: cur } = await supabase.from('recruitment_needs').select('conteo_postulaciones').eq('id', needId).maybeSingle();
+      const { data: cur } = await supabase
+        .from('recruitment_needs')
+        .select('conteo_postulaciones')
+        .eq('id', needRowId)
+        .maybeSingle();
       const prev = (cur as { conteo_postulaciones?: number } | null)?.conteo_postulaciones ?? 0;
       const { error: upNeed } = await supabase
         .from('recruitment_needs')
         .update({ conteo_postulaciones: prev + 1 })
-        .eq('id', needId);
+        .eq('id', needRowId);
       if (upNeed) {
         toast.message('Postulación guardada; no se pudo actualizar el contador de la vacante.', { description: upNeed.message });
       } else {
@@ -370,7 +484,7 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
         </header>
 
         <nav className="mt-6 flex gap-1 overflow-x-auto pb-1" aria-label="Pasos">
-          {STEPS.map((t, i) => (
+          {STEP_LABELS.map((t, i) => (
             <button
               key={t}
               type="button"
@@ -524,6 +638,24 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
               <div>
                 <label className={labelClass}>Profesión u oficio actual</label>
                 <input className={inputClass} value={form.profesionActual} onChange={(e) => setF('profesionActual', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>Federación, sindicato o gremio</label>
+                <input
+                  className={inputClass}
+                  value={form.sindicatoOrganizacion}
+                  onChange={(e) => setF('sindicatoOrganizacion', e.target.value)}
+                  placeholder="Si no aplica, dejar en blanco"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Cargo en la organización gremial</label>
+                <input
+                  className={inputClass}
+                  value={form.sindicatoCargo}
+                  onChange={(e) => setF('sindicatoCargo', e.target.value)}
+                  placeholder="Si no aplica, dejar en blanco"
+                />
               </div>
             </div>
           )}
@@ -840,7 +972,7 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 5 && !captacionMode && (
             <div className="space-y-3">
               <h2 className="text-sm font-bold text-white">Firma digital (planilla legal)</h2>
               <p className="text-xs text-zinc-500">
@@ -864,7 +996,7 @@ export default function RegistroPorNeedCliente({ needId }: { needId: string }) {
           ) : (
             <span className="flex-1 min-[400px]:flex-none" />
           )}
-          {step < STEPS.length - 1 ? (
+          {step < lastStepIndex ? (
             <button
               type="button"
               onClick={() => {

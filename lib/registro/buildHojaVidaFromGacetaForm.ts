@@ -52,8 +52,8 @@ export function buildHojaVidaFromGacetaForm(
       profesionUOficioActual: f.profesionActual.trim(),
     },
     actividadGremial: {
-      federacionSindicatoGremio: '',
-      cargoQueEjerce: '',
+      federacionSindicatoGremio: f.sindicatoOrganizacion.trim(),
+      cargoQueEjerce: f.sindicatoCargo.trim(),
     },
     antecedentesMedicos: {
       examenMedicoPrevio: f.examenMedico ? 'si' : 'no',

@@ -126,8 +126,11 @@ export default function NuevoProyectoModuloPage() {
   const [obs, setObs] = useState('');
   const [clienteMenuOpen, setClienteMenuOpen] = useState(false);
   const [presupuestoMenuOpen, setPresupuestoMenuOpen] = useState(false);
+  const [adicionalMenuOpen, setAdicionalMenuOpen] = useState(false);
   const clienteMenuRef = useRef<HTMLDivElement | null>(null);
   const presupuestoMenuRef = useRef<HTMLDivElement | null>(null);
+  const adicionalMenuRef = useRef<HTMLDivElement | null>(null);
+  const [budgetIdsAdicionales, setBudgetIdsAdicionales] = useState<string[]>([]);
   /** Evita carrera con React Strict Mode: el `finally` solo apaga loading si esta sigue siendo la carga vigente. */
   const clientesCargaIdRef = useRef(0);
   const [mapReady, setMapReady] = useState(false);
@@ -146,7 +149,7 @@ export default function NuevoProyectoModuloPage() {
         if (cancelled) return;
         if (entErr) {
           setEntidades([]);
-          setEntidadesHint('No se cargaron entidades (¿migración 063?). Puedes guardar el proyecto sin entidad.');
+          setEntidadesHint('No se cargaron entidades (¿migración 063?). Crea una en Configuración → Entidades antes de guardar.');
           return;
         }
         setEntidadesHint(null);
@@ -169,17 +172,19 @@ export default function NuevoProyectoModuloPage() {
   }, []);
 
   useEffect(() => {
-    if (!clienteMenuOpen && !presupuestoMenuOpen) return;
+    if (!clienteMenuOpen && !presupuestoMenuOpen && !adicionalMenuOpen) return;
     const close = (e: MouseEvent) => {
       const t = e.target as Node;
       if (clienteMenuRef.current?.contains(t)) return;
       if (presupuestoMenuRef.current?.contains(t)) return;
+      if (adicionalMenuRef.current?.contains(t)) return;
       setClienteMenuOpen(false);
       setPresupuestoMenuOpen(false);
+      setAdicionalMenuOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
-  }, [clienteMenuOpen, presupuestoMenuOpen]);
+  }, [clienteMenuOpen, presupuestoMenuOpen, adicionalMenuOpen]);
 
   useEffect(() => {
     const cargaId = ++clientesCargaIdRef.current;
@@ -419,30 +424,70 @@ export default function NuevoProyectoModuloPage() {
   useEffect(() => {
     if (!customerId) {
       setBudgetId('');
+      setBudgetIdsAdicionales([]);
       return;
     }
     if (budgetId && !budgetsCliente.some((b) => b.id === budgetId)) {
       setBudgetId('');
     }
+    setBudgetIdsAdicionales((prev) => prev.filter((id) => budgetsCliente.some((b) => b.id === id)));
   }, [customerId, budgetId, budgetsCliente]);
 
+  /** Suma subtotales USD del presupuesto principal + adicionales para rellenar el monto del proyecto. */
   useEffect(() => {
-    if (!budgetId) return;
-    const row = budgetsCliente.find((x) => x.id === budgetId);
-    const st = subtotalPresupuestoUSD(row);
-    if (st == null) {
+    const parts = [budgetId, ...budgetIdsAdicionales].filter(Boolean);
+    if (parts.length === 0) {
       setMonto('');
       return;
     }
-    setMonto(String(st));
-  }, [budgetId, budgetsCliente]);
+    let sum = 0;
+    let count = 0;
+    for (const id of parts) {
+      const st = subtotalPresupuestoUSD(budgetsCliente.find((b) => b.id === id));
+      if (st != null) {
+        sum += st;
+        count += 1;
+      }
+    }
+    if (count > 0) setMonto(String(sum));
+  }, [budgetId, budgetIdsAdicionales, budgetsCliente]);
 
   const cerrarPresupuestoMenu = useCallback(() => setPresupuestoMenuOpen(false), []);
+  const cerrarAdicionalMenu = useCallback(() => setAdicionalMenuOpen(false), []);
+
+  const presupuestosDisponiblesParaAdicional = useMemo(
+    () =>
+      budgetsCliente.filter((b) => b.id !== budgetId && !budgetIdsAdicionales.includes(b.id)),
+    [budgetsCliente, budgetId, budgetIdsAdicionales],
+  );
+
+  function sumaSubtotalesSeleccionados(): number | null {
+    const parts = [budgetId, ...budgetIdsAdicionales].filter(Boolean);
+    if (parts.length === 0) return null;
+    let sum = 0;
+    let any = false;
+    for (const id of parts) {
+      const st = subtotalPresupuestoUSD(budgetsCliente.find((b) => b.id === id));
+      if (st != null) {
+        sum += st;
+        any = true;
+      }
+    }
+    return any ? sum : null;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!customerId || !nombre.trim() || !ubicacion.trim()) {
       setError('Cliente, nombre y ubicación son obligatorios.');
+      return;
+    }
+    if (!entidadId.trim()) {
+      setError('Selecciona la entidad de trabajo (patrono / empresa que ejecuta el proyecto).');
+      return;
+    }
+    if (!budgetId.trim()) {
+      setError('Selecciona el presupuesto principal del cliente (número P-…).');
       return;
     }
     setSaving(true);
@@ -457,14 +502,19 @@ export default function NuevoProyectoModuloPage() {
       return;
     }
     const montoParsed = monto.trim().replace(',', '.');
-    const manual =
+    const montoNum =
       montoParsed !== '' && Number.isFinite(Number(montoParsed)) ? Number(montoParsed) : null;
-    const porPresupuesto = budgetId ? subtotalPresupuestoUSD(budgetsCliente.find((b) => b.id === budgetId)) : null;
-    const montoFinal = manual ?? porPresupuesto ?? 0;
+    if (montoNum == null || montoNum < 0 || !Number.isFinite(montoNum)) {
+      setSaving(false);
+      setError('Indica el monto del proyecto (USD), un número válido mayor o igual que 0.');
+      return;
+    }
+    const montoFinal = montoNum;
 
     const payload: Record<string, unknown> = {
       customer_id: customerId,
-      budget_id: budgetId || null,
+      budget_id: budgetId,
+      budgets_adicionales: budgetIdsAdicionales,
       entidad_id: entidadId.trim() || null,
       nombre: nombre.trim(),
       estado,
@@ -478,7 +528,11 @@ export default function NuevoProyectoModuloPage() {
     const { data, error: insErr } = await supabase.from('ci_proyectos').insert(payload).select('id').single();
     setSaving(false);
     if (insErr) {
-      setError(insErr.message);
+      setError(
+        insErr.message.includes('budgets_adicionales')
+          ? `${insErr.message} — Ejecuta en Supabase la migración 072_ci_proyectos_budgets_adicionales.sql.`
+          : insErr.message,
+      );
       return;
     }
     setOkId((data as { id: string }).id);
@@ -496,8 +550,8 @@ export default function NuevoProyectoModuloPage() {
     }
     if (!budgetId || !presupuestoSeleccionado) {
       return {
-        titulo: loadingBudgetsCliente ? 'Cargando presupuestos…' : 'Presupuesto',
-        subtitulo: loadingBudgetsCliente ? null : 'Toca para elegir · opcional',
+        titulo: loadingBudgetsCliente ? 'Cargando presupuestos…' : 'Presupuesto principal',
+        subtitulo: loadingBudgetsCliente ? null : 'Obligatorio · toca para elegir P-…',
         disabled: loadingRefs || loadingBudgetsCliente,
       };
     }
@@ -529,7 +583,7 @@ export default function NuevoProyectoModuloPage() {
           className="space-y-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-6 shadow-lg backdrop-blur-xl"
         >
           <div ref={clienteMenuRef} className="relative">
-            <label className={labelClass}>Cliente *</label>
+            <label className={labelClass}>Cliente (lista CRM) *</label>
             <button
               type="button"
               disabled={loadingRefs}
@@ -541,7 +595,7 @@ export default function NuevoProyectoModuloPage() {
                   ? 'Cargando clientes...'
                   : clienteSeleccionado
                     ? `${etiquetaCliente(clienteSeleccionado)}${rifCliente(clienteSeleccionado) ? ` · ${rifCliente(clienteSeleccionado)}` : ''}`
-                    : 'Selecciona un cliente del registro…'}
+                    : 'Elige un cliente de la lista…'}
               </span>
               <span className="shrink-0 text-zinc-500" aria-hidden>
                 {clienteMenuOpen ? '▲' : '▼'}
@@ -587,9 +641,10 @@ export default function NuevoProyectoModuloPage() {
                       setCustomerId('');
                       setClienteMenuOpen(false);
                       setPresupuestoMenuOpen(false);
+                      setAdicionalMenuOpen(false);
                     }}
                   >
-                    — Sin seleccionar —
+                    — Volver a elegir cliente —
                   </button>
                 </li>
                 {customers.map((c) => {
@@ -606,6 +661,7 @@ export default function NuevoProyectoModuloPage() {
                           setCustomerId(c.id);
                           setClienteMenuOpen(false);
                           setPresupuestoMenuOpen(false);
+                          setAdicionalMenuOpen(false);
                         }}
                       >
                         {label}
@@ -618,20 +674,21 @@ export default function NuevoProyectoModuloPage() {
           </div>
 
           <div>
-            <label className={labelClass}>Entidad de trabajo (patrono)</label>
+            <label className={labelClass}>Patrono / empresa ejecutora *</label>
             <p className="mb-1 text-[11px] text-zinc-500">
-              Razón social y RIF para planillas.{' '}
+              Razón social para planillas y contratos.{' '}
               <Link href="/configuracion/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
                 Gestionar entidades
               </Link>
             </p>
             <select
+              required
               className={fieldClass}
               value={entidadId}
               onChange={(e) => setEntidadId(e.target.value)}
               style={{ colorScheme: 'dark' }}
             >
-              <option value="">— Sin entidad —</option>
+              <option value="">— Selecciona patrono —</option>
               {entidades.map((en) => (
                 <option key={en.id} value={en.id}>
                   {en.nombre}
@@ -643,13 +700,21 @@ export default function NuevoProyectoModuloPage() {
           </div>
 
           <div ref={presupuestoMenuRef} className="relative">
-            <label className={labelClass}>Presupuesto del cliente</label>
+            <label className={labelClass}>Presupuesto principal *</label>
+            <p className="mb-1 text-[11px] leading-relaxed text-zinc-500">
+              Debe ser un presupuesto del cliente elegido. Crear o revisar en{' '}
+              <Link href="/presupuestos" className="font-semibold text-sky-400 underline hover:text-sky-300">
+                Presupuestos
+              </Link>
+              .
+            </p>
             <button
               type="button"
               disabled={presupuestoBotonResumen.disabled}
               onClick={() => {
                 if (!customerId) return;
                 setPresupuestoMenuOpen((o) => !o);
+                setAdicionalMenuOpen(false);
               }}
               className={menuButtonClass}
             >
@@ -670,18 +735,6 @@ export default function NuevoProyectoModuloPage() {
                 className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-white/10 bg-zinc-900 py-1 shadow-xl"
                 role="listbox"
               >
-                <li>
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2.5 text-left text-sm text-zinc-500 hover:bg-white/5"
-                    onClick={() => {
-                      setBudgetId('');
-                      cerrarPresupuestoMenu();
-                    }}
-                  >
-                    Sin presupuesto asociado
-                  </button>
-                </li>
                 {budgetsCliente.map((b) => {
                   const active = b.id === budgetId;
                   const st = subtotalPresupuestoUSD(b);
@@ -695,6 +748,7 @@ export default function NuevoProyectoModuloPage() {
                         className={`flex w-full flex-col gap-0.5 px-3 py-2.5 text-left hover:bg-white/5 ${active ? 'bg-sky-500/15' : ''}`}
                         onClick={() => {
                           setBudgetId(b.id);
+                          setBudgetIdsAdicionales((prev) => prev.filter((x) => x !== b.id));
                           cerrarPresupuestoMenu();
                         }}
                       >
@@ -717,6 +771,107 @@ export default function NuevoProyectoModuloPage() {
                 asignado.
               </p>
             ) : null}
+
+            {budgetIdsAdicionales.length > 0 ? (
+              <ul className="mt-3 space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                <li className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Presupuestos adicionales</li>
+                {budgetIdsAdicionales.map((bid) => {
+                  const b = budgetsCliente.find((x) => x.id === bid);
+                  const st = subtotalPresupuestoUSD(b);
+                  return (
+                    <li key={bid} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="font-semibold text-white">
+                        {b ? numeroPresupuesto(b) : bid.slice(0, 8)}
+                        {st != null ? <span className="ml-2 text-sky-300/95">{formatoUSD(st)}</span> : null}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-red-300 underline decoration-red-400/50 hover:text-red-200"
+                        onClick={() => setBudgetIdsAdicionales((prev) => prev.filter((x) => x !== bid))}
+                      >
+                        Quitar
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+
+            <div ref={adicionalMenuRef} className="relative mt-3">
+              <button
+                type="button"
+                disabled={!customerId || !budgetId || loadingBudgetsCliente || presupuestosDisponiblesParaAdicional.length === 0}
+                onClick={() => {
+                  setAdicionalMenuOpen((o) => !o);
+                  setPresupuestoMenuOpen(false);
+                }}
+                className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-bold text-sky-100 transition hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                + Presupuesto adicional
+              </button>
+              {!customerId ? (
+                <p className="mt-1 text-[11px] text-zinc-500">Primero elige un cliente.</p>
+              ) : !budgetId ? (
+                <p className="mt-1 text-[11px] text-zinc-500">Elige el presupuesto principal antes de añadir otros.</p>
+              ) : presupuestosDisponiblesParaAdicional.length === 0 && budgetsCliente.length > 0 ? (
+                <p className="mt-1 text-[11px] text-zinc-500">No quedan más presupuestos de este cliente por vincular.</p>
+              ) : null}
+              {adicionalMenuOpen && customerId && budgetId ? (
+                <ul className="absolute z-30 mt-1 max-h-56 w-full max-w-md overflow-auto rounded-xl border border-white/10 bg-zinc-900 py-1 shadow-xl">
+                  {presupuestosDisponiblesParaAdicional.map((b) => {
+                    const st = subtotalPresupuestoUSD(b);
+                    const precioTxt = st != null ? formatoUSD(st) : '—';
+                    return (
+                      <li key={b.id}>
+                        <button
+                          type="button"
+                          className="flex w-full flex-col gap-0.5 px-3 py-2.5 text-left hover:bg-white/5"
+                          onClick={() => {
+                            setBudgetIdsAdicionales((prev) => [...prev, b.id]);
+                            cerrarAdicionalMenu();
+                          }}
+                        >
+                          <span className="text-sm font-bold text-white">{numeroPresupuesto(b)}</span>
+                          <span className="text-xs text-sky-300/95">{precioTxt}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+
+            <div className="mt-4">
+              <label className={labelClass}>Monto del proyecto (USD) *</label>
+              <input
+                required
+                value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+                className={fieldClass}
+                inputMode="decimal"
+                placeholder="Ej. 12500.50"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-zinc-200 hover:bg-white/15"
+                  onClick={() => {
+                    const s = sumaSubtotalesSeleccionados();
+                    if (s != null) setMonto(String(s));
+                  }}
+                >
+                  Usar suma de presupuestos seleccionados
+                </button>
+                {sumaSubtotalesSeleccionados() != null ? (
+                  <span className="text-[11px] text-zinc-500">
+                    Suma P-…: <span className="font-mono text-zinc-300">{formatoUSD(sumaSubtotalesSeleccionados()!)}</span>
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                Se rellena al elegir presupuesto(s); puedes corregir el monto manualmente antes de crear el proyecto.
+              </p>
+            </div>
           </div>
 
           <div>
@@ -762,18 +917,6 @@ export default function NuevoProyectoModuloPage() {
           <p className="text-xs text-zinc-500">
             Coordenadas GPS seleccionadas: {lat.trim() || '—'}, {lng.trim() || '—'}
           </p>
-          <div>
-            <label className={labelClass}>Monto aproximado (USD)</label>
-            <input
-              value={monto}
-              onChange={(e) => setMonto(e.target.value)}
-              className={fieldClass}
-              placeholder="Se rellena al elegir presupuesto"
-            />
-            <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-              Si eliges presupuesto, el subtotal en USD se copia aquí; puedes ajustarlo.
-            </p>
-          </div>
           <div>
             <label className={labelClass}>Observaciones</label>
             <textarea value={obs} onChange={(e) => setObs(e.target.value)} className={fieldClass} rows={2} />

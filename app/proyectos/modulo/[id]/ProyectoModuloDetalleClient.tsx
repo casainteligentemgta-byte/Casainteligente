@@ -400,6 +400,10 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       setProyectoSaveError('Nombre y ubicación son obligatorios.');
       return;
     }
+    if (!peEntidadId.trim()) {
+      setProyectoSaveError('Selecciona el patrono / empresa ejecutora.');
+      return;
+    }
     const m = Number(String(peMonto).replace(',', '.'));
     if (!Number.isFinite(m) || m < 0) {
       setProyectoSaveError('Monto aproximado no válido.');
@@ -547,6 +551,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     return `https://wa.me/${telefono}?text=${encodeURIComponent(textoKitRecoleccion)}`;
   }, [trabajadorTelefono, textoKitRecoleccion]);
 
+  const nombrePatronoVista = useMemo(() => {
+    const eid = proyecto?.entidad_id;
+    if (!eid) return null;
+    const row = entidades.find((en) => en.id === String(eid).trim());
+    return row?.nombre?.trim() || null;
+  }, [proyecto?.entidad_id, entidades]);
+
   /** Enlace directo ?tab=rrhh|talento: cabecera mínima (sin atajos duplicados al panel RRHH). */
   const tabVistaTalento = searchParams.get('tab') === 'rrhh' || searchParams.get('tab') === 'talento';
 
@@ -677,7 +688,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Entidad de trabajo (patrono)
+                    Patrono / empresa ejecutora *
                   </label>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
                     <Link href="/configuracion/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
@@ -685,12 +696,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     </Link>
                   </p>
                   <select
+                    required
                     value={peEntidadId}
                     onChange={(e) => setPeEntidadId(e.target.value)}
                     style={{ colorScheme: 'dark' }}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
                   >
-                    <option value="">— Sin entidad —</option>
+                    <option value="">— Selecciona patrono —</option>
                     {entidades.map((en) => (
                       <option key={en.id} value={en.id} className="bg-zinc-900">
                         {en.nombre}
@@ -792,6 +804,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   <div className="min-w-0 flex-1">
                     <h1 className="text-2xl font-bold text-white">{proyecto.nombre}</h1>
                     <p className="mt-1 text-sm text-zinc-400">{proyecto.ubicacion_texto}</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      Patrono:{' '}
+                      <span className="font-semibold text-zinc-200">
+                        {nombrePatronoVista ?? 'Sin asignar — Modificar proyecto'}
+                      </span>
+                    </p>
                     <p className="mt-1 text-xs text-zinc-500">
                       GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
                     </p>
@@ -1150,7 +1168,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               </>
               ) : null}
               <div ref={rrhhPanelRef} className={modoEdicion || !tabVistaTalento ? 'mt-8 space-y-4' : 'space-y-4'}>
-                <GestionRRHHLocal proyectoModuloId={id} listaRefresco={rrhhVacantesTick} />
+                <GestionRRHHLocal
+                  proyectoModuloId={id}
+                  listaRefresco={rrhhVacantesTick}
+                  nombreProyecto={proyecto?.nombre ?? null}
+                />
               </div>
             </div>
           </>

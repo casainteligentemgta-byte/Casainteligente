@@ -17,6 +17,8 @@ export type GestionRRHHLocalProps = {
   proyectoModuloId: string;
   /** Incrementar desde el padre para volver a cargar `recruitment_needs` (p. ej. tras nueva vacante). */
   listaRefresco?: number;
+  /** Nombre de la obra / proyecto (mensaje WhatsApp captación automática). */
+  nombreProyecto?: string | null;
 };
 
 type NeedRow = {
@@ -28,6 +30,7 @@ type NeedRow = {
   created_at: string;
   cantidad_requerida?: number | null;
   conteo_clics?: number | null;
+  captacion_token?: string | null;
 };
 
 function etiquetaCargo(row: NeedRow): string {
@@ -37,28 +40,16 @@ function etiquetaCargo(row: NeedRow): string {
   return t || 'Vacante';
 }
 
-function roleParam(row: NeedRow): string {
-  const cod = (row.cargo_codigo ?? '').trim();
-  if (cod) return cod;
-  return etiquetaCargo(row).slice(0, 120);
+function urlRegistroConToken(row: NeedRow): string | null {
+  const t = (row.captacion_token ?? '').trim();
+  if (!t) return null;
+  const base = publicRegistroOrigin().replace(/\/$/, '');
+  return `${base}/registro/${encodeURIComponent(t)}`;
 }
 
-/** URL pública de postulación (`/registro` resuelve la vacante y redirige a `/reclutamiento?need=`). */
-function urlRegistroPublica(proyectoModuloId: string, row: NeedRow): string {
-  const base = publicRegistroOrigin();
-  const prj = encodeURIComponent(proyectoModuloId.trim());
-  const role = encodeURIComponent(roleParam(row));
-  return `${base}/registro?prj=${prj}&role=${role}`;
-}
-
-function urlRegistroCopiar(proyectoModuloId: string, row: NeedRow): string {
-  return urlRegistroPublica(proyectoModuloId, row);
-}
-
-function mensajeWhatsApp(proyectoModuloId: string, row: NeedRow): string {
-  const cargo = etiquetaCargo(row);
-  const link = urlRegistroPublica(proyectoModuloId, row);
-  return `Hola, Casa Inteligente te invita a postularte para el cargo de ${cargo}. Completa tu perfil aquí: ${link}`;
+function mensajeCaptacionWhatsApp(cargo: string, nombreObra: string, link: string): string {
+  const obra = nombreObra.trim() || 'la obra vinculada al proyecto';
+  return `Hola, Casa Inteligente te invita a postularte para ${cargo} en la obra ${obra}. Completa tu planilla aquí: ${link}`;
 }
 
 function cantidadMostrada(row: NeedRow): number {
@@ -73,7 +64,11 @@ function clicsMostrados(row: NeedRow): number {
   return 0;
 }
 
-export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }: GestionRRHHLocalProps) {
+export default function GestionRRHHLocal({
+  proyectoModuloId,
+  listaRefresco = 0,
+  nombreProyecto = null,
+}: GestionRRHHLocalProps) {
   const supabase = useMemo(() => createClient(), []);
   const [needs, setNeeds] = useState<NeedRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +119,7 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
       const full = await supabase
         .from('recruitment_needs')
         .select(
-          'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,conteo_clics',
+          'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,conteo_clics,captacion_token',
         )
         .eq('proyecto_modulo_id', id)
         .order('created_at', { ascending: false });
@@ -140,7 +135,7 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
       const msg = full.error.message || 'No se pudieron cargar las necesidades.';
       const mid = await supabase
         .from('recruitment_needs')
-        .select('id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida')
+        .select('id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,captacion_token')
         .eq('proyecto_modulo_id', id)
         .order('created_at', { ascending: false });
 
@@ -156,7 +151,7 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
 
       const bare = await supabase
         .from('recruitment_needs')
-        .select('id,title,cargo_nombre,cargo_codigo,protocol_active,created_at')
+        .select('id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,captacion_token')
         .eq('proyecto_modulo_id', id)
         .order('created_at', { ascending: false });
 
@@ -169,6 +164,7 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
             ...r,
             cantidad_requerida: null,
             conteo_clics: null,
+            captacion_token: null,
           })),
         );
         return;
@@ -183,25 +179,69 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
     };
   }, [proyectoModuloId, supabase, listaRefresco, viewportTick]);
 
+  async function emitirCaptacionToken(row: NeedRow): Promise<{ url?: string; token?: string; error?: string }> {
+    const res = await fetch('/api/reclutamiento/captacion-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recruitment_need_id: row.id,
+        public_base_url: typeof window !== 'undefined' ? window.location.origin : '',
+      }),
+    });
+    const j = (await res.json()) as { error?: string; url?: string; token?: string; hint?: string };
+    if (!res.ok) {
+      return { error: j.hint ?? j.error ?? 'No se pudo generar el enlace de captación.' };
+    }
+    return { url: j.url, token: j.token };
+  }
+
   const abrirWhatsApp = useCallback(
-    (row: NeedRow) => {
-      const text = encodeURIComponent(mensajeWhatsApp(proyectoModuloId.trim(), row));
+    async (row: NeedRow) => {
+      let url = urlRegistroConToken(row);
+      let nuevoToken: string | undefined;
+      if (!url) {
+        const r = await emitirCaptacionToken(row);
+        if (r.error || !r.url) {
+          setError(r.error ?? 'No se pudo obtener el enlace.');
+          showToast(r.error ?? 'Error al generar enlace');
+          return;
+        }
+        url = r.url;
+        nuevoToken = r.token;
+        if (nuevoToken) {
+          setNeeds((prev) => prev.map((n) => (n.id === row.id ? { ...n, captacion_token: nuevoToken } : n)));
+        }
+      }
+      const cargo = etiquetaCargo(row);
+      const obra = (nombreProyecto ?? '').trim();
+      const text = encodeURIComponent(mensajeCaptacionWhatsApp(cargo, obra, url));
       window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
     },
-    [proyectoModuloId],
+    [nombreProyecto, showToast],
   );
 
   const copiarLink = useCallback(
     async (row: NeedRow) => {
-      const url = urlRegistroCopiar(proyectoModuloId.trim(), row);
+      let url = urlRegistroConToken(row);
+      if (!url) {
+        const r = await emitirCaptacionToken(row);
+        if (r.error || !r.url) {
+          showToast(r.error ?? 'No se pudo generar el enlace.');
+          return;
+        }
+        url = r.url;
+        if (r.token) {
+          setNeeds((prev) => prev.map((n) => (n.id === row.id ? { ...n, captacion_token: r.token } : n)));
+        }
+      }
       try {
         await navigator.clipboard.writeText(url);
-        showToast('Enlace copiado al portapapeles.');
+        showToast('Enlace de planilla copiado al portapapeles.');
       } catch {
         showToast('No se pudo copiar. Copia manualmente el enlace.');
       }
     },
-    [proyectoModuloId, showToast],
+    [showToast],
   );
 
   const pid = proyectoModuloId.trim();
