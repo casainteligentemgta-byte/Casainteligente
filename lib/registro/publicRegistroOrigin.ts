@@ -1,5 +1,7 @@
 /**
- * Origen público para enlaces `/registro?prj=&role=` (WhatsApp, copiar).
+ * Origen público para enlaces de registro (WhatsApp, copiar).
+ * — Hoja de vida Gaceta: `/registro?need=<uuid de recruitment_needs>`
+ * — Flujo legado proyecto/cargo: `/registro?prj=<uuid ci_proyectos>&role=…`
  * Prioridad: NEXT_PUBLIC_REGISTRO_ORIGEN → NEXT_PUBLIC_BASE_URL → NEXT_PUBLIC_APP_URL → producción por defecto.
  */
 export function publicRegistroOrigin(): string {

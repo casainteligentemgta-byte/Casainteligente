@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import SimularLiquidacionConstruccion from '@/components/dashboard/SimularLiquidacionConstruccion';
+import WidgetFirmasPendientes from '@/components/dashboard/WidgetFirmasPendientes';
 import { createClient } from '@/lib/supabase/server';
 
 type ResultadoConteo = {
@@ -117,6 +118,18 @@ export default async function DashboardPage() {
           ← Inicio
         </Link>
       </div>
+
+      <section
+        style={{
+          marginBottom: '2rem',
+          padding: '1rem',
+          borderRadius: '14px',
+          background: '#0A0A0F',
+          border: '1px solid rgba(249, 115, 22, 0.18)',
+        }}
+      >
+        <WidgetFirmasPendientes />
+      </section>
 
       {hayFallo && (
         <div

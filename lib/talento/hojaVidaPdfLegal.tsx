@@ -1,4 +1,4 @@
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { HojaVidaObreroCompleta, SiNo, TrabajoPrevio } from '@/lib/talento/hojaVidaObreroCompleta';
 import { etiquetaSiNo } from '@/lib/talento/hojaVidaObreroCompleta';
 import {
@@ -12,7 +12,7 @@ import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 export type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 
 /** Máximo 2 páginas (una hoja impresa por ambas caras). */
-const st = StyleSheet.create({
+export const legalPdfStyles = StyleSheet.create({
   page: { paddingTop: 5, paddingHorizontal: 18, paddingBottom: 44, fontSize: 7.5, color: '#0f172a', position: 'relative' },
   headerBand: { borderBottomWidth: 2, borderBottomColor: '#000', paddingBottom: 4, marginBottom: 4 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
@@ -61,8 +61,6 @@ const st = StyleSheet.create({
   },
   footerMain: { fontSize: 5.5, color: '#334155', textAlign: 'center', lineHeight: 1.3 },
   footerSub: { fontSize: 5, color: '#64748b', textAlign: 'center', marginTop: 2 },
-  firmaBlock: { marginTop: 4, flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  firmaHalf: { flex: 1, fontSize: 5.8, textAlign: 'center', color: '#0f172a', lineHeight: 1.25 },
   chkLine: { fontSize: 6, marginTop: 1, lineHeight: 1.25 },
   tableHead: { flexDirection: 'row', backgroundColor: '#e2e8f0', borderWidth: 1, borderColor: '#000' },
   tableRow: { flexDirection: 'row', borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#000' },
@@ -71,14 +69,17 @@ const st = StyleSheet.create({
   tdLast: { fontSize: 5.5, padding: 2, flex: 1 },
 });
 
+/** Alias histórico dentro de este módulo */
+const st = legalPdfStyles;
+
 const BLANK = '_______________________________________________';
 
-function val(s: string | undefined | null): string {
+export function val(s: string | undefined | null): string {
   const t = (s ?? '').trim();
   return t || '—';
 }
 
-function GacetaHeader({ page, total }: { page: number; total: number }) {
+export function GacetaHeader({ page, total }: { page: number; total: number }) {
   return (
     <View style={st.headerBand}>
       <View style={st.headerRow}>
@@ -95,7 +96,7 @@ function GacetaHeader({ page, total }: { page: number; total: number }) {
   );
 }
 
-function GacetaFooter({ extra }: { extra?: string }) {
+export function GacetaFooter({ extra }: { extra?: string }) {
   return (
     <View style={st.footer}>
       <Text style={st.footerMain}>{HOJA_VIDA_GACETA_REFERENCIA}</Text>
@@ -107,7 +108,7 @@ function GacetaFooter({ extra }: { extra?: string }) {
   );
 }
 
-function CellBox({ label, value, flex, w }: { label: string; value: string; flex?: number; w?: string }) {
+export function CellBox({ label, value, flex, w }: { label: string; value: string; flex?: number; w?: string }) {
   return (
     <View style={[st.cell, flex != null ? { flex } : {}, w ? { width: w } : {}]}>
       <Text style={st.cellLabel}>{label}</Text>
@@ -116,7 +117,7 @@ function CellBox({ label, value, flex, w }: { label: string; value: string; flex
   );
 }
 
-function CellBlank({ label, flex, w }: { label: string; flex?: number; w?: string }) {
+export function CellBlank({ label, flex, w }: { label: string; flex?: number; w?: string }) {
   const flexStyle = w != null ? {} : { flex: flex ?? 1 };
   return (
     <View style={[st.cell, flexStyle, w ? { width: w } : {}]}>
@@ -126,7 +127,7 @@ function CellBlank({ label, flex, w }: { label: string; flex?: number; w?: strin
   );
 }
 
-function RomanSection({ code, title }: { code: string; title: string }) {
+export function RomanSection({ code, title }: { code: string; title: string }) {
   return (
     <View style={st.romanBar}>
       <Text style={st.romanText}>
@@ -136,13 +137,19 @@ function RomanSection({ code, title }: { code: string; title: string }) {
   );
 }
 
-function siNoLabel(v: SiNo): string {
+export function siNoLabel(v: SiNo): string {
   return etiquetaSiNo(v);
 }
 
-function chkPair(label: string, on: boolean) {
+export function chkPair(label: string, on: boolean) {
   return `${on ? '[ X ]' : '[   ]'} ${label}`;
 }
+
+export type FirmaTrabajadorPdfMeta = {
+  imageSrc: string;
+  eventId: string;
+  capturedAtLabel: string;
+};
 
 export type HojaVidaLegalPdfMeta = {
   emitidoEn: string;
@@ -151,30 +158,119 @@ export type HojaVidaLegalPdfMeta = {
   cargoCodigo: string;
   cargoNombre: string;
   planillaPatrono?: PlanillaPatronoCampos;
+  firmaTrabajador?: FirmaTrabajadorPdfMeta;
 };
+
+/** Construye metadatos de firma para el PDF a partir de columnas de `ci_empleados`. */
+export function firmaTrabajadorMetaDesdeRow(row: Record<string, unknown>): FirmaTrabajadorPdfMeta | undefined {
+  const url = String(row.firma_electronica_url ?? '').trim();
+  const idRaw = row.firma_electronica_id;
+  const eventId = typeof idRaw === 'string' ? idRaw.trim() : idRaw != null ? String(idRaw).trim() : '';
+  const atRaw = row.firma_electronica_at as string | null | undefined;
+  if (!url || !eventId) return undefined;
+  let capturedAtLabel = '';
+  if (atRaw) {
+    const d = new Date(atRaw);
+    if (!Number.isNaN(d.getTime())) {
+      capturedAtLabel = d.toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' });
+    }
+  }
+  return { imageSrc: url, eventId, capturedAtLabel };
+}
+
+function SeccionFirmaHuella({ firma }: { firma?: FirmaTrabajadorPdfMeta }) {
+  return (
+    <>
+      <RomanSection code="XIII" title="Firma y huella del trabajador" />
+      <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+        <View
+          style={{
+            flex: 1,
+            borderWidth: 1,
+            borderColor: '#000',
+            minHeight: 108,
+            padding: 10,
+            justifyContent: 'flex-start',
+          }}
+        >
+          <View style={{ alignItems: 'center', justifyContent: 'center', minHeight: 52, paddingVertical: 6 }}>
+            {firma?.imageSrc ? (
+              <Image src={firma.imageSrc} style={{ maxHeight: 44, maxWidth: '92%' }} />
+            ) : null}
+          </View>
+          {firma ? (
+            <Text style={{ fontSize: 6, color: '#64748b', marginTop: 8, textAlign: 'center', lineHeight: 1.25 }}>
+              {`Firma electrónica capturada vía Casa Inteligente ERP - ID: ${firma.eventId} - Fecha: ${firma.capturedAtLabel}`}
+            </Text>
+          ) : (
+            <Text style={{ fontSize: 6, color: '#94a3b8', marginTop: 10, textAlign: 'center', lineHeight: 1.25 }}>
+              Espacio en blanco para firma autógrafa y huella dactilar sobre el papel impreso (sin tapar los datos de la
+              planilla).
+            </Text>
+          )}
+        </View>
+        <View
+          style={{
+            flex: 1,
+            borderWidth: 1,
+            borderColor: '#000',
+            minHeight: 108,
+            padding: 10,
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 6.2, color: '#0f172a', textAlign: 'center', lineHeight: 1.3 }}>
+            Firma y sello húmedo RRHH / Entidad de trabajo
+          </Text>
+          <Text style={{ fontSize: 5, color: '#94a3b8', marginTop: 32, textAlign: 'center' }}>________________________</Text>
+        </View>
+      </View>
+    </>
+  );
+}
 
 const TOTAL_PAGES = 2;
 
-function PlanillaPatronoStrip({ campos }: { campos?: PlanillaPatronoCampos }) {
-  const n = (campos?.entidadNombre ?? '').trim();
-  const r = (campos?.entidadRif ?? '').trim();
-  const p = (campos?.proyectoNombre ?? '').trim();
-  const has = Boolean(n || r || p);
-  if (!has) {
-    return (
-      <View style={st.employerRow}>
-        <CellBlank label="Nombre o razón social de la entidad de trabajo" flex={1} />
-        <CellBlank label="RIF" w="28%" />
-        <CellBlank label="Proyecto" w="32%" />
-      </View>
-    );
-  }
+export function PatField({
+  label,
+  value,
+  flex,
+  w,
+}: {
+  label: string;
+  value?: string | null;
+  flex?: number;
+  w?: string;
+}) {
+  const t = (value ?? '').trim();
+  if (t) return <CellBox label={label} value={t} flex={flex} w={w} />;
+  return <CellBlank label={label} flex={flex} w={w} />;
+}
+
+/** Franja del patrono alineada a criterios de planilla de empleo (referencia Gaceta). */
+export function PlanillaPatronoStrip({ campos }: { campos?: PlanillaPatronoCampos }) {
+  const c = campos ?? {};
   return (
-    <View style={st.employerRow}>
-      <CellBox label="Nombre o razón social de la entidad de trabajo" value={n} flex={1} />
-      <CellBox label="RIF" value={r} w="28%" />
-      <CellBox label="Proyecto" value={p} w="32%" />
-    </View>
+    <>
+      <View style={st.employerRow}>
+        <PatField label="Nombre o denominación" value={c.entidadNombre} flex={1} />
+        <PatField label="RIF" value={c.entidadRif} w="26%" />
+        <PatField label="Proyecto / obra (referencia)" value={c.proyectoNombre} w="30%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Nombre y apellido del representante" value={c.representanteNombreApellido} flex={1} />
+        <PatField label="C.I. del representante" value={c.representanteCi} w="24%" />
+        <PatField label="Edad del representante" value={c.representanteEdad} w="18%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Estado civil del representante" value={c.representanteEstadoCivil} w="28%" />
+        <PatField label="Cargo del representante" value={c.representanteCargo} flex={1} />
+        <PatField label="Nacionalidad del representante" value={c.representanteNacionalidad} w="30%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Dirección / domicilio de la empresa" value={c.empresaDomicilio} flex={1} />
+      </View>
+    </>
   );
 }
 
@@ -386,14 +482,7 @@ export function HojaDeVidaObreroLegalPdfDoc({
             por la entidad de trabajo / RRHH conforme a la LOTTT y a la normativa sectorial aplicable.
           </Text>
 
-          <View style={st.firmaBlock}>
-            <Text style={st.firmaHalf}>
-              ________________________{'\n'}Firma del trabajador
-            </Text>
-            <Text style={st.firmaHalf}>
-              ________________________{'\n'}Firma y sello húmedo RRHH / Entidad
-            </Text>
-          </View>
+          <SeccionFirmaHuella firma={meta.firmaTrabajador} />
         </View>
         <GacetaFooter extra={`Impreso: ${meta.emitidoEn}.`} />
       </Page>
@@ -576,10 +665,7 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
           <Text style={[st.note, { marginTop: 3 }]}>
             Declaración: la información consignada será contrastada por RRHH conforme a la LOTTT y normativa sectorial.
           </Text>
-          <View style={st.firmaBlock}>
-            <Text style={st.firmaHalf}>________________________{'\n'}Firma del trabajador</Text>
-            <Text style={st.firmaHalf}>________________________{'\n'}Firma y sello RRHH / Entidad</Text>
-          </View>
+          <SeccionFirmaHuella />
         </View>
         <GacetaFooter />
       </Page>

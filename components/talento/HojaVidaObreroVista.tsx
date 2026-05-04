@@ -33,9 +33,17 @@ export default function HojaVidaObreroVista({ hojaVidaLegal, className = '', pla
     bySec.set(f.seccion, arr);
   }
 
-  const entNombre = (planillaPatrono?.entidadNombre ?? '').trim();
-  const entRif = (planillaPatrono?.entidadRif ?? '').trim();
-  const proyNombre = (planillaPatrono?.proyectoNombre ?? '').trim();
+  const c = planillaPatrono ?? {};
+  const entNombre = (c.entidadNombre ?? '').trim();
+  const entRif = (c.entidadRif ?? '').trim();
+  const proyNombre = (c.proyectoNombre ?? '').trim();
+  const repNom = (c.representanteNombreApellido ?? '').trim();
+  const repCi = (c.representanteCi ?? '').trim();
+  const repEdad = (c.representanteEdad ?? '').trim();
+  const repEc = (c.representanteEstadoCivil ?? '').trim();
+  const repCargo = (c.representanteCargo ?? '').trim();
+  const repNac = (c.representanteNacionalidad ?? '').trim();
+  const domEmp = (c.empresaDomicilio ?? '').trim();
 
   return (
     <div
@@ -57,18 +65,59 @@ export default function HojaVidaObreroVista({ hojaVidaLegal, className = '', pla
         <p className="mt-2 border-t border-slate-300 pt-2 text-[10px] leading-relaxed text-slate-600">{HOJA_VIDA_GACETA_REFERENCIA}</p>
       </header>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3 text-[10px]">
-        <div className="border border-black bg-white px-2 py-1.5">
-          <p className="font-bold uppercase text-slate-700">Entidad de trabajo</p>
-          <p className="mt-1 min-h-[2rem] border-b border-dotted border-slate-400 text-slate-900">{entNombre || '—'}</p>
+      <div className="mt-3 space-y-2 text-[10px]">
+        <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-600">
+          Datos del patrono (planilla de empleo — referencia Gaceta)
+        </p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="border border-black bg-white px-2 py-1.5 sm:col-span-1">
+            <p className="font-bold uppercase text-slate-700">Nombre o denominación</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">
+              {entNombre || '—'}
+            </p>
+          </div>
+          <div className="border border-black bg-white px-2 py-1.5">
+            <p className="font-bold uppercase text-slate-700">RIF</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{entRif || '—'}</p>
+          </div>
+          <div className="border border-black bg-white px-2 py-1.5">
+            <p className="font-bold uppercase text-slate-700">Proyecto / obra</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{proyNombre || '—'}</p>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="border border-black bg-white px-2 py-1.5 sm:col-span-1">
+            <p className="font-bold uppercase text-slate-700">Nombre y apellido del representante</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{repNom || '—'}</p>
+          </div>
+          <div className="border border-black bg-white px-2 py-1.5">
+            <p className="font-bold uppercase text-slate-700">C.I. del representante</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{repCi || '—'}</p>
+          </div>
+          <div className="border border-black bg-white px-2 py-1.5">
+            <p className="font-bold uppercase text-slate-700">Edad del representante</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{repEdad || '—'}</p>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="border border-black bg-white px-2 py-1.5">
+            <p className="font-bold uppercase text-slate-700">Estado civil del representante</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{repEc || '—'}</p>
+          </div>
+          <div className="border border-black bg-white px-2 py-1.5">
+            <p className="font-bold uppercase text-slate-700">Cargo del representante</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{repCargo || '—'}</p>
+          </div>
+          <div className="border border-black bg-white px-2 py-1.5">
+            <p className="font-bold uppercase text-slate-700">Nacionalidad del representante</p>
+            <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">{repNac || '—'}</p>
+          </div>
         </div>
         <div className="border border-black bg-white px-2 py-1.5">
-          <p className="font-bold uppercase text-slate-700">RIF</p>
-          <p className="mt-1 min-h-[2rem] border-b border-dotted border-slate-400 text-slate-900">{entRif || '—'}</p>
-        </div>
-        <div className="border border-black bg-white px-2 py-1.5 sm:col-span-1">
-          <p className="font-bold uppercase text-slate-700">Proyecto</p>
-          <p className="mt-1 min-h-[2rem] border-b border-dotted border-slate-400 text-slate-900">{proyNombre || '—'}</p>
+          <p className="font-bold uppercase text-slate-700">Dirección / domicilio de la empresa</p>
+          <p className="mt-1 min-h-[2rem] whitespace-pre-wrap border-b border-dotted border-slate-400 text-slate-900">
+            {domEmp || '—'}
+          </p>
         </div>
       </div>
 

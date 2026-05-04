@@ -354,6 +354,48 @@ export function hojaVidaDesdeRow(row: Record<string, unknown>): HojaVidaObreroCo
     }
   }
 
+  const fp = str('foto_perfil_url');
+  if (fp && !fromJson.datosPersonales.fotoUrl.trim()) {
+    fromJson.datosPersonales.fotoUrl = fp;
+  }
+
+  const famCol = row.familiares;
+  if (Array.isArray(famCol) && famCol.length > 0) {
+    const mapped: FamiliarDependiente[] = [];
+    for (const item of famCol) {
+      if (!isRecord(item)) continue;
+      const nombre = String(item.nombre ?? '').trim();
+      const apellido = String(item.apellido ?? '').trim();
+      const parentesco = String(item.parentesco ?? '').trim();
+      const fechaNacimiento = String(item.fecha_nacimiento ?? item.fechaNacimiento ?? '').trim();
+      const noAplica = Boolean(item.no_aplica ?? item.noAplica);
+      if (!nombre && !apellido && !parentesco) continue;
+      mapped.push({ nombre, apellido, parentesco, fechaNacimiento, noAplica });
+    }
+    if (mapped.length) {
+      fromJson.familiaresDependientes = mapped;
+    }
+  }
+
+  const expCol = row.experiencia_previa;
+  if (Array.isArray(expCol) && expCol.length > 0) {
+    const mapped: TrabajoPrevio[] = [];
+    for (const item of expCol) {
+      if (!isRecord(item)) continue;
+      const empresaPatrono = String(item.empresa ?? item.empresaPatrono ?? '').trim();
+      const lugar = String(item.lugar ?? '').trim();
+      const oficioOCargo = String(item.cargo ?? item.oficioOCargo ?? '').trim();
+      const duracion = String(item.duracion ?? '').trim();
+      const fechaRetiro = String(item.fecha_retiro ?? item.fechaRetiro ?? '').trim();
+      const motivoRetiro = String(item.motivo_retiro ?? item.motivoRetiro ?? '').trim();
+      if (!empresaPatrono && !oficioOCargo) continue;
+      mapped.push({ empresaPatrono, lugar, oficioOCargo, duracion, fechaRetiro, motivoRetiro });
+    }
+    if (mapped.length) {
+      fromJson.trabajosPrevios = mapped;
+    }
+  }
+
   return fromJson;
 }
 

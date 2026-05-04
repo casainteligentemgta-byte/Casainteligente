@@ -344,7 +344,7 @@ export default function ModuloProyectosPage() {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
           <Link
-            href="/entidades"
+            href="/configuracion/entidades"
             style={{
               borderRadius: '12px',
               padding: '10px 16px',

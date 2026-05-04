@@ -35,12 +35,12 @@ export async function loadOpcionesProyectoReclutamiento(
   opts?: LoadOpcionesProyectoReclutamientoOpts,
 ): Promise<{ opciones: OpcionProyectoReclutamiento[]; errors: string[] }> {
   const errors: string[] = [];
-  let obrQuery = supabase.from('ci_obras').select('id,nombre').order('created_at', { ascending: false }).limit(100);
+  let obrQuery = supabase.from('ci_obras').select('id,nombre').order('created_at', { ascending: false }).limit(250);
   if (opts?.soloObrasActivas) {
     obrQuery = obrQuery.eq('estado', 'activa');
   }
   const [modRes, obrRes] = await Promise.all([
-    supabase.from('ci_proyectos').select('id,nombre').order('created_at', { ascending: false }).limit(100),
+    supabase.from('ci_proyectos').select('id,nombre').order('created_at', { ascending: false }).limit(250),
     obrQuery,
   ]);
 

@@ -1,4 +1,10 @@
 import { NextResponse } from 'next/server';
+import {
+  parseFormaPago,
+  parseJornada,
+  parseTipoContrato,
+  salarioBasicoDiarioVesDesdeNivel,
+} from '@/lib/talento/contratoGacetaLaboral';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
 
 function formatDate(d?: string | null): string | null {
@@ -42,6 +48,19 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     porcentaje_inicial: number;
     texto_legal: string;
     created_at: string;
+    fecha_ingreso?: string | null;
+    recruitment_need_id?: string | null;
+    cargo_oficio_desempeño?: string | null;
+    tabulador_nivel?: number | null;
+    salario_basico_diario_ves?: number | null;
+    forma_pago?: string | null;
+    lugar_pago?: string | null;
+    jornada_trabajo?: string | null;
+    lugar_prestacion_servicio?: string | null;
+    tipo_contrato?: string | null;
+    objeto_contrato?: string | null;
+    numero_oficio_tabulador?: string | null;
+    gaceta_denominacion_oficio?: string | null;
   } | null;
 
   if (e1 || !contrato) {
@@ -102,6 +121,11 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     fecha_fin: obraRaw.fecha_entrega_prometida ?? obraRaw.fecha_fin_estimada ?? null,
   };
 
+  const nivel = contrato.tabulador_nivel ?? 0;
+  const salVes = contrato.salario_basico_diario_ves;
+  const salarioTxt =
+    salVes != null && Number.isFinite(Number(salVes)) ? `${Number(salVes).toFixed(2)} VES (tabulador)` : 'N/D';
+
   return NextResponse.json({
     id: contrato.id,
     empleado: {
@@ -115,14 +139,178 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
       duracion_estimada: estimateDuration(obra.fecha_inicio, obra.fecha_fin),
     },
     contrato: {
-      cargo: 'Perfil técnico asignado',
-      nivel: 0,
-      salario_diario: 'N/D',
+      cargo: (contrato.cargo_oficio_desempeño ?? '').trim() || 'Perfil técnico asignado',
+      nivel,
+      salario_diario: salarioTxt,
       bono_asistencia: 'N/D',
-      fecha_inicio: formatDate(obra.fecha_inicio) ?? formatDate(contrato.created_at) ?? 'No definida',
+      fecha_inicio: formatDate(contrato.fecha_ingreso ?? undefined) ?? formatDate(obra.fecha_inicio) ?? formatDate(contrato.created_at) ?? 'No definida',
       monto_acordado_usd: contrato.monto_acordado_usd,
       porcentaje_inicial: contrato.porcentaje_inicial,
       texto_legal: contrato.texto_legal,
+      laboral: {
+        fecha_ingreso: contrato.fecha_ingreso ?? null,
+        recruitment_need_id: contrato.recruitment_need_id ?? null,
+        cargo_oficio_desempeño: contrato.cargo_oficio_desempeño ?? null,
+        tabulador_nivel: contrato.tabulador_nivel ?? null,
+        salario_basico_diario_ves: contrato.salario_basico_diario_ves ?? null,
+        forma_pago: contrato.forma_pago ?? null,
+        lugar_pago: contrato.lugar_pago ?? null,
+        jornada_trabajo: contrato.jornada_trabajo ?? null,
+        lugar_prestacion_servicio: contrato.lugar_prestacion_servicio ?? null,
+        tipo_contrato: contrato.tipo_contrato ?? null,
+        objeto_contrato: contrato.objeto_contrato ?? null,
+        numero_oficio_tabulador: contrato.numero_oficio_tabulador ?? null,
+        gaceta_denominacion_oficio: contrato.gaceta_denominacion_oficio ?? null,
+      },
     },
   });
+}
+
+/** Campos laborales Gaceta / LOTTT editables por admin o RRHH. */
+export async function PATCH(req: Request, context: { params: { id: string } }) {
+  const id = context.params.id?.trim();
+  if (!id) {
+    return NextResponse.json({ error: 'Falta id de contrato' }, { status: 400 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+
+  const sb = supabaseForRoute();
+  if (!sb.ok) return sb.response;
+  const supabase = sb.client;
+
+  const { data: exists, error: e0 } = await supabase.from('ci_contratos_empleado_obra').select('id').eq('id', id).maybeSingle();
+  if (e0 || !exists) {
+    return NextResponse.json({ error: 'Contrato no encontrado' }, { status: 404 });
+  }
+
+  const patch: Record<string, unknown> = {};
+
+  if ('fecha_ingreso' in body) {
+    const raw = body.fecha_ingreso;
+    if (raw === null || raw === '') {
+      patch.fecha_ingreso = null;
+    } else {
+      const d = new Date(String(raw).trim());
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: 'fecha_ingreso inválida' }, { status: 400 });
+      }
+      patch.fecha_ingreso = d.toISOString().slice(0, 10);
+    }
+  }
+
+  if ('forma_pago' in body) {
+    const v = body.forma_pago;
+    if (v === null || v === '') patch.forma_pago = null;
+    else {
+      const p = parseFormaPago(v);
+      if (!p) return NextResponse.json({ error: 'forma_pago debe ser transferencia, efectivo o pago_movil' }, { status: 400 });
+      patch.forma_pago = p;
+    }
+  }
+
+  if ('lugar_pago' in body) {
+    patch.lugar_pago = body.lugar_pago == null || body.lugar_pago === '' ? null : String(body.lugar_pago).trim();
+  }
+
+  if ('jornada_trabajo' in body) {
+    const v = body.jornada_trabajo;
+    if (v === null || v === '') patch.jornada_trabajo = null;
+    else {
+      const p = parseJornada(v);
+      if (!p) return NextResponse.json({ error: 'jornada_trabajo debe ser diurna, nocturna o mixta' }, { status: 400 });
+      patch.jornada_trabajo = p;
+    }
+  }
+
+  if ('lugar_prestacion_servicio' in body) {
+    patch.lugar_prestacion_servicio =
+      body.lugar_prestacion_servicio == null || body.lugar_prestacion_servicio === ''
+        ? null
+        : String(body.lugar_prestacion_servicio).trim();
+  }
+
+  if ('tipo_contrato' in body) {
+    const v = body.tipo_contrato;
+    if (v === null || v === '') patch.tipo_contrato = null;
+    else {
+      const p = parseTipoContrato(v);
+      if (!p) {
+        return NextResponse.json(
+          { error: 'tipo_contrato debe ser tiempo_determinado o tiempo_indeterminado' },
+          { status: 400 },
+        );
+      }
+      patch.tipo_contrato = p;
+    }
+  }
+
+  if ('objeto_contrato' in body) {
+    patch.objeto_contrato =
+      body.objeto_contrato == null || body.objeto_contrato === '' ? null : String(body.objeto_contrato).trim();
+  }
+
+  if ('cargo_oficio_desempeño' in body) {
+    patch.cargo_oficio_desempeño =
+      body.cargo_oficio_desempeño == null || body.cargo_oficio_desempeño === ''
+        ? null
+        : String(body.cargo_oficio_desempeño).trim();
+  }
+
+  if ('numero_oficio_tabulador' in body) {
+    patch.numero_oficio_tabulador =
+      body.numero_oficio_tabulador == null || body.numero_oficio_tabulador === ''
+        ? null
+        : String(body.numero_oficio_tabulador).trim();
+  }
+
+  if ('gaceta_denominacion_oficio' in body) {
+    patch.gaceta_denominacion_oficio =
+      body.gaceta_denominacion_oficio == null || body.gaceta_denominacion_oficio === ''
+        ? null
+        : String(body.gaceta_denominacion_oficio).trim();
+  }
+
+  if ('salario_basico_diario_ves' in body) {
+    const n = Number(body.salario_basico_diario_ves);
+    if (body.salario_basico_diario_ves === null || body.salario_basico_diario_ves === '') {
+      patch.salario_basico_diario_ves = null;
+    } else if (!Number.isFinite(n) || n <= 0) {
+      return NextResponse.json({ error: 'salario_basico_diario_ves inválido' }, { status: 400 });
+    } else {
+      patch.salario_basico_diario_ves = n;
+    }
+  }
+
+  if ('tabulador_nivel' in body) {
+    const n = Number(body.tabulador_nivel);
+    if (body.tabulador_nivel === null || body.tabulador_nivel === '') {
+      patch.tabulador_nivel = null;
+    } else if (!Number.isInteger(n) || n < 1 || n > 9) {
+      return NextResponse.json({ error: 'tabulador_nivel debe ser entero 1–9' }, { status: 400 });
+    } else {
+      patch.tabulador_nivel = n;
+      if (!('salario_basico_diario_ves' in body)) {
+        const sbVes = salarioBasicoDiarioVesDesdeNivel(n);
+        if (sbVes != null) patch.salario_basico_diario_ves = sbVes;
+      }
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
+  }
+
+  const { error: up } = await supabase.from('ci_contratos_empleado_obra').update(patch as never).eq('id', id);
+  if (up) {
+    console.error('[contratos PATCH]', up);
+    return NextResponse.json({ error: up.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, actualizado: patch });
 }

@@ -79,9 +79,9 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [draftCantidad, setDraftCantidad] = useState<Record<string, string>>({});
-  const [savingCantidadId, setSavingCantidadId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** Al volver a esta pestaña tras registrar vacantes en otra ruta, se vuelve a leer `recruitment_needs`. */
+  const [viewportTick, setViewportTick] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -97,6 +97,14 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') setViewportTick((t) => t + 1);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
   useEffect(() => {
@@ -173,13 +181,7 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
     return () => {
       alive = false;
     };
-  }, [proyectoModuloId, supabase, listaRefresco]);
-
-  useEffect(() => {
-    const next: Record<string, string> = {};
-    for (const r of needs) next[r.id] = String(cantidadMostrada(r));
-    setDraftCantidad(next);
-  }, [needs]);
+  }, [proyectoModuloId, supabase, listaRefresco, viewportTick]);
 
   const abrirWhatsApp = useCallback(
     (row: NeedRow) => {
@@ -203,39 +205,6 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
   );
 
   const pid = proyectoModuloId.trim();
-
-  const guardarCantidad = useCallback(
-    async (row: NeedRow) => {
-      const raw = (draftCantidad[row.id] ?? '').trim();
-      const q = Math.max(1, Math.min(500, Math.floor(Number(raw) || 0)));
-      if (!Number.isFinite(q) || q < 1) {
-        showToast('Indica una cantidad entre 1 y 500.');
-        return;
-      }
-      if (q === cantidadMostrada(row)) {
-        showToast('La cantidad ya está guardada.');
-        return;
-      }
-      setSavingCantidadId(row.id);
-      setError(null);
-      try {
-        const { error: upErr } = await supabase
-          .from('recruitment_needs')
-          .update({ cantidad_requerida: q })
-          .eq('id', row.id)
-          .eq('proyecto_modulo_id', pid);
-        if (upErr) {
-          setError(upErr.message ?? 'No se pudo actualizar la cantidad.');
-          return;
-        }
-        setNeeds((prev) => prev.map((n) => (n.id === row.id ? { ...n, cantidad_requerida: q } : n)));
-        showToast('Cantidad actualizada.');
-      } finally {
-        setSavingCantidadId(null);
-      }
-    },
-    [draftCantidad, pid, showToast, supabase],
-  );
 
   const borrarSolicitud = useCallback(
     async (row: NeedRow) => {
@@ -322,29 +291,7 @@ export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }
                     className="border-b border-white/[0.06] transition-colors hover:bg-white/5"
                   >
                     <td className="px-3 py-3 font-medium text-zinc-100">{etiquetaCargo(row)}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={500}
-                          aria-label={`Plazas solicitadas para ${etiquetaCargo(row)}`}
-                          value={draftCantidad[row.id] ?? String(sol)}
-                          onChange={(e) =>
-                            setDraftCantidad((prev) => ({ ...prev, [row.id]: e.target.value }))
-                          }
-                          className="w-16 rounded-lg border border-white/15 bg-white/[0.06] px-2 py-1 text-xs text-white tabular-nums outline-none focus:border-[#FF9500]/50"
-                        />
-                        <button
-                          type="button"
-                          disabled={savingCantidadId === row.id}
-                          onClick={() => void guardarCantidad(row)}
-                          className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-white/15 disabled:opacity-50"
-                        >
-                          {savingCantidadId === row.id ? '…' : 'Guardar'}
-                        </button>
-                      </div>
-                    </td>
+                    <td className="px-3 py-3 tabular-nums text-zinc-200">{sol}</td>
                     <td className="px-3 py-3 tabular-nums text-zinc-400">{clics}</td>
                     <td className="px-3 py-3">
                       {activa ? (

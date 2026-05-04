@@ -39,14 +39,14 @@ export default function NuevaEntidadPage() {
     }
     const id = (data as { id?: string } | null)?.id;
     if (id) router.push(`/entidades/${id}`);
-    else router.push('/entidades');
+    else router.push('/configuracion/entidades');
   }
 
   const inp = 'mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-sky-500';
 
   return (
     <main className="mx-auto max-w-lg px-4 py-8">
-      <Link href="/entidades" className="text-sm font-medium text-sky-600 hover:text-sky-500">
+      <Link href="/configuracion/entidades" className="text-sm font-medium text-sky-600 hover:text-sky-500">
         ← Entidades
       </Link>
       <h1 className="mt-3 text-2xl font-bold text-slate-900">Nueva entidad</h1>

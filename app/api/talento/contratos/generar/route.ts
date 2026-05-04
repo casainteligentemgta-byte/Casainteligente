@@ -1,6 +1,35 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import {
+  denominacionOficioGaceta,
+  lugarPrestacionServicio,
+  objetoContratoDesdeOficio,
+  parseFormaPago,
+  parseJornada,
+  parseTipoContrato,
+  salarioBasicoDiarioVesDesdeNivel,
+} from '@/lib/talento/contratoGacetaLaboral';
 import { generarTextoLegalCentauro } from '@/lib/talento/contract-centauro';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
+
+type SitioResuelto = {
+  nombre: string;
+  ubicacion: string | null;
+};
+
+async function resolverSitioObraOProyecto(supabase: SupabaseClient, sitioId: string): Promise<SitioResuelto | null> {
+  const { data: ob } = await supabase.from('ci_obras').select('nombre,ubicacion').eq('id', sitioId).maybeSingle();
+  if (ob) {
+    const r = ob as { nombre: string; ubicacion: string | null };
+    return { nombre: r.nombre, ubicacion: r.ubicacion ?? null };
+  }
+  const { data: pr } = await supabase.from('ci_proyectos').select('nombre,ubicacion_texto').eq('id', sitioId).maybeSingle();
+  if (pr) {
+    const r = pr as { nombre: string; ubicacion_texto: string | null };
+    return { nombre: r.nombre, ubicacion: r.ubicacion_texto ?? null };
+  }
+  return null;
+}
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +41,12 @@ export async function POST(req: Request) {
       obra_id?: string;
       monto_acordado_usd?: number;
       porcentaje_inicial?: number;
+      /** Opcional: si RRHH ya define ingreso al generar (sino queda null y se completa con PATCH). */
+      fecha_ingreso?: string | null;
+      forma_pago?: string | null;
+      lugar_pago?: string | null;
+      jornada_trabajo?: string | null;
+      tipo_contrato?: string | null;
     };
 
     const empId = body.empleado_id?.trim();
@@ -25,7 +60,9 @@ export async function POST(req: Request) {
 
     const { data: empRaw, error: e1 } = await supabase
       .from('ci_empleados')
-      .select('id,nombre_completo,documento,estado')
+      .select(
+        'id,nombre_completo,documento,estado,recruitment_need_id,cargo_codigo,cargo_nombre,cargo_nivel,rol_buscado',
+      )
       .eq('id', empId)
       .single();
 
@@ -34,6 +71,11 @@ export async function POST(req: Request) {
       nombre_completo: string;
       documento: string | null;
       estado: string;
+      recruitment_need_id: string | null;
+      cargo_codigo: string | null;
+      cargo_nombre: string | null;
+      cargo_nivel: number | null;
+      rol_buscado: string | null;
     } | null;
 
     if (e1 || !emp) {
@@ -44,22 +86,67 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Solo empleados en estado aprobado' }, { status: 400 });
     }
 
-    const { data: obraRaw, error: e2 } = await supabase
-      .from('ci_obras')
-      .select('id,nombre,ubicacion,cliente')
-      .eq('id', obraId)
-      .single();
-
-    const obra = obraRaw as {
-      id: string;
-      nombre: string;
-      ubicacion: string | null;
-      cliente: string | null;
-    } | null;
-
-    if (e2 || !obra) {
-      return NextResponse.json({ error: 'Obra no encontrada' }, { status: 404 });
+    const sitio = await resolverSitioObraOProyecto(supabase, obraId);
+    if (!sitio) {
+      return NextResponse.json({ error: 'Obra o proyecto no encontrado para el id indicado' }, { status: 404 });
     }
+
+    type NeedRow = {
+      id: string;
+      cargo_codigo: string | null;
+      cargo_nombre: string | null;
+      cargo_nivel: number | null;
+    };
+    let need: NeedRow | null = null;
+    const nid = (emp.recruitment_need_id ?? '').trim();
+    if (nid) {
+      const { data: n } = await supabase
+        .from('recruitment_needs')
+        .select('id,cargo_codigo,cargo_nombre,cargo_nivel')
+        .eq('id', nid)
+        .maybeSingle();
+      need = (n ?? null) as NeedRow | null;
+    }
+
+    const codigoTab = ((need?.cargo_codigo ?? emp.cargo_codigo) ?? '').trim();
+    const nivelTab = need?.cargo_nivel ?? emp.cargo_nivel ?? null;
+    const cargoOficio = ((need?.cargo_nombre ?? emp.cargo_nombre ?? emp.rol_buscado) ?? '').trim() || 'Obrero';
+    const denGaceta = denominacionOficioGaceta(codigoTab) ?? cargoOficio;
+    const salarioVes = salarioBasicoDiarioVesDesdeNivel(nivelTab);
+    const lugarPrest = lugarPrestacionServicio(sitio.nombre, sitio.ubicacion);
+    const objeto = objetoContratoDesdeOficio({
+      denominacionTrabajo: cargoOficio,
+      codigoTabulador: codigoTab || null,
+    });
+
+    const tipoContrato = parseTipoContrato(body.tipo_contrato) ?? 'tiempo_determinado';
+    const formaPago = parseFormaPago(body.forma_pago);
+    const jornada = parseJornada(body.jornada_trabajo);
+    const lugarPago = (body.lugar_pago ?? '').trim() || null;
+
+    let fechaIngreso: string | null = null;
+    if (body.fecha_ingreso != null && String(body.fecha_ingreso).trim()) {
+      const d = new Date(String(body.fecha_ingreso).trim());
+      if (!Number.isNaN(d.getTime())) {
+        fechaIngreso = d.toISOString().slice(0, 10);
+      }
+    }
+
+    const laboralInsert = {
+      recruitment_need_id: (need?.id ?? nid) || null,
+      cargo_oficio_desempeño: cargoOficio,
+      tabulador_nivel: nivelTab != null && nivelTab >= 1 && nivelTab <= 9 ? nivelTab : null,
+      salario_basico_diario_ves: salarioVes,
+      lugar_prestacion_servicio: lugarPrest,
+      tipo_contrato: tipoContrato,
+      objeto_contrato: objeto,
+      numero_oficio_tabulador: codigoTab || null,
+      gaceta_denominacion_oficio: denGaceta,
+      fecha_ingreso: fechaIngreso,
+      forma_pago: formaPago,
+      lugar_pago: lugarPago,
+      jornada_trabajo: jornada,
+    };
 
     const fechaEmision = new Date().toLocaleDateString('es-VE', {
       day: 'numeric',
@@ -70,9 +157,9 @@ export async function POST(req: Request) {
     const texto = generarTextoLegalCentauro({
       empleadoNombre: emp.nombre_completo as string,
       empleadoDocumento: emp.documento as string | null,
-      obraNombre: obra.nombre as string,
-      obraUbicacion: obra.ubicacion as string | null,
-      clienteObra: obra.cliente as string | null,
+      obraNombre: sitio.nombre,
+      obraUbicacion: sitio.ubicacion,
+      clienteObra: null,
       montoAcordadoUsd: monto,
       porcentajeInicial: pct,
       fechaEmision,
@@ -83,7 +170,8 @@ export async function POST(req: Request) {
       monto_acordado_usd: monto,
       porcentaje_inicial: pct,
       texto_legal: texto,
-    } as const;
+      ...laboralInsert,
+    };
 
     let ctrRaw: unknown = null;
     let e3: { message: string } | null = null;
@@ -97,7 +185,7 @@ export async function POST(req: Request) {
     ctrRaw = intentoObra.data;
     e3 = intentoObra.error;
 
-    if (e3 && /obra_id/i.test(e3.message)) {
+    if (e3 && /obra_id|violates|column|foreign key/i.test(e3.message)) {
       const intentoProyecto = await supabase
         .from('ci_contratos_empleado_obra')
         .insert({ ...baseInsert, proyecto_id: obraId } as never)
@@ -117,7 +205,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudo crear el contrato' }, { status: 500 });
     }
 
-    return NextResponse.json({ id: ctr.id, texto_legal: texto });
+    return NextResponse.json({
+      id: ctr.id,
+      texto_legal: texto,
+      laboral: {
+        ...laboralInsert,
+        salario_basico_diario_ves: salarioVes,
+      },
+    });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });

@@ -621,7 +621,7 @@ export default function NuevoProyectoModuloPage() {
             <label className={labelClass}>Entidad de trabajo (patrono)</label>
             <p className="mb-1 text-[11px] text-zinc-500">
               Razón social y RIF para planillas.{' '}
-              <Link href="/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
+              <Link href="/configuracion/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
                 Gestionar entidades
               </Link>
             </p>

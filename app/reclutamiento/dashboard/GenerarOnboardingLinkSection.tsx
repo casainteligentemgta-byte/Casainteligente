@@ -130,7 +130,7 @@ export default function GenerarOnboardingLinkSection() {
           </label>
           <p className="mb-1 text-[10px] text-zinc-500">
             Solo proyectos del módulo integral. Rellena entidad y RIF en{' '}
-            <Link href="/entidades" className="font-semibold text-sky-400 underline">
+            <Link href="/configuracion/entidades" className="font-semibold text-sky-400 underline">
               Entidades
             </Link>{' '}
             y asígnalos al proyecto.

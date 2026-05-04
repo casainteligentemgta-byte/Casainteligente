@@ -62,7 +62,7 @@ const navItems = [
         ),
     },
     {
-        href: '/entidades',
+        href: '/configuracion/entidades',
         label: 'Entidades',
         icon: (active: boolean) => (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -116,6 +116,9 @@ function navItemActive(pathname: string, href: string): boolean {
     if (pathname === href) return true;
     if (href === '/') return false;
     if (href === '/reclutamiento/dashboard') return pathname.startsWith('/reclutamiento');
+    if (href === '/configuracion/entidades') {
+        return pathname.startsWith('/configuracion/entidades') || pathname.startsWith('/entidades');
+    }
     return pathname.startsWith(href);
 }
 

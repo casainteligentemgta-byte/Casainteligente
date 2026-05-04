@@ -6,7 +6,10 @@ import { CATALOGO_OBREROS } from '@/lib/reclutamiento/catalogoObreros';
 import { CATALOGO_EMPLEADOS } from '@/lib/reclutamiento/catalogoEmpleados';
 import { metaDesdeCargoCatalogo } from '@/lib/reclutamiento/cargoMetaCatalogo';
 import { cargoPorCodigo } from '@/lib/constants/cargosObreros';
-import { loadOpcionesProyectoReclutamiento } from '@/lib/proyectos/proyectosUnificados';
+import {
+  etiquetaFuenteProyecto,
+  loadOpcionesProyectoReclutamiento,
+} from '@/lib/proyectos/proyectosUnificados';
 import { createClient } from '@/lib/supabase/client';
 import { apiUrl, assertHttpOrigin } from '@/lib/http/apiUrl';
 
@@ -94,18 +97,56 @@ export function ConstructorRequisicion({
       try {
         const { opciones, errors } = await loadOpcionesProyectoReclutamiento(supabase);
         if (!alive) return;
-        const opts: ProyectoOption[] = opciones.map((o) => ({
+        let opts: ProyectoOption[] = opciones.map((o) => ({
           key: o.key,
           etiqueta: o.etiqueta,
           proyectoModuloId: o.proyectoModuloId,
           proyectoObraId: o.proyectoObraId,
         }));
+
+        const wantM = initialProyectoModuloId?.trim() ?? '';
+        const wantO = initialProyectoObraId?.trim() ?? '';
+
+        /** Si el proyecto de la URL no entra en el límite del listado, las vacantes se guardaban en otro ítem del select. */
+        if (wantM && !opts.some((o) => o.proyectoModuloId === wantM)) {
+          const { data: row } = await supabase.from('ci_proyectos').select('id,nombre').eq('id', wantM).maybeSingle();
+          if (!alive) return;
+          if (row && typeof (row as { id?: unknown }).id === 'string') {
+            const r = row as { id: string; nombre?: string | null };
+            const nombre = String(r.nombre ?? '').trim() || 'Sin nombre';
+            opts = [
+              {
+                key: `i:${r.id}`,
+                etiqueta: `${nombre} · ${etiquetaFuenteProyecto('integral')}`,
+                proyectoModuloId: r.id,
+                proyectoObraId: null,
+              },
+              ...opts,
+            ];
+          }
+        }
+        if (wantO && !opts.some((o) => o.proyectoObraId === wantO)) {
+          const { data: row } = await supabase.from('ci_obras').select('id,nombre').eq('id', wantO).maybeSingle();
+          if (!alive) return;
+          if (row && typeof (row as { id?: unknown }).id === 'string') {
+            const r = row as { id: string; nombre?: string | null };
+            const nombre = String(r.nombre ?? '').trim() || 'Sin nombre';
+            opts = [
+              {
+                key: `t:${r.id}`,
+                etiqueta: `${nombre} · ${etiquetaFuenteProyecto('talento')}`,
+                proyectoModuloId: null,
+                proyectoObraId: r.id,
+              },
+              ...opts,
+            ];
+          }
+        }
+
         for (const msg of errors) {
           setErrorProyectos((e) => e ?? msg);
         }
         setProyectos(opts);
-        const wantM = initialProyectoModuloId?.trim() ?? '';
-        const wantO = initialProyectoObraId?.trim() ?? '';
         let nextKey = opts[0]?.key ?? '';
         if (wantM) {
           const hit = opts.find((o) => o.proyectoModuloId === wantM);

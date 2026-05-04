@@ -17,6 +17,13 @@ export default async function EntidadesPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 text-slate-900">
+      <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Vista ampliada de patronos (logo, mercantil, permisología):{' '}
+        <Link href="/configuracion/entidades" className="font-semibold text-amber-800 underline hover:text-amber-950">
+          Configuración → Entidades
+        </Link>
+        .
+      </p>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/proyectos/modulo" className="text-sm font-medium text-sky-600 hover:text-sky-500">

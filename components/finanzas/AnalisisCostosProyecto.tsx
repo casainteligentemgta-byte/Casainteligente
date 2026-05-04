@@ -110,23 +110,13 @@ export default function AnalisisCostosProyecto({
           .eq('id', proyectoId)
           .maybeSingle();
         if (integral) {
-          const nom = (integral as { nombre?: string }).nombre?.trim() || 'este proyecto';
           setError(
-            <div className="rounded-xl border border-amber-500/30 bg-amber-950/25 px-4 py-3 text-sm text-zinc-200 space-y-3">
-              <p className="font-medium text-amber-100/95">
-                El enlace de finanzas apunta a un proyecto del <strong>módulo integral</strong> («{nom}»), no a una obra
-                de Talento.
+            <div className="rounded-xl border border-amber-500/30 bg-amber-950/25 px-4 py-3 text-sm text-zinc-200 space-y-2">
+              <p className="text-amber-100/95">
+                No hay análisis de costos de mano de obra para esta referencia en esta pantalla.
               </p>
-              <p className="text-[13px] leading-relaxed text-zinc-400">
-                Este análisis (presupuesto de mano de obra, liquidaciones y gráficos) solo aplica a obras dadas de alta
-                en <strong className="text-zinc-300">Reclutamiento → Nuevo proyecto</strong>. Desde ahí, al guardar,
-                podrás abrir finanzas con el registro correcto.
-              </p>
-              <Link
-                href="/proyectos/nuevo"
-                className="inline-flex items-center rounded-xl bg-[#007AFF] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0062CC]"
-              >
-                Ir a Nuevo proyecto (Talento)
+              <Link href="/proyectos/modulo" className="inline-block text-xs font-semibold text-sky-400 hover:text-sky-300 underline">
+                Volver al listado de proyectos
               </Link>
             </div>,
           );

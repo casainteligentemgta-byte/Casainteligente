@@ -600,7 +600,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 onIrGestionTalento={irRrhhPanel}
               />
             ) : null}
-            {!modoEdicion ? (
+            {!tabVistaTalento && !modoEdicion ? (
               <Link
                 href={`/proyectos/modulo/${id}?editar=1`}
                 className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
@@ -633,7 +633,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </Link>
               </>
             ) : null}
-            {!modoEdicion ? (
+            {!tabVistaTalento && !modoEdicion ? (
               <Link
                 href="/proyectos/modulo"
                 className="rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
@@ -680,7 +680,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     Entidad de trabajo (patrono)
                   </label>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
-                    <Link href="/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
+                    <Link href="/configuracion/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
                       Gestionar entidades
                     </Link>
                   </p>

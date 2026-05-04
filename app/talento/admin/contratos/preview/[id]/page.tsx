@@ -1,8 +1,31 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, StyleSheet, Text, pdf } from '@react-pdf/renderer';
+import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { FormularioLaboralRRHH } from './FormularioLaboralRRHH';
+
+function contratoIdDesdeParams(raw: string | string[] | undefined): string {
+  if (Array.isArray(raw)) return (raw[0] ?? '').trim();
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+type LaboralPayload = {
+  fecha_ingreso: string | null;
+  recruitment_need_id: string | null;
+  cargo_oficio_desempeño: string | null;
+  tabulador_nivel: number | null;
+  salario_basico_diario_ves: number | null;
+  forma_pago: string | null;
+  lugar_pago: string | null;
+  jornada_trabajo: string | null;
+  lugar_prestacion_servicio: string | null;
+  tipo_contrato: string | null;
+  objeto_contrato: string | null;
+  numero_oficio_tabulador: string | null;
+  gaceta_denominacion_oficio: string | null;
+};
 
 type ContratoPayload = {
   id: string;
@@ -17,6 +40,7 @@ type ContratoPayload = {
     monto_acordado_usd: number;
     porcentaje_inicial: number;
     texto_legal: string;
+    laboral?: LaboralPayload | null;
   };
 };
 
@@ -44,15 +68,45 @@ function ContratoPdf({ data }: { data: ContratoPayload }) {
           Salario diario: {data.contrato.salario_diario} VES. Bono asistencia diario: {data.contrato.bono_asistencia} VES.
         </Text>
         <Text style={styles.p}>
-          Monto acordado obra: {data.contrato.monto_acordado_usd.toFixed(2)} USD. Inicial: {data.contrato.porcentaje_inicial}%.
+          Monto acordado obra: {Number(data.contrato.monto_acordado_usd ?? 0).toFixed(2)} USD. Inicial:{' '}
+          {Number(data.contrato.porcentaje_inicial ?? 0)}%.
         </Text>
-        <Text style={styles.p}>Fecha de inicio: {data.contrato.fecha_inicio}</Text>
+        <Text style={styles.p}>Fecha de inicio / ingreso (RRHH): {data.contrato.fecha_inicio}</Text>
+        {data.contrato.laboral?.lugar_prestacion_servicio ? (
+          <Text style={styles.p}>Lugar de prestación del servicio: {data.contrato.laboral.lugar_prestacion_servicio}</Text>
+        ) : null}
+        {data.contrato.laboral?.forma_pago ? (
+          <Text style={styles.p}>
+            Forma de pago: {data.contrato.laboral.forma_pago}
+            {data.contrato.laboral.lugar_pago ? ` — ${data.contrato.laboral.lugar_pago}` : ''}
+          </Text>
+        ) : null}
+        {data.contrato.laboral?.jornada_trabajo ? (
+          <Text style={styles.p}>Jornada: {data.contrato.laboral.jornada_trabajo}</Text>
+        ) : null}
+        {data.contrato.laboral?.tipo_contrato ? (
+          <Text style={styles.p}>Tipo de contrato: {data.contrato.laboral.tipo_contrato}</Text>
+        ) : null}
+        {data.contrato.laboral?.numero_oficio_tabulador ? (
+          <Text style={styles.p}>
+            Oficio tabulador Gaceta: {data.contrato.laboral.numero_oficio_tabulador}
+            {data.contrato.laboral.gaceta_denominacion_oficio
+              ? ` — ${data.contrato.laboral.gaceta_denominacion_oficio}`
+              : ''}
+          </Text>
+        ) : null}
+        {data.contrato.laboral?.objeto_contrato ? (
+          <Text style={styles.p}>Objeto: {data.contrato.laboral.objeto_contrato}</Text>
+        ) : null}
       </Page>
     </Document>
   );
 }
 
-export default function ContratoPreview({ params }: { params: { id: string } }) {
+export default function ContratoPreview() {
+  const routeParams = useParams();
+  const contractId = contratoIdDesdeParams(routeParams?.id as string | string[] | undefined);
+
   const componenteRef = useRef<HTMLDivElement | null>(null);
   const supabase = useMemo(() => createClient(), []);
   const [data, setData] = useState<ContratoPayload | null>(null);
@@ -60,17 +114,21 @@ export default function ContratoPreview({ params }: { params: { id: string } }) 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [snapshotVersion, setSnapshotVersion] = useState(0);
+
+  const cargarContrato = useCallback(async () => {
+    if (!contractId) throw new Error('Falta el identificador del contrato en la URL.');
+    const r = await fetch(`/api/talento/contratos/${encodeURIComponent(contractId)}`);
+    const body = (await r.json()) as ContratoPayload & { error?: string };
+    if (!r.ok) throw new Error(body.error ?? 'No se pudo cargar contrato.');
+    setData(body);
+  }, [contractId]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/talento/contratos/${params.id}`)
-      .then(async (r) => {
-        const body = (await r.json()) as ContratoPayload & { error?: string };
-        if (!r.ok) throw new Error(body.error ?? 'No se pudo cargar contrato.');
-        if (!cancelled) setData(body);
-      })
+    cargarContrato()
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Error desconocido');
       })
@@ -80,7 +138,12 @@ export default function ContratoPreview({ params }: { params: { id: string } }) 
     return () => {
       cancelled = true;
     };
-  }, [params.id]);
+  }, [cargarContrato]);
+
+  const alGuardarLaboral = useCallback(async () => {
+    await cargarContrato();
+    setSnapshotVersion((v) => v + 1);
+  }, [cargarContrato]);
 
   const handleImprimirPDF = async () => {
     if (!data) return;
@@ -108,24 +171,44 @@ export default function ContratoPreview({ params }: { params: { id: string } }) 
     }
   };
 
+  if (!contractId) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0F] p-8 text-sm text-amber-200">
+        No se pudo leer el id del contrato en la ruta. Usa una URL del tipo{' '}
+        <code className="rounded bg-white/10 px-1">/talento/admin/contratos/preview/[uuid]</code>.
+      </div>
+    );
+  }
+
   if (loading) {
-    return <div className="min-h-screen bg-slate-100 p-8 text-sm text-slate-600">Cargando contrato...</div>;
+    return <div className="min-h-screen bg-[#0A0A0F] p-8 text-sm text-zinc-400">Cargando contrato…</div>;
   }
   if (error || !data) {
-    return <div className="min-h-screen bg-slate-100 p-8 text-sm text-red-600">{error ?? 'Contrato no disponible.'}</div>;
+    return <div className="min-h-screen bg-[#0A0A0F] p-8 text-sm text-red-400">{error ?? 'Contrato no disponible.'}</div>;
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-slate-100 p-8 pb-24 font-sans">
+    <div className="flex min-h-screen flex-col items-center bg-[#0A0A0F] p-8 pb-24 font-sans">
+      <FormularioLaboralRRHH
+        contractId={contractId}
+        snapshotVersion={snapshotVersion}
+        laboral={data.contrato.laboral}
+        cargoSugerido={data.contrato.cargo}
+        nivelSugerido={Number(data.contrato.nivel ?? 0)}
+        proyectoNombre={String(data.proyecto.nombre ?? '')}
+        proyectoUbicacion={String(data.proyecto.ubicacion ?? '')}
+        onGuardado={alGuardarLaboral}
+      />
+
       <div className="mb-6 flex w-full max-w-4xl items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Previsualizacion de Contrato</h1>
-          <p className="text-sm text-slate-500">Borrador autogenerado por Gemini IA</p>
+          <h1 className="text-2xl font-bold text-white">Previsualización de contrato</h1>
+          <p className="text-sm text-zinc-500">Complete los datos laborales arriba y emita el PDF cuando esté listo.</p>
         </div>
         <button
           onClick={handleImprimirPDF}
           disabled={saving}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 font-bold text-white shadow-md transition-all hover:bg-blue-700"
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF9500] to-orange-700 px-6 py-2 font-bold text-black shadow-md transition-all hover:opacity-95"
         >
           {saving ? 'Emitiendo PDF...' : 'Emitir PDF y Solicitar Firma'}
         </button>
@@ -191,8 +274,8 @@ export default function ContratoPreview({ params }: { params: { id: string } }) 
           </p>
           <p>
             <strong>PAGO INICIAL:</strong> Para esta contratacion se establece un monto acordado de{' '}
-            <strong>{data.contrato.monto_acordado_usd.toFixed(2)} USD</strong> con anticipo del{' '}
-            <strong>{data.contrato.porcentaje_inicial}%</strong>.
+            <strong>{Number(data.contrato.monto_acordado_usd ?? 0).toFixed(2)} USD</strong> con anticipo del{' '}
+            <strong>{Number(data.contrato.porcentaje_inicial ?? 0)}%</strong>.
           </p>
 
           <p>
@@ -218,7 +301,8 @@ export default function ContratoPreview({ params }: { params: { id: string } }) 
 
         <div className="mt-12 text-center text-xs text-slate-400">
           Documento generado el {data.contrato.fecha_inicio}. Hash de validacion: CI-PROJ-
-          {data.proyecto.nombre.substring(0, 3).toUpperCase()}-{data.contrato.nivel}
+          {(String(data.proyecto.nombre ?? 'PRY').trim().slice(0, 3) || 'PRY').toUpperCase()}-
+          {Number(data.contrato.nivel ?? 0)}
         </div>
       </div>
     </div>
