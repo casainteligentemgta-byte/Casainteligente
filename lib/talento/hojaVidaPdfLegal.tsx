@@ -2,10 +2,14 @@ import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/render
 import type { HojaVidaObreroCompleta, SiNo, TrabajoPrevio } from '@/lib/talento/hojaVidaObreroCompleta';
 import { etiquetaSiNo } from '@/lib/talento/hojaVidaObreroCompleta';
 import {
+  HOJA_EMPLEO_SUBTITULO,
+  HOJA_EMPLEO_TITULO,
   HOJA_VIDA_GACETA_NUMERO,
   HOJA_VIDA_GACETA_REFERENCIA,
   HOJA_VIDA_PLANILLA_SUBTITULO,
   HOJA_VIDA_PLANILLA_TITULO,
+  HOJA_VIDA_SOLO_SUBTITULO,
+  HOJA_VIDA_SOLO_TITULO,
 } from '@/lib/talento/hojaVidaGacetaLayout';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 
@@ -159,6 +163,11 @@ export type HojaVidaLegalPdfMeta = {
   cargoNombre: string;
   planillaPatrono?: PlanillaPatronoCampos;
   firmaTrabajador?: FirmaTrabajadorPdfMeta;
+  /**
+   * `hoja_empleo`: trabajador (I) + patrono (II) + obra (III) + contratación (IV) + resto de hoja de vida.
+   * `hoja_vida`: solo trabajador y antecedentes personales (sin patrono, obra ni contratación).
+   */
+  documentVariant?: 'hoja_empleo' | 'hoja_vida';
 };
 
 /** Construye metadatos de firma para el PDF a partir de columnas de `ci_empleados`. */
@@ -274,6 +283,50 @@ export function PlanillaPatronoStrip({ campos }: { campos?: PlanillaPatronoCampo
   );
 }
 
+/** II — Patrono (sin datos de obra). */
+export function PatronoIdentificacionPdfBlock({ campos }: { campos?: PlanillaPatronoCampos }) {
+  const c = campos ?? {};
+  return (
+    <>
+      <RomanSection code="II" title="Identificación del patrono" />
+      <View style={st.employerRow}>
+        <PatField label="Nombre o denominación" value={c.entidadNombre} flex={1} />
+        <PatField label="RIF" value={c.entidadRif} w="26%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Nombre y apellido del representante" value={c.representanteNombreApellido} flex={1} />
+        <PatField label="C.I. del representante" value={c.representanteCi} w="24%" />
+        <PatField label="Edad del representante" value={c.representanteEdad} w="18%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Estado civil del representante" value={c.representanteEstadoCivil} w="28%" />
+        <PatField label="Cargo del representante" value={c.representanteCargo} flex={1} />
+        <PatField label="Nacionalidad del representante" value={c.representanteNacionalidad} w="30%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Dirección / domicilio de la empresa" value={c.empresaDomicilio} flex={1} />
+      </View>
+    </>
+  );
+}
+
+/** III — Obra / proyecto (referencia). */
+export function ObraIdentificacionPdfBlock({ campos }: { campos?: PlanillaPatronoCampos }) {
+  const c = campos ?? {};
+  return (
+    <>
+      <RomanSection code="III" title="Identificación de la obra" />
+      <View style={st.employerRow}>
+        <PatField label="Proyecto u obra (nombre / referencia)" value={c.proyectoNombre} flex={1} />
+        <PatField label="Código o expediente interno de obra" value={undefined} w="34%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Ubicación / municipio (si aplica)" value={undefined} flex={1} />
+      </View>
+    </>
+  );
+}
+
 export function HojaDeVidaObreroLegalPdfDoc({
   data,
   meta,
@@ -281,19 +334,28 @@ export function HojaDeVidaObreroLegalPdfDoc({
   data: HojaVidaObreroCompleta;
   meta: HojaVidaLegalPdfMeta;
 }) {
+  const esHojaEmpleo = (meta.documentVariant ?? 'hoja_empleo') === 'hoja_empleo';
   const d = data.datosPersonales;
   const cargoContrato = val(data.contratacion.cargoUOficio) || val(meta.rolBuscadoSistema);
   const apellidos = [d.primerApellido, d.segundoApellido].map((s) => s.trim()).filter(Boolean).join(' ');
   const nombres = [d.primerNombre, d.segundoNombre].map((s) => s.trim()).filter(Boolean).join(' ');
+
+  const tituloP1 = esHojaEmpleo ? HOJA_EMPLEO_TITULO : HOJA_VIDA_SOLO_TITULO;
+  const subtituloP1 = esHojaEmpleo ? HOJA_EMPLEO_SUBTITULO : HOJA_VIDA_SOLO_SUBTITULO;
+  const codeInstr = esHojaEmpleo ? 'V' : 'III';
+  const codeGrem = esHojaEmpleo ? 'VI' : 'IV';
+  const codeMed = esHojaEmpleo ? 'VII' : 'V';
+  const codePeso = esHojaEmpleo ? 'VIII' : 'VI';
+  const codeFam = esHojaEmpleo ? 'IX' : 'VII';
+  const codeExp = esHojaEmpleo ? 'X' : 'VIII';
 
   return (
     <Document>
       <Page size="A4" style={st.page}>
         <GacetaHeader page={1} total={TOTAL_PAGES} />
         <View style={st.frame}>
-          <Text style={st.planillaTitle}>{HOJA_VIDA_PLANILLA_TITULO}</Text>
-          <Text style={st.planillaSub}>{HOJA_VIDA_PLANILLA_SUBTITULO}</Text>
-          <PlanillaPatronoStrip campos={meta.planillaPatrono} />
+          <Text style={st.planillaTitle}>{tituloP1}</Text>
+          <Text style={st.planillaSub}>{subtituloP1}</Text>
 
           <RomanSection code="I" title="Identificación del trabajador" />
 
@@ -367,21 +429,39 @@ export function HojaDeVidaObreroLegalPdfDoc({
             </View>
           </View>
 
-          <RomanSection code="II" title="Datos de la contratación y certificaciones" />
-          <View style={st.row}>
-            <CellBox label="Cargo u oficio a desempeñar" value={cargoContrato} flex={1} />
-            <CellBox label="Cargo (tabulador / sistema)" value={[meta.cargoCodigo, meta.cargoNombre].filter(Boolean).join(' · ')} w="38%" />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Antecedentes penales (según certificado)" value={siNoLabel(data.certificadoAntecedentesPenales.antecedentesPenales)} w="28%" />
-            <CellBox label="Expedido por" value={data.certificadoAntecedentesPenales.expedidoPor} flex={1} />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Lugar (certificado)" value={data.certificadoAntecedentesPenales.lugar} flex={1} />
-            <CellBox label="Fecha de expedición" value={data.certificadoAntecedentesPenales.fechaExpedicion} w="34%" />
-          </View>
+          {esHojaEmpleo ? (
+            <>
+              <PatronoIdentificacionPdfBlock campos={meta.planillaPatrono} />
+              <ObraIdentificacionPdfBlock campos={meta.planillaPatrono} />
+              <RomanSection code="IV" title="Identificación de la contratación" />
+              <View style={st.row}>
+                <CellBox label="Cargo u oficio a desempeñar" value={cargoContrato} flex={1} />
+                <CellBox label="Cargo (tabulador / sistema)" value={[meta.cargoCodigo, meta.cargoNombre].filter(Boolean).join(' · ')} w="38%" />
+              </View>
+              <View style={[st.row, { marginTop: -1 }]}>
+                <CellBox label="Antecedentes penales (según certificado)" value={siNoLabel(data.certificadoAntecedentesPenales.antecedentesPenales)} w="28%" />
+                <CellBox label="Expedido por" value={data.certificadoAntecedentesPenales.expedidoPor} flex={1} />
+              </View>
+              <View style={[st.row, { marginTop: -1 }]}>
+                <CellBox label="Lugar (certificado)" value={data.certificadoAntecedentesPenales.lugar} flex={1} />
+                <CellBox label="Fecha de expedición" value={data.certificadoAntecedentesPenales.fechaExpedicion} w="34%" />
+              </View>
+            </>
+          ) : (
+            <>
+              <RomanSection code="II" title="Antecedentes penales (certificado)" />
+              <View style={st.row}>
+                <CellBox label="Antecedentes penales (según certificado)" value={siNoLabel(data.certificadoAntecedentesPenales.antecedentesPenales)} w="28%" />
+                <CellBox label="Expedido por" value={data.certificadoAntecedentesPenales.expedidoPor} flex={1} />
+              </View>
+              <View style={[st.row, { marginTop: -1 }]}>
+                <CellBox label="Lugar (certificado)" value={data.certificadoAntecedentesPenales.lugar} flex={1} />
+                <CellBox label="Fecha de expedición" value={data.certificadoAntecedentesPenales.fechaExpedicion} w="34%" />
+              </View>
+            </>
+          )}
 
-          <RomanSection code="III" title="Instrucción y capacitación" />
+          <RomanSection code={codeInstr} title="Instrucción y capacitación" />
           <View style={st.row}>
             <CellBox label="Sabe leer y escribir" value={siNoLabel(data.instruccionCapacitacion.sabeLeer)} w="28%" />
             <View style={[st.cell, { flex: 1, marginLeft: -1 }]}>
@@ -409,7 +489,7 @@ export function HojaDeVidaObreroLegalPdfDoc({
       <Page size="A4" style={st.page}>
         <GacetaHeader page={2} total={TOTAL_PAGES} />
         <View style={st.frame}>
-          <RomanSection code="IV" title="Actividad gremial o sindical" />
+          <RomanSection code={codeGrem} title="Actividad gremial o sindical" />
           <View style={st.row}>
             <CellBox label="Federación, sindicato o gremio" value={data.actividadGremial.federacionSindicatoGremio} flex={1} />
           </View>
@@ -417,7 +497,7 @@ export function HojaDeVidaObreroLegalPdfDoc({
             <CellBox label="Cargo que ejerce en la organización" value={data.actividadGremial.cargoQueEjerce} flex={1} />
           </View>
 
-          <RomanSection code="V" title="Antecedentes médicos" />
+          <RomanSection code={codeMed} title="Antecedentes médicos" />
           <View style={st.row}>
             <CellBox label="Examen médico previo" value={siNoLabel(data.antecedentesMedicos.examenMedicoPrevio)} w="22%" />
             <CellBox label="Efectuado por" value={data.antecedentesMedicos.efectuadoPor} w="34%" />
@@ -429,7 +509,7 @@ export function HojaDeVidaObreroLegalPdfDoc({
             <CellBox label="Incapacidades físicas o funcionales" value={data.antecedentesMedicos.incapacidadesFisicasOFuncionales} flex={1} />
           </View>
 
-          <RomanSection code="VI" title="Peso y medidas (dotación EPP / uniforme)" />
+          <RomanSection code={codePeso} title="Peso y medidas (dotación EPP / uniforme)" />
           <View style={st.row}>
             <CellBox label="Peso (kg)" value={data.pesoMedidas.peso} w="16%" />
             <CellBox label="Estatura (m)" value={data.pesoMedidas.estatura} w="16%" />
@@ -442,7 +522,7 @@ export function HojaDeVidaObreroLegalPdfDoc({
             <CellBox label="Observaciones" value={data.pesoMedidas.observaciones} flex={1} />
           </View>
 
-          <RomanSection code="VII" title="Familiares dependientes a cargo" />
+          <RomanSection code={codeFam} title="Familiares dependientes a cargo" />
           <View style={st.tableHead}>
             <Text style={[st.th, { width: '5%' }]}>N°</Text>
             <Text style={[st.th, { width: '24%' }]}>Apellidos y nombres</Text>
@@ -464,7 +544,7 @@ export function HojaDeVidaObreroLegalPdfDoc({
             </View>
           ))}
 
-          <RomanSection code="VIII" title="Experiencia laboral (trabajos previos)" />
+          <RomanSection code={codeExp} title="Experiencia laboral (trabajos previos)" />
           <View style={st.tableHead}>
             <Text style={[st.th, { width: '22%' }]}>Empresa / patrono</Text>
             <Text style={[st.th, { width: '14%' }]}>Lugar</Text>
@@ -485,8 +565,9 @@ export function HojaDeVidaObreroLegalPdfDoc({
           ))}
 
           <Text style={[st.note, { marginTop: 3 }]}>
-            Declaración: la información consignada corresponde a la mejor información del trabajador y será contrastada
-            por la entidad de trabajo / RRHH conforme a la LOTTT y a la normativa sectorial aplicable.
+            {esHojaEmpleo
+              ? 'Declaración: la información consignada corresponde a la mejor información del trabajador y será contrastada por la entidad de trabajo / RRHH conforme a la LOTTT y a la normativa sectorial aplicable.'
+              : 'Declaración: la información consignada corresponde a la mejor información del trabajador y podrá ser contrastada por Casa Inteligente / RRHH conforme a la normativa aplicable.'}
           </Text>
 
           <SeccionFirmaHuella firma={meta.firmaTrabajador} />

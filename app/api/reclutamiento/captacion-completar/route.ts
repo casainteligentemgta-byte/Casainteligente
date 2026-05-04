@@ -216,6 +216,7 @@ export async function POST(req: Request) {
     cargoNombre: str('cargo_nombre'),
     planillaPatrono,
     firmaTrabajador: undefined,
+    documentVariant: 'hoja_empleo',
   };
 
   try {

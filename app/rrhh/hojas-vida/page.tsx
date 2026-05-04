@@ -92,8 +92,10 @@ export default function RrhhHojasVidaPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">RRHH — Hojas de vida recibidas</h1>
             <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              Obreros y postulantes que completaron la planilla legal (estado «cv_completado»). Desde aquí puedes abrir el
-              PDF o ir al proyecto vinculado.
+              Expedientes con estado «cv_completado». Usa <span className="text-zinc-200">Hoja de empleo</span> para el PDF
+              completo (I–IV: trabajador, patrono, obra, contratación + resto). <span className="text-zinc-200">Hoja de vida</span>{' '}
+              omite patrono, obra y contratación. En onboarding sigue disponible{' '}
+              <code className="text-zinc-500">/api/talento/hoja-vida/pdf?token=…</code>.
             </p>
           </div>
           <button
@@ -127,7 +129,9 @@ export default function RrhhHojasVidaPage() {
             const nombre = (r.nombre_completo ?? '').trim() || 'Sin nombre';
             const cargo = (r.cargo_nombre ?? '').trim() || '—';
             const doc = docMostrado(r);
-            const pdfHref = `/registro/planilla?empleadoId=${encodeURIComponent(r.id)}&cedula=${encodeURIComponent(doc === '—' ? '' : doc)}`;
+            const pdfBase = `/registro/planilla?empleadoId=${encodeURIComponent(r.id)}&cedula=${encodeURIComponent(doc === '—' ? '' : doc)}`;
+            const pdfHojaVida = `${pdfBase}&tipo=hoja_vida`;
+            const pdfHojaEmpleo = `${pdfBase}&tipo=hoja_empleo`;
             const proyectoHref = r.proyecto_modulo_id
               ? `/proyectos/modulo/${encodeURIComponent(r.proyecto_modulo_id)}?tab=rrhh`
               : null;
@@ -153,15 +157,26 @@ export default function RrhhHojasVidaPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                   {doc !== '—' ? (
-                    <a
-                      href={pdfHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#FF9500]/35 bg-[#FF9500]/15 px-3 py-2 text-xs font-bold text-[#FFD60A] transition hover:bg-[#FF9500]/25"
-                    >
-                      <FileText className="h-3.5 w-3.5" />
-                      Ver hoja de vida
-                    </a>
+                    <>
+                      <a
+                        href={pdfHojaEmpleo}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#FF9500]/35 bg-[#FF9500]/15 px-3 py-2 text-xs font-bold text-[#FFD60A] transition hover:bg-[#FF9500]/25"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Hoja de empleo
+                      </a>
+                      <a
+                        href={pdfHojaVida}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/10"
+                      >
+                        <FileText className="h-3.5 w-3.5 opacity-70" />
+                        Hoja de vida
+                      </a>
+                    </>
                   ) : null}
                   {proyectoHref ? (
                     <Link

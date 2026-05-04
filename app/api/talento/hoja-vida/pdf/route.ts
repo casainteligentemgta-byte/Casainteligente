@@ -3,13 +3,12 @@ import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
 import { firmaTrabajadorMetaDesdeRow, HojaDeVidaObreroLegalPdfDoc } from '@/lib/talento/hojaVidaPdfLegal';
-import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
 
 /**
- * GET ?token= — PDF de hoja de vida legal a partir de `ci_empleados.token_registro`.
+ * GET ?token= — PDF de hoja de vida (sin patrono, obra ni contratación) a partir de `ci_empleados.token_registro`.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -47,7 +46,6 @@ export async function GET(req: Request) {
   const completa = hojaVidaDesdeRow(row);
   const nombrePdf = nombreCompletoDesde(completa) || str('nombre_completo') || 'candidato';
 
-  const planillaPatrono = await resolvePlanillaPatronoPdf(admin.client, row.proyecto_modulo_id as string | null | undefined);
   const firmaTrabajador = firmaTrabajadorMetaDesdeRow(row);
 
   const pdfNode = createElement(HojaDeVidaObreroLegalPdfDoc, {
@@ -58,8 +56,8 @@ export async function GET(req: Request) {
       rolBuscadoSistema: str('rol_buscado'),
       cargoCodigo: str('cargo_codigo'),
       cargoNombre: str('cargo_nombre'),
-      planillaPatrono,
       firmaTrabajador,
+      documentVariant: 'hoja_vida',
     },
   });
   const blob = await pdf(pdfNode as Parameters<typeof pdf>[0]).toBlob();

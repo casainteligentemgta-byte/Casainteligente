@@ -10,14 +10,17 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 export const runtime = 'nodejs';
 
 /**
- * GET ?empleadoId=&cedula= — Planilla legal PDF (firma electrónica si existe).
+ * GET ?empleadoId=&cedula=&tipo=
+ * - tipo=hoja_empleo (defecto): HOJA DE EMPLEO — I trabajador, II patrono, III obra, IV contratación + resto.
+ * - tipo=hoja_vida: solo trabajador y antecedentes personales (sin patrono/obra/contratación).
  * La cédula evita descarga arbitraria por UUID.
- * Para ver en pantalla completa en el navegador, usa la página `/registro/planilla?empleadoId=&cedula=` (iframe a esta ruta).
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const empleadoId = (searchParams.get('empleadoId') ?? '').trim();
   const cedula = (searchParams.get('cedula') ?? '').trim().replace(/\uFEFF/g, '');
+  const tipoRaw = (searchParams.get('tipo') ?? 'hoja_empleo').trim().toLowerCase();
+  const documentVariant = tipoRaw === 'hoja_vida' ? 'hoja_vida' : 'hoja_empleo';
   if (!empleadoId || !cedula) {
     return NextResponse.json({ error: 'empleadoId y cedula son requeridos' }, { status: 400 });
   }
@@ -52,7 +55,10 @@ export async function GET(req: Request) {
     timeStyle: 'short',
   });
   const nombrePdf = nombreCompletoDesde(completa) || str('nombre_completo') || 'candidato';
-  const planillaPatrono = await resolvePlanillaPatronoPdf(admin.client, row.proyecto_modulo_id as string | null | undefined);
+  const planillaPatrono =
+    documentVariant === 'hoja_empleo'
+      ? await resolvePlanillaPatronoPdf(admin.client, row.proyecto_modulo_id as string | null | undefined)
+      : {};
   const firmaTrabajador = firmaTrabajadorMetaDesdeRow(row);
 
   const pdfNode = createElement(HojaDeVidaObreroLegalPdfDoc, {
@@ -65,6 +71,7 @@ export async function GET(req: Request) {
       cargoNombre: str('cargo_nombre'),
       planillaPatrono,
       firmaTrabajador,
+      documentVariant,
     },
   });
   let blob: Blob;
@@ -80,12 +87,13 @@ export async function GET(req: Request) {
   }
   const safeName = nombrePdf.replace(/[^\w\s-]/g, '').slice(0, 40) || 'candidato';
   const body = await blob.arrayBuffer();
+  const fileSlug = documentVariant === 'hoja_empleo' ? 'hoja-empleo' : 'hoja-vida';
 
   return new NextResponse(body, {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="planilla-empleo-${safeName}.pdf"`,
+      'Content-Disposition': `inline; filename="${fileSlug}-${safeName}.pdf"`,
       'Cache-Control': 'private, no-store, max-age=0',
       'X-Content-Type-Options': 'nosniff',
     },

@@ -1,16 +1,24 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+export type PlanillaDocTipo = 'hoja_empleo' | 'hoja_vida';
 
 function PlanillaIframe() {
   const sp = useSearchParams();
   const empleadoId = (sp.get('empleadoId') ?? '').trim();
   const cedula = (sp.get('cedula') ?? '').trim().replace(/\uFEFF/g, '');
+  const tipoUrl = (sp.get('tipo') ?? '').trim().toLowerCase();
+  const [docTipo, setDocTipo] = useState<PlanillaDocTipo>(() =>
+    tipoUrl === 'hoja_vida' ? 'hoja_vida' : 'hoja_empleo',
+  );
+
   const src = useMemo(() => {
     if (!empleadoId || !cedula) return null;
-    return `/api/registro/planilla-empleo-pdf?empleadoId=${encodeURIComponent(empleadoId)}&cedula=${encodeURIComponent(cedula)}`;
-  }, [empleadoId, cedula]);
+    const tipo = docTipo === 'hoja_vida' ? 'hoja_vida' : 'hoja_empleo';
+    return `/api/registro/planilla-empleo-pdf?empleadoId=${encodeURIComponent(empleadoId)}&cedula=${encodeURIComponent(cedula)}&tipo=${encodeURIComponent(tipo)}`;
+  }, [empleadoId, cedula, docTipo]);
 
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -56,6 +64,10 @@ function PlanillaIframe() {
     };
   }, [src]);
 
+  const setTipo = useCallback((t: PlanillaDocTipo) => {
+    setDocTipo(t);
+  }, []);
+
   if (!empleadoId || !cedula) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#0A0A0F] px-4 text-center">
@@ -71,21 +83,42 @@ function PlanillaIframe() {
   }
 
   const pdfHref = src ?? '';
+  const labelActivo = docTipo === 'hoja_empleo' ? 'Hoja de empleo' : 'Hoja de vida';
 
   return (
     <div className="flex h-[100dvh] flex-col bg-[#0A0A0F]">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-white/10 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="min-w-0 truncate text-xs font-medium text-zinc-400">
-          Hoja de vida (planilla legal) · <span className="text-zinc-200">{cedula}</span>
+          PDF · <span className="text-zinc-200">{labelActivo}</span> · {cedula}
         </p>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border border-white/10 p-0.5">
+            <button
+              type="button"
+              onClick={() => setTipo('hoja_vida')}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                docTipo === 'hoja_vida' ? 'bg-[#FF9500]/25 text-[#FFD60A]' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Hoja de vida
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipo('hoja_empleo')}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                docTipo === 'hoja_empleo' ? 'bg-[#FF9500]/25 text-[#FFD60A]' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Hoja de empleo
+            </button>
+          </div>
           <a
             href={pdfHref}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#FF9500] hover:bg-white/10"
           >
-            Abrir PDF
+            Abrir en pestaña
           </a>
           <button
             type="button"
@@ -99,6 +132,17 @@ function PlanillaIframe() {
           </button>
         </div>
       </div>
+      {docTipo === 'hoja_empleo' ? (
+        <p className="shrink-0 border-b border-white/5 px-3 py-1.5 text-[10px] leading-snug text-zinc-500">
+          Incluye I trabajador, II patrono, III obra, IV contratación y el resto de la hoja de vida (gremial, médicos,
+          familiares, experiencia, firma).
+        </p>
+      ) : (
+        <p className="shrink-0 border-b border-white/5 px-3 py-1.5 text-[10px] leading-snug text-zinc-500">
+          Sin datos del patrono, de la obra ni del vínculo de contratación; solo identificación del trabajador y
+          antecedentes personales.
+        </p>
+      )}
       {loading ? (
         <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">Generando PDF…</div>
       ) : null}
@@ -112,7 +156,7 @@ function PlanillaIframe() {
         </div>
       ) : null}
       {pdfObjectUrl && !loadError ? (
-        <iframe title="Hoja de vida del obrero" src={pdfObjectUrl} className="min-h-0 w-full flex-1 border-0 bg-zinc-950" />
+        <iframe title={labelActivo} src={pdfObjectUrl} className="min-h-0 w-full flex-1 border-0 bg-zinc-950" />
       ) : null}
     </div>
   );

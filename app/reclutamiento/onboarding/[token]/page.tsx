@@ -316,6 +316,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
                   hojaVidaLegal={legal}
                   className="rounded-none border-0 shadow-none"
                   planillaPatrono={planillaPatrono}
+                  documentVariant="hoja_vida"
                 />
               </div>
             ) : null}

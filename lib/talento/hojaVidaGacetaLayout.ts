@@ -12,3 +12,15 @@ export const HOJA_VIDA_PLANILLA_TITULO = 'PLANILLA DE EMPLEO';
 
 export const HOJA_VIDA_PLANILLA_SUBTITULO =
   'Hoja de identificación del trabajador — Rama construcción (datos para expediente de contratación)';
+
+/** Mismo cuerpo de identificación y antecedentes, sin patrono, obra ni contratación (solo trabajador). */
+export const HOJA_VIDA_SOLO_TITULO = 'HOJA DE VIDA';
+
+export const HOJA_VIDA_SOLO_SUBTITULO =
+  'Identificación del trabajador, certificaciones personales y antecedentes (sin patrono, obra ni datos de contratación)';
+
+/** Expediente completo para vínculo laboral (trabajador + patrono + obra + contratación + resto de hoja de vida). */
+export const HOJA_EMPLEO_TITULO = 'HOJA DE EMPLEO';
+
+export const HOJA_EMPLEO_SUBTITULO =
+  'I. Trabajador · II. Patrono · III. Obra · IV. Contratación — y hoja de vida del obrero (referencia Gaceta / LOTTT)';

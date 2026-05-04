@@ -298,7 +298,7 @@ export default function GestionRRHHLocal({
 
       {vistaHojaVidaDestacada ? (
         <div className="mt-4 rounded-xl border border-[#FF9500]/30 bg-[rgba(255,149,0,0.07)] p-4 backdrop-blur-xl">
-          <h3 className="text-sm font-bold text-[#FFD60A]">Formulario de hoja de vida del obrero (vista previa)</h3>
+          <h3 className="text-sm font-bold text-[#FFD60A]">Planilla de empleo del obrero (vista previa)</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
             Mismo esquema que completará el postulante por el enlace de registro: identificación, contratación, salud,
             familiares, experiencia y datos del patrono. Los campos en blanco se llenan al enviar la planilla.
@@ -313,7 +313,7 @@ export default function GestionRRHHLocal({
       ) : (
         <details className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 backdrop-blur-xl open:pb-4">
           <summary className="cursor-pointer py-2 text-sm font-bold text-zinc-200">
-            Visualizar campos de la hoja de vida del obrero
+            Visualizar planilla de empleo (patrono, obra y trabajador)
           </summary>
           <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">
             Formato legal I. Identificación del trabajador (datos personales, contratación, antecedentes penales,

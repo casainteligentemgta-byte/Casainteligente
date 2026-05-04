@@ -160,7 +160,7 @@ export default function WidgetFirmasPendientes() {
       toast.error('No hay cédula en el expediente; no se puede generar el PDF.');
       return;
     }
-    const pdf = `/api/registro/planilla-empleo-pdf?empleadoId=${encodeURIComponent(row.empleado_id)}&cedula=${encodeURIComponent(ced)}`;
+    const pdf = `/api/registro/planilla-empleo-pdf?empleadoId=${encodeURIComponent(row.empleado_id)}&cedula=${encodeURIComponent(ced)}&tipo=hoja_empleo`;
     window.open(pdf, '_blank', 'noopener,noreferrer');
     setFilaModal(row);
     setModalAbierto(true);
