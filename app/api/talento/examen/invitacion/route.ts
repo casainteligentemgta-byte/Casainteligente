@@ -55,7 +55,9 @@ export async function GET(req: Request) {
 
   const { data: emp, error: errEmp } = await admin.client
     .from('ci_empleados')
-    .select('nombre_completo, telefono, rol_examen, rol_buscado')
+    .select(
+      'nombre_completo, telefono, celular, email, cedula, documento, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_examen, rol_buscado',
+    )
     .eq('id', row.empleado_id)
     .maybeSingle();
 
@@ -66,9 +68,20 @@ export async function GET(req: Request) {
   const e = emp as {
     nombre_completo: string;
     telefono: string | null;
+    celular: string | null;
+    email: string | null;
+    cedula: string | null;
+    documento: string | null;
+    primer_nombre: string | null;
+    segundo_nombre: string | null;
+    primer_apellido: string | null;
+    segundo_apellido: string | null;
     rol_examen: string;
     rol_buscado: string | null;
   };
+
+  const whatsapp = (e.celular ?? e.telefono ?? '').trim() || null;
+  const cedulaDoc = (e.cedula ?? e.documento ?? '').trim() || null;
 
   return NextResponse.json({
     empleado_id: row.empleado_id,
@@ -76,6 +89,14 @@ export async function GET(req: Request) {
     expira_at: row.expira_at,
     nombre_completo: e.nombre_completo,
     telefono: e.telefono,
+    celular: e.celular,
+    whatsapp,
+    email: e.email,
+    cedula: cedulaDoc,
+    primer_nombre: e.primer_nombre,
+    segundo_nombre: e.segundo_nombre,
+    primer_apellido: e.primer_apellido,
+    segundo_apellido: e.segundo_apellido,
     rol_examen: e.rol_examen,
     rol_buscado: e.rol_buscado,
   });

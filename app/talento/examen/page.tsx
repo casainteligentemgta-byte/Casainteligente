@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import ExamenTimer from '@/components/ExamenTimer';
 import { generarExamenAdaptativo, PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
-import { formatDocumentoCedulaVE, type PrefijoCedulaVE } from '@/lib/talento/documento';
+import { formatDocumentoCedulaVE, parseDocumentoCedulaVE, type PrefijoCedulaVE } from '@/lib/talento/documento';
 import type { RolExamen } from '@/types/talento';
 
 const DURACION_SEG = 15 * 60;
@@ -38,6 +38,7 @@ function ExamenTalentoPageInner() {
   const [empleadoInvId, setEmpleadoInvId] = useState<string | null>(null);
   const [examenInvToken, setExamenInvToken] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [invitacionCargando, setInvitacionCargando] = useState(() => Boolean(urlToken));
   const [mensajeCierreTiempo, setMensajeCierreTiempo] = useState<string | null>(null);
 
   const persRef = useRef(pers);
@@ -78,10 +79,12 @@ function ExamenTalentoPageInner() {
       setInviteError(null);
       setEmpleadoInvId(null);
       setExamenInvToken(null);
+      setInvitacionCargando(false);
       return;
     }
     let cancelled = false;
     setInviteError(null);
+    setInvitacionCargando(true);
     void (async () => {
       try {
         const res = await fetch(
@@ -90,7 +93,10 @@ function ExamenTalentoPageInner() {
         const data = (await res.json()) as {
           error?: string;
           nombre_completo?: string;
+          email?: string | null;
           telefono?: string | null;
+          whatsapp?: string | null;
+          cedula?: string | null;
           rol_examen?: string;
           rol_buscado?: string | null;
           empleado_id?: string;
@@ -103,16 +109,28 @@ function ExamenTalentoPageInner() {
           setExamenInvToken(null);
           return;
         }
-        setNombre(data.nombre_completo ?? '');
-        setTelefono((data.telefono ?? '').trim());
-        setRolBuscado((data.rol_buscado ?? '').trim());
-        if (data.rol_examen === 'programador' || data.rol_examen === 'tecnico') {
-          setRolExamen(data.rol_examen);
+        setNombre((data.nombre_completo ?? '').trim());
+        setEmail((data.email ?? '').trim());
+        const wa = ((data.whatsapp ?? data.telefono) ?? '').trim();
+        setTelefono(wa);
+        const cedRaw = (data.cedula ?? '').trim();
+        const parsed = parseDocumentoCedulaVE(cedRaw);
+        if (parsed) {
+          setDocPrefijo(parsed.prefijo);
+          setDocNumero(parsed.numero);
+        } else {
+          setDocPrefijo('V');
+          setDocNumero('');
         }
+        setRolBuscado((data.rol_buscado ?? '').trim());
+        const rx = data.rol_examen === 'programador' || data.rol_examen === 'tecnico' ? data.rol_examen : 'tecnico';
+        setRolExamen(rx);
         setEmpleadoInvId(data.empleado_id ?? null);
         setExamenInvToken(data.examen_token ?? null);
       } catch {
         if (!cancelled) setInviteError('No se pudo validar el enlace');
+      } finally {
+        if (!cancelled) setInvitacionCargando(false);
       }
     })();
     return () => {
@@ -126,7 +144,15 @@ function ExamenTalentoPageInner() {
   );
 
   const iniciarExamen = () => {
-    if (!nombre.trim() || !rolBuscado.trim() || !rolExamen) return;
+    const docStr = formatDocumentoCedulaVE(docPrefijo, docNumero);
+    if (!nombre.trim() || !rolBuscado.trim() || !rolExamen) {
+      setError('Faltan datos en tu expediente (nombre o cargo). Contacta a RRHH para completar el registro.');
+      return;
+    }
+    if (!docStr) {
+      setError('Falta la cédula en tu expediente. Contacta a RRHH para actualizarla.');
+      return;
+    }
     setError(null);
     setMensajeCierreTiempo(null);
     setExpirado(false);
@@ -208,9 +234,14 @@ function ExamenTalentoPageInner() {
       </Link>
 
       <h1 className="text-2xl font-bold text-white mb-2">Evaluación adaptativa</h1>
-      <p className="text-sm text-zinc-400 mb-8">
-        20 ítems de personalidad (1–5) y 5 de lógica según rol. Tiempo máximo:{' '}
-        <strong className="text-zinc-300">15 minutos</strong>. Al expirar, el envío se bloquea.
+      <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
+        Veinte ítems de personalidad (escala 1–5) y cinco de lógica según tu perfil técnico. Con el{' '}
+        <strong className="text-zinc-300">enlace de invitación</strong>, tu nombre, apellidos en razón social, cédula y
+        WhatsApp se <strong className="text-zinc-300">precargan</strong> desde tu postulación. Al pulsar{' '}
+        <strong className="text-zinc-300">Iniciar evaluación</strong> arranca el cronómetro: tienes{' '}
+        <strong className="text-zinc-300">15 minutos</strong> para enviar; lo ideal es{' '}
+        <strong className="text-zinc-300">terminar de una vez</strong>, sin pausas largas. Si se agota el tiempo, el envío
+        completo se bloquea.
       </p>
 
       {inviteError && (
@@ -218,111 +249,85 @@ function ExamenTalentoPageInner() {
           Enlace: {inviteError}
         </p>
       )}
-      {empleadoInvId && examenInvToken && !inviteError && (
-        <p className="text-xs text-emerald-400/90 mb-4 rounded-xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-2">
-          Invitación cargada: los datos se guardarán en tu registro existente al enviar.
+      {fase === 'datos' && urlToken && invitacionCargando ? (
+        <p className="rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-6 text-center text-sm text-zinc-400">
+          Validando tu enlace y cargando datos del expediente…
         </p>
-      )}
+      ) : null}
 
-      {fase === 'datos' && (
-        <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-6">
-          <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1">Nombre completo *</label>
-            <input
-              className="w-full rounded-xl bg-black border border-zinc-800 px-4 py-3 text-white text-sm"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-            />
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Email</label>
-              <input
-                type="email"
-                className="w-full rounded-xl bg-black border border-zinc-800 px-4 py-3 text-white text-sm"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+      {fase === 'datos' && urlToken && !invitacionCargando && empleadoInvId && !inviteError ? (
+        <div className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-6">
+          <h2 className="text-lg font-semibold text-white">Tus datos (precargados)</h2>
+          <p className="text-xs text-zinc-500">
+            Tomados de tu postulación. Si ves un error, pide a RRHH que corrija el expediente antes de evaluarte.
+          </p>
+          <dl className="space-y-3 text-sm">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-zinc-500">Nombre y apellidos</dt>
+              <dd className="font-medium text-zinc-100">{nombre.trim() || '—'}</dd>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Cédula</label>
-              <div className="flex gap-2 items-stretch">
-                <select
-                  className="shrink-0 rounded-xl bg-black border border-zinc-800 px-3 py-3 text-white text-sm w-[4.5rem]"
-                  value={docPrefijo}
-                  onChange={(e) => setDocPrefijo(e.target.value as PrefijoCedulaVE)}
-                  aria-label="Prefijo cédula"
-                >
-                  <option value="V">V-</option>
-                  <option value="E">E-</option>
-                </select>
-                <input
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="Solo números"
-                  className="min-w-0 flex-1 rounded-xl bg-black border border-zinc-800 px-4 py-3 text-white text-sm"
-                  value={docNumero}
-                  onChange={(e) => setDocNumero(e.target.value.replace(/\D/g, '').slice(0, 12))}
-                />
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-zinc-500">Cédula</dt>
+              <dd className="font-medium text-zinc-100">
+                {formatDocumentoCedulaVE(docPrefijo, docNumero) || '—'}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-zinc-500">WhatsApp / móvil</dt>
+              <dd className="font-medium text-zinc-100">{telefono.trim() || '—'}</dd>
+            </div>
+            {email.trim() ? (
+              <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+                <dt className="text-zinc-500">Correo</dt>
+                <dd className="break-all font-medium text-zinc-100">{email.trim()}</dd>
               </div>
-              <p className="text-[10px] text-zinc-600 mt-1">Venezolano (V) o extranjero (E), sin puntos.</p>
+            ) : null}
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-zinc-500">Cargo / puesto</dt>
+              <dd className="text-right font-medium text-zinc-100">{rolBuscado.trim() || '—'}</dd>
             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1">Teléfono</label>
-            <input
-              className="w-full rounded-xl bg-black border border-zinc-800 px-4 py-3 text-white text-sm"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1">Rol o puesto al que aplica *</label>
-            <input
-              className="w-full rounded-xl bg-black border border-zinc-800 px-4 py-3 text-white text-sm placeholder:text-zinc-600"
-              placeholder="Ej. Desarrollador full stack, instalador de CCTV…"
-              value={rolBuscado}
-              onChange={(e) => setRolBuscado(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1">Perfil del examen (preguntas de lógica) *</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setRolExamen('programador')}
-                className={`rounded-xl border px-3 py-3 text-sm font-medium transition-colors ${
-                  rolExamen === 'programador'
-                    ? 'border-sky-500 bg-sky-950/50 text-sky-200'
-                    : 'border-zinc-800 bg-black text-zinc-400 hover:border-zinc-700'
-                }`}
-              >
-                Programador
-              </button>
-              <button
-                type="button"
-                onClick={() => setRolExamen('tecnico')}
-                className={`rounded-xl border px-3 py-3 text-sm font-medium transition-colors ${
-                  rolExamen === 'tecnico'
-                    ? 'border-sky-500 bg-sky-950/50 text-sky-200'
-                    : 'border-zinc-800 bg-black text-zinc-400 hover:border-zinc-700'
-                }`}
-              >
-                Técnico de campo
-              </button>
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="text-zinc-500">Perfil de lógica del examen</dt>
+              <dd className="font-medium capitalize text-sky-300">{rolExamen === 'programador' ? 'Programador' : 'Técnico de campo'}</dd>
             </div>
-            <p className="text-[10px] text-zinc-600 mt-1">Define las 5 preguntas de lógica; es independiente del texto del puesto.</p>
+          </dl>
+
+          <div className="rounded-xl border border-amber-500/35 bg-amber-950/20 px-4 py-3 text-sm leading-relaxed text-amber-100/95">
+            <strong className="text-amber-200">Importante:</strong> al pulsar «Iniciar evaluación ahora» comienza el tiempo
+            de <strong>15 minutos</strong>. Lo recomendable es <strong>completar todo el cuestionario de una sola vez</strong>,
+            sin salir ni dejar pasar mucho rato; si se vence el plazo, no podrás enviar las respuestas completas.
           </div>
+
+          {!formatDocumentoCedulaVE(docPrefijo, docNumero) ? (
+            <p className="text-sm text-amber-300/95">
+              No hay cédula válida en el expediente: el botón de inicio permanecerá desactivado hasta que RRHH la registre.
+            </p>
+          ) : null}
+
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
           <button
             type="button"
-            disabled={!nombre.trim() || !rolBuscado.trim() || !rolExamen}
+            disabled={!nombre.trim() || !rolBuscado.trim() || !rolExamen || !formatDocumentoCedulaVE(docPrefijo, docNumero)}
             onClick={iniciarExamen}
-            className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white font-semibold py-3 text-sm"
+            className="w-full rounded-xl bg-sky-600 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
           >
-            Iniciar examen
+            Iniciar evaluación ahora
           </button>
         </div>
-      )}
+      ) : null}
+
+      {fase === 'datos' && !urlToken ? (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-6 text-center text-sm text-zinc-400">
+          <p className="max-w-md mx-auto leading-relaxed">
+            Para hacer esta evaluación necesitas el <strong className="text-zinc-200">enlace con token</strong> que te envía
+            Casa Inteligente o RRHH (termina en <code className="text-zinc-500">?token=…</code>).
+          </p>
+          <Link href="/talento" className="mt-6 inline-block text-sky-400 hover:underline">
+            Volver al hub Talento
+          </Link>
+        </div>
+      ) : null}
 
       {fase === 'examen' && examen && examenInicio != null && (
         <ExamenTimer
@@ -344,7 +349,7 @@ function ExamenTalentoPageInner() {
               <p className="text-sm text-zinc-300">
                 {expirado
                   ? 'Tiempo agotado — envío bloqueado.'
-                  : 'Cuenta regresiva fija arriba a la derecha (15:00 → 00:00).'}
+                  : 'Cuenta regresiva arriba (15:00 → 00:00). Intenta avanzar sin pausas largas hasta enviar.'}
               </p>
               {expirado && mensajeCierreTiempo && (
                 <p className="text-sm text-emerald-400/95 mt-2 max-w-md">{mensajeCierreTiempo}</p>

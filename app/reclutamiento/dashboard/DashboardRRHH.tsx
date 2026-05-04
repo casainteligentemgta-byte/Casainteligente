@@ -5,10 +5,13 @@ import {
   Briefcase,
   CheckCircle,
   Clock,
+  Filter,
   Link2,
   MessageCircle,
   Users,
 } from 'lucide-react'
+import SemaforoRiesgo from '@/components/reclutamiento/SemaforoRiesgo'
+import { calcularRiesgoObrero, type NivelRiesgoContratacion } from '@/lib/talento/calcularRiesgoObrero'
 
 /** Simula filas de `recruitment_needs` con estado «abierta» (hasta acople real a Supabase). */
 export type RequisicionInboxItem = {
@@ -71,17 +74,86 @@ type CandidatoKanban = {
   cargo: string
   nivel: string
   columna: KanbanColumnId
+  /** Campos alineados con `ci_empleados` (evaluación obrero) para semáforo de riesgo */
+  perfil_color?: string | null
+  puntuacion_logica?: number | null
+  tiempo_respuesta?: number | null
 }
 
 const MOCK_CANDIDATOS_INICIAL: CandidatoKanban[] = [
-  { id: 'c1', nombre: 'María R. López', cargo: 'Albañil 1ra', nivel: 'Grupo 5', columna: 'invitados' },
-  { id: 'c2', nombre: 'José A. Pérez', cargo: 'Electricista 1ra', nivel: 'Grupo 5', columna: 'invitados' },
-  { id: 'c3', nombre: 'Ana K. Méndez', cargo: 'Topografía / Ayudante', nivel: 'Grupo 2', columna: 'evaluando' },
-  { id: 'c4', nombre: 'Luis F. Oropeza', cargo: 'Operador equipo pesado', nivel: 'Grupo 8', columna: 'evaluando' },
-  { id: 'c5', nombre: 'Carla S. Núñez', cargo: 'Albañil 1ra', nivel: 'Grupo 5', columna: 'banca' },
-  { id: 'c6', nombre: 'Diego M. Ríos', cargo: 'Plomero 1ra', nivel: 'Grupo 5', columna: 'banca' },
-  { id: 'c7', nombre: 'Ricardo T. Silva', cargo: 'Caporal', nivel: 'Grupo 3', columna: 'asignados' },
+  {
+    id: 'c1',
+    nombre: 'María R. López',
+    cargo: 'Albañil 1ra',
+    nivel: 'Grupo 5',
+    columna: 'invitados',
+    perfil_color: null,
+    puntuacion_logica: null,
+    tiempo_respuesta: null,
+  },
+  {
+    id: 'c2',
+    nombre: 'José A. Pérez',
+    cargo: 'Electricista 1ra',
+    nivel: 'Grupo 5',
+    columna: 'invitados',
+    perfil_color: 'Amarillo',
+    puntuacion_logica: 63,
+    tiempo_respuesta: 7 * 60,
+  },
+  {
+    id: 'c3',
+    nombre: 'Ana K. Méndez',
+    cargo: 'Topografía / Ayudante',
+    nivel: 'Grupo 2',
+    columna: 'evaluando',
+    perfil_color: 'Verde',
+    puntuacion_logica: 83,
+    tiempo_respuesta: 6 * 60 + 30,
+  },
+  {
+    id: 'c4',
+    nombre: 'Luis F. Oropeza',
+    cargo: 'Operador equipo pesado',
+    nivel: 'Grupo 8',
+    columna: 'evaluando',
+    perfil_color: 'Rojo',
+    puntuacion_logica: 66,
+    tiempo_respuesta: 8 * 60,
+  },
+  {
+    id: 'c5',
+    nombre: 'Carla S. Núñez',
+    cargo: 'Albañil 1ra',
+    nivel: 'Grupo 5',
+    columna: 'banca',
+    perfil_color: 'Azul',
+    puntuacion_logica: 100,
+    tiempo_respuesta: 9 * 60,
+  },
+  {
+    id: 'c6',
+    nombre: 'Diego M. Ríos',
+    cargo: 'Plomero 1ra',
+    nivel: 'Grupo 5',
+    columna: 'banca',
+    perfil_color: 'Rojo',
+    puntuacion_logica: 40,
+    tiempo_respuesta: 11 * 60,
+  },
+  {
+    id: 'c7',
+    nombre: 'Ricardo T. Silva',
+    cargo: 'Caporal',
+    nivel: 'Grupo 3',
+    columna: 'asignados',
+    perfil_color: 'Amarillo',
+    puntuacion_logica: 82,
+    tiempo_respuesta: 3 * 60,
+  },
 ]
+
+type FiltroRiesgo = 'todos' | NivelRiesgoContratacion | 'sin_datos'
 
 const COLUMNAS: {
   id: KanbanColumnId
@@ -130,10 +202,31 @@ function mensajeWhatsapp(needId: string, proyecto: string, cargo: string) {
   return `https://wa.me/?text=${texto}`
 }
 
+const FILTROS_RIESGO: { id: FiltroRiesgo; label: string }[] = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'verde', label: 'Solo verde' },
+  { id: 'amarillo', label: 'Solo ámbar' },
+  { id: 'rojo', label: 'Solo rojo' },
+  { id: 'sin_datos', label: 'Sin evaluar' },
+]
+
 export default function DashboardRRHH() {
   const [toast, setToast] = useState<string | null>(null)
   const [candidatos, setCandidatos] = useState<CandidatoKanban[]>(MOCK_CANDIDATOS_INICIAL)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [filtroRiesgo, setFiltroRiesgo] = useState<FiltroRiesgo>('todos')
+
+  const candidatosFiltrados = useMemo(() => {
+    if (filtroRiesgo === 'todos') return candidatos
+    return candidatos.filter((c) => {
+      const { nivel } = calcularRiesgoObrero({
+        perfil_color: c.perfil_color,
+        puntuacion_logica: c.puntuacion_logica,
+        tiempo_respuesta: c.tiempo_respuesta,
+      })
+      return nivel === filtroRiesgo
+    })
+  }, [candidatos, filtroRiesgo])
 
   const porColumna = useMemo(() => {
     const map: Record<KanbanColumnId, CandidatoKanban[]> = {
@@ -142,9 +235,9 @@ export default function DashboardRRHH() {
       banca: [],
       asignados: [],
     }
-    for (const c of candidatos) map[c.columna].push(c)
+    for (const c of candidatosFiltrados) map[c.columna].push(c)
     return map
-  }, [candidatos])
+  }, [candidatosFiltrados])
 
   const copiarLinkNeed = useCallback((need: RequisicionInboxItem) => {
     const url = linkEntrevista(need.id)
@@ -260,7 +353,88 @@ export default function DashboardRRHH() {
         </div>
       </section>
 
-      {/* —— Sección 2: Kanban —— */}
+      {/* —— Sección 2: Ficha candidatos + riesgo —— */}
+      <section className="space-y-4 border-t border-white/10 pt-10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight text-white md:text-xl">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+                <Filter className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+              </span>
+              Ficha del obrero · riesgo de contratación
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+              Semáforo derivado de <code className="text-[#FF9500]/90">perfil_color</code>,{' '}
+              <code className="text-[#FF9500]/90">puntuacion_logica</code> y{' '}
+              <code className="text-[#FF9500]/90">tiempo_respuesta</code> (simulación; en producción vendrá de{' '}
+              <code className="text-zinc-400">ci_empleados</code>).
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Filtrar</span>
+            {FILTROS_RIESGO.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFiltroRiesgo(f.id)}
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                  filtroRiesgo === f.id
+                    ? 'border-[#FF9500]/50 bg-[#FF9500]/15 text-[#FFD60A]'
+                    : 'border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/25 shadow-inner">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                <th className="px-4 py-3">Nombre</th>
+                <th className="px-4 py-3">Cargo</th>
+                <th className="px-4 py-3">Nivel</th>
+                <th className="px-4 py-3">Embudo</th>
+                <th className="px-4 py-3">Estatus de riesgo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidatosFiltrados.map((c) => {
+                const colLabel =
+                  c.columna === 'invitados'
+                    ? 'Invitados'
+                    : c.columna === 'evaluando'
+                      ? 'Evaluando'
+                      : c.columna === 'banca'
+                        ? 'La Banca'
+                        : 'Asignados'
+                return (
+                  <tr key={c.id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
+                    <td className="px-4 py-3 font-semibold text-white">{c.nombre}</td>
+                    <td className="px-4 py-3 text-zinc-400">{c.cargo}</td>
+                    <td className="px-4 py-3 text-xs text-[#FF9500]">{c.nivel}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">{colLabel}</td>
+                    <td className="px-4 py-3">
+                      <SemaforoRiesgo
+                        perfil_color={c.perfil_color}
+                        puntuacion_logica={c.puntuacion_logica}
+                        tiempo_respuesta={c.tiempo_respuesta}
+                      />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          {candidatosFiltrados.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-zinc-500">Ningún candidato coincide con el filtro.</p>
+          ) : null}
+        </div>
+      </section>
+
+      {/* —— Sección 3: Kanban —— */}
       <section className="space-y-4 border-t border-white/10 pt-10">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight text-white md:text-xl">
@@ -270,8 +444,8 @@ export default function DashboardRRHH() {
             Tablero Kanban · embudo de talento
           </h2>
           <p className="mt-1 text-sm text-zinc-400">
-            Arrastra tarjetas entre columnas (simulación local). La columna <strong className="text-[#FFD60A]">La Banca</strong>{' '}
-            destaca al talento aprobado.
+            Arrastra tarjetas entre columnas (simulación local). Respeta el filtro de riesgo arriba. La columna{' '}
+            <strong className="text-[#FFD60A]">La Banca</strong> destaca al talento aprobado.
           </p>
         </div>
 
@@ -324,7 +498,16 @@ export default function DashboardRRHH() {
                           : 'border-white/10 bg-zinc-900/80 hover:border-white/20'
                       }`}
                     >
-                      <p className="text-sm font-semibold text-white">{c.nombre}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 text-sm font-semibold text-white">{c.nombre}</p>
+                        <SemaforoRiesgo
+                          perfil_color={c.perfil_color}
+                          puntuacion_logica={c.puntuacion_logica}
+                          tiempo_respuesta={c.tiempo_respuesta}
+                          mostrarEtiqueta={false}
+                          className="shrink-0 scale-90"
+                        />
+                      </div>
                       <p className="mt-0.5 text-xs text-zinc-400">{c.cargo}</p>
                       <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-[#FF9500]">{c.nivel}</p>
                     </div>
