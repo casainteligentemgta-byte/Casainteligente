@@ -283,12 +283,105 @@ export function PlanillaPatronoStrip({ campos }: { campos?: PlanillaPatronoCampo
   );
 }
 
-/** II — Patrono (sin datos de obra). */
-export function PatronoIdentificacionPdfBlock({ campos }: { campos?: PlanillaPatronoCampos }) {
+/** Identificación del trabajador (bloque completo de la hoja de vida). */
+export function IdentificacionTrabajadorPdfBlock({
+  sectionCode,
+  data,
+}: {
+  sectionCode: string;
+  data: HojaVidaObreroCompleta;
+}) {
+  const d = data.datosPersonales;
+  const apellidos = [d.primerApellido, d.segundoApellido].map((s) => s.trim()).filter(Boolean).join(' ');
+  const nombres = [d.primerNombre, d.segundoNombre].map((s) => s.trim()).filter(Boolean).join(' ');
+  return (
+    <>
+      <RomanSection code={sectionCode} title="Identificación del trabajador" />
+      <View style={st.row}>
+        <View style={st.photoBox}>
+          <Text style={st.cellLabel}>Fotografía tipo carnet (vertical)</Text>
+          <View style={st.photoInner}>
+            <Text style={{ fontSize: 5.5, color: '#64748b' }}>{d.fotoUrl.trim() ? '(URL en expediente digital)' : '—'}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, marginLeft: 4, gap: 0 }}>
+          <View style={st.row}>
+            <CellBox label="Apellidos" value={apellidos} flex={1} />
+          </View>
+          <View style={[st.row, { marginTop: -1 }]}>
+            <CellBox label="Nombres" value={nombres} flex={1} />
+          </View>
+          <View style={[st.row, { marginTop: -1 }]}>
+            <View style={[st.cell, { flex: 1, flexDirection: 'row', alignItems: 'stretch' }]}>
+              <View style={{ flex: 1, paddingRight: 3 }}>
+                <Text style={st.cellLabel}>Cédula de identidad</Text>
+                <Text style={st.cellValue}>{val(d.cedulaIdentidad)}</Text>
+              </View>
+              <View
+                style={{
+                  width: '24%',
+                  borderLeftWidth: 1,
+                  borderLeftColor: '#000',
+                  paddingLeft: 2,
+                }}
+              >
+                <Text style={st.cellLabel}>Edad</Text>
+                <Text style={st.cellValue}>{val(d.edad)}</Text>
+              </View>
+            </View>
+            <CellBox label="Fecha de nacimiento" value={d.fechaNacimiento} w="36%" />
+          </View>
+        </View>
+      </View>
+
+      <View style={[st.row, { marginTop: -1 }]}>
+        <CellBox label="Estado civil" value={d.estadoCivil} w="26%" />
+        <CellBox label="Lugar de nacimiento" value={d.lugarNacimiento} flex={1} />
+        <CellBox label="País de nacimiento" value={d.paisNacimiento} w="30%" />
+      </View>
+      <View style={[st.row, { marginTop: -1 }]}>
+        <CellBox label="Nacionalidad" value={d.nacionalidad} flex={1} />
+        <CellBox label="Inscripción IVSS" value={siNoLabel(d.inscripcionIvss)} w="22%" />
+        <CellBox label="Zurdo" value={siNoLabel(d.zurdo)} w="18%" />
+      </View>
+      <View style={[st.row, { marginTop: -1 }]}>
+        <CellBox label="Clase de visa" value={d.claseVisa} flex={1} />
+        <CellBox label="Validez visa hasta" value={d.visaValidezHasta} w="36%" />
+      </View>
+      <View style={[st.row, { marginTop: -1 }]}>
+        <CellBox label="Dirección de habitación o domicilio" value={d.direccionDomicilio} flex={1} />
+      </View>
+      <View style={[st.row, { marginTop: -1 }]}>
+        <CellBox label="Teléfono celular" value={d.celular} flex={1} />
+        <CellBox label="Teléfono habitación" value={d.telHabitacion} w="32%" />
+      </View>
+      <View style={[st.row, { marginTop: -1 }]}>
+        <CellBox label="Correo electrónico" value={d.correoElectronico} flex={1} />
+      </View>
+      <View style={[st.photoCedulaOuter, { marginTop: -1 }]}>
+        <Text style={st.cellLabel}>Fotografía de la cédula (apaisada / horizontal)</Text>
+        <View style={st.photoCedulaSlot}>
+          <Text style={{ fontSize: 5.5, color: '#64748b' }}>
+            {d.fotoCedulaUrl.trim() ? '(URL en expediente digital)' : '—'}
+          </Text>
+        </View>
+      </View>
+    </>
+  );
+}
+
+/** I — Patrono (sin datos de obra). */
+export function PatronoIdentificacionPdfBlock({
+  campos,
+  romanCode = 'I',
+}: {
+  campos?: PlanillaPatronoCampos;
+  romanCode?: string;
+}) {
   const c = campos ?? {};
   return (
     <>
-      <RomanSection code="II" title="Identificación del patrono" />
+      <RomanSection code={romanCode} title="Identificación del patrono" />
       <View style={st.employerRow}>
         <PatField label="Nombre o denominación" value={c.entidadNombre} flex={1} />
         <PatField label="RIF" value={c.entidadRif} w="26%" />
@@ -310,18 +403,47 @@ export function PatronoIdentificacionPdfBlock({ campos }: { campos?: PlanillaPat
   );
 }
 
-/** III — Obra / proyecto (referencia). */
-export function ObraIdentificacionPdfBlock({ campos }: { campos?: PlanillaPatronoCampos }) {
+/** Obra / proyecto (referencia). */
+export function ObraIdentificacionPdfBlock({
+  campos,
+  romanCode = 'II',
+}: {
+  campos?: PlanillaPatronoCampos;
+  romanCode?: string;
+}) {
   const c = campos ?? {};
   return (
     <>
-      <RomanSection code="III" title="Identificación de la obra" />
+      <RomanSection code={romanCode} title="Identificación de la obra" />
       <View style={st.employerRow}>
         <PatField label="Proyecto u obra (nombre / referencia)" value={c.proyectoNombre} flex={1} />
         <PatField label="Código o expediente interno de obra" value={undefined} w="34%" />
       </View>
       <View style={st.employerRow}>
         <PatField label="Ubicación / municipio (si aplica)" value={undefined} flex={1} />
+      </View>
+    </>
+  );
+}
+
+/** Solo cargo / tabulador (antecedentes penales van después del bloque del trabajador en hoja de empleo). */
+export function ContratacionSoloCargoPdfBlock({
+  romanCode,
+  cargoContrato,
+  cargoCodigo,
+  cargoNombre,
+}: {
+  romanCode: string;
+  cargoContrato: string;
+  cargoCodigo: string;
+  cargoNombre: string;
+}) {
+  return (
+    <>
+      <RomanSection code={romanCode} title="Identificación de la contratación" />
+      <View style={st.row}>
+        <CellBox label="Cargo u oficio a desempeñar" value={cargoContrato} flex={1} />
+        <CellBox label="Cargo (tabulador / sistema)" value={[cargoCodigo, cargoNombre].filter(Boolean).join(' · ')} w="38%" />
       </View>
     </>
   );
@@ -335,19 +457,16 @@ export function HojaDeVidaObreroLegalPdfDoc({
   meta: HojaVidaLegalPdfMeta;
 }) {
   const esHojaEmpleo = (meta.documentVariant ?? 'hoja_empleo') === 'hoja_empleo';
-  const d = data.datosPersonales;
   const cargoContrato = val(data.contratacion.cargoUOficio) || val(meta.rolBuscadoSistema);
-  const apellidos = [d.primerApellido, d.segundoApellido].map((s) => s.trim()).filter(Boolean).join(' ');
-  const nombres = [d.primerNombre, d.segundoNombre].map((s) => s.trim()).filter(Boolean).join(' ');
 
   const tituloP1 = esHojaEmpleo ? HOJA_EMPLEO_TITULO : HOJA_VIDA_SOLO_TITULO;
   const subtituloP1 = esHojaEmpleo ? HOJA_EMPLEO_SUBTITULO : HOJA_VIDA_SOLO_SUBTITULO;
-  const codeInstr = esHojaEmpleo ? 'V' : 'III';
-  const codeGrem = esHojaEmpleo ? 'VI' : 'IV';
-  const codeMed = esHojaEmpleo ? 'VII' : 'V';
-  const codePeso = esHojaEmpleo ? 'VIII' : 'VI';
-  const codeFam = esHojaEmpleo ? 'IX' : 'VII';
-  const codeExp = esHojaEmpleo ? 'X' : 'VIII';
+  const codeInstr = esHojaEmpleo ? 'VI' : 'III';
+  const codeGrem = esHojaEmpleo ? 'VII' : 'IV';
+  const codeMed = esHojaEmpleo ? 'VIII' : 'V';
+  const codePeso = esHojaEmpleo ? 'IX' : 'VI';
+  const codeFam = esHojaEmpleo ? 'X' : 'VII';
+  const codeExp = esHojaEmpleo ? 'XI' : 'VIII';
 
   return (
     <Document>
@@ -357,88 +476,19 @@ export function HojaDeVidaObreroLegalPdfDoc({
           <Text style={st.planillaTitle}>{tituloP1}</Text>
           <Text style={st.planillaSub}>{subtituloP1}</Text>
 
-          <RomanSection code="I" title="Identificación del trabajador" />
-
-          <View style={st.row}>
-            <View style={st.photoBox}>
-              <Text style={st.cellLabel}>Fotografía tipo carnet (vertical)</Text>
-              <View style={st.photoInner}>
-                <Text style={{ fontSize: 5.5, color: '#64748b' }}>{d.fotoUrl.trim() ? '(URL en expediente digital)' : '—'}</Text>
-              </View>
-            </View>
-            <View style={{ flex: 1, marginLeft: 4, gap: 0 }}>
-              <View style={st.row}>
-                <CellBox label="Apellidos" value={apellidos} flex={1} />
-              </View>
-              <View style={[st.row, { marginTop: -1 }]}>
-                <CellBox label="Nombres" value={nombres} flex={1} />
-              </View>
-              <View style={[st.row, { marginTop: -1 }]}>
-                <View style={[st.cell, { flex: 1, flexDirection: 'row', alignItems: 'stretch' }]}>
-                  <View style={{ flex: 1, paddingRight: 3 }}>
-                    <Text style={st.cellLabel}>Cédula de identidad</Text>
-                    <Text style={st.cellValue}>{val(d.cedulaIdentidad)}</Text>
-                  </View>
-                  <View
-                    style={{
-                      width: '24%',
-                      borderLeftWidth: 1,
-                      borderLeftColor: '#000',
-                      paddingLeft: 2,
-                    }}
-                  >
-                    <Text style={st.cellLabel}>Edad</Text>
-                    <Text style={st.cellValue}>{val(d.edad)}</Text>
-                  </View>
-                </View>
-                <CellBox label="Fecha de nacimiento" value={d.fechaNacimiento} w="36%" />
-              </View>
-            </View>
-          </View>
-
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Estado civil" value={d.estadoCivil} w="26%" />
-            <CellBox label="Lugar de nacimiento" value={d.lugarNacimiento} flex={1} />
-            <CellBox label="País de nacimiento" value={d.paisNacimiento} w="30%" />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Nacionalidad" value={d.nacionalidad} flex={1} />
-            <CellBox label="Inscripción IVSS" value={siNoLabel(d.inscripcionIvss)} w="22%" />
-            <CellBox label="Zurdo" value={siNoLabel(d.zurdo)} w="18%" />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Clase de visa" value={d.claseVisa} flex={1} />
-            <CellBox label="Validez visa hasta" value={d.visaValidezHasta} w="36%" />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Dirección de habitación o domicilio" value={d.direccionDomicilio} flex={1} />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Teléfono celular" value={d.celular} flex={1} />
-            <CellBox label="Teléfono habitación" value={d.telHabitacion} w="32%" />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
-            <CellBox label="Correo electrónico" value={d.correoElectronico} flex={1} />
-          </View>
-          <View style={[st.photoCedulaOuter, { marginTop: -1 }]}>
-            <Text style={st.cellLabel}>Fotografía de la cédula (apaisada / horizontal)</Text>
-            <View style={st.photoCedulaSlot}>
-              <Text style={{ fontSize: 5.5, color: '#64748b' }}>
-                {d.fotoCedulaUrl.trim() ? '(URL en expediente digital)' : '—'}
-              </Text>
-            </View>
-          </View>
-
           {esHojaEmpleo ? (
             <>
-              <PatronoIdentificacionPdfBlock campos={meta.planillaPatrono} />
-              <ObraIdentificacionPdfBlock campos={meta.planillaPatrono} />
-              <RomanSection code="IV" title="Identificación de la contratación" />
+              <PatronoIdentificacionPdfBlock campos={meta.planillaPatrono} romanCode="I" />
+              <ObraIdentificacionPdfBlock campos={meta.planillaPatrono} romanCode="II" />
+              <ContratacionSoloCargoPdfBlock
+                romanCode="III"
+                cargoContrato={cargoContrato}
+                cargoCodigo={meta.cargoCodigo}
+                cargoNombre={meta.cargoNombre}
+              />
+              <IdentificacionTrabajadorPdfBlock sectionCode="IV" data={data} />
+              <RomanSection code="V" title="Antecedentes penales (certificado)" />
               <View style={st.row}>
-                <CellBox label="Cargo u oficio a desempeñar" value={cargoContrato} flex={1} />
-                <CellBox label="Cargo (tabulador / sistema)" value={[meta.cargoCodigo, meta.cargoNombre].filter(Boolean).join(' · ')} w="38%" />
-              </View>
-              <View style={[st.row, { marginTop: -1 }]}>
                 <CellBox label="Antecedentes penales (según certificado)" value={siNoLabel(data.certificadoAntecedentesPenales.antecedentesPenales)} w="28%" />
                 <CellBox label="Expedido por" value={data.certificadoAntecedentesPenales.expedidoPor} flex={1} />
               </View>
@@ -449,6 +499,7 @@ export function HojaDeVidaObreroLegalPdfDoc({
             </>
           ) : (
             <>
+              <IdentificacionTrabajadorPdfBlock sectionCode="I" data={data} />
               <RomanSection code="II" title="Antecedentes penales (certificado)" />
               <View style={st.row}>
                 <CellBox label="Antecedentes penales (según certificado)" value={siNoLabel(data.certificadoAntecedentesPenales.antecedentesPenales)} w="28%" />

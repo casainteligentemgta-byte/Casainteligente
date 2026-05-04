@@ -87,7 +87,7 @@ export default function HojaVidaObreroVista({
         <div className="mt-3 space-y-3 text-[10px]">
           <div>
             <p className="bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">
-              II. Identificación del patrono
+              I. Identificación del patrono
             </p>
             <div className="mt-1 grid gap-2 sm:grid-cols-2">
               <div className="border border-black bg-white px-2 py-1.5">
@@ -137,7 +137,7 @@ export default function HojaVidaObreroVista({
 
           <div>
             <p className="bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">
-              III. Identificación de la obra
+              II. Identificación de la obra
             </p>
             <div className="mt-1 grid gap-2 sm:grid-cols-2">
               <div className="border border-black bg-white px-2 py-1.5 sm:col-span-1">
@@ -157,19 +157,30 @@ export default function HojaVidaObreroVista({
 
           <div>
             <p className="bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">
-              IV. Identificación de la contratación
+              III. Identificación de la contratación
             </p>
-            <p className="mt-1 text-[9px] text-slate-500">
-              Detalle de cargo y certificaciones en las secciones «Contratación» y «Antecedentes penales» más abajo.
-            </p>
+            <div className="mt-1 border border-black bg-white px-2 py-1.5">
+              <p className="font-bold uppercase text-slate-700">Cargo u oficio a desempeñar</p>
+              <p className="mt-1 min-h-[1.75rem] border-b border-dotted border-slate-400 text-slate-900">
+                {(hojaVidaLegal.contratacion.cargoUOficio ?? '').trim() || '—'}
+              </p>
+            </div>
           </div>
+
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-600">
+            Hoja de vida del trabajador (identificación personal y bloques siguientes)
+          </p>
         </div>
       ) : null}
 
       <div className="mt-4 space-y-5">
         {Array.from(bySec.entries()).map(([titulo, filas]) => (
           <section key={titulo}>
-            <h4 className="bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">{titulo}</h4>
+            <h4 className="bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              {esHojaEmpleo && titulo === 'I. Datos personales'
+                ? 'IV. Identificación del trabajador (datos personales)'
+                : titulo}
+            </h4>
             <ul className="mt-0 border border-t-0 border-black bg-white">
               {filas.map((campo) => {
                 const v = valorVistaLegal(campo.id, hojaVidaLegal);

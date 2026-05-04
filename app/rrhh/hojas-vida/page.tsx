@@ -92,9 +92,9 @@ export default function RrhhHojasVidaPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">RRHH — Hojas de vida recibidas</h1>
             <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              Expedientes con estado «cv_completado». Usa <span className="text-zinc-200">Hoja de empleo</span> para el PDF
-              completo (I–IV: trabajador, patrono, obra, contratación + resto). <span className="text-zinc-200">Hoja de vida</span>{' '}
-              omite patrono, obra y contratación. En onboarding sigue disponible{' '}
+              Expedientes «cv_completado». <span className="text-zinc-200">Hoja de empleo</span>: primero patrono, obra y
+              contratación; después la hoja de vida del trabajador. <span className="text-zinc-200">Hoja de vida</span> solo el
+              bloque del trabajador. Onboarding:{' '}
               <code className="text-zinc-500">/api/talento/hoja-vida/pdf?token=…</code>.
             </p>
           </div>
