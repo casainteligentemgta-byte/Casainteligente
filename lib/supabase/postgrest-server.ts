@@ -18,6 +18,7 @@ export function resolveSupabaseProjectUrl(): string | null {
 export function resolveSupabasePostgrestKey(): string | null {
   const k =
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.SUPABASE_SECRET_KEY?.trim() ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
     process.env.SUPABASE_ANON_KEY?.trim() ||
     '';

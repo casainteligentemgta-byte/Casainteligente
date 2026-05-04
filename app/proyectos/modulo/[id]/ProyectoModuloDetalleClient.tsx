@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
 import FeedNotificacionesRealtime from '@/components/proyectos/FeedNotificacionesRealtime';
 import GestionRRHHLocal from '@/components/proyectos/GestionRRHHLocal';
@@ -558,8 +559,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     return row?.nombre?.trim() || null;
   }, [proyecto?.entidad_id, entidades]);
 
+  /** Cabecera “datos del patrono” en la vista previa de hoja de vida (RRHH). */
+  const planillaPatronoVista = useMemo((): PlanillaPatronoCampos | null => {
+    if (!proyecto) return null;
+    const eid = proyecto.entidad_id ? String(proyecto.entidad_id).trim() : '';
+    const ent = eid ? entidades.find((en) => en.id === eid) : undefined;
+    return {
+      entidadNombre: (ent?.nombre ?? '').trim() || undefined,
+      entidadRif: (ent?.rif ?? '').trim() || undefined,
+      proyectoNombre: (proyecto.nombre ?? '').trim() || undefined,
+      empresaDomicilio: (proyecto.ubicacion_texto ?? '').trim() || undefined,
+    };
+  }, [proyecto, entidades]);
+
   /** Enlace directo ?tab=rrhh|talento: cabecera mínima (sin atajos duplicados al panel RRHH). */
   const tabVistaTalento = searchParams.get('tab') === 'rrhh' || searchParams.get('tab') === 'talento';
+  const tabRrhhDirecto = searchParams.get('tab') === 'rrhh';
 
   async function generarSugerenciasIA() {
     if (!proyecto) return;
@@ -1172,6 +1187,8 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   proyectoModuloId={id}
                   listaRefresco={rrhhVacantesTick}
                   nombreProyecto={proyecto?.nombre ?? null}
+                  planillaPatrono={planillaPatronoVista}
+                  vistaHojaVidaDestacada={tabRrhhDirecto}
                 />
               </div>
             </div>
