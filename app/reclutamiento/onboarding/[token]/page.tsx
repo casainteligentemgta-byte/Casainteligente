@@ -173,6 +173,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
     const payload: Record<string, unknown> = {
       hoja_vida_obrero: merged,
       nombre_completo: nombre || 'Candidato',
+      nombres: nombre.trim() || 'Candidato',
       cedula: t(merged.datosPersonales.cedulaIdentidad),
       documento: t(merged.datosPersonales.cedulaIdentidad),
       telefono: t(merged.datosPersonales.celular) || null,
@@ -185,6 +186,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
       talla_camisa: merged.pesoMedidas.tallaCamisa || formData.talla_camisa,
       talla_botas: merged.pesoMedidas.medidaBotas || String(formData.talla_botas),
       rol_buscado: t(merged.contratacion.cargoUOficio) || undefined,
+      cargo: t(merged.contratacion.cargoUOficio) || 'Por definir',
       cedula_foto_url: merged.datosPersonales.fotoCedulaUrl || undefined,
       estado_proceso: 'cv_completado',
       updated_at: new Date().toISOString(),

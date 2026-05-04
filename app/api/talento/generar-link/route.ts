@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
+import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { RolExamen } from '@/types/talento';
 
@@ -86,7 +87,10 @@ export async function POST(req: Request) {
 
   const insertRow: Record<string, unknown> = {
     nombre_completo: nombre,
+    nombres: nombresLegadoDesdeTextoLibre(nombre),
+    cargo: rolBuscado,
     telefono: whatsapp || null,
+    token,
     token_registro: token,
     estado_proceso: 'pendiente_cv',
     rol_examen: rolExamen,

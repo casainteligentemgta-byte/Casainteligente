@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
+import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
+import { cedulaAuthCoincide, cedulaEfectivaDesdeEmpleado } from '@/lib/talento/cedulaAuth';
+import { hojaVidaDesdeRow } from '@/lib/talento/hojaVidaObreroCompleta';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
-
-function normDoc(s: string) {
-  return s.replace(/\s+/g, '').toUpperCase();
-}
 
 type Body = {
   empleadoId?: string;
@@ -50,11 +49,7 @@ export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 
-  const { data: row, error: selErr } = await admin.client
-    .from('ci_empleados')
-    .select('id, documento, cedula')
-    .eq('id', empleadoId)
-    .maybeSingle();
+  const { data: row, error: selErr } = await admin.client.from('ci_empleados').select('*').eq('id', empleadoId).maybeSingle();
 
   if (selErr) {
     console.error('[subir-firma]', selErr);
@@ -64,9 +59,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 });
   }
 
-  const r = row as { id: string; documento?: string | null; cedula?: string | null };
-  const dbDoc = normDoc(String(r.documento ?? r.cedula ?? ''));
-  if (!dbDoc || dbDoc !== normDoc(cedula)) {
+  const r = row as Record<string, unknown>;
+  const hoja = hojaVidaDesdeRow(r);
+  const dbCed = cedulaEfectivaDesdeEmpleado(r, hoja);
+  if (!cedulaAuthCoincide(dbCed, cedula)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
   }
 
@@ -87,7 +83,7 @@ export async function POST(req: Request) {
   });
   if (upErr) {
     console.error('[subir-firma] storage', upErr);
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
+    return NextResponse.json({ error: friendlyStorageError('talento-firmas', upErr.message) }, { status: 500 });
   }
 
   const { data: pub } = admin.client.storage.from('talento-firmas').getPublicUrl(path);

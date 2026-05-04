@@ -3,6 +3,8 @@
  * Evita caer en Drizzle/DATABASE_URL cuando la app ya usa Supabase en el cliente.
  */
 
+import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
+
 export type SupabasePostgrestCreds = { url: string; key: string };
 
 /** URL del proyecto (con o sin NEXT_PUBLIC_). */
@@ -16,9 +18,9 @@ export function resolveSupabaseProjectUrl(): string | null {
  * luego anon (mismo rol que el navegador).
  */
 export function resolveSupabasePostgrestKey(): string | null {
+  const service = resolveSupabaseServiceRoleKey();
   const k =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.SUPABASE_SECRET_KEY?.trim() ||
+    service ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
     process.env.SUPABASE_ANON_KEY?.trim() ||
     '';

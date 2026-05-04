@@ -6,6 +6,7 @@ export type FamiliarPostulacionRow = {
   parentesco: string;
   fechaNacimiento: string;
   noAplica: boolean;
+  observaciones: string;
 };
 
 export type ExperienciaPostulacionRow = {
@@ -33,11 +34,16 @@ export type GacetaPostulacionFormState = {
   edad: string;
   estadoCivil: string;
   lugarNacimiento: string;
+  paisNacimiento: string;
   fechaNacimiento: string;
   nacionalidad: string;
   celular: string;
   correo: string;
   direccion: string;
+  /** Clase de visa (si aplica). */
+  visaClase: string;
+  /** Validez de visa hasta (fecha o texto). */
+  visaValidezHasta: string;
   zurdo: boolean;
   ivssInscrito: boolean;
   fotoPerfilFile: File | null;
@@ -48,11 +54,15 @@ export type GacetaPostulacionFormState = {
   instruccionTecnica: boolean;
   instruccionSuperior: boolean;
   profesionActual: string;
-  /** Actividad gremial / sindical (planilla Gaceta). */
+  /** Federación sindical (apartado sindicato). */
+  sindicatoFederacion: string;
+  /** Gremio o asociación a la que pertenece. */
   sindicatoOrganizacion: string;
   sindicatoCargo: string;
   antecedentes: AntecedentesPenalesPostulacion;
   examenMedico: boolean;
+  examenMedicoEfectuadoPor: string;
+  examenMedicoFecha: string;
   tipoSangre: string;
   enfermedades: string;
   incapacidades: string;
@@ -62,12 +72,13 @@ export type GacetaPostulacionFormState = {
   tallaPantalon: string;
   tallaBragas: string;
   tallaBotas: string;
+  medidasObservaciones: string;
   familiares: FamiliarPostulacionRow[];
   experiencia: ExperienciaPostulacionRow[];
 };
 
 export function emptyFamiliarPostulacion(): FamiliarPostulacionRow {
-  return { nombre: '', apellido: '', parentesco: '', fechaNacimiento: '', noAplica: false };
+  return { nombre: '', apellido: '', parentesco: '', fechaNacimiento: '', noAplica: false, observaciones: '' };
 }
 
 export function emptyExperienciaPostulacion(): ExperienciaPostulacionRow {
@@ -84,11 +95,14 @@ export function initialGacetaPostulacionForm(): GacetaPostulacionFormState {
     edad: '',
     estadoCivil: '',
     lugarNacimiento: '',
+    paisNacimiento: '',
     fechaNacimiento: '',
     nacionalidad: '',
     celular: '',
     correo: '',
     direccion: '',
+    visaClase: '',
+    visaValidezHasta: '',
     zurdo: false,
     ivssInscrito: false,
     fotoPerfilFile: null,
@@ -99,10 +113,13 @@ export function initialGacetaPostulacionForm(): GacetaPostulacionFormState {
     instruccionTecnica: false,
     instruccionSuperior: false,
     profesionActual: '',
+    sindicatoFederacion: '',
     sindicatoOrganizacion: '',
     sindicatoCargo: '',
     antecedentes: { tiene: '', expedidoPor: '', lugar: '', fechaExpedicion: '' },
     examenMedico: false,
+    examenMedicoEfectuadoPor: '',
+    examenMedicoFecha: '',
     tipoSangre: '',
     enfermedades: '',
     incapacidades: '',
@@ -112,7 +129,8 @@ export function initialGacetaPostulacionForm(): GacetaPostulacionFormState {
     tallaPantalon: '',
     tallaBragas: '',
     tallaBotas: '',
-    familiares: [emptyFamiliarPostulacion()],
+    medidasObservaciones: '',
+    familiares: Array.from({ length: 5 }, () => emptyFamiliarPostulacion()),
     experiencia: [emptyExperienciaPostulacion(), emptyExperienciaPostulacion()],
   };
 }

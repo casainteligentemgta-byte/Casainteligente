@@ -12,6 +12,7 @@ export type FamiliarDependiente = {
   fechaNacimiento: string;
   /** Marca “No” del formulario físico (no aplica / no informa). */
   noAplica: boolean;
+  observaciones: string;
 };
 
 export type TrabajoPrevio = {
@@ -44,6 +45,8 @@ export type HojaVidaObreroCompleta = {
     direccionDomicilio: string;
     inscripcionIvss: SiNo;
     zurdo: SiNo;
+    claseVisa: string;
+    visaValidezHasta: string;
   };
   contratacion: {
     cargoUOficio: string;
@@ -69,6 +72,7 @@ export type HojaVidaObreroCompleta = {
   antecedentesMedicos: {
     examenMedicoPrevio: SiNo;
     efectuadoPor: string;
+    fechaExamenMedico: string;
     tipoSangre: string;
     enfermedadesPadecidas: string;
     incapacidadesFisicasOFuncionales: string;
@@ -87,7 +91,7 @@ export type HojaVidaObreroCompleta = {
 };
 
 export function emptyFamiliar(): FamiliarDependiente {
-  return { nombre: '', apellido: '', parentesco: '', fechaNacimiento: '', noAplica: false };
+  return { nombre: '', apellido: '', parentesco: '', fechaNacimiento: '', noAplica: false, observaciones: '' };
 }
 
 export function emptyTrabajoPrevio(): TrabajoPrevio {
@@ -123,6 +127,8 @@ export function emptyHojaVidaObreroCompleta(): HojaVidaObreroCompleta {
       direccionDomicilio: '',
       inscripcionIvss: '',
       zurdo: '',
+      claseVisa: '',
+      visaValidezHasta: '',
     },
     contratacion: { cargoUOficio: '' },
     certificadoAntecedentesPenales: {
@@ -143,6 +149,7 @@ export function emptyHojaVidaObreroCompleta(): HojaVidaObreroCompleta {
     antecedentesMedicos: {
       examenMedicoPrevio: '',
       efectuadoPor: '',
+      fechaExamenMedico: '',
       tipoSangre: '',
       enfermedadesPadecidas: '',
       incapacidadesFisicasOFuncionales: '',
@@ -197,6 +204,8 @@ export function parseHojaVidaObreroJson(raw: unknown): HojaVidaObreroCompleta {
     direccionDomicilio: String(dp.direccionDomicilio ?? ''),
     inscripcionIvss: mergeSiNo(dp.inscripcionIvss),
     zurdo: mergeSiNo(dp.zurdo),
+    claseVisa: String(dp.claseVisa ?? ''),
+    visaValidezHasta: String(dp.visaValidezHasta ?? ''),
   };
 
   const con = isRecord(raw.contratacion) ? raw.contratacion : {};
@@ -232,6 +241,7 @@ export function parseHojaVidaObreroJson(raw: unknown): HojaVidaObreroCompleta {
   const antecedentesMedicos = {
     examenMedicoPrevio: mergeSiNo(am.examenMedicoPrevio),
     efectuadoPor: String(am.efectuadoPor ?? ''),
+    fechaExamenMedico: String(am.fechaExamenMedico ?? ''),
     tipoSangre: String(am.tipoSangre ?? ''),
     enfermedadesPadecidas: String(am.enfermedadesPadecidas ?? ''),
     incapacidadesFisicasOFuncionales: String(am.incapacidadesFisicasOFuncionales ?? ''),
@@ -257,6 +267,7 @@ export function parseHojaVidaObreroJson(raw: unknown): HojaVidaObreroCompleta {
       parentesco: String(fr.parentesco ?? ''),
       fechaNacimiento: String(fr.fechaNacimiento ?? ''),
       noAplica: Boolean(fr.noAplica),
+      observaciones: String(fr.observaciones ?? ''),
     };
   });
 
@@ -370,7 +381,8 @@ export function hojaVidaDesdeRow(row: Record<string, unknown>): HojaVidaObreroCo
       const fechaNacimiento = String(item.fecha_nacimiento ?? item.fechaNacimiento ?? '').trim();
       const noAplica = Boolean(item.no_aplica ?? item.noAplica);
       if (!nombre && !apellido && !parentesco) continue;
-      mapped.push({ nombre, apellido, parentesco, fechaNacimiento, noAplica });
+      const observaciones = String(item.observaciones ?? '').trim();
+      mapped.push({ nombre, apellido, parentesco, fechaNacimiento, noAplica, observaciones });
     }
     if (mapped.length) {
       fromJson.familiaresDependientes = mapped;

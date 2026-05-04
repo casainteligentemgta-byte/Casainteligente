@@ -11,6 +11,8 @@ import {
   estadoContratacionFromTripode,
   semaforoDbFromTripode,
 } from '@/lib/talento/semaphore';
+import { randomUUID } from 'crypto';
+import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
 import type { RolExamen } from '@/types/talento';
@@ -165,8 +167,11 @@ export async function POST(req: Request) {
     const semaforo = semaforoDbFromTripode(tripode) ?? 'amarillo';
     const estado = estadoContratacionFromTripode(tripode);
 
-    const insertRow = {
+    const nombresCol = nombresLegadoDesdeTextoLibre(nombre);
+    const baseRow = {
       nombre_completo: nombre,
+      nombres: nombresCol,
+      cargo: rolBuscado ?? 'Por definir',
       email: body.email?.trim() || null,
       documento: body.documento?.trim() || null,
       telefono: body.telefono?.trim() || null,
@@ -188,6 +193,10 @@ export async function POST(req: Request) {
       examen_inicio_at: new Date(inicio).toISOString(),
       examen_completado_at: new Date().toISOString(),
     };
+    const tokenNuevo = randomUUID();
+    const insertRow = empleadoIdUpdate
+      ? baseRow
+      : { ...baseRow, token: tokenNuevo, token_registro: tokenNuevo };
 
     const { data: rowRaw, error } = empleadoIdUpdate
       ? await supabase

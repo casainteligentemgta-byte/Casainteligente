@@ -17,6 +17,7 @@ import {
   captacionFormJsonSchema,
   captacionStep4Schema,
 } from '@/lib/registro/captacionPlanillaSchema';
+import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
 import { createClient } from '@/lib/supabase/client';
 
@@ -28,8 +29,27 @@ const inputClass =
   'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-[#FF9500] focus:ring-1 focus:ring-[#FF9500]/40';
 const labelClass = 'block text-[10px] font-bold uppercase tracking-wide text-zinc-500';
 
-const STEPS_FULL = ['Personal', 'Educación', 'Salud y medidas', 'Familiares', 'Experiencia', 'Firma digital'] as const;
-const STEPS_CAPTACION = ['Personal', 'Educación', 'Salud y medidas', 'Familiares', 'Experiencia'] as const;
+const STEPS_CAPTACION = [
+  'Trabajador',
+  'Conducta',
+  'Educación',
+  'Sindicato',
+  'Salud',
+  'Medidas',
+  'Familiares',
+  'Trabajos previos',
+] as const;
+const STEPS_FULL = [
+  'Trabajador',
+  'Conducta',
+  'Educación',
+  'Sindicato',
+  'Salud',
+  'Medidas',
+  'Familiares',
+  'Trabajos previos',
+  'Firma digital',
+] as const;
 
 type NeedLoaded = {
   id: string;
@@ -182,10 +202,19 @@ export default function RegistroPorNeedCliente({
       if (!form.fotoPerfilFile) return 'Sube la foto de perfil (tipo carnet).';
       if (!form.fotoCedulaFile) return 'Sube la foto de la cédula.';
     }
-    if (i === 2) {
+    if (i === 1) {
       if (!form.antecedentes.tiene) return 'Indica si tiene antecedentes penales (sí / no).';
     }
-    if (i === 5 && !captacionMode) {
+    if (i === 4) {
+      if (
+        form.examenMedico &&
+        (!form.examenMedicoEfectuadoPor.trim() || !form.examenMedicoFecha.trim())
+      ) {
+        return 'Si hubo examen médico previo, indica efectuado por y la fecha.';
+      }
+    }
+    const firmaStep = captacionMode ? -1 : 8;
+    if (i === firmaStep && !captacionMode) {
       if (!firma) return 'Dibuja y pulsa «Guardar firma» antes de enviar la postulación.';
     }
     return null;
@@ -206,7 +235,7 @@ export default function RegistroPorNeedCliente({
       if (!p4.success) {
         const msg = p4.error.flatten().formErrors[0] ?? 'Revisa familiares y al menos dos empleos anteriores.';
         toast.error(msg);
-        setStep(3);
+        setStep(7);
         return;
       }
       const { fotoPerfilFile: _fp, fotoCedulaFile: _fc, ...formJson } = form;
@@ -297,6 +326,7 @@ export default function RegistroPorNeedCliente({
           parentesco: r.parentesco.trim(),
           fecha_nacimiento: r.fechaNacimiento.trim(),
           no_aplica: r.noAplica,
+          observaciones: r.observaciones.trim() || null,
         }));
 
       const experienciaJson = form.experiencia
@@ -314,6 +344,12 @@ export default function RegistroPorNeedCliente({
       const peso = parseOptionalNum(form.peso);
       const est = parseOptionalNum(form.estatura);
 
+      const nombresLegado = nombresLegadoDesdeGaceta(
+        { primerNombre: form.primerNombre, segundoNombre: form.segundoNombre },
+        nombreCompleto || undefined,
+      );
+      const tokenRegistro = globalThis.crypto.randomUUID();
+
       const insertPayload: Record<string, unknown> = {
         recruitment_need_id: needRowId,
         proyecto_modulo_id: need.proyecto_modulo_id,
@@ -322,6 +358,8 @@ export default function RegistroPorNeedCliente({
         cargo_nivel: need.cargo_nivel,
         tipo_vacante: need.tipo_vacante,
         nombre_completo: nombreCompleto || 'Postulante',
+        nombres: nombresLegado,
+        cargo: cargoEtiqueta,
         email: form.correo.trim(),
         telefono: form.celular.trim(),
         documento: form.cedula.trim(),
@@ -371,6 +409,8 @@ export default function RegistroPorNeedCliente({
         foto_perfil_url: fotoPerfil || null,
         cedula_foto_url: fotoCedula || null,
         hoja_vida_obrero: hoja,
+        token: tokenRegistro,
+        token_registro: tokenRegistro,
       };
 
       const { data: ins, error: insErr } = await supabase.from('ci_empleados').insert(insertPayload).select('id').single();
@@ -467,11 +507,7 @@ export default function RegistroPorNeedCliente({
   return (
     <div className="min-h-screen bg-[#0A0A0F] pb-24 pt-8 text-zinc-100">
       <div className="mx-auto max-w-lg px-4">
-        <Link href="/" className="text-xs font-semibold text-[#FF9500]/90 hover:text-[#FFD60A]">
-          ← Inicio
-        </Link>
-
-        <header className="mt-6 rounded-2xl border border-[#FF9500]/25 bg-gradient-to-br from-[#FF9500]/10 to-transparent p-5 shadow-lg shadow-black/40">
+        <header className="rounded-2xl border border-[#FF9500]/25 bg-gradient-to-br from-[#FF9500]/10 to-transparent p-5 shadow-lg shadow-black/40">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#FFD60A]/90">Casa Inteligente</p>
           <h1 className="mt-2 text-xl font-bold leading-snug text-white">Postulación para: {cargoEtiqueta}</h1>
           {proyectoNombre ? (
@@ -503,7 +539,7 @@ export default function RegistroPorNeedCliente({
         <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
           {step === 0 && (
             <div className="space-y-4">
-              <h2 className="text-sm font-bold text-white">Datos personales</h2>
+              <h2 className="text-sm font-bold text-white">1. Trabajador — datos personales</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Primer nombre *</label>
@@ -546,6 +582,10 @@ export default function RegistroPorNeedCliente({
                     value={form.lugarNacimiento}
                     onChange={(e) => setF('lugarNacimiento', e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className={labelClass}>País de nacimiento</label>
+                  <input className={inputClass} value={form.paisNacimiento} onChange={(e) => setF('paisNacimiento', e.target.value)} />
                 </div>
               </div>
               <div>
@@ -592,8 +632,24 @@ export default function RegistroPorNeedCliente({
                   onChange={(e) => setF('ivssInscrito', e.target.checked)}
                   className="rounded border-white/20"
                 />
-                Inscrito IVSS
+                Inscrito en el IVSS
               </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Clase de visa</label>
+                  <input className={inputClass} value={form.visaClase} onChange={(e) => setF('visaClase', e.target.value)} placeholder="Si no aplica, en blanco" />
+                </div>
+                <div>
+                  <label className={labelClass}>Validez hasta</label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    style={{ colorScheme: 'dark' }}
+                    value={form.visaValidezHasta}
+                    onChange={(e) => setF('visaValidezHasta', e.target.value)}
+                  />
+                </div>
+              </div>
               <div>
                 <label className={labelClass}>Foto de perfil (carnet) *</label>
                 <input
@@ -617,54 +673,9 @@ export default function RegistroPorNeedCliente({
 
           {step === 1 && (
             <div className="space-y-4">
-              <h2 className="text-sm font-bold text-white">Educación</h2>
-              <label className="flex items-center gap-2 text-sm text-zinc-300">
-                <input type="checkbox" checked={form.sabeLeer} onChange={(e) => setF('sabeLeer', e.target.checked)} />
-                Sabe leer y escribir
-              </label>
-              {(
-                [
-                  ['instruccionPrimaria', 'Instrucción primaria'],
-                  ['instruccionSecundaria', 'Secundaria'],
-                  ['instruccionTecnica', 'Técnica'],
-                  ['instruccionSuperior', 'Superior'],
-                ] as const
-              ).map(([k, lab]) => (
-                <label key={k} className="flex items-center gap-2 text-sm text-zinc-300">
-                  <input type="checkbox" checked={form[k]} onChange={(e) => setF(k, e.target.checked)} />
-                  {lab}
-                </label>
-              ))}
+              <h2 className="text-sm font-bold text-white">2. Conducta — antecedentes penales</h2>
               <div>
-                <label className={labelClass}>Profesión u oficio actual</label>
-                <input className={inputClass} value={form.profesionActual} onChange={(e) => setF('profesionActual', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Federación, sindicato o gremio</label>
-                <input
-                  className={inputClass}
-                  value={form.sindicatoOrganizacion}
-                  onChange={(e) => setF('sindicatoOrganizacion', e.target.value)}
-                  placeholder="Si no aplica, dejar en blanco"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Cargo en la organización gremial</label>
-                <input
-                  className={inputClass}
-                  value={form.sindicatoCargo}
-                  onChange={(e) => setF('sindicatoCargo', e.target.value)}
-                  placeholder="Si no aplica, dejar en blanco"
-                />
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-bold text-white">Salud y medidas</h2>
-              <div>
-                <p className={labelClass}>¿Antecedentes penales? *</p>
+                <p className={labelClass}>Antecedentes penales *</p>
                 <div className="mt-2 flex flex-wrap gap-3 text-sm">
                   {(['no', 'si'] as const).map((v) => (
                     <label key={v} className="flex items-center gap-2 text-zinc-300">
@@ -679,17 +690,17 @@ export default function RegistroPorNeedCliente({
                   ))}
                 </div>
               </div>
+              <div>
+                <label className={labelClass}>Expedido por</label>
+                <input
+                  className={inputClass}
+                  value={form.antecedentes.expedidoPor}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, antecedentes: { ...p.antecedentes, expedidoPor: e.target.value } }))
+                  }
+                />
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className={labelClass}>Expedido por</label>
-                  <input
-                    className={inputClass}
-                    value={form.antecedentes.expedidoPor}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, antecedentes: { ...p.antecedentes, expedidoPor: e.target.value } }))
-                    }
-                  />
-                </div>
                 <div>
                   <label className={labelClass}>Lugar</label>
                   <input
@@ -698,28 +709,119 @@ export default function RegistroPorNeedCliente({
                     onChange={(e) => setForm((p) => ({ ...p, antecedentes: { ...p.antecedentes, lugar: e.target.value } }))}
                   />
                 </div>
+                <div>
+                  <label className={labelClass}>Fecha</label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    style={{ colorScheme: 'dark' }}
+                    value={form.antecedentes.fechaExpedicion}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, antecedentes: { ...p.antecedentes, fechaExpedicion: e.target.value } }))
+                    }
+                  />
+                </div>
               </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-bold text-white">3. Educación</h2>
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input type="checkbox" checked={form.sabeLeer} onChange={(e) => setF('sabeLeer', e.target.checked)} />
+                Sabe leer y escribir
+              </label>
+              {(
+                [
+                  ['instruccionPrimaria', 'Instrucción primaria'],
+                  ['instruccionSecundaria', 'Instrucción secundaria'],
+                  ['instruccionTecnica', 'Técnica'],
+                  ['instruccionSuperior', 'Superior'],
+                ] as const
+              ).map(([k, lab]) => (
+                <label key={k} className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input type="checkbox" checked={form[k]} onChange={(e) => setF(k, e.target.checked)} />
+                  {lab}
+                </label>
+              ))}
               <div>
-                <label className={labelClass}>Fecha expedición certificado</label>
+                <label className={labelClass}>Profesión u oficio actual</label>
+                <input className={inputClass} value={form.profesionActual} onChange={(e) => setF('profesionActual', e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-bold text-white">4. Sindicato — actividad gremial</h2>
+              <div>
+                <label className={labelClass}>Federación sindical</label>
                 <input
-                  type="date"
                   className={inputClass}
-                  style={{ colorScheme: 'dark' }}
-                  value={form.antecedentes.fechaExpedicion}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, antecedentes: { ...p.antecedentes, fechaExpedicion: e.target.value } }))
-                  }
+                  value={form.sindicatoFederacion}
+                  onChange={(e) => setF('sindicatoFederacion', e.target.value)}
+                  placeholder="Si no aplica, en blanco"
                 />
               </div>
+              <div>
+                <label className={labelClass}>Gremio o asociación a la que pertenece</label>
+                <input
+                  className={inputClass}
+                  value={form.sindicatoOrganizacion}
+                  onChange={(e) => setF('sindicatoOrganizacion', e.target.value)}
+                  placeholder="Si no aplica, en blanco"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Cargo que ejerce</label>
+                <input className={inputClass} value={form.sindicatoCargo} onChange={(e) => setF('sindicatoCargo', e.target.value)} placeholder="Si no aplica, en blanco" />
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-bold text-white">5. Salud</h2>
               <label className="flex items-center gap-2 text-sm text-zinc-300">
                 <input type="checkbox" checked={form.examenMedico} onChange={(e) => setF('examenMedico', e.target.checked)} />
-                Examen médico previo realizado
+                Examen médico previo (sí)
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelClass}>Tipo de sangre</label>
-                  <input className={inputClass} value={form.tipoSangre} onChange={(e) => setF('tipoSangre', e.target.value)} />
+                  <label className={labelClass}>Efectuado por</label>
+                  <input className={inputClass} value={form.examenMedicoEfectuadoPor} onChange={(e) => setF('examenMedicoEfectuadoPor', e.target.value)} />
                 </div>
+                <div>
+                  <label className={labelClass}>Fecha del examen médico</label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    style={{ colorScheme: 'dark' }}
+                    value={form.examenMedicoFecha}
+                    onChange={(e) => setF('examenMedicoFecha', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Tipo de sangre</label>
+                <input className={inputClass} value={form.tipoSangre} onChange={(e) => setF('tipoSangre', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>Enfermedades padecidas</label>
+                <textarea className={`${inputClass} resize-y`} rows={2} value={form.enfermedades} onChange={(e) => setF('enfermedades', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>Incapacidades físicas o funcionales</label>
+                <textarea className={`${inputClass} resize-y`} rows={2} value={form.incapacidades} onChange={(e) => setF('incapacidades', e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-bold text-white">6. Medidas</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Peso (kg)</label>
                   <input className={inputClass} value={form.peso} onChange={(e) => setF('peso', e.target.value)} />
@@ -728,27 +830,12 @@ export default function RegistroPorNeedCliente({
                   <label className={labelClass}>Estatura (m)</label>
                   <input className={inputClass} value={form.estatura} onChange={(e) => setF('estatura', e.target.value)} />
                 </div>
-              </div>
-              <div>
-                <label className={labelClass}>Enfermedades padecidas</label>
-                <textarea className={`${inputClass} resize-y`} rows={2} value={form.enfermedades} onChange={(e) => setF('enfermedades', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Incapacidades</label>
-                <textarea
-                  className={`${inputClass} resize-y`}
-                  rows={2}
-                  value={form.incapacidades}
-                  onChange={(e) => setF('incapacidades', e.target.value)}
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
                 {(
                   [
+                    ['tallaBragas', 'Talla braga'],
                     ['tallaCamisa', 'Talla camisa'],
                     ['tallaPantalon', 'Talla pantalón'],
-                    ['tallaBragas', 'Talla bragas'],
-                    ['tallaBotas', 'Nº botas'],
+                    ['tallaBotas', 'Medidas / Nº botas'],
                   ] as const
                 ).map(([k, lab]) => (
                   <div key={k}>
@@ -757,17 +844,26 @@ export default function RegistroPorNeedCliente({
                   </div>
                 ))}
               </div>
+              <div>
+                <label className={labelClass}>Observaciones</label>
+                <textarea
+                  className={`${inputClass} resize-y`}
+                  rows={2}
+                  value={form.medidasObservaciones}
+                  onChange={(e) => setF('medidasObservaciones', e.target.value)}
+                />
+              </div>
             </div>
           )}
 
-          {step === 3 && (
+          {step === 6 && (
             <div className="space-y-4">
-              <h2 className="text-sm font-bold text-white">Familiares dependientes</h2>
+              <h2 className="text-sm font-bold text-white">7. Familiares (hasta 5)</h2>
               {form.familiares.map((row, idx) => (
                 <div key={idx} className="rounded-xl border border-white/10 bg-black/20 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase text-[#FFD60A]/80">Familiar {idx + 1}</span>
-                    {form.familiares.length > 1 ? (
+                    {!captacionMode && form.familiares.length > 1 ? (
                       <button
                         type="button"
                         onClick={() =>
@@ -848,26 +944,43 @@ export default function RegistroPorNeedCliente({
                     />
                     No aplica / no informa
                   </label>
+                  <div className="mt-2">
+                    <label className={labelClass}>Observaciones</label>
+                    <textarea
+                      className={`${inputClass} resize-y mt-1`}
+                      rows={2}
+                      value={row.observaciones}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setForm((p) => ({
+                          ...p,
+                          familiares: p.familiares.map((r, i) => (i === idx ? { ...r, observaciones: v } : r)),
+                        }));
+                      }}
+                    />
+                  </div>
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, familiares: [...p.familiares, emptyFamiliarPostulacion()] }))}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-2.5 text-xs font-semibold text-zinc-400 hover:border-[#FF9500]/40 hover:text-[#FFD60A]"
-              >
-                <Plus className="h-4 w-4" /> Añadir familiar
-              </button>
+              {!captacionMode && form.familiares.length < 12 ? (
+                <button
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, familiares: [...p.familiares, emptyFamiliarPostulacion()] }))}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-2.5 text-xs font-semibold text-zinc-400 hover:border-[#FF9500]/40 hover:text-[#FFD60A]"
+                >
+                  <Plus className="h-4 w-4" /> Añadir familiar
+                </button>
+              ) : null}
             </div>
           )}
 
-          {step === 4 && (
+          {step === 7 && (
             <div className="space-y-4">
-              <h2 className="text-sm font-bold text-white">Experiencia laboral previa</h2>
+              <h2 className="text-sm font-bold text-white">8. Trabajos previos (dos empleos anteriores)</h2>
               {form.experiencia.map((row, idx) => (
                 <div key={idx} className="rounded-xl border border-white/10 bg-black/20 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase text-[#FFD60A]/80">Experiencia {idx + 1}</span>
-                    {form.experiencia.length > 1 ? (
+                    {!captacionMode && form.experiencia.length > 1 ? (
                       <button
                         type="button"
                         onClick={() =>
@@ -885,7 +998,7 @@ export default function RegistroPorNeedCliente({
                   </div>
                   <div className="grid gap-2">
                     <input
-                      placeholder="Empresa / patrono"
+                      placeholder="Patrono"
                       className={inputClass}
                       value={row.empresa}
                       onChange={(e) => {
@@ -962,17 +1075,19 @@ export default function RegistroPorNeedCliente({
                   </div>
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, experiencia: [...p.experiencia, emptyExperienciaPostulacion()] }))}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-2.5 text-xs font-semibold text-zinc-400 hover:border-[#FF9500]/40 hover:text-[#FFD60A]"
-              >
-                <Plus className="h-4 w-4" /> Añadir experiencia
-              </button>
+              {!captacionMode ? (
+                <button
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, experiencia: [...p.experiencia, emptyExperienciaPostulacion()] }))}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-2.5 text-xs font-semibold text-zinc-400 hover:border-[#FF9500]/40 hover:text-[#FFD60A]"
+                >
+                  <Plus className="h-4 w-4" /> Añadir experiencia
+                </button>
+              ) : null}
             </div>
           )}
 
-          {step === 5 && !captacionMode && (
+          {step === 8 && !captacionMode && (
             <div className="space-y-3">
               <h2 className="text-sm font-bold text-white">Firma digital (planilla legal)</h2>
               <p className="text-xs text-zinc-500">

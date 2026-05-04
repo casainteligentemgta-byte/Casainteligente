@@ -72,13 +72,17 @@ const navItems = [
         ),
     },
     {
-        href: '/reclutamiento/dashboard',
-        label: 'Reclutamiento',
+        href: '/rrhh/hojas-vida',
+        label: 'RRHH',
         icon: (active: boolean) => (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="9" cy="7" r="4" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" />
-                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={active ? '#0EA5E9' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h6m-6 4h6m-6-8h6"
+                    stroke={active ? '#F472B6' : '#8E8E93'}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
             </svg>
         ),
     },
@@ -115,7 +119,7 @@ const navItems = [
 function navItemActive(pathname: string, href: string): boolean {
     if (pathname === href) return true;
     if (href === '/') return false;
-    if (href === '/reclutamiento/dashboard') return pathname.startsWith('/reclutamiento');
+    if (href === '/rrhh/hojas-vida') return pathname.startsWith('/rrhh');
     if (href === '/configuracion/entidades') {
         return pathname.startsWith('/configuracion/entidades') || pathname.startsWith('/entidades');
     }
@@ -124,6 +128,11 @@ function navItemActive(pathname: string, href: string): boolean {
 
 export default function IOSNavBar() {
     const pathname = usePathname();
+    const path =
+        (typeof pathname === 'string' && pathname.length > 0 ? pathname : null) ??
+        (typeof window !== 'undefined' ? window.location.pathname : '');
+    /** Postulación pública: no mostrar «Inicio» (primer ítem del dock). */
+    const items = path.startsWith('/registro') ? navItems.filter((i) => i.href !== '/') : navItems;
 
     return (
         <nav
@@ -141,8 +150,8 @@ export default function IOSNavBar() {
         >
             <div className="overflow-x-auto scrollbar-hide">
                 <div className="flex min-w-max items-center gap-0.5 px-1 pb-1.5 pt-2">
-                {navItems.map((item) => {
-                    const isActive = navItemActive(pathname, item.href);
+                {items.map((item) => {
+                    const isActive = navItemActive(path || pathname || '', item.href);
                     const activeColor =
                         item.label === 'Conta'
                             ? '#5856D6'
@@ -154,13 +163,13 @@ export default function IOSNavBar() {
                                         ? '#F59E0B'
                                         : item.label === 'Entidades'
                                             ? '#A78BFA'
-                                            : item.label === 'Reclutamiento'
-                                            ? '#0EA5E9'
-                                            : item.label === 'Talento+'
+                                            : item.label === 'RRHH'
+                                              ? '#F472B6'
+                                              : item.label === 'Talento+'
                                                 ? '#38BDF8'
                                                 : item.label === 'Ventas'
-                                                    ? '#34C759'
-                                                    : '#007AFF';
+                                                  ? '#34C759'
+                                                  : '#007AFF';
 
                     return (
                         <Link

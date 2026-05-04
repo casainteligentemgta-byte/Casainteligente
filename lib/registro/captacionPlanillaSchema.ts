@@ -8,6 +8,7 @@ export const familiarRowSchema = z.object({
   parentesco: z.string(),
   fechaNacimiento: z.string(),
   noAplica: z.boolean(),
+  observaciones: z.string(),
 });
 
 export const experienciaRowSchema = z.object({
@@ -36,11 +37,14 @@ export const captacionFormJsonSchema = z.object({
   edad: z.string(),
   estadoCivil: z.string(),
   lugarNacimiento: z.string(),
+  paisNacimiento: z.string(),
   fechaNacimiento: z.string().min(1),
   nacionalidad: z.string(),
   celular: z.string().min(5),
   correo: z.string().min(3).max(200),
   direccion: z.string().min(3),
+  visaClase: z.string(),
+  visaValidezHasta: z.string(),
   zurdo: z.boolean(),
   ivssInscrito: z.boolean(),
   sabeLeer: z.boolean(),
@@ -49,10 +53,13 @@ export const captacionFormJsonSchema = z.object({
   instruccionTecnica: z.boolean(),
   instruccionSuperior: z.boolean(),
   profesionActual: z.string(),
+  sindicatoFederacion: z.string(),
   sindicatoOrganizacion: z.string(),
   sindicatoCargo: z.string(),
   antecedentes: antecedentesSchema,
   examenMedico: z.boolean(),
+  examenMedicoEfectuadoPor: z.string(),
+  examenMedicoFecha: z.string(),
   tipoSangre: z.string(),
   enfermedades: z.string(),
   incapacidades: z.string(),
@@ -62,7 +69,8 @@ export const captacionFormJsonSchema = z.object({
   tallaPantalon: z.string(),
   tallaBragas: z.string(),
   tallaBotas: z.string(),
-  familiares: z.array(familiarRowSchema).max(12),
+  medidasObservaciones: z.string(),
+  familiares: z.array(familiarRowSchema).min(5).max(12),
   experiencia: z.array(experienciaRowSchema).max(6),
 });
 
@@ -129,7 +137,7 @@ export const captacionStep3Schema = captacionFormJsonSchema.pick({
 
 export const captacionStep4Schema = z
   .object({
-    familiares: z.array(familiarRowSchema).min(1),
+    familiares: z.array(familiarRowSchema).length(5),
     experiencia: z.array(experienciaRowSchema).min(2).max(6),
   })
   .refine((d) => d.experiencia.filter((r) => r.empresa.trim().length > 0).length >= 2, {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { createElement } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
@@ -8,7 +9,9 @@ import { PlanillaAnexo1PdfDocument } from '@/lib/talento/PlanillaAnexo1Pdf';
 import type { HojaVidaLegalPdfMeta } from '@/lib/talento/hojaVidaPdfLegal';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
 import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
 
 export const runtime = 'nodejs';
 
@@ -105,6 +108,12 @@ export async function POST(req: Request) {
   const peso = parseFloat(formState.peso.trim().replace(',', '.'));
   const est = parseFloat(formState.estatura.trim().replace(',', '.'));
 
+  const nombresLegado = nombresLegadoDesdeGaceta(
+    { primerNombre: formState.primerNombre, segundoNombre: formState.segundoNombre },
+    nombreCompleto || undefined,
+  );
+  const tokenRegistro = randomUUID();
+
   const insertPayload: Record<string, unknown> = {
     recruitment_need_id: n.id,
     proyecto_modulo_id: n.proyecto_modulo_id,
@@ -113,6 +122,8 @@ export async function POST(req: Request) {
     cargo_nivel: n.cargo_nivel,
     tipo_vacante: n.tipo_vacante,
     nombre_completo: nombreCompleto || 'Postulante',
+    nombres: nombresLegado,
+    cargo: cargoEtiqueta,
     email: formState.correo.trim(),
     telefono: formState.celular.trim(),
     documento: formState.cedula.trim(),
@@ -162,6 +173,8 @@ export async function POST(req: Request) {
     foto_perfil_url: fotoPerfilUrl || null,
     cedula_foto_url: fotoCedulaUrl || null,
     hoja_vida_obrero: hoja,
+    token: tokenRegistro,
+    token_registro: tokenRegistro,
   };
 
   const { data: ins, error: insErr } = await admin.client
@@ -214,7 +227,9 @@ export async function POST(req: Request) {
       contentType: 'application/pdf',
       upsert: true,
     });
-    if (!upSt) {
+    if (upSt) {
+      console.error('[captacion-completar] contratos_obreros', friendlyStorageError('contratos_obreros', upSt.message));
+    } else {
       await admin.client.from('ci_empleados').update({ planilla_captacion_pdf_url: path } as never).eq('id', empleadoId);
     }
   } catch (e) {
@@ -232,6 +247,9 @@ export async function POST(req: Request) {
           contentType: 'image/png',
           upsert: true,
         });
+        if (upF) {
+          console.error('[captacion-completar] talento-firmas', friendlyStorageError('talento-firmas', upF.message));
+        }
         if (!upF) {
           const { data: pub } = admin.client.storage.from('talento-firmas').getPublicUrl(fpath);
           const publicUrl = pub?.publicUrl;

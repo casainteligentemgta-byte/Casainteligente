@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
 
 export const TALENTO_PUBLIC_BUCKET = 'talento-public';
 
@@ -19,7 +20,7 @@ export async function uploadTalentoPublicFile(
     contentType: params.file.type || undefined,
   });
   if (upErr) {
-    return { publicUrl: null, error: upErr.message };
+    return { publicUrl: null, error: friendlyStorageError(TALENTO_PUBLIC_BUCKET, upErr.message) };
   }
   const { data } = supabase.storage.from(TALENTO_PUBLIC_BUCKET).getPublicUrl(path);
   const publicUrl = data?.publicUrl ?? null;

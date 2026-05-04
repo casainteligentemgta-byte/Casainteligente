@@ -159,6 +159,7 @@ export default function HojaVidaObreroVista({ hojaVidaLegal, className = '', pla
                   <th className="border border-black px-1 py-1 font-bold">Parentesco</th>
                   <th className="border border-black px-1 py-1 font-bold">Fecha nac.</th>
                   <th className="border border-black px-1 py-1 font-bold">No aplica</th>
+                  <th className="border border-black px-1 py-1 font-bold">Obs.</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,6 +172,7 @@ export default function HojaVidaObreroVista({ hojaVidaLegal, className = '', pla
                     <td className="border border-black px-1 py-1">{dep.parentesco || '—'}</td>
                     <td className="border border-black px-1 py-1">{dep.fechaNacimiento || '—'}</td>
                     <td className="border border-black px-1 py-1">{dep.noAplica ? 'Sí' : '—'}</td>
+                    <td className="border border-black px-1 py-1">{(dep.observaciones ?? '').trim() || '—'}</td>
                   </tr>
                 ))}
               </tbody>

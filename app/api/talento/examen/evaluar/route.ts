@@ -11,6 +11,7 @@ import {
   estadoContratacionFromTripode,
   semaforoDbFromTripode,
 } from '@/lib/talento/semaphore';
+import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
 import { notifyTalentoWhatsAppExpiracion } from '@/lib/talento/whatsapp';
 import type { RolExamen } from '@/types/talento';
@@ -100,6 +101,8 @@ export async function POST(req: Request) {
 
     const updateRow = {
       nombre_completo: nombre,
+      nombres: nombresLegadoDesdeTextoLibre(nombre),
+      cargo: rolBuscado ?? 'Por definir',
       email: body.email?.trim() || null,
       documento: body.documento?.trim() || null,
       telefono: body.telefono?.trim() || null,

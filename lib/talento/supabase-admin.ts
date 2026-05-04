@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
 
 /** Cliente Supabase con service role (solo rutas servidor; nunca en el bundle del cliente). */
 export function supabaseAdminForRoute():
@@ -9,14 +10,17 @@ export function supabaseAdminForRoute():
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
     process.env.SUPABASE_URL?.trim() ||
     '';
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.SUPABASE_SECRET_KEY?.trim() ||
-    '';
+  const key = resolveSupabaseServiceRoleKey();
   if (!url || !key) {
     const hint = !url
       ? 'Falta NEXT_PUBLIC_SUPABASE_URL (o SUPABASE_URL). Añádela en Vercel → Environment Variables y vuelve a desplegar.'
-      : 'Falta clave de servicio en el servidor: SUPABASE_SERVICE_ROLE_KEY (Supabase → API → service_role) o SUPABASE_SECRET_KEY (integración Vercel–Supabase). Vercel → Environment Variables → Production, luego redeploy. No uses la anon key.';
+      : [
+          'En Vercel: Settings → Environment Variables del proyecto casainteligente.',
+          'Añade SUPABASE_SERVICE_ROLE_KEY con el valor «service_role» de Supabase (Project Settings → API; clave secreta larga que empieza por eyJ…).',
+          'Si usas la integración Vercel–Supabase, puede llamarse SUPABASE_SECRET_KEY; el código acepta ambas (y SUPABASE_SERVICE_KEY).',
+          'Marca el entorno Production (no solo Preview/Development), guarda y Redeploy del último deployment.',
+          'No uses la clave anon (publishable).',
+        ].join(' ');
     return {
       ok: false,
       response: NextResponse.json(

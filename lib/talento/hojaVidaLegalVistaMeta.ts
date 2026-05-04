@@ -22,6 +22,8 @@ export const HOJA_VIDA_LEGAL_VISTA_FILAS: FilaVistaLegal[] = [
   { seccion: 'I. Datos personales', id: 'direccionDomicilio', etiqueta: 'Dirección / domicilio' },
   { seccion: 'I. Datos personales', id: 'inscripcionIvss', etiqueta: 'Inscripción IVSS' },
   { seccion: 'I. Datos personales', id: 'zurdo', etiqueta: 'Zurdo' },
+  { seccion: 'I. Datos personales', id: 'claseVisa', etiqueta: 'Clase de visa' },
+  { seccion: 'I. Datos personales', id: 'visaValidezHasta', etiqueta: 'Validez visa hasta' },
   { seccion: 'Contratación', id: 'cargoUOficio', etiqueta: 'Cargo u oficio a desempeñar' },
   { seccion: 'Antecedentes penales', id: 'antecedentesPenales', etiqueta: 'Antecedentes penales' },
   { seccion: 'Antecedentes penales', id: 'expedidoPor', etiqueta: 'Expedido por' },
@@ -37,6 +39,7 @@ export const HOJA_VIDA_LEGAL_VISTA_FILAS: FilaVistaLegal[] = [
   { seccion: 'Gremial', id: 'cargoQueEjerce', etiqueta: 'Cargo que ejerce' },
   { seccion: 'Médicos', id: 'examenMedicoPrevio', etiqueta: 'Examen médico previo' },
   { seccion: 'Médicos', id: 'efectuadoPor', etiqueta: 'Efectuado por' },
+  { seccion: 'Médicos', id: 'fechaExamenMedico', etiqueta: 'Fecha del examen médico' },
   { seccion: 'Médicos', id: 'tipoSangre', etiqueta: 'Tipo de sangre' },
   { seccion: 'Médicos', id: 'enfermedadesPadecidas', etiqueta: 'Enfermedades padecidas' },
   { seccion: 'Médicos', id: 'incapacidadesFisicasOFuncionales', etiqueta: 'Incapacidades físicas o funcionales' },
@@ -74,6 +77,8 @@ export function valorVistaLegal(
     direccionDomicilio: d.direccionDomicilio,
     inscripcionIvss: d.inscripcionIvss === 'si' ? 'Sí' : d.inscripcionIvss === 'no' ? 'No' : '',
     zurdo: d.zurdo === 'si' ? 'Sí' : d.zurdo === 'no' ? 'No' : '',
+    claseVisa: d.claseVisa,
+    visaValidezHasta: d.visaValidezHasta,
     cargoUOficio: h.contratacion.cargoUOficio,
     antecedentesPenales:
       h.certificadoAntecedentesPenales.antecedentesPenales === 'si'
@@ -100,6 +105,7 @@ export function valorVistaLegal(
           ? 'No'
           : '',
     efectuadoPor: h.antecedentesMedicos.efectuadoPor,
+    fechaExamenMedico: h.antecedentesMedicos.fechaExamenMedico,
     tipoSangre: h.antecedentesMedicos.tipoSangre,
     enfermedadesPadecidas: h.antecedentesMedicos.enfermedadesPadecidas,
     incapacidadesFisicasOFuncionales: h.antecedentesMedicos.incapacidadesFisicasOFuncionales,

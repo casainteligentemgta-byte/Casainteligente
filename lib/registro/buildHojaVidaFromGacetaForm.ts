@@ -24,7 +24,7 @@ export function buildHojaVidaFromGacetaForm(
       edad: f.edad.trim(),
       estadoCivil: f.estadoCivil.trim(),
       lugarNacimiento: f.lugarNacimiento.trim(),
-      paisNacimiento: '',
+      paisNacimiento: f.paisNacimiento.trim(),
       fechaNacimiento: f.fechaNacimiento.trim(),
       nacionalidad: f.nacionalidad.trim(),
       celular: f.celular.trim(),
@@ -33,6 +33,8 @@ export function buildHojaVidaFromGacetaForm(
       direccionDomicilio: f.direccion.trim(),
       inscripcionIvss: siNo(f.ivssInscrito),
       zurdo: siNo(f.zurdo),
+      claseVisa: f.visaClase.trim(),
+      visaValidezHasta: f.visaValidezHasta.trim(),
     },
     contratacion: {
       cargoUOficio: cargoLabel.trim(),
@@ -52,12 +54,15 @@ export function buildHojaVidaFromGacetaForm(
       profesionUOficioActual: f.profesionActual.trim(),
     },
     actividadGremial: {
-      federacionSindicatoGremio: f.sindicatoOrganizacion.trim(),
+      federacionSindicatoGremio: [f.sindicatoFederacion.trim(), f.sindicatoOrganizacion.trim()]
+        .filter(Boolean)
+        .join(' · '),
       cargoQueEjerce: f.sindicatoCargo.trim(),
     },
     antecedentesMedicos: {
       examenMedicoPrevio: f.examenMedico ? 'si' : 'no',
-      efectuadoPor: '',
+      efectuadoPor: f.examenMedicoEfectuadoPor.trim(),
+      fechaExamenMedico: f.examenMedicoFecha.trim(),
       tipoSangre: f.tipoSangre.trim(),
       enfermedadesPadecidas: f.enfermedades.trim(),
       incapacidadesFisicasOFuncionales: f.incapacidades.trim(),
@@ -69,7 +74,7 @@ export function buildHojaVidaFromGacetaForm(
       tallaPantalon: f.tallaPantalon.trim(),
       tallaBragas: f.tallaBragas.trim(),
       medidaBotas: f.tallaBotas.trim(),
-      observaciones: '',
+      observaciones: f.medidasObservaciones.trim(),
     },
     familiaresDependientes: f.familiares.map((r) => ({
       nombre: r.nombre.trim(),
@@ -77,6 +82,7 @@ export function buildHojaVidaFromGacetaForm(
       parentesco: r.parentesco.trim(),
       fechaNacimiento: r.fechaNacimiento.trim(),
       noAplica: r.noAplica,
+      observaciones: r.observaciones.trim(),
     })),
     trabajosPrevios: f.experiencia.map((r) => ({
       empresaPatrono: r.empresa.trim(),

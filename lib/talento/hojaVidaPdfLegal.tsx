@@ -345,6 +345,10 @@ export function HojaDeVidaObreroLegalPdfDoc({
             <CellBox label="Zurdo" value={siNoLabel(d.zurdo)} w="18%" />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
+            <CellBox label="Clase de visa" value={d.claseVisa} flex={1} />
+            <CellBox label="Validez visa hasta" value={d.visaValidezHasta} w="36%" />
+          </View>
+          <View style={[st.row, { marginTop: -1 }]}>
             <CellBox label="Dirección de habitación o domicilio" value={d.direccionDomicilio} flex={1} />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
@@ -415,9 +419,10 @@ export function HojaDeVidaObreroLegalPdfDoc({
 
           <RomanSection code="V" title="Antecedentes médicos" />
           <View style={st.row}>
-            <CellBox label="Examen médico previo" value={siNoLabel(data.antecedentesMedicos.examenMedicoPrevio)} w="24%" />
-            <CellBox label="Efectuado por" value={data.antecedentesMedicos.efectuadoPor} flex={1} />
-            <CellBox label="Tipo de sangre" value={data.antecedentesMedicos.tipoSangre} w="20%" />
+            <CellBox label="Examen médico previo" value={siNoLabel(data.antecedentesMedicos.examenMedicoPrevio)} w="22%" />
+            <CellBox label="Efectuado por" value={data.antecedentesMedicos.efectuadoPor} w="34%" />
+            <CellBox label="Fecha del examen" value={data.antecedentesMedicos.fechaExamenMedico} w="22%" />
+            <CellBox label="Tipo de sangre" value={data.antecedentesMedicos.tipoSangre} w="22%" />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
             <CellBox label="Enfermedades padecidas" value={data.antecedentesMedicos.enfermedadesPadecidas} flex={1} />
@@ -439,21 +444,23 @@ export function HojaDeVidaObreroLegalPdfDoc({
 
           <RomanSection code="VII" title="Familiares dependientes a cargo" />
           <View style={st.tableHead}>
-            <Text style={[st.th, { width: '6%' }]}>N°</Text>
-            <Text style={[st.th, { width: '28%' }]}>Apellidos y nombres</Text>
-            <Text style={[st.th, { width: '22%' }]}>Parentesco</Text>
-            <Text style={[st.th, { width: '22%' }]}>Fecha nac.</Text>
-            <Text style={[st.th, { width: '22%', borderRightWidth: 0 }]}>No aplica</Text>
+            <Text style={[st.th, { width: '5%' }]}>N°</Text>
+            <Text style={[st.th, { width: '24%' }]}>Apellidos y nombres</Text>
+            <Text style={[st.th, { width: '18%' }]}>Parentesco</Text>
+            <Text style={[st.th, { width: '14%' }]}>Fecha nac.</Text>
+            <Text style={[st.th, { width: '10%' }]}>N/A</Text>
+            <Text style={[st.th, { width: '29%', borderRightWidth: 0 }]}>Observaciones</Text>
           </View>
           {data.familiaresDependientes.map((dep, i) => (
             <View key={i} style={st.tableRow} wrap={false}>
-              <Text style={[st.td, { width: '6%', flex: undefined, maxWidth: '6%' }]}>{String(i + 1)}</Text>
-              <Text style={[st.td, { width: '28%', flex: undefined }]}>
+              <Text style={[st.td, { width: '5%', flex: undefined, maxWidth: '5%' }]}>{String(i + 1)}</Text>
+              <Text style={[st.td, { width: '24%', flex: undefined }]}>
                 {[dep.apellido, dep.nombre].filter((s) => s.trim()).join(', ') || '—'}
               </Text>
-              <Text style={[st.td, { width: '22%', flex: undefined }]}>{val(dep.parentesco)}</Text>
-              <Text style={[st.td, { width: '22%', flex: undefined }]}>{val(dep.fechaNacimiento)}</Text>
-              <Text style={[st.tdLast, { width: '22%', flex: undefined }]}>{dep.noAplica ? 'Sí' : '—'}</Text>
+              <Text style={[st.td, { width: '18%', flex: undefined }]}>{val(dep.parentesco)}</Text>
+              <Text style={[st.td, { width: '14%', flex: undefined }]}>{val(dep.fechaNacimiento)}</Text>
+              <Text style={[st.td, { width: '10%', flex: undefined }]}>{dep.noAplica ? 'Sí' : '—'}</Text>
+              <Text style={[st.tdLast, { width: '29%', flex: undefined }]}>{val(dep.observaciones)}</Text>
             </View>
           ))}
 
@@ -546,6 +553,10 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
             <CellBlank label="Zurdo" w="18%" />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
+            <CellBlank label="Clase de visa" flex={1} />
+            <CellBlank label="Validez visa hasta" w="36%" />
+          </View>
+          <View style={[st.row, { marginTop: -1 }]}>
             <CellBlank label="Dirección de habitación o domicilio" flex={1} />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
@@ -602,9 +613,10 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
 
           <RomanSection code="V" title="Antecedentes médicos" />
           <View style={st.row}>
-            <CellBlank label="Examen médico previo" w="24%" />
-            <CellBlank label="Efectuado por" flex={1} />
-            <CellBlank label="Tipo de sangre" w="20%" />
+            <CellBlank label="Examen médico previo" w="22%" />
+            <CellBlank label="Efectuado por" w="34%" />
+            <CellBlank label="Fecha del examen" w="22%" />
+            <CellBlank label="Tipo de sangre" w="22%" />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
             <CellBlank label="Enfermedades padecidas" flex={1} />
@@ -626,19 +638,21 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
 
           <RomanSection code="VII" title="Familiares dependientes a cargo" />
           <View style={st.tableHead}>
-            <Text style={[st.th, { width: '6%' }]}>N°</Text>
-            <Text style={[st.th, { width: '28%' }]}>Apellidos y nombres</Text>
-            <Text style={[st.th, { width: '22%' }]}>Parentesco</Text>
-            <Text style={[st.th, { width: '22%' }]}>Fecha nac.</Text>
-            <Text style={[st.th, { width: '22%', borderRightWidth: 0 }]}>No aplica</Text>
+            <Text style={[st.th, { width: '5%' }]}>N°</Text>
+            <Text style={[st.th, { width: '24%' }]}>Apellidos y nombres</Text>
+            <Text style={[st.th, { width: '18%' }]}>Parentesco</Text>
+            <Text style={[st.th, { width: '14%' }]}>Fecha nac.</Text>
+            <Text style={[st.th, { width: '10%' }]}>N/A</Text>
+            <Text style={[st.th, { width: '29%', borderRightWidth: 0 }]}>Observaciones</Text>
           </View>
           {[1, 2, 3, 4, 5].map((n) => (
             <View key={n} style={st.tableRow} wrap={false}>
-              <Text style={[st.td, { width: '6%', flex: undefined }]}>{String(n)}</Text>
-              <Text style={[st.td, { width: '28%', flex: undefined }]}>{BLANK}</Text>
-              <Text style={[st.td, { width: '22%', flex: undefined }]}>{BLANK}</Text>
-              <Text style={[st.td, { width: '22%', flex: undefined }]}>{BLANK}</Text>
-              <Text style={[st.tdLast, { width: '22%', flex: undefined }]}>{BLANK}</Text>
+              <Text style={[st.td, { width: '5%', flex: undefined }]}>{String(n)}</Text>
+              <Text style={[st.td, { width: '24%', flex: undefined }]}>{BLANK}</Text>
+              <Text style={[st.td, { width: '18%', flex: undefined }]}>{BLANK}</Text>
+              <Text style={[st.td, { width: '14%', flex: undefined }]}>{BLANK}</Text>
+              <Text style={[st.td, { width: '10%', flex: undefined }]}>{BLANK}</Text>
+              <Text style={[st.tdLast, { width: '29%', flex: undefined }]}>{BLANK}</Text>
             </View>
           ))}
 
