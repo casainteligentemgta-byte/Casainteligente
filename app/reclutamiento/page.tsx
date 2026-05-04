@@ -334,10 +334,11 @@ function ReclutamientoPageInner() {
         className="shrink-0 px-4 py-3 border-b"
         style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.35)' }}
       >
-        <h1 className="text-lg font-semibold text-white">Reclutamiento — fase guiada</h1>
+        <h1 className="text-lg font-semibold text-white">Reclutamiento — hoja de vida y entrevista</h1>
         <p className="text-xs text-zinc-300 mt-1 max-w-prose">
-          Responde con selección simple: botones abajo (escala 1–5, Sí/No o A–D). El texto libre es
-          opcional.
+          Si RRHH te envió un enlace con vacante, primero completa la <strong className="text-zinc-200">hoja de vida</strong>{' '}
+          (datos básicos arriba); puedes hacerlo antes, durante o después de la entrevista guiada. Luego responde con los
+          botones de abajo (escala 1–5, Sí/No o A–D). El texto libre es opcional.
         </p>
         <p className="text-[11px] text-zinc-500 mt-2 max-w-prose">
           Esta sesión puede registrar cambios de foco, copiar/pegar y tiempo de respuesta con fines de
@@ -371,7 +372,7 @@ function ReclutamientoPageInner() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {needFromUrl && !needInvalid && sessionId && !sessionComplete ? (
+        {needFromUrl && !needInvalid && sessionId ? (
           <ReclutamientoHojaVidaBlock sessionId={sessionId} needId={needFromUrl} />
         ) : null}
         {lines.map((line, i) => (
@@ -394,7 +395,8 @@ function ReclutamientoPageInner() {
       ) : null}
       {sessionComplete ? (
         <p className="px-4 pb-2 text-sm text-emerald-400 shrink-0">
-          Sesión finalizada. El evaluador puede consultar el resultado con el ID de sesión.
+          Entrevista guiada finalizada. Si aún no guardaste la hoja de vida de arriba, puedes hacerlo ahora; el
+          evaluador puede consultar el resultado con el ID de sesión.
         </p>
       ) : null}
 

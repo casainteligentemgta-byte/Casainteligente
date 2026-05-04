@@ -132,6 +132,37 @@ export default function NuevoProyectoModuloPage() {
   const clientesCargaIdRef = useRef(0);
   const [mapReady, setMapReady] = useState(false);
 
+  type EntidadOpt = { id: string; nombre: string; rif: string | null };
+  const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
+  const [entidadId, setEntidadId] = useState('');
+  const [entidadesHint, setEntidadesHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = getSupabase();
+        const { data, error: entErr } = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+        if (cancelled) return;
+        if (entErr) {
+          setEntidades([]);
+          setEntidadesHint('No se cargaron entidades (¿migración 063?). Puedes guardar el proyecto sin entidad.');
+          return;
+        }
+        setEntidadesHint(null);
+        setEntidades((data ?? []) as EntidadOpt[]);
+      } catch {
+        if (!cancelled) {
+          setEntidades([]);
+          setEntidadesHint('No se pudieron cargar entidades.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getSupabase]);
+
   useEffect(() => {
     const t = requestAnimationFrame(() => setMapReady(true));
     return () => cancelAnimationFrame(t);
@@ -434,6 +465,7 @@ export default function NuevoProyectoModuloPage() {
     const payload: Record<string, unknown> = {
       customer_id: customerId,
       budget_id: budgetId || null,
+      entidad_id: entidadId.trim() || null,
       nombre: nombre.trim(),
       estado,
       ubicacion_texto: ubicacion.trim(),
@@ -583,6 +615,31 @@ export default function NuevoProyectoModuloPage() {
                 })}
               </ul>
             ) : null}
+          </div>
+
+          <div>
+            <label className={labelClass}>Entidad de trabajo (patrono)</label>
+            <p className="mb-1 text-[11px] text-zinc-500">
+              Razón social y RIF para planillas.{' '}
+              <Link href="/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
+                Gestionar entidades
+              </Link>
+            </p>
+            <select
+              className={fieldClass}
+              value={entidadId}
+              onChange={(e) => setEntidadId(e.target.value)}
+              style={{ colorScheme: 'dark' }}
+            >
+              <option value="">— Sin entidad —</option>
+              {entidades.map((en) => (
+                <option key={en.id} value={en.id}>
+                  {en.nombre}
+                  {en.rif ? ` · ${en.rif}` : ''}
+                </option>
+              ))}
+            </select>
+            {entidadesHint ? <p className="mt-1 text-[11px] text-amber-400/90">{entidadesHint}</p> : null}
           </div>
 
           <div ref={presupuestoMenuRef} className="relative">

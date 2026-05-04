@@ -1,17 +1,22 @@
 'use client';
 
-import { ExternalLink, MessageSquare, Users } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { ExternalLink, MessageSquare, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
+import { emptyHojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 
-const REGISTRO_PUBLICO = 'https://casa-inteligente.app/registro';
-const REGISTRO_ORIGEN =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_REGISTRO_ORIGEN?.trim()) ||
-  'https://casa-inteligente.app';
+const HojaVidaObreroVista = dynamic(() => import('@/components/talento/HojaVidaObreroVista'), {
+  ssr: false,
+  loading: () => <p className="mt-2 text-xs text-zinc-500">Cargando vista de campos…</p>,
+});
 
 export type GestionRRHHLocalProps = {
   /** UUID de `ci_proyectos` (módulo integral). */
   proyectoModuloId: string;
+  /** Incrementar desde el padre para volver a cargar `recruitment_needs` (p. ej. tras nueva vacante). */
+  listaRefresco?: number;
 };
 
 type NeedRow = {
@@ -38,21 +43,16 @@ function roleParam(row: NeedRow): string {
   return etiquetaCargo(row).slice(0, 120);
 }
 
-/** URL usada en WhatsApp (dominio fijo del enunciado) y al copiar si no hay override en env. */
+/** URL pública de postulación (`/registro` resuelve la vacante y redirige a `/reclutamiento?need=`). */
 function urlRegistroPublica(proyectoModuloId: string, row: NeedRow): string {
-  const prj = encodeURIComponent(proyectoModuloId.trim());
-  const role = encodeURIComponent(roleParam(row));
-  return `${REGISTRO_PUBLICO}?prj=${prj}&role=${role}`;
-}
-
-function urlRegistroCopiar(proyectoModuloId: string, row: NeedRow): string {
-  const base = REGISTRO_ORIGEN.replace(/\/$/, '');
-  if (base === 'https://casa-inteligente.app') {
-    return urlRegistroPublica(proyectoModuloId, row);
-  }
+  const base = publicRegistroOrigin();
   const prj = encodeURIComponent(proyectoModuloId.trim());
   const role = encodeURIComponent(roleParam(row));
   return `${base}/registro?prj=${prj}&role=${role}`;
+}
+
+function urlRegistroCopiar(proyectoModuloId: string, row: NeedRow): string {
+  return urlRegistroPublica(proyectoModuloId, row);
 }
 
 function mensajeWhatsApp(proyectoModuloId: string, row: NeedRow): string {
@@ -73,12 +73,15 @@ function clicsMostrados(row: NeedRow): number {
   return 0;
 }
 
-export default function GestionRRHHLocal({ proyectoModuloId }: GestionRRHHLocalProps) {
+export default function GestionRRHHLocal({ proyectoModuloId, listaRefresco = 0 }: GestionRRHHLocalProps) {
   const supabase = useMemo(() => createClient(), []);
   const [needs, setNeeds] = useState<NeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [draftCantidad, setDraftCantidad] = useState<Record<string, string>>({});
+  const [savingCantidadId, setSavingCantidadId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -170,7 +173,13 @@ export default function GestionRRHHLocal({ proyectoModuloId }: GestionRRHHLocalP
     return () => {
       alive = false;
     };
-  }, [proyectoModuloId, supabase]);
+  }, [proyectoModuloId, supabase, listaRefresco]);
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const r of needs) next[r.id] = String(cantidadMostrada(r));
+    setDraftCantidad(next);
+  }, [needs]);
 
   const abrirWhatsApp = useCallback(
     (row: NeedRow) => {
@@ -193,6 +202,65 @@ export default function GestionRRHHLocal({ proyectoModuloId }: GestionRRHHLocalP
     [proyectoModuloId, showToast],
   );
 
+  const pid = proyectoModuloId.trim();
+
+  const guardarCantidad = useCallback(
+    async (row: NeedRow) => {
+      const raw = (draftCantidad[row.id] ?? '').trim();
+      const q = Math.max(1, Math.min(500, Math.floor(Number(raw) || 0)));
+      if (!Number.isFinite(q) || q < 1) {
+        showToast('Indica una cantidad entre 1 y 500.');
+        return;
+      }
+      if (q === cantidadMostrada(row)) {
+        showToast('La cantidad ya está guardada.');
+        return;
+      }
+      setSavingCantidadId(row.id);
+      setError(null);
+      try {
+        const { error: upErr } = await supabase
+          .from('recruitment_needs')
+          .update({ cantidad_requerida: q })
+          .eq('id', row.id)
+          .eq('proyecto_modulo_id', pid);
+        if (upErr) {
+          setError(upErr.message ?? 'No se pudo actualizar la cantidad.');
+          return;
+        }
+        setNeeds((prev) => prev.map((n) => (n.id === row.id ? { ...n, cantidad_requerida: q } : n)));
+        showToast('Cantidad actualizada.');
+      } finally {
+        setSavingCantidadId(null);
+      }
+    },
+    [draftCantidad, pid, showToast, supabase],
+  );
+
+  const borrarSolicitud = useCallback(
+    async (row: NeedRow) => {
+      if (!window.confirm('¿Eliminar esta solicitud de personal? No se puede deshacer.')) return;
+      setDeletingId(row.id);
+      setError(null);
+      try {
+        const { error: delErr } = await supabase
+          .from('recruitment_needs')
+          .delete()
+          .eq('id', row.id)
+          .eq('proyecto_modulo_id', pid);
+        if (delErr) {
+          setError(delErr.message ?? 'No se pudo eliminar la solicitud.');
+          return;
+        }
+        setNeeds((prev) => prev.filter((n) => n.id !== row.id));
+        showToast('Solicitud eliminada.');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [pid, showToast, supabase],
+  );
+
   return (
     <section
       className="mt-6 rounded-2xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] backdrop-blur-xl"
@@ -212,6 +280,17 @@ export default function GestionRRHHLocal({ proyectoModuloId }: GestionRRHHLocalP
         </div>
       </div>
 
+      <details className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 backdrop-blur-xl open:pb-4">
+        <summary className="cursor-pointer py-2 text-sm font-bold text-zinc-200">
+          Visualizar campos de la hoja de vida del obrero
+        </summary>
+        <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">
+          Formato legal I. Identificación del trabajador (datos personales, contratación, antecedentes penales,
+          instrucción, gremial, médicos, peso/medidas, dependientes y trabajos previos), alineado al PDF y al onboarding.
+        </p>
+        <HojaVidaObreroVista hojaVidaLegal={emptyHojaVidaObreroCompleta()} />
+      </details>
+
       {loading ? (
         <p className="mt-4 text-sm text-zinc-500">Cargando requerimientos…</p>
       ) : error ? (
@@ -222,11 +301,12 @@ export default function GestionRRHHLocal({ proyectoModuloId }: GestionRRHHLocalP
         </p>
       ) : (
         <div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
-          <table className="w-full min-w-[560px] text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
                 <th className="px-3 py-2.5">Cargo</th>
-                <th className="px-3 py-2.5">Solicitados / interesados</th>
+                <th className="px-3 py-2.5">Plazas</th>
+                <th className="px-3 py-2.5">Interesados</th>
                 <th className="px-3 py-2.5">Estado</th>
                 <th className="px-3 py-2.5 text-right">Acciones</th>
               </tr>
@@ -242,11 +322,30 @@ export default function GestionRRHHLocal({ proyectoModuloId }: GestionRRHHLocalP
                     className="border-b border-white/[0.06] transition-colors hover:bg-white/5"
                   >
                     <td className="px-3 py-3 font-medium text-zinc-100">{etiquetaCargo(row)}</td>
-                    <td className="px-3 py-3 tabular-nums text-zinc-300">
-                      <span className="font-semibold text-white">{sol}</span>
-                      <span className="text-zinc-600"> · </span>
-                      <span className="text-zinc-400">{clics}</span>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          aria-label={`Plazas solicitadas para ${etiquetaCargo(row)}`}
+                          value={draftCantidad[row.id] ?? String(sol)}
+                          onChange={(e) =>
+                            setDraftCantidad((prev) => ({ ...prev, [row.id]: e.target.value }))
+                          }
+                          className="w-16 rounded-lg border border-white/15 bg-white/[0.06] px-2 py-1 text-xs text-white tabular-nums outline-none focus:border-[#FF9500]/50"
+                        />
+                        <button
+                          type="button"
+                          disabled={savingCantidadId === row.id}
+                          onClick={() => void guardarCantidad(row)}
+                          className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-white/15 disabled:opacity-50"
+                        >
+                          {savingCantidadId === row.id ? '…' : 'Guardar'}
+                        </button>
+                      </div>
                     </td>
+                    <td className="px-3 py-3 tabular-nums text-zinc-400">{clics}</td>
                     <td className="px-3 py-3">
                       {activa ? (
                         <span className="inline-flex rounded-full border border-[#FF9500]/50 bg-[#FF9500]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#FF9500]">
@@ -260,6 +359,16 @@ export default function GestionRRHHLocal({ proyectoModuloId }: GestionRRHHLocalP
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void borrarSolicitud(row)}
+                          disabled={deletingId === row.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-950/35 px-2.5 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-950/55 disabled:opacity-50"
+                          title="Eliminar solicitud"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          {deletingId === row.id ? '…' : 'Eliminar'}
+                        </button>
                         <button
                           type="button"
                           onClick={() => abrirWhatsApp(row)}

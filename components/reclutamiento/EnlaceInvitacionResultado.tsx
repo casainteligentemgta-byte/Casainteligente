@@ -6,6 +6,28 @@ function onlyDigits(s: string): string {
   return s.replace(/\D/g, '');
 }
 
+async function copiarAlPortapapeles(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export type EnlaceInvitacionResultadoProps = {
   onboardingUrl: string;
   examUrl?: string | null;
@@ -23,6 +45,7 @@ export function EnlaceInvitacionResultado({
 }: EnlaceInvitacionResultadoProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(true);
+  const [copiado, setCopiado] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,18 +75,21 @@ export function EnlaceInvitacionResultado({
   }, [onboardingUrl]);
 
   const waPhone = useMemo(() => onlyDigits(whatsappDigitsOrRaw), [whatsappDigitsOrRaw]);
+  /** Texto corto: evita límites de longitud en wa.me y deja claro que es la hoja de vida. */
   const waText = useMemo(() => {
-    const n = nombreCandidato.trim() || 'candidato';
-    return `Hola ${n}, enlace CASA INTELIGENTE: primero hoja de vida y cargas; luego la evaluación (prueba). El contrato es después, si RRHH aprueba: ${onboardingUrl}`;
+    const n = nombreCandidato.trim() || 'Hola';
+    return `${n}, completa tu hoja de vida CASA INTELIGENTE aquí: ${onboardingUrl}`;
   }, [onboardingUrl, nombreCandidato]);
-  const waHref = waPhone && waText ? `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}` : '';
+
+  const waHrefDirecto =
+    waPhone.length >= 10 ? `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}` : '';
+  /** Sin número: abre WhatsApp con el texto para que elijas el contacto (móvil / web). */
+  const waHrefCompartir = `https://api.whatsapp.com/send?text=${encodeURIComponent(waText)}`;
 
   async function copiar(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* ignore */
-    }
+    const ok = await copiarAlPortapapeles(text);
+    setCopiado(ok);
+    if (ok) window.setTimeout(() => setCopiado(false), 2500);
   }
 
   return (
@@ -84,11 +110,17 @@ export function EnlaceInvitacionResultado({
         </div>
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-zinc-400">
-            El obrero escanea el QR o abre el enlace, completa datos y carga cédula, y puede descargar la hoja de vida en
-            PDF. Después debe hacer la <span className="text-zinc-200 font-medium">evaluación</span> (prueba). El{' '}
-            <span className="text-zinc-200 font-medium">contrato</span> es un paso posterior y solo si RRHH aprueba tras
-            esa evaluación.
+            El obrero abre el enlace, completa la <span className="text-zinc-200 font-medium">hoja de vida</span> y puede
+            descargar el PDF. Después sigue la evaluación; el contrato es solo si RRHH aprueba.
           </p>
+          <a
+            href={onboardingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex rounded-lg bg-sky-700 px-3 py-2 text-[11px] font-semibold text-white hover:bg-sky-600"
+          >
+            Abrir hoja de vida (probar enlace)
+          </a>
           <code className="block break-all text-[11px] text-sky-300 bg-black/40 p-2 rounded-lg">{onboardingUrl}</code>
           <div className="flex flex-wrap gap-2">
             <button
@@ -96,25 +128,38 @@ export function EnlaceInvitacionResultado({
               onClick={() => void copiar(onboardingUrl)}
               className="rounded-lg px-3 py-1.5 bg-zinc-800 text-zinc-100 text-[11px] font-medium"
             >
-              Copiar enlace
+              {copiado ? 'Copiado ✓' : 'Copiar enlace'}
             </button>
-            {waHref ? (
+            {waHrefDirecto ? (
               <a
-                href={waHref}
+                href={waHrefDirecto}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg px-3 py-1.5 bg-emerald-700 text-white text-[11px] font-medium"
               >
-                Enviar por WhatsApp
+                WhatsApp al número
               </a>
-            ) : (
-              <span className="text-zinc-500 text-[11px]">Añade WhatsApp arriba para habilitar envío directo.</span>
-            )}
+            ) : null}
+            <a
+              href={waHrefCompartir}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg px-3 py-1.5 bg-emerald-800/90 text-white text-[11px] font-medium"
+            >
+              WhatsApp (elegir contacto)
+            </a>
           </div>
+          {!waHrefDirecto ? (
+            <p className="text-zinc-500 text-[11px]">
+              Opcional: añade el móvil arriba para abrir el chat directo con ese número (código país, ej. 58412…).
+            </p>
+          ) : null}
           {examUrl ? (
             <p className="text-zinc-500 pt-1">
-              Tras el registro, la prueba usa el mismo token:{' '}
-              <span className="text-zinc-400 break-all">{examUrl}</span>
+              Tras la hoja de vida, la prueba:{' '}
+              <a href={examUrl} className="text-sky-400 break-all underline" target="_blank" rel="noopener noreferrer">
+                abrir evaluación
+              </a>
             </p>
           ) : null}
         </div>

@@ -212,6 +212,9 @@ export const recruitmentNeeds = pgTable('recruitment_needs', {
   proyectoModuloId: uuid('proyecto_modulo_id').references(() => ciProyectos.id, { onDelete: 'set null' }),
   alertaPresupuestoIgnorada: boolean('alerta_presupuesto_ignorada').default(false).notNull(),
   notasAutorizacion: text('notas_autorizacion'),
+  /** Plazas pedidas para este cargo en el proyecto (misma fila / protocolo). */
+  cantidadRequerida: integer('cantidad_requerida'),
+  conteoClics: integer('conteo_clics').default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

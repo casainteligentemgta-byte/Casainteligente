@@ -16,6 +16,8 @@ export type ModalNuevaVacanteProps = {
   /** UUID de `ci_proyectos` (detalle módulo integral). */
   proyectoModuloId: string;
   proyectoNombre?: string | null;
+  /** Tras crear la vacante correctamente (p. ej. refrescar lista en el padre). */
+  onVacanteCreada?: () => void;
 };
 
 const SHELL = '#0A0A0F';
@@ -25,6 +27,7 @@ export default function ModalNuevaVacante({
   onClose,
   proyectoModuloId,
   proyectoNombre,
+  onVacanteCreada,
 }: ModalNuevaVacanteProps) {
   const [paso, setPaso] = useState(1);
   const [cargoCodigo, setCargoCodigo] = useState('');
@@ -106,6 +109,7 @@ export default function ModalNuevaVacante({
             cargo_nombre: cargoSel.nombre,
             cargo_nivel: cargoSel.nivel,
             tipo_vacante: tipoVacante,
+            cantidad_requerida: q,
             alerta_presupuesto_ignorada: true,
             notas_autorizacion: notasAuditoria,
           }),
@@ -145,6 +149,7 @@ export default function ModalNuevaVacante({
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       setNeedLink(`${origin}/reclutamiento?need=${id}`);
       setPaso(3);
+      onVacanteCreada?.();
     } catch {
       setError('Error inesperado al procesar la respuesta del servidor.');
     } finally {

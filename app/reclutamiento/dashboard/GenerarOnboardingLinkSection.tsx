@@ -1,9 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { loadOpcionesProyectoReclutamiento, type OpcionProyectoReclutamiento } from '@/lib/proyectos/proyectosUnificados';
+import { apiUrl } from '@/lib/http/apiUrl';
 import { EnlaceInvitacionResultado } from '@/components/reclutamiento/EnlaceInvitacionResultado';
 
 export default function GenerarOnboardingLinkSection() {
+  const supabase = useMemo(() => createClient(), []);
   const [nombre, setNombre] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [rol, setRol] = useState<'tecnico' | 'programador'>('tecnico');
@@ -11,6 +16,37 @@ export default function GenerarOnboardingLinkSection() {
   const [error, setError] = useState<string | null>(null);
   const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null);
   const [examUrl, setExamUrl] = useState<string | null>(null);
+
+  const [proyectoOpciones, setProyectoOpciones] = useState<OpcionProyectoReclutamiento[]>([]);
+  const [proyectoKey, setProyectoKey] = useState('');
+  const [loadingProyectos, setLoadingProyectos] = useState(true);
+
+  const opcionesIntegral = useMemo(
+    () => proyectoOpciones.filter((o) => o.proyectoModuloId != null),
+    [proyectoOpciones],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingProyectos(true);
+      try {
+        const { opciones } = await loadOpcionesProyectoReclutamiento(supabase, {});
+        if (!cancelled) {
+          setProyectoOpciones(opciones);
+          setProyectoKey((k) => {
+            if (k && opciones.some((o) => o.key === k)) return k;
+            return '';
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingProyectos(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   async function generar(e: React.FormEvent) {
     e.preventDefault();
@@ -22,8 +58,9 @@ export default function GenerarOnboardingLinkSection() {
     setError(null);
     setOnboardingUrl(null);
     setExamUrl(null);
+    const sel = proyectoKey ? opcionesIntegral.find((o) => o.key === proyectoKey) : undefined;
     try {
-      const res = await fetch('/api/talento/generar-link', {
+      const res = await fetch(apiUrl('/api/talento/generar-link'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -31,6 +68,11 @@ export default function GenerarOnboardingLinkSection() {
           whatsapp: whatsapp.trim() || undefined,
           rol_examen: rol,
           rol_buscado: 'Candidato onboarding',
+          public_base_url:
+            typeof window !== 'undefined' && window.location.protocol.startsWith('http')
+              ? window.location.origin
+              : undefined,
+          ...(sel?.proyectoModuloId ? { proyecto_modulo_id: sel.proyectoModuloId } : {}),
         }),
       });
       const data = (await res.json()) as {
@@ -81,6 +123,32 @@ export default function GenerarOnboardingLinkSection() {
               placeholder="Ej. +58412..."
             />
           </div>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wide text-zinc-500 mb-1">
+            Proyecto (opcional — planilla de empleo)
+          </label>
+          <p className="mb-1 text-[10px] text-zinc-500">
+            Solo proyectos del módulo integral. Rellena entidad y RIF en{' '}
+            <Link href="/entidades" className="font-semibold text-sky-400 underline">
+              Entidades
+            </Link>{' '}
+            y asígnalos al proyecto.
+          </p>
+          <select
+            value={proyectoKey}
+            onChange={(e) => setProyectoKey(e.target.value)}
+            disabled={loadingProyectos}
+            className="w-full rounded-xl bg-zinc-950 border border-zinc-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+            style={{ colorScheme: 'dark' }}
+          >
+            <option value="">— Sin proyecto —</option>
+            {opcionesIntegral.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.etiqueta}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Rol examen</label>

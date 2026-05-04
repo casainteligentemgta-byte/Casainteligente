@@ -41,8 +41,12 @@ export async function POST(req: Request) {
     if (!state) {
       return NextResponse.json({ error: 'sesión no encontrada' }, { status: 401 });
     }
-    if (state.closed) {
-      return NextResponse.json({ error: 'sesión cerrada' }, { status: 410 });
+    /** La entrevista guiada puede cerrar la sesión; el obrero debe poder seguir enviando/actualizando la hoja de vida. */
+    if (state.expiresAt <= Date.now()) {
+      return NextResponse.json(
+        { error: 'sesión expirada', hint: 'Abre de nuevo el enlace que te envió RRHH para obtener una sesión nueva.' },
+        { status: 410 },
+      );
     }
 
     const bodyNeed = (body.needId ?? '').trim();

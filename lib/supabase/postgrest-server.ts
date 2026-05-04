@@ -100,6 +100,8 @@ export type RecruitmentNeedInsert = {
   proyecto_modulo_id: string | null;
   alerta_presupuesto_ignorada: boolean;
   notas_autorizacion: string | null;
+  /** Plazas solicitadas (1–500); por defecto 1. */
+  cantidad_requerida?: number;
 };
 
 /** Texto legado `cargo_solicitado` (NOT NULL en algunas bases) a partir del tabulador actual. */
@@ -127,8 +129,12 @@ function recruitmentNeedInsertPayload(row: RecruitmentNeedInsert): Record<string
     cargo_nombre: row.cargo_nombre,
     cargo_solicitado: cargoSolicitadoTexto(row),
     nivel_tabulador: nivelTabuladorValor(row),
-    // Cada POST = una plaza; legado NOT NULL en algunas bases.
-    cantidad_requerida: 1,
+    cantidad_requerida:
+      typeof row.cantidad_requerida === 'number' &&
+      Number.isFinite(row.cantidad_requerida) &&
+      row.cantidad_requerida >= 1
+        ? Math.min(500, Math.floor(row.cantidad_requerida))
+        : 1,
     tipo_vacante: row.tipo_vacante,
     alerta_presupuesto_ignorada: row.alerta_presupuesto_ignorada,
   };

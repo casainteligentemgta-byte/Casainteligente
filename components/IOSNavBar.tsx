@@ -62,6 +62,16 @@ const navItems = [
         ),
     },
     {
+        href: '/entidades',
+        label: 'Entidades',
+        icon: (active: boolean) => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M4 21h16M6 21V8l6-3 6 3v13M9 21v-5h6v5" stroke={active ? '#A78BFA' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? 'rgba(167,139,250,0.15)' : 'none'} />
+                <path d="M12 5v3" stroke={active ? '#A78BFA' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" />
+            </svg>
+        ),
+    },
+    {
         href: '/reclutamiento/dashboard',
         label: 'Reclutamiento',
         icon: (active: boolean) => (
@@ -139,7 +149,9 @@ export default function IOSNavBar() {
                                     ? '#FF9500'
                                     : item.label === 'Proyectos'
                                         ? '#F59E0B'
-                                        : item.label === 'Reclutamiento'
+                                        : item.label === 'Entidades'
+                                            ? '#A78BFA'
+                                            : item.label === 'Reclutamiento'
                                             ? '#0EA5E9'
                                             : item.label === 'Talento+'
                                                 ? '#38BDF8'

@@ -40,7 +40,10 @@ type Proyecto = {
   monto_aproximado: number;
   moneda: string;
   observaciones: string | null;
+  entidad_id?: string | null;
 };
+
+type EntidadOpt = { id: string; nombre: string; rif: string | null };
 
 type Equipo = {
   id: string;
@@ -132,23 +135,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [sugerenciasIA, setSugerenciasIA] = useState<string | null>(null);
   const [sugerenciasDesdeGemini, setSugerenciasDesdeGemini] = useState(false);
   const [vacanteModalOpen, setVacanteModalOpen] = useState(false);
+  const [rrhhVacantesTick, setRrhhVacantesTick] = useState(0);
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
-  const [seccionDashboard, setSeccionDashboard] = useState<'operaciones' | 'talento'>('operaciones');
   const rrhhPanelRef = useRef<HTMLDivElement>(null);
 
   const irRrhhPanel = useCallback(() => {
-    setSeccionDashboard('talento');
+    router.replace(`/proyectos/modulo/${id}?tab=rrhh`, { scroll: false });
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
-  }, []);
+  }, [id, router]);
 
   useEffect(() => {
     const t = searchParams.get('tab');
     if (t !== 'rrhh' && t !== 'talento') return;
-    setSeccionDashboard('talento');
     const timer = window.setTimeout(() => {
       rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 120);
@@ -163,8 +165,17 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peObs, setPeObs] = useState('');
   const [peLat, setPeLat] = useState('');
   const [peLng, setPeLng] = useState('');
+  const [peEntidadId, setPeEntidadId] = useState('');
+  const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [savingProyecto, setSavingProyecto] = useState(false);
   const [proyectoSaveError, setProyectoSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+      setEntidades((data ?? []) as EntidadOpt[]);
+    })();
+  }, [supabase]);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -376,6 +387,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setPeObs(proyecto.observaciones ?? '');
     setPeLat(proyecto.lat != null ? String(proyecto.lat) : '');
     setPeLng(proyecto.lng != null ? String(proyecto.lng) : '');
+    setPeEntidadId(proyecto.entidad_id ? String(proyecto.entidad_id) : '');
     setProyectoSaveError(null);
   }, [proyecto]);
 
@@ -422,6 +434,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         observaciones: peObs.trim() || null,
         lat,
         lng,
+        entidad_id: peEntidadId.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -534,6 +547,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     return `https://wa.me/${telefono}?text=${encodeURIComponent(textoKitRecoleccion)}`;
   }, [trabajadorTelefono, textoKitRecoleccion]);
 
+  /** Enlace directo ?tab=rrhh|talento: cabecera mínima (sin atajos duplicados al panel RRHH). */
+  const tabVistaTalento = searchParams.get('tab') === 'rrhh' || searchParams.get('tab') === 'talento';
+
   async function generarSugerenciasIA() {
     if (!proyecto) return;
     setGenerandoSugerencias(true);
@@ -578,7 +594,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             ← Proyectos
           </Link>
           <div className="flex flex-wrap items-center gap-2">
-            {proyecto ? (
+            {proyecto && !tabVistaTalento && !modoEdicion ? (
               <FeedNotificacionesRealtime
                 proyectoId={id}
                 onIrGestionTalento={irRrhhPanel}
@@ -592,33 +608,39 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 Modificar proyecto
               </Link>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setVacanteModalOpen(true)}
-              className="rounded-xl border border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25"
-            >
-              Nueva vacante
-            </button>
-            <button
-              type="button"
-              onClick={irRrhhPanel}
-              className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
-              title="Personal solicitado, enlaces WhatsApp y copiar"
-            >
-              RRHH
-            </button>
-            <Link
-              href="/reclutamiento/dashboard"
-              className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
-            >
-              Reclutamiento
-            </Link>
-            <Link
-              href="/proyectos/modulo"
-              className="rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
-            >
-              Terminar y volver a los proyectos
-            </Link>
+            {!tabVistaTalento && !modoEdicion ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setVacanteModalOpen(true)}
+                  className="rounded-xl border border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25"
+                >
+                  Nueva vacante
+                </button>
+                <button
+                  type="button"
+                  onClick={irRrhhPanel}
+                  className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
+                  title="Personal solicitado, enlaces WhatsApp y copiar"
+                >
+                  RRHH
+                </button>
+                <Link
+                  href="/reclutamiento/dashboard"
+                  className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
+                >
+                  Reclutamiento
+                </Link>
+              </>
+            ) : null}
+            {!modoEdicion ? (
+              <Link
+                href="/proyectos/modulo"
+                className="rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
+              >
+                Terminar y volver a los proyectos
+              </Link>
+            ) : null}
           </div>
         </div>
         {loading ? <p className="mt-6 text-sm text-zinc-500">Cargando...</p> : null}
@@ -652,6 +674,30 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     onChange={(e) => setPeNombre(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
                   />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Entidad de trabajo (patrono)
+                  </label>
+                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                    <Link href="/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
+                      Gestionar entidades
+                    </Link>
+                  </p>
+                  <select
+                    value={peEntidadId}
+                    onChange={(e) => setPeEntidadId(e.target.value)}
+                    style={{ colorScheme: 'dark' }}
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                  >
+                    <option value="">— Sin entidad —</option>
+                    {entidades.map((en) => (
+                      <option key={en.id} value={en.id} className="bg-zinc-900">
+                        {en.nombre}
+                        {en.rif ? ` · ${en.rif}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
@@ -740,7 +786,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   {savingProyecto ? 'Guardando…' : 'Guardar cambios'}
                 </button>
               </form>
-            ) : (
+            ) : tabVistaTalento ? null : (
               <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -748,18 +794,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     <p className="mt-1 text-sm text-zinc-400">{proyecto.ubicacion_texto}</p>
                     <p className="mt-1 text-xs text-zinc-500">
                       GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
-                    </p>
-                    <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 max-w-xl">
-                      El análisis de nómina / finanzas usa la tabla{' '}
-                      <code className="text-zinc-400">ci_obras</code> (Talento). Este registro es{' '}
-                      <code className="text-zinc-400">ci_proyectos</code>. Para ver finanzas, crea o abre una obra en{' '}
-                      <Link
-                        href={`/proyectos/nuevo?desde=proyecto&proyecto_modulo_id=${encodeURIComponent(id)}`}
-                        className="text-sky-400 font-medium hover:underline"
-                      >
-                        Solicitar personal
-                      </Link>
-                      .
                     </p>
                   </div>
                   <button
@@ -774,35 +808,8 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               </div>
             )}
 
-            <div ref={rrhhPanelRef} className="mt-4 space-y-4">
-              <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5 backdrop-blur-xl">
-                <button
-                  type="button"
-                  onClick={() => setSeccionDashboard('operaciones')}
-                  className={`rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition duration-200 ${
-                    seccionDashboard === 'operaciones'
-                      ? 'bg-[#FF9500]/20 text-[#FF9500] ring-1 ring-[#FF9500]/40'
-                      : 'text-zinc-500 hover:text-zinc-300 hover:scale-[1.02]'
-                  }`}
-                >
-                  Operaciones
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSeccionDashboard('talento')}
-                  className={`rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wide transition duration-200 ${
-                    seccionDashboard === 'talento'
-                      ? 'bg-fuchsia-500/25 text-fuchsia-100 ring-1 ring-fuchsia-500/45'
-                      : 'text-zinc-500 hover:text-zinc-300 hover:scale-[1.02]'
-                  }`}
-                >
-                  RRHH
-                </button>
-              </div>
-
-              {seccionDashboard === 'talento' ? (
-                <GestionRRHHLocal proyectoModuloId={id} />
-              ) : (
+            <div className={`space-y-4 ${tabVistaTalento && !modoEdicion ? 'mt-2' : 'mt-4'}`}>
+              {modoEdicion || !tabVistaTalento ? (
               <>
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
@@ -1140,8 +1147,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 ))}
               </ul>
             </section>
-            </>
-              )}
+              </>
+              ) : null}
+              <div ref={rrhhPanelRef} className={modoEdicion || !tabVistaTalento ? 'mt-8 space-y-4' : 'space-y-4'}>
+                <GestionRRHHLocal proyectoModuloId={id} listaRefresco={rrhhVacantesTick} />
+              </div>
             </div>
           </>
         ) : null}
@@ -1152,6 +1162,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         onClose={() => setVacanteModalOpen(false)}
         proyectoModuloId={id}
         proyectoNombre={proyecto?.nombre ?? null}
+        onVacanteCreada={() => setRrhhVacantesTick((n) => n + 1)}
       />
     </div>
   );

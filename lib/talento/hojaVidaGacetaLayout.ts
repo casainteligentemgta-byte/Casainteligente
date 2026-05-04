@@ -1,0 +1,14 @@
+/**
+ * Referencia visual al membrete de la Gaceta Oficial (Convención Colectiva Construcción 2023, G.O.E. N° 6.752 Extraordinario).
+ * El cuerpo del documento sigue el formato de planilla de empleo / identificación del trabajador usado en expedientes de la rama.
+ */
+export const HOJA_VIDA_GACETA_REFERENCIA =
+  'Referencia normativa: Convención Colectiva de Trabajo — Rama Construcción, homologada (G.O.E. N° 6.752 Extraordinario, Caracas, 6 de julio de 2023).';
+
+export const HOJA_VIDA_GACETA_NUMERO = 'N° 6.752 Extraordinario';
+
+/** Título principal al estilo planilla de empleo (no es impreso oficial de Gaceta). */
+export const HOJA_VIDA_PLANILLA_TITULO = 'PLANILLA DE EMPLEO';
+
+export const HOJA_VIDA_PLANILLA_SUBTITULO =
+  'Hoja de identificación del trabajador — Rama construcción (datos para expediente de contratación)';

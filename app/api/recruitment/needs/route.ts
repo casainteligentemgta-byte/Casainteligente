@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     proyecto_modulo_id?: string;
     alerta_presupuesto_ignorada?: boolean;
     notas_autorizacion?: string | null;
+    cantidad_requerida?: number;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -142,6 +143,12 @@ export async function POST(req: Request) {
       ? String(body.notas_autorizacion).trim()
       : null;
 
+  const rawCant = body.cantidad_requerida;
+  const cantidadRequerida =
+    typeof rawCant === 'number' && Number.isFinite(rawCant) && rawCant >= 1
+      ? Math.min(500, Math.floor(rawCant))
+      : 1;
+
   try {
     let obraId: string | null = null;
     let moduloId: string | null = null;
@@ -183,6 +190,7 @@ export async function POST(req: Request) {
         proyecto_modulo_id: moduloId,
         alerta_presupuesto_ignorada: alertaIgnorada,
         notas_autorizacion: notasAuth,
+        cantidad_requerida: cantidadRequerida,
       });
       if (!ins.id) {
         return NextResponse.json({ error: 'No se pudo crear la vacante' }, { status: 500 });
@@ -256,6 +264,8 @@ export async function POST(req: Request) {
         proyectoModuloId: moduloId,
         alertaPresupuestoIgnorada: alertaIgnorada,
         notasAutorizacion: notasAuth,
+        cantidadRequerida,
+        conteoClics: 0,
       })
       .returning({
         id: schema.recruitmentNeeds.id,

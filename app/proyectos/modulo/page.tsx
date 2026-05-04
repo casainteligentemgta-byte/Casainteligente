@@ -343,6 +343,21 @@ export default function ModuloProyectosPage() {
           <h1 style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: 0 }}>Proyectos</h1>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+          <Link
+            href="/entidades"
+            style={{
+              borderRadius: '12px',
+              padding: '10px 16px',
+              fontWeight: 700,
+              fontSize: '14px',
+              border: '1px solid rgba(167,139,250,0.5)',
+              color: '#E9D5FF',
+              textDecoration: 'none',
+              background: 'rgba(167,139,250,0.12)',
+            }}
+          >
+            Entidades
+          </Link>
           <Link href="/proyectos/modulo/nuevo">
             <button
               type="button"

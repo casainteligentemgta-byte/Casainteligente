@@ -121,9 +121,11 @@ export default function ReclutamientoHojaVidaBlock({ sessionId, needId }: Props)
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-emerald-200/95">Hoja de vida (datos básicos)</h2>
+          <h2 className="text-sm font-semibold text-emerald-200/95">Hoja de vida laboral (datos básicos)</h2>
           <p className="text-[11px] text-zinc-400 mt-0.5 max-w-prose">
-            Completa estos datos antes o durante la entrevista guiada. Quedan guardados con tu sesión para RRHH.
+            Completa estos datos en cualquier momento (antes, durante o después de la entrevista por botones). Quedan
+            guardados con tu sesión para RRHH. Si RRHH te envió otro enlace con pasos legales completos, úsalo aparte;
+            aquí va lo esencial para tu postulación a esta vacante.
           </p>
         </div>
         {ok ? (
