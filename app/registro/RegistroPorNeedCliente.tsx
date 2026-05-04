@@ -19,6 +19,7 @@ import {
 } from '@/lib/registro/captacionPlanillaSchema';
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
+import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 
 import type { FirmaDigitalGuardado } from './components/FirmaDigital';
@@ -299,15 +300,36 @@ export default function RegistroPorNeedCliente({
               : undefined,
           }),
         });
-        const body = (await res.json().catch(() => ({}))) as { error?: string; hint?: string; empleadoId?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          hint?: string;
+          empleadoId?: string;
+          exam_url?: string;
+          exam_invite_error?: string;
+        };
         if (!res.ok) {
           toast.error(body.error ?? 'No se pudo completar la captación automática.');
           if (body.hint) toast.message(String(body.hint));
           return;
         }
+        const eid = (body.empleadoId ?? '').trim();
+        if (body.exam_url && eid && typeof window !== 'undefined') {
+          const nombrePost =
+            `${form.primerNombre.trim()} ${form.primerApellido.trim()}`.replace(/\s+/g, ' ').trim() || 'Postulante';
+          window.sessionStorage.setItem(
+            `registro-examen-${eid}`,
+            JSON.stringify({
+              examUrl: body.exam_url,
+              nombre: nombrePost,
+              whatsapp: form.celular.trim(),
+            }),
+          );
+        } else if (body.exam_invite_error) {
+          toast.message(`Enlace de evaluación no disponible: ${body.exam_invite_error}`);
+        }
         toast.success('Planilla enviada. PDF generado; pendiente de firma / revisión.');
         router.push(
-          `/registro/exito?empleadoId=${encodeURIComponent(body.empleadoId ?? '')}&cedula=${encodeURIComponent(form.cedula.trim())}`,
+          `/registro/exito?empleadoId=${encodeURIComponent(eid)}&cedula=${encodeURIComponent(form.cedula.trim())}`,
         );
         return;
       }
@@ -458,6 +480,29 @@ export default function RegistroPorNeedCliente({
               'Tu postulación ya quedó registrada. Puedes imprimir la planilla; RRHH puede volver a cargar la firma o usar firma física.',
           });
         }
+      }
+
+      try {
+        const inv = await fetch(apiUrl('/api/registro/emitir-invitacion-examen'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ empleadoId: ins.id, cedula: form.cedula.trim() }),
+        });
+        const ij = (await inv.json().catch(() => ({}))) as { exam_url?: string; error?: string };
+        if (inv.ok && ij.exam_url && typeof window !== 'undefined') {
+          window.sessionStorage.setItem(
+            `registro-examen-${ins.id}`,
+            JSON.stringify({
+              examUrl: ij.exam_url,
+              nombre: nombreCompleto || 'Postulante',
+              whatsapp: form.celular.trim(),
+            }),
+          );
+        } else if (!inv.ok && ij.error) {
+          toast.message(ij.error);
+        }
+      } catch {
+        /* sin bloquear éxito de postulación */
       }
 
       router.push(

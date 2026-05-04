@@ -120,7 +120,7 @@ export default function ModuloProyectosPage() {
           Promise.resolve(
             supabase
               .from('ci_obras')
-              .select('id,nombre,ubicacion,cliente,estado,created_at,precio_venta_usd,entidad_id')
+              .select('id,nombre,ubicacion,cliente,estado,created_at,precio_venta_usd,presupuesto_ves')
               .order('created_at', { ascending: false }),
           ),
         ]),

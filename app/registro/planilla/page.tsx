@@ -1,15 +1,27 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export type PlanillaDocTipo = 'hoja_empleo' | 'hoja_vida';
 
+/** Evita redirecciones abiertas: solo rutas relativas del mismo sitio. */
+function safeReturnPath(raw: string | null): string | null {
+  const s = (raw ?? '').trim();
+  if (!s.startsWith('/') || s.startsWith('//')) return null;
+  if (s.includes('://') || s.toLowerCase().includes('javascript:')) return null;
+  if (s.length > 2048) return null;
+  return s;
+}
+
 function PlanillaIframe() {
+  const router = useRouter();
   const sp = useSearchParams();
   const empleadoId = (sp.get('empleadoId') ?? '').trim();
   const cedula = (sp.get('cedula') ?? '').trim().replace(/\uFEFF/g, '');
   const tipoUrl = (sp.get('tipo') ?? '').trim().toLowerCase();
+  const volverRaw = sp.get('volver') ?? sp.get('return');
+  const volverTo = useMemo(() => safeReturnPath(volverRaw), [volverRaw]);
   const [docTipo, setDocTipo] = useState<PlanillaDocTipo>(() =>
     tipoUrl === 'hoja_vida' ? 'hoja_vida' : 'hoja_empleo',
   );
@@ -123,8 +135,17 @@ function PlanillaIframe() {
           <button
             type="button"
             onClick={() => {
-              if (window.history.length > 1) window.history.back();
-              else window.close();
+              if (volverTo) {
+                router.push(volverTo);
+                return;
+              }
+              if (empleadoId && cedula) {
+                router.push(
+                  `/registro/exito?empleadoId=${encodeURIComponent(empleadoId)}&cedula=${encodeURIComponent(cedula)}`,
+                );
+                return;
+              }
+              router.push('/registro');
             }}
             className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/10"
           >

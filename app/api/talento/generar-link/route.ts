@@ -130,7 +130,11 @@ export async function POST(req: Request) {
     console.error('[talento generar-link] examen', errExa);
     await supabase.from('ci_empleados').delete().eq('id', row.id);
     return NextResponse.json(
-      { error: errExa.message, hint: 'Ejecuta supabase/migrations/029_ci_examenes_invite.sql' },
+      {
+        error: errExa.message,
+        hint:
+          'En Supabase SQL Editor ejecuta supabase/migrations/082_ci_examenes_ensure_postgrest.sql (o 029+030). Luego recarga el esquema API si hace falta.',
+      },
       { status: 500 },
     );
   }

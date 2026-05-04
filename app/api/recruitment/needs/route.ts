@@ -1,4 +1,4 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import {
@@ -18,7 +18,7 @@ export async function GET() {
     );
   }
   try {
-    const rows = await db
+    const baseRows = await db
       .select({
         id: schema.recruitmentNeeds.id,
         title: schema.recruitmentNeeds.title,
@@ -30,16 +30,62 @@ export async function GET() {
         tipoVacante: schema.recruitmentNeeds.tipoVacante,
         proyectoId: schema.recruitmentNeeds.proyectoId,
         proyectoModuloId: schema.recruitmentNeeds.proyectoModuloId,
-        proyectoNombre: sql<string>`COALESCE(${schema.ciObras.nombre}, ${schema.ciProyectos.nombre})`.as(
-          'proyectoNombre',
-        ),
         createdAt: schema.recruitmentNeeds.createdAt,
       })
       .from(schema.recruitmentNeeds)
-      .leftJoin(schema.ciObras, eq(schema.recruitmentNeeds.proyectoId, schema.ciObras.id))
-      .leftJoin(schema.ciProyectos, eq(schema.recruitmentNeeds.proyectoModuloId, schema.ciProyectos.id))
       .orderBy(desc(schema.recruitmentNeeds.createdAt))
       .limit(40);
+
+    const obraIds: string[] = [];
+    const obraSeen = new Set<string>();
+    const modIds: string[] = [];
+    const modSeen = new Set<string>();
+    for (const r of baseRows) {
+      const oid = r.proyectoId;
+      if (oid && !obraSeen.has(oid)) {
+        obraSeen.add(oid);
+        obraIds.push(oid);
+      }
+      const mid = r.proyectoModuloId;
+      if (mid && !modSeen.has(mid)) {
+        modSeen.add(mid);
+        modIds.push(mid);
+      }
+    }
+
+    const obraNombreById = new Map<string, string>();
+    const moduloNombreById = new Map<string, string>();
+
+    if (obraIds.length) {
+      try {
+        const obras = await db
+          .select({ id: schema.ciObras.id, nombre: schema.ciObras.nombre })
+          .from(schema.ciObras)
+          .where(inArray(schema.ciObras.id, obraIds));
+        for (const o of obras) obraNombreById.set(o.id, o.nombre);
+      } catch (e) {
+        console.warn('[recruitment/needs GET] no se pudieron cargar nombres de ci_obras', e);
+      }
+    }
+    if (modIds.length) {
+      try {
+        const mods = await db
+          .select({ id: schema.ciProyectos.id, nombre: schema.ciProyectos.nombre })
+          .from(schema.ciProyectos)
+          .where(inArray(schema.ciProyectos.id, modIds));
+        for (const m of mods) moduloNombreById.set(m.id, m.nombre);
+      } catch (e) {
+        console.warn('[recruitment/needs GET] no se pudieron cargar nombres de ci_proyectos', e);
+      }
+    }
+
+    const rows = baseRows.map((r) => {
+      const porObra = r.proyectoId ? obraNombreById.get(r.proyectoId) : undefined;
+      const porModulo = r.proyectoModuloId ? moduloNombreById.get(r.proyectoModuloId) : undefined;
+      const proyectoNombre: string | null = porObra ?? porModulo ?? null;
+      return { ...r, proyectoNombre };
+    });
+
     return NextResponse.json({ needs: rows });
   } catch (e) {
     console.error('[recruitment/needs GET]', e);

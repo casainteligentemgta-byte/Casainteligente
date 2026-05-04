@@ -10,10 +10,27 @@ import type { HojaVidaLegalPdfMeta } from '@/lib/talento/hojaVidaPdfLegal';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
 import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
+import { ensureCiExamenInviteForEmpleado } from '@/lib/talento/ensureCiExamenInviteForEmpleado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
 
 export const runtime = 'nodejs';
+
+function trimBase(u: string): string {
+  return u.trim().replace(/\/$/, '');
+}
+
+function publicBaseFromReq(req: Request): string {
+  const origin = trimBase(req.headers.get('origin') ?? '');
+  if (origin && /^https?:\/\//i.test(origin)) return origin;
+  const env = trimBase(process.env.NEXT_PUBLIC_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '');
+  if (env && /^https?:\/\//i.test(env)) return env;
+  try {
+    return trimBase(new URL(req.url).origin);
+  } catch {
+    return '';
+  }
+}
 
 /**
  * POST — Cierra captación automática: persiste obrero, PDF Anexo I (firma en blanco), Storage, notificación CEO.
@@ -197,6 +214,14 @@ export async function POST(req: Request) {
 
   const empleadoId = (ins as { id: string }).id;
 
+  const examInvite = await ensureCiExamenInviteForEmpleado(admin.client, {
+    empleadoId,
+    token: tokenRegistro,
+  });
+  if (!examInvite.ok) {
+    console.error('[captacion-completar] ci_examenes', examInvite.error);
+  }
+
   const { data: empFull, error: empErr } = await admin.client.from('ci_empleados').select('*').eq('id', empleadoId).maybeSingle();
   if (empErr || !empFull) {
     return NextResponse.json({ ok: true, empleadoId, warning: 'Empleado creado pero no se generó PDF.' });
@@ -286,5 +311,15 @@ export async function POST(req: Request) {
   const prev = (cur as { conteo_postulaciones?: number } | null)?.conteo_postulaciones ?? 0;
   await admin.client.from('recruitment_needs').update({ conteo_postulaciones: prev + 1 } as never).eq('id', n.id);
 
-  return NextResponse.json({ ok: true, empleadoId, cedula: formState.cedula.trim() });
+  const base = publicBaseFromReq(req);
+  const exam_url =
+    examInvite.ok && base ? `${base}/talento/examen?token=${encodeURIComponent(tokenRegistro)}` : undefined;
+
+  return NextResponse.json({
+    ok: true,
+    empleadoId,
+    cedula: formState.cedula.trim(),
+    ...(exam_url ? { exam_url } : {}),
+    ...(!examInvite.ok ? { exam_invite_error: examInvite.error } : {}),
+  });
 }

@@ -78,8 +78,12 @@ export function EnlaceInvitacionResultado({
   /** Texto corto: evita límites de longitud en wa.me y deja claro que es la hoja de vida. */
   const waText = useMemo(() => {
     const n = nombreCandidato.trim() || 'Hola';
-    return `${n}, completa tu hoja de vida CASA INTELIGENTE aquí: ${onboardingUrl}`;
-  }, [onboardingUrl, nombreCandidato]);
+    const hoja = `${n}, completa tu hoja de vida CASA INTELIGENTE aquí: ${onboardingUrl}`;
+    if (examUrl?.trim()) {
+      return `${hoja}\n\nCuando termines la planilla, entra a la evaluación en línea aquí: ${examUrl.trim()}`;
+    }
+    return hoja;
+  }, [examUrl, onboardingUrl, nombreCandidato]);
 
   const waHrefDirecto =
     waPhone.length >= 10 ? `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}` : '';

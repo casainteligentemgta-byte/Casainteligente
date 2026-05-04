@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, RefreshCw, Trash2 } from 'lucide-react';
+import { FileText, Link2, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 
 type EmpleadoRow = {
@@ -10,6 +12,8 @@ type EmpleadoRow = {
   nombre_completo: string | null;
   documento: string | null;
   cedula: string | null;
+  celular: string | null;
+  telefono: string | null;
   created_at: string;
   estado_proceso: string | null;
   cargo_nombre: string | null;
@@ -42,7 +46,7 @@ export default function RrhhHojasVidaPage() {
     const { data, error: err } = await supabase
       .from('ci_empleados')
       .select(
-        'id,nombre_completo,documento,cedula,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id',
+        'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id',
       )
       .eq('estado_proceso', 'cv_completado')
       .order('created_at', { ascending: false })
@@ -60,6 +64,39 @@ export default function RrhhHojasVidaPage() {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  const emitirEnlaceEvaluacion = useCallback(async (r: EmpleadoRow) => {
+    const doc = docMostrado(r);
+    if (doc === '—') {
+      toast.error('Sin cédula en el expediente: no se puede validar el enlace de evaluación.');
+      return;
+    }
+    try {
+      const res = await fetch(apiUrl('/api/registro/emitir-invitacion-examen'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empleadoId: r.id, cedula: doc }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { exam_url?: string; error?: string };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo generar el enlace de evaluación');
+        return;
+      }
+      if (!j.exam_url) {
+        toast.error('Respuesta sin URL de evaluación');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(j.exam_url);
+        toast.success('Enlace copiado; se abre en una nueva pestaña.');
+      } catch {
+        toast.message('Enlace listo (no se pudo copiar al portapapeles automáticamente)');
+      }
+      window.open(j.exam_url, '_blank', 'noopener,noreferrer');
+    } catch {
+      toast.error('Error de red al solicitar el enlace');
+    }
+  }, []);
 
   const borrarEmpleado = useCallback(
     async (r: EmpleadoRow) => {
@@ -92,9 +129,10 @@ export default function RrhhHojasVidaPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">RRHH — Hojas de vida recibidas</h1>
             <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              Expedientes «cv_completado». <span className="text-zinc-200">Hoja de empleo</span>: primero patrono, obra y
-              contratación; después la hoja de vida del trabajador. <span className="text-zinc-200">Hoja de vida</span> solo el
-              bloque del trabajador. Onboarding:{' '}
+              Expedientes «cv_completado». <span className="text-zinc-200">Hoja de empleo</span> /{' '}
+              <span className="text-zinc-200">Hoja de vida</span> abren el visor PDF. <span className="text-zinc-200">Evaluación</span>{' '}
+              genera el enlace <code className="text-zinc-500">/talento/examen?token=…</code> (copia y abre; valida con la
+              cédula del expediente). Onboarding PDF:{' '}
               <code className="text-zinc-500">/api/talento/hoja-vida/pdf?token=…</code>.
             </p>
           </div>
@@ -129,7 +167,7 @@ export default function RrhhHojasVidaPage() {
             const nombre = (r.nombre_completo ?? '').trim() || 'Sin nombre';
             const cargo = (r.cargo_nombre ?? '').trim() || '—';
             const doc = docMostrado(r);
-            const pdfBase = `/registro/planilla?empleadoId=${encodeURIComponent(r.id)}&cedula=${encodeURIComponent(doc === '—' ? '' : doc)}`;
+            const pdfBase = `/registro/planilla?empleadoId=${encodeURIComponent(r.id)}&cedula=${encodeURIComponent(doc === '—' ? '' : doc)}&volver=${encodeURIComponent('/rrhh/hojas-vida')}`;
             const pdfHojaVida = `${pdfBase}&tipo=hoja_vida`;
             const pdfHojaEmpleo = `${pdfBase}&tipo=hoja_empleo`;
             const proyectoHref = r.proyecto_modulo_id
@@ -176,6 +214,14 @@ export default function RrhhHojasVidaPage() {
                         <FileText className="h-3.5 w-3.5 opacity-70" />
                         Hoja de vida
                       </a>
+                      <button
+                        type="button"
+                        onClick={() => void emitirEnlaceEvaluacion(r)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600/40 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/40"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        Evaluación
+                      </button>
                     </>
                   ) : null}
                   {proyectoHref ? (
