@@ -1,4 +1,4 @@
--- Observaciones internas de RRHH por obrero (visible en /rrhh/hojas-vida).
+ Observaciones internas de RRHH por obrero (visible en /rrhh/hojas-vida).
 -- Idempotente.
 
 alter table public.ci_empleados
@@ -8,3 +8,4 @@ comment on column public.ci_empleados.observaciones_rrhh is
   'Notas internas de RRHH para seguimiento del expediente del trabajador.';
 
 notify pgrst, 'reload schema';
+--

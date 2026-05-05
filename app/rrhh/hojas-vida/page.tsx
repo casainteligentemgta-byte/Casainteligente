@@ -65,9 +65,11 @@ export default function RrhhHojasVidaPage() {
     setLoading(true);
     setError(null);
 
-    const baseCols =
-      'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id,status_evaluacion,semaforo,semaforo_riesgo,perfil_color,motivo_semaforo,motivo_semaforo_riesgo,puntaje_total,puntaje_logica,puntaje_personalidad,puntuacion_logica,puntuacion_confiabilidad,nivel_integridad_riesgo,tiempo_respuesta,examen_completado_at';
-    const withObsCols = `${baseCols},observaciones_rrhh`;
+    const colsMinimas =
+      'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id';
+    const colsExtendidas =
+      'status_evaluacion,semaforo,semaforo_riesgo,perfil_color,motivo_semaforo,motivo_semaforo_riesgo,puntaje_total,puntaje_logica,puntaje_personalidad,puntuacion_logica,puntuacion_confiabilidad,nivel_integridad_riesgo,tiempo_respuesta,examen_completado_at,observaciones_rrhh';
+    const withObsCols = `${colsMinimas},${colsExtendidas}`;
 
     let result: {
       data: EmpleadoRow[] | null;
@@ -82,11 +84,11 @@ export default function RrhhHojasVidaPage() {
       error: { message: string } | null;
     };
 
-    // Compatibilidad temporal: si aún no se aplicó la migración de observaciones, cargamos sin esa columna.
-    if (result.error?.message?.toLowerCase().includes('observaciones_rrhh')) {
+    // Compatibilidad temporal: si faltan columnas nuevas (observaciones/perfil/color/evaluación), reintenta con mínimas.
+    if (result.error) {
       result = (await supabase
         .from('ci_empleados')
-        .select(baseCols)
+        .select(colsMinimas)
         .eq('estado_proceso', 'cv_completado')
         .order('created_at', { ascending: false })
         .limit(300)) as unknown as {
@@ -103,6 +105,20 @@ export default function RrhhHojasVidaPage() {
     }
     const mapped = ((result.data ?? []) as EmpleadoRow[]).map((r) => ({
       ...r,
+      status_evaluacion: r.status_evaluacion ?? null,
+      semaforo: r.semaforo ?? null,
+      semaforo_riesgo: r.semaforo_riesgo ?? null,
+      perfil_color: r.perfil_color ?? null,
+      motivo_semaforo: r.motivo_semaforo ?? null,
+      motivo_semaforo_riesgo: r.motivo_semaforo_riesgo ?? null,
+      puntaje_total: r.puntaje_total ?? null,
+      puntaje_logica: r.puntaje_logica ?? null,
+      puntaje_personalidad: r.puntaje_personalidad ?? null,
+      puntuacion_logica: r.puntuacion_logica ?? null,
+      puntuacion_confiabilidad: r.puntuacion_confiabilidad ?? null,
+      nivel_integridad_riesgo: r.nivel_integridad_riesgo ?? null,
+      tiempo_respuesta: r.tiempo_respuesta ?? null,
+      examen_completado_at: r.examen_completado_at ?? null,
       observaciones_rrhh: r.observaciones_rrhh ?? null,
     }));
     setRows(mapped);

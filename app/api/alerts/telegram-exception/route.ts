@@ -85,7 +85,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Falta record' }, { status: 400 });
   }
 
-  const estatus = asString(record.estatus_evaluacion)?.toLowerCase();
+  const estatus =
+    asString(record.estatus_evaluacion)?.toLowerCase() ??
+    asString(record.status_evaluacion)?.toLowerCase();
   if (estatus !== 'completado') {
     return NextResponse.json({ ok: true, skipped: true, reason: 'estatus_not_completado' }, { status: 200 });
   }

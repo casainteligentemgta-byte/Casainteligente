@@ -18,6 +18,7 @@ import { relations } from 'drizzle-orm';
 /* ─── Enums ───────────────────────────────────────── */
 
 export const nexusClientType = pgEnum('nexus_client_type', ['person', 'organization']);
+export const customerCategory = pgEnum('customer_category', ['natural', 'juridico']);
 export const nexusCatalogKind = pgEnum('nexus_catalog_kind', ['hardware', 'service']);
 export const nexusProposalStatus = pgEnum('nexus_proposal_status', [
   'draft',
@@ -47,6 +48,27 @@ export const nexusMilestoneStatus = pgEnum('nexus_milestone_status', [
 ]);
 
 /* ─── Clientes + inmuebles ───────────────────────── */
+
+/** Fuente de verdad de clientes (unificado: natural | juridico). */
+export const customers = pgTable('customers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  nombre: text('nombre').notNull(),
+  apellido: text('apellido'),
+  razonSocial: text('razon_social'),
+  representanteLegal: text('representante_legal'),
+  customerType: customerCategory('customer_type').default('natural').notNull(),
+  cedula: text('cedula'),
+  rif: text('rif'),
+  email: text('email'),
+  telefono: text('telefono'),
+  movil: text('movil'),
+  tipo: text('tipo'),
+  status: text('status'),
+  direccion: text('direccion'),
+  imagen: text('imagen'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
 
 export const nexusClients = pgTable('nexus_clients', {
   id: uuid('id').primaryKey().defaultRandom(),

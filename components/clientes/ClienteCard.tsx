@@ -323,6 +323,28 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             Ver
                         </button>
 
+                        {/* Ficha */}
+                        <Link
+                            href={`/clientes/${cliente.id}`}
+                            style={{
+                                flex: 1, padding: '9px 0',
+                                background: 'transparent',
+                                borderRight: '1px solid rgba(255,255,255,0.07)',
+                                textDecoration: 'none',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                                color: '#5AC8FA', fontSize: '11px', fontWeight: 600,
+                                transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(90,200,250,0.08)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                <path d="M4 19.5V4.5a1.5 1.5 0 011.5-1.5h8.4L20 9.1V19.5A1.5 1.5 0 0118.5 21h-13A1.5 1.5 0 014 19.5z" stroke="#5AC8FA" strokeWidth="2" />
+                                <path d="M14 3v6h6" stroke="#5AC8FA" strokeWidth="2" />
+                            </svg>
+                            Ficha
+                        </Link>
+
                         {/* Editar */}
                         <Link
                             href={`/clientes/${cliente.id}/editar`}
