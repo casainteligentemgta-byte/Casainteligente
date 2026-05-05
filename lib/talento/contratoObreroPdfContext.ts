@@ -75,7 +75,7 @@ export async function cargarFuentesContratoObreroPdf(
   const [{ data: emp, error: ee }, { data: obra, error: eo }] = await Promise.all([
     admin
       .from('ci_empleados')
-      .select('nombre_completo,documento,cedula,direccion,celular,telefono,hoja_vida_obrero')
+      .select('nombre_completo,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero')
       .eq('id', row.empleado_id)
       .maybeSingle(),
     admin
@@ -96,7 +96,7 @@ export async function cargarFuentesContratoObreroPdf(
     nombre_completo: string | null;
     documento: string | null;
     cedula: string | null;
-    direccion?: string | null;
+    direccion_habitacion?: string | null;
     celular?: string | null;
     telefono?: string | null;
     hoja_vida_obrero?: unknown;
@@ -116,7 +116,7 @@ export async function cargarFuentesContratoObreroPdf(
       nombre_completo: e.nombre_completo,
       documento: e.documento,
       cedula: e.cedula,
-      direccion: e.direccion,
+      direccion: strOpt(e.direccion_habitacion),
       celular: e.celular,
       telefono: e.telefono,
     },
@@ -181,7 +181,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   const { data: emp, error: ee } = await supabase
     .from('ci_empleados')
     .select(
-      'nombre_completo,documento,cedula,direccion,direccion_habitacion,celular,telefono,hoja_vida_obrero,cargo_nombre,cargo_codigo,cargo_nivel,proyecto_modulo_id,recruitment_need_id',
+      'nombre_completo,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero,cargo_nombre,cargo_codigo,cargo_nivel,proyecto_modulo_id,recruitment_need_id',
     )
     .eq('id', eid)
     .maybeSingle();
@@ -194,7 +194,6 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     nombre_completo: string | null;
     documento: string | null;
     cedula: string | null;
-    direccion?: string | null;
     direccion_habitacion?: string | null;
     celular?: string | null;
     telefono?: string | null;
@@ -274,7 +273,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   };
 
   const hv = parseHoja(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
-  const dir = strOpt(e.direccion) ?? strOpt(e.direccion_habitacion);
+  const dir = strOpt(e.direccion_habitacion);
 
   const fuentes: FuentesContratoObrero = {
     empleado: {

@@ -78,7 +78,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
   const [empRes, obraRes] = await Promise.all([
     supabase
       .from('ci_empleados')
-      .select('id,nombre_completo,cedula,documento,direccion')
+      .select('id,nombre_completo,cedula,documento,direccion_habitacion')
       .eq('id', contrato.empleado_id)
       .maybeSingle(),
     supabase
@@ -99,7 +99,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     nombre_completo: string;
     cedula: string | null;
     documento: string | null;
-    direccion?: string | null;
+    direccion_habitacion?: string | null;
   };
   const obraRaw = obraRes.data as {
     nombre: string;
@@ -125,7 +125,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     empleado: {
       nombre: empleado.nombre_completo,
       cedula: empleado.cedula ?? empleado.documento ?? 'No registrada',
-      direccion: empleado.direccion ?? 'No registrada',
+      direccion: empleado.direccion_habitacion ?? 'No registrada',
     },
     proyecto: {
       nombre: obra.nombre,
