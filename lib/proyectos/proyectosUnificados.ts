@@ -30,6 +30,11 @@ export type LoadOpcionesProyectoReclutamientoOpts = {
 /**
  * Opciones para selects de reclutamiento (vacantes): lee `ci_proyectos` por `tipo_proyecto`.
  */
+function esColumnaTipoProyectoAusente(msg: string): boolean {
+  const m = (msg ?? '').toLowerCase();
+  return m.includes('does not exist') && m.includes('tipo_proyecto');
+}
+
 export async function loadOpcionesProyectoReclutamiento(
   supabase: SupabaseClient,
   opts?: LoadOpcionesProyectoReclutamientoOpts,
@@ -53,6 +58,37 @@ export async function loadOpcionesProyectoReclutamiento(
   const [modRes, obrRes] = await Promise.all([intQuery, talQuery]);
 
   const opciones: OpcionProyectoReclutamiento[] = [];
+
+  const fallbackSin086 =
+    (modRes.error && esColumnaTipoProyectoAusente(modRes.error.message ?? '')) ||
+    (obrRes.error && esColumnaTipoProyectoAusente(obrRes.error.message ?? ''));
+
+  if (fallbackSin086) {
+    const { data, error } = await supabase
+      .from('ci_proyectos')
+      .select('id,nombre')
+      .order('created_at', { ascending: false })
+      .limit(250);
+    if (error) {
+      errors.push(error.message ?? 'No se pudieron cargar proyectos.');
+    } else {
+      errors.push(
+        'Falta la columna ci_proyectos.tipo_proyecto (migración 086). Se listan todos los proyectos como integral; no hay distinción Talento hasta aplicar la migración.',
+      );
+      for (const r of data ?? []) {
+        const id = String((r as { id: unknown }).id);
+        const nombre = String((r as { nombre?: unknown }).nombre ?? 'Sin nombre');
+        opciones.push({
+          key: `i:${id}`,
+          etiqueta: `${nombre} · ${etiquetaFuenteProyecto('integral')}`,
+          fuente: 'integral',
+          proyectoModuloId: id,
+          proyectoObraId: null,
+        });
+      }
+    }
+    return { opciones, errors };
+  }
 
   if (modRes.error) {
     errors.push(modRes.error.message ?? 'No se pudieron cargar proyectos (integral).');

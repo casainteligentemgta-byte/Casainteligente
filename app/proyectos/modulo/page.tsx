@@ -75,6 +75,62 @@ const estadoChip: Record<string, { bg: string; text: string }> = {
 
 const LISTA_TIMEOUT_MS = 38_000;
 
+/** PostgREST cuando la columna no existe en la tabla remota (p. ej. migración 086 no aplicada). */
+function esErrorColumnaInexistente(msg: string, columna: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes('does not exist') && m.includes(columna.toLowerCase());
+}
+
+type ProyectoDbRow = {
+  id: string;
+  nombre: string;
+  estado: string;
+  ubicacion_texto: string;
+  moneda: string;
+  monto_aproximado: number;
+  customer_id: string;
+  created_at: string;
+  entidad_id?: string | null;
+  tipo_proyecto?: string | null;
+  obra_ubicacion?: string | null;
+  obra_cliente?: string | null;
+  obra_estado_legacy?: string | null;
+  obra_precio_venta_usd?: number | null;
+  obra_presupuesto_ves?: number | null;
+};
+
+type FilaProyectoLegacy = {
+  id: string;
+  nombre: string;
+  estado: string;
+  ubicacion_texto: string;
+  moneda: string;
+  monto_aproximado: number;
+  customer_id: string;
+  created_at: string;
+  entidad_id?: string | null;
+};
+
+function filasProyectoLegacyIntegral(rows: FilaProyectoLegacy[]): ProyectoDbRow[] {
+  return rows.map((r) => ({
+    id: r.id,
+    nombre: r.nombre ?? 'Sin nombre',
+    estado: r.estado ?? 'nuevo',
+    ubicacion_texto: r.ubicacion_texto ?? '—',
+    moneda: r.moneda ?? 'USD',
+    monto_aproximado: Number(r.monto_aproximado ?? 0),
+    customer_id: r.customer_id ?? '',
+    created_at: r.created_at,
+    entidad_id: r.entidad_id ?? null,
+    tipo_proyecto: 'integral',
+    obra_ubicacion: null,
+    obra_cliente: null,
+    obra_estado_legacy: null,
+    obra_precio_venta_usd: null,
+    obra_presupuesto_ves: null,
+  }));
+}
+
 export default function ModuloProyectosPage() {
   const supabase = useMemo(() => createClient(), []);
   const cargaIdRef = useRef(0);
@@ -124,71 +180,57 @@ export default function ModuloProyectosPage() {
 
       if (stale()) return;
 
-      type ProyectoDbRow = {
-        id: string;
-        nombre: string;
-        estado: string;
-        ubicacion_texto: string;
-        moneda: string;
-        monto_aproximado: number;
-        customer_id: string;
-        created_at: string;
-        entidad_id?: string | null;
-        tipo_proyecto?: string | null;
-        obra_ubicacion?: string | null;
-        obra_cliente?: string | null;
-        obra_estado_legacy?: string | null;
-        obra_precio_venta_usd?: number | null;
-        obra_presupuesto_ves?: number | null;
-      };
-
       let modRows: ProyectoDbRow[] = [];
 
       if (!pRes.error) {
         modRows = (pRes.data ?? []) as ProyectoDbRow[];
       } else {
         const msg = pRes.error?.message ?? 'Error al leer ci_proyectos.';
-        const pMin = await withTimeout(
+        const leg1 = await withTimeout(
           Promise.resolve(
             supabase
               .from('ci_proyectos')
-              .select('id,nombre,estado,created_at,entidad_id,tipo_proyecto')
+              .select(
+                'id,nombre,estado,ubicacion_texto,moneda,monto_aproximado,customer_id,created_at,entidad_id',
+              )
               .order('created_at', { ascending: false }),
           ),
-          22_000,
-          'Reintento ci_proyectos (mínimo)',
+          LISTA_TIMEOUT_MS,
+          'ci_proyectos (sin columnas migración 086)',
         );
         if (stale()) return;
-        if (!pMin.error && pMin.data?.length) {
-          modRows = (
-            pMin.data as Array<{
-              id: string;
-              nombre: string;
-              estado: string;
-              created_at: string;
-              entidad_id?: string | null;
-              tipo_proyecto?: string | null;
-            }>
-          ).map((r) => ({
-            id: r.id,
-            nombre: r.nombre ?? 'Sin nombre',
-            estado: r.estado ?? 'nuevo',
-            ubicacion_texto: '—',
-            moneda: 'USD',
-            monto_aproximado: 0,
-            customer_id: '',
-            created_at: r.created_at,
-            entidad_id: r.entidad_id ?? null,
-            tipo_proyecto: r.tipo_proyecto ?? 'integral',
-            obra_ubicacion: null,
-            obra_cliente: null,
-            obra_estado_legacy: null,
-            obra_precio_venta_usd: null,
-            obra_presupuesto_ves: null,
-          }));
-          avisoIntegralMsg = `Proyectos: ${msg} (listado mínimo; aplica migración 086 para columnas Talento).`;
+        if (!leg1.error && leg1.data?.length) {
+          modRows = filasProyectoLegacyIntegral(leg1.data as FilaProyectoLegacy[]);
+          avisoIntegralMsg =
+            'Proyectos: la base no tiene `tipo_proyecto` ni columnas Talento (aplique `086_ci_proyectos_unifica_ci_obras.sql`). Listado en modo compatible: todas las filas como módulo integral.';
         } else {
-          avisoIntegralMsg = `Proyectos: no se pudieron cargar filas (${msg}).`;
+          const leg1Err = leg1.error?.message ?? '';
+          const sinEntidad =
+            leg1.error && esErrorColumnaInexistente(leg1Err, 'entidad_id');
+          const leg2 = await withTimeout(
+            Promise.resolve(
+              supabase
+                .from('ci_proyectos')
+                .select('id,nombre,estado,ubicacion_texto,moneda,monto_aproximado,customer_id,created_at')
+                .order('created_at', { ascending: false }),
+            ),
+            LISTA_TIMEOUT_MS,
+            'ci_proyectos (solo columnas base)',
+          );
+          if (stale()) return;
+          if (!leg2.error && leg2.data?.length) {
+            modRows = filasProyectoLegacyIntegral(
+              (leg2.data as Omit<FilaProyectoLegacy, 'entidad_id'>[]).map((r) => ({
+                ...r,
+                entidad_id: null,
+              })),
+            );
+            avisoIntegralMsg = sinEntidad
+              ? `Proyectos: ${msg} · Modo compatible sin columna entidad_id.`
+              : `Proyectos: ${msg} · Modo compatible (solo columnas base de ci_proyectos).`;
+          } else {
+            avisoIntegralMsg = `Proyectos: no se pudieron cargar filas (${msg}).`;
+          }
         }
       }
 
