@@ -1,17 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { cargarFuentesContratoObreroPorEmpleadoId } from '@/lib/talento/contratoObreroPdfContext';
-import {
-  compilarPlantillaContratoObrero,
-  construirMapaVariablesContratoObrero,
-} from '@/lib/talento/plantillaContratoObreroCompile';
-import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
+import { compilarContratoObreroDesdeEmpleadoId } from '@/lib/talento/contratoObreroPdfContext';
 
 export const runtime = 'nodejs';
 
 /**
  * GET — Vista previa del contrato obrero rellenado (plantilla biblioteca + expediente del empleado).
- * Requiere sesión Supabase (RRHH autenticado).
+ * No exige sesión; el acceso efectivo depende de RLS/políticas del cliente Supabase del servidor.
  */
 export async function GET(_req: Request, context: { params: { id: string } }) {
   const id = (context.params?.id ?? '').trim();
@@ -21,40 +16,15 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
 
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Inicia sesión para ver el contrato.' }, { status: 401 });
+    const out = await compilarContratoObreroDesdeEmpleadoId(supabase, id);
+    if (!out.ok) {
+      return NextResponse.json({ error: out.error }, { status: 404 });
     }
-
-    const fu = await cargarFuentesContratoObreroPorEmpleadoId(supabase, id);
-    if (!fu.ok) {
-      return NextResponse.json({ error: fu.error }, { status: 404 });
-    }
-
-    const { data: pl, error: pe } = await supabase
-      .from('ci_documento_plantillas')
-      .select('cuerpo')
-      .eq('codigo', 'contrato_obrero')
-      .eq('activo', true)
-      .maybeSingle();
-
-    if (pe) {
-      console.warn('[contrato-vista] plantilla', pe.message);
-    }
-
-    const cuerpoRaw = (pl as { cuerpo?: string } | null)?.cuerpo;
-    const cuerpo =
-      typeof cuerpoRaw === 'string' && cuerpoRaw.trim().length > 80 ? cuerpoRaw.trim() : CONTRATO_OBRERO_CUERPO_DEFAULT;
-
-    const mapa = construirMapaVariablesContratoObrero(fu.fuentes);
-    const { texto, faltantes } = compilarPlantillaContratoObrero(cuerpo, mapa);
 
     return NextResponse.json({
-      texto,
-      faltantes,
-      tiene_datos_faltantes: faltantes.length > 0,
+      texto: out.texto,
+      faltantes: out.faltantes,
+      tiene_datos_faltantes: out.faltantes.length > 0,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error interno';

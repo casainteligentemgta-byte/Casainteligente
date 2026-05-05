@@ -8,6 +8,7 @@ import {
   type FuentesContratoObrero,
 } from '@/lib/talento/plantillaContratoObreroCompile';
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
+import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 
 function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -295,6 +296,38 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   };
 
   return { ok: true, fuentes };
+}
+
+/**
+ * Plantilla biblioteca + expediente del empleado (sin `contrato_id`). Usado por vista JSON y PDF RRHH.
+ */
+export async function compilarContratoObreroDesdeEmpleadoId(
+  supabase: SupabaseClient,
+  empleadoId: string,
+): Promise<{ ok: true; texto: string; faltantes: DatoContratoFaltante[] } | { ok: false; error: string }> {
+  const fu = await cargarFuentesContratoObreroPorEmpleadoId(supabase, empleadoId.trim());
+  if (!fu.ok) {
+    return { ok: false, error: fu.error };
+  }
+
+  const { data: pl, error: pe } = await supabase
+    .from('ci_documento_plantillas')
+    .select('cuerpo')
+    .eq('codigo', 'contrato_obrero')
+    .eq('activo', true)
+    .maybeSingle();
+
+  if (pe) {
+    console.warn('[compilarContratoObreroDesdeEmpleadoId] plantilla', pe.message);
+  }
+
+  const cuerpoRaw = (pl as { cuerpo?: string } | null)?.cuerpo;
+  const cuerpo =
+    typeof cuerpoRaw === 'string' && cuerpoRaw.trim().length > 80 ? cuerpoRaw.trim() : CONTRATO_OBRERO_CUERPO_DEFAULT;
+
+  const mapa = construirMapaVariablesContratoObrero(fu.fuentes);
+  const { texto, faltantes } = compilarPlantillaContratoObrero(cuerpo, mapa);
+  return { ok: true, texto, faltantes };
 }
 
 export type PreviewContratoObrero = {

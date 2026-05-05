@@ -37,8 +37,6 @@ type EmpleadoRow = {
   examen_completado_at: string | null;
 };
 
-type DatoContratoFaltante = { id: string; etiqueta: string; ayuda: string };
-
 function docMostrado(row: EmpleadoRow): string {
   return (row.cedula ?? row.documento ?? '').trim() || '—';
 }
@@ -64,12 +62,6 @@ export default function RrhhHojasVidaPage() {
   const [informeOpen, setInformeOpen] = useState(false);
   const [informeRow, setInformeRow] = useState<EmpleadoRow | null>(null);
   const [aprobandoId, setAprobandoId] = useState<string | null>(null);
-  const [contratoOpen, setContratoOpen] = useState(false);
-  const [contratoRow, setContratoRow] = useState<EmpleadoRow | null>(null);
-  const [contratoTexto, setContratoTexto] = useState<string | null>(null);
-  const [contratoFaltantes, setContratoFaltantes] = useState<DatoContratoFaltante[]>([]);
-  const [contratoLoading, setContratoLoading] = useState(false);
-  const [contratoError, setContratoError] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -225,35 +217,6 @@ export default function RrhhHojasVidaPage() {
     toast.success('Obrero aprobado para contrato');
   }, [informeRow, supabase]);
 
-  const abrirVistaContrato = useCallback(async (r: EmpleadoRow) => {
-    setContratoRow(r);
-    setContratoOpen(true);
-    setContratoLoading(true);
-    setContratoError(null);
-    setContratoTexto(null);
-    setContratoFaltantes([]);
-    try {
-      const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-vista`), {
-        credentials: 'include',
-      });
-      const j = (await res.json().catch(() => ({}))) as {
-        texto?: string;
-        faltantes?: DatoContratoFaltante[];
-        error?: string;
-      };
-      if (!res.ok) {
-        setContratoError(j.error ?? `Error ${res.status}`);
-        return;
-      }
-      setContratoTexto(typeof j.texto === 'string' ? j.texto : '');
-      setContratoFaltantes(Array.isArray(j.faltantes) ? j.faltantes : []);
-    } catch {
-      setContratoError('Error de red');
-    } finally {
-      setContratoLoading(false);
-    }
-  }, []);
-
   const borrarEmpleado = useCallback(
     async (r: EmpleadoRow) => {
       const nombre = (r.nombre_completo ?? '').trim() || 'este registro';
@@ -383,15 +346,16 @@ export default function RrhhHojasVidaPage() {
                           {tieneInformeEvaluacion(r) ? 'Informe evaluación' : 'Evaluación'}
                         </button>
                         <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
-                        <button
-                          type="button"
-                          onClick={() => void abrirVistaContrato(r)}
+                        <a
+                          href={apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-laboral-pdf`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-100/95 transition hover:bg-emerald-900/50"
-                          title="Contrato laboral con datos del expediente"
+                          title="Abrir contrato laboral en PDF (rellenado)"
                         >
                           <ScrollText className="h-3.5 w-3.5 opacity-90" />
                           Contrato
-                        </button>
+                        </a>
                       </div>
                       <button
                         type="button"
@@ -548,70 +512,6 @@ export default function RrhhHojasVidaPage() {
               >
                 Cerrar
               </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {contratoOpen && contratoRow ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3 py-6">
-          <div className="flex max-h-[min(92vh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-violet-500/25 bg-gradient-to-br from-[#0F1117] via-[#12101c] to-[#0A0A0F] shadow-2xl">
-            <div className="shrink-0 border-b border-white/10 px-4 py-3 sm:px-5">
-              <h2 className="text-base font-bold text-white">Contrato laboral (vista previa)</h2>
-              <p className="mt-1 text-xs text-zinc-400">
-                {(contratoRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'} · Plantilla biblioteca + expediente
-              </p>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
-              {contratoLoading ? <p className="text-sm text-zinc-500">Generando texto…</p> : null}
-              {contratoError ? (
-                <p className="rounded-lg border border-red-500/30 bg-red-950/25 px-3 py-2 text-sm text-red-200">{contratoError}</p>
-              ) : null}
-              {!contratoLoading && !contratoError && contratoTexto != null ? (
-                <pre className="whitespace-pre-wrap break-words font-sans text-[11px] leading-relaxed text-zinc-200 sm:text-xs">
-                  {contratoTexto}
-                </pre>
-              ) : null}
-              {!contratoLoading && contratoFaltantes.length > 0 ? (
-                <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-950/20 px-3 py-2">
-                  <p className="text-[11px] font-semibold text-amber-100">Campos pendientes en expediente</p>
-                  <ul className="mt-2 list-inside list-disc space-y-1 text-[11px] text-amber-100/90">
-                    {contratoFaltantes.slice(0, 14).map((d) => (
-                      <li key={d.id}>
-                        {d.etiqueta}
-                        {d.ayuda ? <span className="text-amber-200/75"> — {d.ayuda}</span> : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-            <div className="shrink-0 border-t border-white/10 px-4 py-3 sm:px-5">
-              <div className="flex flex-wrap justify-end gap-2">
-                {docMostrado(contratoRow) !== '—' ? (
-                  <a
-                    href={apiUrl(
-                      `/registro/planilla?empleadoId=${encodeURIComponent(contratoRow.id)}&cedula=${encodeURIComponent(docMostrado(contratoRow))}&volver=${encodeURIComponent('/rrhh/hojas-vida')}`,
-                    )}
-                    className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/25"
-                  >
-                    Completar planilla
-                  </a>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setContratoOpen(false);
-                    setContratoRow(null);
-                    setContratoTexto(null);
-                    setContratoFaltantes([]);
-                    setContratoError(null);
-                  }}
-                  className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
-                >
-                  Cerrar
-                </button>
-              </div>
             </div>
           </div>
         </div>
