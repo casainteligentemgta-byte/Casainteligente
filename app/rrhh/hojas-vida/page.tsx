@@ -21,7 +21,6 @@ type EmpleadoRow = {
   proyecto_modulo_id: string | null;
   observaciones_rrhh: string | null;
   status_evaluacion: string | null;
-  estatus_evaluacion: string | null;
   semaforo: string | null;
   semaforo_riesgo: string | null;
   perfil_color: string | null;
@@ -67,7 +66,7 @@ export default function RrhhHojasVidaPage() {
     setError(null);
 
     const baseCols =
-      'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id,status_evaluacion,estatus_evaluacion,semaforo,semaforo_riesgo,perfil_color,motivo_semaforo,motivo_semaforo_riesgo,puntaje_total,puntaje_logica,puntaje_personalidad,puntuacion_logica,puntuacion_confiabilidad,nivel_integridad_riesgo,tiempo_respuesta,examen_completado_at';
+      'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id,status_evaluacion,semaforo,semaforo_riesgo,perfil_color,motivo_semaforo,motivo_semaforo_riesgo,puntaje_total,puntaje_logica,puntaje_personalidad,puntuacion_logica,puntuacion_confiabilidad,nivel_integridad_riesgo,tiempo_respuesta,examen_completado_at';
     const withObsCols = `${baseCols},observaciones_rrhh`;
 
     let result: {
@@ -150,7 +149,6 @@ export default function RrhhHojasVidaPage() {
     return Boolean(
       r.examen_completado_at ||
         r.status_evaluacion ||
-        r.estatus_evaluacion === 'completado' ||
         r.puntaje_total != null ||
         r.puntuacion_logica != null,
     );
@@ -360,7 +358,7 @@ export default function RrhhHojasVidaPage() {
               <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">Semáforo: {informeRow.semaforo ?? '—'}</p>
               <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">Riesgo: {informeRow.semaforo_riesgo ?? '—'}</p>
               <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">
-                Estado: {informeRow.status_evaluacion ?? informeRow.estatus_evaluacion ?? '—'}
+                Estado: {informeRow.status_evaluacion ?? '—'}
               </p>
               <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">Perfil DISC: {informeRow.perfil_color ?? '—'}</p>
               <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">
