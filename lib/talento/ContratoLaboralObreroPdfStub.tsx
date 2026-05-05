@@ -1,44 +1,52 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 
 const st = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica' },
-  h1: { fontSize: 14, marginBottom: 12, textAlign: 'center' },
-  p: { marginBottom: 6, lineHeight: 1.4 },
-  box: { borderWidth: 1, borderColor: '#94a3b8', padding: 8, marginTop: 12 },
+  page: { padding: 40, fontSize: 9, fontFamily: 'Helvetica', lineHeight: 1.35 },
+  h1: { fontSize: 13, marginBottom: 10, textAlign: 'center', fontWeight: 700 },
+  meta: { fontSize: 8, marginBottom: 8, color: '#475569' },
+  p: { marginBottom: 4, textAlign: 'justify' },
+  pie: { marginTop: 14, fontSize: 8, color: '#64748b', fontStyle: 'italic' },
 });
 
-export type ContratoLaboralObreroPdfStubProps = {
-  contratoId: string;
-  nombreEmpleado: string;
-  documento: string;
-  textoLegalResumen: string;
-  notaPlantilla: string;
+export type ContratoLaboralObreroPdfDocumentProps = {
+  expedienteId: string;
+  titulo: string;
+  /** Texto completo ya sustituido (puede contener marcadores [… COMPLETAR …]). */
+  cuerpoTexto: string;
+  pieLegal?: string | null;
 };
 
 /**
- * PDF provisional hasta que se integre la plantilla legal definitiva (Gaceta / LOTTT).
+ * PDF del contrato obrero a partir de plantilla biblioteca + datos expediente.
  */
-export function ContratoLaboralObreroPdfDocument(props: ContratoLaboralObreroPdfStubProps) {
-  const { contratoId, nombreEmpleado, documento, textoLegalResumen, notaPlantilla } = props;
-  const preview = textoLegalResumen.length > 2800 ? `${textoLegalResumen.slice(0, 2800)}…` : textoLegalResumen;
+export function ContratoLaboralObreroPdfDocument(props: ContratoLaboralObreroPdfDocumentProps) {
+  const { expedienteId, titulo, cuerpoTexto, pieLegal } = props;
+  const bloques = (cuerpoTexto ?? '')
+    .split(/\n{2,}/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   return (
     <Document>
-      <Page size="A4" style={st.page}>
-        <Text style={st.h1}>CONTRATO DE TRABAJO (BORRADOR / PREVISUALIZACIÓN)</Text>
-        <Text style={st.p}>
-          Expediente contrato: <Text style={{ fontWeight: 700 }}>{contratoId}</Text>
+      <Page size="A4" style={st.page} wrap>
+        <Text style={st.h1}>{titulo}</Text>
+        <Text style={st.meta}>
+          Expediente: {expedienteId.slice(0, 8)}… · Generado desde biblioteca de documentos
         </Text>
-        <Text style={st.p}>
-          Trabajador: {nombreEmpleado} — Documento: {documento || '—'}
-        </Text>
-        <View style={st.box}>
-          <Text style={{ ...st.p, fontWeight: 700 }}>Texto legal (extracto del registro)</Text>
-          <Text style={{ ...st.p, fontSize: 8 }}>{preview}</Text>
-        </View>
-        <View style={{ marginTop: 20 }}>
-          <Text style={{ ...st.p, fontSize: 9, color: '#475569' }}>{notaPlantilla}</Text>
-        </View>
+        {bloques.length ? (
+          bloques.map((b, i) => (
+            <Text key={i} style={st.p}>
+              {b}
+            </Text>
+          ))
+        ) : (
+          <Text style={st.p}>—</Text>
+        )}
+        {pieLegal ? (
+          <View style={{ marginTop: 12 }}>
+            <Text style={st.pie}>{pieLegal}</Text>
+          </View>
+        ) : null}
       </Page>
     </Document>
   );

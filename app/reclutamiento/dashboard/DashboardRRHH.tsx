@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { apiUrl } from '@/lib/http/apiUrl'
 import {
   Briefcase,
   CheckCircle,
@@ -13,7 +14,7 @@ import {
 import SemaforoRiesgo from '@/components/reclutamiento/SemaforoRiesgo'
 import { calcularRiesgoObrero, type NivelRiesgoContratacion } from '@/lib/talento/calcularRiesgoObrero'
 
-/** Simula filas de `recruitment_needs` con estado «abierta» (hasta acople real a Supabase). */
+/** Fila de `recruitment_needs` enriquecida con nombre de `ci_proyectos` y plazas cubiertas (`ci_empleados.estado = aprobado`). */
 export type RequisicionInboxItem = {
   id: string
   proyectoNombre: string
@@ -21,50 +22,8 @@ export type RequisicionInboxItem = {
   cantidadTotal: number
   cubiertos: number
   urgente?: boolean
+  protocolActive?: boolean
 }
-
-const MOCK_REQUISICIONES: RequisicionInboxItem[] = [
-  {
-    id: '11111111-1111-4111-8111-111111111101',
-    proyectoNombre: 'Torre Inteligente A',
-    cargo: '5.1 ALBAÑIL DE 1ra.',
-    cantidadTotal: 3,
-    cubiertos: 0,
-    urgente: true,
-  },
-  {
-    id: '11111111-1111-4111-8111-111111111102',
-    proyectoNombre: 'Residencial Elite Park',
-    cargo: '2.7 AYUDANTE DE TOPOGRAFO',
-    cantidadTotal: 1,
-    cubiertos: 0,
-    urgente: false,
-  },
-  {
-    id: '11111111-1111-4111-8111-111111111103',
-    proyectoNombre: 'Ampliación planta industrial',
-    cargo: '5.5 ELECTRICISTA DE 1ra.',
-    cantidadTotal: 2,
-    cubiertos: 1,
-    urgente: true,
-  },
-  {
-    id: '11111111-1111-4111-8111-111111111104',
-    proyectoNombre: 'Nexus Fase II',
-    cargo: '8.2 OPERADOR DE EQUIPO PESADO DE 1ra.',
-    cantidadTotal: 1,
-    cubiertos: 0,
-    urgente: false,
-  },
-  {
-    id: '11111111-1111-4111-8111-111111111105',
-    proyectoNombre: 'Torre Inteligente A',
-    cargo: '3.12 OPERADOR DE PLANTA FIJA DE 2da.',
-    cantidadTotal: 2,
-    cubiertos: 2,
-    urgente: false,
-  },
-]
 
 type KanbanColumnId = 'invitados' | 'evaluando' | 'banca' | 'asignados'
 
@@ -79,79 +38,6 @@ type CandidatoKanban = {
   puntuacion_logica?: number | null
   tiempo_respuesta?: number | null
 }
-
-const MOCK_CANDIDATOS_INICIAL: CandidatoKanban[] = [
-  {
-    id: 'c1',
-    nombre: 'María R. López',
-    cargo: 'Albañil 1ra',
-    nivel: 'Grupo 5',
-    columna: 'invitados',
-    perfil_color: null,
-    puntuacion_logica: null,
-    tiempo_respuesta: null,
-  },
-  {
-    id: 'c2',
-    nombre: 'José A. Pérez',
-    cargo: 'Electricista 1ra',
-    nivel: 'Grupo 5',
-    columna: 'invitados',
-    perfil_color: 'Amarillo',
-    puntuacion_logica: 63,
-    tiempo_respuesta: 7 * 60,
-  },
-  {
-    id: 'c3',
-    nombre: 'Ana K. Méndez',
-    cargo: 'Topografía / Ayudante',
-    nivel: 'Grupo 2',
-    columna: 'evaluando',
-    perfil_color: 'Verde',
-    puntuacion_logica: 83,
-    tiempo_respuesta: 6 * 60 + 30,
-  },
-  {
-    id: 'c4',
-    nombre: 'Luis F. Oropeza',
-    cargo: 'Operador equipo pesado',
-    nivel: 'Grupo 8',
-    columna: 'evaluando',
-    perfil_color: 'Rojo',
-    puntuacion_logica: 66,
-    tiempo_respuesta: 8 * 60,
-  },
-  {
-    id: 'c5',
-    nombre: 'Carla S. Núñez',
-    cargo: 'Albañil 1ra',
-    nivel: 'Grupo 5',
-    columna: 'banca',
-    perfil_color: 'Azul',
-    puntuacion_logica: 100,
-    tiempo_respuesta: 9 * 60,
-  },
-  {
-    id: 'c6',
-    nombre: 'Diego M. Ríos',
-    cargo: 'Plomero 1ra',
-    nivel: 'Grupo 5',
-    columna: 'banca',
-    perfil_color: 'Rojo',
-    puntuacion_logica: 40,
-    tiempo_respuesta: 11 * 60,
-  },
-  {
-    id: 'c7',
-    nombre: 'Ricardo T. Silva',
-    cargo: 'Caporal',
-    nivel: 'Grupo 3',
-    columna: 'asignados',
-    perfil_color: 'Amarillo',
-    puntuacion_logica: 82,
-    tiempo_respuesta: 3 * 60,
-  },
-]
 
 type FiltroRiesgo = 'todos' | NivelRiesgoContratacion | 'sin_datos'
 
@@ -210,11 +96,65 @@ const FILTROS_RIESGO: { id: FiltroRiesgo; label: string }[] = [
   { id: 'sin_datos', label: 'Sin evaluar' },
 ]
 
+type FunnelApi = {
+  needs?: RequisicionInboxItem[]
+  candidatos?: CandidatoKanban[]
+  error?: string
+}
+
 export default function DashboardRRHH() {
   const [toast, setToast] = useState<string | null>(null)
-  const [candidatos, setCandidatos] = useState<CandidatoKanban[]>(MOCK_CANDIDATOS_INICIAL)
+  const [requisiciones, setRequisiciones] = useState<RequisicionInboxItem[]>([])
+  const [candidatosServer, setCandidatosServer] = useState<CandidatoKanban[]>([])
+  /** Ajuste local al arrastrar tarjetas (no persiste en base de datos). */
+  const [columnOverrides, setColumnOverrides] = useState<Partial<Record<string, KanbanColumnId>>>({})
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [filtroRiesgo, setFiltroRiesgo] = useState<FiltroRiesgo>('todos')
+  const [cargando, setCargando] = useState(true)
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+
+  const cargarEmbudo = useCallback(async () => {
+    setCargando(true)
+    setErrorCarga(null)
+    try {
+      const res = await fetch(apiUrl('/api/recruitment/dashboard-funnel'), { credentials: 'include' })
+      const data = (await res.json().catch(() => ({}))) as FunnelApi & { error?: string }
+      if (res.status === 401) {
+        setRequisiciones([])
+        setCandidatosServer([])
+        setErrorCarga('Inicia sesión CEO o define la clave en la URL (?key=…) para ver datos de vacantes y postulantes.')
+        return
+      }
+      if (!res.ok) {
+        setRequisiciones([])
+        setCandidatosServer([])
+        setErrorCarga(data.error ?? `Error ${res.status}`)
+        return
+      }
+      setRequisiciones(Array.isArray(data.needs) ? data.needs : [])
+      setCandidatosServer(Array.isArray(data.candidatos) ? data.candidatos : [])
+      setColumnOverrides({})
+    } catch {
+      setErrorCarga('Error de red al cargar el embudo.')
+      setRequisiciones([])
+      setCandidatosServer([])
+    } finally {
+      setCargando(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void cargarEmbudo()
+  }, [cargarEmbudo])
+
+  const candidatos = useMemo(
+    () =>
+      candidatosServer.map((c) => ({
+        ...c,
+        columna: columnOverrides[c.id] ?? c.columna,
+      })),
+    [candidatosServer, columnOverrides],
+  )
 
   const candidatosFiltrados = useMemo(() => {
     if (filtroRiesgo === 'todos') return candidatos
@@ -265,7 +205,7 @@ export default function DashboardRRHH() {
   const handleDropColumna = useCallback(
     (col: KanbanColumnId) => {
       if (!draggingId) return
-      setCandidatos((prev) => prev.map((c) => (c.id === draggingId ? { ...c, columna: col } : c)))
+      setColumnOverrides((prev) => ({ ...prev, [draggingId]: col }))
       setDraggingId(null)
     },
     [draggingId],
@@ -279,6 +219,25 @@ export default function DashboardRRHH() {
         </p>
       ) : null}
 
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+        <p className="text-xs text-zinc-500">
+          Datos desde <code className="text-zinc-400">recruitment_needs</code>,{' '}
+          <code className="text-zinc-400">ci_proyectos</code> y <code className="text-zinc-400">ci_empleados</code>.
+        </p>
+        <button
+          type="button"
+          disabled={cargando}
+          onClick={() => void cargarEmbudo()}
+          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-50"
+        >
+          {cargando ? 'Actualizando…' : 'Actualizar'}
+        </button>
+      </div>
+
+      {errorCarga ? (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">{errorCarga}</p>
+      ) : null}
+
       {/* —— Sección 1: Inbox —— */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -290,27 +249,35 @@ export default function DashboardRRHH() {
               Bandeja de requisiciones
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-              Peticiones desde proyectos (simulación). Estado objetivo: <span className="text-zinc-300">abierta</span>{' '}
-              en <code className="text-[#FF9500]">recruitment_needs</code>.
+              Vacantes activas por proyecto (módulo integral u obra en <code className="text-[#FF9500]">ci_proyectos</code>
+              ). «Cubierto» cuenta postulantes con <code className="text-zinc-400">estado = aprobado</code> vinculados a
+              esa vacante.
             </p>
           </div>
         </div>
 
+        {cargando && requisiciones.length === 0 ? (
+          <p className="text-sm text-zinc-500">Cargando vacantes…</p>
+        ) : null}
+
         <div className="flex gap-4 overflow-x-auto pb-2 pt-1 [scrollbar-width:thin] md:snap-x md:snap-mandatory">
-          {MOCK_REQUISICIONES.map((need) => {
+          {requisiciones.map((need) => {
             const pct =
               need.cantidadTotal > 0 ? Math.min(100, Math.round((need.cubiertos / need.cantidadTotal) * 100)) : 0
+            const cerrada = need.protocolActive === false
             return (
               <article
                 key={need.id}
                 className={`min-w-[280px] max-w-[320px] shrink-0 snap-start rounded-2xl border bg-white/5 p-4 shadow-lg transition hover:bg-white/[0.07] md:min-w-[300px] ${
-                  need.urgente
+                  need.urgente && !cerrada
                     ? 'border-[#FF9500]/50 shadow-[0_0_20px_rgba(249,115,22,0.12)]'
-                    : 'border-white/10'
+                    : cerrada
+                      ? 'border-zinc-700 opacity-70'
+                      : 'border-white/10'
                 }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#FF9500]">
-                  {need.urgente ? 'Urgente' : 'Estándar'}
+                  {cerrada ? 'Cerrada' : need.urgente ? 'Urgente' : 'Estándar'}
                 </p>
                 <h3 className="mt-2 line-clamp-2 text-base font-semibold text-white">{need.proyectoNombre}</h3>
                 <p className="mt-2 line-clamp-2 text-sm text-zinc-300">{need.cargo}</p>
@@ -351,6 +318,13 @@ export default function DashboardRRHH() {
             )
           })}
         </div>
+
+        {!cargando && requisiciones.length === 0 && !errorCarga ? (
+          <p className="text-sm text-zinc-500">
+            No hay vacantes en <code className="text-zinc-400">recruitment_needs</code>. Crea una desde un proyecto
+            (RRHH) o con «Requisición personal» arriba.
+          </p>
+        ) : null}
       </section>
 
       {/* —— Sección 2: Ficha candidatos + riesgo —— */}
@@ -366,8 +340,8 @@ export default function DashboardRRHH() {
             <p className="mt-1 max-w-2xl text-sm text-zinc-400">
               Semáforo derivado de <code className="text-[#FF9500]/90">perfil_color</code>,{' '}
               <code className="text-[#FF9500]/90">puntuacion_logica</code> y{' '}
-              <code className="text-[#FF9500]/90">tiempo_respuesta</code> (simulación; en producción vendrá de{' '}
-              <code className="text-zinc-400">ci_empleados</code>).
+              <code className="text-[#FF9500]/90">tiempo_respuesta</code> en{' '}
+              <code className="text-zinc-400">ci_empleados</code> (postulantes con vacante asignada).
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -444,8 +418,10 @@ export default function DashboardRRHH() {
             Tablero Kanban · embudo de talento
           </h2>
           <p className="mt-1 text-sm text-zinc-400">
-            Arrastra tarjetas entre columnas (simulación local). Respeta el filtro de riesgo arriba. La columna{' '}
-            <strong className="text-[#FFD60A]">La Banca</strong> destaca al talento aprobado.
+            Columnas inferidas desde <code className="text-zinc-500">estado_proceso</code> y{' '}
+            <code className="text-zinc-500">estado</code> en <code className="text-zinc-500">ci_empleados</code>. Puedes
+            reordenar localmente al arrastrar (no se guarda en base de datos). La columna{' '}
+            <strong className="text-[#FFD60A]">La Banca</strong> agrupa examen completado pendiente de aprobación RRHH.
           </p>
         </div>
 

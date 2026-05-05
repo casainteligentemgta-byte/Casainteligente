@@ -1,18 +1,20 @@
 import { createElement } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
+import { cargarFuentesContratoObreroPdf } from '@/lib/talento/contratoObreroPdfContext';
 import { ContratoLaboralObreroPdfDocument } from '@/lib/talento/ContratoLaboralObreroPdfStub';
 import { contratoObreroPorToken } from '@/lib/talento/contratoObreroToken';
+import {
+  compilarPlantillaContratoObrero,
+  construirMapaVariablesContratoObrero,
+} from '@/lib/talento/plantillaContratoObreroCompile';
+import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
 
-const NOTA_PLANTILLA =
-  'Este PDF es una previsualización generada por el sistema. Cuando RRHH integre la plantilla legal definitiva, ' +
-  'este documento se sustituirá por el formato oficial sin cambiar el flujo de aceptación e impresión.';
-
 /**
- * GET ?contrato_id=&token= — PDF del contrato laboral (stub hasta plantilla definitiva).
+ * GET ?contrato_id=&token= — PDF del contrato laboral (plantilla biblioteca + datos expediente / hoja de empleo).
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -30,38 +32,32 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: v.error }, { status: v.status });
   }
 
-  const { data: c, error: ec } = await admin.client
-    .from('ci_contratos_empleado_obra')
-    .select('texto_legal')
-    .eq('id', contratoId)
-    .maybeSingle();
-
-  if (ec || !c) {
-    return NextResponse.json({ error: ec?.message ?? 'Contrato no encontrado' }, { status: 404 });
+  const fu = await cargarFuentesContratoObreroPdf(admin.client, contratoId);
+  if (!fu.ok) {
+    return NextResponse.json({ error: fu.error }, { status: 400 });
   }
 
-  const { data: emp, error: ee } = await admin.client
-    .from('ci_empleados')
-    .select('nombre_completo, documento, cedula')
-    .eq('id', v.empleadoId)
-    .maybeSingle();
-
-  if (ee || !emp) {
-    return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 });
+  let cuerpo: string;
+  try {
+    cuerpo = await obtenerCuerpoPlantillaContratoObrero(admin.client);
+  } catch (e) {
+    console.error('[contrato-laboral pdf] plantilla', e);
+    return NextResponse.json({ error: 'No se pudo cargar la plantilla del contrato' }, { status: 500 });
   }
 
-  const texto = String((c as { texto_legal?: string }).texto_legal ?? '').trim() || '—';
-  const e = emp as { nombre_completo: string | null; documento: string | null; cedula: string | null };
-  const doc = (e.cedula ?? e.documento ?? '').trim() || '—';
-  const nom = (e.nombre_completo ?? '').trim() || 'Trabajador';
+  const mapa = construirMapaVariablesContratoObrero(fu.fuentes);
+  const { texto, faltantes } = compilarPlantillaContratoObrero(cuerpo, mapa);
+  const pie =
+    faltantes.length > 0
+      ? 'Revise los recuadros [… COMPLETAR …] con su planilla de empleo o solicite ayuda a RRHH antes de firmar.'
+      : null;
 
   try {
     const node = createElement(ContratoLaboralObreroPdfDocument, {
-      contratoId,
-      nombreEmpleado: nom,
-      documento: doc,
-      textoLegalResumen: texto,
-      notaPlantilla: NOTA_PLANTILLA,
+      expedienteId: contratoId,
+      titulo: 'CONTRATO INDIVIDUAL DE TRABAJO',
+      cuerpoTexto: texto,
+      pieLegal: pie,
     });
     const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
     const buf = Buffer.from(await blob.arrayBuffer());

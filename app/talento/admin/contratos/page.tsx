@@ -70,9 +70,14 @@ export default function ContratosAdminPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 pb-28">
-      <Link href="/talento" className="text-xs text-zinc-500 hover:text-zinc-300 mb-6 inline-block">
-        ← Talento
-      </Link>
+      <div className="mb-6 flex flex-wrap gap-3 text-xs">
+        <Link href="/talento" className="text-zinc-500 hover:text-zinc-300">
+          ← Talento
+        </Link>
+        <Link href="/talento/admin/documentos" className="text-[#FF9500] hover:text-[#FFD60A]">
+          Biblioteca de documentos
+        </Link>
+      </div>
       <h1 className="text-2xl font-bold text-white mb-2">Contratos dinámicos</h1>
       <p className="text-sm text-zinc-400 mb-6">
         Selecciona un empleado <strong className="text-zinc-300">aprobado</strong> y una obra. Ajusta monto y porcentaje

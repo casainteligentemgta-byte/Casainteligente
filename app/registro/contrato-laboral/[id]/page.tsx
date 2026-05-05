@@ -5,12 +5,17 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { apiUrl } from '@/lib/http/apiUrl';
 
+type DatoFaltante = { id: string; etiqueta: string; ayuda: string };
+
 type Meta = {
   contrato_id: string;
   estado_contrato: string;
   obrero_aceptacion_contrato_at: string | null;
   nombre_completo: string;
   documento: string | null;
+  datos_faltantes?: DatoFaltante[];
+  tiene_datos_faltantes?: boolean;
+  planilla_completar_url?: string | null;
 };
 
 function ContratoLaboralObreroInner() {
@@ -23,6 +28,7 @@ function ContratoLaboralObreroInner() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [aceptando, setAceptando] = useState(false);
+  const [pdfTick, setPdfTick] = useState(0);
 
   const pdfSrc =
     contratoId && token
@@ -57,7 +63,11 @@ function ContratoLaboralObreroInner() {
         obrero_aceptacion_contrato_at: j.obrero_aceptacion_contrato_at,
         nombre_completo: j.nombre_completo,
         documento: j.documento,
+        datos_faltantes: Array.isArray(j.datos_faltantes) ? j.datos_faltantes : [],
+        tiene_datos_faltantes: Boolean(j.tiene_datos_faltantes),
+        planilla_completar_url: j.planilla_completar_url ?? null,
       });
+      setPdfTick((n) => n + 1);
     } catch {
       setError('Error de red');
       setMeta(null);
@@ -68,6 +78,14 @@ function ContratoLaboralObreroInner() {
 
   useEffect(() => {
     void cargar();
+  }, [cargar]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void cargar();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, [cargar]);
 
   const aceptar = async () => {
@@ -133,8 +151,48 @@ function ContratoLaboralObreroInner() {
               </p>
             </div>
 
+            {meta.tiene_datos_faltantes && meta.datos_faltantes?.length ? (
+              <div className="rounded-xl border border-amber-500/35 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
+                <p className="font-semibold text-amber-50">Faltan datos para completar el contrato</p>
+                <p className="mt-1 text-xs text-amber-200/90">
+                  El PDF mostrará temporalmente los campos pendientes. Actualiza la planilla de empleo y vuelve a esta
+                  página (o pulsa «Recargar contrato»).
+                </p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-amber-100/95">
+                  {meta.datos_faltantes.slice(0, 12).map((d) => (
+                    <li key={d.id}>
+                      <span className="font-medium">{d.etiqueta}</span>
+                      {d.ayuda ? <span className="text-amber-200/80"> — {d.ayuda}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {meta.planilla_completar_url ? (
+                    <a
+                      href={apiUrl(meta.planilla_completar_url)}
+                      className="inline-flex rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-amber-400"
+                    >
+                      Completar planilla de empleo
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void cargar()}
+                    className="inline-flex rounded-lg border border-amber-400/40 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/10"
+                  >
+                    Recargar contrato
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {pdfSrc ? (
-              <iframe title="Contrato PDF" src={pdfSrc} className="h-[70vh] w-full rounded-xl border border-white/10 bg-zinc-950" />
+              <iframe
+                key={pdfTick}
+                title="Contrato PDF"
+                src={pdfSrc}
+                className="h-[70vh] w-full rounded-xl border border-white/10 bg-zinc-950"
+              />
             ) : null}
 
             {!aceptado ? (

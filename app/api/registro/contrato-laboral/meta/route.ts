@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { previewContratoObreroPlantilla } from '@/lib/talento/contratoObreroPdfContext';
 import { contratoObreroPorToken } from '@/lib/talento/contratoObreroToken';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
 
 /**
- * GET ?contrato_id=&token= — Metadatos públicos del contrato para el obrero (validación por token_registro).
+ * GET ?contrato_id=&token= — Metadatos del contrato + datos faltantes para la plantilla y enlace a planilla.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -35,11 +36,22 @@ export async function GET(req: Request) {
 
   const e = emp as { nombre_completo: string | null; documento: string | null; cedula: string | null };
 
+  const returnPath = `/registro/contrato-laboral/${encodeURIComponent(contratoId)}?token=${encodeURIComponent(token)}`;
+  const prev = await previewContratoObreroPlantilla(admin.client, contratoId, {
+    planillaReturnPath: returnPath,
+  });
+
+  const datos_faltantes = prev.ok ? prev.preview.datos_faltantes : [];
+  const planilla_completar_url = prev.ok ? prev.preview.planilla_completar_url : null;
+
   return NextResponse.json({
     contrato_id: v.contratoId,
     estado_contrato: v.estadoContrato,
     obrero_aceptacion_contrato_at: v.obreroAceptacionContratoAt,
     nombre_completo: (e.nombre_completo ?? '').trim() || 'Trabajador',
     documento: (e.cedula ?? e.documento ?? '').trim() || null,
+    datos_faltantes,
+    tiene_datos_faltantes: datos_faltantes.length > 0,
+    planilla_completar_url,
   });
 }

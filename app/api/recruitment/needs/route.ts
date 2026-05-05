@@ -30,6 +30,8 @@ export async function GET() {
         tipoVacante: schema.recruitmentNeeds.tipoVacante,
         proyectoId: schema.recruitmentNeeds.proyectoId,
         proyectoModuloId: schema.recruitmentNeeds.proyectoModuloId,
+        cantidadRequerida: schema.recruitmentNeeds.cantidadRequerida,
+        conteoClics: schema.recruitmentNeeds.conteoClics,
         createdAt: schema.recruitmentNeeds.createdAt,
       })
       .from(schema.recruitmentNeeds)
