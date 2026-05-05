@@ -9,6 +9,8 @@ import { uploadProjectAsset } from '@/lib/supabase/project-media';
 import FeedNotificacionesRealtime from '@/components/proyectos/FeedNotificacionesRealtime';
 import GestionRRHHLocal from '@/components/proyectos/GestionRRHHLocal';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
+import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
+import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -814,32 +816,36 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </button>
               </form>
             ) : tabVistaTalento ? null : (
-              <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h1 className="text-2xl font-bold text-white">{proyecto.nombre}</h1>
-                    <p className="mt-1 text-sm text-zinc-400">{proyecto.ubicacion_texto}</p>
-                    <p className="mt-1 text-xs text-zinc-400">
-                      Patrono:{' '}
-                      <span className="font-semibold text-zinc-200">
-                        {nombrePatronoVista ?? 'Sin asignar — Modificar proyecto'}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
-                    </p>
+              <>
+                <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h1 className="text-2xl font-bold text-white">{proyecto.nombre}</h1>
+                      <p className="mt-1 text-sm text-zinc-400">{proyecto.ubicacion_texto}</p>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        Patrono:{' '}
+                        <span className="font-semibold text-zinc-200">
+                          {nombrePatronoVista ?? 'Sin asignar — Modificar proyecto'}
+                        </span>
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void borrarProyectoActual()}
+                      disabled={borrandoProyecto}
+                      className="shrink-0 rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void borrarProyectoActual()}
-                    disabled={borrandoProyecto}
-                    className="shrink-0 rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
-                  </button>
                 </div>
-              </div>
+              </>
             )}
+
+            {proyecto && !modoEdicion ? <DashboardUtilidadReal proyectoId={id} className="mt-4" /> : null}
 
             <div className={`space-y-4 ${tabVistaTalento && !modoEdicion ? 'mt-2' : 'mt-4'}`}>
               {modoEdicion || !tabVistaTalento ? (
@@ -1183,6 +1189,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               </>
               ) : null}
               <div ref={rrhhPanelRef} className={modoEdicion || !tabVistaTalento ? 'mt-8 space-y-4' : 'space-y-4'}>
+                {proyecto ? (
+                  <SugerenciaCuadrilla
+                    nombreObra={proyecto.nombre}
+                    ubicacionObra={proyecto.ubicacion_texto}
+                    proyectoModuloId={id}
+                  />
+                ) : null}
                 <GestionRRHHLocal
                   proyectoModuloId={id}
                   listaRefresco={rrhhVacantesTick}

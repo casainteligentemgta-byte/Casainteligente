@@ -30,17 +30,15 @@ function publicBaseFromPostReq(req: Request): string {
 }
 
 async function resolverSitioObraOProyecto(supabase: SupabaseClient, sitioId: string): Promise<SitioResuelto | null> {
-  const { data: ob } = await supabase.from('ci_obras').select('nombre,ubicacion').eq('id', sitioId).maybeSingle();
-  if (ob) {
-    const r = ob as { nombre: string; ubicacion: string | null };
-    return { nombre: r.nombre, ubicacion: r.ubicacion ?? null };
-  }
-  const { data: pr } = await supabase.from('ci_proyectos').select('nombre,ubicacion_texto').eq('id', sitioId).maybeSingle();
-  if (pr) {
-    const r = pr as { nombre: string; ubicacion_texto: string | null };
-    return { nombre: r.nombre, ubicacion: r.ubicacion_texto ?? null };
-  }
-  return null;
+  const { data: pr } = await supabase
+    .from('ci_proyectos')
+    .select('nombre,ubicacion_texto,obra_ubicacion')
+    .eq('id', sitioId)
+    .maybeSingle();
+  if (!pr) return null;
+  const r = pr as { nombre: string; ubicacion_texto: string | null; obra_ubicacion: string | null };
+  const ubic = (r.obra_ubicacion ?? r.ubicacion_texto ?? '').trim() || null;
+  return { nombre: r.nombre, ubicacion: ubic };
 }
 
 export async function POST(req: Request) {

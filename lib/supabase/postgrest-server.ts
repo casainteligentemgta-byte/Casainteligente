@@ -43,7 +43,7 @@ const jsonHeaders = (creds: SupabasePostgrestCreds) => ({
 /** ¿Existe una fila con esa PK en tabla `public.<table>`? */
 export async function restRowExistsById(
   creds: SupabasePostgrestCreds,
-  table: 'ci_obras' | 'ci_proyectos',
+  table: 'ci_proyectos',
   id: string,
 ): Promise<boolean> {
   const u = `${creds.url}/rest/v1/${table}?select=id&id=eq.${encodeURIComponent(id)}&limit=1`;

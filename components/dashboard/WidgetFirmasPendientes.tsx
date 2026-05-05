@@ -13,7 +13,8 @@ type EmpleadoEmbed = {
   firma_electronica_at: string | null;
 };
 
-type ObraEmbed = { nombre: string | null };
+/** Sitio de obra (FK obra_id → ci_proyectos tras migración 086). */
+type ObraSitioEmbed = { nombre: string | null };
 
 export type FilaFirmaPendiente = {
   id: string;
@@ -21,7 +22,7 @@ export type FilaFirmaPendiente = {
   obra_id: string | null;
   proyecto_id: string | null;
   ci_empleados: EmpleadoEmbed | EmpleadoEmbed[] | null;
-  ci_obras: ObraEmbed | ObraEmbed[] | null;
+  obra_sitio: ObraSitioEmbed | ObraSitioEmbed[] | null;
 };
 
 function uno<T>(v: T | T[] | null | undefined): T | null {
@@ -35,7 +36,7 @@ function cedulaDe(emp: EmpleadoEmbed | null): string {
 }
 
 function nombreProyectoObra(row: FilaFirmaPendiente, nombresProyecto: Map<string, string>): string {
-  const obra = uno(row.ci_obras);
+  const obra = uno(row.obra_sitio);
   const on = (obra?.nombre ?? '').trim();
   if (on) return on;
   const pid = (row.proyecto_id ?? '').trim();
@@ -83,7 +84,7 @@ export default function WidgetFirmasPendientes() {
         obra_id,
         proyecto_id,
         ci_empleados ( nombre_completo, cedula, documento, firma_electronica_at ),
-        ci_obras ( nombre )
+        obra_sitio:ci_proyectos!ci_contratos_empleado_obra_obra_id_fkey ( nombre )
       `,
       )
       .eq('estado_contrato', 'firmado_electronico')

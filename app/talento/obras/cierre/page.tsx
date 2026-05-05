@@ -23,9 +23,19 @@ export default function CierreObraPage() {
   useEffect(() => {
     let c = true;
     (async () => {
-      const { data: rows } = await supabase.from('ci_obras').select('id,nombre,estado').order('nombre');
+      const { data: rows } = await supabase
+        .from('ci_proyectos')
+        .select('id,nombre,obra_estado_legacy')
+        .eq('tipo_proyecto', 'talento')
+        .order('nombre');
       if (!c) return;
-      setObras((rows ?? []) as ObraOpt[]);
+      setObras(
+        ((rows ?? []) as { id: string; nombre: string; obra_estado_legacy: string | null }[]).map((r) => ({
+          id: r.id,
+          nombre: r.nombre,
+          estado: (r.obra_estado_legacy ?? '—').trim() || '—',
+        })),
+      );
     })();
     return () => {
       c = false;
@@ -55,10 +65,17 @@ export default function CierreObraPage() {
   async function cerrarObra() {
     if (!obraId) return;
     if (!confirm('¿Marcar esta obra como cerrada?')) return;
+    const cierreAt = new Date().toISOString();
     const { error } = await supabase
-      .from('ci_obras')
-      .update({ estado: 'cerrada', fecha_cierre: new Date().toISOString() })
-      .eq('id', obraId);
+      .from('ci_proyectos')
+      .update({
+        estado: 'cerrado',
+        obra_estado_legacy: 'cerrada',
+        obra_fecha_cierre: cierreAt,
+        updated_at: cierreAt,
+      })
+      .eq('id', obraId)
+      .eq('tipo_proyecto', 'talento');
     if (error) {
       alert(error.message);
       return;

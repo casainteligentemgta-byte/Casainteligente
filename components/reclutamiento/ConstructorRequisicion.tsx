@@ -60,7 +60,7 @@ function mensajeErrorGuardadoPlaza(raw: string | undefined): string {
 export type ConstructorRequisicionProps = {
   /** UUID de `ci_proyectos` (p. ej. desde ?proyecto_modulo_id= al crear proyecto). */
   initialProyectoModuloId?: string | null;
-  /** UUID de `ci_obras` (Talento), p. ej. ?proyecto_id=. */
+  /** UUID de fila Talento en `ci_proyectos` (antes ci_obras), p. ej. ?proyecto_id=. */
   initialProyectoObraId?: string | null;
 };
 
@@ -126,7 +126,12 @@ export function ConstructorRequisicion({
           }
         }
         if (wantO && !opts.some((o) => o.proyectoObraId === wantO)) {
-          const { data: row } = await supabase.from('ci_obras').select('id,nombre').eq('id', wantO).maybeSingle();
+          const { data: row } = await supabase
+            .from('ci_proyectos')
+            .select('id,nombre')
+            .eq('id', wantO)
+            .eq('tipo_proyecto', 'talento')
+            .maybeSingle();
           if (!alive) return;
           if (row && typeof (row as { id?: unknown }).id === 'string') {
             const r = row as { id: string; nombre?: string | null };

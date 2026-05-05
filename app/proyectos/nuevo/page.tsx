@@ -458,41 +458,67 @@ function ProyectoNuevoPageContent() {
     setCreado(null);
     setResumen(null);
 
+    const notasObra =
+      (notasPersonal ? `Personal requerido (tabulador GOE 6.752):\n${notasPersonal}` : '') || null;
+
+    const ubicTxt = (ubicacion.trim() || n).trim();
     const payload: Record<string, unknown> = {
+      tipo_proyecto: 'talento',
+      customer_id: null,
+      budget_id: null,
       nombre: n,
-      ubicacion: ubicacion.trim() || null,
-      cliente: textoClienteObra(clienteSeleccionado),
-      fecha_inicio: fechaInicio,
-      fecha_entrega_prometida: fechaFin,
-      estado: 'activa',
-      avance_porcentaje: 0,
-      penalizacion_diaria_usd: 0,
+      estado: 'ejecucion',
+      ubicacion_texto: ubicTxt,
+      lat: null,
+      lng: null,
+      monto_aproximado: 0,
+      moneda: 'USD',
+      observaciones: notasObra,
+      entidad_id: entidadId.trim(),
+      obra_cliente: textoClienteObra(clienteSeleccionado),
+      obra_ubicacion: ubicacion.trim() || null,
+      obra_fecha_inicio: fechaInicio,
+      obra_fecha_entrega: fechaFin,
+      obra_avance_pct: 0,
+      obra_precio_venta_usd: 0,
+      obra_penalizacion_diaria_usd: 0,
+      obra_estado_legacy: 'activa',
+      obra_notas: notasObra,
+      obra_presupuesto_ves: presNum,
     };
-    if (notasPersonal) {
-      payload.notas = `Personal requerido (tabulador GOE 6.752):\n${notasPersonal}`;
-    }
-    payload.presupuesto_ves = presNum;
-    payload.entidad_id = entidadId.trim();
 
     const { data, error: err } = await supabase
-      .from('ci_obras')
+      .from('ci_proyectos')
       .insert(payload)
-      .select('id,nombre,fecha_inicio,fecha_entrega_prometida,presupuesto_ves')
+      .select('id,nombre,obra_fecha_inicio,obra_fecha_entrega,obra_presupuesto_ves')
       .single();
 
     setLoading(false);
     if (err) {
       setError(
         err.message.includes('entidad_id')
-          ? `${err.message} — Ejecuta la migración 071_ci_obras_entidad_patrono.sql en Supabase.`
-          : err.message.includes('presupuesto_ves') || err.message.includes('column')
-            ? `${err.message} — Ejecuta la migración 034 en Supabase (columna presupuesto_ves).`
+          ? `${err.message} — Revisa migraciones 063/071 (entidad_id) y 086 (unificación ci_proyectos).`
+          : err.message.includes('tipo_proyecto') || err.message.includes('column')
+            ? `${err.message} — Ejecuta la migración 086_ci_proyectos_unifica_ci_obras.sql en Supabase.`
             : err.message,
       );
       return;
     }
     if (data) {
-      setCreado(data as InsertResult);
+      const row = data as {
+        id: string;
+        nombre: string;
+        obra_fecha_inicio: string | null;
+        obra_fecha_entrega: string;
+        obra_presupuesto_ves: number | null;
+      };
+      setCreado({
+        id: row.id,
+        nombre: row.nombre,
+        fecha_inicio: row.obra_fecha_inicio,
+        fecha_entrega_prometida: row.obra_fecha_entrega,
+        presupuesto_ves: row.obra_presupuesto_ves,
+      });
       setResumen({
         dias: diasRef,
         obreros: omitirTabuladorPersonal ? 0 : obrerosRef,

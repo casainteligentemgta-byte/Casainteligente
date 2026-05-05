@@ -59,12 +59,12 @@ export async function GET() {
     if (obraIds.length) {
       try {
         const obras = await db
-          .select({ id: schema.ciObras.id, nombre: schema.ciObras.nombre })
-          .from(schema.ciObras)
-          .where(inArray(schema.ciObras.id, obraIds));
+          .select({ id: schema.ciProyectos.id, nombre: schema.ciProyectos.nombre })
+          .from(schema.ciProyectos)
+          .where(inArray(schema.ciProyectos.id, obraIds));
         for (const o of obras) obraNombreById.set(o.id, o.nombre);
       } catch (e) {
-        console.warn('[recruitment/needs GET] no se pudieron cargar nombres de ci_obras', e);
+        console.warn('[recruitment/needs GET] no se pudieron cargar nombres de proyectos Talento', e);
       }
     }
     if (modIds.length) {
@@ -177,7 +177,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          'Indica proyecto_id (UUID en ci_obras / Talento) o proyecto_modulo_id (UUID en ci_proyectos / módulo integral).',
+          'Indica proyecto_id (UUID en ci_proyectos, fila Talento) o proyecto_modulo_id (UUID en ci_proyectos / módulo integral).',
       },
       { status: 400 },
     );
@@ -201,12 +201,12 @@ export async function POST(req: Request) {
 
     if (postgrestCreds) {
       if (tieneObra) {
-        const existe = await restRowExistsById(postgrestCreds, 'ci_obras', proyectoObraId);
+        const existe = await restRowExistsById(postgrestCreds, 'ci_proyectos', proyectoObraId);
         if (!existe) {
           return NextResponse.json(
             {
               error:
-                'proyecto_id no existe en ci_obras. Crea el proyecto primero en /proyectos/nuevo.',
+                'proyecto_id no existe en ci_proyectos. Crea el proyecto Talento primero en /proyectos/nuevo.',
             },
             { status: 400 },
           );
@@ -268,13 +268,13 @@ export async function POST(req: Request) {
 
     if (tieneObra) {
       const obra = await db
-        .select({ id: schema.ciObras.id })
-        .from(schema.ciObras)
-        .where(eq(schema.ciObras.id, proyectoObraId))
+        .select({ id: schema.ciProyectos.id })
+        .from(schema.ciProyectos)
+        .where(eq(schema.ciProyectos.id, proyectoObraId))
         .limit(1);
       if (!obra[0]) {
         return NextResponse.json(
-          { error: 'proyecto_id no existe en ci_obras. Crea el proyecto primero en /proyectos/nuevo.' },
+          { error: 'proyecto_id no existe en ci_proyectos. Crea el proyecto Talento primero en /proyectos/nuevo.' },
           { status: 400 },
         );
       }

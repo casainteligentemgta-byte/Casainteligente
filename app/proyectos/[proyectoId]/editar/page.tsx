@@ -59,7 +59,13 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
     }
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase.from('ci_obras').select('*').eq('id', id).maybeSingle();
+    const { data, error: err } = await supabase
+      .from('ci_proyectos')
+      .select(
+        'id,tipo_proyecto,nombre,obra_ubicacion,obra_cliente,obra_estado_legacy,obra_precio_venta_usd,obra_fecha_inicio,obra_fecha_entrega,obra_notas,entidad_id',
+      )
+      .eq('id', id)
+      .maybeSingle();
     setLoading(false);
     if (err) {
       setObra(null);
@@ -71,7 +77,35 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
       setError('Obra no encontrada.');
       return;
     }
-    const r = data as ObraRow;
+    const raw = data as {
+      tipo_proyecto?: string;
+      nombre: string;
+      obra_ubicacion: string | null;
+      obra_cliente: string | null;
+      obra_estado_legacy: string | null;
+      obra_precio_venta_usd: number | null;
+      obra_fecha_inicio: string | null;
+      obra_fecha_entrega: string | null;
+      obra_notas: string | null;
+      entidad_id?: string | null;
+    };
+    if (raw.tipo_proyecto && raw.tipo_proyecto !== 'talento') {
+      setObra(null);
+      setError('Este registro es del módulo integral; edítalo desde el flujo de proyectos integral.');
+      return;
+    }
+    const r: ObraRow = {
+      id,
+      nombre: raw.nombre,
+      ubicacion: raw.obra_ubicacion,
+      cliente: raw.obra_cliente,
+      estado: raw.obra_estado_legacy === 'cerrada' ? 'cerrada' : 'activa',
+      precio_venta_usd: raw.obra_precio_venta_usd,
+      fecha_inicio: raw.obra_fecha_inicio,
+      fecha_entrega_prometida: raw.obra_fecha_entrega ?? '',
+      notas: raw.obra_notas,
+      entidad_id: raw.entidad_id,
+    };
     setObra(r);
     setNombre(r.nombre ?? '');
     setUbicacion((r.ubicacion ?? '').trim());
@@ -110,21 +144,30 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
       setError('Precio de venta (USD) no válido.');
       return;
     }
+    const ubi = ubicacion.trim();
+    const ubicTxt = (ubi || n).trim();
+    const notasVal = notas.trim() || null;
+    const estadoModulo = estado === 'cerrada' ? 'cerrado' : 'ejecucion';
     const { error: err } = await supabase
-      .from('ci_obras')
+      .from('ci_proyectos')
       .update({
         nombre: n,
-        ubicacion: ubicacion.trim() || null,
-        cliente: cliente.trim() || null,
-        estado,
-        precio_venta_usd: precio,
-        fecha_inicio: fechaInicio.trim() || null,
-        fecha_entrega_prometida: fechaEntrega,
-        notas: notas.trim() || null,
+        estado: estadoModulo,
+        ubicacion_texto: ubicTxt,
+        observaciones: notasVal,
+        obra_ubicacion: ubi || null,
+        obra_cliente: cliente.trim() || null,
+        obra_estado_legacy: estado,
+        obra_precio_venta_usd: precio,
+        monto_aproximado: precio != null && Number.isFinite(precio) ? precio : 0,
+        obra_fecha_inicio: fechaInicio.trim() || null,
+        obra_fecha_entrega: fechaEntrega,
+        obra_notas: notasVal,
         entidad_id: entidadId.trim(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('tipo_proyecto', 'talento');
     setSaving(false);
     if (err) {
       setError(err.message);
@@ -149,7 +192,7 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
           </Link>
           <h1 style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: '8px 0 0' }}>Modificar obra</h1>
           <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', margin: '4px 0 0' }}>
-            Talento · <code className="text-zinc-400">ci_obras</code>
+            Talento · <code className="text-zinc-400">ci_proyectos</code> (tipo talento)
           </p>
         </div>
       </div>

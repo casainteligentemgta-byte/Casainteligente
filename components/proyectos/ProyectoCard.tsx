@@ -16,7 +16,7 @@ export type ProyectoCardProps = {
   onGestionarClick?: () => void;
 };
 
-/** Adapta una fila típica de `ci_obras` al shape esperado por la tarjeta. */
+/** Adapta una fila Talento (`ci_proyectos` o shape tipo vista legacy) al shape esperado por la tarjeta. */
 export function mapCiObraToProyectoCard(
   row: {
     nombre: string;

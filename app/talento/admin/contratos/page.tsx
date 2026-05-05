@@ -26,7 +26,7 @@ export default function ContratosAdminPage() {
     (async () => {
       const [e, o] = await Promise.all([
         supabase.from('ci_empleados').select('id,nombre_completo,estado').eq('estado', 'aprobado').order('nombre_completo'),
-        supabase.from('ci_obras').select('id,nombre').order('nombre'),
+        supabase.from('ci_proyectos').select('id,nombre').eq('tipo_proyecto', 'talento').order('nombre'),
       ]);
       if (!c) return;
       if (!e.error && e.data) setEmpleados(e.data as Emp[]);
@@ -116,7 +116,10 @@ export default function ContratosAdminPage() {
               ))}
             </select>
             {obras.length === 0 && (
-              <p className="text-xs text-zinc-500 mt-2">Inserta obras en Supabase (tabla ci_obras) o desde SQL.</p>
+              <p className="text-xs text-zinc-500 mt-2">
+                Crea proyectos Talento en <code className="text-zinc-400">ci_proyectos</code> (tipo talento) o desde{' '}
+                <span className="text-zinc-400">/proyectos/nuevo</span>.
+              </p>
             )}
           </div>
           <div className="grid sm:grid-cols-2 gap-4">

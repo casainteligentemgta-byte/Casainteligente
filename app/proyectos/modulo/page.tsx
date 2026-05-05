@@ -14,7 +14,7 @@ import {
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
 
-/** `modulo` = tabla ci_proyectos; `obra_talento` = ci_obras (flujo /proyectos/nuevo). */
+/** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
 
 type ProyectoRow = {
@@ -109,41 +109,50 @@ export default function ModuloProyectosPage() {
       let avisoIntegralMsg: string | null = null;
       let avisoObrasMsg: string | null = null;
 
-      const [pRes, oRes] = await withTimeout(
-        Promise.all([
-          Promise.resolve(
-            supabase
-              .from('ci_proyectos')
-              .select('id,nombre,estado,ubicacion_texto,moneda,monto_aproximado,customer_id,created_at,entidad_id')
-              .order('created_at', { ascending: false }),
-          ),
-          Promise.resolve(
-            supabase
-              .from('ci_obras')
-              .select('id,nombre,ubicacion,cliente,estado,created_at,precio_venta_usd,presupuesto_ves')
-              .order('created_at', { ascending: false }),
-          ),
-        ]),
+      const pRes = await withTimeout(
+        Promise.resolve(
+          supabase
+            .from('ci_proyectos')
+            .select(
+              'id,nombre,estado,ubicacion_texto,moneda,monto_aproximado,customer_id,created_at,entidad_id,tipo_proyecto,obra_ubicacion,obra_cliente,obra_estado_legacy,obra_precio_venta_usd,obra_presupuesto_ves',
+            )
+            .order('created_at', { ascending: false }),
+        ),
         LISTA_TIMEOUT_MS,
-        'Carga inicial (proyectos y obras)',
+        'Carga inicial (ci_proyectos unificado)',
       );
 
       if (stale()) return;
 
-      let modRows: Omit<ProyectoRow, 'customer_name' | 'origen' | 'obrerosContratados' | 'patrono_nombre'>[] = [];
+      type ProyectoDbRow = {
+        id: string;
+        nombre: string;
+        estado: string;
+        ubicacion_texto: string;
+        moneda: string;
+        monto_aproximado: number;
+        customer_id: string;
+        created_at: string;
+        entidad_id?: string | null;
+        tipo_proyecto?: string | null;
+        obra_ubicacion?: string | null;
+        obra_cliente?: string | null;
+        obra_estado_legacy?: string | null;
+        obra_precio_venta_usd?: number | null;
+        obra_presupuesto_ves?: number | null;
+      };
+
+      let modRows: ProyectoDbRow[] = [];
 
       if (!pRes.error) {
-        modRows = (pRes.data ?? []) as Omit<
-          ProyectoRow,
-          'customer_name' | 'origen' | 'obrerosContratados' | 'patrono_nombre'
-        >[];
+        modRows = (pRes.data ?? []) as ProyectoDbRow[];
       } else {
         const msg = pRes.error?.message ?? 'Error al leer ci_proyectos.';
         const pMin = await withTimeout(
           Promise.resolve(
             supabase
               .from('ci_proyectos')
-              .select('id,nombre,estado,created_at,entidad_id')
+              .select('id,nombre,estado,created_at,entidad_id,tipo_proyecto')
               .order('created_at', { ascending: false }),
           ),
           22_000,
@@ -152,7 +161,14 @@ export default function ModuloProyectosPage() {
         if (stale()) return;
         if (!pMin.error && pMin.data?.length) {
           modRows = (
-            pMin.data as Array<{ id: string; nombre: string; estado: string; created_at: string; entidad_id?: string | null }>
+            pMin.data as Array<{
+              id: string;
+              nombre: string;
+              estado: string;
+              created_at: string;
+              entidad_id?: string | null;
+              tipo_proyecto?: string | null;
+            }>
           ).map((r) => ({
             id: r.id,
             nombre: r.nombre ?? 'Sin nombre',
@@ -163,69 +179,22 @@ export default function ModuloProyectosPage() {
             customer_id: '',
             created_at: r.created_at,
             entidad_id: r.entidad_id ?? null,
+            tipo_proyecto: r.tipo_proyecto ?? 'integral',
+            obra_ubicacion: null,
+            obra_cliente: null,
+            obra_estado_legacy: null,
+            obra_precio_venta_usd: null,
+            obra_presupuesto_ves: null,
           }));
-          avisoIntegralMsg = `Módulo integral: ${msg} (listado mínimo: id, nombre, estado).`;
+          avisoIntegralMsg = `Proyectos: ${msg} (listado mínimo; aplica migración 086 para columnas Talento).`;
         } else {
-          avisoIntegralMsg = `Módulo integral: no se pudieron cargar filas (${msg}).`;
+          avisoIntegralMsg = `Proyectos: no se pudieron cargar filas (${msg}).`;
         }
       }
 
-      type ObraRow = {
-        id: string;
-        nombre: string;
-        ubicacion: string | null;
-        cliente: string | null;
-        estado: string;
-        created_at: string;
-        precio_venta_usd?: number | null;
-        presupuesto_ves?: number | null;
-        entidad_id?: string | null;
-      };
-
-      let obrasRaw: ObraRow[] = [];
-
-      if (!oRes.error) {
-        obrasRaw = (oRes.data ?? []) as ObraRow[];
-      } else {
-        const msg = oRes.error?.message ?? 'Error al leer ci_obras.';
-        const oMid = await withTimeout(
-          Promise.resolve(
-            supabase
-              .from('ci_obras')
-              .select('id,nombre,ubicacion,cliente,estado,created_at,precio_venta_usd,presupuesto_ves')
-              .order('created_at', { ascending: false }),
-          ),
-          22_000,
-          'Reintento ci_obras (con montos)',
-        );
-        if (stale()) return;
-        if (!oMid.error && oMid.data?.length) {
-          obrasRaw = oMid.data as ObraRow[];
-          avisoObrasMsg = `Obras (Talento): ${msg} (se usan columnas disponibles para el monto).`;
-        } else {
-          const oBare = await withTimeout(
-            supabase
-              .from('ci_obras')
-              .select('id,nombre,ubicacion,cliente,estado,created_at')
-              .order('created_at', { ascending: false }),
-            22_000,
-            'Reintento ci_obras (básico)',
-          );
-          if (stale()) return;
-          if (!oBare.error && oBare.data?.length) {
-            obrasRaw = (oBare.data as ObraRow[]).map((o) => ({
-              ...o,
-              precio_venta_usd: null,
-              presupuesto_ves: null,
-              entidad_id: null,
-            }));
-            avisoObrasMsg = `Obras (Talento): ${msg} (sin columna de monto en esta base).`;
-          } else {
-            avisoObrasMsg = `Obras (Talento): no se pudieron cargar (${msg}).`;
-          }
-        }
-      }
-      const ids = Array.from(new Set(modRows.map((r) => r.customer_id).filter(Boolean)));
+      const obrasRaw: ProyectoDbRow[] = modRows.filter((r) => (r.tipo_proyecto ?? 'integral') === 'talento');
+      const integralRows: ProyectoDbRow[] = modRows.filter((r) => (r.tipo_proyecto ?? 'integral') !== 'talento');
+      const ids = Array.from(new Set(integralRows.map((r) => r.customer_id).filter(Boolean)));
       let byId: Record<string, string> = {};
       if (ids.length > 0) {
         const { data: customersData } = await withTimeout(
@@ -244,10 +213,9 @@ export default function ModuloProyectosPage() {
 
       const entidadIds = Array.from(
         new Set(
-          [
-            ...modRows.map((r) => String(r.entidad_id ?? '').trim()),
-            ...obrasRaw.map((o) => String(o.entidad_id ?? '').trim()),
-          ].filter(Boolean),
+          [...integralRows, ...obrasRaw]
+            .map((r) => String(r.entidad_id ?? '').trim())
+            .filter(Boolean),
         ),
       );
       let patronoPorId: Record<string, string> = {};
@@ -266,8 +234,16 @@ export default function ModuloProyectosPage() {
         );
       }
 
-      const desdeModulo: ProyectoRow[] = modRows.map((r) => ({
-        ...r,
+      const desdeModulo: ProyectoRow[] = integralRows.map((r) => ({
+        id: r.id,
+        nombre: r.nombre ?? 'Sin nombre',
+        estado: r.estado ?? 'nuevo',
+        ubicacion_texto: (r.ubicacion_texto ?? '').trim() || '—',
+        moneda: r.moneda ?? 'USD',
+        monto_aproximado: Number(r.monto_aproximado ?? 0),
+        customer_id: r.customer_id ?? '',
+        created_at: r.created_at,
+        entidad_id: r.entidad_id ?? null,
         origen: 'modulo' as const,
         customer_name: byId[r.customer_id] || null,
         obrerosContratados: null,
@@ -285,13 +261,13 @@ export default function ModuloProyectosPage() {
       const desdeObra: ProyectoRow[] = obrasRaw.map((o) => ({
         id: o.id,
         nombre: o.nombre ?? 'Sin nombre',
-        estado: o.estado ?? '—',
-        ubicacion_texto: (o.ubicacion ?? '').trim() || '—',
-        moneda: 'USD',
-        monto_aproximado: Number(o.precio_venta_usd ?? o.presupuesto_ves ?? 0),
+        estado: (o.obra_estado_legacy ?? o.estado ?? '—').trim() || '—',
+        ubicacion_texto: (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || '—',
+        moneda: o.moneda ?? 'USD',
+        monto_aproximado: Number(o.obra_precio_venta_usd ?? o.obra_presupuesto_ves ?? o.monto_aproximado ?? 0),
         customer_id: '',
         created_at: o.created_at ?? new Date(0).toISOString(),
-        customer_name: (o.cliente ?? '').trim() || null,
+        customer_name: (o.obra_cliente ?? '').trim() || null,
         origen: 'obra_talento' as const,
         obrerosContratados: porObra[o.id] ?? 0,
         entidad_id: o.entidad_id ?? null,
@@ -358,10 +334,7 @@ export default function ModuloProyectosPage() {
       if (!ok) return;
       setDeletingId(row.id);
       setError(null);
-      const { error: delErr } = await supabase
-        .from(row.origen === 'obra_talento' ? 'ci_obras' : 'ci_proyectos')
-        .delete()
-        .eq('id', row.id);
+      const { error: delErr } = await supabase.from('ci_proyectos').delete().eq('id', row.id);
       setDeletingId(null);
       if (delErr) {
         setError(delErr.message);

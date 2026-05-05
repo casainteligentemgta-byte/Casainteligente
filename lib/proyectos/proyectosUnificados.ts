@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Dos orígenes físicos en Supabase (`ci_proyectos` vs `ci_obras`).
+ * Subtipos lógicos en `ci_proyectos` (`tipo_proyecto`: integral | talento).
  * En la UI se presentan como un solo concepto «proyecto» con subtipo.
  */
 export type FuenteProyectoCi = 'integral' | 'talento';
@@ -23,26 +23,34 @@ export const TEXTO_LISTADO_PROYECTOS_UNIFICADO =
   'Un solo listado: proyectos del módulo integral y obras Talento. En la base siguen en tablas distintas; aquí se muestran juntos.';
 
 export type LoadOpcionesProyectoReclutamientoOpts = {
-  /** Si true, solo filas `ci_obras` con `estado = 'activa'` (p. ej. vacantes CEO). */
+  /** Si true, solo filas Talento con `obra_estado_legacy = 'activa'` (p. ej. vacantes CEO). */
   soloObrasActivas?: boolean;
 };
 
 /**
- * Opciones para selects de reclutamiento (vacantes): lee `ci_proyectos` y `ci_obras`.
+ * Opciones para selects de reclutamiento (vacantes): lee `ci_proyectos` por `tipo_proyecto`.
  */
 export async function loadOpcionesProyectoReclutamiento(
   supabase: SupabaseClient,
   opts?: LoadOpcionesProyectoReclutamientoOpts,
 ): Promise<{ opciones: OpcionProyectoReclutamiento[]; errors: string[] }> {
   const errors: string[] = [];
-  let obrQuery = supabase.from('ci_obras').select('id,nombre').order('created_at', { ascending: false }).limit(250);
+  let intQuery = supabase
+    .from('ci_proyectos')
+    .select('id,nombre')
+    .eq('tipo_proyecto', 'integral')
+    .order('created_at', { ascending: false })
+    .limit(250);
+  let talQuery = supabase
+    .from('ci_proyectos')
+    .select('id,nombre,obra_estado_legacy')
+    .eq('tipo_proyecto', 'talento')
+    .order('created_at', { ascending: false })
+    .limit(250);
   if (opts?.soloObrasActivas) {
-    obrQuery = obrQuery.eq('estado', 'activa');
+    talQuery = talQuery.eq('obra_estado_legacy', 'activa');
   }
-  const [modRes, obrRes] = await Promise.all([
-    supabase.from('ci_proyectos').select('id,nombre').order('created_at', { ascending: false }).limit(250),
-    obrQuery,
-  ]);
+  const [modRes, obrRes] = await Promise.all([intQuery, talQuery]);
 
   const opciones: OpcionProyectoReclutamiento[] = [];
 

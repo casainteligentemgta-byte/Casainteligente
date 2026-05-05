@@ -24,12 +24,37 @@ export default function SeguimientoObraPage() {
     let c = true;
     (async () => {
       const { data, error } = await supabase
-        .from('ci_obras')
-        .select('id,codigo,nombre,fecha_entrega_prometida,avance_porcentaje,penalizacion_diaria_usd,estado')
-        .eq('estado', 'activa')
-        .order('fecha_entrega_prometida');
+        .from('ci_proyectos')
+        .select(
+          'id,obra_codigo,nombre,obra_fecha_entrega,obra_avance_pct,obra_penalizacion_diaria_usd,obra_estado_legacy',
+        )
+        .eq('tipo_proyecto', 'talento')
+        .eq('obra_estado_legacy', 'activa')
+        .order('obra_fecha_entrega');
       if (!c) return;
-      if (!error && data) setObras(data as ObraRow[]);
+      if (!error && data) {
+        setObras(
+          (
+            data as {
+              id: string;
+              obra_codigo: string | null;
+              nombre: string;
+              obra_fecha_entrega: string | null;
+              obra_avance_pct: number | null;
+              obra_penalizacion_diaria_usd: number | null;
+              obra_estado_legacy: string | null;
+            }[]
+          ).map((r) => ({
+            id: r.id,
+            codigo: r.obra_codigo,
+            nombre: r.nombre,
+            fecha_entrega_prometida: r.obra_fecha_entrega ?? '',
+            avance_porcentaje: Number(r.obra_avance_pct ?? 0),
+            penalizacion_diaria_usd: Number(r.obra_penalizacion_diaria_usd ?? 0),
+            estado: r.obra_estado_legacy ?? 'activa',
+          })),
+        );
+      }
       setLoading(false);
     })();
     return () => {
@@ -53,7 +78,10 @@ export default function SeguimientoObraPage() {
       {loading ? (
         <p className="text-zinc-500">Cargando…</p>
       ) : obras.length === 0 ? (
-        <p className="text-zinc-500 text-sm">No hay obras activas. Inserta registros en <code className="text-zinc-400">ci_obras</code>.</p>
+        <p className="text-zinc-500 text-sm">
+          No hay obras activas. Crea proyectos Talento en <code className="text-zinc-400">ci_proyectos</code> o desde{' '}
+          <span className="text-zinc-400">/proyectos/nuevo</span>.
+        </p>
       ) : (
         <div className="space-y-4">
           {obras.map((o) => {

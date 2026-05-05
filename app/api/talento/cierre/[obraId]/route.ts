@@ -13,16 +13,17 @@ export async function GET(_req: Request, { params }: { params: { obraId: string 
   const supabase = sb.client;
 
   const { data: obraRaw, error: oErr } = await supabase
-    .from('ci_obras')
-    .select('id,nombre,precio_venta_usd,estado')
+    .from('ci_proyectos')
+    .select('id,nombre,obra_precio_venta_usd,obra_estado_legacy')
     .eq('id', obraId)
+    .eq('tipo_proyecto', 'talento')
     .single();
 
   const obra = obraRaw as {
     id: string;
     nombre: string;
-    precio_venta_usd: number | null;
-    estado: string;
+    obra_precio_venta_usd: number | null;
+    obra_estado_legacy: string | null;
   } | null;
 
   if (oErr || !obra) {
@@ -48,7 +49,7 @@ export async function GET(_req: Request, { params }: { params: { obraId: string 
     multas += Number(row.multas_acumuladas_usd ?? 0);
   }
 
-  const precioVenta = Number(obra.precio_venta_usd ?? 0);
+  const precioVenta = Number(obra.obra_precio_venta_usd ?? 0);
   const margen = margenNetoProyecto({
     precioVentaUsd: precioVenta,
     sumaMaterialesUsd: sumaMateriales,
@@ -59,7 +60,7 @@ export async function GET(_req: Request, { params }: { params: { obraId: string 
   return NextResponse.json({
     obra_id: obra.id,
     nombre: obra.nombre,
-    estado: obra.estado,
+    estado: obra.obra_estado_legacy ?? '—',
     precio_venta_usd: precioVenta,
     suma_materiales_usd: sumaMateriales,
     honorarios_empleados_usd: honorarios,

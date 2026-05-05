@@ -75,11 +75,6 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     );
   }
 
-  const proyectoTabla = contrato.obra_id ? 'ci_obras' : 'ci_proyectos';
-  const proyectoSelect = contrato.obra_id
-    ? 'id,nombre,ubicacion,fecha_inicio,fecha_entrega_prometida'
-    : 'id,nombre,ubicacion_texto,fecha_inicio,fecha_fin_estimada';
-
   const [empRes, obraRes] = await Promise.all([
     supabase
       .from('ci_empleados')
@@ -87,8 +82,8 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
       .eq('id', contrato.empleado_id)
       .maybeSingle(),
     supabase
-      .from(proyectoTabla)
-      .select(proyectoSelect)
+      .from('ci_proyectos')
+      .select('id,nombre,ubicacion_texto,obra_ubicacion,obra_fecha_inicio,obra_fecha_entrega')
       .eq('id', vinculoId)
       .maybeSingle(),
   ]);
@@ -108,17 +103,16 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
   };
   const obraRaw = obraRes.data as {
     nombre: string;
-    ubicacion?: string | null;
     ubicacion_texto?: string | null;
-    fecha_inicio: string | null;
-    fecha_entrega_prometida?: string | null;
-    fecha_fin_estimada?: string | null;
+    obra_ubicacion?: string | null;
+    obra_fecha_inicio?: string | null;
+    obra_fecha_entrega?: string | null;
   };
   const obra = {
     nombre: obraRaw.nombre,
-    ubicacion: obraRaw.ubicacion ?? obraRaw.ubicacion_texto ?? null,
-    fecha_inicio: obraRaw.fecha_inicio ?? null,
-    fecha_fin: obraRaw.fecha_entrega_prometida ?? obraRaw.fecha_fin_estimada ?? null,
+    ubicacion: obraRaw.obra_ubicacion ?? obraRaw.ubicacion_texto ?? null,
+    fecha_inicio: obraRaw.obra_fecha_inicio ?? null,
+    fecha_fin: obraRaw.obra_fecha_entrega ?? null,
   };
 
   const nivel = contrato.tabulador_nivel ?? 0;

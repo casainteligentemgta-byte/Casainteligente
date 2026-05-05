@@ -93,9 +93,11 @@ export default function AnalisisCostosProyecto({
     setAnalisis(null);
     setObra(null);
     try {
-      const { data: o, error: e1 } = await supabase
-        .from('ci_obras')
-        .select('id,nombre,presupuesto_mano_obra_ves,presupuesto_ves,fondo_reserva_liquidacion_ves')
+      const { data: rawP, error: e1 } = await supabase
+        .from('ci_proyectos')
+        .select(
+          'id,nombre,tipo_proyecto,obra_presupuesto_mano_obra_ves,obra_presupuesto_ves,obra_fondo_reserva_liquidacion_ves',
+        )
         .eq('id', proyectoId)
         .maybeSingle();
 
@@ -103,7 +105,16 @@ export default function AnalisisCostosProyecto({
         setError(<p className="text-sm text-red-400">{e1.message}</p>);
         return;
       }
-      if (!o) {
+      const raw = rawP as {
+        id: string;
+        nombre: string;
+        tipo_proyecto?: string | null;
+        obra_presupuesto_mano_obra_ves: number | null;
+        obra_presupuesto_ves: number | null;
+        obra_fondo_reserva_liquidacion_ves: number | null;
+      } | null;
+
+      if (!raw || raw.tipo_proyecto !== 'talento') {
         const { data: integral } = await supabase
           .from('ci_proyectos')
           .select('id,nombre')
@@ -129,7 +140,15 @@ export default function AnalisisCostosProyecto({
         );
         return;
       }
-      setObra(o as ObraRow);
+
+      const o: ObraRow = {
+        id: raw.id,
+        nombre: raw.nombre,
+        presupuesto_mano_obra_ves: raw.obra_presupuesto_mano_obra_ves,
+        presupuesto_ves: raw.obra_presupuesto_ves,
+        fondo_reserva_liquidacion_ves: raw.obra_fondo_reserva_liquidacion_ves,
+      };
+      setObra(o);
 
       const { data: links, error: e2 } = await supabase
         .from('ci_obra_empleados')
@@ -149,7 +168,7 @@ export default function AnalisisCostosProyecto({
 
       const dias = Math.max(1, Math.floor(Number(diasMes) || 22));
       const built = buildAnalisisCostosProyecto({
-        obra: o as ObraRow,
+        obra: o,
         empleados,
         añoMes,
         diasLaboradosMesReferencia: dias,

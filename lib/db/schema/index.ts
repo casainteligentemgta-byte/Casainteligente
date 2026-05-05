@@ -173,16 +173,9 @@ export const nexusProjectMilestones = pgTable('nexus_project_milestones', {
   completedAt: timestamp('completed_at', { withTimezone: true }),
 });
 
-/* ─── Talento / obras (columnas mínimas para joins con reclutamiento) ─ */
-
-export const ciObras = pgTable('ci_obras', {
-  id: uuid('id').primaryKey(),
-  nombre: text('nombre').notNull(),
-});
-
-/** Módulo integral de proyectos (columnas mínimas para FK desde recruitment_needs). */
+/** Módulo integral + obras Talento unificadas (`tipo_proyecto`: integral | talento). */
 export const ciProyectos = pgTable('ci_proyectos', {
-  id: uuid('id').primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   nombre: text('nombre').notNull(),
 });
 
@@ -206,8 +199,8 @@ export const recruitmentNeeds = pgTable('recruitment_needs', {
   cargoNombre: text('cargo_nombre'),
   cargoNivel: integer('cargo_nivel'),
   tipoVacante: text('tipo_vacante'),
-  /** FK a `ci_obras` (obra Talento); opcional si se usa `proyecto_modulo_id`. */
-  proyectoId: uuid('proyecto_id').references(() => ciObras.id, { onDelete: 'restrict' }),
+  /** FK a `ci_proyectos` (fila Talento o integral; antes apuntaba solo a obra). */
+  proyectoId: uuid('proyecto_id').references(() => ciProyectos.id, { onDelete: 'restrict' }),
   /** FK a `ci_proyectos` (módulo integral). */
   proyectoModuloId: uuid('proyecto_modulo_id').references(() => ciProyectos.id, { onDelete: 'set null' }),
   alertaPresupuestoIgnorada: boolean('alerta_presupuesto_ignorada').default(false).notNull(),

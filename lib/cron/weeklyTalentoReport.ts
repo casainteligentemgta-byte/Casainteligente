@@ -78,7 +78,7 @@ function semaforoBucket(row: {
 }
 
 /**
- * Agrega métricas de `recruitment_needs`, `ci_empleados`, `ci_contratos_empleado_obra`, `ci_obras`, `ci_entidades`.
+ * Agrega métricas de `recruitment_needs`, `ci_empleados`, `ci_contratos_empleado_obra`, `ci_proyectos`, `ci_entidades`.
  */
 export async function buildWeeklyTalentoReport(
   admin: SupabaseClient,
@@ -185,8 +185,8 @@ export async function buildWeeklyTalentoReport(
     }
   }
   if (topPid) {
-    const { data: obra, error: errOb } = await admin.from('ci_obras').select('nombre').eq('id', topPid).maybeSingle();
-    if (errOb) errores.push(`ci_obras: ${errOb.message}`);
+    const { data: obra, error: errOb } = await admin.from('ci_proyectos').select('nombre').eq('id', topPid).maybeSingle();
+    if (errOb) errores.push(`ci_proyectos: ${errOb.message}`);
     else if (obra && typeof (obra as { nombre?: string }).nombre === 'string') {
       proyectoMasActivoNombre = (obra as { nombre: string }).nombre;
     }
@@ -262,7 +262,7 @@ export function formatTelegramWeeklyTalentoReport(rep: WeeklyTalentoReport): str
     `\n\n` +
     `⚖️ <b>Cumplimiento legal (heurística):</b> ${rep.entidadesFichaIncompleta} entidad(es) sin RIF o registro mercantil en ficha.` +
     `\n\n` +
-    `🧠 <i>Fuentes: recruitment_needs, ci_empleados, ci_contratos_empleado_obra, ci_obras, ci_entidades. Costos vía env RECRUITMENT_BASE_COST_VES / RECRUITMENT_MILESTONE_COST_VES.</i>` +
+    `🧠 <i>Fuentes: recruitment_needs, ci_empleados, ci_contratos_empleado_obra, ci_proyectos, ci_entidades. Costos vía env RECRUITMENT_BASE_COST_VES / RECRUITMENT_MILESTONE_COST_VES.</i>` +
     errBlock
   );
 }

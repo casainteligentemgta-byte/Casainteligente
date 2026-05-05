@@ -1,5 +1,6 @@
 'use client';
 
+import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import IOSNavBar from '@/components/IOSNavBar';
 import { usePathname } from 'next/navigation';
 import { useLayoutEffect, useState } from 'react';
@@ -36,7 +37,9 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-28 sm:pb-24'}>{children}</div>
+      <ReactQueryProvider>
+        <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-28 sm:pb-24'}>{children}</div>
+      </ReactQueryProvider>
       {!chromeMinimal ? <IOSNavBar /> : null}
       <Toaster
         theme="dark"
