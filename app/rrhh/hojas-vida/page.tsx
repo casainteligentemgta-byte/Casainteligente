@@ -70,21 +70,30 @@ export default function RrhhHojasVidaPage() {
       'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id,status_evaluacion,estatus_evaluacion,semaforo,semaforo_riesgo,perfil_color,motivo_semaforo,motivo_semaforo_riesgo,puntaje_total,puntaje_logica,puntaje_personalidad,puntuacion_logica,puntuacion_confiabilidad,nivel_integridad_riesgo,tiempo_respuesta,examen_completado_at';
     const withObsCols = `${baseCols},observaciones_rrhh`;
 
-    let result = await supabase
+    let result: {
+      data: EmpleadoRow[] | null;
+      error: { message: string } | null;
+    } = (await supabase
       .from('ci_empleados')
       .select(withObsCols)
       .eq('estado_proceso', 'cv_completado')
       .order('created_at', { ascending: false })
-      .limit(300);
+      .limit(300)) as unknown as {
+      data: EmpleadoRow[] | null;
+      error: { message: string } | null;
+    };
 
     // Compatibilidad temporal: si aún no se aplicó la migración de observaciones, cargamos sin esa columna.
     if (result.error?.message?.toLowerCase().includes('observaciones_rrhh')) {
-      result = await supabase
+      result = (await supabase
         .from('ci_empleados')
         .select(baseCols)
         .eq('estado_proceso', 'cv_completado')
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(300)) as unknown as {
+        data: EmpleadoRow[] | null;
+        error: { message: string } | null;
+      };
     }
 
     setLoading(false);
