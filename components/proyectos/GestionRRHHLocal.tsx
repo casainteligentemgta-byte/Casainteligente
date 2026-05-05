@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { ExternalLink, MessageSquare, Trash2, Users } from 'lucide-react';
+import { ChevronDown, ExternalLink, MessageSquare, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
@@ -22,7 +22,7 @@ export type GestionRRHHLocalProps = {
   nombreProyecto?: string | null;
   /** Datos del patrono en cabecera de la planilla (vista previa). */
   planillaPatrono?: PlanillaPatronoCampos | null;
-  /** Si es true (p. ej. `?tab=rrhh`), la hoja de vida se muestra expandida arriba; si no, queda en un desplegable. */
+  /** Si es true (p. ej. `?tab=rrhh`), la planilla de empleo inicia visible; el usuario puede ocultarla con el mismo control. */
   vistaHojaVidaDestacada?: boolean;
 };
 
@@ -77,6 +77,7 @@ export default function GestionRRHHLocal({
   vistaHojaVidaDestacada = false,
 }: GestionRRHHLocalProps) {
   const supabase = useMemo(() => createClient(), []);
+  const [mostrarPlanillaEmpleo, setMostrarPlanillaEmpleo] = useState(vistaHojaVidaDestacada);
   const [needs, setNeeds] = useState<NeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +109,10 @@ export default function GestionRRHHLocal({
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
+
+  useEffect(() => {
+    setMostrarPlanillaEmpleo(vistaHojaVidaDestacada);
+  }, [vistaHojaVidaDestacada]);
 
   useEffect(() => {
     const id = proyectoModuloId.trim();
@@ -296,35 +301,58 @@ export default function GestionRRHHLocal({
         </div>
       </div>
 
-      {vistaHojaVidaDestacada ? (
-        <div className="mt-4 rounded-xl border border-[#FF9500]/30 bg-[rgba(255,149,0,0.07)] p-4 backdrop-blur-xl">
-          <h3 className="text-sm font-bold text-[#FFD60A]">Planilla de empleo del obrero (vista previa)</h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
-            Mismo esquema que completará el postulante por el enlace de registro: identificación, contratación, salud,
-            familiares, experiencia y datos del patrono. Los campos en blanco se llenan al enviar la planilla.
-          </p>
-          <div className="mt-3 max-h-[min(78vh,1200px)] overflow-y-auto overflow-x-auto rounded-xl border border-white/10 bg-black/20 p-2 sm:p-3">
-            <HojaVidaObreroVista
-              hojaVidaLegal={emptyHojaVidaObreroCompleta()}
-              planillaPatrono={planillaPatrono ?? undefined}
-            />
+      <div
+        className={
+          vistaHojaVidaDestacada
+            ? 'mt-4 rounded-xl border border-[#FF9500]/30 bg-[rgba(255,149,0,0.07)] p-3 backdrop-blur-xl sm:p-4'
+            : 'mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-xl sm:p-4'
+        }
+      >
+        <button
+          type="button"
+          onClick={() => setMostrarPlanillaEmpleo((v) => !v)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg py-1.5 text-left transition-colors hover:bg-white/[0.04]"
+          aria-expanded={mostrarPlanillaEmpleo}
+        >
+          <div>
+            <h3
+              className={
+                vistaHojaVidaDestacada ? 'text-sm font-bold text-[#FFD60A]' : 'text-sm font-bold text-zinc-200'
+              }
+            >
+              Planilla de empleo del obrero (vista previa)
+            </h3>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              {mostrarPlanillaEmpleo ? 'Pulsa para ocultar' : 'Pulsa para visualizar'} · patrono, obra y trabajador
+            </p>
           </div>
-        </div>
-      ) : (
-        <details className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 backdrop-blur-xl open:pb-4">
-          <summary className="cursor-pointer py-2 text-sm font-bold text-zinc-200">
-            Visualizar planilla de empleo (patrono, obra y trabajador)
-          </summary>
-          <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">
-            Formato legal I. Identificación del trabajador (datos personales, contratación, antecedentes penales,
-            instrucción, gremial, médicos, peso/medidas, dependientes y trabajos previos), alineado al PDF y al onboarding.
-          </p>
-          <HojaVidaObreroVista
-            hojaVidaLegal={emptyHojaVidaObreroCompleta()}
-            planillaPatrono={planillaPatrono ?? undefined}
+          <ChevronDown
+            className={`h-5 w-5 shrink-0 text-zinc-400 transition-transform ${mostrarPlanillaEmpleo ? 'rotate-180' : ''}`}
+            aria-hidden
           />
-        </details>
-      )}
+        </button>
+        {mostrarPlanillaEmpleo ? (
+          <>
+            <p
+              className={
+                vistaHojaVidaDestacada
+                  ? 'mt-2 text-[11px] leading-relaxed text-zinc-400'
+                  : 'mt-2 text-[11px] leading-relaxed text-zinc-500'
+              }
+            >
+              {vistaHojaVidaDestacada
+                ? 'Mismo esquema que completará el postulante por el enlace de registro: identificación, contratación, salud, familiares, experiencia y datos del patrono. Los campos en blanco se llenan al enviar la planilla.'
+                : 'Formato legal I. Identificación del trabajador (datos personales, contratación, antecedentes penales, instrucción, gremial, médicos, peso/medidas, dependientes y trabajos previos), alineado al PDF y al onboarding.'}
+            </p>
+            <div className="mt-3 max-h-[min(78vh,1200px)] overflow-y-auto overflow-x-auto rounded-xl border border-white/10 bg-black/20 p-2 sm:p-3">
+              <HojaVidaObreroVista
+                hojaVidaLegal={emptyHojaVidaObreroCompleta()}
+                planillaPatrono={planillaPatrono ?? undefined}
+              />
+            </div>
+          </>
+        ) : null}
+      </div>
 
       {loading ? (
         <p className="mt-4 text-sm text-zinc-500">Cargando requerimientos…</p>
