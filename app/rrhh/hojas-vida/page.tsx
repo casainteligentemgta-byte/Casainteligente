@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Link2, RefreshCw, Trash2 } from 'lucide-react';
+import { FileText, Link2, MessageSquareText, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
@@ -19,6 +19,22 @@ type EmpleadoRow = {
   cargo_nombre: string | null;
   recruitment_need_id: string | null;
   proyecto_modulo_id: string | null;
+  observaciones_rrhh: string | null;
+  status_evaluacion: string | null;
+  estatus_evaluacion: string | null;
+  semaforo: string | null;
+  semaforo_riesgo: string | null;
+  perfil_color: string | null;
+  motivo_semaforo: string | null;
+  motivo_semaforo_riesgo: string | null;
+  puntaje_total: number | null;
+  puntaje_logica: number | null;
+  puntaje_personalidad: number | null;
+  puntuacion_logica: number | null;
+  puntuacion_confiabilidad: number | null;
+  nivel_integridad_riesgo: string | null;
+  tiempo_respuesta: number | null;
+  examen_completado_at: string | null;
 };
 
 function docMostrado(row: EmpleadoRow): string {
@@ -39,26 +55,49 @@ export default function RrhhHojasVidaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [savingObsId, setSavingObsId] = useState<string | null>(null);
+  const [obsOpen, setObsOpen] = useState(false);
+  const [obsDraft, setObsDraft] = useState('');
+  const [obsRow, setObsRow] = useState<EmpleadoRow | null>(null);
+  const [informeOpen, setInformeOpen] = useState(false);
+  const [informeRow, setInformeRow] = useState<EmpleadoRow | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
+
+    const baseCols =
+      'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id,status_evaluacion,estatus_evaluacion,semaforo,semaforo_riesgo,perfil_color,motivo_semaforo,motivo_semaforo_riesgo,puntaje_total,puntaje_logica,puntaje_personalidad,puntuacion_logica,puntuacion_confiabilidad,nivel_integridad_riesgo,tiempo_respuesta,examen_completado_at';
+    const withObsCols = `${baseCols},observaciones_rrhh`;
+
+    let result = await supabase
       .from('ci_empleados')
-      .select(
-        'id,nombre_completo,documento,cedula,celular,telefono,created_at,estado_proceso,cargo_nombre,recruitment_need_id,proyecto_modulo_id',
-      )
+      .select(withObsCols)
       .eq('estado_proceso', 'cv_completado')
       .order('created_at', { ascending: false })
       .limit(300);
 
+    // Compatibilidad temporal: si aún no se aplicó la migración de observaciones, cargamos sin esa columna.
+    if (result.error?.message?.toLowerCase().includes('observaciones_rrhh')) {
+      result = await supabase
+        .from('ci_empleados')
+        .select(baseCols)
+        .eq('estado_proceso', 'cv_completado')
+        .order('created_at', { ascending: false })
+        .limit(300);
+    }
+
     setLoading(false);
-    if (err) {
-      setError(err.message);
+    if (result.error) {
+      setError(result.error.message);
       setRows([]);
       return;
     }
-    setRows((data ?? []) as EmpleadoRow[]);
+    const mapped = ((result.data ?? []) as EmpleadoRow[]).map((r) => ({
+      ...r,
+      observaciones_rrhh: r.observaciones_rrhh ?? null,
+    }));
+    setRows(mapped);
   }, [supabase]);
 
   useEffect(() => {
@@ -97,6 +136,43 @@ export default function RrhhHojasVidaPage() {
       toast.error('Error de red al solicitar el enlace');
     }
   }, []);
+
+  const tieneInformeEvaluacion = useCallback((r: EmpleadoRow) => {
+    return Boolean(
+      r.examen_completado_at ||
+        r.status_evaluacion ||
+        r.estatus_evaluacion === 'completado' ||
+        r.puntaje_total != null ||
+        r.puntuacion_logica != null,
+    );
+  }, []);
+
+  const abrirObservaciones = useCallback((r: EmpleadoRow) => {
+    setObsRow(r);
+    setObsDraft((r.observaciones_rrhh ?? '').trim());
+    setObsOpen(true);
+  }, []);
+
+  const guardarObservaciones = useCallback(async () => {
+    if (!obsRow) return;
+    setSavingObsId(obsRow.id);
+    const valor = obsDraft.trim();
+    const { error: upErr } = await supabase
+      .from('ci_empleados')
+      .update({ observaciones_rrhh: valor || null } as never)
+      .eq('id', obsRow.id);
+    setSavingObsId(null);
+    if (upErr) {
+      toast.error(upErr.message);
+      return;
+    }
+    setRows((prev) =>
+      prev.map((r) => (r.id === obsRow.id ? { ...r, observaciones_rrhh: valor || null } : r)),
+    );
+    toast.success('Observaciones guardadas');
+    setObsOpen(false);
+    setObsRow(null);
+  }, [obsDraft, obsRow, supabase]);
 
   const borrarEmpleado = useCallback(
     async (r: EmpleadoRow) => {
@@ -148,9 +224,7 @@ export default function RrhhHojasVidaPage() {
         </div>
       </header>
 
-      {loading && rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">Cargando lista…</p>
-      ) : null}
+      {loading && rows.length === 0 ? <p className="text-sm text-zinc-500">Cargando lista…</p> : null}
       {error ? (
         <div className="rounded-xl border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">{error}</div>
       ) : null}
@@ -188,9 +262,7 @@ export default function RrhhHojasVidaPage() {
                   </p>
                   <p className="mt-1 text-xs text-zinc-400">
                     Cargo: <span className="text-zinc-200">{cargo}</span>
-                    {r.recruitment_need_id ? (
-                      <span className="text-zinc-600"> · Vacante vinculada</span>
-                    ) : null}
+                    {r.recruitment_need_id ? <span className="text-zinc-600"> · Vacante vinculada</span> : null}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
@@ -216,11 +288,26 @@ export default function RrhhHojasVidaPage() {
                       </a>
                       <button
                         type="button"
-                        onClick={() => void emitirEnlaceEvaluacion(r)}
+                        onClick={() => {
+                          if (tieneInformeEvaluacion(r)) {
+                            setInformeRow(r);
+                            setInformeOpen(true);
+                            return;
+                          }
+                          void emitirEnlaceEvaluacion(r);
+                        }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600/40 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/40"
                       >
                         <Link2 className="h-3.5 w-3.5" />
-                        Evaluación
+                        {tieneInformeEvaluacion(r) ? 'Informe evaluación' : 'Evaluación'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => abrirObservaciones(r)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 transition hover:bg-sky-900/40"
+                      >
+                        <MessageSquareText className="h-3.5 w-3.5" />
+                        Observaciones
                       </button>
                     </>
                   ) : null}
@@ -253,6 +340,95 @@ export default function RrhhHojasVidaPage() {
             );
           })}
         </ul>
+      ) : null}
+
+      {informeOpen && informeRow ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0F1117] p-5 shadow-2xl">
+            <h2 className="text-base font-bold text-white">Informe de evaluación</h2>
+            <p className="mt-1 text-xs text-zinc-400">{(informeRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">Semáforo: {informeRow.semaforo ?? '—'}</p>
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">Riesgo: {informeRow.semaforo_riesgo ?? '—'}</p>
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">
+                Estado: {informeRow.status_evaluacion ?? informeRow.estatus_evaluacion ?? '—'}
+              </p>
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">Perfil DISC: {informeRow.perfil_color ?? '—'}</p>
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">
+                Puntaje total: {informeRow.puntaje_total != null ? informeRow.puntaje_total.toFixed(1) : '—'}
+              </p>
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">
+                Lógica:{' '}
+                {informeRow.puntaje_logica != null
+                  ? informeRow.puntaje_logica.toFixed(1)
+                  : informeRow.puntuacion_logica != null
+                    ? informeRow.puntuacion_logica.toFixed(1)
+                    : '—'}
+              </p>
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">
+                Personalidad: {informeRow.puntaje_personalidad != null ? informeRow.puntaje_personalidad.toFixed(1) : '—'}
+              </p>
+              <p className="rounded bg-white/5 px-2 py-1 text-zinc-300">
+                Confiabilidad: {informeRow.puntuacion_confiabilidad != null ? informeRow.puntuacion_confiabilidad.toFixed(1) : '—'}
+              </p>
+            </div>
+            <div className="mt-3 space-y-2 text-xs text-zinc-300">
+              <p>Motivo semáforo: {informeRow.motivo_semaforo ?? '—'}</p>
+              <p>Motivo riesgo: {informeRow.motivo_semaforo_riesgo ?? '—'}</p>
+              <p>Nivel integridad/riesgo: {informeRow.nivel_integridad_riesgo ?? '—'}</p>
+              <p>Tiempo respuesta: {informeRow.tiempo_respuesta != null ? `${informeRow.tiempo_respuesta}s` : '—'}</p>
+              <p>Completado: {informeRow.examen_completado_at ? fechaCorta(informeRow.examen_completado_at) : '—'}</p>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setInformeOpen(false);
+                  setInformeRow(null);
+                }}
+                className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {obsOpen && obsRow ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0F1117] p-5 shadow-2xl">
+            <h2 className="text-base font-bold text-white">Observaciones RRHH</h2>
+            <p className="mt-1 text-xs text-zinc-400">{(obsRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'}</p>
+            <textarea
+              value={obsDraft}
+              onChange={(e) => setObsDraft(e.target.value)}
+              rows={6}
+              placeholder="Escribe observaciones internas de RRHH para este obrero..."
+              className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/60"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setObsOpen(false);
+                  setObsRow(null);
+                }}
+                className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void guardarObservaciones()}
+                disabled={savingObsId === obsRow.id}
+                className="rounded-lg border border-sky-500/40 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/40 disabled:opacity-60"
+              >
+                {savingObsId === obsRow.id ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

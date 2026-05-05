@@ -23,4 +23,4 @@ export const HOJA_VIDA_SOLO_SUBTITULO =
 export const HOJA_EMPLEO_TITULO = 'HOJA DE EMPLEO';
 
 export const HOJA_EMPLEO_SUBTITULO =
-  'Primero patrono, obra y contratación; a continuación la hoja de vida del trabajador (identificación personal, antecedentes, instrucción y anexos — referencia Gaceta / LOTTT)';
+  'Documento para expediente laboral con datos de patrono, obra, contratación e identificación del trabajador (referencia Gaceta / LOTTT)';

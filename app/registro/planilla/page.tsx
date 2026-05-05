@@ -155,8 +155,7 @@ function PlanillaIframe() {
       </div>
       {docTipo === 'hoja_empleo' ? (
         <p className="shrink-0 border-b border-white/5 px-3 py-1.5 text-[10px] leading-snug text-zinc-500">
-          Orden: I patrono, II obra, III contratación (cargo); luego la hoja de vida del trabajador (IV identificación, V
-          antecedentes, VI instrucción y anexos en el reverso).
+          Incluye datos de patrono, obra y contratación junto con la información del trabajador para expediente laboral.
         </p>
       ) : (
         <p className="shrink-0 border-b border-white/5 px-3 py-1.5 text-[10px] leading-snug text-zinc-500">
