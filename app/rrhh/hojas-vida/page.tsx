@@ -38,6 +38,12 @@ type EmpleadoRow = {
   examen_completado_at: string | null;
 };
 
+type DatoContratoFaltante = {
+  id: string;
+  etiqueta: string;
+  ayuda: string;
+};
+
 function docMostrado(row: EmpleadoRow): string {
   return (row.cedula ?? row.documento ?? '').trim() || '—';
 }
@@ -67,6 +73,10 @@ export default function RrhhHojasVidaPage() {
   const [contratoGenEmpleadoId, setContratoGenEmpleadoId] = useState<string | null>(null);
   const [contratoGenNombre, setContratoGenNombre] = useState<string | null>(null);
   const [contratoGenObraId, setContratoGenObraId] = useState<string | null>(null);
+  const [validandoContratoId, setValidandoContratoId] = useState<string | null>(null);
+  const [faltantesOpen, setFaltantesOpen] = useState(false);
+  const [faltantesRow, setFaltantesRow] = useState<EmpleadoRow | null>(null);
+  const [faltantesContrato, setFaltantesContrato] = useState<DatoContratoFaltante[]>([]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -251,6 +261,40 @@ export default function RrhhHojasVidaPage() {
     [supabase],
   );
 
+  const validarYAbrirContrato = useCallback(async (r: EmpleadoRow) => {
+    setValidandoContratoId(r.id);
+    try {
+      const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-vista`), {
+        credentials: 'include',
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        faltantes?: DatoContratoFaltante[];
+      };
+      if (!res.ok) {
+        toast.error(j.error ?? `No se pudo validar el contrato (${res.status})`);
+        return;
+      }
+      const falt = Array.isArray(j.faltantes) ? j.faltantes : [];
+      if (falt.length > 0) {
+        setFaltantesRow(r);
+        setFaltantesContrato(falt);
+        setFaltantesOpen(true);
+        toast.message('Faltan datos para generar el contrato sin marcadores.');
+        return;
+      }
+      window.open(
+        apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-laboral-pdf`),
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } catch {
+      toast.error('Error de red al validar el contrato');
+    } finally {
+      setValidandoContratoId(null);
+    }
+  }, []);
+
   return (
     <div className="mx-auto max-w-4xl px-4 pb-28 pt-8">
       <header className="mb-8">
@@ -357,16 +401,16 @@ export default function RrhhHojasVidaPage() {
                           {tieneInformeEvaluacion(r) ? 'Informe evaluación' : 'Evaluación'}
                         </button>
                         <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
-                        <a
-                          href={apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-laboral-pdf`)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => void validarYAbrirContrato(r)}
+                          disabled={validandoContratoId === r.id}
                           className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-100/95 transition hover:bg-emerald-900/50"
-                          title="Abrir contrato laboral en PDF (rellenado)"
+                          title="Validar y abrir contrato laboral en PDF"
                         >
                           <ScrollText className="h-3.5 w-3.5 opacity-90" />
-                          Contrato
-                        </a>
+                          {validandoContratoId === r.id ? 'Validando…' : 'Contrato'}
+                        </button>
                       </div>
                       <button
                         type="button"
@@ -588,6 +632,49 @@ export default function RrhhHojasVidaPage() {
                 className="rounded-lg border border-sky-500/40 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/40 disabled:opacity-60"
               >
                 {savingObsId === obsRow.id ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {faltantesOpen && faltantesRow ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-amber-400/25 bg-[#0F1117] p-5 shadow-2xl">
+            <h2 className="text-base font-bold text-amber-100">Datos pendientes para generar contrato</h2>
+            <p className="mt-1 text-xs text-zinc-400">
+              {(faltantesRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'} · completa estos campos para quitar los
+              marcadores <span className="text-zinc-300">[… COMPLETAR …]</span>.
+            </p>
+            <ul className="mt-4 max-h-[46vh] space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
+              {faltantesContrato.map((f) => (
+                <li key={f.id} className="rounded-lg border border-amber-500/20 bg-amber-950/15 px-3 py-2">
+                  <p className="font-semibold text-amber-100">{f.etiqueta}</p>
+                  <p className="mt-0.5 text-amber-100/80">{f.ayuda}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <a
+                href={apiUrl(
+                  `/registro/planilla?empleadoId=${encodeURIComponent(faltantesRow.id)}&cedula=${encodeURIComponent(docMostrado(faltantesRow) === '—' ? '' : docMostrado(faltantesRow))}&volver=${encodeURIComponent('/rrhh/hojas-vida')}`,
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/25"
+              >
+                Completar planilla
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setFaltantesOpen(false);
+                  setFaltantesRow(null);
+                  setFaltantesContrato([]);
+                }}
+                className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
+              >
+                Cerrar
               </button>
             </div>
           </div>
