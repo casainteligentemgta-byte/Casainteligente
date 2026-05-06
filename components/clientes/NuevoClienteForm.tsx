@@ -27,7 +27,83 @@ const juridicoSchema = z.object({
 
 const customerSchema = z.discriminatedUnion('customerType', [naturalSchema, juridicoSchema]);
 
+type CustomerValidated = z.infer<typeof customerSchema>;
+
 type FormErrors = Record<string, string>;
+
+/** PostgREST / Supabase: columna desconocida en `customers`. */
+function columnaCustomersFaltante(message: string): string | null {
+  const m1 = /Could not find the '(\w+)' column of 'customers'/i.exec(message);
+  if (m1?.[1]) return m1[1];
+  const m2 = /column ['"](\w+)['"] of relation ['"]customers['"]/i.exec(message);
+  if (m2?.[1]) return m2[1];
+  const m3 = /['"](\w+)['"].*customers.*does not exist/i.exec(message);
+  return m3?.[1] ?? null;
+}
+
+function esErrorSchemaColumnaCustomers(message: string): boolean {
+  if (/Could not find the '\w+' column of 'customers'/i.test(message)) return true;
+  return (
+    /customers/i.test(message) &&
+    (/schema cache/i.test(message) || /column/i.test(message) || /does not exist/i.test(message))
+  );
+}
+
+/** Último recurso: solo columnas del modelo original 009 (sin cedula/apellido/customer_type). */
+function payloadSoloEsquema009(validated: CustomerValidated): Record<string, unknown> {
+  if (validated.customerType === 'natural') {
+    return {
+      nombre: `${validated.nombre} ${validated.apellido} — CI ${validated.cedula}`.trim(),
+      rif: null,
+      movil: validated.telefono,
+      email: validated.email || null,
+      tipo: 'Natural',
+      status: 'activo',
+    };
+  }
+  return {
+    nombre: `${validated.razon_social} — Rep.: ${validated.representante_legal}`.trim(),
+    rif: validated.rif,
+    movil: validated.telefono,
+    email: validated.email || null,
+    tipo: 'Juridico',
+    status: 'activo',
+  };
+}
+
+/**
+ * Quita una columna que la BD aún no tiene y conserva el dato en columnas base (009) cuando es posible.
+ */
+function payloadSinColumnaCustomers(
+  data: Record<string, unknown>,
+  validated: CustomerValidated,
+  columna: string,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...data };
+  delete next[columna];
+
+  if (validated.customerType === 'natural') {
+    if (columna === 'apellido') {
+      next.nombre = `${validated.nombre} ${validated.apellido}`.trim();
+    }
+    if (columna === 'cedula') {
+      const note = `Cédula: ${validated.cedula}`;
+      const prev = String(next.direccion ?? '').trim();
+      next.direccion = prev ? `${prev} | ${note}` : note;
+    }
+    return next;
+  }
+
+  if (validated.customerType === 'juridico') {
+    if (columna === 'representante_legal') {
+      const note = `Representante legal: ${validated.representante_legal}`;
+      const prev = String(next.direccion ?? '').trim();
+      next.direccion = prev ? `${prev} | ${note}` : note;
+    }
+  }
+
+  return next;
+}
 
 function Field({
   label,
@@ -113,48 +189,66 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
     setErrors({});
     setSaving(true);
 
-    const validated = parsed.data;
-    const insertData =
-      validated.customerType === 'natural'
-        ? {
-            customer_type: 'natural',
-            tipo: 'Natural',
-            nombre: validated.nombre,
-            apellido: validated.apellido,
-            cedula: validated.cedula,
-            rif: null,
-            razon_social: null,
-            representante_legal: null,
-            email: validated.email || null,
-            telefono: validated.telefono,
-            movil: validated.telefono,
-          }
-        : {
-            customer_type: 'juridico',
-            tipo: 'Juridico',
-            nombre: validated.razon_social,
-            apellido: null,
-            cedula: null,
-            rif: validated.rif,
-            razon_social: validated.razon_social,
-            representante_legal: validated.representante_legal,
-            email: validated.email || null,
-            telefono: validated.telefono,
-            movil: validated.telefono,
-          };
+    try {
+      const validated = parsed.data;
+      const insertData =
+        validated.customerType === 'natural'
+          ? {
+              customer_type: 'natural',
+              tipo: 'Natural',
+              nombre: validated.nombre,
+              apellido: validated.apellido,
+              cedula: validated.cedula,
+              rif: null,
+              razon_social: null,
+              representante_legal: null,
+              email: validated.email || null,
+              telefono: validated.telefono,
+              movil: validated.telefono,
+            }
+          : {
+              customer_type: 'juridico',
+              tipo: 'Juridico',
+              nombre: validated.razon_social,
+              apellido: null,
+              cedula: null,
+              rif: validated.rif,
+              razon_social: validated.razon_social,
+              representante_legal: validated.representante_legal,
+              email: validated.email || null,
+              telefono: validated.telefono,
+              movil: validated.telefono,
+            };
 
-    const result =
-      isEditing && initialData?.id
-        ? await supabase.from('customers').update(insertData).eq('id', initialData.id)
-        : await supabase.from('customers').insert(insertData);
+      const runSave = async (payload: Record<string, unknown>) =>
+        isEditing && initialData?.id
+          ? supabase.from('customers').update(payload).eq('id', initialData.id)
+          : supabase.from('customers').insert(payload);
 
-    setSaving(false);
-    if (result.error) {
-      alert(`Error al guardar: ${result.error.message}`);
-      return;
+      let payloadActual: Record<string, unknown> = { ...insertData };
+      let result = await runSave(payloadActual as never);
+
+      for (let i = 0; i < 12 && result.error && esErrorSchemaColumnaCustomers(result.error.message); i++) {
+        const col = columnaCustomersFaltante(result.error.message);
+        if (!col) break;
+        if (!(col in payloadActual)) break;
+        payloadActual = payloadSinColumnaCustomers(payloadActual, validated, col);
+        result = await runSave(payloadActual as never);
+      }
+
+      if (result.error && esErrorSchemaColumnaCustomers(result.error.message)) {
+        result = await runSave(payloadSoloEsquema009(validated) as never);
+      }
+
+      if (result.error) {
+        alert(`Error al guardar: ${result.error.message}`);
+        return;
+      }
+      router.push('/clientes');
+      router.refresh();
+    } finally {
+      setSaving(false);
     }
-    router.push('/clientes');
-    router.refresh();
   };
 
   return (
