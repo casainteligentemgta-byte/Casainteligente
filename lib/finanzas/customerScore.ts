@@ -71,7 +71,7 @@ export async function calculateCustomerLoyaltyScore(
       .eq('status', 'aprobado'),
     supabase
       .from('ci_proyectos')
-      .select('id,monto_aproximado,obra_precio_venta_usd,created_at')
+      .select('*')
       .eq('customer_id', id),
     supabase.from('ventas').select('id,importe_total,fecha,empresa_id').neq('estado', 'cancelada'),
   ]);

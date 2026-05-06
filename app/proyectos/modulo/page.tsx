@@ -167,12 +167,7 @@ export default function ModuloProyectosPage() {
 
       const pRes = await withTimeout(
         Promise.resolve(
-          supabase
-            .from('ci_proyectos')
-            .select(
-              'id,nombre,estado,ubicacion_texto,moneda,monto_aproximado,customer_id,created_at,entidad_id,tipo_proyecto,obra_ubicacion,obra_cliente,obra_estado_legacy,obra_precio_venta_usd,obra_presupuesto_ves',
-            )
-            .order('created_at', { ascending: false }),
+          supabase.from('ci_proyectos').select('*').order('created_at', { ascending: false }),
         ),
         LISTA_TIMEOUT_MS,
         'Carga inicial (ci_proyectos unificado)',

@@ -1,3 +1,4 @@
+import { domicilioPatronoParaEntidad } from '@/lib/talento/patronoDomicilioReglas';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 import type { RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
 
@@ -43,7 +44,9 @@ function primerRepresentante(
  */
 export function planillaPatronoDesdeEntidadRow(input: {
   nombre: string | null | undefined;
+  nombre_legal?: string | null | undefined;
   rif: string | null | undefined;
+  domicilio_fiscal?: string | null | undefined;
   direccion_fiscal?: string | null | undefined;
   rep_legal_nombre?: string | null | undefined;
   rep_legal_cedula?: string | null | undefined;
@@ -57,7 +60,16 @@ export function planillaPatronoDesdeEntidadRow(input: {
     cedula: trimStr(input.rep_legal_cedula),
     cargo: trimStr(input.rep_legal_cargo),
   });
-  const domEmpresa = trimStr(rm.domicilio_empresa) || trimStr(input.direccion_fiscal);
+  const domEmpresa =
+    trimStr(
+      domicilioPatronoParaEntidad({
+        nombre_legal: input.nombre_legal,
+        nombre: input.nombre,
+        domicilio_fiscal: input.domicilio_fiscal,
+        direccion_fiscal: input.direccion_fiscal,
+        registro_mercantil: input.registro_mercantil,
+      }) ?? '',
+    ) || trimStr(input.direccion_fiscal);
 
   return {
     entidadNombre: trimStr(input.nombre),

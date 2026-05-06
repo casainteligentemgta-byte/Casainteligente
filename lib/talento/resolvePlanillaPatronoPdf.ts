@@ -32,6 +32,7 @@ export async function resolvePlanillaPatronoPdf(
   const er = e as {
     nombre: string | null;
     rif: string | null;
+    domicilio_fiscal?: string | null;
     direccion_fiscal?: string | null;
     rep_legal_nombre?: string | null;
     rep_legal_cedula?: string | null;

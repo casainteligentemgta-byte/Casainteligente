@@ -10,6 +10,7 @@ import {
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import type { ContratoObreroPdfStructuredProps } from '@/lib/talento/ContratoObreroPdfStructured';
+import { domicilioPatronoParaEntidad } from '@/lib/talento/patronoDomicilioReglas';
 
 function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -20,15 +21,10 @@ function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
   }
 }
 
-function domicilioDesdeRegistroMercantil(raw: unknown): string | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const d = (raw as { domicilio_empresa?: string | null }).domicilio_empresa;
-  return strOpt(d);
-}
-
 /**
- * Patrono para contrato / planilla: nombre y domicilio fiscal desde `ci_entidades`
+ * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
  * vinculada al proyecto (`entidad_id`). Sin id de entidad se usan variables de entorno públicas.
+ * Casa Inteligente: domicilio según `registro_mercantil.domicilio_empresa` antes que fiscal.
  */
 export async function resolverPatronoDesdeEntidad(
   supabase: SupabaseClient,
@@ -47,10 +43,13 @@ export async function resolverPatronoDesdeEntidad(
   const nombre =
     strOpt(e.nombre_legal) ?? strOpt(e.nombre as string | null | undefined) ?? envNombre;
   const domicilio =
-    strOpt(e.domicilio_fiscal as string | null | undefined) ??
-    strOpt(e.direccion_fiscal as string | null | undefined) ??
-    domicilioDesdeRegistroMercantil(e.registro_mercantil) ??
-    envDom;
+    domicilioPatronoParaEntidad({
+      nombre_legal: strOpt(e.nombre_legal),
+      nombre: strOpt(e.nombre),
+      domicilio_fiscal: strOpt(e.domicilio_fiscal),
+      direccion_fiscal: strOpt(e.direccion_fiscal),
+      registro_mercantil: e.registro_mercantil,
+    }) ?? envDom;
   const representante =
     strOpt(e.rep_legal_nombre as string | null | undefined) ??
     strOpt(e.representante_legal as string | null | undefined) ??

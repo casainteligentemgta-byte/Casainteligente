@@ -59,13 +59,7 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
     }
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
-      .from('ci_proyectos')
-      .select(
-        'id,tipo_proyecto,nombre,obra_ubicacion,obra_cliente,obra_estado_legacy,obra_precio_venta_usd,obra_fecha_inicio,obra_fecha_entrega,obra_notas,entidad_id',
-      )
-      .eq('id', id)
-      .maybeSingle();
+    const { data, error: err } = await supabase.from('ci_proyectos').select('*').eq('id', id).maybeSingle();
     setLoading(false);
     if (err) {
       setObra(null);

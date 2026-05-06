@@ -5,6 +5,7 @@ import {
   objetoContratoDesdeOficio,
   salarioBasicoDiarioVesDesdeNivel,
 } from '@/lib/talento/contratoGacetaLaboral';
+import { domicilioPatronoParaEntidad } from '@/lib/talento/patronoDomicilioReglas';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
       .select(`
         *,
         ci_proyectos (id, entidad_id, nombre, ubicacion, ubicacion_texto, obra_ubicacion),
-        ci_entidades (nombre_legal, domicilio_fiscal, direccion_fiscal, representante_legal, rep_legal_nombre, datos_registro)
+        ci_entidades (nombre_legal, nombre, domicilio_fiscal, direccion_fiscal, representante_legal, rep_legal_nombre, registro_mercantil)
       `)
       .eq('id', empleadoIdFinal)
       .single();
@@ -125,11 +126,12 @@ export async function POST(req: Request) {
       hoja_vida_obrero?: unknown;
       ci_entidades?: {
         nombre_legal?: string | null;
+        nombre?: string | null;
         domicilio_fiscal?: string | null;
         direccion_fiscal?: string | null;
         representante_legal?: string | null;
         rep_legal_nombre?: string | null;
-        datos_registro?: string | null;
+        registro_mercantil?: unknown;
       } | null;
       ci_proyectos?: {
         id?: string | null;
@@ -157,17 +159,25 @@ export async function POST(req: Request) {
       cargo_codigo?: string | null;
     } | null;
 
-    let nombreEntidad = strOrNull(worker.ci_entidades?.nombre_legal) ?? 'LA ENTIDAD';
-    let domicilioEntidad =
-      strOrNull(worker.ci_entidades?.domicilio_fiscal) ??
-      strOrNull(worker.ci_entidades?.direccion_fiscal);
+    const entDir = worker.ci_entidades;
+    let nombreEntidad =
+      strOrNull(entDir?.nombre_legal) ?? strOrNull(entDir?.nombre) ?? 'LA ENTIDAD';
+    let domicilioEntidad = entDir
+      ? domicilioPatronoParaEntidad({
+          nombre_legal: entDir.nombre_legal,
+          nombre: entDir.nombre,
+          domicilio_fiscal: entDir.domicilio_fiscal,
+          direccion_fiscal: entDir.direccion_fiscal,
+          registro_mercantil: entDir.registro_mercantil,
+        })
+      : null;
 
     // Fallback: si la relación directa no trae entidad, resolver por la entidad vinculada al proyecto.
     const entidadIdProyecto = strOrNull(worker.ci_proyectos?.entidad_id);
     if (entidadIdProyecto && (!domicilioEntidad || nombreEntidad === 'LA ENTIDAD')) {
       const { data: entidadProyecto } = await supabase
         .from('ci_entidades')
-        .select('nombre_legal,nombre,domicilio_fiscal,direccion_fiscal')
+        .select('nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,registro_mercantil')
         .eq('id', entidadIdProyecto)
         .maybeSingle();
 
@@ -177,15 +187,14 @@ export async function POST(req: Request) {
             nombre?: string | null;
             domicilio_fiscal?: string | null;
             direccion_fiscal?: string | null;
+            registro_mercantil?: unknown;
           }
         | null;
 
       if (ep) {
         nombreEntidad = strOrNull(ep.nombre_legal) ?? strOrNull(ep.nombre) ?? nombreEntidad;
         domicilioEntidad =
-          strOrNull(ep.domicilio_fiscal) ??
-          strOrNull(ep.direccion_fiscal) ??
-          domicilioEntidad;
+          domicilioPatronoParaEntidad(ep) ?? domicilioEntidad;
       }
     }
 

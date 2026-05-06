@@ -12,19 +12,10 @@ export async function GET(_req: Request, { params }: { params: { obraId: string 
   if (!sb.ok) return sb.response;
   const supabase = sb.client;
 
-  const q0 = await supabase
-    .from('ci_proyectos')
-    .select('id,nombre,obra_precio_venta_usd,obra_estado_legacy')
-    .eq('id', obraId)
-    .eq('tipo_proyecto', 'talento')
-    .single();
+  const q0 = await supabase.from('ci_proyectos').select('*').eq('id', obraId).eq('tipo_proyecto', 'talento').single();
   const q1 =
     q0.error && (q0.error.message ?? '').toLowerCase().includes('tipo_proyecto')
-      ? await supabase
-          .from('ci_proyectos')
-          .select('id,nombre,obra_precio_venta_usd,obra_estado_legacy')
-          .eq('id', obraId)
-          .single()
+      ? await supabase.from('ci_proyectos').select('*').eq('id', obraId).single()
       : q0;
   const { data: obraRaw, error: oErr } = q1;
 
