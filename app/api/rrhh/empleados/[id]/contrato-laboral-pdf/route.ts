@@ -2,24 +2,54 @@ import { createElement } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { compilarContratoObreroDesdeEmpleadoId } from '@/lib/talento/contratoObreroPdfContext';
+import {
+  cargarPropsContratoObreroPdfEstructurado,
+  compilarContratoObreroDesdeEmpleadoId,
+} from '@/lib/talento/contratoObreroPdfContext';
 import { construirExpedienteRefPorEmpleado } from '@/lib/talento/contratoExpedienteRef';
+import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { ContratoLaboralObreroPdfDocument } from '@/lib/talento/ContratoLaboralObreroPdfStub';
 
 export const runtime = 'nodejs';
 
 /**
  * GET — PDF del contrato laboral obrero rellenado (plantilla + expediente).
+ * Query `formato=estructurado`: PDF con cláusulas fijas (@react-pdf) en carta; por defecto plantilla biblioteca.
  * No exige sesión; el acceso efectivo depende de RLS/políticas del cliente Supabase del servidor.
  */
-export async function GET(_req: Request, context: { params: { id: string } }) {
+export async function GET(req: Request, context: { params: { id: string } }) {
   const empleadoId = (context.params?.id ?? '').trim();
   if (!empleadoId) {
     return NextResponse.json({ error: 'Falta id de empleado' }, { status: 400 });
   }
 
+  const formato = new URL(req.url).searchParams.get('formato')?.toLowerCase() ?? '';
+
   try {
     const supabase = await createClient();
+    const expedienteRef = await construirExpedienteRefPorEmpleado(supabase, empleadoId);
+
+    if (formato === 'estructurado') {
+      const st = await cargarPropsContratoObreroPdfEstructurado(supabase, empleadoId);
+      if (!st.ok) {
+        return NextResponse.json({ error: st.error }, { status: 404 });
+      }
+      const node = createElement(ContratoObreroPDF, {
+        ...st.props,
+        expedienteId: expedienteRef,
+      });
+      const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
+      const buf = Buffer.from(await blob.arrayBuffer());
+      return new NextResponse(buf, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="contrato-obrero-estructurado-${empleadoId.slice(0, 8)}.pdf"`,
+          'Cache-Control': 'private, no-store',
+        },
+      });
+    }
+
     const out = await compilarContratoObreroDesdeEmpleadoId(supabase, empleadoId);
     if (!out.ok) {
       return NextResponse.json({ error: out.error }, { status: 404 });
@@ -29,7 +59,6 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
       out.faltantes.length > 0
         ? 'Revise los recuadros [… COMPLETAR …]: complete la planilla de empleo o los datos del expediente antes de la firma.'
         : null;
-    const expedienteRef = await construirExpedienteRefPorEmpleado(supabase, empleadoId);
 
     const node = createElement(ContratoLaboralObreroPdfDocument, {
       expedienteId: expedienteRef,

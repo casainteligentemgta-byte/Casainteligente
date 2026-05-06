@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { Calculator, Copy, Database, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -410,21 +409,6 @@ export default function RrhhOficiosSalariosPage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl backdrop-blur-xl">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Imagen de referencia</h2>
-          <p className="mt-1 text-xs text-zinc-500">Cuadro enviado como guía visual (zoom del navegador si hace falta).</p>
-          <div className="relative mt-4 max-h-[min(50vh,520px)] overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-2">
-            <Image
-              src="/ref/tabulador-salarios-referencia.png"
-              alt="Tabulador de salarios de referencia"
-              width={900}
-              height={2400}
-              className="mx-auto h-auto w-full max-w-3xl object-contain"
-              unoptimized
-            />
           </div>
         </section>
 

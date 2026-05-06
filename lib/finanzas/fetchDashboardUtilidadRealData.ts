@@ -55,15 +55,9 @@ export async function fetchDashboardUtilidadRealData(
   const tasaBen = opts?.tasaBeneficiosSobreNomina ?? 0.12;
   const eppUnit = opts?.costeEppPorUnidadEquipoUsd ?? 42;
 
-  const [pRes, tipoRes, matRes, nomRes, needRes, eqRes] = await Promise.all([
-    supabase
-      .from('ci_proyectos')
-      .select(
-        'id,monto_aproximado,moneda,obra_precio_venta_usd,obra_presupuesto_ves,obra_presupuesto_mano_obra_ves,created_at,obra_fecha_inicio,obra_fecha_entrega',
-      )
-      .eq('id', id)
-      .maybeSingle(),
-    supabase.from('ci_proyectos').select('tipo_proyecto').eq('id', id).maybeSingle(),
+  const [pRes, matRes, nomRes, needRes, eqRes] = await Promise.all([
+    /** `*` evita error si falta `tipo_proyecto` u otras columnas Talento (migración 086 no aplicada). */
+    supabase.from('ci_proyectos').select('*').eq('id', id).maybeSingle(),
     supabase.from('ci_materiales_obra').select('costo_usd').eq('obra_id', id),
     supabase.from('ci_obra_empleados').select('honorarios_acordados_usd').eq('obra_id', id),
     supabase
@@ -75,11 +69,9 @@ export async function fetchDashboardUtilidadRealData(
 
   let proyecto: ProyectoFinSnapshot | null = null;
   if (!pRes.error && pRes.data) {
+    const raw = pRes.data as Record<string, unknown>;
+    const tipo = String(raw.tipo_proyecto ?? 'integral').trim() || 'integral';
     const base = pRes.data as ProyectoFinSnapshot;
-    const tipo =
-      !tipoRes.error && tipoRes.data
-        ? String((tipoRes.data as { tipo_proyecto?: string | null }).tipo_proyecto ?? '').trim() || 'integral'
-        : 'integral';
     proyecto = { ...base, tipo_proyecto: tipo };
   } else {
     throw new Error(pRes.error?.message ?? 'Proyecto no encontrado.');

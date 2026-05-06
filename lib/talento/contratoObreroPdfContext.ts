@@ -9,6 +9,7 @@ import {
 } from '@/lib/talento/plantillaContratoObreroCompile';
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
+import type { ContratoObreroPdfStructuredProps } from '@/lib/talento/ContratoObreroPdfStructured';
 
 function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -336,6 +337,91 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   };
 
   return { ok: true, fuentes };
+}
+
+const DIAS_MES_REF_SALARIO = 30;
+
+/**
+ * Props para {@link ContratoObreroPDF} (cláusulas fijas) a partir de empleado + contrato + tabulador opcional.
+ */
+export async function cargarPropsContratoObreroPdfEstructurado(
+  supabase: SupabaseClient,
+  empleadoId: string,
+): Promise<{ ok: true; props: ContratoObreroPdfStructuredProps } | { ok: false; error: string }> {
+  const fu = await cargarFuentesContratoObreroPorEmpleadoId(supabase, empleadoId.trim());
+  if (!fu.ok) return fu;
+
+  const f = fu.fuentes;
+  const hv = f.hojaVida ?? emptyHojaVidaObreroCompleta();
+  const dp = hv.datosPersonales;
+  const nacionalidad = strOpt(dp?.nacionalidad) ?? null;
+  const direccionHab = strOpt(f.empleado.direccion) ?? strOpt(dp?.direccionDomicilio);
+  const cargoNom =
+    strOpt(f.contrato.cargo_oficio_desempeño) ?? strOpt(hv.contratacion?.cargoUOficio) ?? null;
+  const tareasEsp = strOpt(hv.contratacion?.cargoUOficio) ?? null;
+
+  const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
+    nombre_legal: f.patron.nombre,
+    domicilio_fiscal: f.patron.domicilio,
+    representante_legal: f.patron.representante,
+  };
+
+  const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
+    nombres: f.empleado.nombre_completo,
+    nacionalidad,
+    cedula: f.empleado.cedula ?? f.empleado.documento,
+    direccion_domicilio: direccionHab,
+    cargo_nombre: cargoNom,
+    tareas_especificas: tareasEsp,
+  };
+
+  let salarioMensual: number | null = null;
+  let cestaMensual: number | null = null;
+  let funcionesOficiales: string | null = strOpt(f.contrato.gaceta_denominacion_oficio);
+
+  const codTab = strOpt(f.contrato.numero_oficio_tabulador);
+  if (codTab) {
+    const { data: nom } = await supabase
+      .from('ci_config_nomina')
+      .select('salario_base_mensual,cestaticket_mensual')
+      .eq('cargo_codigo', codTab)
+      .limit(1)
+      .maybeSingle();
+    if (nom && typeof nom === 'object') {
+      const n = nom as { salario_base_mensual?: unknown; cestaticket_mensual?: unknown };
+      const sm = Number(n.salario_base_mensual);
+      const ce = Number(n.cestaticket_mensual);
+      if (Number.isFinite(sm) && sm > 0) salarioMensual = sm;
+      if (Number.isFinite(ce) && ce >= 0) cestaMensual = ce;
+    }
+  }
+
+  const sbDia = f.contrato.salario_basico_diario_ves;
+  if (salarioMensual == null && sbDia != null && Number.isFinite(Number(sbDia)) && Number(sbDia) > 0) {
+    salarioMensual = Math.round(Number(sbDia) * DIAS_MES_REF_SALARIO * 100) / 100;
+  }
+
+  const configNomina: ContratoObreroPdfStructuredProps['configNomina'] = {
+    funciones_oficiales: funcionesOficiales,
+    salario_base_mensual: salarioMensual,
+    cestaticket_mensual: cestaMensual,
+  };
+
+  const parametros: ContratoObreroPdfStructuredProps['parametros'] = {
+    tipoPlazo: f.contrato.tipo_contrato,
+    fechaIngreso: strOpt(f.contrato.fecha_ingreso),
+  };
+
+  return {
+    ok: true,
+    props: {
+      expedienteId: null,
+      empleado,
+      entidad,
+      configNomina,
+      parametros,
+    },
+  };
 }
 
 /**
