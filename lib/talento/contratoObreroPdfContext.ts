@@ -20,7 +20,17 @@ function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
   }
 }
 
-async function resolverPatronoDesdeEntidad(
+function domicilioDesdeRegistroMercantil(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const d = (raw as { domicilio_empresa?: string | null }).domicilio_empresa;
+  return strOpt(d);
+}
+
+/**
+ * Patrono para contrato / planilla: nombre y domicilio fiscal desde `ci_entidades`
+ * vinculada al proyecto (`entidad_id`). Sin id de entidad se usan variables de entorno públicas.
+ */
+export async function resolverPatronoDesdeEntidad(
   supabase: SupabaseClient,
   entidadId: string | null,
 ): Promise<{ nombre: string; domicilio: string; representante: string }> {
@@ -30,24 +40,22 @@ async function resolverPatronoDesdeEntidad(
   const eid = (entidadId ?? '').trim();
   if (!eid) return { nombre: envNombre, domicilio: envDom, representante: envRep };
 
-  const { data, error } = await supabase
-    .from('ci_entidades')
-    .select('nombre,direccion_fiscal,domicilio_fiscal,rep_legal_nombre')
-    .eq('id', eid)
-    .maybeSingle();
+  const { data, error } = await supabase.from('ci_entidades').select('*').eq('id', eid).maybeSingle();
   if (error || !data) return { nombre: envNombre, domicilio: envDom, representante: envRep };
 
-  const e = data as {
-    nombre?: string | null;
-    direccion_fiscal?: string | null;
-    domicilio_fiscal?: string | null;
-    rep_legal_nombre?: string | null;
-  };
-  return {
-    nombre: strOpt(e.nombre) ?? envNombre,
-    domicilio: strOpt(e.domicilio_fiscal) ?? strOpt(e.direccion_fiscal) ?? envDom,
-    representante: strOpt(e.rep_legal_nombre) ?? envRep,
-  };
+  const e = data as Record<string, unknown>;
+  const nombre =
+    strOpt(e.nombre_legal) ?? strOpt(e.nombre as string | null | undefined) ?? envNombre;
+  const domicilio =
+    strOpt(e.domicilio_fiscal as string | null | undefined) ??
+    strOpt(e.direccion_fiscal as string | null | undefined) ??
+    domicilioDesdeRegistroMercantil(e.registro_mercantil) ??
+    envDom;
+  const representante =
+    strOpt(e.rep_legal_nombre as string | null | undefined) ??
+    strOpt(e.representante_legal as string | null | undefined) ??
+    envRep;
+  return { nombre, domicilio, representante };
 }
 
 export async function cargarFuentesContratoObreroPdf(

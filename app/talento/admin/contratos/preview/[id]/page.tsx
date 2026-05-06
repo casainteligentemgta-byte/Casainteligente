@@ -30,6 +30,11 @@ type LaboralPayload = {
 type ContratoPayload = {
   id: string;
   empleado: { nombre: string; cedula: string; direccion: string };
+  patrono?: {
+    nombre: string;
+    domicilio_fiscal: string;
+    representante: string | null;
+  };
   proyecto: { nombre: string; ubicacion: string; duracion_estimada: string };
   contrato: {
     cargo: string;
@@ -55,11 +60,16 @@ function ContratoPdf({ data }: { data: ContratoPayload }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>CASA INTELIGENTE</Text>
+        <Text style={styles.title}>{(data.patrono?.nombre ?? 'CASA INTELIGENTE').toUpperCase()}</Text>
         <Text style={styles.subtitle}>Contrato Individual de Trabajo para Obra Determinada</Text>
         <Text style={styles.p}>
-          Entre CASA INTELIGENTE C.A. y el trabajador {data.empleado.nombre}, CI {data.empleado.cedula}, se celebra
-          contrato para el proyecto "{data.proyecto.nombre}" ubicado en {data.proyecto.ubicacion}.
+          {`Entre ${data.patrono?.nombre ?? 'EL PATRONO'}${
+            data.patrono?.domicilio_fiscal?.trim()
+              ? `, domicilio fiscal en ${data.patrono.domicilio_fiscal},`
+              : ''
+          } y el trabajador ${data.empleado.nombre}, CI ${data.empleado.cedula}, se celebra contrato para el proyecto «${
+            data.proyecto.nombre
+          }» ubicado en ${data.proyecto.ubicacion}.`}
         </Text>
         <Text style={styles.p}>
           Cargo: {data.contrato.cargo} (Nivel {data.contrato.nivel}). Duración estimada: {data.proyecto.duracion_estimada}.
@@ -192,6 +202,8 @@ export default function ContratoPreview() {
       <FormularioLaboralRRHH
         contractId={contractId}
         snapshotVersion={snapshotVersion}
+        patronoNombre={data.patrono?.nombre}
+        patronoDomicilioFiscal={data.patrono?.domicilio_fiscal}
         laboral={data.contrato.laboral}
         cargoSugerido={data.contrato.cargo}
         nivelSugerido={Number(data.contrato.nivel ?? 0)}
@@ -229,7 +241,9 @@ export default function ContratoPreview() {
         style={{ minHeight: '297mm' }}
       >
         <div className="mb-8 border-b-2 border-slate-800 pb-4 text-center">
-          <h2 className="text-3xl font-black tracking-tighter">CASA INTELIGENTE</h2>
+          <h2 className="text-3xl font-black tracking-tighter">
+            {(data.patrono?.nombre ?? 'CASA INTELIGENTE').toUpperCase()}
+          </h2>
           <p className="mt-1 text-sm font-semibold uppercase tracking-widest text-slate-600">
             Contrato Individual de Trabajo para Obra Determinada
           </p>
@@ -237,12 +251,19 @@ export default function ContratoPreview() {
 
         <div className="space-y-6 text-sm">
           <p>
-            Entre la sociedad mercantil <strong>CASA INTELIGENTE C.A.</strong>, domiciliada en la Republica
-            Bolivariana de Venezuela, en lo sucesivo denominada "EL PATRONO", y por la otra parte el ciudadano{' '}
+            Entre la sociedad mercantil <strong>{data.patrono?.nombre ?? 'EL PATRONO'}</strong>
+            {data.patrono?.domicilio_fiscal?.trim() ? (
+              <>
+                , domicilio fiscal en <strong>{data.patrono.domicilio_fiscal}</strong>
+              </>
+            ) : (
+              <>, domicilio fiscal por registrar en la entidad del proyecto</>
+            )}
+            , en lo sucesivo denominada &quot;EL PATRONO&quot;, y por la otra parte el ciudadano{' '}
             <strong>{data.empleado.nombre}</strong>, titular de la Cedula de Identidad Nro.{' '}
             <strong>{data.empleado.cedula}</strong>, domiciliado en <strong>{data.empleado.direccion}</strong>, en lo
-            sucesivo denominado "EL TRABAJADOR", se ha convenido en celebrar el presente Contrato de Trabajo, el cual
-            se regira por las siguientes clausulas:
+            sucesivo denominado &quot;EL TRABAJADOR&quot;, se ha convenido en celebrar el presente Contrato de Trabajo,
+            el cual se regira por las siguientes clausulas:
           </p>
 
           <p>
@@ -288,7 +309,10 @@ export default function ContratoPreview() {
         <div className="mt-24 grid grid-cols-2 gap-16 text-center">
           <div>
             <div className="border-t border-slate-400 pt-2 font-bold">Por EL PATRONO</div>
-            <div className="text-sm text-slate-500">CASA INTELIGENTE C.A.</div>
+            <div className="text-sm text-slate-500">{data.patrono?.nombre ?? 'Patrono'}</div>
+            {data.patrono?.representante?.trim() ? (
+              <div className="mt-1 text-xs text-slate-500">{data.patrono.representante}</div>
+            ) : null}
           </div>
           <div>
             <div className="border-t border-slate-400 pt-2 font-bold">Por EL TRABAJADOR</div>

@@ -9,6 +9,9 @@ export type LaboralFormProps = {
   contractId: string;
   /** Se incrementa tras guardar para sincronizar el formulario con el servidor. */
   snapshotVersion: number;
+  /** Patrono desde entidad del proyecto (solo lectura; alimenta PDF legal / plantilla). */
+  patronoNombre?: string;
+  patronoDomicilioFiscal?: string;
   laboral: {
     fecha_ingreso: string | null;
     cargo_oficio_desempeño: string | null;
@@ -180,6 +183,22 @@ export function FormularioLaboralRRHH(p: LaboralFormProps) {
         Fecha de ingreso, forma de pago, jornada y demás campos Gaceta. El cargo y el salario suelen venir de la vacante y
         del tabulador; puedes ajustarlos aquí antes de emitir el PDF.
       </p>
+      {(p.patronoNombre?.trim() || p.patronoDomicilioFiscal?.trim()) ? (
+        <div className="mt-4 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-xs text-zinc-300">
+          <p className="font-bold uppercase tracking-wide text-sky-300/90">Patrono (entidad del proyecto)</p>
+          <p className="mt-1">
+            <span className="text-zinc-500">Razón social:</span>{' '}
+            <span className="text-zinc-100">{p.patronoNombre?.trim() || '—'}</span>
+          </p>
+          <p className="mt-1">
+            <span className="text-zinc-500">Domicilio fiscal:</span>{' '}
+            <span className="text-zinc-100">{p.patronoDomicilioFiscal?.trim() || '— (complete en la ficha de la entidad)'}</span>
+          </p>
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Estos datos no se escriben aquí: salen de la entidad asignada al proyecto y del contrato PDF / plantilla legal.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className={labelClass}>

@@ -5,6 +5,7 @@ import {
   parseTipoContrato,
   salarioBasicoDiarioVesDesdeNivel,
 } from '@/lib/talento/contratoGacetaLaboral';
+import { resolverPatronoDesdeEntidad } from '@/lib/talento/contratoObreroPdfContext';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
 
 function formatDate(d?: string | null): string | null {
@@ -83,7 +84,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
       .maybeSingle(),
     supabase
       .from('ci_proyectos')
-      .select('id,nombre,ubicacion_texto,obra_ubicacion,obra_fecha_inicio,obra_fecha_entrega')
+      .select('id,nombre,ubicacion_texto,obra_ubicacion,obra_fecha_inicio,obra_fecha_entrega,entidad_id')
       .eq('id', vinculoId)
       .maybeSingle(),
   ]);
@@ -107,6 +108,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     obra_ubicacion?: string | null;
     obra_fecha_inicio?: string | null;
     obra_fecha_entrega?: string | null;
+    entidad_id?: string | null;
   };
   const obra = {
     nombre: obraRaw.nombre,
@@ -114,6 +116,10 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     fecha_inicio: obraRaw.obra_fecha_inicio ?? null,
     fecha_fin: obraRaw.obra_fecha_entrega ?? null,
   };
+
+  const entidadIdProyecto =
+    obraRaw.entidad_id != null && String(obraRaw.entidad_id).trim() ? String(obraRaw.entidad_id).trim() : null;
+  const patrono = await resolverPatronoDesdeEntidad(supabase, entidadIdProyecto);
 
   const nivel = contrato.tabulador_nivel ?? 0;
   const salVes = contrato.salario_basico_diario_ves;
@@ -126,6 +132,12 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
       nombre: empleado.nombre_completo,
       cedula: empleado.cedula ?? empleado.documento ?? 'No registrada',
       direccion: empleado.direccion_habitacion ?? 'No registrada',
+    },
+    patrono: {
+      nombre: patrono.nombre,
+      /** Domicilio fiscal desde `ci_entidades` del proyecto (no se edita en el contrato). */
+      domicilio_fiscal: patrono.domicilio,
+      representante: patrono.representante || null,
     },
     proyecto: {
       nombre: obra.nombre,
