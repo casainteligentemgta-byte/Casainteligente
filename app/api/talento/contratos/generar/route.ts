@@ -6,6 +6,11 @@ import {
   salarioBasicoDiarioVesDesdeNivel,
 } from '@/lib/talento/contratoGacetaLaboral';
 import { domicilioPatronoParaEntidad } from '@/lib/talento/patronoDomicilioReglas';
+import { emptyHojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
+import {
+  fusionarEmpleadoContratoDesdePlanilla,
+  parseHojaVidaObrero,
+} from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -248,8 +253,16 @@ export async function POST(req: Request) {
 
     nombreEntidad = nombreEntidad.toUpperCase();
     domicilioEntidad = domicilioEntidad ?? '[DOMICILIO FISCAL NO REGISTRADO]';
-    const nacionalidad = strOrNull(worker.nacionalidad) ?? 'venezolana';
-    const domicilioTrabajador = strOrNull(worker.direccion_domicilio) ?? strOrNull(worker.direccion_habitacion) ?? 'Nueva Esparta';
+
+    const hvPlanilla = parseHojaVidaObrero(worker.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
+    const empPlanilla = fusionarEmpleadoContratoDesdePlanilla(worker, hvPlanilla);
+
+    const nacionalidad = empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad) ?? 'venezolana';
+    const domicilioTrabajador =
+      empPlanilla.direccion ??
+      strOrNull(worker.direccion_domicilio) ??
+      strOrNull(worker.direccion_habitacion) ??
+      'Nueva Esparta';
     const cargoMayus = worker.cargo_nombre?.toUpperCase() || 'TRABAJADOR';
     const funcionesManual =
       strOrNull(conf?.funciones_oficiales) ??
@@ -260,8 +273,8 @@ export async function POST(req: Request) {
     const tipo = toUpperSafe(tipoPlazo ?? tipo_contrato, 'DETERMINADO');
     const jornada = toUpperSafe(jornadaTrabajo ?? jornada_trabajo, 'DIURNA');
     const fecha = strOrNull(fechaIngreso ?? fecha_ingreso) ?? 'POR DEFINIR';
-    const nombreTrabajador = worker.nombres || worker.nombre_completo || 'TRABAJADOR NO REGISTRADO';
-    const cedula = worker.cedula || worker.documento || 'NO REGISTRADA';
+    const nombreTrabajador = empPlanilla.nombre_completo ?? worker.nombres ?? worker.nombre_completo ?? 'TRABAJADOR NO REGISTRADO';
+    const cedula = empPlanilla.cedula ?? empPlanilla.documento ?? worker.cedula ?? worker.documento ?? 'NO REGISTRADA';
     const codigoTabulador = strOrNull(conf?.cargo_codigo) ?? strOrNull(worker.cargo_codigo) ?? 'NO DEFINIDO';
     const denominacionGaceta = denominacionOficioGaceta(strOrNull(worker.cargo_codigo) ?? strOrNull(conf?.cargo_codigo)) ?? cargoMayus;
     const objetoContrato = objetoContratoDesdeOficio({

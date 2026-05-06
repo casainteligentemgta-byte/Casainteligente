@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 import { emptyHojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 import {
   aplicarOverridesMapaContrato,
@@ -12,15 +11,10 @@ import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaCon
 import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import type { ContratoObreroPdfStructuredProps } from '@/lib/talento/ContratoObreroPdfStructured';
 import { domicilioPatronoParaEntidad } from '@/lib/talento/patronoDomicilioReglas';
-
-function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
-  if (!raw || typeof raw !== 'object') return null;
-  try {
-    return raw as HojaVidaObreroCompleta;
-  } catch {
-    return null;
-  }
-}
+import {
+  fusionarEmpleadoContratoDesdePlanilla,
+  parseHojaVidaObrero,
+} from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
@@ -114,7 +108,9 @@ export async function cargarFuentesContratoObreroPdf(
   const [{ data: emp, error: ee }, { data: obra, error: eo }] = await Promise.all([
     admin
       .from('ci_empleados')
-      .select('nombre_completo,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero')
+      .select(
+        'nombre_completo,nombres,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero',
+      )
       .eq('id', row.empleado_id)
       .maybeSingle(),
     admin
@@ -133,6 +129,7 @@ export async function cargarFuentesContratoObreroPdf(
 
   const e = emp as {
     nombre_completo: string | null;
+    nombres?: string | null;
     documento: string | null;
     cedula: string | null;
     direccion_habitacion?: string | null;
@@ -149,18 +146,19 @@ export async function cargarFuentesContratoObreroPdf(
   };
   const ubic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
 
-  const hv = parseHoja(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
+  const hv = parseHojaVidaObrero(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
+  const empleado = fusionarEmpleadoContratoDesdePlanilla(e, hv);
 
   const patron = await resolverPatronoDesdeEntidad(admin, strOpt(o.entidad_id));
 
   const fuentes: FuentesContratoObrero = {
     empleado: {
-      nombre_completo: e.nombre_completo,
-      documento: e.documento,
-      cedula: e.cedula,
-      direccion: strOpt(e.direccion_habitacion),
-      celular: e.celular,
-      telefono: e.telefono,
+      nombre_completo: empleado.nombre_completo,
+      documento: empleado.documento,
+      cedula: empleado.cedula,
+      direccion: empleado.direccion,
+      celular: empleado.celular,
+      telefono: empleado.telefono,
     },
     hojaVida: hv,
     contrato: {
@@ -223,7 +221,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   const { data: emp, error: ee } = await supabase
     .from('ci_empleados')
     .select(
-      'nombre_completo,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero,cargo_nombre,cargo_codigo,cargo_nivel,proyecto_modulo_id,recruitment_need_id',
+      'nombre_completo,nombres,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero,cargo_nombre,cargo_codigo,cargo_nivel,proyecto_modulo_id,recruitment_need_id',
     )
     .eq('id', eid)
     .maybeSingle();
@@ -234,6 +232,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
 
   const e = emp as {
     nombre_completo: string | null;
+    nombres?: string | null;
     documento: string | null;
     cedula: string | null;
     direccion_habitacion?: string | null;
@@ -321,18 +320,18 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     gaceta_denominacion_oficio: c?.gaceta_denominacion_oficio ?? null,
   };
 
-  const hv = parseHoja(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
-  const dir = strOpt(e.direccion_habitacion);
+  const hv = parseHojaVidaObrero(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
+  const empleado = fusionarEmpleadoContratoDesdePlanilla(e, hv);
   const patron = await resolverPatronoDesdeEntidad(supabase, entidadId);
 
   const fuentes: FuentesContratoObrero = {
     empleado: {
-      nombre_completo: e.nombre_completo,
-      documento: e.documento,
-      cedula: e.cedula,
-      direccion: dir,
-      celular: e.celular,
-      telefono: e.telefono,
+      nombre_completo: empleado.nombre_completo,
+      documento: empleado.documento,
+      cedula: empleado.cedula,
+      direccion: empleado.direccion,
+      celular: empleado.celular,
+      telefono: empleado.telefono,
     },
     hojaVida: hv,
     contrato,

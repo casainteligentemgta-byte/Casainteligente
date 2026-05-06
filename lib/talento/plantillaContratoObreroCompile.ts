@@ -129,13 +129,16 @@ function formaPagoHuman(f?: string | null): string {
 export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): Record<string, string> {
   const hv = f.hojaVida;
   const dp = hv?.datosPersonales;
-  const nombreCompleto =
-    str(f.empleado.nombre_completo) ||
-    [dp?.primerNombre, dp?.segundoNombre, dp?.primerApellido, dp?.segundoApellido].filter(Boolean).join(' ').trim();
+  const nombreDesdeHoja = [dp?.primerNombre, dp?.segundoNombre, dp?.primerApellido, dp?.segundoApellido]
+    .map((x) => String(x ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  const nombreCompleto = nombreDesdeHoja || str(f.empleado.nombre_completo);
 
-  const cedula = str(f.empleado.cedula) || str(dp?.cedulaIdentidad);
-  const direccion = str(f.empleado.direccion) || str(dp?.direccionDomicilio);
-  const celular = str(f.empleado.celular) || str(dp?.celular);
+  const cedula = str(dp?.cedulaIdentidad) || str(f.empleado.cedula) || str(f.empleado.documento);
+  const direccion = str(dp?.direccionDomicilio) || str(f.empleado.direccion);
+  const celular = str(dp?.celular) || str(f.empleado.celular);
   const nacionalidad = str(dp?.nacionalidad);
   const estadoCivil = str(dp?.estadoCivil);
   const fechaNac = str(dp?.fechaNacimiento);
