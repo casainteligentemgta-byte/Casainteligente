@@ -31,15 +31,20 @@ async function resolverPatronoDesdeEntidad(
 
   const { data, error } = await supabase
     .from('ci_entidades')
-    .select('nombre,direccion_fiscal,rep_legal_nombre')
+    .select('nombre,direccion_fiscal,domicilio_fiscal,rep_legal_nombre')
     .eq('id', eid)
     .maybeSingle();
   if (error || !data) return { nombre: envNombre, domicilio: envDom, representante: envRep };
 
-  const e = data as { nombre?: string | null; direccion_fiscal?: string | null; rep_legal_nombre?: string | null };
+  const e = data as {
+    nombre?: string | null;
+    direccion_fiscal?: string | null;
+    domicilio_fiscal?: string | null;
+    rep_legal_nombre?: string | null;
+  };
   return {
     nombre: strOpt(e.nombre) ?? envNombre,
-    domicilio: strOpt(e.direccion_fiscal) ?? envDom,
+    domicilio: strOpt(e.domicilio_fiscal) ?? strOpt(e.direccion_fiscal) ?? envDom,
     representante: strOpt(e.rep_legal_nombre) ?? envRep,
   };
 }
