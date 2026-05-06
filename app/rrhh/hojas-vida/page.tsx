@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FileText, Link2, MessageSquareText, RefreshCw, ScrollText, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { ModalGenerarContrato } from '@/components/rrhh/ModalGenerarContrato';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 
@@ -61,7 +62,11 @@ export default function RrhhHojasVidaPage() {
   const [obsRow, setObsRow] = useState<EmpleadoRow | null>(null);
   const [informeOpen, setInformeOpen] = useState(false);
   const [informeRow, setInformeRow] = useState<EmpleadoRow | null>(null);
-  const [aprobandoId, setAprobandoId] = useState<string | null>(null);
+  const [resolviendoObraContrato, setResolviendoObraContrato] = useState(false);
+  const [contratoGenOpen, setContratoGenOpen] = useState(false);
+  const [contratoGenEmpleadoId, setContratoGenEmpleadoId] = useState<string | null>(null);
+  const [contratoGenNombre, setContratoGenNombre] = useState<string | null>(null);
+  const [contratoGenObraId, setContratoGenObraId] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -200,21 +205,27 @@ export default function RrhhHojasVidaPage() {
     setObsRow(null);
   }, [obsDraft, obsRow, supabase]);
 
-  const aprobarParaContrato = useCallback(async () => {
+  const abrirModalGenerarContrato = useCallback(async () => {
     if (!informeRow) return;
-    setAprobandoId(informeRow.id);
-    const { error: upErr } = await supabase
-      .from('ci_empleados')
-      .update({ estado: 'aprobado', estatus: 'disponible' } as never)
-      .eq('id', informeRow.id);
-    setAprobandoId(null);
-    if (upErr) {
-      toast.error(upErr.message);
-      return;
+    setResolviendoObraContrato(true);
+    let oid = (informeRow.proyecto_modulo_id ?? '').trim() || null;
+    const nid = (informeRow.recruitment_need_id ?? '').trim();
+    if (!oid && nid) {
+      const { data, error } = await supabase
+        .from('recruitment_needs')
+        .select('proyecto_modulo_id,proyecto_id')
+        .eq('id', nid)
+        .maybeSingle();
+      if (!error && data) {
+        const d = data as { proyecto_modulo_id?: string | null; proyecto_id?: string | null };
+        oid = (d.proyecto_modulo_id ?? d.proyecto_id ?? '').trim() || null;
+      }
     }
-    setRows((prev) => prev.map((r) => (r.id === informeRow.id ? { ...r, estado: 'aprobado' } : r)));
-    setInformeRow((prev) => (prev ? { ...prev, estado: 'aprobado' } : prev));
-    toast.success('Obrero aprobado para contrato');
+    setContratoGenEmpleadoId(informeRow.id);
+    setContratoGenNombre((informeRow.nombre_completo ?? '').trim() || null);
+    setContratoGenObraId(oid);
+    setResolviendoObraContrato(false);
+    setContratoGenOpen(true);
   }, [informeRow, supabase]);
 
   const borrarEmpleado = useCallback(
@@ -492,14 +503,14 @@ export default function RrhhHojasVidaPage() {
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => void aprobarParaContrato()}
-                disabled={aprobandoId === informeRow.id || informeRow.estado === 'aprobado'}
+                onClick={() => void abrirModalGenerarContrato()}
+                disabled={resolviendoObraContrato || informeRow.estado === 'aprobado'}
                 className="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-60"
               >
                 {informeRow.estado === 'aprobado'
                   ? 'Ya aprobado para contrato'
-                  : aprobandoId === informeRow.id
-                    ? 'Aprobando...'
+                  : resolviendoObraContrato
+                    ? 'Preparando…'
                     : 'Aprobar para contrato'}
               </button>
               <button
@@ -516,6 +527,36 @@ export default function RrhhHojasVidaPage() {
           </div>
         </div>
       ) : null}
+
+      <ModalGenerarContrato
+        open={contratoGenOpen}
+        onOpenChange={(v) => {
+          setContratoGenOpen(v);
+          if (!v) {
+            setContratoGenEmpleadoId(null);
+            setContratoGenNombre(null);
+            setContratoGenObraId(null);
+          }
+        }}
+        supabase={supabase}
+        empleadoId={contratoGenEmpleadoId}
+        obraId={contratoGenObraId}
+        nombreObrero={contratoGenNombre}
+        onExito={({ portalUrl: url }) => {
+          const eid = (contratoGenEmpleadoId ?? '').trim();
+          if (!eid) return;
+          setRows((prev) => prev.map((r) => (r.id === eid ? { ...r, estado: 'aprobado' } : r)));
+          setInformeRow((prev) => (prev?.id === eid ? { ...prev, estado: 'aprobado' } : prev));
+          setInformeOpen(false);
+          setInformeRow(null);
+          setContratoGenEmpleadoId(null);
+          setContratoGenNombre(null);
+          setContratoGenObraId(null);
+          if (url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }
+        }}
+      />
 
       {obsOpen && obsRow ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
