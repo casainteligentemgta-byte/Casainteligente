@@ -1,5 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import {
+  denominacionOficioGaceta,
+  objetoContratoDesdeOficio,
+  salarioBasicoDiarioVesDesdeNivel,
+} from '@/lib/talento/contratoGacetaLaboral';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -7,22 +12,91 @@ function strOrNull(value: unknown): string | null {
   return t.length ? t : null;
 }
 
+function toUpperSafe(value: string | null | undefined, fallback: string): string {
+  return strOrNull(value)?.toUpperCase() ?? fallback;
+}
+
+function soloDosDecimales(n: number): string {
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
+function numeroALetrasHastaMiles(valor: number): string {
+  const n = Math.floor(Math.abs(valor));
+  const unidades = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+  const especiales = ['diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciseis', 'diecisiete', 'dieciocho', 'diecinueve'];
+  const decenas = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+  const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+
+  function hasta99(x: number): string {
+    if (x < 10) return unidades[x] ?? 'cero';
+    if (x < 20) return especiales[x - 10] ?? 'cero';
+    if (x < 30) return x === 20 ? 'veinte' : `veinti${unidades[x - 20] ?? ''}`;
+    const d = Math.floor(x / 10);
+    const u = x % 10;
+    return u === 0 ? decenas[d] ?? '' : `${decenas[d] ?? ''} y ${unidades[u] ?? ''}`;
+  }
+
+  function hasta999(x: number): string {
+    if (x === 0) return 'cero';
+    if (x === 100) return 'cien';
+    if (x < 100) return hasta99(x);
+    const c = Math.floor(x / 100);
+    const r = x % 100;
+    return r === 0 ? (centenas[c] ?? '') : `${centenas[c] ?? ''} ${hasta99(r)}`;
+  }
+
+  if (n < 1000) return hasta999(n);
+  if (n < 1000000) {
+    const miles = Math.floor(n / 1000);
+    const resto = n % 1000;
+    const pref = miles === 1 ? 'mil' : `${hasta999(miles)} mil`;
+    return resto === 0 ? pref : `${pref} ${hasta999(resto)}`;
+  }
+  return String(n);
+}
+
+function montoVesEnLetras(valor: number): string {
+  const abs = Math.abs(Number.isFinite(valor) ? valor : 0);
+  const enteros = Math.floor(abs);
+  const dec = Math.round((abs - enteros) * 100);
+  const enterosTxt = numeroALetrasHastaMiles(enteros);
+  const decTxt = String(dec).padStart(2, '0');
+  return `${enterosTxt} con ${decTxt}/100`;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
     const {
       empleadoId,
+      empleado_id,
       fechaIngreso,
+      fecha_ingreso,
       tipoPlazo,
+      tipo_contrato,
       jornadaTrabajo,
+      jornada_trabajo,
+      forma_pago,
+      lugar_pago,
+      cuenta_bancaria,
+      banco,
     } = (await req.json()) as {
       empleadoId?: string;
+      empleado_id?: string;
       fechaIngreso?: string;
+      fecha_ingreso?: string;
       tipoPlazo?: string;
+      tipo_contrato?: string;
       jornadaTrabajo?: string;
+      jornada_trabajo?: string;
+      forma_pago?: string;
+      lugar_pago?: string;
+      cuenta_bancaria?: string;
+      banco?: string;
     };
 
-    if (!empleadoId?.trim()) {
+    const empleadoIdFinal = strOrNull(empleadoId) ?? strOrNull(empleado_id);
+    if (!empleadoIdFinal) {
       throw new Error('ID de empleado requerido');
     }
 
@@ -33,7 +107,7 @@ export async function POST(req: Request) {
         ci_proyectos (id, entidad_id, nombre, ubicacion, ubicacion_texto, obra_ubicacion),
         ci_entidades (nombre_legal, domicilio_fiscal, direccion_fiscal, representante_legal, rep_legal_nombre, datos_registro)
       `)
-      .eq('id', empleadoId.trim())
+      .eq('id', empleadoIdFinal)
       .single();
 
     const worker = workerRaw as {
@@ -46,6 +120,9 @@ export async function POST(req: Request) {
       direccion_habitacion?: string | null;
       tareas_especificas?: string | null;
       cargo_nombre?: string | null;
+      cargo_codigo?: string | null;
+      cargo_nivel?: number | null;
+      hoja_vida_obrero?: unknown;
       ci_entidades?: {
         nombre_legal?: string | null;
         domicilio_fiscal?: string | null;
@@ -70,13 +147,14 @@ export async function POST(req: Request) {
 
     const { data: cargoConfig } = await supabase
       .from('ci_config_nomina')
-      .select('funciones_oficiales, salario_base_mensual')
+      .select('funciones_oficiales, salario_base_mensual, cargo_codigo')
       .ilike('cargo_nombre', worker.cargo_nombre ?? '')
-      .single();
+      .maybeSingle();
 
     const conf = (cargoConfig ?? null) as {
       funciones_oficiales?: string | null;
       salario_base_mensual?: number | null;
+      cargo_codigo?: string | null;
     } | null;
 
     let nombreEntidad = strOrNull(worker.ci_entidades?.nombre_legal) ?? 'LA ENTIDAD';
@@ -112,23 +190,40 @@ export async function POST(req: Request) {
     }
 
     const salarioBase = Number(conf?.salario_base_mensual ?? 0);
-    const salarioDiario = (salarioBase / 30).toFixed(2);
+    const salarioDiarioNum = salarioBase > 0 ? salarioBase / 30 : Number(salarioBasicoDiarioVesDesdeNivel(worker.cargo_nivel) ?? 0);
+    const salarioDiario = soloDosDecimales(salarioDiarioNum);
+    const salarioDiarioLetras = montoVesEnLetras(salarioDiarioNum);
     const funcionesTexto =
       (conf?.funciones_oficiales ?? worker.tareas_especificas ?? '').toString().trim() || 'Labores inherentes al cargo';
 
     nombreEntidad = nombreEntidad.toUpperCase();
     domicilioEntidad = domicilioEntidad ?? '[DOMICILIO FISCAL NO REGISTRADO]';
-    const nacionalidad = worker.nacionalidad || 'venezolana';
-    const domicilioTrabajador = worker.direccion_domicilio || worker.direccion_habitacion || 'Nueva Esparta';
+    const nacionalidad = strOrNull(worker.nacionalidad) ?? 'venezolana';
+    const domicilioTrabajador = strOrNull(worker.direccion_domicilio) ?? strOrNull(worker.direccion_habitacion) ?? 'Nueva Esparta';
     const cargoNombre = worker.cargo_nombre?.toUpperCase() || 'OBRERO';
     const nombreProyecto = worker.ci_proyectos?.nombre || 'OBRA NO REGISTRADA';
     const ubicacionProyecto =
       worker.ci_proyectos?.ubicacion || worker.ci_proyectos?.ubicacion_texto || worker.ci_proyectos?.obra_ubicacion || 'UBICACION NO REGISTRADA';
-    const tipo = (tipoPlazo ?? '').toUpperCase() || 'DETERMINADO';
-    const jornada = (jornadaTrabajo ?? '').toUpperCase() || 'DIURNA';
-    const fecha = (fechaIngreso ?? '').trim() || 'POR DEFINIR';
+    const tipo = toUpperSafe(tipoPlazo ?? tipo_contrato, 'DETERMINADO');
+    const jornada = toUpperSafe(jornadaTrabajo ?? jornada_trabajo, 'DIURNA');
+    const fecha = strOrNull(fechaIngreso ?? fecha_ingreso) ?? 'POR DEFINIR';
     const nombreTrabajador = worker.nombres || worker.nombre_completo || 'TRABAJADOR NO REGISTRADO';
     const cedula = worker.cedula || worker.documento || 'NO REGISTRADA';
+    const codigoTabulador = strOrNull(conf?.cargo_codigo) ?? strOrNull(worker.cargo_codigo) ?? 'NO DEFINIDO';
+    const denominacionGaceta = denominacionOficioGaceta(strOrNull(worker.cargo_codigo) ?? strOrNull(conf?.cargo_codigo)) ?? cargoNombre;
+    const objetoContrato = objetoContratoDesdeOficio({
+      denominacionTrabajo: denominacionGaceta,
+      codigoTabulador: codigoTabulador === 'NO DEFINIDO' ? null : codigoTabulador,
+    });
+
+    const hv = (worker.hoja_vida_obrero ?? null) as Record<string, unknown> | null;
+    const pagoBanco = strOrNull(banco) ?? strOrNull((hv?.['banco'] as string | undefined) ?? '');
+    const pagoCuenta = strOrNull(cuenta_bancaria) ?? strOrNull((hv?.['cuenta_bancaria'] as string | undefined) ?? '');
+    const formaPago = toUpperSafe(forma_pago ?? 'transferencia', 'TRANSFERENCIA');
+    const detallePago = pagoBanco || pagoCuenta
+      ? `${pagoBanco ? `Banco: ${pagoBanco}` : ''}${pagoBanco && pagoCuenta ? ' · ' : ''}${pagoCuenta ? `Cuenta: ${pagoCuenta}` : ''}`
+      : 'Datos bancarios del trabajador por completar';
+    const lugarPago = strOrNull(lugar_pago) ?? ubicacionProyecto;
 
     const contratoMarkdown = `
 # CONTRATO INDIVIDUAL DE TRABAJO
@@ -144,10 +239,20 @@ El presente contrato se celebra por tiempo **${tipo}**.
 ### TERCERA: JORNADA DE TRABAJO
 **EL TRABAJADOR** cumplirá una jornada **${jornada}**.
 
-### CUARTA: REMUNERACION
-**EL EMPLEADOR** pagara a **EL TRABAJADOR** un salario basico diario de **${salarioDiario} VES**, pagadero mediante transferencia bancaria y entregando recibo en Obra.
+### CUARTA: TABULADOR Y DENOMINACION DEL OFICIO (GACETA)
+Cargo en tabulador: **${codigoTabulador}**. Denominacion oficial segun Gaceta: **${denominacionGaceta}**.
 
-### QUINTA: FECHA DE INGRESO Y LUGAR DE TRABAJO
+### QUINTA: OBJETO DEL CONTRATO
+${objetoContrato}
+
+### SEXTA: REMUNERACION
+**EL EMPLEADOR** pagara a **EL TRABAJADOR** un salario basico diario de **${salarioDiario} VES** (**${salarioDiarioLetras} bolivares**).
+
+### SEPTIMA: FORMA Y LUGAR DE PAGO
+Forma de pago: **${formaPago}**. Detalle: **${detallePago}**.
+Lugar del pago: **${lugarPago}**.
+
+### OCTAVA: FECHA DE INGRESO Y LUGAR DE TRABAJO
 **EL TRABAJADOR** iniciara la prestacion de sus servicios a partir del **${fecha}**. Las labores se prestaran en el proyecto **${nombreProyecto}**, ubicado en: **${ubicacionProyecto}**.
 `;
 

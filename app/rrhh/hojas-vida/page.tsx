@@ -310,15 +310,24 @@ export default function RrhhHojasVidaPage() {
               <code className="text-zinc-500">/api/talento/hoja-vida/pdf?token=…</code>.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void cargar()}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/rrhh/oficios-salarios"
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+            >
+              <ScrollText className="h-4 w-4" />
+              Oficios y salarios
+            </Link>
+            <button
+              type="button"
+              onClick={() => void cargar()}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
         </div>
       </header>
 
