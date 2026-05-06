@@ -188,6 +188,29 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   };
 }
 
+const OVERRIDE_MAX_LEN = 8000;
+
+/**
+ * Fusiona valores manuales (RRHH) sobre el mapa de la plantilla.
+ * Solo acepta claves que existan como `{{CLAVE}}` en el cuerpo y texto recortado no vacío.
+ */
+export function aplicarOverridesMapaContrato(
+  cuerpo: string,
+  mapa: Record<string, string>,
+  overrides: Record<string, string> | null | undefined,
+): Record<string, string> {
+  const allowed = new Set(extraerPlaceholders(cuerpo));
+  if (!overrides || typeof overrides !== 'object') return mapa;
+  const out = { ...mapa };
+  for (const [k, v] of Object.entries(overrides)) {
+    if (!allowed.has(k)) continue;
+    let t = String(v ?? '').trim();
+    if (t.length > OVERRIDE_MAX_LEN) t = t.slice(0, OVERRIDE_MAX_LEN);
+    if (t) out[k] = t;
+  }
+  return out;
+}
+
 export function compilarPlantillaContratoObrero(
   cuerpo: string,
   mapa: Record<string, string>,

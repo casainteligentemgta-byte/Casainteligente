@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 import { emptyHojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 import {
+  aplicarOverridesMapaContrato,
   compilarPlantillaContratoObrero,
   construirMapaVariablesContratoObrero,
   type DatoContratoFaltante,
@@ -437,6 +438,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
 export async function compilarContratoObreroDesdeEmpleadoId(
   supabase: SupabaseClient,
   empleadoId: string,
+  overrides?: Record<string, string> | null,
 ): Promise<{ ok: true; texto: string; faltantes: DatoContratoFaltante[] } | { ok: false; error: string }> {
   const fu = await cargarFuentesContratoObreroPorEmpleadoId(supabase, empleadoId.trim());
   if (!fu.ok) {
@@ -458,7 +460,8 @@ export async function compilarContratoObreroDesdeEmpleadoId(
   const cuerpo =
     typeof cuerpoRaw === 'string' && cuerpoRaw.trim().length > 80 ? cuerpoRaw.trim() : CONTRATO_OBRERO_CUERPO_DEFAULT;
 
-  const mapa = construirMapaVariablesContratoObrero(fu.fuentes);
+  const mapaBase = construirMapaVariablesContratoObrero(fu.fuentes);
+  const mapa = aplicarOverridesMapaContrato(cuerpo, mapaBase, overrides ?? undefined);
   const { texto, faltantes } = compilarPlantillaContratoObrero(cuerpo, mapa);
   return { ok: true, texto, faltantes };
 }
@@ -507,6 +510,22 @@ export async function previewContratoObreroPlantilla(
       planilla_completar_url: planilla,
     },
   };
+}
+
+/**
+ * Lee `{ overrides: Record<string, string> }` desde POST JSON (RRHH: datos manuales para la plantilla).
+ * Solo acepta claves alfanuméricas en MAYÚSCULAS con guiones bajos (como placeholders `{{VAR}}`).
+ */
+export function parseOverridesContratoRequestBody(body: unknown): Record<string, string> | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+  const raw = (body as { overrides?: unknown }).overrides;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof k !== 'string' || k.length > 120 || !/^[A-Z0-9_]+$/.test(k)) continue;
+    out[k] = String(v ?? '');
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function str(v: unknown): string {

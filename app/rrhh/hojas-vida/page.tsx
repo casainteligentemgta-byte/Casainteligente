@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { ModalGenerarContrato } from '@/components/rrhh/ModalGenerarContrato';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
+import type { DatoContratoFaltante } from '@/lib/talento/plantillaContratoObreroCompile';
 
 type EmpleadoRow = {
   id: string;
@@ -36,12 +37,6 @@ type EmpleadoRow = {
   nivel_integridad_riesgo: string | null;
   tiempo_respuesta: number | null;
   examen_completado_at: string | null;
-};
-
-type DatoContratoFaltante = {
-  id: string;
-  etiqueta: string;
-  ayuda: string;
 };
 
 function docMostrado(row: EmpleadoRow): string {
@@ -77,6 +72,9 @@ export default function RrhhHojasVidaPage() {
   const [faltantesOpen, setFaltantesOpen] = useState(false);
   const [faltantesRow, setFaltantesRow] = useState<EmpleadoRow | null>(null);
   const [faltantesContrato, setFaltantesContrato] = useState<DatoContratoFaltante[]>([]);
+  const [overridesDraft, setOverridesDraft] = useState<Record<string, string>>({});
+  const [pdfFaltantesBusy, setPdfFaltantesBusy] = useState(false);
+  const [revalidandoFaltantes, setRevalidandoFaltantes] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -279,6 +277,7 @@ export default function RrhhHojasVidaPage() {
       if (falt.length > 0) {
         setFaltantesRow(r);
         setFaltantesContrato(falt);
+        setOverridesDraft({});
         setFaltantesOpen(true);
         toast.message('Faltan datos para generar el contrato sin marcadores.');
         return;
@@ -294,6 +293,72 @@ export default function RrhhHojasVidaPage() {
       setValidandoContratoId(null);
     }
   }, []);
+
+  const overridesDesdeBorrador = useCallback(() => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(overridesDraft)) {
+      const t = String(v ?? '').trim();
+      if (t && /^[A-Z0-9_]+$/.test(k)) out[k] = t;
+    }
+    return out;
+  }, [overridesDraft]);
+
+  const reaplicarFaltantesConOverrides = useCallback(async () => {
+    if (!faltantesRow) return;
+    setRevalidandoFaltantes(true);
+    try {
+      const overrides = overridesDesdeBorrador();
+      const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(faltantesRow.id)}/contrato-vista`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ overrides }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        faltantes?: DatoContratoFaltante[];
+      };
+      if (!res.ok) {
+        toast.error(j.error ?? `No se pudo recomprobar (${res.status})`);
+        return;
+      }
+      const falt = Array.isArray(j.faltantes) ? j.faltantes : [];
+      setFaltantesContrato(falt);
+      toast.message(falt.length === 0 ? 'Con estos valores ya no faltan datos en la plantilla.' : `Aún faltan ${falt.length} dato(s).`);
+    } catch {
+      toast.error('Error de red al recomprobar');
+    } finally {
+      setRevalidandoFaltantes(false);
+    }
+  }, [faltantesRow, overridesDesdeBorrador]);
+
+  const generarPdfContratoConOverrides = useCallback(async () => {
+    if (!faltantesRow) return;
+    setPdfFaltantesBusy(true);
+    try {
+      const overrides = overridesDesdeBorrador();
+      const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(faltantesRow.id)}/contrato-laboral-pdf`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ overrides }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(j.error ?? `No se pudo generar el PDF (${res.status})`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      toast.success('PDF generado (valores manuales aplicados donde corresponda).');
+      setTimeout(() => URL.revokeObjectURL(url), 120_000);
+    } catch {
+      toast.error('Error de red al generar el PDF');
+    } finally {
+      setPdfFaltantesBusy(false);
+    }
+  }, [faltantesRow, overridesDesdeBorrador]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 pb-28 pt-8">
@@ -652,18 +717,60 @@ export default function RrhhHojasVidaPage() {
           <div className="w-full max-w-2xl rounded-2xl border border-amber-400/25 bg-[#0F1117] p-5 shadow-2xl">
             <h2 className="text-base font-bold text-amber-100">Datos pendientes para generar contrato</h2>
             <p className="mt-1 text-xs text-zinc-400">
-              {(faltantesRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'} · completa estos campos para quitar los
-              marcadores <span className="text-zinc-300">[… COMPLETAR …]</span>.
+              {(faltantesRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'} · puedes completar la planilla o escribir
+              aquí los valores que faltan. Placeholder en plantilla:{' '}
+              <span className="font-mono text-zinc-300">{'{{'}CLAVE{'}}'}</span> en la
+              plantilla.
             </p>
-            <ul className="mt-4 max-h-[46vh] space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
+            <ul className="mt-4 max-h-[46vh] space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
+              {faltantesContrato.length === 0 ? (
+                <li className="rounded-lg border border-emerald-500/25 bg-emerald-950/20 px-3 py-3 text-emerald-100/95">
+                  No hay datos pendientes en la plantilla con los valores actuales (manuales + expediente). Puedes generar el
+                  PDF.
+                </li>
+              ) : null}
               {faltantesContrato.map((f) => (
                 <li key={f.id} className="rounded-lg border border-amber-500/20 bg-amber-950/15 px-3 py-2">
-                  <p className="font-semibold text-amber-100">{f.etiqueta}</p>
+                  <p className="font-semibold text-amber-100">
+                    {f.etiqueta}{' '}
+                    <span className="font-normal font-mono text-[10px] text-zinc-500">({f.id})</span>
+                  </p>
                   <p className="mt-0.5 text-amber-100/80">{f.ayuda}</p>
+                  <label className="mt-2 block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Valor manual
+                    <textarea
+                      value={overridesDraft[f.id] ?? ''}
+                      onChange={(e) =>
+                        setOverridesDraft((prev) => ({
+                          ...prev,
+                          [f.id]: e.target.value,
+                        }))
+                      }
+                      rows={2}
+                      placeholder="Escribe el texto que debe aparecer en el contrato…"
+                      className="mt-1 w-full resize-y rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-amber-500/50"
+                    />
+                  </label>
                 </li>
               ))}
             </ul>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void generarPdfContratoConOverrides()}
+                disabled={pdfFaltantesBusy}
+                className="rounded-lg border border-emerald-500/45 bg-emerald-950/35 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/45 disabled:opacity-50"
+              >
+                {pdfFaltantesBusy ? 'Generando PDF…' : 'Generar PDF con valores indicados'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void reaplicarFaltantesConOverrides()}
+                disabled={revalidandoFaltantes}
+                className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
+              >
+                {revalidandoFaltantes ? 'Recomprobando…' : 'Aplicar y ver qué sigue faltando'}
+              </button>
               <a
                 href={apiUrl(
                   `/registro/planilla?empleadoId=${encodeURIComponent(faltantesRow.id)}&cedula=${encodeURIComponent(docMostrado(faltantesRow) === '—' ? '' : docMostrado(faltantesRow))}&volver=${encodeURIComponent('/rrhh/hojas-vida')}`,
@@ -680,6 +787,7 @@ export default function RrhhHojasVidaPage() {
                   setFaltantesOpen(false);
                   setFaltantesRow(null);
                   setFaltantesContrato([]);
+                  setOverridesDraft({});
                 }}
                 className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
               >
