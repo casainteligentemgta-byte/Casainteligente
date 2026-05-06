@@ -23,7 +23,7 @@ export default function SeguimientoObraPage() {
   useEffect(() => {
     let c = true;
     (async () => {
-      const { data, error } = await supabase
+      const q0 = await supabase
         .from('ci_proyectos')
         .select(
           'id,obra_codigo,nombre,obra_fecha_entrega,obra_avance_pct,obra_penalizacion_diaria_usd,obra_estado_legacy',
@@ -31,6 +31,17 @@ export default function SeguimientoObraPage() {
         .eq('tipo_proyecto', 'talento')
         .eq('obra_estado_legacy', 'activa')
         .order('obra_fecha_entrega');
+      const q1 =
+        q0.error && (q0.error.message ?? '').toLowerCase().includes('tipo_proyecto')
+          ? await supabase
+              .from('ci_proyectos')
+              .select(
+                'id,obra_codigo,nombre,obra_fecha_entrega,obra_avance_pct,obra_penalizacion_diaria_usd,obra_estado_legacy',
+              )
+              .eq('obra_estado_legacy', 'activa')
+              .order('obra_fecha_entrega')
+          : q0;
+      const { data, error } = q1;
       if (!c) return;
       if (!error && data) {
         setObras(

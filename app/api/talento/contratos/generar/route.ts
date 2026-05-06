@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       .from('ci_config_nomina')
       .select('funciones_oficiales')
       .ilike('cargo_nombre', worker.cargo_nombre ?? '')
-      .maybeSingle();
+      .single();
 
     const sitio = await resolverSitioObraOProyecto(supabase, obraId);
     if (!sitio) {
@@ -176,7 +176,9 @@ export async function POST(req: Request) {
       jornada_trabajo: jornada,
     };
 
-    const tipoPlazoLegible = tipoContrato === 'tiempo_indeterminado' ? 'INDETERMINADO' : 'DETERMINADO';
+    const params = {
+      tipoPlazo: tipoContrato === 'tiempo_indeterminado' ? 'INDETERMINADO' : 'DETERMINADO',
+    };
     const nombreEntidad =
       (worker.ci_entidades?.nombre_legal ?? worker.ci_entidades?.nombre ?? process.env.NEXT_PUBLIC_PATRON_NOMBRE ?? 'CASA INTELIGENTE')
         .trim()
@@ -202,10 +204,10 @@ export async function POST(req: Request) {
 ENTRE **${nombreEntidad}**, domiciliada en **${domicilioEntidad}**. de aquí en adelante "**EL EMPLEADOR**", por una parte, y el(la) ciudadano(a) **${nombreTrabajador}**, de nacionalidad **${nacionalidadTrabajador}**, mayor de edad, hábil en el ejercicio de sus derechos civiles, titular de la cédula de identidad N° **${cedulaTrabajador}**, domiciliado(a) en **${domicilioTrabajador}**, en adelante "**EL TRABAJADOR**", por la otra parte, han convenido celebrar el presente contrato individual de trabajo, sujeto a las siguientes cláusulas:
 
 ### PRIMERA: OBJETO
-**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoOficio.toUpperCase()}**, con las funciones inherentes al mismo, tales como: "${funcionesTexto}".
+**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${(worker.cargo_nombre ?? cargoOficio).toUpperCase()}**, con las funciones inherentes al mismo, tales como: "${funcionesTexto}".
 
 ### SEGUNDA: TIPO Y PLAZO
-Se celebra por tiempo ${tipoPlazoLegible}...
+Se celebra por tiempo ${params.tipoPlazo.toUpperCase()}...
 `;
     const texto = contratoMarkdown.trim();
 

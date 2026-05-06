@@ -24,10 +24,14 @@ export default function ContratosAdminPage() {
   useEffect(() => {
     let c = true;
     (async () => {
-      const [e, o] = await Promise.all([
+      const [e, o0] = await Promise.all([
         supabase.from('ci_empleados').select('id,nombre_completo,estado').eq('estado', 'aprobado').order('nombre_completo'),
         supabase.from('ci_proyectos').select('id,nombre').eq('tipo_proyecto', 'talento').order('nombre'),
       ]);
+      let o = o0;
+      if (o0.error && (o0.error.message ?? '').toLowerCase().includes('tipo_proyecto')) {
+        o = await supabase.from('ci_proyectos').select('id,nombre').order('nombre');
+      }
       if (!c) return;
       if (!e.error && e.data) setEmpleados(e.data as Emp[]);
       if (!o.error && o.data) setObras(o.data as Obra[]);

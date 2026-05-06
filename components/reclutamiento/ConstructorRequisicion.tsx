@@ -126,12 +126,15 @@ export function ConstructorRequisicion({
           }
         }
         if (wantO && !opts.some((o) => o.proyectoObraId === wantO)) {
-          const { data: row } = await supabase
+          const q0 = await supabase
             .from('ci_proyectos')
             .select('id,nombre')
             .eq('id', wantO)
-            .eq('tipo_proyecto', 'talento')
             .maybeSingle();
+          const row =
+            q0.error && (q0.error.message ?? '').toLowerCase().includes('tipo_proyecto')
+              ? (await supabase.from('ci_proyectos').select('id,nombre').eq('id', wantO).maybeSingle()).data
+              : q0.data;
           if (!alive) return;
           if (row && typeof (row as { id?: unknown }).id === 'string') {
             const r = row as { id: string; nombre?: string | null };

@@ -72,11 +72,25 @@ export async function fetchDashboardUtilidadRealData(
     supabase.from('ci_proyecto_equipos').select('cantidad').eq('proyecto_id', id),
   ]);
 
-  if (pRes.error || !pRes.data) {
+  let proyecto: ProyectoFinSnapshot | null = null;
+  if (!pRes.error && pRes.data) {
+    proyecto = pRes.data as ProyectoFinSnapshot;
+  } else if ((pRes.error?.message ?? '').toLowerCase().includes('tipo_proyecto')) {
+    const pLegacy = await supabase
+      .from('ci_proyectos')
+      .select(
+        'id,monto_aproximado,moneda,obra_precio_venta_usd,obra_presupuesto_ves,obra_presupuesto_mano_obra_ves,created_at,obra_fecha_inicio,obra_fecha_entrega',
+      )
+      .eq('id', id)
+      .maybeSingle();
+    if (!pLegacy.error && pLegacy.data) {
+      proyecto = { ...(pLegacy.data as ProyectoFinSnapshot), tipo_proyecto: 'integral' };
+    } else {
+      throw new Error(pLegacy.error?.message ?? 'Proyecto no encontrado.');
+    }
+  } else {
     throw new Error(pRes.error?.message ?? 'Proyecto no encontrado.');
   }
-
-  const proyecto = pRes.data as ProyectoFinSnapshot;
   const ingresosTotalesUsd = ingresosContratoUsd(proyecto, tasaBcv);
 
   const costosMaterialesUsd = matRes.error

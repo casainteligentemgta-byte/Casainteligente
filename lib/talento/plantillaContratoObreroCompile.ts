@@ -9,7 +9,7 @@ export type DatoContratoFaltante = {
 
 const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   PATRON_NOMBRE: { etiqueta: 'Nombre del patrono', ayuda: 'RRHH puede definirlo en la plantilla o datos de empresa.' },
-  PATRON_DOMICILIO: { etiqueta: 'Domicilio fiscal del patrono', ayuda: 'Complete en documentos / datos de empresa.' },
+  PATRON_DOMICILIO: { etiqueta: 'Domicilio fiscal de la entidad seleccionada', ayuda: 'Complete el domicilio fiscal en la entidad vinculada al proyecto.' },
   PATRON_REPRESENTANTE: { etiqueta: 'Representante que firma', ayuda: 'Opcional; indique en plantilla o datos de obra.' },
   EMPLEADO_NOMBRE_COMPLETO: { etiqueta: 'Nombre completo del trabajador', ayuda: 'Revise su planilla de empleo.' },
   EMPLEADO_CEDULA: { etiqueta: 'Cédula o documento', ayuda: 'Indíquelo en la planilla de empleo.' },

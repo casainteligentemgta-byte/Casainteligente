@@ -23,11 +23,15 @@ export default function CierreObraPage() {
   useEffect(() => {
     let c = true;
     (async () => {
-      const { data: rows } = await supabase
+      const q0 = await supabase
         .from('ci_proyectos')
         .select('id,nombre,obra_estado_legacy')
         .eq('tipo_proyecto', 'talento')
         .order('nombre');
+      const rows =
+        q0.error && (q0.error.message ?? '').toLowerCase().includes('tipo_proyecto')
+          ? (await supabase.from('ci_proyectos').select('id,nombre,obra_estado_legacy').order('nombre')).data
+          : q0.data;
       if (!c) return;
       setObras(
         ((rows ?? []) as { id: string; nombre: string; obra_estado_legacy: string | null }[]).map((r) => ({
@@ -74,8 +78,7 @@ export default function CierreObraPage() {
         obra_fecha_cierre: cierreAt,
         updated_at: cierreAt,
       })
-      .eq('id', obraId)
-      .eq('tipo_proyecto', 'talento');
+      .eq('id', obraId);
     if (error) {
       alert(error.message);
       return;
