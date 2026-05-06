@@ -9,7 +9,6 @@ import {
   parseTipoContrato,
   salarioBasicoDiarioVesDesdeNivel,
 } from '@/lib/talento/contratoGacetaLaboral';
-import { generarTextoLegalCentauro } from '@/lib/talento/contract-centauro';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
 
 type SitioResuelto = {
@@ -68,15 +67,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'empleado_id, obra_id, monto_acordado_usd y porcentaje_inicial válidos requeridos' }, { status: 400 });
     }
 
-    const { data: empRaw, error: e1 } = await supabase
+    const { data: workerRaw, error: e1 } = await supabase
       .from('ci_empleados')
       .select(
-        'id,nombre_completo,documento,estado,recruitment_need_id,cargo_codigo,cargo_nombre,cargo_nivel,rol_buscado',
+        '*, ci_entidades(*), ci_proyectos(*)',
       )
       .eq('id', empId)
       .single();
 
-    const emp = empRaw as {
+    const worker = workerRaw as {
       id: string;
       nombre_completo: string;
       documento: string | null;
@@ -86,15 +85,34 @@ export async function POST(req: Request) {
       cargo_nombre: string | null;
       cargo_nivel: number | null;
       rol_buscado: string | null;
+      nombres?: string | null;
+      nacionalidad?: string | null;
+      cedula?: string | null;
+      direccion_domicilio?: string | null;
+      direccion_habitacion?: string | null;
+      tareas_especificas?: string | null;
+      ci_entidades?: {
+        nombre_legal?: string | null;
+        nombre?: string | null;
+        domicilio_fiscal?: string | null;
+        direccion_fiscal?: string | null;
+      } | null;
+      ci_proyectos?: unknown;
     } | null;
 
-    if (e1 || !emp) {
+    if (e1 || !worker) {
       return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 });
     }
 
-    if (emp.estado !== 'aprobado') {
+    if (worker.estado !== 'aprobado') {
       return NextResponse.json({ error: 'Solo empleados en estado aprobado' }, { status: 400 });
     }
+
+    const { data: cargoConfig } = await supabase
+      .from('ci_config_nomina')
+      .select('funciones_oficiales')
+      .ilike('cargo_nombre', worker.cargo_nombre ?? '')
+      .maybeSingle();
 
     const sitio = await resolverSitioObraOProyecto(supabase, obraId);
     if (!sitio) {
@@ -108,7 +126,7 @@ export async function POST(req: Request) {
       cargo_nivel: number | null;
     };
     let need: NeedRow | null = null;
-    const nid = (emp.recruitment_need_id ?? '').trim();
+    const nid = (worker.recruitment_need_id ?? '').trim();
     if (nid) {
       const { data: n } = await supabase
         .from('recruitment_needs')
@@ -118,9 +136,9 @@ export async function POST(req: Request) {
       need = (n ?? null) as NeedRow | null;
     }
 
-    const codigoTab = ((need?.cargo_codigo ?? emp.cargo_codigo) ?? '').trim();
-    const nivelTab = need?.cargo_nivel ?? emp.cargo_nivel ?? null;
-    const cargoOficio = ((need?.cargo_nombre ?? emp.cargo_nombre ?? emp.rol_buscado) ?? '').trim() || 'Obrero';
+    const codigoTab = ((need?.cargo_codigo ?? worker.cargo_codigo) ?? '').trim();
+    const nivelTab = need?.cargo_nivel ?? worker.cargo_nivel ?? null;
+    const cargoOficio = ((need?.cargo_nombre ?? worker.cargo_nombre ?? worker.rol_buscado) ?? '').trim() || 'Obrero';
     const denGaceta = denominacionOficioGaceta(codigoTab) ?? cargoOficio;
     const salarioVes = salarioBasicoDiarioVesDesdeNivel(nivelTab);
     const lugarPrest = lugarPrestacionServicio(sitio.nombre, sitio.ubicacion);
@@ -158,22 +176,38 @@ export async function POST(req: Request) {
       jornada_trabajo: jornada,
     };
 
-    const fechaEmision = new Date().toLocaleDateString('es-VE', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    const tipoPlazoLegible = tipoContrato === 'tiempo_indeterminado' ? 'INDETERMINADO' : 'DETERMINADO';
+    const nombreEntidad =
+      (worker.ci_entidades?.nombre_legal ?? worker.ci_entidades?.nombre ?? process.env.NEXT_PUBLIC_PATRON_NOMBRE ?? 'CASA INTELIGENTE')
+        .trim()
+        .toUpperCase();
+    const domicilioEntidad =
+      (worker.ci_entidades?.domicilio_fiscal ?? worker.ci_entidades?.direccion_fiscal ?? process.env.NEXT_PUBLIC_PATRON_DOMICILIO ?? '').trim() ||
+      '[DOMICILIO FISCAL NO REGISTRADO]';
+    const nombreTrabajador = (worker.nombres ?? worker.nombre_completo ?? '').trim() || 'TRABAJADOR NO REGISTRADO';
+    const nacionalidadTrabajador = (worker.nacionalidad ?? 'venezolana').trim();
+    const cedulaTrabajador = (worker.cedula ?? worker.documento ?? '').trim() || '[CÉDULA NO REGISTRADA]';
+    const domicilioTrabajador =
+      (worker.direccion_domicilio ?? worker.direccion_habitacion ?? '').trim() || '[DOMICILIO NO REGISTRADO]';
+    const funcionesTexto =
+      ((cargoConfig as { funciones_oficiales?: string | null } | null)?.funciones_oficiales ??
+        worker.tareas_especificas ??
+        '')
+        .toString()
+        .trim() || '[FUNCIONES NO REGISTRADAS]';
 
-    const texto = generarTextoLegalCentauro({
-      empleadoNombre: emp.nombre_completo as string,
-      empleadoDocumento: emp.documento as string | null,
-      obraNombre: sitio.nombre,
-      obraUbicacion: sitio.ubicacion,
-      clienteObra: null,
-      montoAcordadoUsd: monto,
-      porcentajeInicial: pct,
-      fechaEmision,
-    });
+    const contratoMarkdown = `
+# CONTRATO INDIVIDUAL DE TRABAJO
+
+ENTRE **${nombreEntidad}**, domiciliada en **${domicilioEntidad}**. de aquí en adelante "**EL EMPLEADOR**", por una parte, y el(la) ciudadano(a) **${nombreTrabajador}**, de nacionalidad **${nacionalidadTrabajador}**, mayor de edad, hábil en el ejercicio de sus derechos civiles, titular de la cédula de identidad N° **${cedulaTrabajador}**, domiciliado(a) en **${domicilioTrabajador}**, en adelante "**EL TRABAJADOR**", por la otra parte, han convenido celebrar el presente contrato individual de trabajo, sujeto a las siguientes cláusulas:
+
+### PRIMERA: OBJETO
+**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoOficio.toUpperCase()}**, con las funciones inherentes al mismo, tales como: "${funcionesTexto}".
+
+### SEGUNDA: TIPO Y PLAZO
+Se celebra por tiempo ${tipoPlazoLegible}...
+`;
+    const texto = contratoMarkdown.trim();
 
     const baseInsert = {
       empleado_id: empId,
