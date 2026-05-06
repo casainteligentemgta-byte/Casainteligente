@@ -19,6 +19,31 @@ function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
   }
 }
 
+async function resolverPatronoDesdeEntidad(
+  supabase: SupabaseClient,
+  entidadId: string | null,
+): Promise<{ nombre: string; domicilio: string; representante: string }> {
+  const envNombre = (process.env.NEXT_PUBLIC_PATRON_NOMBRE ?? 'CASA INTELIGENTE').trim();
+  const envDom = (process.env.NEXT_PUBLIC_PATRON_DOMICILIO ?? '').trim();
+  const envRep = (process.env.NEXT_PUBLIC_PATRON_REPRESENTANTE ?? '').trim();
+  const eid = (entidadId ?? '').trim();
+  if (!eid) return { nombre: envNombre, domicilio: envDom, representante: envRep };
+
+  const { data, error } = await supabase
+    .from('ci_entidades')
+    .select('nombre,direccion_fiscal,rep_legal_nombre')
+    .eq('id', eid)
+    .maybeSingle();
+  if (error || !data) return { nombre: envNombre, domicilio: envDom, representante: envRep };
+
+  const e = data as { nombre?: string | null; direccion_fiscal?: string | null; rep_legal_nombre?: string | null };
+  return {
+    nombre: strOpt(e.nombre) ?? envNombre,
+    domicilio: strOpt(e.direccion_fiscal) ?? envDom,
+    representante: strOpt(e.rep_legal_nombre) ?? envRep,
+  };
+}
+
 export async function cargarFuentesContratoObreroPdf(
   admin: SupabaseClient,
   contratoId: string,
@@ -80,7 +105,7 @@ export async function cargarFuentesContratoObreroPdf(
       .maybeSingle(),
     admin
       .from('ci_proyectos')
-      .select('nombre,ubicacion_texto,obra_ubicacion')
+      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id')
       .eq('id', vinculo)
       .maybeSingle(),
   ]);
@@ -102,14 +127,17 @@ export async function cargarFuentesContratoObreroPdf(
     hoja_vida_obrero?: unknown;
   };
 
-  const o = obra as { nombre: string; ubicacion_texto?: string | null; obra_ubicacion?: string | null };
+  const o = obra as {
+    nombre: string;
+    ubicacion_texto?: string | null;
+    obra_ubicacion?: string | null;
+    entidad_id?: string | null;
+  };
   const ubic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
 
   const hv = parseHoja(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
 
-  const patronNombre = (process.env.NEXT_PUBLIC_PATRON_NOMBRE ?? 'CASA INTELIGENTE').trim();
-  const patronDom = (process.env.NEXT_PUBLIC_PATRON_DOMICILIO ?? '').trim();
-  const patronRep = (process.env.NEXT_PUBLIC_PATRON_REPRESENTANTE ?? '').trim();
+  const patron = await resolverPatronoDesdeEntidad(admin, strOpt(o.entidad_id));
 
   const fuentes: FuentesContratoObrero = {
     empleado: {
@@ -136,9 +164,9 @@ export async function cargarFuentesContratoObreroPdf(
     },
     obra: { nombre: o.nombre, ubicacion: ubic },
     patron: {
-      nombre: patronNombre,
-      domicilio: patronDom,
-      representante: patronRep,
+      nombre: patron.nombre,
+      domicilio: patron.domicilio,
+      representante: patron.representante,
     },
   };
 
@@ -223,16 +251,23 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
 
   let obraNombre = 'Por definir';
   let obraUbic: string | null = null;
+  let entidadId: string | null = null;
   if (proyectoId) {
     const { data: ob } = await supabase
       .from('ci_proyectos')
-      .select('nombre,ubicacion_texto,obra_ubicacion')
+      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id')
       .eq('id', proyectoId)
       .maybeSingle();
     if (ob) {
-      const o = ob as { nombre: string; ubicacion_texto?: string | null; obra_ubicacion?: string | null };
+      const o = ob as {
+        nombre: string;
+        ubicacion_texto?: string | null;
+        obra_ubicacion?: string | null;
+        entidad_id?: string | null;
+      };
       obraNombre = o.nombre;
       obraUbic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
+      entidadId = strOpt(o.entidad_id);
     }
   }
 
@@ -274,6 +309,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
 
   const hv = parseHoja(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
   const dir = strOpt(e.direccion_habitacion);
+  const patron = await resolverPatronoDesdeEntidad(supabase, entidadId);
 
   const fuentes: FuentesContratoObrero = {
     empleado: {
@@ -288,9 +324,9 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     contrato,
     obra: { nombre: obraNombre, ubicacion: obraUbic },
     patron: {
-      nombre: (process.env.NEXT_PUBLIC_PATRON_NOMBRE ?? 'CASA INTELIGENTE').trim(),
-      domicilio: (process.env.NEXT_PUBLIC_PATRON_DOMICILIO ?? '').trim(),
-      representante: (process.env.NEXT_PUBLIC_PATRON_REPRESENTANTE ?? '').trim(),
+      nombre: patron.nombre,
+      domicilio: patron.domicilio,
+      representante: patron.representante,
     },
   };
 

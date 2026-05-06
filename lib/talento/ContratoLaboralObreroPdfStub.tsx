@@ -21,18 +21,26 @@ export type ContratoLaboralObreroPdfDocumentProps = {
  */
 export function ContratoLaboralObreroPdfDocument(props: ContratoLaboralObreroPdfDocumentProps) {
   const { expedienteId, titulo, cuerpoTexto, pieLegal } = props;
-  const bloques = (cuerpoTexto ?? '')
+  const bloquesRaw = (cuerpoTexto ?? '')
     .split(/\n{2,}/)
     .map((s) => s.trim())
     .filter(Boolean);
+  const norm = (s: string) =>
+    s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  const tituloNorm = norm(titulo);
+  const bloques =
+    bloquesRaw.length > 0 && norm(bloquesRaw[0] ?? '') === tituloNorm ? bloquesRaw.slice(1) : bloquesRaw;
 
   return (
     <Document>
       <Page size="A4" style={st.page} wrap>
         <Text style={st.h1}>{titulo}</Text>
-        <Text style={st.meta}>
-          Expediente: {expedienteId.slice(0, 8)}… · Generado desde biblioteca de documentos
-        </Text>
+        <Text style={st.meta}>Expediente: {expedienteId}</Text>
         {bloques.length ? (
           bloques.map((b, i) => (
             <Text key={i} style={st.p}>
