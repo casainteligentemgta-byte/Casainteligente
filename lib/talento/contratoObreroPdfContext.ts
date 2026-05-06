@@ -24,7 +24,7 @@ function parseHoja(raw: unknown): HojaVidaObreroCompleta | null {
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
  * vinculada al proyecto (`entidad_id`). Sin id de entidad se usan variables de entorno públicas.
- * Casa Inteligente: domicilio según `registro_mercantil.domicilio_empresa` antes que fiscal.
+ * Domicilio: `registro_mercantil.domicilio_empresa` y, si falta, domicilio/dirección fiscal.
  */
 export async function resolverPatronoDesdeEntidad(
   supabase: SupabaseClient,
