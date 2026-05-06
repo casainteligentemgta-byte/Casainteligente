@@ -65,6 +65,37 @@ function montoVesEnLetras(valor: number): string {
   return `${enterosTxt} con ${decTxt}/100`;
 }
 
+/** Primer representante en `registro_mercantil.representantes[]` (jsonb). */
+function primerRepresentanteRegistroMercantil(raw: unknown): {
+  nombre?: string;
+  cedula?: string;
+  cargo?: string;
+  profesion?: string;
+} {
+  try {
+    let o: unknown = raw;
+    if (typeof raw === 'string') {
+      try {
+        o = JSON.parse(raw) as unknown;
+      } catch {
+        return {};
+      }
+    }
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return {};
+    const arr = (o as { representantes?: unknown }).representantes;
+    if (!Array.isArray(arr) || !arr[0] || typeof arr[0] !== 'object' || Array.isArray(arr[0])) return {};
+    const r = arr[0] as Record<string, unknown>;
+    return {
+      nombre: typeof r.nombre === 'string' ? r.nombre : undefined,
+      cedula: typeof r.cedula === 'string' ? r.cedula : undefined,
+      cargo: typeof r.cargo === 'string' ? r.cargo : undefined,
+      profesion: typeof r.profesion === 'string' ? r.profesion : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -106,7 +137,7 @@ export async function POST(req: Request) {
       .select(`
         *,
         ci_proyectos (id, entidad_id, nombre, ubicacion, ubicacion_texto, obra_ubicacion),
-        ci_entidades (nombre_legal, nombre, domicilio_fiscal, direccion_fiscal, representante_legal, rep_legal_nombre, registro_mercantil)
+        ci_entidades (nombre_legal, nombre, domicilio_fiscal, direccion_fiscal, representante_legal, rep_legal_nombre, rep_legal_cedula, rep_legal_cargo, registro_mercantil)
       `)
       .eq('id', empleadoIdFinal)
       .single();
@@ -131,6 +162,8 @@ export async function POST(req: Request) {
         direccion_fiscal?: string | null;
         representante_legal?: string | null;
         rep_legal_nombre?: string | null;
+        rep_legal_cedula?: string | null;
+        rep_legal_cargo?: string | null;
         registro_mercantil?: unknown;
       } | null;
       ci_proyectos?: {
@@ -160,6 +193,7 @@ export async function POST(req: Request) {
     } | null;
 
     const entDir = worker.ci_entidades;
+    let entPatrono = entDir ?? null;
     let nombreEntidad =
       strOrNull(entDir?.nombre_legal) ?? strOrNull(entDir?.nombre) ?? 'LA ENTIDAD';
     let domicilioEntidad = entDir
@@ -177,7 +211,9 @@ export async function POST(req: Request) {
     if (entidadIdProyecto && (!domicilioEntidad || nombreEntidad === 'LA ENTIDAD')) {
       const { data: entidadProyecto } = await supabase
         .from('ci_entidades')
-        .select('nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,registro_mercantil')
+        .select(
+          'nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,registro_mercantil,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo',
+        )
         .eq('id', entidadIdProyecto)
         .maybeSingle();
 
@@ -188,6 +224,10 @@ export async function POST(req: Request) {
             domicilio_fiscal?: string | null;
             direccion_fiscal?: string | null;
             registro_mercantil?: unknown;
+            representante_legal?: string | null;
+            rep_legal_nombre?: string | null;
+            rep_legal_cedula?: string | null;
+            rep_legal_cargo?: string | null;
           }
         | null;
 
@@ -195,6 +235,9 @@ export async function POST(req: Request) {
         nombreEntidad = strOrNull(ep.nombre_legal) ?? strOrNull(ep.nombre) ?? nombreEntidad;
         domicilioEntidad =
           domicilioPatronoParaEntidad(ep) ?? domicilioEntidad;
+        if (!entPatrono) {
+          entPatrono = ep as NonNullable<(typeof worker)['ci_entidades']>;
+        }
       }
     }
 
@@ -202,14 +245,15 @@ export async function POST(req: Request) {
     const salarioDiarioNum = salarioBase > 0 ? salarioBase / 30 : Number(salarioBasicoDiarioVesDesdeNivel(worker.cargo_nivel) ?? 0);
     const salarioDiario = soloDosDecimales(salarioDiarioNum);
     const salarioDiarioLetras = montoVesEnLetras(salarioDiarioNum);
-    const funcionesTexto =
-      (conf?.funciones_oficiales ?? worker.tareas_especificas ?? '').toString().trim() || 'Labores inherentes al cargo';
 
     nombreEntidad = nombreEntidad.toUpperCase();
     domicilioEntidad = domicilioEntidad ?? '[DOMICILIO FISCAL NO REGISTRADO]';
     const nacionalidad = strOrNull(worker.nacionalidad) ?? 'venezolana';
     const domicilioTrabajador = strOrNull(worker.direccion_domicilio) ?? strOrNull(worker.direccion_habitacion) ?? 'Nueva Esparta';
-    const cargoNombre = worker.cargo_nombre?.toUpperCase() || 'OBRERO';
+    const cargoMayus = worker.cargo_nombre?.toUpperCase() || 'TRABAJADOR';
+    const funcionesManual =
+      strOrNull(conf?.funciones_oficiales) ??
+      'las tareas inherentes a su cargo y aquellas asignadas por su supervisor inmediato';
     const nombreProyecto = worker.ci_proyectos?.nombre || 'OBRA NO REGISTRADA';
     const ubicacionProyecto =
       worker.ci_proyectos?.ubicacion || worker.ci_proyectos?.ubicacion_texto || worker.ci_proyectos?.obra_ubicacion || 'UBICACION NO REGISTRADA';
@@ -219,11 +263,29 @@ export async function POST(req: Request) {
     const nombreTrabajador = worker.nombres || worker.nombre_completo || 'TRABAJADOR NO REGISTRADO';
     const cedula = worker.cedula || worker.documento || 'NO REGISTRADA';
     const codigoTabulador = strOrNull(conf?.cargo_codigo) ?? strOrNull(worker.cargo_codigo) ?? 'NO DEFINIDO';
-    const denominacionGaceta = denominacionOficioGaceta(strOrNull(worker.cargo_codigo) ?? strOrNull(conf?.cargo_codigo)) ?? cargoNombre;
+    const denominacionGaceta = denominacionOficioGaceta(strOrNull(worker.cargo_codigo) ?? strOrNull(conf?.cargo_codigo)) ?? cargoMayus;
     const objetoContrato = objetoContratoDesdeOficio({
       denominacionTrabajo: denominacionGaceta,
       codigoTabulador: codigoTabulador === 'NO DEFINIDO' ? null : codigoTabulador,
     });
+
+    const rmRep = primerRepresentanteRegistroMercantil(entPatrono?.registro_mercantil);
+    const cargoRep =
+      strOrNull(entPatrono?.rep_legal_cargo) ?? strOrNull(rmRep.cargo) ?? 'Administrador';
+    const nombreRep =
+      strOrNull(entPatrono?.rep_legal_nombre) ??
+      strOrNull(entPatrono?.representante_legal) ??
+      strOrNull(rmRep.nombre) ??
+      '[REPRESENTANTE NO REGISTRADO]';
+    const cedulaRep =
+      strOrNull(entPatrono?.rep_legal_cedula) ?? strOrNull(rmRep.cedula) ?? '[CÉDULA NO REGISTRADA]';
+    const profesionRep = strOrNull(rmRep.profesion) ?? 'Empresario';
+    const nombreTrabajadorUpper = toUpperSafe(worker.nombres ?? worker.nombre_completo, 'EL TRABAJADOR');
+
+    const encabezadoLegal = `Entre la empresa **${nombreEntidad}**, representada en este acto por su **${cargoRep}**, **${nombreRep}**, venezolano, mayor de edad, de profesión **${profesionRep}**, titular de la cédula de identidad Nº **${cedulaRep}**, domiciliado en **${domicilioEntidad}**; quien en lo adelante y a efectos del presente contrato se denominará "**EL EMPLEADOR**" por una parte y por la otra, el Ciudadano **${nombreTrabajadorUpper}**, de nacionalidad **${nacionalidad}**, mayor de edad, hábil en el ejercicio de sus derechos civiles, domiciliado en **${domicilioTrabajador}** y titular de la cédula de identidad N° **${cedula}**, en adelante "**EL TRABAJADOR**", se ha convenido en celebrar el **CONTRATO DE TRABAJO POR TIEMPO ${tipo}**, que se regirá por las siguientes cláusulas:`;
+
+    const clausulaObjeto = `### PRIMERA: OBJETO
+**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, ejecutando específicamente: **${funcionesManual}**, de conformidad con el Manual de Cargos de la empresa y las instrucciones impartidas por **EL EMPLEADOR**.`;
 
     const hv = (worker.hoja_vida_obrero ?? null) as Record<string, unknown> | null;
     const pagoBanco = strOrNull(banco) ?? strOrNull((hv?.['banco'] as string | undefined) ?? '');
@@ -237,10 +299,9 @@ export async function POST(req: Request) {
     const contratoMarkdown = `
 # CONTRATO INDIVIDUAL DE TRABAJO
 
-ENTRE **${nombreEntidad}**, domiciliada en **${domicilioEntidad}**, de aquí en adelante "**EL EMPLEADOR**", por una parte, y el(la) ciudadano(a) **${nombreTrabajador}**, de nacionalidad **${nacionalidad}**, mayor de edad, hábil en el ejercicio de sus derechos civiles, titular de la cédula de identidad N° **${cedula}**, domiciliado(a) en **${domicilioTrabajador}**, en adelante "**EL TRABAJADOR**", por la otra parte, han convenido celebrar el presente contrato individual de trabajo, sujeto a las siguientes cláusulas:
+${encabezadoLegal}
 
-### PRIMERA: OBJETO
-**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoNombre}**, con las funciones inherentes al mismo, tales como: "${funcionesTexto}".
+${clausulaObjeto}
 
 ### SEGUNDA: TIPO Y PLAZO
 El presente contrato se celebra por tiempo **${tipo}**.
