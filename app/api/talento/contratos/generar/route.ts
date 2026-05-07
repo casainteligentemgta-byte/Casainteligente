@@ -117,6 +117,8 @@ export async function POST(req: Request) {
       lugar_pago,
       cuenta_bancaria,
       banco,
+      duracion_valor,
+      duracion_unidad,
     } = (await req.json()) as {
       empleadoId?: string;
       empleado_id?: string;
@@ -130,6 +132,8 @@ export async function POST(req: Request) {
       lugar_pago?: string;
       cuenta_bancaria?: string;
       banco?: string;
+      duracion_valor?: number;
+      duracion_unidad?: 'dias' | 'meses';
     };
 
     const empleadoIdFinal = strOrNull(empleadoId) ?? strOrNull(empleado_id);
@@ -270,8 +274,20 @@ export async function POST(req: Request) {
     const nombreProyecto = worker.ci_proyectos?.nombre || 'OBRA NO REGISTRADA';
     const ubicacionProyecto =
       worker.ci_proyectos?.ubicacion || worker.ci_proyectos?.ubicacion_texto || worker.ci_proyectos?.obra_ubicacion || 'UBICACION NO REGISTRADA';
+    const tipoRaw = strOrNull(tipoPlazo ?? tipo_contrato) ?? 'DETERMINADO';
+    const tipoNorm = tipoRaw.trim().toLowerCase();
+    const esIndeterminado = tipoNorm.includes('indetermin');
     const tipo = toUpperSafe(tipoPlazo ?? tipo_contrato, 'DETERMINADO');
     const jornada = toUpperSafe(jornadaTrabajo ?? jornada_trabajo, 'DIURNA');
+    const dv = Number(duracion_valor);
+    const du = (duracion_unidad ?? '').trim().toLowerCase();
+    const duracionTexto =
+      !esIndeterminado &&
+      Number.isFinite(dv) &&
+      dv > 0 &&
+      (du === 'dias' || du === 'meses')
+        ? ` La duración pactada es de **${Math.floor(dv)}** ${du === 'meses' ? 'mes(es) calendario' : 'día(s) calendario'}.`
+        : '';
     const fecha = strOrNull(fechaIngreso ?? fecha_ingreso) ?? 'POR DEFINIR';
     const nombreTrabajador = empPlanilla.nombre_completo ?? worker.nombres ?? worker.nombre_completo ?? 'TRABAJADOR NO REGISTRADO';
     const cedula = empPlanilla.cedula ?? empPlanilla.documento ?? worker.cedula ?? worker.documento ?? 'NO REGISTRADA';
@@ -317,7 +333,7 @@ ${encabezadoLegal}
 ${clausulaObjeto}
 
 ### SEGUNDA: TIPO Y PLAZO
-El presente contrato se celebra por tiempo **${tipo}**.
+El presente contrato se celebra por tiempo **${tipo}**.${duracionTexto}
 
 ### TERCERA: JORNADA DE TRABAJO
 **EL TRABAJADOR** cumplirá una jornada **${jornada}**.

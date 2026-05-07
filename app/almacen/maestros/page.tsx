@@ -6,7 +6,7 @@
  * Requiere migración: supabase/migrations/014_almacen_maestros_sap.sql
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/inventory/GlassCard';
@@ -32,7 +32,7 @@ const KINDS = [
 ];
 
 export default function AlmacenMaestrosPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [tab, setTab] = useState<'depositos' | 'muebles' | 'categorias' | 'unidades'>('depositos');
   const [err, setErr] = useState<string | null>(null);
 

@@ -67,7 +67,7 @@ export default function NewInventoryItemPage() {
   });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const loadMasters = useCallback(async () => {
     setLoadErr(null);
@@ -199,6 +199,7 @@ export default function NewInventoryItemPage() {
         serial_number: item.serial_number.trim() || null,
         status: isHerramientas ? item.status : null,
         observations: item.observations.trim() || null,
+        product_id: item.product_id ?? null,
       };
       if (sapTrim) payload.sap_code = sapTrim;
 

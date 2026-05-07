@@ -2,6 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { ModalCompletarContrato } from '@/components/talento/ModalCompletarContrato';
 
 export type PlanillaDocTipo = 'hoja_empleo' | 'hoja_vida';
 
@@ -17,6 +19,8 @@ function safeReturnPath(raw: string | null): string | null {
 function PlanillaIframe() {
   const router = useRouter();
   const sp = useSearchParams();
+  const supabase = useMemo(() => createClient(), []);
+  const [modalContratoOpen, setModalContratoOpen] = useState(false);
   const empleadoId = (sp.get('empleadoId') ?? '').trim();
   const cedula = (sp.get('cedula') ?? '').trim().replace(/\uFEFF/g, '');
   const tipoUrl = (sp.get('tipo') ?? '').trim().toLowerCase();
@@ -124,6 +128,15 @@ function PlanillaIframe() {
               Hoja de empleo
             </button>
           </div>
+          {docTipo === 'hoja_empleo' ? (
+            <button
+              type="button"
+              onClick={() => setModalContratoOpen(true)}
+              className="rounded-lg border border-emerald-500/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25"
+            >
+              Generar contrato
+            </button>
+          ) : null}
           <a
             href={pdfHref}
             target="_blank"
@@ -178,6 +191,13 @@ function PlanillaIframe() {
       {pdfObjectUrl && !loadError ? (
         <iframe title={labelActivo} src={pdfObjectUrl} className="min-h-0 w-full flex-1 border-0 bg-zinc-950" />
       ) : null}
+
+      <ModalCompletarContrato
+        open={modalContratoOpen}
+        onOpenChange={setModalContratoOpen}
+        supabase={supabase}
+        obreroId={empleadoId || null}
+      />
     </div>
   );
 }
