@@ -78,6 +78,17 @@ function fmtFechaLargaEs(v: string | null | undefined): string | null {
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
+/** Evita dígitos de cédula u otros pegados al final del nombre por error de captura (ej. "Ortiz88"). */
+function limpiarNombreRepresentanteLegal(n: string): string {
+  let t = n.trim().replace(/\s+/g, ' ');
+  if (!t) return t;
+  // Sufijo numérico largo (cédula sin separador)
+  t = t.replace(/\s*\d{7,}\s*$/, '').trim();
+  // Dos o más dígitos pegados directamente a una letra al final (ej. …Ortiz88)
+  t = t.replace(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])(\d{2,})$/, '$1').trim();
+  return t;
+}
+
 /**
  * PDF estructurado del contrato obrero (cláusulas fijas + datos de entidad, empleado y nómina).
  * Alternativa a {@link ContratoLaboralObreroPdfDocument} cuando el cuerpo no viene de plantilla Markdown.
@@ -105,7 +116,9 @@ export function ContratoObreroPDF({
     'Las estipuladas en el tabulador de oficios vigente';
   const tipoPlazo = (parametros.tipoPlazo ?? 'DETERMINADO').toString().trim().toUpperCase() || 'DETERMINADO';
   const fechaIngreso = str(parametros.fechaIngreso, '[fecha de ingreso]');
-  const rep = str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]');
+  const rep = limpiarNombreRepresentanteLegal(
+    str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]'),
+  );
   const repCedulaRaw = (entidad.rep_legal_cedula ?? '').trim();
   const repCedulaFormato =
     repCedulaRaw.length === 0
@@ -128,12 +141,13 @@ export function ContratoObreroPDF({
         {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
 
         <Text style={styles.paragraph}>
-          Entre, la sociedad mercantil <Text style={styles.bold}>{nombreLegalSociedad}</Text>, inscrita por ante la Oficina de{' '}
-          <Text style={styles.bold}>{rmCircunscripcion}</Text> en fecha <Text style={styles.bold}>{rmFecha}</Text>, bajo el Nº{' '}
-          <Text style={styles.bold}>{rmNumero}</Text>, Tomo <Text style={styles.bold}>{rmTomo}</Text> de los Libros de Registro
-          de Comercio, representada en este acto por su Presidente, ciudadano <Text style={styles.bold}>{rep}</Text>,
-          venezolano, mayor de edad, titular de la Cédula de Identidad No <Text style={styles.bold}>{repCedulaFormato}</Text>,
-          quien en lo sucesivo y a los solos efectos del presente contrato se denominará LA EMPRESA.
+          Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina
+          de <Text style={styles.bold}>{rmCircunscripcion}</Text>, en fecha <Text style={styles.bold}>{rmFecha}</Text>, bajo el
+          Nº <Text style={styles.bold}>{rmNumero}</Text>, Tomo <Text style={styles.bold}>{rmTomo}</Text> de los Libros de
+          Registro de Comercio, representada en este acto por su Presidente, ciudadano{' '}
+          <Text style={styles.bold}>{rep}</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
+          <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato
+          se denominará EL EMPLEADOR.
         </Text>
         <Text style={styles.paragraph}>
           Y por la otra, el(la) ciudadano(a) <Text style={styles.bold}>{nombreTrabajador}</Text>, de nacionalidad {nacionalidad}
