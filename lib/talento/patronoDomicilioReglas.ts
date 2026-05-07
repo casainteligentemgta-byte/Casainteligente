@@ -9,7 +9,10 @@ function strOpt(v: unknown): string | null {
   return t.length ? t : null;
 }
 
-/** `domicilio_empresa` dentro de `ci_entidades.registro_mercantil` (jsonb o JSON string). */
+/**
+ * Domicilio dentro de `ci_entidades.registro_mercantil` (jsonb o JSON string).
+ * Acepta variantes históricas de clave para evitar placeholders en contratos.
+ */
 export function domicilioEmpresaDesdeRegistroMercantil(raw: unknown): string | null {
   if (raw == null) return null;
   let o: unknown = raw;
@@ -21,7 +24,15 @@ export function domicilioEmpresaDesdeRegistroMercantil(raw: unknown): string | n
     }
   }
   if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
-  return strOpt((o as { domicilio_empresa?: unknown }).domicilio_empresa);
+  const r = o as Record<string, unknown>;
+  return (
+    strOpt(r.domicilio_empresa) ??
+    strOpt(r.domicilioFiscal) ??
+    strOpt(r.domicilio_fiscal) ??
+    strOpt(r.direccion_fiscal) ??
+    strOpt(r.direccion) ??
+    null
+  );
 }
 
 /**

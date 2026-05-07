@@ -71,9 +71,10 @@ export function ContratoObreroPDF({
   configNomina,
   parametros,
 }: ContratoObreroPdfStructuredProps) {
+  const envDom = (process.env.NEXT_PUBLIC_PATRON_DOMICILIO ?? '').trim();
   const nombreEntidad = str(entidad.nombre_legal ?? entidad.nombre, 'EL EMPLEADOR').toUpperCase();
   const domicilioEntidad = str(
-    entidad.domicilio_fiscal ?? entidad.direccion_fiscal,
+    entidad.domicilio_fiscal ?? entidad.direccion_fiscal ?? envDom,
     '[domicilio fiscal por registrar]',
   );
   const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, 'EL TRABAJADOR');
