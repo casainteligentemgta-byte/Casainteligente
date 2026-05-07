@@ -147,11 +147,40 @@ export async function POST(req: Request) {
       .from('ci_empleados')
       .select(`
         *,
-        ci_proyectos (id, entidad_id, nombre, ubicacion, ubicacion_texto, obra_ubicacion),
-        ci_entidades (nombre_legal, nombre, domicilio_fiscal, direccion_fiscal, representante_legal, rep_legal_nombre, rep_legal_cedula, rep_legal_cargo, registro_mercantil)
+        ci_proyectos (
+          id,
+          entidad_id,
+          nombre,
+          ubicacion,
+          ubicacion_texto,
+          obra_ubicacion,
+          ci_entidades (
+            nombre_legal,
+            nombre,
+            domicilio_fiscal,
+            direccion_fiscal,
+            representante_legal,
+            rep_legal_nombre,
+            rep_legal_cedula,
+            rep_legal_cargo,
+            registro_mercantil
+          )
+        )
       `)
       .eq('id', empleadoIdFinal)
-      .single();
+      .maybeSingle();
+
+    type EntidadPatronoRow = {
+      nombre_legal?: string | null;
+      nombre?: string | null;
+      domicilio_fiscal?: string | null;
+      direccion_fiscal?: string | null;
+      representante_legal?: string | null;
+      rep_legal_nombre?: string | null;
+      rep_legal_cedula?: string | null;
+      rep_legal_cargo?: string | null;
+      registro_mercantil?: unknown;
+    };
 
     const worker = workerRaw as {
       nombres?: string | null;
@@ -166,17 +195,6 @@ export async function POST(req: Request) {
       cargo_codigo?: string | null;
       cargo_nivel?: number | null;
       hoja_vida_obrero?: unknown;
-      ci_entidades?: {
-        nombre_legal?: string | null;
-        nombre?: string | null;
-        domicilio_fiscal?: string | null;
-        direccion_fiscal?: string | null;
-        representante_legal?: string | null;
-        rep_legal_nombre?: string | null;
-        rep_legal_cedula?: string | null;
-        rep_legal_cargo?: string | null;
-        registro_mercantil?: unknown;
-      } | null;
       ci_proyectos?: {
         id?: string | null;
         entidad_id?: string | null;
@@ -184,12 +202,22 @@ export async function POST(req: Request) {
         ubicacion?: string | null;
         ubicacion_texto?: string | null;
         obra_ubicacion?: string | null;
+        ci_entidades?: EntidadPatronoRow | EntidadPatronoRow[] | null;
       } | null;
     } | null;
 
-    if (workerError || !worker) {
-      throw new Error('Error buscando empleado o relaciones incompletas');
+    if (workerError) {
+      throw new Error(workerError.message || 'Error al consultar el empleado');
     }
+    if (!worker) {
+      throw new Error('Empleado no encontrado');
+    }
+
+    const entidadDesdeProyecto = (() => {
+      const nested = worker.ci_proyectos?.ci_entidades;
+      if (!nested) return null;
+      return Array.isArray(nested) ? (nested[0] ?? null) : nested;
+    })();
 
     const { data: cargoConfig } = await supabase
       .from('ci_config_nomina')
@@ -203,8 +231,8 @@ export async function POST(req: Request) {
       cargo_codigo?: string | null;
     } | null;
 
-    const entDir = worker.ci_entidades;
-    let entPatrono = entDir ?? null;
+    const entDir = entidadDesdeProyecto;
+    let entPatrono: EntidadPatronoRow | null = entDir ?? null;
     let nombreEntidad =
       strOrNull(entDir?.nombre_legal) ?? strOrNull(entDir?.nombre) ?? 'LA ENTIDAD';
     let domicilioEntidad = entDir
@@ -247,7 +275,7 @@ export async function POST(req: Request) {
         domicilioEntidad =
           domicilioPatronoParaEntidad(ep) ?? domicilioEntidad;
         if (!entPatrono) {
-          entPatrono = ep as NonNullable<(typeof worker)['ci_entidades']>;
+          entPatrono = ep;
         }
       }
     }
