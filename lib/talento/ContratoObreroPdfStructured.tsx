@@ -128,13 +128,12 @@ export function ContratoObreroPDF({
         {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
 
         <Text style={styles.paragraph}>
-          Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina
-          de <Text style={styles.bold}>“{rmCircunscripcion}”</Text> en fecha <Text style={styles.bold}>“{rmFecha}”</Text>, bajo
-          el Nº <Text style={styles.bold}>“{rmNumero}”</Text>, Tomo <Text style={styles.bold}>“{rmTomo}”</Text> de los Libros de
-          Registro de Comercio, representada en este acto por su Presidente, ciudadano{' '}
-          <Text style={styles.bold}>“{rep}”</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
-          <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente
-          contrato se denominará LA EMPRESA.
+          Entre, la sociedad mercantil <Text style={styles.bold}>{nombreLegalSociedad}</Text>, inscrita por ante la Oficina de{' '}
+          <Text style={styles.bold}>{rmCircunscripcion}</Text> en fecha <Text style={styles.bold}>{rmFecha}</Text>, bajo el Nº{' '}
+          <Text style={styles.bold}>{rmNumero}</Text>, Tomo <Text style={styles.bold}>{rmTomo}</Text> de los Libros de Registro
+          de Comercio, representada en este acto por su Presidente, ciudadano <Text style={styles.bold}>{rep}</Text>,
+          venezolano, mayor de edad, titular de la Cédula de Identidad No <Text style={styles.bold}>{repCedulaFormato}</Text>,
+          quien en lo sucesivo y a los solos efectos del presente contrato se denominará LA EMPRESA.
         </Text>
         <Text style={styles.paragraph}>
           Y por la otra, el(la) ciudadano(a) <Text style={styles.bold}>{nombreTrabajador}</Text>, de nacionalidad {nacionalidad}
@@ -146,7 +145,7 @@ export function ContratoObreroPDF({
         <Text style={styles.paragraph}>
           <Text style={styles.bold}>PRIMERA: OBJETO.</Text> EL TRABAJADOR se obliga a prestar sus servicios personales en
           el cargo u oficio de <Text style={styles.bold}>{cargo}</Text>, con las funciones inherentes al mismo, tales
-          como: &quot;{funciones}&quot;.
+          como: <Text style={styles.bold}>{funciones}</Text>.
         </Text>
 
         <Text style={styles.paragraph}>
