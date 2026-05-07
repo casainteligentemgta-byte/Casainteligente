@@ -449,6 +449,15 @@ export async function cargarPropsContratoObreroPdfEstructurado(
         .maybeSingle()
     : { data: null };
   const entidadRow = (ent ?? null) as Record<string, unknown> | null;
+  const domicilioEmpresaSegunRegistro = entidadRow
+    ? domicilioPatronoParaEntidad({
+        nombre_legal: strOpt(entidadRow.nombre_legal),
+        nombre: strOpt(entidadRow.nombre),
+        domicilio_fiscal: strOpt(entidadRow.domicilio_fiscal),
+        direccion_fiscal: strOpt(entidadRow.direccion_fiscal),
+        registro_mercantil: entidadRow.registro_mercantil,
+      })
+    : null;
   const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
   const rm = (() => {
     const raw = entidadRow?.registro_mercantil;
@@ -467,16 +476,19 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
     nombre_legal: strOpt(entidadRow?.nombre_legal) ?? f.patron.nombre,
     nombre: strOpt(entidadRow?.nombre),
-    domicilio_fiscal: f.patron.domicilio,
+    domicilio_fiscal: domicilioEmpresaSegunRegistro ?? f.patron.domicilio,
     direccion_fiscal: strOpt(entidadRow?.direccion_fiscal),
     representante_legal: strOpt(entidadRow?.representante_legal) ?? f.patron.representante,
     rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre,
     rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula,
     rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? rmRep.cargo,
     rm_oficina:
-      strOpt(rm?.registro_mercantil_oficina) ?? strOpt(rm?.registro_mercantil) ?? strOpt(rm?.oficina) ?? strOpt(rm?.registro),
-    rm_fecha: strOpt(rm?.fecha_registro) ?? strOpt(rm?.fecha_inscripcion) ?? strOpt(rm?.fecha),
-    rm_numero: strOpt(rm?.numero_registro) ?? strOpt(rm?.numero) ?? strOpt(rm?.nro),
+      strOpt(rm?.circunscripcion) ??
+      strOpt(rm?.registro_mercantil_oficina) ??
+      strOpt(rm?.oficina) ??
+      strOpt(rm?.registro),
+    rm_fecha: strOpt(rm?.fecha) ?? strOpt(rm?.fecha_registro) ?? strOpt(rm?.fecha_inscripcion),
+    rm_numero: strOpt(rm?.numero) ?? strOpt(rm?.numero_registro) ?? strOpt(rm?.nro),
     rm_tomo: strOpt(rm?.tomo) ?? strOpt(rm?.libro_tomo),
   };
 
