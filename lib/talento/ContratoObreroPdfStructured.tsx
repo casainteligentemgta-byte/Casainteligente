@@ -17,6 +17,12 @@ export type EntidadContratoPdf = {
   direccion_fiscal?: string | null;
   representante_legal?: string | null;
   rep_legal_nombre?: string | null;
+  rep_legal_cedula?: string | null;
+  rep_legal_cargo?: string | null;
+  rm_oficina?: string | null;
+  rm_fecha?: string | null;
+  rm_numero?: string | null;
+  rm_tomo?: string | null;
 };
 
 export type EmpleadoContratoPdf = {
@@ -60,6 +66,14 @@ function fmtMonto(n: number | null | undefined): string {
   return Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtFechaLargaEs(v: string | null | undefined): string | null {
+  const t = (v ?? '').trim();
+  if (!t) return null;
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
 /**
  * PDF estructurado del contrato obrero (cláusulas fijas + datos de entidad, empleado y nómina).
  * Alternativa a {@link ContratoLaboralObreroPdfDocument} cuando el cuerpo no viene de plantilla Markdown.
@@ -91,7 +105,13 @@ export function ContratoObreroPDF({
     'Las estipuladas en el tabulador de oficios vigente';
   const tipoPlazo = (parametros.tipoPlazo ?? 'DETERMINADO').toString().trim().toUpperCase() || 'DETERMINADO';
   const fechaIngreso = str(parametros.fechaIngreso, '[fecha de ingreso]');
-  const rep = str(entidad.representante_legal ?? entidad.rep_legal_nombre, 'Representante legal');
+  const rep = str(entidad.rep_legal_nombre ?? entidad.representante_legal, 'Representante legal');
+  const repCedula = str(entidad.rep_legal_cedula, '[CÉDULA NO REGISTRADA]');
+  const repCargo = str(entidad.rep_legal_cargo, 'Presidente');
+  const rmOficina = str(entidad.rm_oficina, 'Registro Mercantil correspondiente');
+  const rmFecha = str(fmtFechaLargaEs(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
+  const rmNumero = str(entidad.rm_numero, '[N° NO REGISTRADO]');
+  const rmTomo = str(entidad.rm_tomo, '[TOMO NO REGISTRADO]');
   const salBase = fmtMonto(configNomina.salario_base_mensual);
   const cesta = fmtMonto(configNomina.cestaticket_mensual);
 
@@ -102,12 +122,19 @@ export function ContratoObreroPDF({
         {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
 
         <Text style={styles.paragraph}>
-          ENTRE <Text style={styles.bold}>{nombreEntidad}</Text>, domiciliada en {domicilioEntidad}, de aquí en adelante
-          &quot;EL EMPLEADOR&quot;, por una parte, y el(la) ciudadano(a) <Text style={styles.bold}>{nombreTrabajador}</Text>
-          , de nacionalidad {nacionalidad}, mayor de edad, hábil en el ejercicio de sus derechos civiles, titular de la
-          cédula de identidad N° <Text style={styles.bold}>{cedula}</Text>, domiciliado(a) en {domicilioTrab}, en adelante
-          &quot;EL TRABAJADOR&quot;, por la otra parte, han convenido celebrar el presente contrato individual de trabajo,
-          sujeto a las siguientes cláusulas:
+          Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreEntidad}”</Text>, inscrita por ante la,{' '}
+          <Text style={styles.bold}>“{rmOficina}”</Text>, en fecha <Text style={styles.bold}>“{rmFecha}”</Text>, bajo el Nº{' '}
+          <Text style={styles.bold}>“{rmNumero}”</Text>, Tomo <Text style={styles.bold}>“{rmTomo}”</Text> de los Libros de
+          Registro de Comercio, representada en este acto por su {repCargo}, ciudadano{' '}
+          <Text style={styles.bold}>“{rep}”</Text>, {nacionalidad}, mayor de edad, titular de la Cédula de Identidad No{' '}
+          <Text style={styles.bold}>“{repCedula}”</Text>, quien en lo sucesivo y a los solos efectos del presente contrato se
+          denominará EL EMPLEADOR.
+        </Text>
+        <Text style={styles.paragraph}>
+          Y por la otra, el(la) ciudadano(a) <Text style={styles.bold}>{nombreTrabajador}</Text>, de nacionalidad {nacionalidad}
+          , mayor de edad, hábil en el ejercicio de sus derechos civiles, titular de la cédula de identidad N°{' '}
+          <Text style={styles.bold}>{cedula}</Text>, domiciliado(a) en {domicilioTrab}. Ambas partes han convenido celebrar el
+          presente contrato individual de trabajo, sujeto a las siguientes cláusulas:
         </Text>
 
         <Text style={styles.paragraph}>

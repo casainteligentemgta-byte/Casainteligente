@@ -221,6 +221,23 @@ function strOpt(v: unknown): string | null {
   return s || null;
 }
 
+function primerRepresentanteRegistro(raw: unknown): { nombre?: string; cedula?: string; cargo?: string } {
+  if (!raw) return {};
+  let o: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw) as unknown;
+    } catch {
+      return {};
+    }
+  }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return {};
+  const reps = (o as { representantes?: unknown }).representantes;
+  if (!Array.isArray(reps) || !reps[0] || typeof reps[0] !== 'object' || Array.isArray(reps[0])) return {};
+  const r = reps[0] as Record<string, unknown>;
+  return { nombre: strOpt(r.nombre), cedula: strOpt(r.cedula), cargo: strOpt(r.cargo) };
+}
+
 /**
  * Arma fuentes del contrato para un empleado: hoja de empleo + último contrato si existe + obra por proyecto/vacante.
  * Sirve para vista previa RRHH sin `contrato_id`.
@@ -395,10 +412,69 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     strOpt(f.contrato.cargo_oficio_desempeño) ?? strOpt(hv.contratacion?.cargoUOficio) ?? null;
   const tareasEsp = strOpt(hv.contratacion?.cargoUOficio) ?? null;
 
+  let entidadId: string | null = null;
+  const { data: empProyecto } = await supabase
+    .from('ci_empleados')
+    .select('proyecto_modulo_id,recruitment_need_id')
+    .eq('id', empleadoId.trim())
+    .maybeSingle();
+  const ep = (empProyecto ?? null) as { proyecto_modulo_id?: string | null; recruitment_need_id?: string | null } | null;
+  let proyectoId = strOpt(ep?.proyecto_modulo_id);
+  if (!proyectoId) {
+    const needId = strOpt(ep?.recruitment_need_id);
+    if (needId) {
+      const { data: need } = await supabase
+        .from('recruitment_needs')
+        .select('proyecto_modulo_id,proyecto_id')
+        .eq('id', needId)
+        .maybeSingle();
+      const n = need as { proyecto_modulo_id?: string | null; proyecto_id?: string | null } | null;
+      proyectoId = strOpt(n?.proyecto_modulo_id) ?? strOpt(n?.proyecto_id);
+    }
+  }
+  if (proyectoId) {
+    const { data: pr } = await supabase.from('ci_proyectos').select('entidad_id').eq('id', proyectoId).maybeSingle();
+    entidadId = strOpt((pr as { entidad_id?: string | null } | null)?.entidad_id);
+  }
+  const { data: ent } = entidadId
+    ? await supabase
+        .from('ci_entidades')
+        .select(
+          'nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+        )
+        .eq('id', entidadId)
+        .maybeSingle()
+    : { data: null };
+  const entidadRow = (ent ?? null) as Record<string, unknown> | null;
+  const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
+  const rm = (() => {
+    const raw = entidadRow?.registro_mercantil;
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+      } catch {
+        return null;
+      }
+    }
+    return typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  })();
+
   const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
-    nombre_legal: f.patron.nombre,
+    nombre_legal: strOpt(entidadRow?.nombre_legal) ?? f.patron.nombre,
+    nombre: strOpt(entidadRow?.nombre),
     domicilio_fiscal: f.patron.domicilio,
-    representante_legal: f.patron.representante,
+    direccion_fiscal: strOpt(entidadRow?.direccion_fiscal),
+    representante_legal: strOpt(entidadRow?.representante_legal) ?? f.patron.representante,
+    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre,
+    rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula,
+    rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? rmRep.cargo,
+    rm_oficina:
+      strOpt(rm?.registro_mercantil_oficina) ?? strOpt(rm?.registro_mercantil) ?? strOpt(rm?.oficina) ?? strOpt(rm?.registro),
+    rm_fecha: strOpt(rm?.fecha_registro) ?? strOpt(rm?.fecha_inscripcion) ?? strOpt(rm?.fecha),
+    rm_numero: strOpt(rm?.numero_registro) ?? strOpt(rm?.numero) ?? strOpt(rm?.nro),
+    rm_tomo: strOpt(rm?.tomo) ?? strOpt(rm?.libro_tomo),
   };
 
   const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
