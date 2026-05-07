@@ -308,6 +308,7 @@ export async function POST(req: Request) {
     const cargoMayus = worker.cargo_nombre?.toUpperCase() || 'TRABAJADOR';
     const funcionesManual =
       strOrNull(conf?.funciones_oficiales) ??
+      strOrNull(worker.tareas_especificas) ??
       'las tareas inherentes a su cargo y aquellas asignadas por su supervisor inmediato';
     const nombreProyecto = worker.ci_proyectos?.nombre || 'OBRA NO REGISTRADA';
     const ubicacionProyecto =
@@ -349,10 +350,13 @@ export async function POST(req: Request) {
     const profesionRep = strOrNull(rmRep.profesion) ?? 'Empresario';
     const nombreTrabajadorUpper = toUpperSafe(worker.nombres ?? worker.nombre_completo, 'EL TRABAJADOR');
 
-    const encabezadoLegal = `Entre la empresa **${nombreEntidad}**, representada en este acto por su **${cargoRep}**, **${nombreRep}**, venezolano, mayor de edad, de profesión **${profesionRep}**, titular de la cédula de identidad Nº **${cedulaRep}**, domiciliado en **${domicilioEntidad}**; quien en lo adelante y a efectos del presente contrato se denominará "**EL EMPLEADOR**" por una parte y por la otra, el Ciudadano **${nombreTrabajadorUpper}**, de nacionalidad **${nacionalidad}**, mayor de edad, hábil en el ejercicio de sus derechos civiles, domiciliado en **${domicilioTrabajador}** y titular de la cédula de identidad N° **${cedula}**, en adelante "**EL TRABAJADOR**", se ha convenido en celebrar el **CONTRATO DE TRABAJO POR TIEMPO ${tipo}**, que se regirá por las siguientes cláusulas:`;
+    const encabezadoLegal = `Entre la empresa **${nombreEntidad}**, representada en este acto por su **${cargoRep}**, **${nombreRep}**, de profesión **${profesionRep}**, titular de la cédula de identidad Nº **${cedulaRep}**, domiciliado en **${domicilioEntidad}**; quien en lo adelante se denominará "**EL EMPLEADOR**"; y por la otra, el ciudadano **${nombreTrabajadorUpper}**, de nacionalidad **${nacionalidad}**, mayor de edad, domiciliado en **${domicilioTrabajador}** y titular de la cédula de identidad N° **${cedula}**, en adelante "**EL TRABAJADOR**"; han convenido celebrar el **CONTRATO DE TRABAJO POR TIEMPO ${tipo}**, el cual se regirá por las siguientes cláusulas:`;
 
     const clausulaObjeto = `### PRIMERA: OBJETO
-**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, ejecutando específicamente: **${funcionesManual}**, de conformidad con el Manual de Cargos de la empresa y las instrucciones impartidas por **EL EMPLEADOR**.`;
+**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;
+
+    const clausulaJornadaLugar = `### SEGUNDA: JORNADA Y LUGAR
+**EL TRABAJADOR** cumplirá una jornada **${jornada}** en el proyecto **${nombreProyecto}**, ubicado en **${ubicacionProyecto}**.`;
 
     const hv = (worker.hoja_vida_obrero ?? null) as Record<string, unknown> | null;
     const pagoBanco = strOrNull(banco) ?? strOrNull((hv?.['banco'] as string | undefined) ?? '');
@@ -363,6 +367,14 @@ export async function POST(req: Request) {
       : 'Datos bancarios del trabajador por completar';
     const lugarPago = strOrNull(lugar_pago) ?? ubicacionProyecto;
 
+    const formaPagoBreve =
+      formaPago === 'TRANSFERENCIA'
+        ? 'transferencia bancaria'
+        : formaPago.toLowerCase();
+
+    const clausulaRemuneracion = `### TERCERA: REMUNERACIÓN
+Se acuerda un salario básico diario de **${salarioDiario} VES** (**${salarioDiarioLetras} bolívares**), pagadero mediante **${formaPagoBreve}**, sin perjuicio del detalle operativo previsto en la cláusula séptima.`;
+
     const contratoMarkdown = `
 # CONTRATO INDIVIDUAL DE TRABAJO
 
@@ -370,27 +382,25 @@ ${encabezadoLegal}
 
 ${clausulaObjeto}
 
-### SEGUNDA: TIPO Y PLAZO
+${clausulaJornadaLugar}
+
+${clausulaRemuneracion}
+
+### CUARTA: TIPO Y PLAZO
 El presente contrato se celebra por tiempo **${tipo}**.${duracionTexto}
 
-### TERCERA: JORNADA DE TRABAJO
-**EL TRABAJADOR** cumplirá una jornada **${jornada}**.
+### QUINTA: TABULADOR Y DENOMINACIÓN DEL OFICIO (GACETA)
+Cargo en tabulador: **${codigoTabulador}**. Denominación oficial según Gaceta: **${denominacionGaceta}**.
 
-### CUARTA: TABULADOR Y DENOMINACION DEL OFICIO (GACETA)
-Cargo en tabulador: **${codigoTabulador}**. Denominacion oficial segun Gaceta: **${denominacionGaceta}**.
-
-### QUINTA: OBJETO DEL CONTRATO
+### SEXTA: OBJETO DEL CONTRATO
 ${objetoContrato}
 
-### SEXTA: REMUNERACION
-**EL EMPLEADOR** pagara a **EL TRABAJADOR** un salario basico diario de **${salarioDiario} VES** (**${salarioDiarioLetras} bolivares**).
-
-### SEPTIMA: FORMA Y LUGAR DE PAGO
+### SÉPTIMA: FORMA Y LUGAR DE PAGO
 Forma de pago: **${formaPago}**. Detalle: **${detallePago}**.
 Lugar del pago: **${lugarPago}**.
 
-### OCTAVA: FECHA DE INGRESO Y LUGAR DE TRABAJO
-**EL TRABAJADOR** iniciara la prestacion de sus servicios a partir del **${fecha}**. Las labores se prestaran en el proyecto **${nombreProyecto}**, ubicado en: **${ubicacionProyecto}**.
+### OCTAVA: FECHA DE INGRESO
+**EL TRABAJADOR** iniciará la prestación de sus servicios a partir del **${fecha}**, sin perjuicio del lugar de trabajo indicado en la cláusula segunda.
 `;
 
     return NextResponse.json({ success: true, contrato: contratoMarkdown.trim() });

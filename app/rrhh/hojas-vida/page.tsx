@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { FileText, Link2, MessageSquareText, RefreshCw, ScrollText, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ModalGenerarContrato } from '@/components/rrhh/ModalGenerarContrato';
+import { ModalGenerarContrato } from '@/app/rrhh/hojas-vida/components/ModalGenerarContrato';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 import type { DatoContratoFaltante } from '@/lib/talento/plantillaContratoObreroCompile';
@@ -63,7 +63,8 @@ export default function RrhhHojasVidaPage() {
   const [obsRow, setObsRow] = useState<EmpleadoRow | null>(null);
   const [informeOpen, setInformeOpen] = useState(false);
   const [informeRow, setInformeRow] = useState<EmpleadoRow | null>(null);
-  const [resolviendoObraContrato, setResolviendoObraContrato] = useState(false);
+  /** Resolución proyecto/vacante al abrir el modal de contrato (por fila). */
+  const [contratoModalPrepId, setContratoModalPrepId] = useState<string | null>(null);
   const [contratoGenOpen, setContratoGenOpen] = useState(false);
   const [contratoGenEmpleadoId, setContratoGenEmpleadoId] = useState<string | null>(null);
   const [contratoGenNombre, setContratoGenNombre] = useState<string | null>(null);
@@ -213,28 +214,38 @@ export default function RrhhHojasVidaPage() {
     setObsRow(null);
   }, [obsDraft, obsRow, supabase]);
 
+  const prepararYAbrirModalContrato = useCallback(
+    async (r: EmpleadoRow) => {
+      setContratoModalPrepId(r.id);
+      try {
+        let oid = (r.proyecto_modulo_id ?? '').trim() || null;
+        const nid = (r.recruitment_need_id ?? '').trim();
+        if (!oid && nid) {
+          const { data, error } = await supabase
+            .from('recruitment_needs')
+            .select('proyecto_modulo_id,proyecto_id')
+            .eq('id', nid)
+            .maybeSingle();
+          if (!error && data) {
+            const d = data as { proyecto_modulo_id?: string | null; proyecto_id?: string | null };
+            oid = (d.proyecto_modulo_id ?? d.proyecto_id ?? '').trim() || null;
+          }
+        }
+        setContratoGenEmpleadoId(r.id);
+        setContratoGenNombre((r.nombre_completo ?? '').trim() || null);
+        setContratoGenObraId(oid);
+        setContratoGenOpen(true);
+      } finally {
+        setContratoModalPrepId(null);
+      }
+    },
+    [supabase],
+  );
+
   const abrirModalGenerarContrato = useCallback(async () => {
     if (!informeRow) return;
-    setResolviendoObraContrato(true);
-    let oid = (informeRow.proyecto_modulo_id ?? '').trim() || null;
-    const nid = (informeRow.recruitment_need_id ?? '').trim();
-    if (!oid && nid) {
-      const { data, error } = await supabase
-        .from('recruitment_needs')
-        .select('proyecto_modulo_id,proyecto_id')
-        .eq('id', nid)
-        .maybeSingle();
-      if (!error && data) {
-        const d = data as { proyecto_modulo_id?: string | null; proyecto_id?: string | null };
-        oid = (d.proyecto_modulo_id ?? d.proyecto_id ?? '').trim() || null;
-      }
-    }
-    setContratoGenEmpleadoId(informeRow.id);
-    setContratoGenNombre((informeRow.nombre_completo ?? '').trim() || null);
-    setContratoGenObraId(oid);
-    setResolviendoObraContrato(false);
-    setContratoGenOpen(true);
-  }, [informeRow, supabase]);
+    await prepararYAbrirModalContrato(informeRow);
+  }, [informeRow, prepararYAbrirModalContrato]);
 
   const borrarEmpleado = useCallback(
     async (r: EmpleadoRow) => {
@@ -477,13 +488,22 @@ export default function RrhhHojasVidaPage() {
                         <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
                         <button
                           type="button"
-                          onClick={() => void validarYAbrirContrato(r)}
-                          disabled={validandoContratoId === r.id}
+                          onClick={() => void prepararYAbrirModalContrato(r)}
+                          disabled={contratoModalPrepId === r.id}
                           className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-100/95 transition hover:bg-emerald-900/50"
-                          title="Validar y abrir contrato laboral en PDF"
+                          title="Generar contrato (markdown) y datos consolidados"
                         >
                           <ScrollText className="h-3.5 w-3.5 opacity-90" />
-                          {validandoContratoId === r.id ? 'Validando…' : 'Contrato'}
+                          {contratoModalPrepId === r.id ? '…' : 'Contrato'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void validarYAbrirContrato(r)}
+                          disabled={validandoContratoId === r.id}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-[10px] font-semibold text-emerald-200/80 transition hover:bg-emerald-900/40"
+                          title="Plantilla PDF con placeholders"
+                        >
+                          {validandoContratoId === r.id ? '…' : 'PDF'}
                         </button>
                       </div>
                       <button
@@ -622,12 +642,12 @@ export default function RrhhHojasVidaPage() {
               <button
                 type="button"
                 onClick={() => void abrirModalGenerarContrato()}
-                disabled={resolviendoObraContrato || informeRow.estado === 'aprobado'}
+                disabled={contratoModalPrepId !== null || informeRow.estado === 'aprobado'}
                 className="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-60"
               >
                 {informeRow.estado === 'aprobado'
                   ? 'Ya aprobado para contrato'
-                  : resolviendoObraContrato
+                  : contratoModalPrepId !== null
                     ? 'Preparando…'
                     : 'Aprobar para contrato'}
               </button>
@@ -657,7 +677,7 @@ export default function RrhhHojasVidaPage() {
           }
         }}
         supabase={supabase}
-        empleadoId={contratoGenEmpleadoId}
+        obreroId={contratoGenEmpleadoId}
         obraId={contratoGenObraId}
         nombreObrero={contratoGenNombre}
         onExito={({ portalUrl: url }) => {
