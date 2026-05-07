@@ -9,6 +9,15 @@ function strOpt(v: unknown): string | null {
   return t.length ? t : null;
 }
 
+function normalizarClave(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
 /**
  * Domicilio dentro de `ci_entidades.registro_mercantil` (jsonb o JSON string).
  * Acepta variantes históricas de clave para evitar placeholders en contratos.
@@ -25,14 +34,26 @@ export function domicilioEmpresaDesdeRegistroMercantil(raw: unknown): string | n
   }
   if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
   const r = o as Record<string, unknown>;
-  return (
+  const directo =
     strOpt(r.domicilio_empresa) ??
     strOpt(r.domicilioFiscal) ??
     strOpt(r.domicilio_fiscal) ??
     strOpt(r.direccion_fiscal) ??
     strOpt(r.direccion) ??
-    null
-  );
+    null;
+  if (directo) return directo;
+
+  // Compatibilidad con estructuras legacy: claves libres como
+  // "Domicilio de la empresa (según registro)".
+  for (const [k, v] of Object.entries(r)) {
+    const nk = normalizarClave(k);
+    const esDomicilio = nk.includes('domicilio') || nk.includes('direccion');
+    const esEmpresaRegistro = nk.includes('empresa') || nk.includes('registro');
+    if (!esDomicilio || !esEmpresaRegistro) continue;
+    const val = strOpt(v);
+    if (val) return val;
+  }
+  return null;
 }
 
 /**
