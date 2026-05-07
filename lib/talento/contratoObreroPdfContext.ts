@@ -474,7 +474,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   })();
 
   const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
-    nombre_legal: strOpt(entidadRow?.nombre_legal) ?? f.patron.nombre,
+    nombre_legal: strOpt(entidadRow?.nombre_legal) ?? strOpt(entidadRow?.nombre) ?? f.patron.nombre,
     nombre: strOpt(entidadRow?.nombre),
     domicilio_fiscal: domicilioEmpresaSegunRegistro ?? f.patron.domicilio,
     direccion_fiscal: strOpt(entidadRow?.direccion_fiscal),

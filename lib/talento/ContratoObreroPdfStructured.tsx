@@ -85,13 +85,8 @@ export function ContratoObreroPDF({
   configNomina,
   parametros,
 }: ContratoObreroPdfStructuredProps) {
-  const envDom = (process.env.NEXT_PUBLIC_PATRON_DOMICILIO ?? '').trim();
-  /** Razón social desde `ci_entidades.nombre` (prioridad), luego `nombre_legal` si existe en el embed. */
-  const nombreRazonEntidad = str(entidad.nombre ?? entidad.nombre_legal, 'EL EMPLEADOR');
-  const domicilioEntidad = str(
-    entidad.domicilio_fiscal ?? entidad.direccion_fiscal ?? envDom,
-    '[domicilio fiscal por registrar]',
-  );
+  /** Razón social para contrato: `nombre_legal` si existe en BD, si no `nombre` (`ci_entidades`). */
+  const nombreLegalSociedad = str(entidad.nombre_legal ?? entidad.nombre, '[RAZÓN SOCIAL]');
   const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, 'EL TRABAJADOR');
   const nacionalidad = str(empleado.nacionalidad, 'venezolana');
   const cedula = str(empleado.cedula ?? empleado.documento, '—');
@@ -106,10 +101,16 @@ export function ContratoObreroPDF({
     'Las estipuladas en el tabulador de oficios vigente';
   const tipoPlazo = (parametros.tipoPlazo ?? 'DETERMINADO').toString().trim().toUpperCase() || 'DETERMINADO';
   const fechaIngreso = str(parametros.fechaIngreso, '[fecha de ingreso]');
-  const rep = str(entidad.rep_legal_nombre ?? entidad.representante_legal, 'Representante legal');
-  const repCedula = str(entidad.rep_legal_cedula, '[CÉDULA NO REGISTRADA]');
-  const repCargo = str(entidad.rep_legal_cargo, 'Presidente');
-  const rmOficina = str(entidad.rm_oficina, 'Registro Mercantil correspondiente');
+  const rep = str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]');
+  const repCedulaRaw = (entidad.rep_legal_cedula ?? '').trim();
+  const repCedulaFormato =
+    repCedulaRaw.length === 0
+      ? 'V-___________'
+      : /^[VE]/i.test(repCedulaRaw.trim())
+        ? repCedulaRaw
+        : `V-${repCedulaRaw}`;
+  /** Circunscripción / oficina RM (`registro_mercantil.circunscripcion`). */
+  const rmCircunscripcion = str(entidad.rm_oficina, '[circunscripción]');
   const rmFecha = str(fmtFechaLargaEs(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
   const rmNumero = str(entidad.rm_numero, '[N° NO REGISTRADO]');
   const rmTomo = str(entidad.rm_tomo, '[TOMO NO REGISTRADO]');
@@ -123,14 +124,13 @@ export function ContratoObreroPDF({
         {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
 
         <Text style={styles.paragraph}>
-          Entre, <Text style={styles.bold}>{nombreRazonEntidad}</Text>, domiciliada en{' '}
-          <Text style={styles.bold}>{domicilioEntidad}</Text>, inscrita por ante la,{' '}
-          <Text style={styles.bold}>“{rmOficina}”</Text>, en fecha <Text style={styles.bold}>“{rmFecha}”</Text>, bajo el Nº{' '}
-          <Text style={styles.bold}>“{rmNumero}”</Text>, Tomo <Text style={styles.bold}>“{rmTomo}”</Text> de los Libros de
-          Registro de Comercio, representada en este acto por su {repCargo}, ciudadano{' '}
-          <Text style={styles.bold}>“{rep}”</Text>, {nacionalidad}, mayor de edad, titular de la Cédula de Identidad No{' '}
-          <Text style={styles.bold}>“{repCedula}”</Text>, quien en lo sucesivo y a los solos efectos del presente contrato se
-          denominará EL EMPLEADOR.
+          Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina
+          de <Text style={styles.bold}>“{rmCircunscripcion}”</Text> en fecha <Text style={styles.bold}>“{rmFecha}”</Text>, bajo
+          el Nº <Text style={styles.bold}>“{rmNumero}”</Text>, Tomo <Text style={styles.bold}>“{rmTomo}”</Text> de los Libros de
+          Registro de Comercio, representada en este acto por su Presidente, ciudadano{' '}
+          <Text style={styles.bold}>“{rep}”</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
+          <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente
+          contrato se denominará LA EMPRESA.
         </Text>
         <Text style={styles.paragraph}>
           Y por la otra, el(la) ciudadano(a) <Text style={styles.bold}>{nombreTrabajador}</Text>, de nacionalidad {nacionalidad}
@@ -162,7 +162,7 @@ export function ContratoObreroPDF({
           <View style={styles.signatureBox}>
             <Text style={styles.bold}>POR EL EMPLEADOR</Text>
             <Text>{rep}</Text>
-            <Text>{nombreRazonEntidad}</Text>
+            <Text>{nombreLegalSociedad}</Text>
           </View>
           <View style={styles.signatureBox}>
             <Text style={styles.bold}>EL TRABAJADOR</Text>
