@@ -16,7 +16,7 @@ import {
   parseHojaVidaObrero,
   patronEmpresaDomicilioDesdeHojaJson,
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
-import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
@@ -111,7 +111,7 @@ export async function cargarFuentesContratoObreroPdf(
     admin
       .from('ci_empleados')
       .select(
-        'nombre_completo,nombres,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero,proyecto_modulo_id',
+        'nombre_completo,nombres,documento,cedula,direccion_habitacion,celular,telefono,hoja_vida_obrero,proyecto_modulo_id,recruitment_need_id',
       )
       .eq('id', row.empleado_id)
       .maybeSingle(),
@@ -139,6 +139,7 @@ export async function cargarFuentesContratoObreroPdf(
     telefono?: string | null;
     hoja_vida_obrero?: unknown;
     proyecto_modulo_id?: string | null;
+    recruitment_need_id?: string | null;
   };
 
   const o = obra as {
@@ -154,8 +155,15 @@ export async function cargarFuentesContratoObreroPdf(
 
   const patron = await resolverPatronoDesdeEntidad(admin, strOpt(o.entidad_id));
   const domDesdeHoja = patronEmpresaDomicilioDesdeHojaJson(e.hoja_vida_obrero);
-  const proyectoPlanilla = strOpt(e.proyecto_modulo_id) ?? vinculo;
-  const planillaCampos = await resolvePlanillaPatronoPdf(admin, proyectoPlanilla);
+  const planillaCampos = await resolvePlanillaPatronoParaEmpleado(
+    admin,
+    {
+      proyecto_modulo_id: e.proyecto_modulo_id,
+      recruitment_need_id: e.recruitment_need_id,
+      hoja_vida_obrero: e.hoja_vida_obrero,
+    } as Record<string, unknown>,
+    { proyectoModuloIdAlternativo: vinculo },
+  );
   const domDesdePlanilla = strOpt(planillaCampos.empresaDomicilio);
   const domicilioPatrono = domDesdeHoja ?? domDesdePlanilla ?? patron.domicilio;
 
@@ -332,7 +340,15 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   const empleado = fusionarEmpleadoContratoDesdePlanilla(e, hv);
   const patron = await resolverPatronoDesdeEntidad(supabase, entidadId);
   const domDesdeHoja = patronEmpresaDomicilioDesdeHojaJson(e.hoja_vida_obrero);
-  const planillaCampos = await resolvePlanillaPatronoPdf(supabase, proyectoId);
+  const planillaCampos = await resolvePlanillaPatronoParaEmpleado(
+    supabase,
+    {
+      proyecto_modulo_id: e.proyecto_modulo_id,
+      recruitment_need_id: e.recruitment_need_id,
+      hoja_vida_obrero: e.hoja_vida_obrero,
+    } as Record<string, unknown>,
+    { proyectoModuloIdAlternativo: proyectoId },
+  );
   const domDesdePlanilla = strOpt(planillaCampos.empresaDomicilio);
   const domicilioPatrono = domDesdeHoja ?? domDesdePlanilla ?? patron.domicilio;
 

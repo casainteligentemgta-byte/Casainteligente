@@ -12,7 +12,7 @@ import {
   parseHojaVidaObrero,
   patronEmpresaDomicilioDesdeHojaJson,
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
-import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -286,10 +286,11 @@ export async function POST(req: Request) {
     const salarioDiarioLetras = montoVesEnLetras(salarioDiarioNum);
 
     const domDesdeHoja = patronEmpresaDomicilioDesdeHojaJson(worker.hoja_vida_obrero);
-    const wRow = worker as { proyecto_modulo_id?: string | null };
-    const pidPlanilla =
-      strOrNull(wRow.proyecto_modulo_id ?? undefined) ?? strOrNull(worker.ci_proyectos?.id ?? undefined);
-    const planillaPatronoGen = pidPlanilla ? await resolvePlanillaPatronoPdf(supabase, pidPlanilla) : {};
+    const planillaPatronoGen = await resolvePlanillaPatronoParaEmpleado(
+      supabase,
+      worker as unknown as Record<string, unknown>,
+      { proyectoModuloIdAlternativo: strOrNull(worker.ci_proyectos?.id ?? undefined) },
+    );
     const domPlanilla = String(planillaPatronoGen.empresaDomicilio ?? '').trim() || null;
     domicilioEntidad = domDesdeHoja ?? domPlanilla ?? domicilioEntidad ?? '[DOMICILIO FISCAL NO REGISTRADO]';
 

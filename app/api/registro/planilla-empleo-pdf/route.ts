@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { cedulaAuthCoincide, cedulaEfectivaDesdeEmpleado } from '@/lib/talento/cedulaAuth';
 import { firmaTrabajadorMetaDesdeRow, HojaDeVidaObreroLegalPdfDoc } from '@/lib/talento/hojaVidaPdfLegal';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
-import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
@@ -56,9 +56,7 @@ export async function GET(req: Request) {
   });
   const nombrePdf = nombreCompletoDesde(completa) || str('nombre_completo') || 'candidato';
   const planillaPatrono =
-    documentVariant === 'hoja_empleo'
-      ? await resolvePlanillaPatronoPdf(admin.client, row.proyecto_modulo_id as string | null | undefined)
-      : {};
+    documentVariant === 'hoja_empleo' ? await resolvePlanillaPatronoParaEmpleado(admin.client, row) : {};
   const firmaTrabajador = firmaTrabajadorMetaDesdeRow(row);
 
   const pdfNode = createElement(HojaDeVidaObreroLegalPdfDoc, {

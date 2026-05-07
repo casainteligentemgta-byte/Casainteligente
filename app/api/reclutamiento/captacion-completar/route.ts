@@ -8,7 +8,7 @@ import type { GacetaPostulacionFormState } from '@/lib/registro/gacetaPostulacio
 import { PlanillaAnexo1PdfDocument } from '@/lib/talento/PlanillaAnexo1Pdf';
 import type { HojaVidaLegalPdfMeta } from '@/lib/talento/hojaVidaPdfLegal';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
-import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { resolvePlanillaPatronoParaEmpleado, resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { ensureCiExamenInviteForEmpleado } from '@/lib/talento/ensureCiExamenInviteForEmpleado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -234,7 +234,7 @@ export async function POST(req: Request) {
   const str = (k: string) => String(row[k] ?? '').trim();
   const completa = hojaVidaDesdeRow(row);
   const emitidoEn = new Date().toLocaleString('es-VE', { dateStyle: 'long', timeStyle: 'short' });
-  const planillaPatrono = await resolvePlanillaPatronoPdf(admin.client, str('proyecto_modulo_id') || null);
+  const planillaPatrono = await resolvePlanillaPatronoParaEmpleado(admin.client, row);
 
   const meta: HojaVidaLegalPdfMeta = {
     emitidoEn,

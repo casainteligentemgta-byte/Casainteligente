@@ -11,7 +11,7 @@ import {
   type HojaVidaObreroCompleta,
 } from '@/lib/talento/hojaVidaObreroCompleta';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
-import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 
 const HojaVidaObreroVista = dynamic(() => import('@/components/talento/HojaVidaObreroVista'), {
   ssr: false,
@@ -80,7 +80,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
       const row = data as Record<string, unknown>;
       setLegal(hojaVidaDesdeRow(row));
       try {
-        const campos = await resolvePlanillaPatronoPdf(supabase, row.proyecto_modulo_id as string | null | undefined);
+        const campos = await resolvePlanillaPatronoParaEmpleado(supabase, row);
         if (alive) setPlanillaPatrono(campos);
       } catch {
         if (alive) setPlanillaPatrono(null);

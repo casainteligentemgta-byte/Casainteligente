@@ -72,7 +72,7 @@ export function planillaPatronoDesdeEntidadRow(input: {
     ) || trimStr(input.direccion_fiscal);
 
   return {
-    entidadNombre: trimStr(input.nombre),
+    entidadNombre: trimStr(input.nombre_legal) || trimStr(input.nombre),
     entidadRif: trimStr(input.rif),
     proyectoNombre: trimStr(input.proyectoNombre),
     representanteNombreApellido: trimStr(rep.nombre),
