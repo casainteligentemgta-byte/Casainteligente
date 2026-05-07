@@ -93,7 +93,10 @@ export async function POST(req: Request) {
   const cargoEtiqueta =
     (n.cargo_nombre ?? '').trim() || (n.title ?? '').trim() || 'Vacante';
 
-  const hoja = buildHojaVidaFromGacetaForm(formState, { fotoPerfil: fotoPerfilUrl, fotoCedula: fotoCedulaUrl }, cargoEtiqueta);
+  const hojaBase = buildHojaVidaFromGacetaForm(formState, { fotoPerfil: fotoPerfilUrl, fotoCedula: fotoCedulaUrl }, cargoEtiqueta);
+  const planillaSnapCapt = await resolvePlanillaPatronoPdf(admin.client, n.proyecto_modulo_id);
+  const empDomCapt = String(planillaSnapCapt.empresaDomicilio ?? '').trim();
+  const hoja = empDomCapt ? { ...hojaBase, planillaPatrono: { empresaDomicilio: empDomCapt } } : hojaBase;
   const nombreCompleto =
     `${formState.primerApellido.trim()} ${formState.segundoApellido.trim()}, ${formState.primerNombre.trim()} ${formState.segundoNombre.trim()}`
       .replace(/\s+/g, ' ')

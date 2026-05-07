@@ -88,6 +88,10 @@ export type HojaVidaObreroCompleta = {
   };
   familiaresDependientes: FamiliarDependiente[];
   trabajosPrevios: TrabajoPrevio[];
+  /** Snapshot alineado con la planilla legal (campo “Dirección / domicilio de la empresa”). */
+  planillaPatrono?: {
+    empresaDomicilio?: string;
+  };
 };
 
 export function emptyFamiliar(): FamiliarDependiente {
@@ -284,6 +288,10 @@ export function parseHojaVidaObreroJson(raw: unknown): HojaVidaObreroCompleta {
     };
   });
 
+  const ppm = isRecord(raw.planillaPatrono) ? raw.planillaPatrono : {};
+  const empresaDomPlan = String(ppm.empresaDomicilio ?? '').trim();
+  const planillaPatrono = empresaDomPlan ? { empresaDomicilio: empresaDomPlan } : undefined;
+
   return {
     datosPersonales,
     contratacion,
@@ -294,6 +302,7 @@ export function parseHojaVidaObreroJson(raw: unknown): HojaVidaObreroCompleta {
     pesoMedidas,
     familiaresDependientes,
     trabajosPrevios,
+    ...(planillaPatrono ? { planillaPatrono } : {}),
   };
 }
 

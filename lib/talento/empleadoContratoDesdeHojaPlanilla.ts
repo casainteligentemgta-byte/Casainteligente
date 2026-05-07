@@ -7,6 +7,18 @@ function str(v: unknown): string | null {
   return s || null;
 }
 
+/**
+ * Texto del bloque legal “Dirección / domicilio de la empresa” si fue persistido
+ * en `hoja_vida_obrero.planillaPatrono` (p. ej. al cerrar captación).
+ */
+export function patronEmpresaDomicilioDesdeHojaJson(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const pp = (raw as { planillaPatrono?: unknown }).planillaPatrono;
+  if (!pp || typeof pp !== 'object' || Array.isArray(pp)) return null;
+  const ed = String((pp as { empresaDomicilio?: unknown }).empresaDomicilio ?? '').trim();
+  return ed || null;
+}
+
 export type CiEmpleadoContratoRow = {
   nombre_completo?: string | null;
   nombres?: string | null;

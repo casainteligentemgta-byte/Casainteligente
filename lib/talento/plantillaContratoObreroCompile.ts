@@ -12,7 +12,7 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   PATRON_DOMICILIO: {
     etiqueta: 'Domicilio fiscal del patrono',
     ayuda:
-      'Se toma automáticamente de la entidad (`ci_entidades`) vinculada al proyecto (`entidad_id`). Complete dirección fiscal o domicilio en Configuración → Entidades si aparece vacío.',
+      'Prioriza el texto de la planilla de empleo (“Dirección / domicilio de la empresa”) guardado en la hoja o el mismo criterio que el PDF de planilla; si falta, entidad vinculada al proyecto o variables de entorno.',
   },
   PATRON_REPRESENTANTE: { etiqueta: 'Representante que firma', ayuda: 'Opcional; indique en plantilla o datos de obra.' },
   EMPLEADO_NOMBRE_COMPLETO: { etiqueta: 'Nombre completo del trabajador', ayuda: 'Revise su planilla de empleo.' },

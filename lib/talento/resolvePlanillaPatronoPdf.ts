@@ -24,13 +24,16 @@ export async function resolvePlanillaPatronoPdf(
 
   const { data: e, error: eErr } = await client
     .from('ci_entidades')
-    .select('nombre, rif, direccion_fiscal, rep_legal_nombre, rep_legal_cedula, rep_legal_cargo, registro_mercantil')
+    .select(
+      'nombre, nombre_legal, rif, domicilio_fiscal, direccion_fiscal, rep_legal_nombre, rep_legal_cedula, rep_legal_cargo, registro_mercantil',
+    )
     .eq('id', eid)
     .maybeSingle();
   if (eErr || !e) return { proyectoNombre };
 
   const er = e as {
     nombre: string | null;
+    nombre_legal?: string | null;
     rif: string | null;
     domicilio_fiscal?: string | null;
     direccion_fiscal?: string | null;
@@ -42,7 +45,9 @@ export async function resolvePlanillaPatronoPdf(
 
   return planillaPatronoDesdeEntidadRow({
     nombre: er.nombre,
+    nombre_legal: er.nombre_legal,
     rif: er.rif,
+    domicilio_fiscal: er.domicilio_fiscal,
     direccion_fiscal: er.direccion_fiscal,
     rep_legal_nombre: er.rep_legal_nombre,
     rep_legal_cedula: er.rep_legal_cedula,
