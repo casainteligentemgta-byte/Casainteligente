@@ -122,7 +122,8 @@ export function ContratoObreroPDF({
         {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
 
         <Text style={styles.paragraph}>
-          Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreEntidad}”</Text>, inscrita por ante la,{' '}
+          Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreEntidad}”</Text>, domiciliada en{' '}
+          <Text style={styles.bold}>{domicilioEntidad}</Text>, inscrita por ante la,{' '}
           <Text style={styles.bold}>“{rmOficina}”</Text>, en fecha <Text style={styles.bold}>“{rmFecha}”</Text>, bajo el Nº{' '}
           <Text style={styles.bold}>“{rmNumero}”</Text>, Tomo <Text style={styles.bold}>“{rmTomo}”</Text> de los Libros de
           Registro de Comercio, representada en este acto por su {repCargo}, ciudadano{' '}
