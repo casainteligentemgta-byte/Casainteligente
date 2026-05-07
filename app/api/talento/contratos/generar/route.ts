@@ -148,19 +148,27 @@ function partesCircunscripcionJudicial(circ: string): { oficina: string; estado:
 }
 
 /**
- * Markdown de la frase “inscrita por ante …” usando `circunscripcion` de la entidad.
- * Si no hay datos, usa el estado por defecto (p. ej. inferido de la ubicación del proyecto).
+ * Texto para el hueco [datos_registro] del encabezado: clave explícita en JSON o parte “oficina”
+ * deducida de `circunscripcion` (equivalente a lo guardado desde Configuración → Entidad).
  */
-function fraseInscripcionRegistroMercantilMarkdown(circ: string | null, estadoPorDefecto: string): string {
-  const t = (circ ?? '').trim();
-  if (!t) {
-    return `**[Registro Mercantil / circunscripción por registrar]**, Circunscripción Judicial del Estado **${estadoPorDefecto}**`;
+function datosRegistroOficinaRm(raw: unknown): string {
+  let o: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw) as unknown;
+    } catch {
+      return '';
+    }
   }
-  const p = partesCircunscripcionJudicial(t);
-  if (p) {
-    return `**${p.oficina}** de la Circunscripción Judicial del Estado **${p.estado}**`;
-  }
-  return `**${t}**`;
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return '';
+  const r = o as Record<string, unknown>;
+  const s = (k: string) => (typeof r[k] === 'string' ? r[k].trim() : '');
+  const explicit = s('datos_registro');
+  if (explicit) return explicit;
+  const circ = s('circunscripcion') || s('registro_mercantil_oficina') || s('oficina') || s('registro');
+  const partes = circ ? partesCircunscripcionJudicial(circ) : null;
+  if (partes?.oficina) return partes.oficina;
+  return circ;
 }
 
 function fmtFechaLargaEsContrato(v: string): string {
@@ -171,27 +179,6 @@ function fmtFechaLargaEsContrato(v: string): string {
     return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
   }
   return t;
-}
-
-/** Heurística ligera: si la ubicación del proyecto menciona un estado venezolano conocido, úsalo como respaldo del RM. */
-function estadoJudicialPorDefectoDesdeUbicacion(ubicacion: string): string {
-  const u = ubicacion.toLowerCase();
-  const candidatos = [
-    'Nueva Esparta',
-    'Miranda',
-    'Carabobo',
-    'Zulia',
-    'Aragua',
-    'Lara',
-    'Táchira',
-    'Mérida',
-    'Distrito Capital',
-    'Vargas',
-  ];
-  for (const e of candidatos) {
-    if (u.includes(e.toLowerCase())) return e;
-  }
-  return 'Nueva Esparta';
 }
 
 export async function POST(req: Request) {
@@ -525,16 +512,26 @@ export async function POST(req: Request) {
     const domicilioRepresentanteFrag = domRepRm ? `, domiciliado(a) en **${domRepRm}**` : '';
     const nombreTrabajadorUpper = toUpperSafe(worker.nombres ?? worker.nombre_completo, 'EL TRABAJADOR');
 
-    const cedulaExp = (cedula ?? 'NO-REG').replace(/\s+/g, '').replace(/[^\dA-Za-z-]/g, '');
-    const expediente = `EXP-${cedulaExp}-${new Date().getFullYear()}`;
-    const estadoJudicialRm = estadoJudicialPorDefectoDesdeUbicacion(ubicacionProyecto);
     const rmCampos = registroMercantilCamposDesde(entPatrono?.registro_mercantil);
-    const fraseRmMd = fraseInscripcionRegistroMercantilMarkdown(strOrNull(rmCampos.circunscripcion), estadoJudicialRm);
     const fechaRmMd = fmtFechaLargaEsContrato(rmCampos.fecha || '');
     const numeroRmMd = rmCampos.numero.trim() || '[Nº NO REGISTRADO]';
     const tomoRmMd = rmCampos.tomo.trim() || '[TOMO NO REGISTRADO]';
 
-    const encabezadoLegal = `Entre la sociedad mercantil **"${nombreEntidad}"**, domiciliada en **${domicilioEntidad}**, inscrita por ante ${fraseRmMd}, en fecha **${fechaRmMd}**, bajo el Nº **${numeroRmMd}**, Tomo **${tomoRmMd}** de los Libros de Registro de Comercio, representada en este acto por su **${cargoRep}**, ciudadano **${nombreRep}**, de profesión **${profesionRep}**, titular de la cédula de identidad Nº **${cedulaRep}**${domicilioRepresentanteFrag}, quien en lo adelante se denominará **"EL EMPLEADOR"**; y por la otra, el ciudadano **${nombreTrabajadorUpper}**, de nacionalidad **${nacionalidad}**, mayor de edad, domiciliado en **${domicilioTrabajador}**, titular de la cédula de identidad N° **${cedula}**, en adelante **"EL TRABAJADOR"**; han convenido celebrar el **CONTRATO DE TRABAJO POR TIEMPO ${tipo}**, el cual se regirá por las siguientes cláusulas:`;
+    /** Cédula del trabajador tal como viene en `ci_empleados` (formato expediente solicitado). */
+    const cedulaWorkerParaExp = strOrNull(worker.cedula) ?? strOrNull(worker.documento) ?? 'NO-REG';
+    const cedulaExp = cedulaWorkerParaExp.replace(/\s+/g, '').replace(/[^\dA-Za-z-]/g, '');
+    const expediente = `EXP-${cedulaExp}-${new Date().getFullYear()}`;
+
+    /** `nombre_legal` de la entidad del proyecto (`ci_entidades` vía `ci_proyectos`), sin forzar mayúsculas en este párrafo. */
+    const nombreLegalEntidadParrafo =
+      strOrNull(entPatrono?.nombre_legal) ?? strOrNull(entPatrono?.nombre) ?? nombreEntidad;
+    const datosRegistroRaw = datosRegistroOficinaRm(entPatrono?.registro_mercantil).trim();
+    const datosRegistroParrafo =
+      datosRegistroRaw || '[datos_registro por completar en la entidad]';
+
+    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de Registro Mercantil **${datosRegistroParrafo}** de la Circunscripción Judicial del Estado Nueva Esparta`;
+
+    const encabezadoTrasRm = `Domiciliada en **${domicilioEntidad}**, en fecha **${fechaRmMd}**, bajo el Nº **${numeroRmMd}**, Tomo **${tomoRmMd}** de los Libros de Registro de Comercio, representada en este acto por su **${cargoRep}**, ciudadano **${nombreRep}**, de profesión **${profesionRep}**, titular de la cédula de identidad Nº **${cedulaRep}**${domicilioRepresentanteFrag}, quien en lo adelante se denominará **"EL EMPLEADOR"**; y por la otra, el ciudadano **${nombreTrabajadorUpper}**, de nacionalidad **${nacionalidad}**, mayor de edad, domiciliado en **${domicilioTrabajador}**, titular de la cédula de identidad N° **${cedula}**, en adelante **"EL TRABAJADOR"**; han convenido celebrar el **CONTRATO DE TRABAJO POR TIEMPO ${tipo}**, el cual se regirá por las siguientes cláusulas:`;
 
     const clausulaObjeto = `### PRIMERA: OBJETO
 **EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;
@@ -562,9 +559,11 @@ Se acuerda un salario básico diario de **${salarioDiario} VES** (**${salarioDia
     const contratoMarkdown = `
 # CONTRATO INDIVIDUAL DE TRABAJO
 
-**N° DE EXPEDIENTE:** ${expediente}
+**Número de expediente:** **${expediente}**
 
-${encabezadoLegal}
+${parrafoAperturaRm}
+
+${encabezadoTrasRm}
 
 ${clausulaObjeto}
 
