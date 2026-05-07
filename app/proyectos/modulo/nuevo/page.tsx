@@ -135,7 +135,7 @@ export default function NuevoProyectoModuloPage() {
   const clientesCargaIdRef = useRef(0);
   const [mapReady, setMapReady] = useState(false);
 
-  type EntidadOpt = { id: string; nombre: string; rif: string | null };
+  type EntidadOpt = { id: string; nombre: string | null; nombre_legal: string | null; rif: string | null };
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [entidadId, setEntidadId] = useState('');
   const [entidadesHint, setEntidadesHint] = useState<string | null>(null);
@@ -145,15 +145,40 @@ export default function NuevoProyectoModuloPage() {
     (async () => {
       try {
         const supabase = getSupabase();
-        const { data, error: entErr } = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+
+        // Compatibilidad entre entornos: `nombre_legal` existe en algunas BD, en otras solo `nombre`.
+        let data: EntidadOpt[] | null = null;
+        let entErr: { message?: string } | null = null;
+
+        const full = await supabase
+          .from('ci_entidades')
+          .select('id,nombre,nombre_legal,rif')
+          .order('nombre_legal', { ascending: true, nullsFirst: false });
+
+        if (full.error) {
+          const fallback = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+          if (fallback.error) {
+            entErr = fallback.error as { message?: string };
+          } else {
+            data = ((fallback.data ?? []) as Array<{ id: string; nombre: string | null; rif: string | null }>).map((r) => ({
+              id: r.id,
+              nombre: r.nombre,
+              nombre_legal: null,
+              rif: r.rif,
+            }));
+          }
+        } else {
+          data = (full.data ?? []) as EntidadOpt[];
+        }
+
         if (cancelled) return;
         if (entErr) {
           setEntidades([]);
-          setEntidadesHint('No se cargaron entidades (¿migración 063?). Crea una en Configuración → Entidades antes de guardar.');
+          setEntidadesHint('No se cargaron empresas ejecutoras. Revisa permisos/RLS o que exista la tabla ci_entidades.');
           return;
         }
         setEntidadesHint(null);
-        setEntidades((data ?? []) as EntidadOpt[]);
+        setEntidades(data ?? []);
       } catch {
         if (!cancelled) {
           setEntidades([]);
@@ -165,6 +190,12 @@ export default function NuevoProyectoModuloPage() {
       cancelled = true;
     };
   }, [getSupabase]);
+
+  useEffect(() => {
+    if (entidadId) return;
+    if (!entidades.length) return;
+    setEntidadId(entidades[0]!.id);
+  }, [entidades, entidadId]);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setMapReady(true));
@@ -517,6 +548,7 @@ export default function NuevoProyectoModuloPage() {
       budgets_adicionales: budgetIdsAdicionales,
       entidad_id: entidadId.trim() || null,
       nombre: nombre.trim(),
+      nombre_proyecto: nombre.trim(),
       estado,
       ubicacion_texto: ubicacion.trim(),
       lat: lat.trim() ? Number(lat) : null,
@@ -583,7 +615,7 @@ export default function NuevoProyectoModuloPage() {
           className="space-y-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-6 shadow-lg backdrop-blur-xl"
         >
           <div ref={clienteMenuRef} className="relative">
-            <label className={labelClass}>Cliente (lista CRM) *</label>
+            <label className={labelClass}>CLIENTE</label>
             <button
               type="button"
               disabled={loadingRefs}
@@ -674,13 +706,7 @@ export default function NuevoProyectoModuloPage() {
           </div>
 
           <div>
-            <label className={labelClass}>Patrono / empresa ejecutora *</label>
-            <p className="mb-1 text-[11px] text-zinc-500">
-              Razón social para planillas y contratos.{' '}
-              <Link href="/configuracion/entidades" className="font-semibold text-sky-400 underline hover:text-sky-300">
-                Gestionar entidades
-              </Link>
-            </p>
+            <label className={labelClass}>EMPRESA EJECUTORA</label>
             <select
               required
               className={fieldClass}
@@ -688,10 +714,10 @@ export default function NuevoProyectoModuloPage() {
               onChange={(e) => setEntidadId(e.target.value)}
               style={{ colorScheme: 'dark' }}
             >
-              <option value="">— Selecciona patrono —</option>
+              <option value="">— Selecciona empresa ejecutora —</option>
               {entidades.map((en) => (
                 <option key={en.id} value={en.id}>
-                  {en.nombre}
+                  {(en.nombre || en.nombre_legal || 'Entidad sin nombre').trim()}
                   {en.rif ? ` · ${en.rif}` : ''}
                 </option>
               ))}
@@ -947,21 +973,6 @@ export default function NuevoProyectoModuloPage() {
           </button>
         </form>
 
-        <div className="mt-6 rounded-2xl border border-amber-500/35 bg-amber-950/25 px-4 py-3 shadow-sm">
-          <p className="text-sm font-bold text-amber-100">Requisición de personal (obrero y/o empleado)</p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-            Si necesitas vacantes u oficios, usa el panel de reclutamiento y elige el proyecto en la lista cuando ya
-            esté guardado.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              href="/reclutamiento/dashboard"
-              className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/10"
-            >
-              Panel reclutamiento
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );
