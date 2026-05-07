@@ -203,8 +203,6 @@ export function ModalCompletarContrato({
           empleado_id: eid,
           obra_id: oid,
           proyecto_id: oid,
-          monto_acordado_usd: 0,
-          porcentaje_inicial: 0,
           texto_legal: md,
           fecha_ingreso: fechaIngreso,
           jornada_trabajo: jornada,

@@ -45,8 +45,8 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     empleado_id: string;
     obra_id?: string | null;
     proyecto_id?: string | null;
-    monto_acordado_usd: number;
-    porcentaje_inicial: number;
+    monto_acordado_usd?: number | null;
+    porcentaje_inicial?: number | null;
     texto_legal: string;
     created_at: string;
     fecha_ingreso?: string | null;
@@ -150,8 +150,8 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
       salario_diario: salarioTxt,
       bono_asistencia: 'N/D',
       fecha_inicio: formatDate(contrato.fecha_ingreso ?? undefined) ?? formatDate(obra.fecha_inicio) ?? formatDate(contrato.created_at) ?? 'No definida',
-      monto_acordado_usd: contrato.monto_acordado_usd,
-      porcentaje_inicial: contrato.porcentaje_inicial,
+      monto_acordado_usd: contrato.monto_acordado_usd ?? null,
+      porcentaje_inicial: contrato.porcentaje_inicial ?? null,
       texto_legal: contrato.texto_legal,
       laboral: {
         fecha_ingreso: contrato.fecha_ingreso ?? null,

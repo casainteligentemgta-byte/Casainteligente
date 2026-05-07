@@ -72,6 +72,14 @@ function montoVesEnLetras(valor: number): string {
   return `${enterosTxt} con ${decTxt}/100`;
 }
 
+function nonEmpty(...values: Array<unknown>): string | null {
+  for (const v of values) {
+    const t = strOrNull(v);
+    if (t) return t;
+  }
+  return null;
+}
+
 /** Primer representante en `registro_mercantil.representantes[]` (jsonb). */
 function primerRepresentanteRegistroMercantil(raw: unknown): {
   nombre?: string;
@@ -121,6 +129,9 @@ export async function POST(req: Request) {
       banco,
       duracion_valor,
       duracion_unidad,
+      proyecto_modulo_id,
+      proyecto_id,
+      datos_consolidados,
     } = (await req.json()) as {
       empleadoId?: string;
       empleado_id?: string;
@@ -136,6 +147,26 @@ export async function POST(req: Request) {
       banco?: string;
       duracion_valor?: number;
       duracion_unidad?: 'dias' | 'meses';
+      proyecto_modulo_id?: string;
+      proyecto_id?: string;
+      datos_consolidados?: {
+        proyecto?: {
+          id?: string | null;
+          nombre?: string | null;
+          ubicacion?: string | null;
+          etapa_actual?: string | null;
+        } | null;
+        entidad_empleador?: {
+          nombre_legal?: string | null;
+          nombre?: string | null;
+          rif?: string | null;
+          domicilio_fiscal?: string | null;
+          representante_legal?: string | null;
+          cargo_representante?: string | null;
+          cedula_representante?: string | null;
+          datos_registro?: unknown;
+        } | null;
+      };
     };
 
     const empleadoIdFinal = strOrNull(empleadoId) ?? strOrNull(empleado_id);
@@ -185,7 +216,9 @@ export async function POST(req: Request) {
       throw new Error('Empleado no encontrado');
     }
 
-    let proyectoId = strOrNull(worker.proyecto_modulo_id);
+    let proyectoId =
+      nonEmpty(proyecto_modulo_id, proyecto_id, datos_consolidados?.proyecto?.id) ??
+      strOrNull(worker.proyecto_modulo_id);
     if (!proyectoId) {
       const needId = strOrNull(worker.recruitment_need_id);
       if (needId) {
@@ -234,6 +267,21 @@ export async function POST(req: Request) {
       }
     }
 
+    if (!proyecto) {
+      const p = datos_consolidados?.proyecto;
+      if (p) {
+        proyecto = {
+          id: strOrNull(p.id),
+          entidad_id: null,
+          nombre: strOrNull(p.nombre),
+          ubicacion: strOrNull(p.ubicacion),
+          ubicacion_texto: strOrNull(p.ubicacion),
+          obra_ubicacion: strOrNull(p.ubicacion),
+          ci_entidades: null,
+        };
+      }
+    }
+
     const { data: cargoConfig } = await supabase
       .from('ci_config_nomina')
       .select('funciones_oficiales, salario_base_mensual, cargo_codigo')
@@ -245,6 +293,21 @@ export async function POST(req: Request) {
       salario_base_mensual?: number | null;
       cargo_codigo?: string | null;
     } | null;
+
+    const entidadBody = datos_consolidados?.entidad_empleador ?? null;
+    const entBody: EntidadPatronoRow | null = entidadBody
+      ? {
+          nombre_legal: strOrNull(entidadBody.nombre_legal),
+          nombre: strOrNull(entidadBody.nombre),
+          domicilio_fiscal: strOrNull(entidadBody.domicilio_fiscal),
+          direccion_fiscal: strOrNull(entidadBody.domicilio_fiscal),
+          representante_legal: strOrNull(entidadBody.representante_legal),
+          rep_legal_nombre: strOrNull(entidadBody.representante_legal),
+          rep_legal_cedula: strOrNull(entidadBody.cedula_representante),
+          rep_legal_cargo: strOrNull(entidadBody.cargo_representante),
+          registro_mercantil: entidadBody.datos_registro ?? null,
+        }
+      : null;
 
     const entDir = entidadDesdeProyecto;
     let entPatrono: EntidadPatronoRow | null = entDir ?? null;
@@ -259,6 +322,18 @@ export async function POST(req: Request) {
           registro_mercantil: entDir.registro_mercantil,
         })
       : null;
+
+    if (entBody) {
+      entPatrono = entBody;
+      nombreEntidad = nonEmpty(entBody.nombre_legal, entBody.nombre, nombreEntidad) ?? 'LA ENTIDAD';
+      domicilioEntidad = domicilioPatronoParaEntidad({
+        nombre_legal: entBody.nombre_legal,
+        nombre: entBody.nombre,
+        domicilio_fiscal: entBody.domicilio_fiscal,
+        direccion_fiscal: entBody.direccion_fiscal,
+        registro_mercantil: entBody.registro_mercantil,
+      }) ?? domicilioEntidad;
+    }
 
     // Fallback: si la relación directa no trae entidad, resolver por la entidad vinculada al proyecto.
     const entidadIdProyecto = strOrNull(proyecto?.entidad_id);

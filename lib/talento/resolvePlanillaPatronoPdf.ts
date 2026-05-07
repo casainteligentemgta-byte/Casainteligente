@@ -78,7 +78,23 @@ export async function resolveProyectoModuloIdDesdeEmpleado(
     .maybeSingle();
   if (error || !need) return null;
   const n = need as { proyecto_modulo_id?: string | null; proyecto_id?: string | null };
-  return trimStr(n.proyecto_modulo_id) || trimStr(n.proyecto_id) || null;
+  const fromNeed = trimStr(n.proyecto_modulo_id) || trimStr(n.proyecto_id) || null;
+  if (fromNeed) return fromNeed;
+
+  // Fallback de compatibilidad: si no hay proyecto en empleado/vacante,
+  // tomar el último contrato laboral del empleado y usar su obra/proyecto.
+  const empleadoId = trimStr(row.id);
+  if (!empleadoId) return null;
+  const { data: ctr, error: cErr } = await client
+    .from('ci_contratos_empleado_obra')
+    .select('obra_id,proyecto_id')
+    .eq('empleado_id', empleadoId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (cErr || !ctr) return null;
+  const c = ctr as { obra_id?: string | null; proyecto_id?: string | null };
+  return trimStr(c.obra_id) || trimStr(c.proyecto_id) || null;
 }
 
 const PATRON_KEYS: (keyof PlanillaPatronoCampos)[] = [
