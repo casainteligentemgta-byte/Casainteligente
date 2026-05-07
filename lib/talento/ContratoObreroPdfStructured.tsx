@@ -69,7 +69,11 @@ function fmtMonto(n: number | null | undefined): string {
 function fmtFechaLargaEs(v: string | null | undefined): string | null {
   const t = (v ?? '').trim();
   if (!t) return null;
-  const d = new Date(t);
+  // ISO YYYY-MM-DD (input type="date" en Configuración → Entidad): evitar desfase UTC.
+  const ymd = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const d = ymd
+    ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 12, 0, 0)
+    : new Date(t);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
 }

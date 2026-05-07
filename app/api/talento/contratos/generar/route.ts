@@ -317,7 +317,7 @@ export async function POST(req: Request) {
       const { data: pr } = await supabase
         .from('ci_proyectos')
         .select(
-          'id,entidad_id,nombre,ubicacion,ubicacion_texto,obra_ubicacion,ci_entidades(nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil)',
+          'id,entidad_id,nombre,ubicacion,ubicacion_texto,obra_ubicacion,ci_entidades(nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil)',
         )
         .eq('id', proyectoId)
         .maybeSingle();
@@ -411,7 +411,7 @@ export async function POST(req: Request) {
       const { data: entidadProyecto } = await supabase
         .from('ci_entidades')
         .select(
-          'nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,registro_mercantil,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo',
+          'nombre,nombre_comercial,rif,direccion_fiscal,registro_mercantil,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo',
         )
         .eq('id', entidadIdProyecto)
         .maybeSingle();

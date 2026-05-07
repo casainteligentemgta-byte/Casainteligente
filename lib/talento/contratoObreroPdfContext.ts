@@ -439,11 +439,12 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     const { data: pr } = await supabase.from('ci_proyectos').select('entidad_id').eq('id', proyectoId).maybeSingle();
     entidadId = strOpt((pr as { entidad_id?: string | null } | null)?.entidad_id);
   }
+  /** Columnas alineadas a migraciones 063/064 (evita fallo PostgREST si no existen `nombre_legal` / `domicilio_fiscal`). */
   const { data: ent } = entidadId
     ? await supabase
         .from('ci_entidades')
         .select(
-          'nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+          'nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
         )
         .eq('id', entidadId)
         .maybeSingle()
@@ -488,7 +489,12 @@ export async function cargarPropsContratoObreroPdfEstructurado(
       strOpt(rm?.oficina) ??
       strOpt(rm?.registro),
     rm_fecha: strOpt(rm?.fecha) ?? strOpt(rm?.fecha_registro) ?? strOpt(rm?.fecha_inscripcion),
-    rm_numero: strOpt(rm?.numero) ?? strOpt(rm?.numero_registro) ?? strOpt(rm?.nro),
+    rm_numero:
+      strOpt(rm?.numero) ??
+      strOpt(rm?.numero_registro) ??
+      strOpt(rm?.nro) ??
+      strOpt(rm?.numero_inscripcion) ??
+      strOpt(rm?.n_inscripcion),
     rm_tomo: strOpt(rm?.tomo) ?? strOpt(rm?.libro_tomo),
   };
 
