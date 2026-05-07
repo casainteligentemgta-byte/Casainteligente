@@ -235,7 +235,10 @@ function primerRepresentanteRegistro(raw: unknown): { nombre?: string; cedula?: 
   const reps = (o as { representantes?: unknown }).representantes;
   if (!Array.isArray(reps) || !reps[0] || typeof reps[0] !== 'object' || Array.isArray(reps[0])) return {};
   const r = reps[0] as Record<string, unknown>;
-  return { nombre: strOpt(r.nombre), cedula: strOpt(r.cedula), cargo: strOpt(r.cargo) };
+  const nombre = strOpt(r.nombre) ?? undefined;
+  const cedula = strOpt(r.cedula) ?? undefined;
+  const cargo = strOpt(r.cargo) ?? undefined;
+  return { nombre, cedula, cargo };
 }
 
 /**
