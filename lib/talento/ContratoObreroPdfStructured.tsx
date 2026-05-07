@@ -86,7 +86,8 @@ export function ContratoObreroPDF({
   parametros,
 }: ContratoObreroPdfStructuredProps) {
   const envDom = (process.env.NEXT_PUBLIC_PATRON_DOMICILIO ?? '').trim();
-  const nombreEntidad = str(entidad.nombre_legal ?? entidad.nombre, 'EL EMPLEADOR').toUpperCase();
+  /** Razón social desde `ci_entidades.nombre` (prioridad), luego `nombre_legal` si existe en el embed. */
+  const nombreRazonEntidad = str(entidad.nombre ?? entidad.nombre_legal, 'EL EMPLEADOR');
   const domicilioEntidad = str(
     entidad.domicilio_fiscal ?? entidad.direccion_fiscal ?? envDom,
     '[domicilio fiscal por registrar]',
@@ -122,7 +123,7 @@ export function ContratoObreroPDF({
         {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
 
         <Text style={styles.paragraph}>
-          Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreEntidad}”</Text>, domiciliada en{' '}
+          Entre, <Text style={styles.bold}>{nombreRazonEntidad}</Text>, domiciliada en{' '}
           <Text style={styles.bold}>{domicilioEntidad}</Text>, inscrita por ante la,{' '}
           <Text style={styles.bold}>“{rmOficina}”</Text>, en fecha <Text style={styles.bold}>“{rmFecha}”</Text>, bajo el Nº{' '}
           <Text style={styles.bold}>“{rmNumero}”</Text>, Tomo <Text style={styles.bold}>“{rmTomo}”</Text> de los Libros de
@@ -161,7 +162,7 @@ export function ContratoObreroPDF({
           <View style={styles.signatureBox}>
             <Text style={styles.bold}>POR EL EMPLEADOR</Text>
             <Text>{rep}</Text>
-            <Text>{nombreEntidad}</Text>
+            <Text>{nombreRazonEntidad}</Text>
           </View>
           <View style={styles.signatureBox}>
             <Text style={styles.bold}>EL TRABAJADOR</Text>
