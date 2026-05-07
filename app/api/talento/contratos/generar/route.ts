@@ -145,28 +145,7 @@ export async function POST(req: Request) {
 
     const { data: workerRaw, error: workerError } = await supabase
       .from('ci_empleados')
-      .select(`
-        *,
-        ci_proyectos (
-          id,
-          entidad_id,
-          nombre,
-          ubicacion,
-          ubicacion_texto,
-          obra_ubicacion,
-          ci_entidades (
-            nombre_legal,
-            nombre,
-            domicilio_fiscal,
-            direccion_fiscal,
-            representante_legal,
-            rep_legal_nombre,
-            rep_legal_cedula,
-            rep_legal_cargo,
-            registro_mercantil
-          )
-        )
-      `)
+      .select('*')
       .eq('id', empleadoIdFinal)
       .maybeSingle();
 
@@ -195,15 +174,8 @@ export async function POST(req: Request) {
       cargo_codigo?: string | null;
       cargo_nivel?: number | null;
       hoja_vida_obrero?: unknown;
-      ci_proyectos?: {
-        id?: string | null;
-        entidad_id?: string | null;
-        nombre?: string | null;
-        ubicacion?: string | null;
-        ubicacion_texto?: string | null;
-        obra_ubicacion?: string | null;
-        ci_entidades?: EntidadPatronoRow | EntidadPatronoRow[] | null;
-      } | null;
+      proyecto_modulo_id?: string | null;
+      recruitment_need_id?: string | null;
     } | null;
 
     if (workerError) {
@@ -213,11 +185,54 @@ export async function POST(req: Request) {
       throw new Error('Empleado no encontrado');
     }
 
-    const entidadDesdeProyecto = (() => {
-      const nested = worker.ci_proyectos?.ci_entidades;
-      if (!nested) return null;
-      return Array.isArray(nested) ? (nested[0] ?? null) : nested;
-    })();
+    let proyectoId = strOrNull(worker.proyecto_modulo_id);
+    if (!proyectoId) {
+      const needId = strOrNull(worker.recruitment_need_id);
+      if (needId) {
+        const { data: need } = await supabase
+          .from('recruitment_needs')
+          .select('proyecto_modulo_id,proyecto_id')
+          .eq('id', needId)
+          .maybeSingle();
+        const n = need as { proyecto_modulo_id?: string | null; proyecto_id?: string | null } | null;
+        proyectoId = strOrNull(n?.proyecto_modulo_id) ?? strOrNull(n?.proyecto_id);
+      }
+    }
+
+    let proyecto: {
+      id?: string | null;
+      entidad_id?: string | null;
+      nombre?: string | null;
+      ubicacion?: string | null;
+      ubicacion_texto?: string | null;
+      obra_ubicacion?: string | null;
+      ci_entidades?: EntidadPatronoRow | EntidadPatronoRow[] | null;
+    } | null = null;
+    let entidadDesdeProyecto: EntidadPatronoRow | null = null;
+
+    if (proyectoId) {
+      const { data: pr } = await supabase
+        .from('ci_proyectos')
+        .select(
+          'id,entidad_id,nombre,ubicacion,ubicacion_texto,obra_ubicacion,ci_entidades(nombre_legal,nombre,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil)',
+        )
+        .eq('id', proyectoId)
+        .maybeSingle();
+      if (pr) {
+        const p = pr as {
+          id?: string | null;
+          entidad_id?: string | null;
+          nombre?: string | null;
+          ubicacion?: string | null;
+          ubicacion_texto?: string | null;
+          obra_ubicacion?: string | null;
+          ci_entidades?: EntidadPatronoRow | EntidadPatronoRow[] | null;
+        };
+        proyecto = p;
+        const nested = p.ci_entidades;
+        entidadDesdeProyecto = nested ? (Array.isArray(nested) ? (nested[0] ?? null) : nested) : null;
+      }
+    }
 
     const { data: cargoConfig } = await supabase
       .from('ci_config_nomina')
@@ -246,7 +261,7 @@ export async function POST(req: Request) {
       : null;
 
     // Fallback: si la relación directa no trae entidad, resolver por la entidad vinculada al proyecto.
-    const entidadIdProyecto = strOrNull(worker.ci_proyectos?.entidad_id);
+    const entidadIdProyecto = strOrNull(proyecto?.entidad_id);
     if (entidadIdProyecto && (!domicilioEntidad || nombreEntidad === 'LA ENTIDAD')) {
       const { data: entidadProyecto } = await supabase
         .from('ci_entidades')
@@ -289,7 +304,7 @@ export async function POST(req: Request) {
     const planillaPatronoGen = await resolvePlanillaPatronoParaEmpleado(
       supabase,
       worker as unknown as Record<string, unknown>,
-      { proyectoModuloIdAlternativo: strOrNull(worker.ci_proyectos?.id ?? undefined) },
+      { proyectoModuloIdAlternativo: strOrNull(proyecto?.id ?? undefined) },
     );
     const domPlanilla = String(planillaPatronoGen.empresaDomicilio ?? '').trim() || null;
     domicilioEntidad = domDesdeHoja ?? domPlanilla ?? domicilioEntidad ?? '[DOMICILIO FISCAL NO REGISTRADO]';
@@ -310,9 +325,9 @@ export async function POST(req: Request) {
       strOrNull(conf?.funciones_oficiales) ??
       strOrNull(worker.tareas_especificas) ??
       'las tareas inherentes a su cargo y aquellas asignadas por su supervisor inmediato';
-    const nombreProyecto = worker.ci_proyectos?.nombre || 'OBRA NO REGISTRADA';
+    const nombreProyecto = proyecto?.nombre || 'OBRA NO REGISTRADA';
     const ubicacionProyecto =
-      worker.ci_proyectos?.ubicacion || worker.ci_proyectos?.ubicacion_texto || worker.ci_proyectos?.obra_ubicacion || 'UBICACION NO REGISTRADA';
+      proyecto?.ubicacion || proyecto?.ubicacion_texto || proyecto?.obra_ubicacion || 'UBICACION NO REGISTRADA';
     const tipoRaw = strOrNull(tipoPlazo ?? tipo_contrato) ?? 'DETERMINADO';
     const tipoNorm = tipoRaw.trim().toLowerCase();
     const esIndeterminado = tipoNorm.includes('indetermin');

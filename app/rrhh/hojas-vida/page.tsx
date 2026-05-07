@@ -273,33 +273,13 @@ export default function RrhhHojasVidaPage() {
   const validarYAbrirContrato = useCallback(async (r: EmpleadoRow) => {
     setValidandoContratoId(r.id);
     try {
-      const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-vista`), {
-        credentials: 'include',
-      });
-      const j = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        faltantes?: DatoContratoFaltante[];
-      };
-      if (!res.ok) {
-        toast.error(j.error ?? `No se pudo validar el contrato (${res.status})`);
-        return;
-      }
-      const falt = Array.isArray(j.faltantes) ? j.faltantes : [];
-      if (falt.length > 0) {
-        setFaltantesRow(r);
-        setFaltantesContrato(falt);
-        setOverridesDraft({});
-        setFaltantesOpen(true);
-        toast.message('Faltan datos para generar el contrato sin marcadores.');
-        return;
-      }
       window.open(
-        apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-laboral-pdf`),
+        apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-laboral-pdf?formato=estructurado`),
         '_blank',
         'noopener,noreferrer',
       );
     } catch {
-      toast.error('Error de red al validar el contrato');
+      toast.error('Error al abrir el contrato PDF');
     } finally {
       setValidandoContratoId(null);
     }
@@ -488,13 +468,13 @@ export default function RrhhHojasVidaPage() {
                         <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
                         <button
                           type="button"
-                          onClick={() => void prepararYAbrirModalContrato(r)}
-                          disabled={contratoModalPrepId === r.id}
+                          onClick={() => void validarYAbrirContrato(r)}
+                          disabled={validandoContratoId === r.id}
                           className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-100/95 transition hover:bg-emerald-900/50"
-                          title="Generar contrato (markdown) y datos consolidados"
+                          title="Previsualizar contrato individual (PDF)"
                         >
                           <ScrollText className="h-3.5 w-3.5 opacity-90" />
-                          {contratoModalPrepId === r.id ? '…' : 'Contrato'}
+                          {validandoContratoId === r.id ? '…' : 'Contrato'}
                         </button>
                         <button
                           type="button"
