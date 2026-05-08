@@ -50,12 +50,21 @@ export type ParametrosContratoPdf = {
   fechaIngreso?: string | null;
 };
 
+/** Datos del contrato de obra para cláusulas primera y segunda (tabla `ci_contratos_empleado_obra`). */
+export type ContratoObreroDetallePdf = {
+  objeto_contrato?: string | null;
+  lugar_prestacion_servicio?: string | null;
+  /** Sustituye el texto entre corchetes tras «suscripción del»; si falta, se usa el modelo legal por defecto. */
+  documento_culminacion?: string | null;
+};
+
 export type ContratoObreroPdfStructuredProps = {
   expedienteId?: string | null;
   empleado: EmpleadoContratoPdf;
   entidad: EntidadContratoPdf;
   configNomina: ConfigNominaContratoPdf;
   parametros: ParametrosContratoPdf;
+  contrato?: ContratoObreroDetallePdf | null;
 };
 
 function str(v: string | null | undefined, fallback: string): string {
@@ -102,6 +111,29 @@ function formatCedulaIdentidad(raw: string | null | undefined): string {
 
 const PLACEHOLDER_LINEA = '_____________';
 
+const DOC_CULMINACION_DEFECTO =
+  'Acta de Culminación / Visto Bueno del Ingeniero Residente / Reporte de Conformidad';
+
+/** Texto de la fase técnica para la cláusula primera (prioriza objeto del contrato). */
+function faseTecnicaParaClausulaPrimera(
+  contrato: ContratoObreroDetallePdf | null | undefined,
+  empleado: EmpleadoContratoPdf,
+  configNomina: ConfigNominaContratoPdf,
+): string {
+  const obj = (contrato?.objeto_contrato ?? '').trim();
+  if (obj) return obj;
+  const tareas = (empleado.tareas_especificas ?? '').trim();
+  const lugar = (contrato?.lugar_prestacion_servicio ?? '').trim();
+  if (tareas && lugar) return `${tareas} (${lugar})`;
+  if (tareas) return tareas;
+  if (lugar) return `las labores contratadas en el ámbito de ${lugar}`;
+  const funciones = (configNomina.funciones_oficiales ?? '').trim();
+  const cargo = (empleado.cargo_nombre ?? '').trim();
+  if (funciones && cargo) return `${funciones}, en el cargo de ${cargo}`;
+  if (cargo) return `las labores propias del oficio de ${cargo}`;
+  return '[descripción de la fase técnica]';
+}
+
 /** Evita dígitos de cédula u otros pegados al final del nombre por error de captura (ej. "Ortiz88"). */
 function limpiarNombreRepresentanteLegal(n: string): string {
   let t = n.trim().replace(/\s+/g, ' ');
@@ -122,7 +154,8 @@ export function ContratoObreroPDF({
   empleado,
   entidad,
   configNomina,
-  parametros,
+  parametros: _parametros,
+  contrato,
 }: ContratoObreroPdfStructuredProps) {
   /** Razón social para contrato: `nombre_legal` si existe en BD, si no `nombre` (`ci_entidades`). */
   const nombreLegalSociedad = str(entidad.nombre_legal ?? entidad.nombre, '[RAZÓN SOCIAL]');
@@ -133,13 +166,8 @@ export function ContratoObreroPDF({
     empleado.direccion_domicilio ?? empleado.direccion_habitacion,
     'dirección domicilio',
   );
-  const cargo = str(empleado.cargo_nombre, 'oficio contratado').toUpperCase();
-  const funciones =
-    str(configNomina.funciones_oficiales, '') ||
-    str(empleado.tareas_especificas, '') ||
-    'Las estipuladas en el tabulador de oficios vigente';
-  const tipoPlazo = (parametros.tipoPlazo ?? 'DETERMINADO').toString().trim().toUpperCase() || 'DETERMINADO';
-  const fechaIngreso = str(parametros.fechaIngreso, '[fecha de ingreso]');
+  const faseTecnica = faseTecnicaParaClausulaPrimera(contrato ?? null, empleado, configNomina);
+  const docCulminacion = str(contrato?.documento_culminacion, DOC_CULMINACION_DEFECTO);
   const rep = limpiarNombreRepresentanteLegal(
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]'),
   );
@@ -177,15 +205,23 @@ export function ContratoObreroPDF({
         </Text>
 
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>PRIMERA: OBJETO.</Text> EL TRABAJADOR se obliga a prestar sus servicios personales en
-          el cargo u oficio de <Text style={styles.bold}>{cargo}</Text>, con las funciones inherentes al mismo, tales
-          como: <Text style={styles.bold}>{funciones}</Text>.
+          <Text style={styles.bold}>CLÁUSULA PRIMERA (Del Objeto y Naturaleza Exclusiva):</Text> EL PATRONO contrata los
+          servicios de EL TRABAJADOR para ejecutar exclusiva y excluyentemente la fase técnica correspondiente a:{' '}
+          <Text style={styles.bold}>{faseTecnica}</Text>. Esta labor constituye una{' '}
+          <Text style={styles.bold}>OBRA DETERMINADA</Text>, cuya naturaleza exige su culminación, de estricta conformidad
+          con lo previsto en el artículo 75 y 77{' '}
+          {'(literal "a")'} de la Ley Orgánica del Trabajo, los Trabajadores y las Trabajadoras (LOTTT).
+          EL TRABAJADOR reconoce y acepta que su contratación se limita a esta fase técnica, prohibiéndosele ejecutar labores
+          ajenas a las aquí descritas.
         </Text>
 
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>SEGUNDA: TIPO Y PLAZO.</Text> Se celebra por tiempo{' '}
-          <Text style={styles.bold}>{tipoPlazo}</Text>, iniciando la prestación de sus servicios a partir del{' '}
-          {fechaIngreso}.
+          <Text style={styles.bold}>CLÁUSULA SEGUNDA (De la Terminación de Pleno Derecho):</Text> El presente contrato
+          finalizará de pleno derecho y cesarán las obligaciones entre las partes el día exacto en que la fase técnica
+          descrita en la Cláusula Primera sea concluida. La culminación de la fase técnica se considerará materializada
+          mediante la suscripción del <Text style={styles.bold}>[{docCulminacion}]</Text>. Al extinguirse la relación por
+          conclusión de la obra determinada, no habrá lugar a preaviso, calificación de despido ni indemnización por despido
+          injustificado (Art. 92 LOTTT), procediéndose únicamente a la liquidación de las prestaciones sociales adquiridas.
         </Text>
 
         <Text style={styles.paragraph}>

@@ -551,6 +551,12 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     fechaIngreso: strOpt(f.contrato.fecha_ingreso),
   };
 
+  const contratoPdf: ContratoObreroPdfStructuredProps['contrato'] = {
+    objeto_contrato: strOpt(f.contrato.objeto_contrato),
+    lugar_prestacion_servicio: strOpt(f.contrato.lugar_prestacion_servicio),
+    documento_culminacion: null,
+  };
+
   return {
     ok: true,
     props: {
@@ -559,6 +565,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
       entidad,
       configNomina,
       parametros,
+      contrato: contratoPdf,
     },
   };
 }
