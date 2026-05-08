@@ -409,6 +409,12 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const f = fu.fuentes;
   const hv = f.hojaVida ?? emptyHojaVidaObreroCompleta();
   const dp = hv.datosPersonales;
+  const dpAny = dp as unknown as Record<string, unknown>;
+  const pickDp = (k: string) => strOpt(dpAny[k]);
+  const ciudadDomPdf =
+    pickDp('ciudad') ?? pickDp('ciudad_domicilio') ?? pickDp('ciudad_domicilio_trabajador') ?? null;
+  const municipioDomPdf = pickDp('municipio') ?? pickDp('municipio_domicilio') ?? null;
+  const estadoDomPdf = pickDp('estado') ?? pickDp('estado_domicilio') ?? null;
   const nacionalidad = strOpt(dp?.nacionalidad) ?? null;
   const direccionHab = strOpt(f.empleado.direccion) ?? strOpt(dp?.direccionDomicilio);
   const cargoNom =
@@ -505,6 +511,9 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     direccion_domicilio: direccionHab,
     cargo_nombre: cargoNom,
     tareas_especificas: tareasEsp,
+    ciudad_domicilio: ciudadDomPdf,
+    municipio_domicilio: municipioDomPdf,
+    estado_domicilio: estadoDomPdf,
   };
 
   let salarioMensual: number | null = null;

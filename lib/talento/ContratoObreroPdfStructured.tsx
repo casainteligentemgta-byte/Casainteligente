@@ -35,6 +35,10 @@ export type EmpleadoContratoPdf = {
   direccion_habitacion?: string | null;
   cargo_nombre?: string | null;
   tareas_especificas?: string | null;
+  /** Opcional: JSON hoja de vida / columnas extendidas para el encabezado legal. */
+  ciudad_domicilio?: string | null;
+  municipio_domicilio?: string | null;
+  estado_domicilio?: string | null;
 };
 
 export type ConfigNominaContratoPdf = {
@@ -78,6 +82,16 @@ function fmtFechaLargaEs(v: string | null | undefined): string | null {
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
+/** Cédula en formato V-… para el contrato (trabajador o representante). */
+function formatCedulaV(raw: string | null | undefined): string {
+  const t = (raw ?? '').trim();
+  if (!t) return 'V-___________';
+  if (/^[VE]/i.test(t)) return t;
+  return `V-${t}`;
+}
+
+const PLACEHOLDER_LINEA = '_____________';
+
 /** Evita dígitos de cédula u otros pegados al final del nombre por error de captura (ej. "Ortiz88"). */
 function limpiarNombreRepresentanteLegal(n: string): string {
   let t = n.trim().replace(/\s+/g, ' ');
@@ -102,13 +116,12 @@ export function ContratoObreroPDF({
 }: ContratoObreroPdfStructuredProps) {
   /** Razón social para contrato: `nombre_legal` si existe en BD, si no `nombre` (`ci_entidades`). */
   const nombreLegalSociedad = str(entidad.nombre_legal ?? entidad.nombre, '[RAZÓN SOCIAL]');
-  const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, 'EL TRABAJADOR');
-  const nacionalidad = str(empleado.nacionalidad, 'venezolana');
-  const cedula = str(empleado.cedula ?? empleado.documento, '—');
-  const domicilioTrab = str(
-    empleado.direccion_domicilio ?? empleado.direccion_habitacion,
-    'Nueva Esparta',
-  );
+  const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, '[nombre trabajador]');
+  const nacionalidadTrab = str(empleado.nacionalidad, PLACEHOLDER_LINEA);
+  const cedulaTrabFormato = formatCedulaV(empleado.cedula ?? empleado.documento);
+  const ciudadTrab = str(empleado.ciudad_domicilio, PLACEHOLDER_LINEA);
+  const municipioTrab = str(empleado.municipio_domicilio, PLACEHOLDER_LINEA);
+  const estadoTrab = str(empleado.estado_domicilio, PLACEHOLDER_LINEA);
   const cargo = str(empleado.cargo_nombre, 'oficio contratado').toUpperCase();
   const funciones =
     str(configNomina.funciones_oficiales, '') ||
@@ -119,13 +132,7 @@ export function ContratoObreroPDF({
   const rep = limpiarNombreRepresentanteLegal(
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]'),
   );
-  const repCedulaRaw = (entidad.rep_legal_cedula ?? '').trim();
-  const repCedulaFormato =
-    repCedulaRaw.length === 0
-      ? 'V-___________'
-      : /^[VE]/i.test(repCedulaRaw.trim())
-        ? repCedulaRaw
-        : `V-${repCedulaRaw}`;
+  const repCedulaFormato = formatCedulaV(entidad.rep_legal_cedula);
   /** Circunscripción / oficina RM (`registro_mercantil.circunscripcion`). */
   const rmCircunscripcion = str(entidad.rm_oficina, '[circunscripción]');
   const rmFecha = str(fmtFechaLargaEs(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
@@ -142,18 +149,19 @@ export function ContratoObreroPDF({
 
         <Text style={styles.paragraph}>
           Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina
-          de <Text style={styles.bold}>{rmCircunscripcion}</Text>, en fecha <Text style={styles.bold}>{rmFecha}</Text>, bajo el
-          Nº <Text style={styles.bold}>{rmNumero}</Text>, Tomo <Text style={styles.bold}>{rmTomo}</Text> de los Libros de
+          de <Text style={styles.bold}>"{rmCircunscripcion}"</Text> en fecha <Text style={styles.bold}>"{rmFecha}"</Text>, bajo
+          el Nº <Text style={styles.bold}>"{rmNumero}"</Text>, Tomo <Text style={styles.bold}>"{rmTomo}"</Text> de los Libros de
           Registro de Comercio, representada en este acto por su Presidente, ciudadano{' '}
-          <Text style={styles.bold}>{rep}</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
+          <Text style={styles.bold}>"{rep}"</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
           <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato
-          se denominará EL EMPLEADOR.
-        </Text>
-        <Text style={styles.paragraph}>
-          Y por la otra, el(la) ciudadano(a) <Text style={styles.bold}>{nombreTrabajador}</Text>, de nacionalidad {nacionalidad}
-          , mayor de edad, hábil en el ejercicio de sus derechos civiles, titular de la cédula de identidad N°{' '}
-          <Text style={styles.bold}>{cedula}</Text>, domiciliado(a) en {domicilioTrab}. Ambas partes han convenido celebrar el
-          presente contrato individual de trabajo, sujeto a las siguientes cláusulas:
+          se denominará EL EMPLEADOR, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>
+          , quien es de nacionalidad <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula de
+          Identidad <Text style={styles.bold}>{cedulaTrabFormato}</Text> y domiciliado en la ciudad de{' '}
+          <Text style={styles.bold}>{ciudadTrab}</Text>, Municipio Autónomo <Text style={styles.bold}>{municipioTrab}</Text> del
+          Estado <Text style={styles.bold}>{estadoTrab}</Text>, quien a los mismos efectos se denominará EL TRABAJADOR; y en
+          virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza
+          de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se
+          regirá por las cláusulas siguientes:
         </Text>
 
         <Text style={styles.paragraph}>
@@ -184,7 +192,7 @@ export function ContratoObreroPDF({
           <View style={styles.signatureBox}>
             <Text style={styles.bold}>EL TRABAJADOR</Text>
             <Text>{nombreTrabajador}</Text>
-            <Text>C.I: {cedula}</Text>
+            <Text>C.I: {cedulaTrabFormato}</Text>
           </View>
         </View>
       </Page>
