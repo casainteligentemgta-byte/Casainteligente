@@ -64,6 +64,7 @@ export type FuentesContratoObrero = {
     documento: string | null;
     cedula: string | null;
     direccion?: string | null;
+    nacionalidad?: string | null;
     celular?: string | null;
     telefono?: string | null;
   };
@@ -139,7 +140,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const cedula = str(dp?.cedulaIdentidad) || str(f.empleado.cedula) || str(f.empleado.documento);
   const direccion = str(dp?.direccionDomicilio) || str(f.empleado.direccion);
   const celular = str(dp?.celular) || str(f.empleado.celular);
-  const nacionalidad = str(dp?.nacionalidad);
+  const nacionalidad = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
   const estadoCivil = str(dp?.estadoCivil);
   const fechaNac = str(dp?.fechaNacimiento);
   const lugarNac = [str(dp?.lugarNacimiento), str(dp?.paisNacimiento)].filter(Boolean).join(', ');

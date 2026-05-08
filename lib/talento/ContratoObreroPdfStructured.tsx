@@ -37,10 +37,6 @@ export type EmpleadoContratoPdf = {
   direccion_habitacion?: string | null;
   cargo_nombre?: string | null;
   tareas_especificas?: string | null;
-  /** Opcional: JSON hoja de vida / columnas extendidas para el encabezado legal. */
-  ciudad_domicilio?: string | null;
-  municipio_domicilio?: string | null;
-  estado_domicilio?: string | null;
 };
 
 export type ConfigNominaContratoPdf = {
@@ -84,12 +80,24 @@ function fmtFechaLargaEs(v: string | null | undefined): string | null {
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
-/** Cédula en formato V-… para el contrato (trabajador o representante). */
-function formatCedulaV(raw: string | null | undefined): string {
-  const t = (raw ?? '').trim();
-  if (!t) return 'V-___________';
-  if (/^[VE]/i.test(t)) return t;
-  return `V-${t}`;
+/**
+ * Cédula de identidad para el cuerpo del contrato: letra V o E seguida de dígitos, sin guión
+ * (p. ej. `V1384818688`), alineado al estilo de actas laborales venezolanas.
+ */
+function formatCedulaIdentidad(raw: string | null | undefined): string {
+  const compact = (raw ?? '').trim().replace(/\s+/g, '');
+  if (!compact) return 'V___________';
+  const upper = compact.toUpperCase();
+  const m = upper.match(/^([VE])(.*)$/);
+  if (m) {
+    const letra = m[1];
+    const digits = m[2].replace(/[^\d]/g, '');
+    if (!digits) return `${letra}___________`;
+    return `${letra}${digits}`;
+  }
+  const digitsOnly = upper.replace(/[^\d]/g, '');
+  if (digitsOnly) return `V${digitsOnly}`;
+  return 'V___________';
 }
 
 const PLACEHOLDER_LINEA = '_____________';
@@ -120,10 +128,11 @@ export function ContratoObreroPDF({
   const nombreLegalSociedad = str(entidad.nombre_legal ?? entidad.nombre, '[RAZÓN SOCIAL]');
   const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, '[nombre trabajador]');
   const nacionalidadTrab = str(empleado.nacionalidad, PLACEHOLDER_LINEA);
-  const cedulaTrabFormato = formatCedulaV(empleado.cedula ?? empleado.documento);
-  const ciudadTrab = str(empleado.ciudad_domicilio, PLACEHOLDER_LINEA);
-  const municipioTrab = str(empleado.municipio_domicilio, PLACEHOLDER_LINEA);
-  const estadoTrab = str(empleado.estado_domicilio, PLACEHOLDER_LINEA);
+  const cedulaTrabFormato = formatCedulaIdentidad(empleado.cedula ?? empleado.documento);
+  const domicilioTrab = str(
+    empleado.direccion_domicilio ?? empleado.direccion_habitacion,
+    'dirección domicilio',
+  );
   const cargo = str(empleado.cargo_nombre, 'oficio contratado').toUpperCase();
   const funciones =
     str(configNomina.funciones_oficiales, '') ||
@@ -134,7 +143,7 @@ export function ContratoObreroPDF({
   const rep = limpiarNombreRepresentanteLegal(
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]'),
   );
-  const repCedulaFormato = formatCedulaV(entidad.rep_legal_cedula);
+  const repCedulaFormato = formatCedulaIdentidad(entidad.rep_legal_cedula);
   /** Circunscripción / oficina RM (`registro_mercantil.circunscripcion`). */
   const rmCircunscripcion = str(entidad.rm_oficina, '[circunscripción]');
   const rmFecha = str(fmtFechaLargaEs(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
@@ -159,10 +168,9 @@ export function ContratoObreroPDF({
           <Text style={styles.bold}>"{rep}"</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
           <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato
           se denominará EL EMPLEADOR, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>
-          , quien es de nacionalidad <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula de
-          Identidad <Text style={styles.bold}>{cedulaTrabFormato}</Text> y domiciliado en la ciudad de{' '}
-          <Text style={styles.bold}>{ciudadTrab}</Text>, Municipio Autónomo <Text style={styles.bold}>{municipioTrab}</Text> del
-          Estado <Text style={styles.bold}>{estadoTrab}</Text>, quien a los mismos efectos se denominará EL TRABAJADOR; y en
+          , quien es de nacionalidad <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula
+          de Identidad <Text style={styles.bold}>{cedulaTrabFormato}</Text> y domiciliado en{' '}
+          <Text style={styles.bold}>"{domicilioTrab}"</Text>, quien a los mismos efectos se denominará EL TRABAJADOR; y en
           virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza
           de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se
           regirá por las cláusulas siguientes:

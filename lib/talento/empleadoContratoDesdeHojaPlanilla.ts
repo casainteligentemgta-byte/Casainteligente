@@ -36,10 +36,7 @@ export function parseHojaVidaObrero(raw: unknown): HojaVidaObreroCompleta | null
   return raw as HojaVidaObreroCompleta;
 }
 
-export type EmpleadoContratoFusion = FuentesContratoObrero['empleado'] & {
-  /** Solo planilla / columnas; no forma parte de `FuentesContratoObrero.empleado`. */
-  nacionalidad: string | null;
-};
+export type EmpleadoContratoFusion = FuentesContratoObrero['empleado'];
 
 /**
  * Prioriza `hoja_vida_obrero.datosPersonales` sobre columnas sueltas de `ci_empleados`
@@ -70,8 +67,8 @@ export function fusionarEmpleadoContratoDesdePlanilla(
     documento,
     cedula,
     direccion,
+    nacionalidad,
     celular,
     telefono,
-    nacionalidad,
   };
 }
