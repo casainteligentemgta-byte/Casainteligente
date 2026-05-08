@@ -489,6 +489,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre,
     rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula,
     rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? rmRep.cargo,
+    rif: strOpt(entidadRow?.rif),
     rm_oficina:
       strOpt(rm?.circunscripcion) ??
       strOpt(rm?.registro_mercantil_oficina) ??

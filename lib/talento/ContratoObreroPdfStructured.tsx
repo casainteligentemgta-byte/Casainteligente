@@ -13,6 +13,8 @@ const styles = StyleSheet.create({
 export type EntidadContratoPdf = {
   nombre_legal?: string | null;
   nombre?: string | null;
+  /** RIF del patrono (`ci_entidades.rif`). */
+  rif?: string | null;
   domicilio_fiscal?: string | null;
   direccion_fiscal?: string | null;
   representante_legal?: string | null;
@@ -138,6 +140,7 @@ export function ContratoObreroPDF({
   const rmFecha = str(fmtFechaLargaEs(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
   const rmNumero = str(entidad.rm_numero, '[N° NO REGISTRADO]');
   const rmTomo = str(entidad.rm_tomo, '[TOMO NO REGISTRADO]');
+  const rifEntidad = str(entidad.rif, '_____________');
   const salBase = fmtMonto(configNomina.salario_base_mensual);
   const cesta = fmtMonto(configNomina.cestaticket_mensual);
 
@@ -151,7 +154,8 @@ export function ContratoObreroPDF({
           Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina
           de <Text style={styles.bold}>"{rmCircunscripcion}"</Text> en fecha <Text style={styles.bold}>"{rmFecha}"</Text>, bajo
           el Nº <Text style={styles.bold}>"{rmNumero}"</Text>, Tomo <Text style={styles.bold}>"{rmTomo}"</Text> de los Libros de
-          Registro de Comercio, representada en este acto por su Presidente, ciudadano{' '}
+          Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número:{' '}
+          <Text style={styles.bold}>{rifEntidad}</Text>, representada en este acto por su Presidente, ciudadano{' '}
           <Text style={styles.bold}>"{rep}"</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
           <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato
           se denominará EL EMPLEADOR, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>
