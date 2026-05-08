@@ -63,7 +63,7 @@ function ContratoPdf({ data }: { data: ContratoPayload }) {
         <Text style={styles.title}>{(data.patrono?.nombre ?? 'CASA INTELIGENTE').toUpperCase()}</Text>
         <Text style={styles.subtitle}>Contrato Individual de Trabajo para Obra Determinada</Text>
         <Text style={styles.p}>
-          {`Entre ${data.patrono?.nombre ?? 'EL PATRONO'}${
+          {`Entre ${data.patrono?.nombre ?? 'EL EMPLEADOR'}${
             data.patrono?.domicilio_fiscal?.trim()
               ? `, domicilio fiscal en ${data.patrono.domicilio_fiscal},`
               : ''
@@ -251,7 +251,7 @@ export default function ContratoPreview() {
 
         <div className="space-y-6 text-sm">
           <p>
-            Entre la sociedad mercantil <strong>{data.patrono?.nombre ?? 'EL PATRONO'}</strong>
+            Entre la sociedad mercantil <strong>{data.patrono?.nombre ?? 'EL EMPLEADOR'}</strong>
             {data.patrono?.domicilio_fiscal?.trim() ? (
               <>
                 , domicilio fiscal en <strong>{data.patrono.domicilio_fiscal}</strong>
@@ -259,7 +259,7 @@ export default function ContratoPreview() {
             ) : (
               <>, domicilio fiscal por registrar en la entidad del proyecto</>
             )}
-            , en lo sucesivo denominada &quot;EL PATRONO&quot;, y por la otra parte el ciudadano{' '}
+            , en lo sucesivo denominada &quot;EL EMPLEADOR&quot;, y por la otra parte el ciudadano{' '}
             <strong>{data.empleado.nombre}</strong>, titular de la Cedula de Identidad Nro.{' '}
             <strong>{data.empleado.cedula}</strong>, domiciliado en <strong>{data.empleado.direccion}</strong>, en lo
             sucesivo denominado &quot;EL TRABAJADOR&quot;, se ha convenido en celebrar el presente Contrato de Trabajo,
@@ -268,7 +268,7 @@ export default function ContratoPreview() {
 
           <p>
             <strong>PRIMERA (DEL OBJETO Y LUGAR):</strong> EL TRABAJADOR se compromete a prestar sus servicios
-            personales y exclusivos bajo la dependencia y direccion de EL PATRONO, desempenando el cargo de{' '}
+            personales y exclusivos bajo la dependencia y direccion de EL EMPLEADOR, desempenando el cargo de{' '}
             <strong>
               {data.contrato.cargo} (Nivel {data.contrato.nivel})
             </strong>
@@ -286,7 +286,7 @@ export default function ContratoPreview() {
           </p>
 
           <p>
-            <strong>TERCERA (DE LA REMUNERACION):</strong> EL PATRONO pagara a EL TRABAJADOR un{' '}
+            <strong>TERCERA (DE LA REMUNERACION):</strong> EL EMPLEADOR pagara a EL TRABAJADOR un{' '}
             <strong>Salario Basico Diario de {data.contrato.salario_diario} VES</strong>, de conformidad con el
             tabulador vigente (Clausula 33). Adicionalmente, percibira un{' '}
             <strong>Bono de Asistencia Diaria de {data.contrato.bono_asistencia} VES</strong> (Clausula 34 de la
@@ -308,7 +308,7 @@ export default function ContratoPreview() {
 
         <div className="mt-24 grid grid-cols-2 gap-16 text-center">
           <div>
-            <div className="border-t border-slate-400 pt-2 font-bold">Por EL PATRONO</div>
+            <div className="border-t border-slate-400 pt-2 font-bold">Por EL EMPLEADOR</div>
             <div className="text-sm text-slate-500">{data.patrono?.nombre ?? 'Patrono'}</div>
             {data.patrono?.representante?.trim() ? (
               <div className="mt-1 text-xs text-slate-500">{data.patrono.representante}</div>

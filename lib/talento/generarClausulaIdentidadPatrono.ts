@@ -61,7 +61,7 @@ function formatearFechaRegistroMercantil(fechaIso: string | undefined): string {
 
 /**
  * Transforma los datos de la entidad legal en el párrafo de identificación
- * para la Cláusula Primera del contrato de trabajo (patrono / EL PATRONO).
+ * para la Cláusula Primera del contrato de trabajo (patrono / EL EMPLEADOR).
  *
  * Usa `nombre`, `rep_legal_*` y `registro_mercantil` como en `public.ci_entidades`
  * (migración 064). Acepta alias `nombre_legal` y `representante_legal_*` por compatibilidad.
@@ -118,7 +118,7 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
     representada en este acto por el ciudadano ${bloqueRep},
     de nacionalidad ${bloqueNac}${fragEdadRep}${fragEstadoCivil}, titular de la cédula de identidad Nro. ${bloqueCi}${fragDomicilioRep}${fragProfesion},
     en su carácter de ${bloqueCargo},
-    quien a los efectos de este contrato se denominará "EL PATRONO"...
+    quien a los efectos de este contrato se denominará "EL EMPLEADOR"...
   `.replace(/\s+/g, ' ').trim();
 
   return texto;

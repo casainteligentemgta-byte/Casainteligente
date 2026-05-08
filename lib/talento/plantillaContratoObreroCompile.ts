@@ -80,6 +80,9 @@ export type FuentesContratoObrero = {
     fecha_ingreso?: string | null;
     numero_oficio_tabulador?: string | null;
     gaceta_denominacion_oficio?: string | null;
+    duracion_referencial_semanas?: string | null;
+    horario_semanal_texto?: string | null;
+    fecha_firma_contrato?: string | null;
   };
   obra: { nombre: string; ubicacion?: string | null };
   /** Valores por defecto patrono (env o planilla). */

@@ -76,6 +76,9 @@ export async function cargarFuentesContratoObreroPdf(
         'fecha_ingreso',
         'numero_oficio_tabulador',
         'gaceta_denominacion_oficio',
+        'duracion_referencial_semanas',
+        'horario_semanal_texto',
+        'fecha_firma_contrato',
       ].join(','),
     )
     .eq('id', contratoId.trim())
@@ -100,6 +103,9 @@ export async function cargarFuentesContratoObreroPdf(
     fecha_ingreso?: string | null;
     numero_oficio_tabulador?: string | null;
     gaceta_denominacion_oficio?: string | null;
+    duracion_referencial_semanas?: string | null;
+    horario_semanal_texto?: string | null;
+    fecha_firma_contrato?: string | null;
   };
 
   const vinculo = row.obra_id ?? row.proyecto_id ?? null;
@@ -192,6 +198,9 @@ export async function cargarFuentesContratoObreroPdf(
       fecha_ingreso: row.fecha_ingreso,
       numero_oficio_tabulador: row.numero_oficio_tabulador,
       gaceta_denominacion_oficio: row.gaceta_denominacion_oficio,
+      duracion_referencial_semanas: row.duracion_referencial_semanas,
+      horario_semanal_texto: row.horario_semanal_texto,
+      fecha_firma_contrato: row.fecha_firma_contrato,
     },
     obra: { nombre: o.nombre, ubicacion: ubic },
     patron: {
@@ -216,6 +225,9 @@ type ContratoLaboralRow = {
   fecha_ingreso?: string | null;
   numero_oficio_tabulador?: string | null;
   gaceta_denominacion_oficio?: string | null;
+  duracion_referencial_semanas?: string | null;
+  horario_semanal_texto?: string | null;
+  fecha_firma_contrato?: string | null;
 };
 
 function strOpt(v: unknown): string | null {
@@ -328,7 +340,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   const { data: ctr, error: ctrErr } = await supabase
     .from('ci_contratos_empleado_obra')
     .select(
-      'cargo_oficio_desempeño,lugar_prestacion_servicio,objeto_contrato,tipo_contrato,jornada_trabajo,salario_basico_diario_ves,forma_pago,lugar_pago,fecha_ingreso,numero_oficio_tabulador,gaceta_denominacion_oficio',
+      'cargo_oficio_desempeño,lugar_prestacion_servicio,objeto_contrato,tipo_contrato,jornada_trabajo,salario_basico_diario_ves,forma_pago,lugar_pago,fecha_ingreso,numero_oficio_tabulador,gaceta_denominacion_oficio,duracion_referencial_semanas,horario_semanal_texto,fecha_firma_contrato',
     )
     .eq('empleado_id', eid)
     .order('created_at', { ascending: false })
@@ -359,6 +371,9 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     fecha_ingreso: c?.fecha_ingreso ?? null,
     numero_oficio_tabulador: pick(c?.numero_oficio_tabulador, e.cargo_codigo ?? null) ?? null,
     gaceta_denominacion_oficio: c?.gaceta_denominacion_oficio ?? null,
+    duracion_referencial_semanas: c?.duracion_referencial_semanas ?? null,
+    horario_semanal_texto: c?.horario_semanal_texto ?? null,
+    fecha_firma_contrato: c?.fecha_firma_contrato ?? null,
   };
 
   const hv = parseHojaVidaObrero(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
@@ -540,21 +555,27 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     salarioMensual = Math.round(Number(sbDia) * DIAS_MES_REF_SALARIO * 100) / 100;
   }
 
+  const salarioDiarioNum =
+    sbDia != null && Number.isFinite(Number(sbDia)) && Number(sbDia) > 0 ? Number(sbDia) : null;
+
   const configNomina: ContratoObreroPdfStructuredProps['configNomina'] = {
     funciones_oficiales: funcionesOficiales,
     salario_base_mensual: salarioMensual,
     cestaticket_mensual: cestaMensual,
+    salario_basico_diario_ves: salarioDiarioNum,
   };
 
   const parametros: ContratoObreroPdfStructuredProps['parametros'] = {
     tipoPlazo: f.contrato.tipo_contrato,
     fechaIngreso: strOpt(f.contrato.fecha_ingreso),
+    duracionSemanasReferencial: strOpt(f.contrato.duracion_referencial_semanas),
+    horarioSemanal: strOpt(f.contrato.horario_semanal_texto),
+    fechaFirmaContratoIso: strOpt(f.contrato.fecha_firma_contrato) ?? strOpt(f.contrato.fecha_ingreso),
   };
 
   const contratoPdf: ContratoObreroPdfStructuredProps['contrato'] = {
     objeto_contrato: strOpt(f.contrato.objeto_contrato),
     lugar_prestacion_servicio: strOpt(f.contrato.lugar_prestacion_servicio),
-    documento_culminacion: null,
   };
 
   return {
