@@ -353,7 +353,7 @@ export default function ResumenObrerosProyectoModulo({
         }
 
         const obraIdsContratos = new Set<string>();
-        for (const filas of filasContratoPorEmpleado.values()) {
+        for (const filas of Array.from(filasContratoPorEmpleado.values())) {
           for (const f of filas) {
             if (f.obra_id) obraIdsContratos.add(f.obra_id);
           }
