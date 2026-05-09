@@ -19,6 +19,7 @@ import { createClient } from '@/lib/supabase/client';
 
 type Row = {
   id: string;
+  nivel_salarial: number | null;
   vigencia_desde: string;
   tabulador_referencia: string | null;
   cargo_nombre: string;
@@ -57,6 +58,32 @@ function isoHoy(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function mapNivelPorCodigoGaceta(): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const f of filasTabuladorGacetaReferencia()) {
+    m.set(f.codigo.trim().toLowerCase(), f.nivel);
+  }
+  return m;
+}
+
+function inferirNivelSalarialDesdeCodigo(codigo: string | null, porCodigo: Map<string, number>): number | null {
+  const c = codigo?.trim().toLowerCase();
+  if (!c) return null;
+  const n = porCodigo.get(c);
+  return n != null && n >= 1 && n <= 9 ? n : null;
+}
+
+/** Fecha legible sin depender de `Intl` en el servidor (evita pantalla en blanco si el locale falla). */
+function formatIsoFechaEs(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const mi = Number(mo) - 1;
+  const label = meses[mi] ?? mo;
+  return `${Number(d)} ${label} ${y}`;
+}
+
 function keyOficioRow(r: Row): string {
   const c = r.cargo_codigo?.trim();
   if (c) return `c:${c.toLowerCase()}`;
@@ -93,8 +120,15 @@ function filasVigentesAlCorte(rows: Row[], fechaCorteISO: string): Row[] {
 
 function mapRow(r: Record<string, unknown>): Row {
   const vig = r.vigencia_desde != null ? String(r.vigencia_desde).slice(0, 10) : TABULADOR_GACETA_VIGENCIA_ISO;
+  const ns = r.nivel_salarial;
+  const nivelParsed =
+    ns != null && ns !== '' ? Number(ns) : null;
   return {
     id: String(r.id),
+    nivel_salarial:
+      nivelParsed != null && Number.isFinite(nivelParsed) && nivelParsed >= 1 && nivelParsed <= 9
+        ? nivelParsed
+        : null,
     vigencia_desde: vig,
     tabulador_referencia: (r.tabulador_referencia as string | null) ?? null,
     cargo_nombre: String(r.cargo_nombre ?? ''),
@@ -132,6 +166,8 @@ export default function RrhhOficiosSalariosPage() {
     return [...f].sort((a, b) => a.nivel - b.nivel || compararCodigoOficio(a.codigo, b.codigo));
   }, []);
 
+  const nivelPorCodigo = useMemo(() => mapNivelPorCodigoGaceta(), []);
+
   const hoyISO = useMemo(() => isoHoy(), []);
 
   const load = useCallback(async () => {
@@ -140,7 +176,9 @@ export default function RrhhOficiosSalariosPage() {
     setLoading(false);
     if (error) {
       const msg = error.message ?? '';
-      if (msg.includes('vigencia_desde') || msg.includes('does not exist')) {
+      if (msg.includes('nivel_salarial')) {
+        toast.error('Aplica la migración 105 en Supabase (nivel salarial del tabulador) y recarga.');
+      } else if (msg.includes('vigencia_desde') || msg.includes('does not exist')) {
         toast.error('Aplica la migración 098 en Supabase (vigencia del tabulador) y recarga.');
       } else {
         toast.error(msg);
@@ -187,9 +225,12 @@ export default function RrhhOficiosSalariosPage() {
 
   async function saveRow(r: Row) {
     setSavingId(r.id);
+    const nivelGuardado =
+      r.nivel_salarial ?? inferirNivelSalarialDesdeCodigo(r.cargo_codigo, nivelPorCodigo) ?? null;
     const { error } = await supabase
       .from('ci_config_nomina')
       .update({
+        nivel_salarial: nivelGuardado,
         vigencia_desde: r.vigencia_desde,
         tabulador_referencia: r.tabulador_referencia?.trim() || null,
         cargo_nombre: r.cargo_nombre.trim(),
@@ -222,6 +263,7 @@ export default function RrhhOficiosSalariosPage() {
 
   async function addRow() {
     const { error } = await supabase.from('ci_config_nomina').insert({
+      nivel_salarial: null,
       vigencia_desde: isoHoy(),
       tabulador_referencia: null,
       cargo_nombre: 'Nuevo nivel / oficio',
@@ -286,6 +328,7 @@ export default function RrhhOficiosSalariosPage() {
       const chunk = 40;
       for (let i = 0; i < aInsertar.length; i += chunk) {
         const part = aInsertar.slice(i, i + chunk).map((f) => ({
+          nivel_salarial: f.nivel,
           vigencia_desde: TABULADOR_GACETA_VIGENCIA_ISO,
           tabulador_referencia: TABULADOR_GACETA_ETIQUETA,
           cargo_nombre: f.nombre,
@@ -326,7 +369,10 @@ export default function RrhhOficiosSalariosPage() {
       toast.error('Elige otra fecha distinta a la vigencia actual.');
       return;
     }
+    const nivelClon =
+      r.nivel_salarial ?? inferirNivelSalarialDesdeCodigo(r.cargo_codigo, nivelPorCodigo) ?? null;
     const { error } = await supabase.from('ci_config_nomina').insert({
+      nivel_salarial: nivelClon,
       vigencia_desde: nv,
       tabulador_referencia: r.tabulador_referencia?.trim() || null,
       cargo_nombre: r.cargo_nombre.trim(),
@@ -381,16 +427,18 @@ export default function RrhhOficiosSalariosPage() {
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl backdrop-blur-xl">
           <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Anexo oficial — referencia</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            {TABULADOR_GACETA_ETIQUETA}. Salario básico diario por nivel salarial (1–9) según tabla numérica homologada;
-            columna mensual = diario × 30 solo como referencia de pantalla.
+            {TABULADOR_GACETA_ETIQUETA}. Estructura tipo tabulador: nivel, oficio, denominación y vigencia de referencia
+            del anexo; los salarios editables y nuevas fechas de vigencia (aumentos) se gestionan en la tabla de base de
+            datos siguiente.
           </p>
           <div className="relative mt-4 max-h-[min(55vh,560px)] overflow-auto rounded-xl border border-white/10 bg-black/40">
-            <Table className="min-w-[720px] text-sm">
+            <Table className="min-w-[880px] text-sm">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-14 text-right">Nivel</TableHead>
-                  <TableHead className="min-w-[72px]">Nº oficio</TableHead>
+                  <TableHead className="min-w-[80px]">Oficio</TableHead>
                   <TableHead>Denominación</TableHead>
+                  <TableHead className="min-w-[140px] whitespace-nowrap">Vigencia a partir (ref.)</TableHead>
                   <TableHead className="text-right">SB diario (VES)</TableHead>
                   <TableHead className="text-right">SB mensual ref. (×30)</TableHead>
                 </TableRow>
@@ -401,6 +449,9 @@ export default function RrhhOficiosSalariosPage() {
                     <TableCell className="text-right tabular-nums text-zinc-400">{f.nivel}</TableCell>
                     <TableCell className="font-mono text-sky-300/90">{f.codigo}</TableCell>
                     <TableCell className="text-zinc-200">{f.nombre}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs tabular-nums text-zinc-400">
+                      {formatIsoFechaEs(TABULADOR_GACETA_VIGENCIA_ISO)}
+                    </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{fmtVes(f.salarioBasicoDiarioVes)}</TableCell>
                     <TableCell className="text-right font-mono text-zinc-400 tabular-nums">
                       {fmtVes(f.salarioBasicoMensualRef30)}
@@ -434,9 +485,9 @@ export default function RrhhOficiosSalariosPage() {
             <div>
               <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Tabulador en base de datos</h2>
               <p className="mt-1 max-w-2xl text-xs text-zinc-500">
-                «Total» en gris = sueldo base + compensación si no indicas total manual. Usa «Vigentes al» para ver qué
-                fila aplica por oficio a una fecha (p. ej. hoy o cierre de mes). «Clonar vigencia» copia la fila con otra
-                fecha para subidas futuras.
+                Columnas principales: nivel, oficio (código), denominación y vigencia a partir (fecha desde la que
+                rigen esos montos). «Clonar vigencia» duplica la fila con otra fecha para aumentos salariales futuros
+                sin perder revisiones anteriores. Si el nivel está vacío, al guardar se intenta deducirlo del código GOE.
               </p>
             </div>
             <div className="flex flex-wrap items-end gap-3">
@@ -472,14 +523,15 @@ export default function RrhhOficiosSalariosPage() {
           ) : null}
           {!loading && filasTablaEditables.length > 0 ? (
             <div className="mt-4 overflow-x-auto">
-              <Table className="min-w-[1280px]">
+              <Table className="min-w-[1320px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[108px]">Vigencia</TableHead>
-                    <TableHead className="min-w-[120px]">Estado</TableHead>
-                    <TableHead className="min-w-[140px]">Referencia</TableHead>
-                    <TableHead className="min-w-[160px]">Nivel / oficio</TableHead>
-                    <TableHead className="min-w-[72px]">Código</TableHead>
+                    <TableHead className="w-16 text-center">Nivel</TableHead>
+                    <TableHead className="min-w-[88px]">Oficio</TableHead>
+                    <TableHead className="min-w-[200px]">Denominación</TableHead>
+                    <TableHead className="min-w-[132px] whitespace-nowrap">Vigencia a partir</TableHead>
+                    <TableHead className="min-w-[100px]">Estado</TableHead>
+                    <TableHead className="min-w-[120px]">Referencia</TableHead>
                     <TableHead className="text-right">Sueldo base</TableHead>
                     <TableHead className="text-right">Comp. garantizada</TableHead>
                     <TableHead className="text-right">Total (cuadro)</TableHead>
@@ -498,10 +550,64 @@ export default function RrhhOficiosSalariosPage() {
                     const live = previewCosto(r);
                     const totalCalc = totalBrutoMostrado(r);
                     const ev = etiquetaVigencia(r, hoyISO);
+                    const inferNivel = inferirNivelSalarialDesdeCodigo(r.cargo_codigo, nivelPorCodigo);
                     return (
                       <TableRow key={r.id}>
                         <TableCell>
+                          <Label className="sr-only" htmlFor={`nv-${r.id}`}>
+                            Nivel salarial
+                          </Label>
                           <Input
+                            id={`nv-${r.id}`}
+                            type="number"
+                            min={1}
+                            max={9}
+                            inputMode="numeric"
+                            value={r.nivel_salarial != null ? String(r.nivel_salarial) : ''}
+                            placeholder={inferNivel != null ? String(inferNivel) : '1–9'}
+                            onChange={(e) => {
+                              const t = e.target.value.trim();
+                              if (t === '') {
+                                patchLocal(r.id, { nivel_salarial: null });
+                                return;
+                              }
+                              const n = parseInt(t, 10);
+                              if (!Number.isNaN(n) && n >= 1 && n <= 9) {
+                                patchLocal(r.id, { nivel_salarial: n });
+                              }
+                            }}
+                            className="mx-auto w-[56px] border-white/10 bg-black/30 text-center font-mono text-xs text-white tabular-nums"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Label className="sr-only" htmlFor={`co-${r.id}`}>
+                            Oficio (código)
+                          </Label>
+                          <Input
+                            id={`co-${r.id}`}
+                            value={r.cargo_codigo ?? ''}
+                            onChange={(e) => patchLocal(r.id, { cargo_codigo: e.target.value || null })}
+                            className="border-white/10 bg-black/30 font-mono text-sm text-sky-200/90"
+                            placeholder="—"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Label className="sr-only" htmlFor={`dn-${r.id}`}>
+                            Denominación
+                          </Label>
+                          <Input
+                            id={`dn-${r.id}`}
+                            value={r.cargo_nombre}
+                            onChange={(e) => patchLocal(r.id, { cargo_nombre: e.target.value })}
+                            className="min-w-[160px] border-white/10 bg-black/30 font-medium text-white"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Label className="sr-only" htmlFor={`vg-${r.id}`}>
+                            Vigencia a partir
+                          </Label>
+                          <Input
+                            id={`vg-${r.id}`}
                             type="date"
                             value={r.vigencia_desde}
                             onChange={(e) => patchLocal(r.id, { vigencia_desde: e.target.value })}
@@ -523,25 +629,6 @@ export default function RrhhOficiosSalariosPage() {
                             onChange={(e) => patchLocal(r.id, { tabulador_referencia: e.target.value || null })}
                             placeholder="GOE / nota"
                             className="min-w-[120px] border-white/10 bg-black/30 text-xs text-white"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Label className="sr-only" htmlFor={`cn-${r.id}`}>
-                            Nivel
-                          </Label>
-                          <Input
-                            id={`cn-${r.id}`}
-                            value={r.cargo_nombre}
-                            onChange={(e) => patchLocal(r.id, { cargo_nombre: e.target.value })}
-                            className="border-white/10 bg-black/30 font-medium text-white"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={r.cargo_codigo ?? ''}
-                            onChange={(e) => patchLocal(r.id, { cargo_codigo: e.target.value || null })}
-                            className="border-white/10 bg-black/30 text-white"
-                            placeholder="—"
                           />
                         </TableCell>
                         <TableCell className="text-right">

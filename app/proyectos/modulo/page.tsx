@@ -75,6 +75,9 @@ const estadoChip: Record<string, { bg: string; text: string }> = {
 
 const LISTA_TIMEOUT_MS = 38_000;
 
+/** Destino del atajo Finanzas desde el listado de módulo (proyecto + pestaña en detalle). */
+const HREF_FINANZAS_MODULO_DEMO = '/proyectos/modulo/f5826274-ceb6-4436-b53d-2c844ede71c2?tab=rrhh';
+
 /** PostgREST cuando la columna no existe en la tabla remota (p. ej. migración 086 no aplicada). */
 function esErrorColumnaInexistente(msg: string, columna: string): boolean {
   const m = msg.toLowerCase();
@@ -389,21 +392,6 @@ export default function ModuloProyectosPage() {
           <h1 style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: 0 }}>Proyectos</h1>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-          <Link
-            href="/configuracion/entidades"
-            style={{
-              borderRadius: '12px',
-              padding: '10px 16px',
-              fontWeight: 700,
-              fontSize: '14px',
-              border: '1px solid rgba(167,139,250,0.5)',
-              color: '#E9D5FF',
-              textDecoration: 'none',
-              background: 'rgba(167,139,250,0.12)',
-            }}
-          >
-            Entidades
-          </Link>
           <Link href="/proyectos/modulo/nuevo">
             <button
               type="button"
@@ -520,27 +508,6 @@ export default function ModuloProyectosPage() {
                       </span>
                     </p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
-                      {r.origen === 'modulo' ? (
-                        <Link
-                          href={`/proyectos/nuevo?desde=proyecto&proyecto_modulo_id=${encodeURIComponent(r.id)}`}
-                        >
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(255,255,255,0.08)',
-                              color: 'rgba(255,255,255,0.9)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Solicitar personal
-                          </button>
-                        </Link>
-                      ) : null}
                       <Link
                         href={
                           r.origen === 'modulo'
@@ -582,7 +549,27 @@ export default function ModuloProyectosPage() {
                         </button>
                       </Link>
                       {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}?tab=rrhh`}>
+                        <Link href={`/proyectos/modulo/${r.id}?tab=solicitados`}>
+                          <button
+                            type="button"
+                            title="Resumen RRHH: solicitados, contratados, carpeta y listas"
+                            style={{
+                              background: 'rgba(255, 149, 0, 0.18)',
+                              color: '#ffedd5',
+                              border: '1px solid rgba(255, 149, 0, 0.55)',
+                              borderRadius: '10px',
+                              padding: '8px 14px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Cuadro de obreros
+                          </button>
+                        </Link>
+                      ) : null}
+                      {r.origen === 'modulo' ? (
+                        <Link href="/rrhh/hojas-vida">
                           <button
                             type="button"
                             style={{
@@ -597,6 +584,25 @@ export default function ModuloProyectosPage() {
                             }}
                           >
                             RRHH
+                          </button>
+                        </Link>
+                      ) : null}
+                      {r.origen === 'modulo' ? (
+                        <Link href={HREF_FINANZAS_MODULO_DEMO}>
+                          <button
+                            type="button"
+                            style={{
+                              background: 'rgba(16, 185, 129, 0.2)',
+                              color: '#a7f3d0',
+                              border: '1px solid rgba(52, 211, 153, 0.55)',
+                              borderRadius: '10px',
+                              padding: '8px 14px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Finanzas
                           </button>
                         </Link>
                       ) : null}

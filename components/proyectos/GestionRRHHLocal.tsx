@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { ChevronDown, ExternalLink, MessageSquare, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { createClient } from '@/lib/supabase/client';
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { emptyHojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
@@ -69,6 +70,17 @@ function clicsMostrados(row: NeedRow): number {
   return 0;
 }
 
+function mergeNeedsPorId<T extends { id: string; created_at: string }>(principal: T[], extra: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const r of principal) byId.set(r.id, r);
+  for (const r of extra) {
+    if (!byId.has(r.id)) byId.set(r.id, r);
+  }
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+}
+
 export default function GestionRRHHLocal({
   proyectoModuloId,
   listaRefresco = 0,
@@ -123,56 +135,72 @@ export default function GestionRRHHLocal({
       return;
     }
 
+    /** Misma fila `ci_proyectos` puede quedar en `proyecto_modulo_id` o, por flujos antiguos, en `proyecto_id`. */
+    const filtroProyectoModulo = `proyecto_modulo_id.eq.${id},proyecto_id.eq.${id}`;
+
     let alive = true;
     (async () => {
       setLoading(true);
       setError(null);
 
-      const full = await supabase
-        .from('recruitment_needs')
-        .select(
-          'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,conteo_clics,captacion_token',
-        )
-        .eq('proyecto_modulo_id', id)
-        .order('created_at', { ascending: false });
+      const obraHijaIds = await idsObrasHijasDesdeModuloIntegral(supabase, id);
+      if (!alive) return;
+
+      async function anexarPorObraHija<S extends string>(
+        selectStr: S,
+        base: { id: string; created_at: string }[] | null,
+      ): Promise<{ id: string; created_at: string }[]> {
+        const b = base ?? [];
+        if (obraHijaIds.length === 0) return b;
+        const ex = await supabase
+          .from('recruitment_needs')
+          .select(selectStr)
+          .in('proyecto_id', obraHijaIds)
+          .order('created_at', { ascending: false });
+        if (!alive) return b;
+        if (ex.error || !ex.data?.length) return b;
+        return mergeNeedsPorId(b as { id: string; created_at: string }[], ex.data as { id: string; created_at: string }[]);
+      }
+
+      const selFull =
+        'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,conteo_clics,captacion_token' as const;
+      const full = await supabase.from('recruitment_needs').select(selFull).or(filtroProyectoModulo).order('created_at', { ascending: false });
 
       if (!alive) return;
 
       if (!full.error) {
-        setNeeds((full.data ?? []) as NeedRow[]);
+        const merged = await anexarPorObraHija(selFull, (full.data ?? []) as NeedRow[]);
+        setNeeds(merged as NeedRow[]);
         setLoading(false);
         return;
       }
 
       const msg = full.error.message || 'No se pudieron cargar las necesidades.';
-      const mid = await supabase
-        .from('recruitment_needs')
-        .select('id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,captacion_token')
-        .eq('proyecto_modulo_id', id)
-        .order('created_at', { ascending: false });
+      const selMid =
+        'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,captacion_token' as const;
+      const mid = await supabase.from('recruitment_needs').select(selMid).or(filtroProyectoModulo).order('created_at', { ascending: false });
 
       if (!alive) return;
 
       if (!mid.error) {
+        const merged = await anexarPorObraHija(selMid, mid.data ?? []);
         setNeeds(
-          ((mid.data ?? []) as Omit<NeedRow, 'conteo_clics'>[]).map((r) => ({ ...r, conteo_clics: null })),
+          (merged as Omit<NeedRow, 'conteo_clics'>[]).map((r) => ({ ...r, conteo_clics: null })),
         );
         setLoading(false);
         return;
       }
 
-      const bare = await supabase
-        .from('recruitment_needs')
-        .select('id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,captacion_token')
-        .eq('proyecto_modulo_id', id)
-        .order('created_at', { ascending: false });
+      const selBare = 'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,captacion_token' as const;
+      const bare = await supabase.from('recruitment_needs').select(selBare).or(filtroProyectoModulo).order('created_at', { ascending: false });
 
       if (!alive) return;
       setLoading(false);
 
       if (!bare.error) {
+        const merged = await anexarPorObraHija(selBare, (bare.data ?? []) as { id: string; created_at: string }[]);
         setNeeds(
-          ((bare.data ?? []) as Omit<NeedRow, 'cantidad_requerida' | 'conteo_clics'>[]).map((r) => ({
+          (merged as Omit<NeedRow, 'cantidad_requerida' | 'conteo_clics'>[]).map((r) => ({
             ...r,
             cantidad_requerida: null,
             conteo_clics: null,
@@ -256,19 +284,13 @@ export default function GestionRRHHLocal({
     [showToast],
   );
 
-  const pid = proyectoModuloId.trim();
-
   const borrarSolicitud = useCallback(
     async (row: NeedRow) => {
       if (!window.confirm('¿Eliminar esta solicitud de personal? No se puede deshacer.')) return;
       setDeletingId(row.id);
       setError(null);
       try {
-        const { error: delErr } = await supabase
-          .from('recruitment_needs')
-          .delete()
-          .eq('id', row.id)
-          .eq('proyecto_modulo_id', pid);
+        const { error: delErr } = await supabase.from('recruitment_needs').delete().eq('id', row.id);
         if (delErr) {
           setError(delErr.message ?? 'No se pudo eliminar la solicitud.');
           return;
@@ -279,7 +301,7 @@ export default function GestionRRHHLocal({
         setDeletingId(null);
       }
     },
-    [pid, showToast, supabase],
+    [showToast, supabase],
   );
 
   return (

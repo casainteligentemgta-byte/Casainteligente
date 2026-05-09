@@ -462,6 +462,7 @@ function ProyectoNuevoPageContent() {
       (notasPersonal ? `Personal requerido (tabulador GOE 6.752):\n${notasPersonal}` : '') || null;
 
     const ubicTxt = (ubicacion.trim() || n).trim();
+    const moduloOrigen = proyectoModuloIdParam.trim();
     const payload: Record<string, unknown> = {
       tipo_proyecto: 'talento',
       customer_id: null,
@@ -485,6 +486,7 @@ function ProyectoNuevoPageContent() {
       obra_estado_legacy: 'activa',
       obra_notas: notasObra,
       obra_presupuesto_ves: presNum,
+      ...(moduloOrigen ? { proyecto_modulo_origen_id: moduloOrigen } : {}),
     };
 
     const { data, error: err } = await supabase
