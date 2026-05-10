@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Copy, MessageCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { CARGOS_OBREROS } from '@/lib/constants/cargosObreros';
 import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPersonnel';
+import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
 
 type LaborRequestRow = {
@@ -62,17 +65,44 @@ async function contarAsignaciones(
 const TABS = ['pendientes', 'obra', 'maestro'] as const;
 type GestionPersonalTab = (typeof TABS)[number];
 
-function tabFromSearchParams(searchParams: ReturnType<typeof useSearchParams>): GestionPersonalTab {
-  const t = searchParams.get('tab');
-  if (t === 'obra' || t === 'maestro' || t === 'pendientes') return t;
+function tabFromInitial(raw: string | undefined): GestionPersonalTab {
+  if (raw === 'obra' || raw === 'maestro' || raw === 'pendientes') return raw;
   return 'pendientes';
 }
 
-export default function RrhhGestionPersonalClient() {
+function hrefFormatoHojaVidaLabor(projectId: string, codigoOficio: string): string {
+  const base = publicRegistroOrigin().replace(/\/$/, '');
+  return `${base}/registro?prj=${encodeURIComponent(projectId.trim())}&role=${encodeURIComponent(codigoOficio.trim())}`;
+}
+
+function mensajeWhatsAppPlanilla(link: string, specialtyNombre: string | null, codigo: string): string {
+  const cargo = (specialtyNombre ?? '').trim() || codigo.trim();
+  return `Hola, Casa Inteligente te invita a completar la hoja de vida / planilla para el oficio «${cargo}». Enlace:\n${link}`;
+}
+
+type RrhhGestionPersonalClientProps = {
+  /** Resuelto en el Server Component desde `searchParams` (fiable en primer paint y SSR). */
+  soloPendientesInitial?: boolean;
+  tabInitial?: string;
+};
+
+export default function RrhhGestionPersonalClient({
+  soloPendientesInitial = false,
+  tabInitial,
+}: RrhhGestionPersonalClientProps) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tab = useMemo(() => tabFromSearchParams(searchParams), [searchParams]);
+  const soloFromClient = searchParams.get('solo') === 'pendientes';
+  /** Si servidor y cliente difieren (hook desfasado), prevalece el valor del Server Component. */
+  const soloPendientes =
+    soloPendientesInitial === soloFromClient ? soloFromClient : soloPendientesInitial;
+
+  const tabInitialResolved = tabFromInitial(tabInitial);
+  const rawTab = searchParams.get('tab');
+  const tabFromUrl: GestionPersonalTab | null =
+    rawTab === 'obra' || rawTab === 'maestro' || rawTab === 'pendientes' ? rawTab : null;
+  const tab: GestionPersonalTab = soloPendientes ? 'pendientes' : tabFromUrl ?? tabInitialResolved;
   const [tick, setTick] = useState(0);
 
   const [pending, setPending] = useState<LaborRequestRow[]>([]);
@@ -104,6 +134,22 @@ export default function RrhhGestionPersonalClient() {
   const [savingEmp, setSavingEmp] = useState(false);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+
+  const copiarEnlaceHojaVida = useCallback(async (r: LaborRequestRow) => {
+    const href = hrefFormatoHojaVidaLabor(r.project_id, r.specialty_codigo);
+    try {
+      await navigator.clipboard.writeText(href);
+      toast.success('Enlace del formato de hoja de vida copiado.');
+    } catch {
+      toast.error('No se pudo copiar al portapapeles.');
+    }
+  }, []);
+
+  const abrirWhatsAppPlanilla = useCallback((r: LaborRequestRow) => {
+    const href = hrefFormatoHojaVidaLabor(r.project_id, r.specialty_codigo);
+    const text = mensajeWhatsAppPlanilla(href, r.specialty_nombre, r.specialty_codigo);
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -143,6 +189,12 @@ export default function RrhhGestionPersonalClient() {
   }, [supabase, tick]);
 
   useEffect(() => {
+    if (soloPendientes) {
+      setLoadingObra(false);
+      setAssignments([]);
+      setNombreEmpleado(new Map());
+      return;
+    }
     let alive = true;
     (async () => {
       setLoadingObra(true);
@@ -188,9 +240,14 @@ export default function RrhhGestionPersonalClient() {
     return () => {
       alive = false;
     };
-  }, [supabase, tick]);
+  }, [supabase, tick, soloPendientes]);
 
   useEffect(() => {
+    if (soloPendientes) {
+      setLoadingMaestro(false);
+      setEmpleados([]);
+      return;
+    }
     let alive = true;
     (async () => {
       setLoadingMaestro(true);
@@ -208,7 +265,7 @@ export default function RrhhGestionPersonalClient() {
     return () => {
       alive = false;
     };
-  }, [supabase, tick]);
+  }, [supabase, tick, soloPendientes]);
 
   const asignacionesPorProyecto = useMemo(() => {
     const m = new Map<string, AssignmentRow[]>();
@@ -401,60 +458,102 @@ export default function RrhhGestionPersonalClient() {
     setCreateOpen(true);
   }
 
+  const pendientesInner = (
+    <>
+      {loadingPending ? (
+        <p className="text-sm text-zinc-500">Cargando…</p>
+      ) : pending.length === 0 ? (
+        <p className="text-sm text-zinc-500">No hay solicitudes en estado pending.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Especialidad</TableHead>
+              <TableHead>Cantidad</TableHead>
+              <TableHead>Proyecto</TableHead>
+              <TableHead className="min-w-[220px] text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pending.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="text-zinc-300">{new Date(r.created_at).toLocaleString('es-VE')}</TableCell>
+                <TableCell>
+                  <span className="font-medium text-white">{r.specialty_codigo}</span>
+                  <span className="ml-2 text-xs text-zinc-500">{r.specialty_nombre ?? ''}</span>
+                </TableCell>
+                <TableCell className="tabular-nums">{r.quantity_requested}</TableCell>
+                <TableCell className="max-w-[200px] truncate text-zinc-400" title={r.project_id}>
+                  {nombreProyecto.get(r.project_id) ?? r.project_id.slice(0, 8)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="elite"
+                      className="gap-1.5"
+                      title="Copiar enlace público del formato de hoja de vida"
+                      onClick={() => void copiarEnlaceHojaVida(r)}
+                    >
+                      <Copy className="h-3.5 w-3.5" aria-hidden />
+                      Copiar enlace HV
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="elite"
+                      className="gap-1.5 border-emerald-500/30 text-emerald-100 hover:bg-emerald-950/40"
+                      title="Abrir WhatsApp con mensaje e enlace (eliges el contacto)"
+                      onClick={() => abrirWhatsAppPlanilla(r)}
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                      WhatsApp
+                    </Button>
+                    <Button type="button" size="sm" variant="elitePrimary" onClick={() => void abrirAsignacion(r)}>
+                      Asignar obreros
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </>
+  );
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-white">
-      <Tabs
-        value={tab}
-        onValueChange={(v) => {
-          router.replace(`/rrhh/gestion-personal?tab=${encodeURIComponent(v)}`, { scroll: false });
-        }}
-        className="w-full"
-      >
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
-          <TabsTrigger value="pendientes">Solicitudes pendientes</TabsTrigger>
-          <TabsTrigger value="obra">Personal en obra</TabsTrigger>
-          <TabsTrigger value="maestro">Maestro obreros</TabsTrigger>
-        </TabsList>
+      {soloPendientes ? (
+        <>
+          <p className="mb-4 text-xs text-zinc-400">
+            Vista desde proyecto: solo solicitudes pendientes.{' '}
+            <Link href="/rrhh/gestion-personal" className="font-semibold text-sky-400 underline hover:text-sky-300">
+              Abrir gestión de personal completa
+            </Link>{' '}
+            (pestañas obra y maestro).
+          </p>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">{pendientesInner}</div>
+        </>
+      ) : (
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            router.replace(`/rrhh/gestion-personal?tab=${encodeURIComponent(v)}`, { scroll: false });
+          }}
+          className="w-full"
+        >
+          <TabsList className="grid w-full max-w-2xl grid-cols-3">
+            <TabsTrigger value="pendientes">Solicitudes pendientes</TabsTrigger>
+            <TabsTrigger value="obra">Personal en obra</TabsTrigger>
+            <TabsTrigger value="maestro">Maestro obreros</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="pendientes" className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
-          {loadingPending ? (
-            <p className="text-sm text-zinc-500">Cargando…</p>
-          ) : pending.length === 0 ? (
-            <p className="text-sm text-zinc-500">No hay solicitudes en estado pending.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Especialidad</TableHead>
-                  <TableHead>Cantidad</TableHead>
-                  <TableHead>Proyecto</TableHead>
-                  <TableHead className="text-right">Acción</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pending.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="text-zinc-300">{new Date(r.created_at).toLocaleString('es-VE')}</TableCell>
-                    <TableCell>
-                      <span className="font-medium text-white">{r.specialty_codigo}</span>
-                      <span className="ml-2 text-xs text-zinc-500">{r.specialty_nombre ?? ''}</span>
-                    </TableCell>
-                    <TableCell className="tabular-nums">{r.quantity_requested}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-zinc-400" title={r.project_id}>
-                      {nombreProyecto.get(r.project_id) ?? r.project_id.slice(0, 8)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button type="button" size="sm" variant="elitePrimary" onClick={() => void abrirAsignacion(r)}>
-                        Asignar obreros
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </TabsContent>
+          <TabsContent value="pendientes" className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
+            {pendientesInner}
+          </TabsContent>
 
         <TabsContent value="obra" className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
           {loadingObra ? (
@@ -549,6 +648,7 @@ export default function RrhhGestionPersonalClient() {
           )}
         </TabsContent>
       </Tabs>
+      )}
 
       <Dialog open={!!dialogReq} onOpenChange={(o) => !o && setDialogReq(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">

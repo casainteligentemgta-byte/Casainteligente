@@ -179,7 +179,7 @@ export default function LaborRequestDirectorForm({
               {saving ? 'Guardando…' : 'Crear solicitud'}
             </Button>
             <Link
-              href="/rrhh/gestion-personal"
+              href="/rrhh/gestion-personal?solo=pendientes"
               className="text-xs font-medium text-sky-400 underline hover:text-sky-300"
             >
               Panel RRHH — asignaciones

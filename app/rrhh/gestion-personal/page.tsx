@@ -6,11 +6,23 @@ export const metadata = {
   description: 'Solicitudes de mano de obra, asignaciones a proyecto y maestro de obreros.',
 };
 
-export default function RrhhGestionPersonalPage() {
+function firstQueryValue(v: string | string[] | undefined): string | undefined {
+  if (v === undefined) return undefined;
+  return Array.isArray(v) ? v[0] : v;
+}
+
+type PageProps = {
+  searchParams: Record<string, string | string[] | undefined>;
+};
+
+export default function RrhhGestionPersonalPage({ searchParams }: PageProps) {
+  const soloPendientesInitial = firstQueryValue(searchParams.solo) === 'pendientes';
+  const tabInitial = firstQueryValue(searchParams.tab);
+
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
       <Suspense fallback={<p className="p-8 text-sm text-zinc-500">Cargando panel…</p>}>
-        <RrhhGestionPersonalClient />
+        <RrhhGestionPersonalClient soloPendientesInitial={soloPendientesInitial} tabInitial={tabInitial} />
       </Suspense>
     </div>
   );

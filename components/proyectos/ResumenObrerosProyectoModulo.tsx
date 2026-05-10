@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ClipboardList, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
+import { ClipboardList, FileText, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -49,10 +50,62 @@ type FilaContratoObra = {
 
 type ListaModalTipo = 'enCarpeta' | 'inactivos' | 'porContratar';
 
+type LaborRequestLite = {
+  id: string;
+  specialty_codigo: string;
+  specialty_nombre: string | null;
+  quantity_requested: number;
+  status: string;
+};
+
 /** Evita `.trim()` sobre no-string (p. ej. número desde PostgREST), que rompe React con pantalla en blanco. */
 function sTrim(v: unknown): string {
   if (v == null) return '';
   return String(v).trim();
+}
+
+function uuidNeedOk(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
+/** URL pública para completar planilla / hoja de vida (Gaceta). */
+function baseRegistroPublico(): string {
+  return publicRegistroOrigin().replace(/\/$/, '');
+}
+
+function hrefFormatoHojaVidaPorOficio(moduloIntegralId: string, codigoOficio: string): string | null {
+  const mid = moduloIntegralId.trim();
+  const cod = codigoOficio.trim();
+  if (!mid || !cod) return null;
+  return `${baseRegistroPublico()}/registro?prj=${encodeURIComponent(mid)}&role=${encodeURIComponent(cod)}`;
+}
+
+function hrefFormatoHojaVidaEmpleado(moduloIntegralId: string, row: EmpleadoLite): string | null {
+  const base = baseRegistroPublico();
+  const nid = sTrim(row.recruitment_need_id);
+  if (uuidNeedOk(nid)) return `${base}/registro?need=${encodeURIComponent(nid)}`;
+  const cod = sTrim(row.cargo_codigo);
+  if (cod && moduloIntegralId.trim()) return hrefFormatoHojaVidaPorOficio(moduloIntegralId, cod);
+  const nom = sTrim(row.cargo_nombre);
+  if (nom && moduloIntegralId.trim()) {
+    return `${base}/registro?prj=${encodeURIComponent(moduloIntegralId.trim())}&role=${encodeURIComponent(nom)}`;
+  }
+  return null;
+}
+
+function LinkFormatoHojaVida({ href, etiqueta = 'Formato HV' }: { href: string; etiqueta?: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-500/20"
+      title="Abre el enlace público para que el obrero complete la hoja de vida / planilla"
+    >
+      <FileText className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+      {etiqueta}
+    </a>
+  );
 }
 
 function nombreApellidoDesdeEmpleado(row: EmpleadoLite): { nombre: string; apellido: string } {
@@ -199,6 +252,10 @@ export default function ResumenObrerosProyectoModulo({
   const [obraEstadoPorId, setObraEstadoPorId] = useState<Map<string, string>>(() => new Map());
   const [listaModal, setListaModal] = useState<ListaModalTipo | null>(null);
   const [viewportTick, setViewportTick] = useState(0);
+  /** Solicitudes `labor_requests` pendientes (director) en módulo u obras hijas. */
+  const [laborPendientes, setLaborPendientes] = useState<LaborRequestLite[]>([]);
+  const [cuadroPlazasLaborPendientes, setCuadroPlazasLaborPendientes] = useState(0);
+  const [cuadroAsignadosLabor, setCuadroAsignadosLabor] = useState(0);
 
   useEffect(() => {
     const bump = () => setViewportTick((t) => t + 1);
@@ -302,6 +359,33 @@ export default function ResumenObrerosProyectoModulo({
 
         /** Obreros asignados vía `project_assignments` (solicitud de personal); suelen no tener `proyecto_modulo_id`. */
         const projectIdsAsignacion = Array.from(new Set([id, ...obraHijaIds]));
+
+        let laborPendientesRows: LaborRequestLite[] = [];
+        const { data: lrData, error: lrErr } = await supabase
+          .from('labor_requests')
+          .select('id,specialty_codigo,specialty_nombre,quantity_requested,status')
+          .in('project_id', projectIdsAsignacion)
+          .eq('status', 'pending');
+        if (!alive) return;
+        if (!lrErr && lrData?.length) {
+          laborPendientesRows = (lrData as LaborRequestLite[])
+            .map((raw) => {
+              const lid = typeof raw.id === 'string' ? raw.id : '';
+              const qty =
+                typeof raw.quantity_requested === 'number' && Number.isFinite(raw.quantity_requested)
+                  ? Math.max(1, Math.min(500, Math.floor(raw.quantity_requested)))
+                  : 1;
+              return {
+                id: lid,
+                specialty_codigo: sTrim(raw.specialty_codigo),
+                specialty_nombre: raw.specialty_nombre ?? null,
+                quantity_requested: qty,
+                status: sTrim(raw.status) || 'pending',
+              };
+            })
+            .filter((r) => r.id && sTrim(r.status).toLowerCase() === 'pending');
+        }
+
         const solicitadosIds = new Set<string>();
         const { data: pasg, error: pasgErr } = await supabase
           .from('project_assignments')
@@ -377,6 +461,9 @@ export default function ResumenObrerosProyectoModulo({
         const activos = emps.filter((e) => bucketContrato(contrMap.get(e.id) ?? []) === 'contratado_activo').length;
         const enCarpetaEval = emps.filter((e) => evaluacionNoAprobada(e)).length;
         const solicitadosEnLista = emps.filter((e) => solicitadosIds.has(e.id)).length;
+        const laborPlazasPendCount = laborPendientesRows.reduce((a, r) => a + r.quantity_requested, 0);
+        /** Plazas en solicitud RRHH pendientes; si no hay, el número muestra obreros ya asignados en obra. */
+        const solicitadosTarjetaNum = laborPlazasPendCount > 0 ? laborPlazasPendCount : solicitadosEnLista;
 
         emps = emps.map((row) => ({
           ...row,
@@ -385,7 +472,10 @@ export default function ResumenObrerosProyectoModulo({
 
         if (!alive) return;
         setPlazasVacantesResumen(plazas);
-        setSolicitadosPlazas(solicitadosEnLista);
+        setSolicitadosPlazas(solicitadosTarjetaNum);
+        setLaborPendientes(laborPendientesRows);
+        setCuadroPlazasLaborPendientes(laborPlazasPendCount);
+        setCuadroAsignadosLabor(solicitadosEnLista);
         setVacantesActivas(needsActivas.length);
         setEnCarpeta(enCarpetaEval);
         setContratadosActivos(activos);
@@ -397,6 +487,9 @@ export default function ResumenObrerosProyectoModulo({
         if (!alive) return;
         setError('No se pudo cargar el resumen de obreros.');
         setSolicitadosPlazas(0);
+        setLaborPendientes([]);
+        setCuadroPlazasLaborPendientes(0);
+        setCuadroAsignadosLabor(0);
         setPlazasVacantesResumen(0);
         setVacantesActivas(0);
         setEnCarpeta(0);
@@ -480,9 +573,9 @@ export default function ResumenObrerosProyectoModulo({
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Link
-            href={`/proyectos/nuevo?desde=proyecto&proyecto_modulo_id=${encodeURIComponent(proyectoModuloId)}`}
+            href={`/proyectos/nuevo?proyecto_modulo_id=${encodeURIComponent(proyectoModuloId)}`}
             className="rounded-lg border border-sky-500/45 bg-sky-500/15 px-3 py-1.5 text-[11px] font-semibold text-sky-100 hover:bg-sky-500/25"
-            title="Nueva solicitud de personal vinculada a este proyecto integral"
+            title="Registrar obra Talento vinculada al módulo y plazas del tabulador (aparecen en este cuadro)"
           >
             Solicitar personal
           </Link>
@@ -502,21 +595,39 @@ export default function ResumenObrerosProyectoModulo({
       ) : (
         <>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Link
-              href="/rrhh/gestion-personal"
-              className="block w-full rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 p-4 text-left transition hover:border-[#FF9500]/55 hover:bg-[#FF9500]/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9500]/50"
-              title="Gestionar solicitudes de personal y asignaciones (RRHH)"
-            >
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-[#FF9500]/90">
-                <ClipboardList className="h-3.5 w-3.5" aria-hidden />
-                Solicitados
+            <div className="flex w-full flex-col overflow-hidden rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 text-left transition hover:border-[#FF9500]/55 hover:bg-[#FF9500]/15 focus-within:ring-2 focus-within:ring-[#FF9500]/50">
+              <Link
+                href="/rrhh/gestion-personal?solo=pendientes"
+                className="block p-4 focus:outline-none"
+                title="Gestionar solicitudes pendientes (vista compacta desde proyecto)"
+              >
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-[#FF9500]/90">
+                  <ClipboardList className="h-3.5 w-3.5" aria-hidden />
+                  Solicitados
+                </div>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-white">{solicitadosPlazas}</p>
+                <p className="mt-1 text-[10px] leading-snug text-zinc-500">
+                  {cuadroPlazasLaborPendientes > 0 ? (
+                    <>
+                      Plazas en solicitud de mano de obra (pendientes RRHH): {cuadroPlazasLaborPendientes}. Asignados en
+                      obra: {cuadroAsignadosLabor}.
+                    </>
+                  ) : cuadroAsignadosLabor > 0 ? (
+                    <>Obreros ya asignados vía solicitud: {cuadroAsignadosLabor}.</>
+                  ) : (
+                    <>Sin plazas en <span className="font-mono text-zinc-400">labor_requests</span> ni asignaciones.</>
+                  )}{' '}
+                  Ref. reclutamiento: {plazasVacantesResumen} plaza(s) en {vacantesActivas} vacante(s). Clic: gestión
+                  laboral RRHH.
+                </p>
+              </Link>
+              <div className="border-t border-[#FF9500]/25 bg-black/20 px-3 py-2">
+                <p className="text-[10px] leading-snug text-zinc-400">
+                  Formato hoja de vida para candidatos: usa la columna «Formato HV» en la tabla de esta página (enlace
+                  público listo para copiar o enviar).
+                </p>
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{solicitadosPlazas}</p>
-              <p className="mt-1 text-[10px] text-zinc-500">
-                Asignados a solicitud de personal. Ref.: {plazasVacantesResumen} plaza(s) en {vacantesActivas} vacante(s).
-                Clic: ir a gestión de personal RRHH.
-              </p>
-            </Link>
+            </div>
             <button
               type="button"
               onClick={() => setListaModal('enCarpeta')}
@@ -576,26 +687,59 @@ export default function ResumenObrerosProyectoModulo({
           </div>
 
           <div className="mt-5 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03]">
-            <table className="w-full min-w-[520px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
                   <th className="px-3 py-2.5">Obrero</th>
                   <th className="px-3 py-2.5">Cargo</th>
                   <th className="px-3 py-2.5">Proceso</th>
                   <th className="px-3 py-2.5">Contrato</th>
+                  <th className="px-3 py-2.5">Formato HV</th>
                 </tr>
               </thead>
               <tbody>
-                {empleados.length === 0 ? (
+                {laborPendientes.length === 0 && empleados.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-6 text-center text-sm text-zinc-500">
-                      Aún no hay postulantes vinculados a este proyecto. Los registros por enlace de vacante
-                      aparecerán aquí.
+                    <td colSpan={5} className="px-3 py-6 text-center text-sm text-zinc-500">
+                      Aún no hay solicitudes de mano de obra registradas ni postulantes vinculados. Tras crear la obra
+                      desde «Solicitar personal» con oficios del tabulador, las plazas pendientes aparecen aquí; los
+                      registros por vacante o asignación RRHH también.
                     </td>
                   </tr>
                 ) : (
-                  empleados.map((row) => {
+                  <>
+                    {laborPendientes.map((lr) => {
+                      const hvLabor = hrefFormatoHojaVidaPorOficio(proyectoModuloId, lr.specialty_codigo);
+                      return (
+                      <tr key={`lr-${lr.id}`} className="border-b border-white/[0.06] bg-amber-500/5 hover:bg-amber-500/10">
+                        <td className="px-3 py-2.5 font-medium text-amber-100/95">
+                          Mano de obra × {lr.quantity_requested}
+                          <span className="mt-0.5 block text-[10px] font-normal text-zinc-500">
+                            Pendiente asignación en RRHH
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-zinc-300">
+                          {sTrim(lr.specialty_nombre) || lr.specialty_codigo}
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-zinc-500">—</td>
+                        <td className="px-3 py-2.5">
+                          <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                            Solicitud pendiente
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {hvLabor ? (
+                            <LinkFormatoHojaVida href={hvLabor} etiqueta="Enviar formato" />
+                          ) : (
+                            <span className="text-xs text-zinc-600">—</span>
+                          )}
+                        </td>
+                      </tr>
+                      );
+                    })}
+                    {empleados.map((row) => {
                     const bucket = bucketContrato(contratoPorEmpleado.get(row.id) ?? []);
+                    const hvEmp = hrefFormatoHojaVidaEmpleado(proyectoModuloId, row);
                     return (
                       <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
                         <td className="px-3 py-2.5 font-medium text-zinc-100">
@@ -623,9 +767,13 @@ export default function ResumenObrerosProyectoModulo({
                             {etiquetaBucket(bucket)}
                           </span>
                         </td>
+                        <td className="px-3 py-2.5">
+                          {hvEmp ? <LinkFormatoHojaVida href={hvEmp} etiqueta="Enviar formato" /> : <span className="text-xs text-zinc-600">—</span>}
+                        </td>
                       </tr>
                     );
-                  })
+                  })}
+                  </>
                 )}
               </tbody>
             </table>

@@ -754,7 +754,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   Reclutamiento
                 </Link>
                 <Link
-                  href="/rrhh/gestion-personal"
+                  href="/rrhh/gestion-personal?solo=pendientes"
                   className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
                 >
                   Gestión laboral
@@ -793,7 +793,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   Reclutamiento
                 </Link>
                 <Link
-                  href="/rrhh/gestion-personal"
+                  href="/rrhh/gestion-personal?solo=pendientes"
                   className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
                 >
                   Gestión laboral
@@ -1007,7 +1007,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               </>
             ) : null}
 
-            {proyecto && !modoEdicion ? <DashboardUtilidadReal proyectoId={id} className="mt-4" /> : null}
+            {proyecto && !modoEdicion && !tabSolicitados ? (
+              <DashboardUtilidadReal proyectoId={id} className="mt-4" />
+            ) : null}
 
             <div className={`space-y-4 ${tabVistaTalento && !modoEdicion ? 'mt-2' : 'mt-4'}`}>
               {modoEdicion || !tabVistaTalento ? (

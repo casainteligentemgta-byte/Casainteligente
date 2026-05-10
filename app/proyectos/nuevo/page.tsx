@@ -129,6 +129,14 @@ function ProyectoNuevoPageContent() {
   const proyectoObraIdParam = searchParams.get('proyecto_id')?.trim() ?? '';
 
   const supabase = useMemo(() => createClient(), []);
+
+  /** Antes `?desde=proyecto` abría solo el tabulador sin crear obra ni labor_requests; redirige al formulario completo. */
+  useEffect(() => {
+    if (searchParams.get('desde') !== 'proyecto') return;
+    const mid = searchParams.get('proyecto_modulo_id')?.trim();
+    if (!mid) return;
+    router.replace(`/proyectos/nuevo?proyecto_modulo_id=${encodeURIComponent(mid)}`);
+  }, [searchParams, router]);
   const [nombre, setNombre] = useState('');
   const [ubicacion, setUbicacion] = useState('');
   const [customerId, setCustomerId] = useState('');
@@ -514,6 +522,29 @@ function ProyectoNuevoPageContent() {
         obra_fecha_entrega: string;
         obra_presupuesto_ves: number | null;
       };
+      const moduloOrigenTrim = proyectoModuloIdParam.trim();
+      if (moduloOrigenTrim) {
+        const mergedPost = mergeCantidadPorCodigo(lineasPersonal);
+        if (mergedPost.size > 0) {
+          const laborRows = Array.from(mergedPost.entries()).map(([codigo, cantidad]) => {
+            const c = cargoPorCodigo(codigo);
+            return {
+              project_id: row.id,
+              specialty_codigo: codigo,
+              specialty_nombre: c?.nombre ?? null,
+              quantity_requested: Math.max(1, Math.min(500, Math.floor(Number(cantidad) || 1))),
+              status: 'pending' as const,
+              notes: null as string | null,
+            };
+          });
+          const { error: lrErr } = await supabase.from('labor_requests').insert(laborRows);
+          if (lrErr) {
+            console.warn('[proyectos/nuevo] labor_requests:', lrErr.message);
+          } else if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
+          }
+        }
+      }
       setCreado({
         id: row.id,
         nombre: row.nombre,
