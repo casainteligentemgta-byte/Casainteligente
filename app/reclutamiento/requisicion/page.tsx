@@ -25,7 +25,7 @@ export default function ReclutamientoRequisicionPage({ searchParams }: PageProps
     <div className="min-h-screen app-root-bg pb-28 sm:pb-24">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 pt-6">
         <Link
-          href="/reclutamiento/dashboard"
+          href="/reclutamiento"
           className="text-sm font-medium text-zinc-400 transition hover:text-[#FFD60A]"
         >
           ← Volver al panel de reclutamiento

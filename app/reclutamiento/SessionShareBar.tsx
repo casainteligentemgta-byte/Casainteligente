@@ -16,7 +16,7 @@ export default function SessionShareBar({ sessionId }: { sessionId: string }) {
     }
   }
 
-  const dashboardHref = `/reclutamiento/dashboard?session=${encodeURIComponent(sessionId)}`;
+  const reclutamientoHref = `/reclutamiento?session=${encodeURIComponent(sessionId)}`;
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -28,10 +28,10 @@ export default function SessionShareBar({ sessionId }: { sessionId: string }) {
         {copied ? 'Copiado' : 'Copiar ID'}
       </button>
       <Link
-        href={dashboardHref}
+        href={reclutamientoHref}
         className="text-[11px] rounded-lg px-2 py-1 bg-sky-900/50 text-sky-200 border border-sky-700/60"
       >
-        Abrir panel evaluador
+        Ir a reclutamiento
       </Link>
     </div>
   );

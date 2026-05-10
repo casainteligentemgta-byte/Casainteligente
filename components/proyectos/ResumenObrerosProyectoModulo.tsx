@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { ClipboardList, FileText, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { ClipboardList, Trash2, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
-import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export type ResumenObrerosProyectoModuloProps = {
@@ -14,7 +15,54 @@ export type ResumenObrerosProyectoModuloProps = {
   listaRefresco?: number;
   /** Valor de `?tab=` en la URL; al cambiar se vuelve a cargar el cuadro (p. ej. vista RRHH directa). */
   tabUrl?: string;
+  /**
+   * Solo pruebas: con `?demo_listas=1` en la URL del módulo, cada modal (En carpeta, Inactivos, Por contratar)
+   * muestra un obrero ficticio y los contadores de esas tarjetas son al menos 1.
+   */
+  demoListasObrero?: boolean;
 };
+
+/** Fila ficticia para pruebas UI (no persiste en BD). UUID solo para keys/links estables en demo. */
+const OBRERO_DEMO_LISTA: EmpleadoLite = {
+  id: '00000000-0000-4000-8000-000000000001',
+  nombre_completo: 'Obrero demo (prueba)',
+  nombres: 'Obrero',
+  primer_apellido: 'Demo',
+  segundo_apellido: 'Prueba',
+  cedula: 'V-12345678',
+  documento: 'V-12345678',
+  celular: '04141234567',
+  telefono: '04141234567',
+  cargo_nombre: 'Oficial',
+  cargo_codigo: 'OFICIAL',
+  estado: 'aprobado',
+  estado_proceso: 'cv_completado',
+  recruitment_need_id: null,
+  status_evaluacion: 'verde',
+  rol_examen: 'obrero',
+};
+
+/** Demo «Por contratar»: vigilante aprobado sin contrato (rol técnico + oficio vigilancia). */
+const LUS_VICENTE_MATA_DEMO: EmpleadoLite = {
+  id: '00000000-0000-4000-8000-000000000002',
+  nombre_completo: 'Luis Vicente Mata',
+  nombres: 'Luis Vicente',
+  primer_apellido: 'Mata',
+  segundo_apellido: null,
+  cedula: 'V-00000000',
+  documento: 'V-00000000',
+  celular: '04140000000',
+  telefono: '04140000000',
+  cargo_nombre: 'Vigilante',
+  cargo_codigo: 'VIGILANTE',
+  estado: 'aprobado',
+  estado_proceso: 'cv_completado',
+  recruitment_need_id: null,
+  status_evaluacion: 'verde',
+  rol_examen: 'tecnico',
+};
+
+const IDS_DEMO_FILA = new Set([OBRERO_DEMO_LISTA.id, LUS_VICENTE_MATA_DEMO.id]);
 
 type NeedLite = {
   id: string;
@@ -41,6 +89,8 @@ type EmpleadoLite = {
   recruitment_need_id: string | null;
   /** Legacy RRHH: verde = apto, rojo/rechazado = no apto, amarillo = en curso. */
   status_evaluacion: string | null;
+  /** `obrero` | `programador` | `tecnico` — «por contratar» incluye obra y vigilancia (técnico + oficio). */
+  rol_examen: string | null;
 };
 
 type FilaContratoObra = {
@@ -62,50 +112,6 @@ type LaborRequestLite = {
 function sTrim(v: unknown): string {
   if (v == null) return '';
   return String(v).trim();
-}
-
-function uuidNeedOk(s: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim());
-}
-
-/** URL pública para completar planilla / hoja de vida (Gaceta). */
-function baseRegistroPublico(): string {
-  return publicRegistroOrigin().replace(/\/$/, '');
-}
-
-function hrefFormatoHojaVidaPorOficio(moduloIntegralId: string, codigoOficio: string): string | null {
-  const mid = moduloIntegralId.trim();
-  const cod = codigoOficio.trim();
-  if (!mid || !cod) return null;
-  return `${baseRegistroPublico()}/registro?prj=${encodeURIComponent(mid)}&role=${encodeURIComponent(cod)}`;
-}
-
-function hrefFormatoHojaVidaEmpleado(moduloIntegralId: string, row: EmpleadoLite): string | null {
-  const base = baseRegistroPublico();
-  const nid = sTrim(row.recruitment_need_id);
-  if (uuidNeedOk(nid)) return `${base}/registro?need=${encodeURIComponent(nid)}`;
-  const cod = sTrim(row.cargo_codigo);
-  if (cod && moduloIntegralId.trim()) return hrefFormatoHojaVidaPorOficio(moduloIntegralId, cod);
-  const nom = sTrim(row.cargo_nombre);
-  if (nom && moduloIntegralId.trim()) {
-    return `${base}/registro?prj=${encodeURIComponent(moduloIntegralId.trim())}&role=${encodeURIComponent(nom)}`;
-  }
-  return null;
-}
-
-function LinkFormatoHojaVida({ href, etiqueta = 'Formato HV' }: { href: string; etiqueta?: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-500/20"
-      title="Abre el enlace público para que el obrero complete la hoja de vida / planilla"
-    >
-      <FileText className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
-      {etiqueta}
-    </a>
-  );
 }
 
 function nombreApellidoDesdeEmpleado(row: EmpleadoLite): { nombre: string; apellido: string } {
@@ -172,12 +178,6 @@ function bucketContrato(estados: string[]): 'contratado_activo' | 'en_tramite' |
   return 'sin_contrato';
 }
 
-function etiquetaBucket(b: ReturnType<typeof bucketContrato>): string {
-  if (b === 'contratado_activo') return 'Contratado activo';
-  if (b === 'en_tramite') return 'Contrato en trámite';
-  return 'Sin contrato';
-}
-
 function statusEvaluacionCodigo(row: EmpleadoLite): string {
   return sTrim(row.status_evaluacion).toLowerCase();
 }
@@ -190,6 +190,33 @@ function evaluacionAprobada(row: EmpleadoLite): boolean {
 function evaluacionNoAprobada(row: EmpleadoLite): boolean {
   const s = statusEvaluacionCodigo(row);
   return s === 'rojo' || s === 'rechazado';
+}
+
+/** Apto para contratar obra: semáforo verde o, si no hay rojo explícito, empleado marcado aprobado en RRHH. */
+function evaluacionAptaPorContratar(row: EmpleadoLite): boolean {
+  if (evaluacionAprobada(row)) return true;
+  if (evaluacionNoAprobada(row)) return false;
+  return sTrim(row.estado).toLowerCase() === 'aprobado';
+}
+
+/**
+ * Personal de campo que puede figurar en «por contratar»: obreros de obra y vigilancia (suelen ir como `tecnico` en talento).
+ * Excluye programadores.
+ */
+function esPersonalCampoPorContratar(row: EmpleadoLite): boolean {
+  const r = sTrim(row.rol_examen).toLowerCase();
+  if (r === 'programador') return false;
+  if (r === 'obrero') return true;
+  if (r === 'tecnico') {
+    const cargo = `${sTrim(row.cargo_nombre)} ${sTrim(row.cargo_codigo)}`.toLowerCase();
+    return /vigil|seguridad|custod|guardia|porter/.test(cargo);
+  }
+  return false;
+}
+
+function entraEnListaPorContratar(row: EmpleadoLite, contrMap: Map<string, string[]>): boolean {
+  const b = bucketContrato(contrMap.get(row.id) ?? []);
+  return esPersonalCampoPorContratar(row) && evaluacionAptaPorContratar(row) && b !== 'contratado_activo';
 }
 
 /** Contratado en firma activa sobre obra aún abierta (no cuenta como «inactivo por obra cerrada»). */
@@ -235,6 +262,7 @@ export default function ResumenObrerosProyectoModulo({
   proyectoModuloId,
   listaRefresco = 0,
   tabUrl = '',
+  demoListasObrero = false,
 }: ResumenObrerosProyectoModuloProps) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -253,9 +281,19 @@ export default function ResumenObrerosProyectoModulo({
   const [listaModal, setListaModal] = useState<ListaModalTipo | null>(null);
   const [viewportTick, setViewportTick] = useState(0);
   /** Solicitudes `labor_requests` pendientes (director) en módulo u obras hijas. */
-  const [laborPendientes, setLaborPendientes] = useState<LaborRequestLite[]>([]);
   const [cuadroPlazasLaborPendientes, setCuadroPlazasLaborPendientes] = useState(0);
   const [cuadroAsignadosLabor, setCuadroAsignadosLabor] = useState(0);
+  /** Proyectos (módulo + obras hijas) para borrar `project_assignments` al quitar asignación. */
+  const [projectIdsForLabor, setProjectIdsForLabor] = useState<string[]>([]);
+  /** Obreros con fila en `project_assignments` para este alcance (muestra botón quitar asignación). */
+  const [solicitadosWorkerIdSet, setSolicitadosWorkerIdSet] = useState<Set<string>>(() => new Set());
+  /** Modo demo: fila ficticia oculta por lista tras pulsar Eliminar. */
+  const [demoEliminadoPorLista, setDemoEliminadoPorLista] = useState<Partial<Record<ListaModalTipo, boolean>>>({});
+  const [eliminandoWorkerId, setEliminandoWorkerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDemoEliminadoPorLista({});
+  }, [proyectoModuloId, demoListasObrero]);
 
   useEffect(() => {
     const bump = () => setViewportTick((t) => t + 1);
@@ -278,6 +316,8 @@ export default function ResumenObrerosProyectoModulo({
     if (!id) {
       setLoading(false);
       setError('Proyecto no válido.');
+      setProjectIdsForLabor([]);
+      setSolicitadosWorkerIdSet(new Set());
       return;
     }
 
@@ -319,7 +359,7 @@ export default function ResumenObrerosProyectoModulo({
         const needIds = needsActivas.map((n) => n.id);
 
         const selEmp =
-          'id,nombre_completo,nombres,primer_apellido,segundo_apellido,cedula,documento,celular,telefono,cargo_nombre,cargo_codigo,estado,estado_proceso,recruitment_need_id,status_evaluacion,created_at';
+          'id,nombre_completo,nombres,primer_apellido,segundo_apellido,cedula,documento,celular,telefono,cargo_nombre,cargo_codigo,estado,estado_proceso,recruitment_need_id,status_evaluacion,rol_examen,created_at';
         const e1 = await supabase.from('ci_empleados').select(selEmp).eq('proyecto_modulo_id', id).order('nombre_completo');
         if (!alive) return;
 
@@ -359,6 +399,7 @@ export default function ResumenObrerosProyectoModulo({
 
         /** Obreros asignados vía `project_assignments` (solicitud de personal); suelen no tener `proyecto_modulo_id`. */
         const projectIdsAsignacion = Array.from(new Set([id, ...obraHijaIds]));
+        setProjectIdsForLabor(projectIdsAsignacion);
 
         let laborPendientesRows: LaborRequestLite[] = [];
         const { data: lrData, error: lrErr } = await supabase
@@ -407,6 +448,7 @@ export default function ResumenObrerosProyectoModulo({
             }
           }
         }
+        setSolicitadosWorkerIdSet(new Set(solicitadosIds));
 
         emps.sort((a, b) =>
           sTrim(a.nombre_completo).localeCompare(sTrim(b.nombre_completo), 'es', { sensitivity: 'base' }),
@@ -468,12 +510,12 @@ export default function ResumenObrerosProyectoModulo({
         emps = emps.map((row) => ({
           ...row,
           status_evaluacion: (row as { status_evaluacion?: string | null }).status_evaluacion ?? null,
+          rol_examen: (row as { rol_examen?: string | null }).rol_examen ?? null,
         })) as EmpleadoLite[];
 
         if (!alive) return;
         setPlazasVacantesResumen(plazas);
         setSolicitadosPlazas(solicitadosTarjetaNum);
-        setLaborPendientes(laborPendientesRows);
         setCuadroPlazasLaborPendientes(laborPlazasPendCount);
         setCuadroAsignadosLabor(solicitadosEnLista);
         setVacantesActivas(needsActivas.length);
@@ -486,8 +528,9 @@ export default function ResumenObrerosProyectoModulo({
       } catch {
         if (!alive) return;
         setError('No se pudo cargar el resumen de obreros.');
+        setProjectIdsForLabor([]);
+        setSolicitadosWorkerIdSet(new Set());
         setSolicitadosPlazas(0);
-        setLaborPendientes([]);
         setCuadroPlazasLaborPendientes(0);
         setCuadroAsignadosLabor(0);
         setPlazasVacantesResumen(0);
@@ -509,11 +552,79 @@ export default function ResumenObrerosProyectoModulo({
   }, [proyectoModuloId, supabase, listaRefresco, viewportTick, tabUrl]);
 
   const porContratarObrerosCount = useMemo(
-    () =>
-      empleados.filter(
-        (e) => evaluacionAprobada(e) && bucketContrato(contratoPorEmpleado.get(e.id) ?? []) !== 'contratado_activo',
-      ).length,
+    () => empleados.filter((e) => entraEnListaPorContratar(e, contratoPorEmpleado)).length,
     [empleados, contratoPorEmpleado],
+  );
+
+  const quitarAsignacionLaboral = useCallback(
+    async (workerId: string) => {
+      const wid = workerId.trim();
+      if (!wid) return;
+      if (projectIdsForLabor.length === 0) {
+        toast.error('No hay proyectos en alcance para esta acción.');
+        return;
+      }
+      setEliminandoWorkerId(wid);
+      try {
+        const { data: removed, error } = await supabase
+          .from('project_assignments')
+          .delete()
+          .eq('worker_id', wid)
+          .in('project_id', projectIdsForLabor)
+          .select('id,labor_request_id');
+        if (error) throw error;
+        const rows = (removed ?? []) as { labor_request_id?: string }[];
+        if (rows.length === 0) {
+          toast.message('Sin asignación', {
+            description: 'Este obrero no tiene asignación a solicitud en este módulo u obras vinculadas.',
+          });
+          return;
+        }
+        const lrIds = Array.from(
+          new Set(rows.map((r) => (typeof r.labor_request_id === 'string' ? r.labor_request_id : '')).filter(Boolean)),
+        );
+        for (const lid of lrIds) {
+          const { data: lr } = await supabase
+            .from('labor_requests')
+            .select('id,quantity_requested,status')
+            .eq('id', lid)
+            .maybeSingle();
+          const qty =
+            lr && typeof lr.quantity_requested === 'number' && Number.isFinite(lr.quantity_requested)
+              ? Math.max(1, Math.min(500, Math.floor(lr.quantity_requested)))
+              : 1;
+          const { count, error: cErr } = await supabase
+            .from('project_assignments')
+            .select('id', { count: 'exact', head: true })
+            .eq('labor_request_id', lid);
+          if (cErr) continue;
+          const c = count ?? 0;
+          const st = sTrim((lr as { status?: string } | null)?.status).toLowerCase();
+          if (st === 'fulfilled' && c < qty) {
+            await supabase
+              .from('labor_requests')
+              .update({ status: 'pending', updated_at: new Date().toISOString() })
+              .eq('id', lid);
+          }
+        }
+        const { count: totalAsg, error: aErr } = await supabase
+          .from('project_assignments')
+          .select('id', { count: 'exact', head: true })
+          .eq('worker_id', wid);
+        if (!aErr && (totalAsg ?? 0) === 0) {
+          await supabase.from('ci_empleados').update({ estatus: 'disponible' }).eq('id', wid);
+        }
+        toast.success('Asignación a solicitud quitada.');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo quitar la asignación.');
+      } finally {
+        setEliminandoWorkerId(null);
+      }
+    },
+    [projectIdsForLabor, supabase],
   );
 
   const contratadosInactivos = useMemo(
@@ -524,33 +635,77 @@ export default function ResumenObrerosProyectoModulo({
 
   const filasListaModal = useMemo(() => {
     if (!listaModal) return [];
+    if (demoListasObrero && listaModal === 'porContratar') {
+      const reales = empleados.filter((e) => entraEnListaPorContratar(e, contratoPorEmpleado));
+      if (demoEliminadoPorLista.porContratar) return reales;
+      if (reales.length > 0) return reales;
+      return [LUS_VICENTE_MATA_DEMO];
+    }
+    if (demoListasObrero && (listaModal === 'enCarpeta' || listaModal === 'inactivos')) {
+      if (demoEliminadoPorLista[listaModal]) return [];
+      return [OBRERO_DEMO_LISTA];
+    }
     return empleados.filter((e) => {
-      const b = bucketContrato(contratoPorEmpleado.get(e.id) ?? []);
       switch (listaModal) {
         case 'enCarpeta':
           return evaluacionNoAprobada(e);
         case 'inactivos':
           return esInactivoPorObraCulminada(e.id, filasContratoPorEmpleado, obraEstadoPorId);
         case 'porContratar':
-          return evaluacionAprobada(e) && b !== 'contratado_activo';
+          return entraEnListaPorContratar(e, contratoPorEmpleado);
         default:
           return false;
       }
     });
-  }, [listaModal, empleados, contratoPorEmpleado, filasContratoPorEmpleado, obraEstadoPorId]);
+  }, [
+    listaModal,
+    empleados,
+    contratoPorEmpleado,
+    filasContratoPorEmpleado,
+    obraEstadoPorId,
+    demoListasObrero,
+    demoEliminadoPorLista,
+  ]);
+
+  const enCarpetaMostrar =
+    demoListasObrero && !demoEliminadoPorLista.enCarpeta ? Math.max(enCarpeta, 1) : enCarpeta;
+  const contratadosInactivosMostrar =
+    demoListasObrero && !demoEliminadoPorLista.inactivos ? Math.max(contratadosInactivos, 1) : contratadosInactivos;
+  const porContratarMostrar =
+    demoListasObrero && !demoEliminadoPorLista.porContratar
+      ? Math.max(porContratarObrerosCount, 1)
+      : porContratarObrerosCount;
 
   const tituloListaModal = useMemo(() => {
     switch (listaModal) {
       case 'enCarpeta':
-        return 'En carpeta (evaluación no aprobada)';
+        return 'En carpeta — no aprobaron la evaluación';
       case 'inactivos':
         return 'Contratados inactivos (obra culminada)';
       case 'porContratar':
-        return 'Por contratar (evaluación aprobada, sin contrato activo)';
+        return 'Por contratar — personal de obra / vigilancia, apto, sin contrato activo';
       default:
         return '';
     }
   }, [listaModal]);
+
+  const hrefSolicitarManoObra = useMemo(
+    () => `/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}?tab=solicitados#solicitar-mano-obra`,
+    [proyectoModuloId],
+  );
+
+  const onClickIrSolicitarManoObra = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (typeof window === 'undefined') return;
+      const pathEsperado = `/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}`;
+      if (window.location.pathname !== pathEsperado) return;
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get('tab') !== 'solicitados') return;
+      e.preventDefault();
+      document.getElementById('solicitar-mano-obra')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [proyectoModuloId],
+  );
 
   return (
     <section
@@ -567,15 +722,21 @@ export default function ResumenObrerosProyectoModulo({
               Cuadro de obreros — RRHH del proyecto
             </h2>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Plazas solicitadas, personas en carpeta del proyecto y contratos activos en obra vinculada.
+              Plazas solicitadas, obreros en carpeta (no aprobaron la evaluación) y contratos activos en obra vinculada.
             </p>
+            {demoListasObrero ? (
+              <p className="mt-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-200">
+                Modo prueba: listas simuladas (<code className="font-mono text-amber-100/90">?demo_listas=1</code>)
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Link
-            href={`/proyectos/nuevo?proyecto_modulo_id=${encodeURIComponent(proyectoModuloId)}`}
+            href={hrefSolicitarManoObra}
+            onClick={onClickIrSolicitarManoObra}
             className="rounded-lg border border-sky-500/45 bg-sky-500/15 px-3 py-1.5 text-[11px] font-semibold text-sky-100 hover:bg-sky-500/25"
-            title="Registrar obra Talento vinculada al módulo y plazas del tabulador (aparecen en este cuadro)"
+            title="Formulario de solicitud de mano de obra (plazas y tabulador) en esta misma vista"
           >
             Solicitar personal
           </Link>
@@ -621,25 +782,20 @@ export default function ResumenObrerosProyectoModulo({
                   laboral RRHH.
                 </p>
               </Link>
-              <div className="border-t border-[#FF9500]/25 bg-black/20 px-3 py-2">
-                <p className="text-[10px] leading-snug text-zinc-400">
-                  Formato hoja de vida para candidatos: usa la columna «Formato HV» en la tabla de esta página (enlace
-                  público listo para copiar o enviar).
-                </p>
-              </div>
             </div>
             <button
               type="button"
               onClick={() => setListaModal('enCarpeta')}
+              title="Obreros vinculados al proyecto que no aprobaron la evaluación"
               className="w-full rounded-xl border border-sky-500/35 bg-sky-500/10 p-4 text-left transition hover:border-sky-400/50 hover:bg-sky-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
             >
               <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-sky-300/90">
                 <Users className="h-3.5 w-3.5" aria-hidden />
                 En carpeta
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{enCarpeta}</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{enCarpetaMostrar}</p>
               <p className="mt-1 text-[10px] text-zinc-500">
-                Resultado «rojo» o «rechazado» en status_evaluacion. Clic: lista.
+                No aprobaron la evaluación (semáforo rojo o rechazado). Clic: ver lista.
               </p>
             </button>
             <Link
@@ -665,7 +821,7 @@ export default function ResumenObrerosProyectoModulo({
                 <UserX className="h-3.5 w-3.5" aria-hidden />
                 Contratados inactivos
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{contratadosInactivos}</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{contratadosInactivosMostrar}</p>
               <p className="mt-1 text-[10px] text-zinc-500">
                 Contrato vinculado a obra en estado «cerrada» y sin contrato activo en obra abierta. Clic: lista.
               </p>
@@ -679,104 +835,13 @@ export default function ResumenObrerosProyectoModulo({
                 <UserMinus className="h-3.5 w-3.5" aria-hidden />
                 Por contratar
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{porContratarObrerosCount}</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{porContratarMostrar}</p>
               <p className="mt-1 text-[10px] leading-snug text-zinc-500">
-                Evaluación aprobada (verde) y aún sin contrato obra «firmado activo». Clic: lista.
+                <span className="font-semibold text-zinc-400">Obrero</span> o{' '}
+                <span className="font-semibold text-zinc-400">vigilancia</span> (técnico + oficio), apto (verde o
+                estado aprobado sin rojo) y sin contrato obra «firmado activo». Clic: lista.
               </p>
             </button>
-          </div>
-
-          <div className="mt-5 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03]">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                  <th className="px-3 py-2.5">Obrero</th>
-                  <th className="px-3 py-2.5">Cargo</th>
-                  <th className="px-3 py-2.5">Proceso</th>
-                  <th className="px-3 py-2.5">Contrato</th>
-                  <th className="px-3 py-2.5">Formato HV</th>
-                </tr>
-              </thead>
-              <tbody>
-                {laborPendientes.length === 0 && empleados.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-sm text-zinc-500">
-                      Aún no hay solicitudes de mano de obra registradas ni postulantes vinculados. Tras crear la obra
-                      desde «Solicitar personal» con oficios del tabulador, las plazas pendientes aparecen aquí; los
-                      registros por vacante o asignación RRHH también.
-                    </td>
-                  </tr>
-                ) : (
-                  <>
-                    {laborPendientes.map((lr) => {
-                      const hvLabor = hrefFormatoHojaVidaPorOficio(proyectoModuloId, lr.specialty_codigo);
-                      return (
-                      <tr key={`lr-${lr.id}`} className="border-b border-white/[0.06] bg-amber-500/5 hover:bg-amber-500/10">
-                        <td className="px-3 py-2.5 font-medium text-amber-100/95">
-                          Mano de obra × {lr.quantity_requested}
-                          <span className="mt-0.5 block text-[10px] font-normal text-zinc-500">
-                            Pendiente asignación en RRHH
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-zinc-300">
-                          {sTrim(lr.specialty_nombre) || lr.specialty_codigo}
-                        </td>
-                        <td className="px-3 py-2.5 text-xs text-zinc-500">—</td>
-                        <td className="px-3 py-2.5">
-                          <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
-                            Solicitud pendiente
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {hvLabor ? (
-                            <LinkFormatoHojaVida href={hvLabor} etiqueta="Enviar formato" />
-                          ) : (
-                            <span className="text-xs text-zinc-600">—</span>
-                          )}
-                        </td>
-                      </tr>
-                      );
-                    })}
-                    {empleados.map((row) => {
-                    const bucket = bucketContrato(contratoPorEmpleado.get(row.id) ?? []);
-                    const hvEmp = hrefFormatoHojaVidaEmpleado(proyectoModuloId, row);
-                    return (
-                      <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
-                        <td className="px-3 py-2.5 font-medium text-zinc-100">
-                          <Link
-                            href={`/empleados/${encodeURIComponent(row.id)}`}
-                            className="text-sky-300 underline decoration-sky-500/40 hover:text-sky-200"
-                          >
-                            {sTrim(row.nombre_completo) || 'Sin nombre'}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2.5 text-zinc-300">{sTrim(row.cargo_nombre) || '—'}</td>
-                        <td className="px-3 py-2.5 text-xs text-zinc-400">
-                          {sTrim(row.estado_proceso ?? row.estado) || '—'}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <span
-                            className={
-                              bucket === 'contratado_activo'
-                                ? 'inline-flex rounded-full border border-emerald-500/45 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-200'
-                                : bucket === 'en_tramite'
-                                  ? 'inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100'
-                                  : 'inline-flex rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold text-zinc-400'
-                            }
-                          >
-                            {etiquetaBucket(bucket)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {hvEmp ? <LinkFormatoHojaVida href={hvEmp} etiqueta="Enviar formato" /> : <span className="text-xs text-zinc-600">—</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  </>
-                )}
-              </tbody>
-            </table>
           </div>
 
           <Dialog open={listaModal !== null} onOpenChange={(open) => !open && setListaModal(null)}>
@@ -786,9 +851,9 @@ export default function ResumenObrerosProyectoModulo({
                 {(listaModal === 'porContratar' || listaModal === 'enCarpeta' || listaModal === 'inactivos') && (
                   <p className="text-xs text-zinc-500">
                     {listaModal === 'enCarpeta' &&
-                      'Criterio: status_evaluacion «rojo» o «rechazado» (evaluación presentada y no aprobada).'}
+                      'Criterio: no aprobaron la evaluación — en base de datos, status_evaluacion «rojo» o «rechazado».'}
                     {listaModal === 'porContratar' &&
-                      'Criterio: evaluación «verde» y sin estado de contrato obra «firmado_activo» en este resumen.'}
+                      'Criterio: rol «obrero», o «tecnico» con oficio de vigilancia/seguridad; apto (evaluación verde o estado aprobado sin rechazo); sin contrato obra «firmado_activo». No incluye programadores.'}
                     {listaModal === 'inactivos' &&
                       'Criterio: al menos un contrato obra cuya obra está «cerrada» en ci_obras, y sin contrato activo en obra «activa».'}
                   </p>
@@ -798,7 +863,7 @@ export default function ResumenObrerosProyectoModulo({
                 {filasListaModal.length === 0 ? (
                   <p className="px-3 py-8 text-center text-sm text-zinc-500">No hay registros en esta categoría.</p>
                 ) : (
-                  <table className="w-full min-w-[640px] text-left text-sm">
+                  <table className="w-full min-w-[720px] text-left text-sm">
                     <thead>
                       <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2">Nombre</th>
@@ -806,11 +871,14 @@ export default function ResumenObrerosProyectoModulo({
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2">Cédula</th>
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2">Teléfono</th>
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2">Oficio</th>
+                        <th className="sticky top-0 bg-zinc-950 px-3 py-2 text-right">Eliminar</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filasListaModal.map((row) => {
                         const { nombre, apellido } = nombreApellidoDesdeEmpleado(row);
+                        const puedeEliminar = demoListasObrero || solicitadosWorkerIdSet.has(row.id);
+                        const esDemoFila = demoListasObrero && IDS_DEMO_FILA.has(row.id);
                         return (
                           <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
                             <td className="px-3 py-2 font-medium text-zinc-100">
@@ -825,6 +893,35 @@ export default function ResumenObrerosProyectoModulo({
                             <td className="px-3 py-2 tabular-nums text-zinc-300">{cedulaDesdeEmpleado(row)}</td>
                             <td className="px-3 py-2 tabular-nums text-zinc-300">{telefonoDesdeEmpleado(row)}</td>
                             <td className="px-3 py-2 text-zinc-300">{oficioDesdeEmpleado(row)}</td>
+                            <td className="px-3 py-2 text-right">
+                              {puedeEliminar ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1.5 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200"
+                                  disabled={eliminandoWorkerId === row.id}
+                                  onClick={() => {
+                                    if (esDemoFila && listaModal) {
+                                      setDemoEliminadoPorLista((p) => ({ ...p, [listaModal]: true }));
+                                      toast.success('Fila de prueba ocultada (no afecta la base de datos).');
+                                      return;
+                                    }
+                                    void quitarAsignacionLaboral(row.id);
+                                  }}
+                                  title={
+                                    esDemoFila
+                                      ? 'Ocultar la fila ficticia de prueba'
+                                      : 'Quitar asignación a solicitud de mano de obra en este módulo'
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+                                  <span className="hidden sm:inline">Quitar</span>
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-zinc-600">—</span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}

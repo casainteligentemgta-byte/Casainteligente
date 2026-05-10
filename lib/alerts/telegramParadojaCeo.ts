@@ -26,7 +26,7 @@ export function construirMensajeTelegramParadojaCeo(row: FilaEmpleadoParadoja): 
     `Puntuación lógica ${row.puntuacion_logica ?? '—'}% · Perfil ${row.perfil_color ?? '—'}`;
   const base = baseUrlApp();
   const accion = base
-    ? `${base}/reclutamiento/dashboard?empleado_id=${encodeURIComponent(row.id)}`
+    ? `${base}/reclutamiento?empleado_id=${encodeURIComponent(row.id)}`
     : '(Configure NEXT_PUBLIC_BASE_URL para enlace directo)';
 
   return (

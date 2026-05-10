@@ -7,12 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { CARGOS_OBREROS } from '@/lib/constants/cargosObreros';
 import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPersonnel';
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
@@ -62,11 +58,11 @@ async function contarAsignaciones(
   return count ?? 0;
 }
 
-const TABS = ['pendientes', 'obra', 'maestro'] as const;
+const TABS = ['pendientes', 'obra'] as const;
 type GestionPersonalTab = (typeof TABS)[number];
 
 function tabFromInitial(raw: string | undefined): GestionPersonalTab {
-  if (raw === 'obra' || raw === 'maestro' || raw === 'pendientes') return raw;
+  if (raw === 'obra' || raw === 'pendientes') return raw;
   return 'pendientes';
 }
 
@@ -101,7 +97,7 @@ export default function RrhhGestionPersonalClient({
   const tabInitialResolved = tabFromInitial(tabInitial);
   const rawTab = searchParams.get('tab');
   const tabFromUrl: GestionPersonalTab | null =
-    rawTab === 'obra' || rawTab === 'maestro' || rawTab === 'pendientes' ? rawTab : null;
+    rawTab === 'obra' || rawTab === 'pendientes' ? rawTab : null;
   const tab: GestionPersonalTab = soloPendientes ? 'pendientes' : tabFromUrl ?? tabInitialResolved;
   const [tick, setTick] = useState(0);
 
@@ -113,25 +109,12 @@ export default function RrhhGestionPersonalClient({
   const [nombreEmpleado, setNombreEmpleado] = useState<Map<string, string>>(new Map());
   const [loadingObra, setLoadingObra] = useState(true);
 
-  const [empleados, setEmpleados] = useState<EmpleadoRow[]>([]);
-  const [loadingMaestro, setLoadingMaestro] = useState(true);
-
   const [dialogReq, setDialogReq] = useState<LaborRequestRow | null>(null);
   const [candidatos, setCandidatos] = useState<EmpleadoRow[]>([]);
   const [yaAsignados, setYaAsignados] = useState(0);
   const [loadingDialog, setLoadingDialog] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
-
-  const [editEmp, setEditEmp] = useState<EmpleadoRow | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [formNombre, setFormNombre] = useState('');
-  const [formDoc, setFormDoc] = useState('');
-  const [formTel, setFormTel] = useState('');
-  const [formCargo, setFormCargo] = useState('');
-  const [formEstado, setFormEstado] = useState('aprobado');
-  const [formEstatus, setFormEstatus] = useState('disponible');
-  const [savingEmp, setSavingEmp] = useState(false);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
@@ -236,31 +219,6 @@ export default function RrhhGestionPersonalClient({
       if (!alive) return;
       setNombreEmpleado(em);
       setLoadingObra(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [supabase, tick, soloPendientes]);
-
-  useEffect(() => {
-    if (soloPendientes) {
-      setLoadingMaestro(false);
-      setEmpleados([]);
-      return;
-    }
-    let alive = true;
-    (async () => {
-      setLoadingMaestro(true);
-      const cols =
-        'id,nombre_completo,email,documento,telefono,cargo_codigo,cargo_nombre,estado,estatus,rol_examen,created_at';
-      const { data, error } = await supabase.from('ci_empleados').select(cols).order('created_at', { ascending: false }).limit(400);
-      if (!alive) return;
-      if (error) {
-        setEmpleados([]);
-      } else {
-        setEmpleados((data ?? []) as EmpleadoRow[]);
-      }
-      setLoadingMaestro(false);
     })();
     return () => {
       alive = false;
@@ -373,91 +331,6 @@ export default function RrhhGestionPersonalClient({
     }
   }
 
-  async function guardarEmpleado() {
-    if (!formNombre.trim()) {
-      toast.error('El nombre es obligatorio.');
-      return;
-    }
-    setSavingEmp(true);
-    try {
-      if (editEmp) {
-        const { error } = await supabase
-          .from('ci_empleados')
-          .update({
-            nombre_completo: formNombre.trim(),
-            documento: formDoc.trim() || null,
-            telefono: formTel.trim() || null,
-            cargo_codigo: formCargo.trim() || null,
-            cargo_nombre: (CARGOS_OBREROS.find((c) => c.codigo === formCargo.trim())?.nombre ?? null) as string | null,
-            estado: formEstado,
-            estatus: formEstatus,
-          })
-          .eq('id', editEmp.id);
-        if (error) throw new Error(error.message);
-        toast.success('Obrero actualizado.');
-        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
-        setEditEmp(null);
-      } else {
-        const { error } = await supabase.from('ci_empleados').insert({
-          nombre_completo: formNombre.trim(),
-          documento: formDoc.trim() || null,
-          telefono: formTel.trim() || null,
-          cargo_codigo: formCargo.trim() || null,
-          cargo_nombre: (CARGOS_OBREROS.find((c) => c.codigo === formCargo.trim())?.nombre ?? null) as string | null,
-          rol_examen: 'obrero',
-          estado: formEstado,
-          estatus: formEstatus,
-          estado_proceso: 'cv_completado',
-          respuestas_personalidad: [],
-          respuestas_logica: [],
-        });
-        if (error) throw new Error(error.message);
-        toast.success('Obrero creado.');
-        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
-        setCreateOpen(false);
-      }
-      refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error al guardar.');
-    } finally {
-      setSavingEmp(false);
-    }
-  }
-
-  async function eliminarEmpleado(id: string) {
-    if (!window.confirm('¿Eliminar este registro de ci_empleados? No se puede deshacer.')) return;
-    const { error } = await supabase.from('ci_empleados').delete().eq('id', id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success('Eliminado.');
-    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
-    refresh();
-  }
-
-  function openEdit(e: EmpleadoRow) {
-    setEditEmp(e);
-    setFormNombre(e.nombre_completo ?? '');
-    setFormDoc((e.documento ?? '').trim());
-    setFormTel((e.telefono ?? '').trim());
-    setFormCargo((e.cargo_codigo ?? '').trim());
-    setFormEstado((e.estado ?? 'aprobado').trim());
-    setFormEstatus((e.estatus ?? 'disponible').trim() || 'disponible');
-    setCreateOpen(true);
-  }
-
-  function openCreate() {
-    setEditEmp(null);
-    setFormNombre('');
-    setFormDoc('');
-    setFormTel('');
-    setFormCargo('');
-    setFormEstado('aprobado');
-    setFormEstatus('disponible');
-    setCreateOpen(true);
-  }
-
   const pendientesInner = (
     <>
       {loadingPending ? (
@@ -533,7 +406,7 @@ export default function RrhhGestionPersonalClient({
             <Link href="/rrhh/gestion-personal" className="font-semibold text-sky-400 underline hover:text-sky-300">
               Abrir gestión de personal completa
             </Link>{' '}
-            (pestañas obra y maestro).
+            (pestaña personal en obra).
           </p>
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">{pendientesInner}</div>
         </>
@@ -545,10 +418,9 @@ export default function RrhhGestionPersonalClient({
           }}
           className="w-full"
         >
-          <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-2">
             <TabsTrigger value="pendientes">Solicitudes pendientes</TabsTrigger>
             <TabsTrigger value="obra">Personal en obra</TabsTrigger>
-            <TabsTrigger value="maestro">Maestro obreros</TabsTrigger>
           </TabsList>
 
           <TabsContent value="pendientes" className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
@@ -590,61 +462,6 @@ export default function RrhhGestionPersonalClient({
                 </div>
               ))}
             </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="maestro" className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
-          <div className="mb-4 flex justify-end">
-            <Button type="button" variant="elitePrimary" onClick={openCreate}>
-              Nuevo obrero
-            </Button>
-          </div>
-          {loadingMaestro ? (
-            <p className="text-sm text-zinc-500">Cargando…</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Documento</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Estatus</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {empleados.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell className="font-medium text-white">{e.nombre_completo}</TableCell>
-                    <TableCell className="text-zinc-400">{(e.documento ?? '—').trim() || '—'}</TableCell>
-                    <TableCell className="text-zinc-300">
-                      {(e.cargo_codigo ?? '').trim() || '—'} {(e.cargo_nombre ?? '').trim()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="border-zinc-600 text-zinc-300">
-                        {e.estado ?? '—'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-zinc-400">{e.estatus ?? '—'}</TableCell>
-                    <TableCell className="text-right">
-                      <Button type="button" size="sm" variant="ghost" className="text-sky-400" onClick={() => openEdit(e)}>
-                        Editar
-                      </Button>{' '}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-400"
-                        onClick={() => void eliminarEmpleado(e.id)}
-                      >
-                        Eliminar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
           )}
         </TabsContent>
       </Tabs>
@@ -703,89 +520,6 @@ export default function RrhhGestionPersonalClient({
               onClick={() => void confirmarAsignacion()}
             >
               {submitting ? 'Guardando…' : `Confirmar (${sel.size})`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={createOpen}
-        onOpenChange={(o) => {
-          if (!o) {
-            setCreateOpen(false);
-            setEditEmp(null);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editEmp ? 'Editar obrero' : 'Nuevo obrero'}</DialogTitle>
-            <DialogDescription>Registro en ci_empleados (rol obrero).</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 py-2">
-            <div>
-              <Label>Nombre completo</Label>
-              <Input value={formNombre} onChange={(e) => setFormNombre(e.target.value)} className="mt-1 border-zinc-600 bg-zinc-900 text-white" />
-            </div>
-            <div>
-              <Label>Documento / cédula</Label>
-              <Input value={formDoc} onChange={(e) => setFormDoc(e.target.value)} className="mt-1 border-zinc-600 bg-zinc-900 text-white" />
-            </div>
-            <div>
-              <Label>Teléfono</Label>
-              <Input value={formTel} onChange={(e) => setFormTel(e.target.value)} className="mt-1 border-zinc-600 bg-zinc-900 text-white" />
-            </div>
-            <div>
-              <Label>Especialidad (código GOE)</Label>
-              <select
-                value={formCargo}
-                onChange={(e) => setFormCargo(e.target.value)}
-                style={{ colorScheme: 'dark' }}
-                className="mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white"
-              >
-                <option value="">—</option>
-                {CARGOS_OBREROS.map((c) => (
-                  <option key={c.codigo} value={c.codigo} className="bg-zinc-900">
-                    {c.codigo} — {c.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Estado</Label>
-                <select
-                  value={formEstado}
-                  onChange={(e) => setFormEstado(e.target.value)}
-                  style={{ colorScheme: 'dark' }}
-                  className="mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 px-2 py-2 text-sm text-white"
-                >
-                  <option value="aprobado">aprobado</option>
-                  <option value="evaluacion_pendiente">evaluacion_pendiente</option>
-                  <option value="rechazado">rechazado</option>
-                </select>
-              </div>
-              <div>
-                <Label>Estatus cuadrilla</Label>
-                <select
-                  value={formEstatus}
-                  onChange={(e) => setFormEstatus(e.target.value)}
-                  style={{ colorScheme: 'dark' }}
-                  className="mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 px-2 py-2 text-sm text-white"
-                >
-                  <option value="disponible">disponible</option>
-                  <option value="asignado">asignado</option>
-                  <option value="no_disponible">no_disponible</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" className="border-zinc-600" onClick={() => (setCreateOpen(false), setEditEmp(null))}>
-              Cerrar
-            </Button>
-            <Button type="button" variant="elitePrimary" disabled={savingEmp} onClick={() => void guardarEmpleado()}>
-              {savingEmp ? 'Guardando…' : 'Guardar'}
             </Button>
           </DialogFooter>
         </DialogContent>

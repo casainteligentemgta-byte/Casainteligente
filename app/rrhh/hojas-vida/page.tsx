@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Link2, MessageSquareText, RefreshCw, ScrollText, Trash2 } from 'lucide-react';
+import { FileText, Link2, MessageSquareText, RefreshCw, ScrollText, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ModalGenerarContrato } from '@/app/rrhh/hojas-vida/components/ModalGenerarContrato';
@@ -76,6 +76,39 @@ export default function RrhhHojasVidaPage() {
   const [overridesDraft, setOverridesDraft] = useState<Record<string, string>>({});
   const [pdfFaltantesBusy, setPdfFaltantesBusy] = useState(false);
   const [revalidandoFaltantes, setRevalidandoFaltantes] = useState(false);
+  /** Primer módulo integral → pantalla del cuadro (tarjetas Solicitados, En carpeta, etc.). */
+  const [hrefCuadroObreros, setHrefCuadroObreros] = useState('/proyectos/modulo');
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const withTipo = await supabase
+        .from('ci_proyectos')
+        .select('id,tipo_proyecto')
+        .order('created_at', { ascending: false })
+        .limit(60);
+      if (!alive) return;
+      if (!withTipo.error && withTipo.data?.length) {
+        const rows = withTipo.data as { id: string; tipo_proyecto?: string | null }[];
+        const integral = rows.find((r) => (r.tipo_proyecto ?? 'integral') !== 'talento');
+        if (integral?.id) {
+          setHrefCuadroObreros(`/proyectos/modulo/${encodeURIComponent(integral.id)}?tab=solicitados`);
+          return;
+        }
+      }
+      const leg = await supabase.from('ci_proyectos').select('id').order('created_at', { ascending: false }).limit(1);
+      if (!alive) return;
+      const id0 = (leg.data?.[0] as { id?: string } | undefined)?.id;
+      if (id0 && !leg.error) {
+        setHrefCuadroObreros(`/proyectos/modulo/${encodeURIComponent(id0)}?tab=solicitados`);
+      } else {
+        setHrefCuadroObreros('/proyectos/modulo');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [supabase]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -366,7 +399,15 @@ export default function RrhhHojasVidaPage() {
               <code className="text-zinc-500">/api/talento/hoja-vida/pdf?token=…</code>.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              href={hrefCuadroObreros}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/10 px-4 py-2.5 text-sm font-bold text-[#FF9500] transition hover:bg-[#FF9500]/20"
+              title="Cuadro de obreros del proyecto (Solicitados, En carpeta, Contratados, Por contratar…)"
+            >
+              <Users className="h-4 w-4" aria-hidden />
+              Cuadro de obreros
+            </Link>
             <Link
               href="/rrhh/oficios-salarios"
               className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"

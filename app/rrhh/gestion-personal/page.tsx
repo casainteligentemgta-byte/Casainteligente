@@ -3,7 +3,7 @@ import RrhhGestionPersonalClient from '@/components/rrhh/gestion-personal/RrhhGe
 
 export const metadata = {
   title: 'Gestión de personal | RRHH',
-  description: 'Solicitudes de mano de obra, asignaciones a proyecto y maestro de obreros.',
+  description: 'Solicitudes de mano de obra y asignaciones a proyecto (personal en obra).',
 };
 
 function firstQueryValue(v: string | string[] | undefined): string | undefined {

@@ -49,7 +49,7 @@ export default function EmpleadoFichaPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0F] px-4 pb-28 pt-6">
       <div className="mx-auto max-w-lg">
-        <Link href="/reclutamiento/dashboard" className="text-sm font-medium text-sky-400 hover:underline">
+        <Link href="/reclutamiento" className="text-sm font-medium text-sky-400 hover:underline">
           ← Reclutamiento
         </Link>
         <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">

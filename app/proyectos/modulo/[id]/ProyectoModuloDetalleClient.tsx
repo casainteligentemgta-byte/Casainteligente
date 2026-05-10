@@ -4,12 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
-import { planillaPatronoDesdeEntidadRow } from '@/lib/talento/planillaPatronoBuild';
-import { mergePlanillaPatronoFallbackPublico } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
-import FeedNotificacionesRealtime from '@/components/proyectos/FeedNotificacionesRealtime';
-import GestionRRHHLocal from '@/components/proyectos/GestionRRHHLocal';
 import LaborRequestDirectorForm from '@/components/rrhh/LaborRequestDirectorForm';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
@@ -17,6 +12,76 @@ import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
 
 const LOAD_TIMEOUT_MS = 45_000;
+
+type RrhhMenuDropdownProps = {
+  irRrhhPanel: () => void;
+  irCuadroSolicitados: () => void;
+};
+
+/** Botón RRHH con menú: panel personal y cuadro de obreros (solicitados). */
+function RrhhMenuDropdown({ irRrhhPanel, irCuadroSolicitados }: RrhhMenuDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const btnClass =
+    'rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60';
+
+  return (
+    <div ref={rootRef} className="relative inline-block text-left">
+      <button
+        type="button"
+        className={`${btnClass} inline-flex items-center gap-1.5`}
+        title="RRHH: panel personal y cuadro de obreros"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((o) => !o)}
+      >
+        RRHH
+        <span className="text-[10px] font-normal opacity-80" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-50 mt-1 min-w-[13.5rem] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 py-1 shadow-xl"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full px-3 py-2 text-left text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-950/60"
+            onClick={() => {
+              irRrhhPanel();
+              setOpen(false);
+            }}
+          >
+            Panel personal
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full px-3 py-2 text-left text-xs font-semibold text-[#FF9500] hover:bg-[#FF9500]/10"
+            onClick={() => {
+              irCuadroSolicitados();
+              setOpen(false);
+            }}
+          >
+            Cuadro de obreros
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -175,7 +240,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
 
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t !== 'rrhh' && t !== 'talento' && t !== 'solicitados') return;
+    if (t !== 'rrhh' && t !== 'talento' && t !== 'solicitados' && t !== 'finanzas') return;
     const timer = window.setTimeout(() => {
       rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 120);
@@ -586,58 +651,45 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     return row?.nombre?.trim() || null;
   }, [proyecto?.entidad_id, entidades]);
 
-  /** Cabecera “datos del patrono” en la vista previa de hoja de empleo (RRHH), alineada al PDF legal. */
-  const planillaPatronoVista = useMemo((): PlanillaPatronoCampos | null => {
-    if (!proyecto) return null;
-    const eid = proyecto.entidad_id ? String(proyecto.entidad_id).trim() : '';
-    const ent = eid ? entidades.find((en) => en.id === eid) : undefined;
-    const proyectoNombre = (proyecto.nombre ?? '').trim() || undefined;
-    if (!ent) {
-      return mergePlanillaPatronoFallbackPublico({ proyectoNombre });
-    }
-    return mergePlanillaPatronoFallbackPublico(
-      planillaPatronoDesdeEntidadRow({
-        nombre: ent.nombre,
-        rif: ent.rif,
-        direccion_fiscal: ent.direccion_fiscal,
-        rep_legal_nombre: ent.rep_legal_nombre,
-        rep_legal_cedula: ent.rep_legal_cedula,
-        rep_legal_cargo: ent.rep_legal_cargo,
-        registro_mercantil: ent.registro_mercantil,
-        proyectoNombre,
-      }),
-    );
-  }, [proyecto, entidades]);
-
-  /** Enlace directo ?tab=rrhh|talento|solicitados: cabecera mínima (sin atajos duplicados al panel RRHH). */
+  /** Enlace directo ?tab=rrhh|talento|solicitados|finanzas: vistas compactas / cuadro RRHH / utilidad real. */
   const tabVistaTalento =
     searchParams.get('tab') === 'rrhh' ||
     searchParams.get('tab') === 'talento' ||
-    searchParams.get('tab') === 'solicitados';
-  const tabRrhhDirecto = searchParams.get('tab') === 'rrhh';
+    searchParams.get('tab') === 'solicitados' ||
+    searchParams.get('tab') === 'finanzas';
   const tabSolicitados = searchParams.get('tab') === 'solicitados';
+  /** rrhh/talento/solicitados/finanzas: sin barra superior de acciones (modificar, vacante, enlaces RRHH, etc.). */
+  const tabCabeceraMinimaSinAcciones =
+    searchParams.get('tab') === 'rrhh' ||
+    searchParams.get('tab') === 'talento' ||
+    searchParams.get('tab') === 'solicitados' ||
+    searchParams.get('tab') === 'finanzas';
   const tabUrl = searchParams.get('tab') ?? '';
+  /** Ficha normal del módulo (sin ?tab=): sin vacante, RRHH, reclutamiento, gestión laboral ni «Terminar». */
+  const fichaModuloSinPestaña = tabUrl === '';
 
   const panelRrhhModulo = useMemo(() => {
     if (!proyecto) return null;
+    /** `tab=finanzas` o `tab=rrhh`: consolidado de utilidad real (mismo dashboard). */
+    if (tabUrl === 'finanzas' || tabUrl === 'rrhh') {
+      return <DashboardUtilidadReal proyectoId={id} className="" />;
+    }
     if (tabSolicitados) {
       return (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/proyectos/modulo/${id}?tab=rrhh`}
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
-            >
-              ← RRHH del proyecto
-            </Link>
-            <Link
-              href={`/proyectos/modulo/${id}`}
-              className="rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
-            >
-              Ficha del proyecto
-            </Link>
+          <div id="solicitar-mano-obra" className="scroll-mt-24">
+            <LaborRequestDirectorForm
+              moduloIntegralId={id}
+              nombreProyecto={proyecto.nombre}
+              onCreada={() => setRrhhVacantesTick((n) => n + 1)}
+            />
           </div>
-          <ResumenObrerosProyectoModulo proyectoModuloId={id} listaRefresco={rrhhVacantesTick} tabUrl={tabUrl} />
+          <ResumenObrerosProyectoModulo
+            proyectoModuloId={id}
+            listaRefresco={rrhhVacantesTick}
+            tabUrl={tabUrl}
+            demoListasObrero={searchParams.get('demo_listas') === '1'}
+          />
         </div>
       );
     }
@@ -653,16 +705,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           ubicacionObra={proyecto.ubicacion_texto}
           proyectoModuloId={id}
         />
-        <GestionRRHHLocal
-          proyectoModuloId={id}
-          listaRefresco={rrhhVacantesTick}
-          nombreProyecto={proyecto.nombre ?? null}
-          planillaPatrono={planillaPatronoVista}
-          vistaHojaVidaDestacada={tabRrhhDirecto}
-        />
       </>
     );
-  }, [proyecto, id, rrhhVacantesTick, planillaPatronoVista, tabRrhhDirecto, tabUrl, tabSolicitados]);
+  }, [proyecto, id, rrhhVacantesTick, tabUrl, tabSolicitados]);
 
   async function generarSugerenciasIA() {
     if (!proyecto) return;
@@ -708,13 +753,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             ← Proyectos
           </Link>
           <div className="flex flex-wrap items-center gap-2">
-            {proyecto && !tabVistaTalento && !modoEdicion ? (
-              <FeedNotificacionesRealtime
-                proyectoId={id}
-                onIrGestionTalento={irRrhhPanel}
-              />
-            ) : null}
-            {!tabVistaTalento && !modoEdicion ? (
+            {!tabCabeceraMinimaSinAcciones && !modoEdicion ? (
               <Link
                 href={`/proyectos/modulo/${id}?editar=1`}
                 className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
@@ -722,7 +761,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 Modificar proyecto
               </Link>
             ) : null}
-            {modoEdicion && proyecto ? (
+            {modoEdicion && proyecto && !tabCabeceraMinimaSinAcciones && !fichaModuloSinPestaña ? (
               <>
                 <button
                   type="button"
@@ -731,24 +770,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Nueva vacante
                 </button>
-                <button
-                  type="button"
-                  onClick={irRrhhPanel}
-                  className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
-                  title="Ir al bloque de personal solicitado"
-                >
-                  RRHH
-                </button>
-                <button
-                  type="button"
-                  onClick={irCuadroSolicitados}
-                  className="rounded-xl border border-[#FF9500]/45 bg-[#FF9500]/10 px-3 py-2 text-xs font-bold text-[#FF9500] shadow-sm hover:bg-[#FF9500]/20"
-                  title="Cuadro de obreros y solicitudes asignadas"
-                >
-                  Solicitados
-                </button>
+                <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
                 <Link
-                  href="/reclutamiento/dashboard"
+                  href="/reclutamiento"
                   className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
                 >
                   Reclutamiento
@@ -761,7 +785,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </Link>
               </>
             ) : null}
-            {!tabVistaTalento && !modoEdicion ? (
+            {!tabCabeceraMinimaSinAcciones && !modoEdicion && !fichaModuloSinPestaña ? (
               <>
                 <button
                   type="button"
@@ -770,24 +794,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Nueva vacante
                 </button>
-                <button
-                  type="button"
-                  onClick={irRrhhPanel}
-                  className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
-                  title="Personal solicitado, enlaces WhatsApp y copiar"
-                >
-                  RRHH
-                </button>
-                <button
-                  type="button"
-                  onClick={irCuadroSolicitados}
-                  className="rounded-xl border border-[#FF9500]/45 bg-[#FF9500]/10 px-3 py-2 text-xs font-bold text-[#FF9500] shadow-sm hover:bg-[#FF9500]/20"
-                  title="Cuadro de obreros (solicitados, contratados, carpeta)"
-                >
-                  Solicitados
-                </button>
+                <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
                 <Link
-                  href="/reclutamiento/dashboard"
+                  href="/reclutamiento"
                   className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
                 >
                   Reclutamiento
@@ -799,26 +808,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   Gestión laboral
                 </Link>
               </>
-            ) : null}
-            {!tabVistaTalento && !modoEdicion ? (
-              <Link
-                href="/proyectos/modulo"
-                className="rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
-              >
-                Terminar y volver a los proyectos
-              </Link>
             ) : null}
           </div>
         </div>
-        {proyecto && tabVistaTalento && !modoEdicion && tabUrl !== 'solicitados' ? (
+        {proyecto && tabVistaTalento && !modoEdicion && tabUrl !== 'solicitados' && tabUrl !== 'rrhh' && tabUrl !== 'finanzas' ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
-            <button
-              type="button"
-              onClick={irCuadroSolicitados}
-              className="rounded-xl border border-[#FF9500]/45 bg-[#FF9500]/10 px-3 py-2 text-xs font-bold text-[#FF9500] hover:bg-[#FF9500]/20"
-            >
-              Solicitados — cuadro de obreros
-            </button>
+            <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
             <Link
               href={`/proyectos/modulo/${id}`}
               className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
@@ -1005,10 +1000,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   </div>
                 </div>
               </>
-            ) : null}
-
-            {proyecto && !modoEdicion && !tabSolicitados ? (
-              <DashboardUtilidadReal proyectoId={id} className="mt-4" />
             ) : null}
 
             <div className={`space-y-4 ${tabVistaTalento && !modoEdicion ? 'mt-2' : 'mt-4'}`}>

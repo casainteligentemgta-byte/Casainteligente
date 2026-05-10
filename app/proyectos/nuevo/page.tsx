@@ -698,7 +698,7 @@ function ProyectoNuevoPageContent() {
       <div style={moduloProyectosStickyHeader}>
         <div>
           <Link
-            href="/reclutamiento/dashboard"
+            href="/reclutamiento"
             style={{ color: 'rgba(90,200,250,0.95)', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}
           >
             ← Reclutamiento
@@ -1147,7 +1147,7 @@ function ProyectoNuevoPageContent() {
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/reclutamiento/dashboard"
+                href="/reclutamiento"
                 className="inline-flex rounded-xl bg-[#007AFF] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0062CC]"
               >
                 Ir a vacantes
