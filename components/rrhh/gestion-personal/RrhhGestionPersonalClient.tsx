@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { Copy, MessageCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -400,16 +399,7 @@ export default function RrhhGestionPersonalClient({
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-white">
       {soloPendientes ? (
-        <>
-          <p className="mb-4 text-xs text-zinc-400">
-            Vista desde proyecto: solo solicitudes pendientes.{' '}
-            <Link href="/rrhh/gestion-personal" className="font-semibold text-sky-400 underline hover:text-sky-300">
-              Abrir gestión de personal completa
-            </Link>{' '}
-            (pestaña personal en obra).
-          </p>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">{pendientesInner}</div>
-        </>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">{pendientesInner}</div>
       ) : (
         <Tabs
           value={tab}

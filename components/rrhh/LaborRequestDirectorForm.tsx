@@ -1,12 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { CARGOS_OBREROS, cargoPorCodigo } from '@/lib/constants/cargosObreros';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -108,9 +107,6 @@ export default function LaborRequestDirectorForm({
     <Card className="border-zinc-700 bg-zinc-950/90 text-white shadow-md">
       <CardHeader className="pb-2">
         <CardTitle className="text-base text-white">Solicitud de mano de obra</CardTitle>
-        <CardDescription className="text-zinc-400">
-          Director de obra · Especialidad y cantidad (se registra como <code className="text-zinc-300">labor_requests</code>).
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void onSubmit(e)} className="grid gap-4 sm:grid-cols-2">
@@ -174,16 +170,10 @@ export default function LaborRequestDirectorForm({
           </div>
           {error ? <p className="sm:col-span-2 text-sm text-red-400">{error}</p> : null}
           {okMsg ? <p className="sm:col-span-2 text-sm text-emerald-400">{okMsg}</p> : null}
-          <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+          <div className="sm:col-span-2">
             <Button type="submit" variant="elitePrimary" disabled={saving || loadingOpts}>
               {saving ? 'Guardando…' : 'Crear solicitud'}
             </Button>
-            <Link
-              href="/rrhh/gestion-personal?solo=pendientes"
-              className="text-xs font-medium text-sky-400 underline hover:text-sky-300"
-            >
-              Panel RRHH — asignaciones
-            </Link>
           </div>
         </form>
       </CardContent>

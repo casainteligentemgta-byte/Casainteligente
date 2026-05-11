@@ -29,6 +29,10 @@ function parseEnvFile(content) {
 }
 
 const REQUIRED = ['recruitment_needs', 'ci_proyectos'];
+/** Tablas Drizzle/Nexus Home; si faltan, /nexus/* falla hasta aplicar 011. */
+const NEXUS_TABLES = ['nexus_clients'];
+/** Solicitudes labor + asignaciones; si faltan, LaborRequest / cuadro RRHH fallan hasta aplicar 104. */
+const LABOR_TABLES = ['labor_requests', 'project_assignments'];
 
 async function main() {
   console.log('Casa Inteligente — verificación DATABASE_URL + tablas\n');
@@ -80,16 +84,39 @@ async function main() {
       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public'
         and c.relkind = 'r'
-        and c.relname in ${sql(REQUIRED)}
+        and c.relname in ${sql([...REQUIRED, ...NEXUS_TABLES, ...LABOR_TABLES])}
     `;
     const found = new Set(rows.map((r) => r.name));
     const missing = REQUIRED.filter((t) => !found.has(t));
+    const missingNexus = NEXUS_TABLES.filter((t) => !found.has(t));
+    const missingLabor = LABOR_TABLES.filter((t) => !found.has(t));
 
     if (missing.length === 0) {
-      console.log('✅ Tablas presentes:', [...found].join(', '));
-      console.log('\nSi la API sigue fallando, revisa que el UUID del proyecto exista en ci_proyectos.\n');
+      const okList = [...REQUIRED, ...NEXUS_TABLES, ...LABOR_TABLES].filter((t) => found.has(t));
+      console.log('✅ Tablas presentes:', Array.from(new Set(okList)).join(', '));
+      if (missingNexus.length > 0) {
+        console.error('\n⚠️  Falta esquema Nexus Home:', missingNexus.join(', '));
+        console.error('   La ruta /nexus/clientes (Drizzle) fallará hasta ejecutar:');
+        console.error('   supabase/migrations/011_nexus_home_schema.sql');
+        console.error('   (Supabase → SQL Editor → pegar archivo completo → Run.)\n');
+      }
+      if (missingLabor.length > 0) {
+        console.error('\n⚠️  Falta esquema solicitudes labor / asignaciones:', missingLabor.join(', '));
+        console.error('   Ejecuta en SQL Editor (requiere ci_proyectos y ci_empleados):');
+        console.error('   supabase/migrations/104_labor_requests_project_assignments.sql\n');
+      }
+      if (missingNexus.length === 0 && missingLabor.length === 0) {
+        console.log('\nSi la API sigue fallando, revisa que el UUID del proyecto exista en ci_proyectos.\n');
+      }
     } else {
       console.error('❌ Faltan tablas en el esquema public:', missing.join(', '));
+      if (missingNexus.length > 0) {
+        console.error('\nTambién falta Nexus Home:', missingNexus.join(', '), '→ supabase/migrations/011_nexus_home_schema.sql');
+      }
+      if (missingLabor.length > 0) {
+        console.error('\nTambién falta labor_requests / project_assignments:', missingLabor.join(', '));
+        console.error('  → supabase/migrations/104_labor_requests_project_assignments.sql');
+      }
       console.error('\nAplica las migraciones del repo en ESTE proyecto de Supabase, en orden, por ejemplo:');
       console.error('  supabase/migrations/031_recruitment_needs.sql');
       console.error('  supabase/migrations/032_recruitment_needs_cargo.sql');

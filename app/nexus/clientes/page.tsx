@@ -7,6 +7,38 @@ import { nexusClients } from '@/lib/db/schema';
 import { desc } from 'drizzle-orm';
 import { Building2, User } from 'lucide-react';
 
+/** Drizzle/postgres suelen envolver el PostgresError en `cause`; sin esto solo ves "Failed query: …". */
+function formatDbErrorChain(e: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let cur: unknown = e;
+  for (let depth = 0; cur != null && depth < 10; depth++) {
+    if (typeof cur !== 'object') {
+      parts.push(String(cur));
+      break;
+    }
+    if (seen.has(cur)) break;
+    seen.add(cur);
+    const o = cur as Record<string, unknown>;
+    if (typeof o.message === 'string' && o.message.trim()) parts.push(o.message.trim());
+    if (typeof o.detail === 'string' && o.detail.trim()) parts.push(`Detalle: ${o.detail.trim()}`);
+    if (typeof o.hint === 'string' && o.hint.trim()) parts.push(`Sugerencia: ${o.hint.trim()}`);
+    if (typeof o.code === 'string' && o.code.trim()) parts.push(`Código Postgres: ${o.code.trim()}`);
+    cur = o.cause ?? null;
+  }
+  return Array.from(new Set(parts)).join('\n\n');
+}
+
+function pareceTablaNexusAusente(msg: string): boolean {
+  return (
+    /42P01/.test(msg) ||
+    /undefined_table/i.test(msg) ||
+    /relation\s+"?nexus_clients"?/i.test(msg) ||
+    /does not exist/i.test(msg) ||
+    (/Failed query/i.test(msg) && /nexus_clients/i.test(msg))
+  );
+}
+
 export default async function NexusClientesPage() {
   if (!db) {
     return (
@@ -24,8 +56,10 @@ export default async function NexusClientesPage() {
   try {
     rows = await db.select().from(nexusClients).orderBy(desc(nexusClients.createdAt)).limit(50);
   } catch (e) {
-    err = e instanceof Error ? e.message : 'Error al consultar';
+    err = formatDbErrorChain(e);
   }
+
+  const ayudaMigracion011 = err ? pareceTablaNexusAusente(err) : false;
 
   return (
     <div className="space-y-6">
@@ -39,7 +73,23 @@ export default async function NexusClientesPage() {
 
       {err ? (
         <NexusAlert variant="error" title="Error de lectura">
-          {err}. ¿Ejecutaste la migración <Mono>011_nexus_home_schema.sql</Mono>?
+          <p className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--nexus-text-muted)]">{err}</p>
+          {ayudaMigracion011 ? (
+            <p className="mt-3 text-[var(--nexus-text-muted)]">
+              La tabla <Mono>nexus_clients</Mono> no existe en esta base. En el mismo proyecto Postgres al que apunta{' '}
+              <Mono>DATABASE_URL</Mono>: Supabase → <strong>SQL Editor</strong> → pega y ejecuta{' '}
+              <Mono>supabase/migrations/011_nexus_home_schema.sql</Mono> (archivo completo del repo).
+            </p>
+          ) : (
+            <p className="mt-3 text-[var(--nexus-text-muted)]">
+              Revisa conexión, credenciales y que <Mono>DATABASE_URL</Mono> apunte al proyecto correcto. Si acabas de
+              crear el proyecto, aplica también <Mono>011_nexus_home_schema.sql</Mono> por si el esquema Nexus nunca se
+              cargó.
+            </p>
+          )}
+          <p className="mt-2 text-xs text-[var(--nexus-text-dim)]">
+            En local: <Mono>npm run verify:db</Mono> (comprueba tablas y avisa si falta Nexus).
+          </p>
         </NexusAlert>
       ) : null}
 

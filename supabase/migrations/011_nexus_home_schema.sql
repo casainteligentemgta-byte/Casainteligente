@@ -1,4 +1,3 @@
--- Nexus Home — esquema ERP/CRM (tablas nexus_*)
 -- Ejecutar una vez en Supabase SQL Editor (o: npm run db:push con DATABASE_URL)
 -- Coexiste con customers, budgets, productos, etc.
 
@@ -44,7 +43,8 @@ CREATE TABLE IF NOT EXISTS public.nexus_clients (
   notes text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
-);
+);-- Nexus Home — esquema ERP/CRM (tablas nexus_*)
+
 
 CREATE TABLE IF NOT EXISTS public.nexus_client_properties (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

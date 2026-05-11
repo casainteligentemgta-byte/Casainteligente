@@ -1,5 +1,8 @@
 -- Solicitudes de mano de obra (director) y asignaciones a obreros (ci_empleados).
 -- Integrado con ci_proyectos y ci_empleados existentes.
+--
+-- Prerrequisitos en public: ci_proyectos, ci_empleados (FKs). Si falla, aplica antes las migraciones de proyectos/empleados.
+-- Aplicación: Supabase → SQL Editor → pegar este archivo completo → Run. Idempotente (IF NOT EXISTS en tablas).
 
 create table if not exists public.labor_requests (
   id uuid primary key default gen_random_uuid(),
