@@ -1,12 +1,22 @@
 'use client';
 
 import { Building2, Pencil, Plus, Trash2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad } from '@/types/ci-entidad';
-import FormularioEntidad from './FormularioEntidad';
+
+/** Carga diferida: el formulario (Radix Tabs + muchos campos) no forma parte del chunk inicial de la ruta; evita fallos de carga tipo `/_next/undefined` en dev tras HMR o splits raros de webpack. */
+const FormularioEntidad = dynamic(() => import('./FormularioEntidad'), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+      <p className="rounded-xl border border-white/10 bg-[#0A0A0F] px-4 py-3 text-sm text-zinc-300">Cargando formulario…</p>
+    </div>
+  ),
+});
 
 const SELECT_ENTIDADES =
   'id,nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil,permisologia,logo_url,sello_url,notas,created_at,updated_at';
@@ -187,15 +197,17 @@ export default function EntidadesPatronoClient() {
         )}
       </div>
 
-      <FormularioEntidad
-        open={formOpen}
-        onClose={() => {
-          setFormOpen(false);
-          setEditando(null);
-        }}
-        entidad={editando}
-        onGuardado={() => void cargar()}
-      />
+      {formOpen ? (
+        <FormularioEntidad
+          open={formOpen}
+          onClose={() => {
+            setFormOpen(false);
+            setEditando(null);
+          }}
+          entidad={editando}
+          onGuardado={() => void cargar()}
+        />
+      ) : null}
     </div>
   );
 }

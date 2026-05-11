@@ -1,5 +1,10 @@
-import type { CiEntidad, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
+import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
+import {
+  camposRegistroMercantilContrato,
+  fechaLargaEsDesdeCampoRm,
+} from '@/lib/talento/registroMercantilCamposPdf';
 import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
+import type { CiEntidad, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
 
 /**
  * Entrada flexible: columnas reales de `ci_entidades` o alias legados usados en borradores.
@@ -38,7 +43,7 @@ function primerRepresentanteRm(rm: RegistroMercantilCi): RepresentanteMercantilC
 }
 
 function nombreLegalDe(entidad: EntidadPatronoClausulaInput): string {
-  return str(entidad.nombre) || str(entidad.nombre_legal);
+  return razonSocialPatronoParaContratoPdf(entidad.nombre_legal, entidad.nombre);
 }
 
 function repNombreDe(entidad: EntidadPatronoClausulaInput): string {
@@ -54,10 +59,7 @@ function repCargoDe(entidad: EntidadPatronoClausulaInput): string {
 }
 
 function formatearFechaRegistroMercantil(fechaIso: string | undefined): string {
-  if (!fechaIso?.trim()) return '[FECHA NO REGISTRADA]';
-  const d = new Date(`${fechaIso.trim()}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return '[FECHA NO REGISTRADA]';
-  return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
+  return fechaLargaEsDesdeCampoRm(fechaIso) ?? '[FECHA NO REGISTRADA]';
 }
 
 /**
@@ -76,10 +78,11 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const rif = str(entidad.rif);
 
   const rm = normalizarRegistroMercantil(entidad.registro_mercantil);
-  const tomo = str(rm.tomo);
-  const numero = str(rm.numero);
-  const fecha = str(rm.fecha);
-  const circunscripcion = str(rm.circunscripcion);
+  const rmCampos = camposRegistroMercantilContrato(entidad.registro_mercantil);
+  const tomo = (rmCampos.tomo || str(rm.tomo)).trim();
+  const numero = (rmCampos.numero || str(rm.numero)).trim();
+  const fecha = (rmCampos.fecha || str(rm.fecha)).trim();
+  const circunscripcion = (rmCampos.circunscripcion || str(rm.circunscripcion)).trim();
   const domRm = str(rm.domicilio_empresa);
   const direccionFiscal = str(entidad.direccion_fiscal);
 
@@ -115,7 +118,7 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const texto = `
     Entre la sociedad mercantil ${bloqueNombre},
     domiciliada en ${bloqueDom},
-    inscrita por ante la Oficina de ${bloqueCirc}, bajo el Nro. ${bloqueNum}, Tomo ${bloqueTomo},
+    inscrita por ante la Oficina de ${bloqueCirc}, constando en el Tomo ${bloqueTomo}, bajo el Nro. ${bloqueNum},
     de fecha ${fechaRegistro}, titular del Registro de Información Fiscal (RIF) Nro. ${bloqueRif},
     representada en este acto por su ${bloqueCargo}, ciudadano ${bloqueRep},
     de nacionalidad ${bloqueNac}${fragEdadRep}${fragEstadoCivil}, titular de la cédula de identidad Nro. ${bloqueCi}${fragDomicilioRep}${fragProfesion},

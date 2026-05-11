@@ -10,6 +10,7 @@ import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosP
 import ModalNuevaVacante from './components/ModalNuevaVacante';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
+import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -113,6 +114,9 @@ type Proyecto = {
   moneda: string;
   observaciones: string | null;
   entidad_id?: string | null;
+  /** Horario por defecto en contratos PDF si el contrato no trae texto propio. */
+  horario_semanal_obra_default?: string | null;
+  updated_at?: string;
 };
 
 type EntidadOpt = {
@@ -256,6 +260,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peLat, setPeLat] = useState('');
   const [peLng, setPeLng] = useState('');
   const [peEntidadId, setPeEntidadId] = useState('');
+  const [peHorarioSemanalObra, setPeHorarioSemanalObra] = useState('');
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [savingProyecto, setSavingProyecto] = useState(false);
   const [proyectoSaveError, setProyectoSaveError] = useState<string | null>(null);
@@ -481,6 +486,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setPeLat(proyecto.lat != null ? String(proyecto.lat) : '');
     setPeLng(proyecto.lng != null ? String(proyecto.lng) : '');
     setPeEntidadId(proyecto.entidad_id ? String(proyecto.entidad_id) : '');
+    setPeHorarioSemanalObra(proyecto.horario_semanal_obra_default ?? '');
     setProyectoSaveError(null);
   }, [proyecto]);
 
@@ -532,6 +538,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         lat,
         lng,
         entidad_id: peEntidadId.trim() || null,
+        horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -889,6 +896,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     onChange={(e) => setPeUbicacion(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
                   />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Horario semanal en obra (contratos laborales)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Se usa en el PDF estructurado si el contrato del obrero no define otro horario. Elige días y hora de
+                    inicio y culminación por franja; puedes añadir otra franja (p. ej. viernes corto).
+                  </p>
+                  <div className="mt-2">
+                    <HorarioObraEditor
+                      key={`${id}:${proyecto.updated_at ?? ''}`}
+                      value={peHorarioSemanalObra}
+                      onChange={setPeHorarioSemanalObra}
+                    />
+                  </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>

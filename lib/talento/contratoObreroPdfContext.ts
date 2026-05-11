@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { PRESUPUESTO_BRAND } from '@/lib/presupuesto/brand';
 import { emptyHojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 import {
   aplicarOverridesMapaContrato,
@@ -17,6 +18,14 @@ import {
   patronEmpresaDomicilioDesdeHojaJson,
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { resolverTextoHorarioSemanalObra } from '@/lib/talento/horarioSemanalContratoPdf';
+import { camposRegistroMercantilDesdeRecord, parseRegistroMercantilRecord } from '@/lib/talento/registroMercantilCamposPdf';
+import {
+  formatearUsdContratoPdf,
+  ingresoSemanalConsolidadoUsdDesdeNivelGaceta,
+  nivelGacetaDesdeCodigoOficio,
+  nivelGacetaDesdeSalarioBasicoDiarioVes,
+} from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
 
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
@@ -123,7 +132,7 @@ export async function cargarFuentesContratoObreroPdf(
       .maybeSingle(),
     admin
       .from('ci_proyectos')
-      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id')
+      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default')
       .eq('id', vinculo)
       .maybeSingle(),
   ]);
@@ -155,11 +164,18 @@ export async function cargarFuentesContratoObreroPdf(
     ubicacion_texto?: string | null;
     obra_ubicacion?: string | null;
     entidad_id?: string | null;
+    horario_semanal_obra_default?: string | null;
   };
   const ubic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
 
   const hv = parseHojaVidaObrero(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
   const empleado = fusionarEmpleadoContratoDesdePlanilla(e, hv);
+
+  const horarioSemanalResuelto = resolverTextoHorarioSemanalObra({
+    horarioContrato: row.horario_semanal_texto,
+    horarioProyectoDefault: strOpt(o.horario_semanal_obra_default),
+    jornadaTrabajo: row.jornada_trabajo,
+  });
 
   const patron = await resolverPatronoDesdeEntidad(admin, strOpt(o.entidad_id));
   const domDesdeHoja = patronEmpresaDomicilioDesdeHojaJson(e.hoja_vida_obrero);
@@ -199,7 +215,7 @@ export async function cargarFuentesContratoObreroPdf(
       numero_oficio_tabulador: row.numero_oficio_tabulador,
       gaceta_denominacion_oficio: row.gaceta_denominacion_oficio,
       duracion_referencial_semanas: row.duracion_referencial_semanas,
-      horario_semanal_texto: row.horario_semanal_texto,
+      horario_semanal_texto: horarioSemanalResuelto,
       fecha_firma_contrato: row.fecha_firma_contrato,
     },
     obra: { nombre: o.nombre, ubicacion: ubic },
@@ -318,10 +334,11 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   let obraNombre = 'Por definir';
   let obraUbic: string | null = null;
   let entidadId: string | null = null;
+  let horarioProyectoDefault: string | null = null;
   if (proyectoId) {
     const { data: ob } = await supabase
       .from('ci_proyectos')
-      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id')
+      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default')
       .eq('id', proyectoId)
       .maybeSingle();
     if (ob) {
@@ -330,10 +347,12 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
         ubicacion_texto?: string | null;
         obra_ubicacion?: string | null;
         entidad_id?: string | null;
+        horario_semanal_obra_default?: string | null;
       };
       obraNombre = o.nombre;
       obraUbic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
       entidadId = strOpt(o.entidad_id);
+      horarioProyectoDefault = strOpt(o.horario_semanal_obra_default);
     }
   }
 
@@ -343,7 +362,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
       'cargo_oficio_desempeño,lugar_prestacion_servicio,objeto_contrato,tipo_contrato,jornada_trabajo,salario_basico_diario_ves,forma_pago,lugar_pago,fecha_ingreso,numero_oficio_tabulador,gaceta_denominacion_oficio,duracion_referencial_semanas,horario_semanal_texto,fecha_firma_contrato',
     )
     .eq('empleado_id', eid)
-    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -359,6 +378,12 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     return strOpt(b) ?? null;
   };
 
+  const horarioSemanalResueltoEmpleado = resolverTextoHorarioSemanalObra({
+    horarioContrato: c?.horario_semanal_texto,
+    horarioProyectoDefault: horarioProyectoDefault,
+    jornadaTrabajo: c?.jornada_trabajo,
+  });
+
   const contrato: FuentesContratoObrero['contrato'] = {
     cargo_oficio_desempeño: pick(c?.cargo_oficio_desempeño, e.cargo_nombre ?? null) ?? null,
     lugar_prestacion_servicio: pick(c?.lugar_prestacion_servicio, obraNombre) ?? null,
@@ -372,7 +397,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     numero_oficio_tabulador: pick(c?.numero_oficio_tabulador, e.cargo_codigo ?? null) ?? null,
     gaceta_denominacion_oficio: c?.gaceta_denominacion_oficio ?? null,
     duracion_referencial_semanas: c?.duracion_referencial_semanas ?? null,
-    horario_semanal_texto: c?.horario_semanal_texto ?? null,
+    horario_semanal_texto: horarioSemanalResueltoEmpleado,
     fecha_firma_contrato: c?.fecha_firma_contrato ?? null,
   };
 
@@ -418,6 +443,97 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
 const DIAS_MES_REF_SALARIO = 30;
 
 /**
+ * Patrono (`ci_entidades.id`) para el PDF estructurado: primero el proyecto del empleado
+ * (`proyecto_modulo_id` / vacante); si ahí no hay `entidad_id`, el de la obra del último contrato
+ * (`ci_contratos_empleado_obra.obra_id` → `ci_proyectos.entidad_id`), donde suele estar el RM en Talento.
+ */
+/** Datos de RM y representante legal usados en contratos cuando el patrono es CASA INTELIGENTE y faltan campos en BD. */
+const DEFAULT_RM_PATRONO_CASA_INTELIGENTE = {
+  rm_tomo: '56',
+  rm_numero: '76',
+  rm_fecha: '2015-03-15',
+  rep_legal_nombre: 'Luis Vicente Mata Ortiz',
+  rep_legal_cedula: 'V1384818688',
+  rep_legal_cargo: 'Presidente',
+  rif: PRESUPUESTO_BRAND.rifEmpresa,
+} as const;
+
+function textoSugierePatronoCasaInteligente(...partes: (string | null | undefined)[]): boolean {
+  for (const p of partes) {
+    if ((p ?? '').toLowerCase().includes('casa inteligente')) return true;
+  }
+  return false;
+}
+
+function rellenarEntidadCasaInteligenteContratoPdf(
+  entidad: ContratoObreroPdfStructuredProps['entidad'],
+  entidadRow: Record<string, unknown> | null,
+  patronNombrePlanilla: string,
+): void {
+  if (
+    !textoSugierePatronoCasaInteligente(
+      strOpt(entidadRow?.nombre_legal),
+      strOpt(entidadRow?.nombre),
+      strOpt(entidad.nombre_legal),
+      strOpt(entidad.nombre),
+      patronNombrePlanilla,
+    )
+  ) {
+    return;
+  }
+  const d = DEFAULT_RM_PATRONO_CASA_INTELIGENTE;
+  if (!strOpt(entidad.rif)) entidad.rif = d.rif;
+  if (!strOpt(entidad.rm_tomo)) entidad.rm_tomo = d.rm_tomo;
+  if (!strOpt(entidad.rm_numero)) entidad.rm_numero = d.rm_numero;
+  if (!strOpt(entidad.rm_fecha)) entidad.rm_fecha = d.rm_fecha;
+  if (!strOpt(entidad.rep_legal_nombre)) entidad.rep_legal_nombre = d.rep_legal_nombre;
+  if (!strOpt(entidad.rep_legal_cedula)) entidad.rep_legal_cedula = d.rep_legal_cedula;
+  if (!strOpt(entidad.rep_legal_cargo)) entidad.rep_legal_cargo = d.rep_legal_cargo;
+}
+
+async function resolverEntidadIdPatronoParaPdfEstructurado(
+  supabase: SupabaseClient,
+  empleadoId: string,
+): Promise<string | null> {
+  const eid = empleadoId.trim();
+  const { data: empProyecto } = await supabase
+    .from('ci_empleados')
+    .select('proyecto_modulo_id,recruitment_need_id')
+    .eq('id', eid)
+    .maybeSingle();
+  const ep = (empProyecto ?? null) as { proyecto_modulo_id?: string | null; recruitment_need_id?: string | null } | null;
+  let proyectoId = strOpt(ep?.proyecto_modulo_id);
+  if (!proyectoId) {
+    const needId = strOpt(ep?.recruitment_need_id);
+    if (needId) {
+      const { data: need } = await supabase
+        .from('recruitment_needs')
+        .select('proyecto_modulo_id,proyecto_id')
+        .eq('id', needId)
+        .maybeSingle();
+      const n = need as { proyecto_modulo_id?: string | null; proyecto_id?: string | null } | null;
+      proyectoId = strOpt(n?.proyecto_modulo_id) ?? strOpt(n?.proyecto_id);
+    }
+  }
+  if (proyectoId) {
+    const { data: pr } = await supabase.from('ci_proyectos').select('entidad_id').eq('id', proyectoId).maybeSingle();
+    const fromProyecto = strOpt((pr as { entidad_id?: string | null } | null)?.entidad_id);
+    if (fromProyecto) return fromProyecto;
+  }
+  const { data: ctr } = await supabase
+    .from('ci_contratos_empleado_obra')
+    .select('obra_id')
+    .eq('empleado_id', eid)
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const obraId = strOpt((ctr as { obra_id?: string | null } | null)?.obra_id);
+  if (!obraId) return null;
+  const { data: prOb } = await supabase.from('ci_proyectos').select('entidad_id').eq('id', obraId).maybeSingle();
+  return strOpt((prOb as { entidad_id?: string | null } | null)?.entidad_id);
+}
+
+/**
  * Props para {@link ContratoObreroPDF} (cláusulas fijas) a partir de empleado + contrato + tabulador opcional.
  */
 export async function cargarPropsContratoObreroPdfEstructurado(
@@ -436,36 +552,13 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     strOpt(f.contrato.cargo_oficio_desempeño) ?? strOpt(hv.contratacion?.cargoUOficio) ?? null;
   const tareasEsp = strOpt(hv.contratacion?.cargoUOficio) ?? null;
 
-  let entidadId: string | null = null;
-  const { data: empProyecto } = await supabase
-    .from('ci_empleados')
-    .select('proyecto_modulo_id,recruitment_need_id')
-    .eq('id', empleadoId.trim())
-    .maybeSingle();
-  const ep = (empProyecto ?? null) as { proyecto_modulo_id?: string | null; recruitment_need_id?: string | null } | null;
-  let proyectoId = strOpt(ep?.proyecto_modulo_id);
-  if (!proyectoId) {
-    const needId = strOpt(ep?.recruitment_need_id);
-    if (needId) {
-      const { data: need } = await supabase
-        .from('recruitment_needs')
-        .select('proyecto_modulo_id,proyecto_id')
-        .eq('id', needId)
-        .maybeSingle();
-      const n = need as { proyecto_modulo_id?: string | null; proyecto_id?: string | null } | null;
-      proyectoId = strOpt(n?.proyecto_modulo_id) ?? strOpt(n?.proyecto_id);
-    }
-  }
-  if (proyectoId) {
-    const { data: pr } = await supabase.from('ci_proyectos').select('entidad_id').eq('id', proyectoId).maybeSingle();
-    entidadId = strOpt((pr as { entidad_id?: string | null } | null)?.entidad_id);
-  }
+  const entidadId = await resolverEntidadIdPatronoParaPdfEstructurado(supabase, empleadoId.trim());
   /** Columnas alineadas a migraciones 063/064 (evita fallo PostgREST si no existen `nombre_legal` / `domicilio_fiscal`). */
   const { data: ent } = entidadId
     ? await supabase
         .from('ci_entidades')
         .select(
-          'nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+          'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
         )
         .eq('id', entidadId)
         .maybeSingle()
@@ -481,19 +574,8 @@ export async function cargarPropsContratoObreroPdfEstructurado(
       })
     : null;
   const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
-  const rm = (() => {
-    const raw = entidadRow?.registro_mercantil;
-    if (!raw) return null;
-    if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-      } catch {
-        return null;
-      }
-    }
-    return typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
-  })();
+  const rm = parseRegistroMercantilRecord(entidadRow?.registro_mercantil);
+  const rmCampos = camposRegistroMercantilDesdeRecord(rm);
 
   const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
     nombre_legal: strOpt(entidadRow?.nombre_legal) ?? strOpt(entidadRow?.nombre) ?? f.patron.nombre,
@@ -505,20 +587,12 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula,
     rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? rmRep.cargo,
     rif: strOpt(entidadRow?.rif),
-    rm_oficina:
-      strOpt(rm?.circunscripcion) ??
-      strOpt(rm?.registro_mercantil_oficina) ??
-      strOpt(rm?.oficina) ??
-      strOpt(rm?.registro),
-    rm_fecha: strOpt(rm?.fecha) ?? strOpt(rm?.fecha_registro) ?? strOpt(rm?.fecha_inscripcion),
-    rm_numero:
-      strOpt(rm?.numero) ??
-      strOpt(rm?.numero_registro) ??
-      strOpt(rm?.nro) ??
-      strOpt(rm?.numero_inscripcion) ??
-      strOpt(rm?.n_inscripcion),
-    rm_tomo: strOpt(rm?.tomo) ?? strOpt(rm?.libro_tomo),
+    rm_oficina: strOpt(rmCampos.circunscripcion) || null,
+    rm_fecha: strOpt(rmCampos.fecha) || null,
+    rm_numero: strOpt(rmCampos.numero) || null,
+    rm_tomo: strOpt(rmCampos.tomo) || null,
   };
+  rellenarEntidadCasaInteligenteContratoPdf(entidad, entidadRow, f.patron.nombre);
 
   const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
     nombres: f.empleado.nombre_completo,
@@ -535,13 +609,17 @@ export async function cargarPropsContratoObreroPdfEstructurado(
 
   const codTab = strOpt(f.contrato.numero_oficio_tabulador);
   if (codTab) {
-    const { data: nom } = await supabase
+    const { data: nomList, error: nomErr } = await supabase
       .from('ci_config_nomina')
-      .select('salario_base_mensual,cestaticket_mensual')
-      .eq('cargo_codigo', codTab)
-      .limit(1)
-      .maybeSingle();
-    if (nom && typeof nom === 'object') {
+      .select('salario_base_mensual,cestaticket_mensual,vigencia_desde')
+      .ilike('cargo_codigo', codTab)
+      .order('vigencia_desde', { ascending: false })
+      .limit(1);
+    if (nomErr) {
+      console.warn('[cargarPropsContratoObreroPdfEstructurado] ci_config_nomina', nomErr.message);
+    }
+    const nom = Array.isArray(nomList) && nomList[0] && typeof nomList[0] === 'object' ? nomList[0] : null;
+    if (nom) {
       const n = nom as { salario_base_mensual?: unknown; cestaticket_mensual?: unknown };
       const sm = Number(n.salario_base_mensual);
       const ce = Number(n.cestaticket_mensual);
@@ -558,6 +636,13 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const salarioDiarioNum =
     sbDia != null && Number.isFinite(Number(sbDia)) && Number(sbDia) > 0 ? Number(sbDia) : null;
 
+  const nivelGaceta =
+    nivelGacetaDesdeCodigoOficio(codTab) ?? nivelGacetaDesdeSalarioBasicoDiarioVes(salarioDiarioNum);
+  const ingresoUsdNum =
+    nivelGaceta != null ? ingresoSemanalConsolidadoUsdDesdeNivelGaceta(nivelGaceta, cestaMensual) : null;
+  const ingresoSemanalUsdTabulador =
+    ingresoUsdNum != null && Number.isFinite(ingresoUsdNum) ? formatearUsdContratoPdf(ingresoUsdNum) : null;
+
   const configNomina: ContratoObreroPdfStructuredProps['configNomina'] = {
     funciones_oficiales: funcionesOficiales,
     salario_base_mensual: salarioMensual,
@@ -571,6 +656,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     duracionSemanasReferencial: strOpt(f.contrato.duracion_referencial_semanas),
     horarioSemanal: strOpt(f.contrato.horario_semanal_texto),
     fechaFirmaContratoIso: strOpt(f.contrato.fecha_firma_contrato) ?? strOpt(f.contrato.fecha_ingreso),
+    ingresoSemanalConsolidadoUsdTexto: ingresoSemanalUsdTabulador,
   };
 
   const contratoPdf: ContratoObreroPdfStructuredProps['contrato'] = {

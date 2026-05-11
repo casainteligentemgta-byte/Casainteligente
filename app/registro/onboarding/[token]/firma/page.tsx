@@ -104,7 +104,7 @@ export default function FirmaDigitalOnboardingPage({ params }: PageProps) {
         .from('ci_contratos_empleado_obra')
         .select('cargo_oficio_desempeño,salario_basico_diario_ves,lugar_prestacion_servicio,obra_id,proyecto_id')
         .eq('empleado_id', e.id)
-        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();
       if (!alive) return;

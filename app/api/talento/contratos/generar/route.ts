@@ -1,3 +1,4 @@
+import { camposRegistroMercantilContrato, fechaLargaEsDesdeCampoRm } from '@/lib/talento/registroMercantilCamposPdf';
 import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
@@ -14,6 +15,7 @@ import {
   patronEmpresaDomicilioDesdeHojaJson,
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { numeroALetrasHastaMiles } from '@/lib/talento/numeroALetrasVe';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -27,41 +29,6 @@ function toUpperSafe(value: string | null | undefined, fallback: string): string
 
 function soloDosDecimales(n: number): string {
   return Number.isFinite(n) ? n.toFixed(2) : '0.00';
-}
-
-function numeroALetrasHastaMiles(valor: number): string {
-  const n = Math.floor(Math.abs(valor));
-  const unidades = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
-  const especiales = ['diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciseis', 'diecisiete', 'dieciocho', 'diecinueve'];
-  const decenas = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
-  const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
-
-  function hasta99(x: number): string {
-    if (x < 10) return unidades[x] ?? 'cero';
-    if (x < 20) return especiales[x - 10] ?? 'cero';
-    if (x < 30) return x === 20 ? 'veinte' : `veinti${unidades[x - 20] ?? ''}`;
-    const d = Math.floor(x / 10);
-    const u = x % 10;
-    return u === 0 ? decenas[d] ?? '' : `${decenas[d] ?? ''} y ${unidades[u] ?? ''}`;
-  }
-
-  function hasta999(x: number): string {
-    if (x === 0) return 'cero';
-    if (x === 100) return 'cien';
-    if (x < 100) return hasta99(x);
-    const c = Math.floor(x / 100);
-    const r = x % 100;
-    return r === 0 ? (centenas[c] ?? '') : `${centenas[c] ?? ''} ${hasta99(r)}`;
-  }
-
-  if (n < 1000) return hasta999(n);
-  if (n < 1000000) {
-    const miles = Math.floor(n / 1000);
-    const resto = n % 1000;
-    const pref = miles === 1 ? 'mil' : `${hasta999(miles)} mil`;
-    return resto === 0 ? pref : `${pref} ${hasta999(resto)}`;
-  }
-  return String(n);
 }
 
 function montoVesEnLetras(valor: number): string {
@@ -114,31 +81,6 @@ function primerRepresentanteRegistroMercantil(raw: unknown): {
   }
 }
 
-function registroMercantilCamposDesde(raw: unknown): {
-  circunscripcion: string;
-  fecha: string;
-  numero: string;
-  tomo: string;
-} {
-  let o: unknown = raw;
-  if (typeof raw === 'string') {
-    try {
-      o = JSON.parse(raw) as unknown;
-    } catch {
-      return { circunscripcion: '', fecha: '', numero: '', tomo: '' };
-    }
-  }
-  if (!o || typeof o !== 'object' || Array.isArray(o)) return { circunscripcion: '', fecha: '', numero: '', tomo: '' };
-  const r = o as Record<string, unknown>;
-  const s = (k: string) => (typeof r[k] === 'string' ? r[k].trim() : '');
-  return {
-    circunscripcion: s('circunscripcion') || s('registro_mercantil_oficina') || s('oficina') || s('registro'),
-    fecha: s('fecha') || s('fecha_registro') || s('fecha_inscripcion'),
-    numero: s('numero') || s('numero_registro') || s('nro'),
-    tomo: s('tomo') || s('libro_tomo'),
-  };
-}
-
 /** Si el texto sigue el patrón “… de la Circunscripción Judicial del Estado X”, lo separa para el encabezado legal. */
 function partesCircunscripcionJudicial(circ: string): { oficina: string; estado: string } | null {
   const t = circ.trim();
@@ -170,16 +112,6 @@ function datosRegistroOficinaRm(raw: unknown): string {
   const partes = circ ? partesCircunscripcionJudicial(circ) : null;
   if (partes?.oficina) return partes.oficina;
   return circ;
-}
-
-function fmtFechaLargaEsContrato(v: string): string {
-  const t = v.trim();
-  if (!t) return '[FECHA NO REGISTRADA]';
-  const d = new Date(t.includes('T') ? t : `${t}T12:00:00`);
-  if (!Number.isNaN(d.getTime())) {
-    return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'long', year: 'numeric' });
-  }
-  return t;
 }
 
 export async function POST(req: Request) {
@@ -542,8 +474,8 @@ export async function POST(req: Request) {
       '[REPRESENTANTE NO REGISTRADO]';
     const cedulaRep =
       strOrNull(entPatrono?.rep_legal_cedula) ?? strOrNull(rmRep.cedula) ?? '[CÉDULA NO REGISTRADA]';
-    const rmCampos = registroMercantilCamposDesde(entPatrono?.registro_mercantil);
-    const fechaRmMd = fmtFechaLargaEsContrato(rmCampos.fecha || '');
+    const rmCampos = camposRegistroMercantilContrato(entPatrono?.registro_mercantil);
+    const fechaRmMd = fechaLargaEsDesdeCampoRm(rmCampos.fecha) ?? '[FECHA NO REGISTRADA]';
     const numeroRmMd = rmCampos.numero.trim() || '[Nº NO REGISTRADO]';
     const tomoRmMd = rmCampos.tomo.trim() || '[TOMO NO REGISTRADO]';
 
@@ -563,7 +495,7 @@ export async function POST(req: Request) {
 
     const rifLine = strOrNull(entPatrono?.rif)?.trim() || '_____________';
 
-    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, en fecha **${fechaRmMd}**, bajo el Nº **${numeroRmMd}**, Tomo **${tomoRmMd}** de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ciudadano **"${nombreRep}"**, venezolano, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, el ciudadano **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
+    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, constando en el Tomo **${tomoRmMd}**, bajo el Nº **${numeroRmMd}**, de fecha **${fechaRmMd}**, de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ciudadano **"${nombreRep}"**, venezolano, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, el ciudadano **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
 
     const clausulaObjeto = `### PRIMERA: OBJETO
 **EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;

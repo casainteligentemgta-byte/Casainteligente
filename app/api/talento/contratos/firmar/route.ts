@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     .from('ci_contratos_empleado_obra')
     .select('id,obra_id,proyecto_id,salario_basico_diario_ves')
     .eq('empleado_id', empleadoId)
-    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(1)
     .maybeSingle();
 

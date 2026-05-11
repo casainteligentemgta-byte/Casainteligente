@@ -11,12 +11,18 @@ export type RepresentanteMercantilCi = {
   profesion?: string;
 };
 
-/** Registro mercantil persistido en `ci_entidades.registro_mercantil` (jsonb). */
+/**
+ * Registro mercantil en `ci_entidades.registro_mercantil` (jsonb), editado en `/configuracion/entidades`.
+ * `fecha`, `tomo` y `numero` alimentan el párrafo del empleador en el contrato laboral PDF (vía `ci_proyectos.entidad_id`).
+ */
 export type RegistroMercantilCi = {
   /** Domicilio social o de la empresa según consta en el registro (puede coincidir con dirección fiscal). */
   domicilio_empresa?: string;
+  /** Tomo del libro de comercio (contrato PDF: «constando en el Tomo …»). */
   tomo?: string;
+  /** Número de inscripción o asiento en el RM (contrato PDF: «bajo el Nº …»); no confundir con el RIF. */
   numero?: string;
+  /** Fecha de inscripción ISO `YYYY-MM-DD` (contrato PDF: «de fecha …»). */
   fecha?: string;
   /** Tras «Oficina de » en contrato: «Registro Mercantil Segundo de la Circunscripción Judicial del Estado …». */
   circunscripcion?: string;

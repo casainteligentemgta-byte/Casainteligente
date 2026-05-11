@@ -105,6 +105,10 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     })
     .join('');
 
+  const nItems = items.length;
+  const sheetMod =
+    nItems > 14 ? ' sheet--compact sheet--many' : nItems > 7 ? ' sheet--compact' : '';
+
   const showZelle = budget.show_zelle !== false;
   const condiciones = escapeHtml(PRESUPUESTO_BRAND.condicionesDefault.replace(/\s+/g, ' ').trim());
   const pago = escapeHtml(textoMetodosPago());
@@ -123,57 +127,80 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       color: ${c.texto};
       background: ${c.fondo};
       margin: 0;
-      padding: 12mm 14mm;
-      font-size: 11px;
-      line-height: 1.45;
+      padding: 8mm 10mm;
+      font-size: 9.5px;
+      line-height: 1.28;
     }
     .sheet { max-width: 210mm; margin: 0 auto; }
+    .sheet--compact .items-table td, .sheet--compact .items-table th {
+      padding: 2px 5px !important; font-size: 8.5px !important; line-height: 1.08 !important;
+    }
+    .sheet--compact .cliente-nombre { font-size: 14px !important; }
+    .sheet--compact .total-val { font-size: 20px !important; }
+    .sheet--compact .top { padding-bottom: 8px !important; margin-bottom: 10px !important; }
+    .sheet--compact .cliente-block { margin-bottom: 10px !important; }
+    .sheet--compact .items-table { margin-bottom: 10px !important; }
+    .sheet--compact .footer-grid { gap: 10px !important; margin-top: 4px !important; }
+    .sheet--many .items-table td, .sheet--many .items-table th {
+      padding: 1px 4px !important; font-size: 8px !important; line-height: 1.05 !important;
+    }
+    .sheet--many .legal p { font-size: 8.5px !important; line-height: 1.35 !important; }
+    .sheet--many .logo-casa-inteligente { width: 40px !important; height: 40px !important; margin-bottom: 2px !important; }
+    .sheet--many .brand-name { font-size: 15px !important; }
+    .sheet--many .total-val { font-size: 17px !important; }
     .top {
       display: flex; justify-content: space-between; align-items: flex-start;
-      border-bottom: 3px solid ${c.acento};
-      padding-bottom: 14px; margin-bottom: 18px;
+      border-bottom: 2px solid ${c.acento};
+      padding-bottom: 8px; margin-bottom: 10px;
     }
-    .brand-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 4px; color: ${c.texto}; }
-    .logo-casa-inteligente { width: 56px; height: 56px; object-fit: cover; border-radius: 14px; margin-bottom: 6px; }
-    .brand-sub { font-size: 10px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.06em; }
+    .brand-name { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 2px; color: ${c.texto}; }
+    .logo-casa-inteligente { width: 44px; height: 44px; object-fit: cover; border-radius: 10px; margin-bottom: 4px; }
+    .brand-sub { font-size: 8.5px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.06em; }
     .badge {
-      background: ${c.acento}; color: #fff; font-weight: 700; font-size: 11px;
-      padding: 8px 14px; border-radius: 8px; display: inline-block;
+      background: ${c.acento}; color: #fff; font-weight: 700; font-size: 9px;
+      padding: 5px 10px; border-radius: 6px; display: inline-block;
     }
-    .fecha { font-size: 11px; color: ${c.textoMuted}; margin-bottom: 8px; text-align: right; }
-    .cliente-block { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-    .cliente-nombre { font-size: 18px; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.02em; }
-    .cliente-meta { color: ${c.textoMuted}; font-size: 11px; }
+    .fecha { font-size: 9px; color: ${c.textoMuted}; margin-bottom: 4px; text-align: right; }
+    .cliente-block { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .cliente-nombre { font-size: 15px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.02em; line-height: 1.15; }
+    .cliente-meta { color: ${c.textoMuted}; font-size: 9px; }
     .total-box { text-align: right; }
-    .total-label { font-size: 10px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.05em; }
-    .total-val { font-size: 28px; font-weight: 800; color: ${c.acento}; }
-    table { width: 100%; border-collapse: collapse; margin: 0 0 20px; }
-    th {
-      text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
-      color: ${c.textoMuted}; padding: 10px 8px; background: ${c.barraTabla}; border-bottom: 1px solid ${c.borde};
+    .total-label { font-size: 8px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.05em; }
+    .total-val { font-size: 22px; font-weight: 800; color: ${c.acento}; line-height: 1; }
+    .items-table { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
+    .items-table th {
+      text-align: left; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: ${c.textoMuted}; padding: 3px 6px; background: ${c.barraTabla}; border-bottom: 1px solid ${c.borde};
+      line-height: 1.1; vertical-align: middle;
     }
-    th:nth-child(n+2), td.num { text-align: right; }
-    td { padding: 10px 8px; border-bottom: 1px solid ${c.borde}; vertical-align: top; }
-    table td img, table td picture { display: none !important; width: 0 !important; height: 0 !important; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    .footer-grid { display: grid; grid-template-columns: 1fr 200px; gap: 20px; margin-top: 8px; }
-    .legal h4 { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: ${c.textoMuted}; margin: 0 0 6px; }
-    .legal p { margin: 0; color: ${c.textoMuted}; font-size: 10px; line-height: 1.55; }
-    .legal .block { margin-top: 12px; }
-    .sum-line { display: flex; justify-content: space-between; padding: 8px 10px; border: 1px solid ${c.borde}; border-radius: 8px; margin-bottom: 6px; background: #fff; }
+    .items-table th:nth-child(n+2), .items-table td.num { text-align: right; }
+    .items-table td {
+      padding: 3px 6px; border-bottom: 1px solid ${c.borde}; vertical-align: middle;
+      line-height: 1.12;
+    }
+    .items-table td strong { font-weight: 700; line-height: 1.1; }
+    .items-table td img, .items-table td picture { display: none !important; width: 0 !important; height: 0 !important; }
+    .items-table tbody tr:nth-child(even) td { background: #f8fafc; }
+    .footer-grid { display: grid; grid-template-columns: 1fr minmax(120px, 160px); gap: 10px; margin-top: 4px; align-items: start; }
+    .legal h4 { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: ${c.textoMuted}; margin: 0 0 3px; }
+    .legal p { margin: 0; color: ${c.textoMuted}; font-size: 8.5px; line-height: 1.35; }
+    .legal .block { margin-top: 6px; }
+    .sum-line { display: flex; justify-content: space-between; padding: 5px 8px; border: 1px solid ${c.borde}; border-radius: 6px; margin-bottom: 4px; background: #fff; }
     .sum-total {
-      background: #eff6ff; border-color: #bfdbfe; font-weight: 800; font-size: 14px; color: ${c.acento};
+      background: #eff6ff; border-color: #bfdbfe; font-weight: 800; font-size: 11px; color: ${c.acento};
     }
     .muted { color: ${c.textoMuted}; }
     @media print {
-      body { padding: 10mm 12mm; }
-      .sheet { max-width: none; }
+      body { padding: 5mm 7mm !important; margin: 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .sheet { max-width: none !important; }
+      /* Chrome/Edge: reduce ~4% para intentar una sola hoja A4 con mucho texto */
+      html { zoom: 0.96; }
     }
-    @page { size: A4; margin: 12mm; }
+    @page { size: A4 portrait; margin: 6mm; }
   </style>
 </head>
 <body>
-  <div class="sheet">
+  <div class="sheet${sheetMod}">
     <div class="top">
       <div>
         <img src="/logo-casa-inteligente.png" alt="" class="logo-casa-inteligente" />
@@ -197,7 +224,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       </div>
     </div>
 
-    <table>
+    <table class="items-table">
       <thead>
         <tr>
           <th>Descripción</th>
@@ -221,7 +248,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
           <span>TOTAL</span>
           <span>$${fmt(Number(budget.subtotal ?? 0))}</span>
         </div>
-        <p class="muted" style="font-size:9px;margin-top:10px;text-align:right">Casa Inteligente · Documento generado electrónicamente</p>
+        <p class="muted" style="font-size:7.5px;margin-top:6px;text-align:right;line-height:1.2">Casa Inteligente · Documento generado electrónicamente</p>
       </div>
     </div>
   </div>

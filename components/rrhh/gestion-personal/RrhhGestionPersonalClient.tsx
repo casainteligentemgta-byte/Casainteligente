@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, MessageCircle } from 'lucide-react';
+import { Copy, MessageCircle, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -132,6 +132,58 @@ export default function RrhhGestionPersonalClient({
     const text = mensajeWhatsAppPlanilla(href, r.specialty_nombre, r.specialty_codigo);
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   }, []);
+
+  const borrarSolicitud = useCallback(
+    async (r: LaborRequestRow) => {
+      const n = await contarAsignaciones(supabase, r.id);
+      const msg =
+        n > 0
+          ? `Esta solicitud tiene ${n} asignación(es) en obra. Al borrarla se eliminarán esas filas (cascade). Los obreros sin otra asignación volverán a estatus «disponible». ¿Continuar?`
+          : '¿Borrar esta solicitud de obreros? No se puede deshacer.';
+      if (!window.confirm(msg)) return;
+
+      const { data: asgRows, error: fetchAsgErr } = await supabase
+        .from('project_assignments')
+        .select('worker_id')
+        .eq('labor_request_id', r.id);
+      if (fetchAsgErr) {
+        toast.error(fetchAsgErr.message);
+        return;
+      }
+      const workerIdsAfectados = Array.from(
+        new Set(
+          (asgRows ?? [])
+            .map((row) => (row as { worker_id?: string }).worker_id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      );
+
+      const { error } = await supabase.from('labor_requests').delete().eq('id', r.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      for (const wid of workerIdsAfectados) {
+        const { count, error: cErr } = await supabase
+          .from('project_assignments')
+          .select('id', { count: 'exact', head: true })
+          .eq('worker_id', wid);
+        if (cErr) continue;
+        if ((count ?? 0) === 0) {
+          await supabase.from('ci_empleados').update({ estatus: 'disponible' }).eq('id', wid);
+        }
+      }
+
+      if (dialogReq?.id === r.id) setDialogReq(null);
+      toast.success('Solicitud eliminada.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
+      }
+      refresh();
+    },
+    [supabase, dialogReq, refresh],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -385,6 +437,17 @@ export default function RrhhGestionPersonalClient({
                     </Button>
                     <Button type="button" size="sm" variant="elitePrimary" onClick={() => void abrirAsignacion(r)}>
                       Asignar obreros
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-red-800/60 text-red-200 hover:bg-red-950/50"
+                      title="Eliminar solicitud"
+                      onClick={() => void borrarSolicitud(r)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                      Borrar
                     </Button>
                   </div>
                 </TableCell>

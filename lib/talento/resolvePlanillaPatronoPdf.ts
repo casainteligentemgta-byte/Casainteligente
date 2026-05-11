@@ -89,7 +89,7 @@ export async function resolveProyectoModuloIdDesdeEmpleado(
     .from('ci_contratos_empleado_obra')
     .select('obra_id,proyecto_id')
     .eq('empleado_id', empleadoId)
-    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (cErr || !ctr) return null;

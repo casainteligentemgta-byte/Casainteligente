@@ -689,24 +689,6 @@ export default function ResumenObrerosProyectoModulo({
     }
   }, [listaModal]);
 
-  const hrefSolicitarManoObra = useMemo(
-    () => `/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}?tab=solicitados#solicitar-mano-obra`,
-    [proyectoModuloId],
-  );
-
-  const onClickIrSolicitarManoObra = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>) => {
-      if (typeof window === 'undefined') return;
-      const pathEsperado = `/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}`;
-      if (window.location.pathname !== pathEsperado) return;
-      const sp = new URLSearchParams(window.location.search);
-      if (sp.get('tab') !== 'solicitados') return;
-      e.preventDefault();
-      document.getElementById('solicitar-mano-obra')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    },
-    [proyectoModuloId],
-  );
-
   return (
     <section
       className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-b from-fuchsia-950/40 to-zinc-950/80 p-5 shadow-[0_0_32px_rgba(192,38,211,0.08)] backdrop-blur-xl"
@@ -732,14 +714,6 @@ export default function ResumenObrerosProyectoModulo({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <Link
-            href={hrefSolicitarManoObra}
-            onClick={onClickIrSolicitarManoObra}
-            className="rounded-lg border border-sky-500/45 bg-sky-500/15 px-3 py-1.5 text-[11px] font-semibold text-sky-100 hover:bg-sky-500/25"
-            title="Formulario de solicitud de mano de obra (plazas y tabulador) en esta misma vista"
-          >
-            Solicitar personal
-          </Link>
           <Link
             href="/rrhh/hojas-vida"
             className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-100 hover:bg-white/10"

@@ -212,6 +212,8 @@ export const recruitmentSessions = pgTable('recruitment_sessions', {
 });
 
 /** Necesidad de puesto (protocolo de reclutamiento asociado vía ?need= en /reclutamiento). */
+export * from './obraDigitalLabor';
+
 export const recruitmentNeeds = pgTable('recruitment_needs', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),

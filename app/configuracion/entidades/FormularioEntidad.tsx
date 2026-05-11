@@ -582,9 +582,15 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
               <Tabs.Content value="mercantil" className="space-y-4 outline-none">
                 <p className="text-xs text-zinc-500">
-                  Objeto <code className="text-zinc-400">registro_mercantil</code>. El domicilio de la empresa aquí
-                  es el que se imprime en la planilla de empleo; si queda vacío, se usa la dirección fiscal (pestaña
-                  Datos).
+                  Objeto <code className="text-zinc-400">registro_mercantil</code> en la base de datos. El{' '}
+                  <strong className="text-zinc-400">domicilio de la empresa</strong> aquí es el que se imprime en la
+                  planilla de empleo; si queda vacío, se usa la dirección fiscal (pestaña Datos). La{' '}
+                  <strong className="text-zinc-400">oficina</strong>, <strong className="text-zinc-400">tomo</strong>,{' '}
+                  <strong className="text-zinc-400">número de inscripción</strong> y{' '}
+                  <strong className="text-zinc-400">fecha de inscripción</strong> son los que usa el{' '}
+                  <strong className="text-zinc-400">contrato laboral PDF</strong> (cláusula del empleador: «constando en
+                  el Tomo …, bajo el Nº …, de fecha …») cuando el proyecto obra enlaza esta entidad en{' '}
+                  <code className="text-zinc-500">ci_proyectos.entidad_id</code>.
                 </p>
                 <div>
                   <label className={labelClass}>Domicilio de la empresa (según registro)</label>
@@ -609,15 +615,20 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Tomo</label>
+                    <label className={labelClass}>Tomo (libro de comercio)</label>
                     <input value={rmTomo} onChange={(e) => setRmTomo(e.target.value)} className={inputClass} />
                   </div>
                   <div>
-                    <label className={labelClass}>Número</label>
-                    <input value={rmNumero} onChange={(e) => setRmNumero(e.target.value)} className={inputClass} />
+                    <label className={labelClass}>Número de inscripción (Nº en el RM)</label>
+                    <input
+                      value={rmNumero}
+                      onChange={(e) => setRmNumero(e.target.value)}
+                      className={inputClass}
+                      placeholder="Nº asiento / inscripción mercantil"
+                    />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={labelClass}>Fecha de inscripción</label>
+                    <label className={labelClass}>Fecha de inscripción o asiento</label>
                     <input
                       type="date"
                       value={rmFecha}
