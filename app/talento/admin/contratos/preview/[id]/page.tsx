@@ -27,6 +27,15 @@ type LaboralPayload = {
   gaceta_denominacion_oficio: string | null;
 };
 
+type LaboralArchivosPayload = {
+  obrero_aceptacion_contrato_at?: string | null;
+  laboral_pdf_storage_path?: string | null;
+  laboral_pdf_generado_at?: string | null;
+  laboral_constancia_aceptacion_storage_path?: string | null;
+  laboral_escaneo_firmado_storage_path?: string | null;
+  laboral_escaneo_firmado_at?: string | null;
+};
+
 type ContratoPayload = {
   id: string;
   empleado: { nombre: string; cedula: string; direccion: string };
@@ -47,6 +56,7 @@ type ContratoPayload = {
     texto_legal: string;
     laboral?: LaboralPayload | null;
   };
+  laboralArchivos?: LaboralArchivosPayload | null;
 };
 
 const styles = StyleSheet.create({
@@ -125,11 +135,12 @@ export default function ContratoPreview() {
   const [saving, setSaving] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [snapshotVersion, setSnapshotVersion] = useState(0);
+  const [escaneoBusy, setEscaneoBusy] = useState(false);
 
   const cargarContrato = useCallback(async () => {
     if (!contractId) throw new Error('Falta el identificador del contrato en la URL.');
     const r = await fetch(`/api/talento/contratos/${encodeURIComponent(contractId)}`);
-    const body = (await r.json()) as ContratoPayload & { error?: string };
+    const body = (await r.json()) as ContratoPayload & { error?: string; laboralArchivos?: LaboralArchivosPayload | null };
     if (!r.ok) throw new Error(body.error ?? 'No se pudo cargar contrato.');
     setData(body);
   }, [contractId]);
@@ -211,6 +222,100 @@ export default function ContratoPreview() {
         proyectoUbicacion={String(data.proyecto.ubicacion ?? '')}
         onGuardado={alGuardarLaboral}
       />
+
+      <div className="mb-6 w-full max-w-4xl rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-4 text-sm text-zinc-300">
+        <h3 className="text-sm font-semibold text-white">Registro digital del contrato (obra)</h3>
+        <p className="mt-1 text-xs text-zinc-500">
+          El obrero acepta en <span className="text-zinc-400">/registro/contrato-laboral/[id]?token=…</span>. Aquí puede
+          cargar el PDF escaneado con firma autógrafa y huella.
+        </p>
+        <ul className="mt-3 space-y-1 text-xs text-zinc-400">
+          <li>
+            Aceptación electrónica:{' '}
+            <span className="font-mono text-zinc-200">
+              {data.laboralArchivos?.obrero_aceptacion_contrato_at ?? '—'}
+            </span>
+          </li>
+          <li>
+            PDF archivado (Storage):{' '}
+            {data.laboralArchivos?.laboral_pdf_storage_path ? (
+              <span className="text-emerald-400">sí</span>
+            ) : (
+              <span className="text-zinc-500">aún no (se crea al abrir el PDF desde el enlace del obrero)</span>
+            )}
+          </li>
+          <li>
+            Constancia de aceptación:{' '}
+            {data.laboralArchivos?.laboral_constancia_aceptacion_storage_path ? (
+              <span className="text-emerald-400">generada</span>
+            ) : (
+              <span className="text-zinc-500">pendiente de aceptación del obrero</span>
+            )}
+          </li>
+          <li>
+            Escaneo firmado:{' '}
+            {data.laboralArchivos?.laboral_escaneo_firmado_storage_path ? (
+              <span className="text-emerald-400">
+                cargado {data.laboralArchivos.laboral_escaneo_firmado_at ? `(${data.laboralArchivos.laboral_escaneo_firmado_at})` : ''}
+              </span>
+            ) : (
+              <span className="text-zinc-500">pendiente</span>
+            )}
+          </li>
+        </ul>
+        <form
+          className="mt-4 flex flex-wrap items-end gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            const file = fd.get('archivo');
+            if (!(file instanceof File) || file.size < 1) {
+              setError('Seleccione un archivo PDF o imagen.');
+              return;
+            }
+            setEscaneoBusy(true);
+            setError(null);
+            try {
+              const up = new FormData();
+              up.append('archivo', file);
+              const r = await fetch(`/api/talento/contratos/${encodeURIComponent(contractId)}/escaneo-firmado`, {
+                method: 'POST',
+                body: up,
+                credentials: 'same-origin',
+              });
+              const j = (await r.json().catch(() => ({}))) as { error?: string };
+              if (!r.ok) {
+                setError(j.error ?? `Error ${r.status}`);
+                return;
+              }
+              await cargarContrato();
+              e.currentTarget.reset();
+            } catch {
+              setError('Error de red al subir el escaneo.');
+            } finally {
+              setEscaneoBusy(false);
+            }
+          }}
+        >
+          <label className="block min-w-[200px] flex-1 text-xs text-zinc-500">
+            <span className="mb-1 block text-zinc-400">Archivo (PDF / JPG / PNG)</span>
+            <input
+              name="archivo"
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              className="w-full text-xs text-zinc-200 file:mr-2 file:rounded file:border-0 file:bg-zinc-700 file:px-2 file:py-1 file:text-zinc-100"
+              required
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={escaneoBusy}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {escaneoBusy ? 'Subiendo…' : 'Registrar escaneo firmado'}
+          </button>
+        </form>
+      </div>
 
       <div className="mb-6 flex w-full max-w-4xl items-center justify-between">
         <div>

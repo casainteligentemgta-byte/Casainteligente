@@ -9,6 +9,10 @@ const nextConfig = {
     if (dev && config.output) {
       config.output.chunkLoadTimeout = 300000;
     }
+    // En dev, caché filesystem de webpack puede dejar referencias a chunks ya borrados (p. ej. Cannot find module './1682.js').
+    if (dev) {
+      config.cache = false;
+    }
     return config;
   },
 };

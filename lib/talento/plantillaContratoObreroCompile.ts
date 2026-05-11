@@ -1,4 +1,5 @@
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
+import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -39,6 +40,10 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   CONTRATO_DENOMINACION_GACETA: { etiqueta: 'Denominación oficio Gaceta', ayuda: 'Vacante / contrato.' },
   OBRA_NOMBRE: { etiqueta: 'Nombre de la obra o proyecto', ayuda: 'Proyecto vinculado al contrato.' },
   OBRA_UBICACION: { etiqueta: 'Ubicación de la obra', ayuda: 'Datos del proyecto en ci_proyectos.' },
+  OBRA_PUNTO_ENC_TRANSPORTE: {
+    etiqueta: 'Parada / punto de encuentro del transporte (SEXTA)',
+    ayuda: 'Campo «punto_encuentro_transporte_contrato» en el proyecto (Módulo proyecto).',
+  },
 };
 
 export function etiquetaPlaceholder(id: string): { etiqueta: string; ayuda: string } {
@@ -84,7 +89,12 @@ export type FuentesContratoObrero = {
     horario_semanal_texto?: string | null;
     fecha_firma_contrato?: string | null;
   };
-  obra: { nombre: string; ubicacion?: string | null };
+  obra: {
+    nombre: string;
+    ubicacion?: string | null;
+    /** `ci_proyectos.punto_encuentro_transporte_contrato` */
+    punto_encuentro_transporte_contrato?: string | null;
+  };
   /** Valores por defecto patrono (env o planilla). */
   patron: {
     nombre: string;
@@ -192,6 +202,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_DENOMINACION_GACETA: str(f.contrato.gaceta_denominacion_oficio),
     OBRA_NOMBRE: str(f.obra.nombre),
     OBRA_UBICACION: str(f.obra.ubicacion),
+    OBRA_PUNTO_ENC_TRANSPORTE: textoPuntoEncuentroTransporteClausulaSex(f.obra.punto_encuentro_transporte_contrato),
   };
 }
 

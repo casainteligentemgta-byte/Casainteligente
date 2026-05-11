@@ -36,9 +36,14 @@ export function nivelGacetaDesdeSalarioBasicoDiarioVes(diario: number | null | u
   return bestDiff <= 2 ? best + 1 : null;
 }
 
+/** Mes de referencia para prorratear el tabulador (mismo criterio que salario mensual = diario × 30). */
+const DIAS_MES_REF_TABULADOR = 30;
+/** Semanas por mes para el equivalente semanal en USD (criterio contable: mes ÷ 4). */
+const SEMANAS_POR_MES_REF = 4;
+
 /**
- * Ingreso semanal consolidado en USD según anexo del tabulador (USD/día × 5) más la parte semanal
- * del cestaticket mensual convertida con la tasa de referencia del propio anexo (BCV 27,25 Bs/$ al 20-06-2023).
+ * Ingreso semanal consolidado en USD: salario como **(USD/día × 30 días) ÷ 4 semanas**, más la parte semanal
+ * del cestaticket mensual (**mensual ÷ 4**) convertida con la tasa de referencia del anexo (BCV 27,25 Bs/$ al 20-06-2023).
  */
 export function ingresoSemanalConsolidadoUsdDesdeNivelGaceta(
   nivel: number,
@@ -47,10 +52,11 @@ export function ingresoSemanalConsolidadoUsdDesdeNivelGaceta(
   if (nivel < 1 || nivel > 9) return null;
   const usdDia = SALARIO_BASICO_DIARIO_USD_REF_POR_NIVEL[nivel - 1];
   if (usdDia == null || !Number.isFinite(usdDia)) return null;
-  let total = 5 * usdDia;
+  const salarioMensualUsd = DIAS_MES_REF_TABULADOR * usdDia;
+  let total = salarioMensualUsd / SEMANAS_POR_MES_REF;
   const cesta = cestaticketMensualVes != null && Number.isFinite(Number(cestaticketMensualVes)) ? Number(cestaticketMensualVes) : 0;
   if (cesta > 0 && TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 > 0) {
-    const cestaSemanalVes = cesta / 4;
+    const cestaSemanalVes = cesta / SEMANAS_POR_MES_REF;
     total += cestaSemanalVes / TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20;
   }
   return Math.round(total * 100) / 100;

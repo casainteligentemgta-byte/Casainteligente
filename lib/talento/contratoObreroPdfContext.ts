@@ -26,6 +26,7 @@ import {
   nivelGacetaDesdeCodigoOficio,
   nivelGacetaDesdeSalarioBasicoDiarioVes,
 } from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
+import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
 
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
@@ -132,7 +133,9 @@ export async function cargarFuentesContratoObreroPdf(
       .maybeSingle(),
     admin
       .from('ci_proyectos')
-      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default')
+      .select(
+        'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
+      )
       .eq('id', vinculo)
       .maybeSingle(),
   ]);
@@ -165,6 +168,7 @@ export async function cargarFuentesContratoObreroPdf(
     obra_ubicacion?: string | null;
     entidad_id?: string | null;
     horario_semanal_obra_default?: string | null;
+    punto_encuentro_transporte_contrato?: string | null;
   };
   const ubic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
 
@@ -218,7 +222,11 @@ export async function cargarFuentesContratoObreroPdf(
       horario_semanal_texto: horarioSemanalResuelto,
       fecha_firma_contrato: row.fecha_firma_contrato,
     },
-    obra: { nombre: o.nombre, ubicacion: ubic },
+    obra: {
+      nombre: o.nombre,
+      ubicacion: ubic,
+      punto_encuentro_transporte_contrato: strOpt(o.punto_encuentro_transporte_contrato),
+    },
     patron: {
       nombre: patron.nombre,
       domicilio: domicilioPatrono,
@@ -335,10 +343,13 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   let obraUbic: string | null = null;
   let entidadId: string | null = null;
   let horarioProyectoDefault: string | null = null;
+  let puntoEncTransporteProyecto: string | null = null;
   if (proyectoId) {
     const { data: ob } = await supabase
       .from('ci_proyectos')
-      .select('nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default')
+      .select(
+        'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
+      )
       .eq('id', proyectoId)
       .maybeSingle();
     if (ob) {
@@ -348,11 +359,13 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
         obra_ubicacion?: string | null;
         entidad_id?: string | null;
         horario_semanal_obra_default?: string | null;
+        punto_encuentro_transporte_contrato?: string | null;
       };
       obraNombre = o.nombre;
       obraUbic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
       entidadId = strOpt(o.entidad_id);
       horarioProyectoDefault = strOpt(o.horario_semanal_obra_default);
+      puntoEncTransporteProyecto = strOpt(o.punto_encuentro_transporte_contrato);
     }
   }
 
@@ -429,7 +442,11 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     },
     hojaVida: hv,
     contrato,
-    obra: { nombre: obraNombre, ubicacion: obraUbic },
+    obra: {
+      nombre: obraNombre,
+      ubicacion: obraUbic,
+      punto_encuentro_transporte_contrato: puntoEncTransporteProyecto,
+    },
     patron: {
       nombre: patron.nombre,
       domicilio: domicilioPatrono,
@@ -657,6 +674,9 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     horarioSemanal: strOpt(f.contrato.horario_semanal_texto),
     fechaFirmaContratoIso: strOpt(f.contrato.fecha_firma_contrato) ?? strOpt(f.contrato.fecha_ingreso),
     ingresoSemanalConsolidadoUsdTexto: ingresoSemanalUsdTabulador,
+    textoPuntoEncuentroTransporteSex: textoPuntoEncuentroTransporteClausulaSex(
+      f.obra.punto_encuentro_transporte_contrato,
+    ),
   };
 
   const contratoPdf: ContratoObreroPdfStructuredProps['contrato'] = {

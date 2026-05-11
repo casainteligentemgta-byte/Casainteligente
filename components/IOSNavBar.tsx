@@ -87,16 +87,6 @@ const navItems = [
         ),
     },
     {
-        href: '/talento',
-        label: 'Talento+',
-        icon: (active: boolean) => (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" stroke={active ? '#38BDF8' : '#8E8E93'} strokeWidth="2" strokeLinejoin="round" />
-                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke={active ? '#38BDF8' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-        ),
-    },
-    {
         href: '/almacen',
         label: 'Inventario',
         icon: (active: boolean) => (
@@ -165,9 +155,7 @@ export default function IOSNavBar() {
                                             ? '#A78BFA'
                                             : item.label === 'RRHH'
                                               ? '#F472B6'
-                                              : item.label === 'Talento+'
-                                                ? '#38BDF8'
-                                                : item.label === 'Ventas'
+                                              : item.label === 'Ventas'
                                                   ? '#34C759'
                                                   : '#007AFF';
 

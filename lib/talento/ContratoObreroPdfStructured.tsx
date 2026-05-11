@@ -1,8 +1,8 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import { HORARIO_JORNADA_TERCERA_CONTRATO_PDF_DEFAULT } from '@/lib/talento/horarioSemanalContratoPdf';
 import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
+import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
 
 /** Carta US Letter (~792 pt alto); márgenes e interlineado ajustados para encajar el contrato en 2 páginas. */
 const styles = StyleSheet.create({
@@ -14,6 +14,11 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     color: '#000',
   },
+  /** Primera página: menos aire arriba y entre bloques (comparecencia + PRIMERA–TERCERA). */
+  pageFirst: {
+    paddingTop: 16,
+    paddingBottom: 28,
+  },
   header: {
     fontSize: 11.5,
     fontWeight: 'bold',
@@ -21,12 +26,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 1.18,
   },
+  headerFirst: {
+    fontSize: 11,
+    marginBottom: 5,
+  },
   paragraph: { marginBottom: 6, textAlign: 'justify', lineHeight: 1.28, fontSize: 9.5 },
+  paragraphIntro: { marginBottom: 3.5, lineHeight: 1.22 },
   bold: { fontWeight: 'bold' },
   signatureSection: { flexDirection: 'row', marginTop: 16, justifyContent: 'space-between' },
   signatureBox: { width: '40%', borderTopWidth: 1, borderColor: '#000', paddingTop: 6, textAlign: 'center', lineHeight: 1.28 },
   signatureLine: { marginBottom: 2, lineHeight: 1.25, fontSize: 9.5 },
   meta: { fontSize: 8.5, marginBottom: 10, textAlign: 'center', color: '#333', lineHeight: 1.25 },
+  metaFirst: { marginBottom: 4 },
 });
 
 export type EntidadContratoPdf = {
@@ -80,6 +91,11 @@ export type ParametrosContratoPdf = {
   fechaAsambleaVoluntadIso?: string | null;
   /** Texto ya formateado, p. ej. «$50,00» para el equivalente USD del ingreso semanal consolidado. */
   ingresoSemanalConsolidadoUsdTexto?: string | null;
+  /**
+   * Tras «desde el punto de encuentro» en SEXTA (hasta «hasta el sitio…»).
+   * Viene de `ci_proyectos.punto_encuentro_transporte_contrato` con fallback al texto histórico.
+   */
+  textoPuntoEncuentroTransporteSex?: string | null;
 };
 
 /** Datos del contrato de obra para partida / lugar (tabla `ci_contratos_empleado_obra`). */
@@ -219,13 +235,11 @@ export function ContratoObreroPDF({
     const c = (empleado.cargo_nombre ?? '').trim();
     return c ? c.toUpperCase() : '[OFICIO]';
   })();
-  const horarioSem = str(parametros.horarioSemanal, HORARIO_JORNADA_TERCERA_CONTRATO_PDF_DEFAULT);
-  const ingresoSemanalUsdTxt = str(
-    parametros.ingresoSemanalConsolidadoUsdTexto,
-    '[Monto de la Semanal en USD]',
-  );
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
+  /** Equivalente USD semanal (tabulador: mes÷4); si no hay dato, guión del modelo para completar a mano. */
+  const ingresoSemanalUsdTxt = str(parametros.ingresoSemanalConsolidadoUsdTexto, '$_____');
+  const textoPuntoTransporteSex = textoPuntoEncuentroTransporteClausulaSex(parametros.textoPuntoEncuentroTransporteSex);
   const rep = limpiarNombreRepresentanteLegal(
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]'),
   );
@@ -244,128 +258,97 @@ export function ContratoObreroPDF({
   const cargoRepresentacion = str(entidad.rep_legal_cargo, 'Presidente');
   const bloqueIntroClausulas = (
     <>
-      <Text style={styles.header}>CONTRATO INDIVIDUAL DE TRABAJO</Text>
-      {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
+      <Text style={[styles.header, styles.headerFirst]}>CONTRATO INDIVIDUAL DE TRABAJO</Text>
+      {expedienteId?.trim() ? (
+        <Text style={[styles.meta, styles.metaFirst]}>Expediente: {expedienteId.trim()}</Text>
+      ) : null}
 
-      <Text style={styles.paragraph}>
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
         Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina de{' '}
         <Text style={styles.bold}>{oficinaRmContrato}</Text>, constando en el Tomo <Text style={styles.bold}>{rmTomo}</Text>, bajo el Nº{' '}
         <Text style={styles.bold}>{rmNumero}</Text>, de fecha <Text style={styles.bold}>{rmFecha}</Text>, de los Libros de Registro de Comercio, inscrita en el
         Registro de Información Fiscal bajo el número: <Text style={styles.bold}>{rifEntidad}</Text>, representada en este acto por su{' '}
         <Text style={styles.bold}>{cargoRepresentacion}</Text>, ciudadano <Text style={styles.bold}>"{rep}"</Text>, venezolano, mayor de edad, titular de la
         Cédula de Identidad No <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato se
-        denominará EL EMPLEADOR, por una parte{'\n'}
-        y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>, quien es de nacionalidad{' '}
+        denominará EL EMPLEADOR, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>, quien es de nacionalidad{' '}
         <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula de Identidad{' '}
         <Text style={styles.bold}>{cedulaTrabFormato}</Text> y domiciliado en <Text style={styles.bold}>"{domicilioTrab}"</Text>, quien a los mismos efectos se
-        denominará EL TRABAJADOR;{'\n'}
-        y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a
+        denominará EL TRABAJADOR; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a
         desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las cláusulas siguientes:
       </Text>
 
-      <Text style={styles.paragraph}>
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>PRIMERA (OBJETO Y DELIMITACIÓN DE FUNCIONES)</Text>
         {'\n'}
         Este contrato se celebra bajo la modalidad de <Text style={styles.bold}>OBRA DETERMINADA</Text>
         {' (Arts. 75 y 77, literal "a" de la LOTTT) '}para la ejecución exclusiva de la fase técnica:{' '}
-        <Text style={styles.bold}>{partidaFase}</Text>.{'\n'}
-        La categoría de <Text style={styles.bold}>{oficioStr}</Text> se asigna únicamente para la escala del Tabulador de la
-        Construcción, limitando las funciones del TRABAJADOR estrictamente a la meta física antes descrita en esta cláusula.
+        <Text style={styles.bold}>{partidaFase}</Text>. La categoría de <Text style={styles.bold}>{oficioStr}</Text> se asigna
+        únicamente para la escala del Tabulador de la Construcción, limitando las funciones del TRABAJADOR estrictamente a la
+        meta física antes descrita en esta cláusula.
       </Text>
 
-      <Text style={styles.paragraph}>
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>SEGUNDA (DURACIÓN Y TERMINACIÓN DE LA RELACIÓN)</Text>
         {'\n'}
-        La relación de trabajo tiene una duración sujeta exclusivamente a la culminación física de la fase técnica descrita en
-        la Cláusula Primera.{'\n'}
-        El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada el Acta de
-        Culminación en el Libro de Obra por el Supervisor.{'\n'}
-        Las partes aclaran que la terminación es independiente de la entrega formal del inmueble al propietario del proyecto,
-        y que cualquier labor sucesiva requerirá obligatoriamente un nuevo contrato escrito.
+        {`La relación de trabajo tiene una duración sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada el Acta de Culminación en el Libro de Obra por el Supervisor. Las partes aclaran que la terminación es independiente de la entrega formal del inmueble al propietario del proyecto, y que cualquier labor sucesiva requerirá obligatoriamente un nuevo contrato escrito.`}
       </Text>
 
-      <Text style={styles.paragraph}>
-        <Text style={styles.bold}>TERCERA (JORNADA, HORARIO Y RENDIMIENTO)</Text>
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>TERCERA (JORNADA, HORARIO Y TIEMPO DE DESCANSO EFECTIVO)</Text>
         {'\n'}
-        La jornada será de cuarenta (40) horas semanales: <Text style={styles.bold}>{horarioSem}</Text>, con el descanso de
-        ley.{'\n'}
-        EL TRABAJADOR se obliga a mantener el rendimiento pactado en el cronograma y a firmar diariamente su avance en el
-        Libro de Obra.{'\n'}
-        El retraso injustificado en las metas de la partida o la negativa a registrar su firma constituirá falta grave a sus
-        obligaciones {'(Art. 102, literal "i" de la LOTTT)'}.
+        {`La jornada semanal de trabajo será de cuarenta (40) horas de trabajo efectivo, distribuidas de la siguiente manera:`}
+        {'\n'}
+        {`De lunes a jueves: De 7:00 a.m. a 5:00 p.m., disponiendo EL TRABAJADOR de un tiempo de descanso y alimentación de una (1) hora diaria no imputable a la jornada (de 12:00 p.m. a 1:00 p.m.), para un total de nueve (9) horas diarias de trabajo efectivo.`}
+        {'\n'}
+        {`Los viernes: De 7:00 a.m. a 11:00 a.m. continuas, equivalentes a cuatro (4) horas de trabajo efectivo.`}
+        {'\n'}
+        {`EL TRABAJADOR se obliga a mantener el rendimiento pactado en el cronograma y a firmar diariamente su avance en el Libro de Obra. El retraso injustificado o la negativa a registrar su firma constituirá falta grave a sus obligaciones (Art. 102, literal "i" de la LOTTT).`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>CUARTA (REMUNERACIÓN CONSOLIDADA Y EXCLUSIÓN SALARIAL)</Text>
+        {'\n'}
+        Las partes acuerdan libremente, por convenimiento individual, expreso y de mutuo acuerdo, que EL TRABAJADOR percibirá un ingreso semanal consolidado equivalente en Bolívares a{' '}
+        <Text style={styles.bold}>{ingresoSemanalUsdTxt}</Text>
+        {`, el cual se calculará y pagará estrictamente a la tasa oficial del Banco Central de Venezuela (BCV) vigente para el día del pago efectivo. A los solos efectos legales, este ingreso semanal consolidado se desglosará de la siguiente manera: a) Un salario semanal, el cual constituirá el salario normal de la relación de trabajo y la base única para el cálculo de sus prestaciones sociales; y b) El pago de la alícuota semanal correspondiente al Cestaticket Socialista de Ley (conforme a la Gaceta Oficial Extraordinaria N° 6.746). Con fundamento en el artículo 133, parágrafo tercero de la LOTTT, EL TRABAJADOR acepta expresamente que cualquier cantidad de dinero o beneficio adicional que reciba de EL PATRONO por encima de los dos conceptos antes desglosados (sea por rendimiento, asistencia, incentivos de obra o ajustes extraordinarios por devaluación), carece de carácter salarial. En consecuencia, las partes pactan su exclusión de la base de cálculo de prestaciones sociales y demás conceptos laborales.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>QUINTA (ANTICIPOS MENSUALES Y LIQUIDACIÓN PREVENTIVA)</Text>
+        {'\n'}
+        {`De conformidad con el artículo 144 de la LOTTT y en ejecución del acuerdo individual alcanzado, EL PATRONO pagará una (1) semana de salario básico correspondiente al adelanto de prestaciones sociales acumulados para los fines de ley de salud, educación o vivienda y otros conceptos laborales.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>SEXTA (TRANSPORTE GRATUITO - BENEFICIO NO REMUNERATIVO)</Text>
+        {'\n'}
+        Con el único propósito de facilitar la asistencia y resguardar la seguridad de EL TRABAJADOR, EL PATRONO brindará de
+        manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro{' '}
+        <Text style={styles.bold}>{textoPuntoTransporteSex}</Text>
+        {` hasta el sitio donde se ejecute la obra determinada. De conformidad con el artículo 105 de la LOTTT, las partes acuerdan expresamente que este servicio de transporte constituye un beneficio social de carácter no remunerativo, por lo que no forma parte del salario, no tiene carácter salarial en especie, ni se considerará para el cálculo de ningún pasivo o derecho laboral.`}
       </Text>
     </>
   );
 
-  const bloqueClausulasCuartaAOctava = (
+  const bloqueClausulasSeptimaANovena = (
     <>
-      <Text style={styles.paragraph}>
-        <Text style={styles.bold}>CUARTA (REMUNERACIÓN CONSOLIDADA Y EXCLUSIÓN SALARIAL)</Text>
-        {'\n'}
-        Las partes acuerdan libremente, por convenimiento individual, expreso y de mutuo acuerdo, que EL TRABAJADOR percibirá
-        un ingreso semanal consolidado equivalente en Bolívares a <Text style={styles.bold}>{ingresoSemanalUsdTxt}</Text>, el
-        cual se calculará y pagará estrictamente a la tasa oficial del Banco Central de Venezuela (BCV) vigente para el día
-        del pago efectivo.{'\n'}
-        A los solos efectos legales, este ingreso semanal consolidado se desglosará de la siguiente manera:
-        {'\n'}
-        a) Un salario semanal, el cual{'\n'}
-        constituirá el salario normal de la relación de trabajo y la base única para el cálculo de sus prestaciones
-        sociales; y{'\n'}
-        b) El pago de la alícuota semanal correspondiente al Cestaticket Socialista de Ley (conforme a la Gaceta Oficial
-        Extraordinaria N° 6.746).{'\n'}
-        Con fundamento en el artículo 133, parágrafo tercero de la LOTTT, EL TRABAJADOR acepta expresamente que cualquier
-        cantidad de dinero o beneficio adicional que reciba de EL PATRONO por encima de los dos conceptos antes desglosados
-        (sea por rendimiento, asistencia, incentivos de obra o ajustes extraordinarios por devaluación), carece de carácter
-        salarial.{'\n'}
-        En consecuencia, las partes pactan su exclusión de la base de cálculo de prestaciones sociales, utilidades,
-        vacaciones, horas extras o indemnizaciones de cualquier naturaleza.
-      </Text>
-
-      <Text style={styles.paragraph}>
-        <Text style={styles.bold}>QUINTA (ANTICIPOS MENSUALES Y LIQUIDACIÓN PREVENTIVA)</Text>
-        {'\n'}
-        De conformidad con el artículo 144 de la LOTTT y en ejecución del acuerdo individual alcanzado, EL PATRONO registrará
-        mensualmente la garantía de prestaciones sociales (5 días de salario), la alícuota de utilidades y la alícuota de bono
-        vacacional de EL TRABAJADOR.{'\n'}
-        Con una frecuencia mensual, EL TRABAJADOR solicitará por escrito, y EL PATRONO otorgará, un anticipo equivalente a una
-        (1) semana de salario básico (correspondiente al 75% aproximado de sus haberes mensuales acumulados) para los fines de
-        ley de salud, educación o vivienda.{'\n'}
-        El remanente no anticipado del veinticinco por ciento (25%) acumulado se mantendrá bajo custodia de EL PATRONO y se
-        cancelará de manera definitiva junto con el finiquito de cierre de la relación laboral, momento en el cual se
-        deducirán la totalidad de los anticipos semanales otorgados durante la obra.
-      </Text>
-
-      <Text style={styles.paragraph}>
-        <Text style={styles.bold}>SEXTA (TRANSPORTE GRATUITO - BENEFICIO NO REMUNERATIVO)</Text>
-        {'\n'}
-        Con el único propósito de facilitar la asistencia y resguardar la seguridad de EL TRABAJADOR, EL PATRONO brindará de
-        manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro en el sector Jorge
-        Coll (Municipio Maneiro) hasta el sitio donde se ejecute la obra determinada.{'\n'}
-        De conformidad con el artículo 105 de la LOTTT, las partes acuerdan expresamente que este servicio de transporte
-        constituye un beneficio social de carácter no remunerativo, por lo que no forma parte del salario, no tiene carácter
-        salarial en especie, ni se considerará para el cálculo de ningún pasivo o derecho laboral.
-      </Text>
-
       <Text style={styles.paragraph}>
         <Text style={styles.bold}>SÉPTIMA (SEGURIDAD Y CONFIDENCIALIDAD)</Text>
         {'\n'}
-        EL TRABAJADOR se obliga al cumplimiento estricto de las normas de la LOPCYMAT y al uso permanente de los equipos de
-        protección personal (EPP) asignados.{'\n'}
-        Su negativa injustificada a usarlos se considerará falta grave y causal de despido justificado (Art. 102 LOTTT).{'\n'}
-        Asimismo, se obliga a mantener absoluta reserva y confidencialidad sobre planos, contraseñas, configuraciones de red y
-        datos de seguridad de los clientes de EL PATRONO; su divulgación o uso no autorizado causará despido justificado y
-        acciones legales correspondientes.
+        {`EL TRABAJADOR se obliga al cumplimiento estricto de las normas de la LOPCYMAT y al uso permanente de los equipos de protección personal (EPP) asignados. Su negativa injustificada a usarlos se considerará falta grave y causal de despido justificado (Art. 102 LOTTT). Asimismo, se obliga a mantener absoluta reserva y confidencialidad sobre planos, contraseñas, configuraciones de red y datos de seguridad de los clientes de EL PATRONO; su divulgación o uso no autorizado causará despido justificado y acciones legales correspondientes.`}
       </Text>
 
       <Text style={styles.paragraph}>
-        <Text style={styles.bold}>OCTAVA (DOMICILIO Y JURISDICCIÓN)</Text>
+        <Text style={styles.bold}>OCTAVA (DESPIDO JUSTIFICADO Y EXENCIÓN DE INDEMNIZACIÓN)</Text>
         {'\n'}
-        Para todos los efectos derivados de este contrato, las partes eligen como domicilio especial, único y excluyente a la
-        ciudad de Pampatar, Estado Nueva Esparta, a la jurisdicción de cuyos tribunales del trabajo declaran expresamente
-        someterse.
+        {`En el eventual caso de que EL TRABAJADOR sea despedido por causas justificadas, conforme al artículo 102 de la Ley Orgánica del Trabajo o al Reglamento de la misma Ley, por incumplimiento de este contrato laboral, por incumplimiento del Reglamento Interno de la empresa, si lo hubiere, o a los instructivos internos emanados de la misma, poniéndosele fin al presente contrato laboral, LA EMPRESA estará exenta de pagar cantidad alguna de dinero como compensación o indemnización hasta el vencimiento del término natural de este contrato.`}
       </Text>
 
       <Text style={styles.paragraph}>
+        <Text style={styles.bold}>NOVENA (DOMICILIO Y JURISDICCIÓN)</Text>
+        {'\n'}
+        {`Para todos los efectos derivados de este contrato, las partes eligen como domicilio especial, único y excluyente a la ciudad de Pampatar, Estado Nueva Esparta, a la jurisdicción de cuyos tribunales del trabajo declaran expresamente someterse.`}
+        {'\n'}
         Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de Pampatar, a los{' '}
         <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> de{' '}
         <Text style={styles.bold}>{anioFirma}</Text>.
@@ -388,11 +371,11 @@ export function ContratoObreroPDF({
 
   return (
     <Document>
-      <Page size="LETTER" style={styles.page}>
+      <Page size="LETTER" style={[styles.page, styles.pageFirst]}>
         {bloqueIntroClausulas}
       </Page>
       <Page size="LETTER" style={styles.page}>
-        {bloqueClausulasCuartaAOctava}
+        {bloqueClausulasSeptimaANovena}
       </Page>
     </Document>
   );

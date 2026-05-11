@@ -11,8 +11,23 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const nextDir = join(root, '.next');
 const traceFile = join(nextDir, 'trace');
 
+function purgeNodeModulesCache(projectRoot) {
+  const nodeCache = join(projectRoot, 'node_modules', '.cache');
+  if (!existsSync(nodeCache)) return;
+  try {
+    rmSync(nodeCache, { recursive: true, force: true, maxRetries: 6, retryDelay: 200 });
+    console.log('OK: eliminado node_modules/.cache');
+  } catch (e) {
+    console.warn(
+      'Advertencia: no se pudo borrar node_modules/.cache (cierra el dev server y reintenta).',
+      e instanceof Error ? e.message : e,
+    );
+  }
+}
+
 if (!existsSync(nextDir)) {
   console.log('No existe .next, nada que borrar.');
+  purgeNodeModulesCache(root);
   process.exit(0);
 }
 
@@ -32,6 +47,7 @@ function winRmdirNext() {
 
 if (process.platform === 'win32' && winRmdirNext()) {
   console.log('OK: eliminada carpeta .next (rmdir Windows)');
+  purgeNodeModulesCache(root);
   process.exit(0);
 }
 
@@ -50,9 +66,11 @@ try {
     retryDelay: 250,
   });
   console.log('OK: eliminada carpeta .next');
+  purgeNodeModulesCache(root);
 } catch (e) {
   if (winRmdirNext()) {
     console.log('OK: eliminada carpeta .next (rmdir Windows, 2.º intento)');
+    purgeNodeModulesCache(root);
     process.exit(0);
   }
   console.error(

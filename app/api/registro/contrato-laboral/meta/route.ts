@@ -44,6 +44,26 @@ export async function GET(req: Request) {
   const datos_faltantes = prev.ok ? prev.preview.datos_faltantes : [];
   const planilla_completar_url = prev.ok ? prev.preview.planilla_completar_url : null;
 
+  const archQ = await admin.client
+    .from('ci_contratos_empleado_obra')
+    .select(
+      'laboral_pdf_storage_path, laboral_pdf_generado_at, laboral_constancia_aceptacion_storage_path, laboral_escaneo_firmado_storage_path, laboral_escaneo_firmado_at',
+    )
+    .eq('id', v.contratoId)
+    .maybeSingle();
+
+  if (archQ.error) {
+    console.warn('[contrato-laboral meta] columnas de archivo:', archQ.error.message);
+  }
+
+  const ar = (archQ.data ?? null) as {
+    laboral_pdf_storage_path?: string | null;
+    laboral_pdf_generado_at?: string | null;
+    laboral_constancia_aceptacion_storage_path?: string | null;
+    laboral_escaneo_firmado_storage_path?: string | null;
+    laboral_escaneo_firmado_at?: string | null;
+  } | null;
+
   return NextResponse.json({
     contrato_id: v.contratoId,
     estado_contrato: v.estadoContrato,
@@ -53,5 +73,10 @@ export async function GET(req: Request) {
     datos_faltantes,
     tiene_datos_faltantes: datos_faltantes.length > 0,
     planilla_completar_url,
+    tiene_pdf_archivado: Boolean((ar?.laboral_pdf_storage_path ?? '').trim()),
+    laboral_pdf_generado_at: ar?.laboral_pdf_generado_at ?? null,
+    tiene_constancia_aceptacion: Boolean((ar?.laboral_constancia_aceptacion_storage_path ?? '').trim()),
+    tiene_escaneo_firmado: Boolean((ar?.laboral_escaneo_firmado_storage_path ?? '').trim()),
+    laboral_escaneo_firmado_at: ar?.laboral_escaneo_firmado_at ?? null,
   });
 }

@@ -126,6 +126,17 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
   const salarioTxt =
     salVes != null && Number.isFinite(Number(salVes)) ? `${Number(salVes).toFixed(2)} VES (tabulador)` : 'N/D';
 
+  const full = (contratoRaw ?? {}) as unknown as Record<string, unknown>;
+  const laboralArchivos = {
+    obrero_aceptacion_contrato_at: (full.obrero_aceptacion_contrato_at as string | null | undefined) ?? null,
+    laboral_pdf_storage_path: (full.laboral_pdf_storage_path as string | null | undefined) ?? null,
+    laboral_pdf_generado_at: (full.laboral_pdf_generado_at as string | null | undefined) ?? null,
+    laboral_constancia_aceptacion_storage_path:
+      (full.laboral_constancia_aceptacion_storage_path as string | null | undefined) ?? null,
+    laboral_escaneo_firmado_storage_path: (full.laboral_escaneo_firmado_storage_path as string | null | undefined) ?? null,
+    laboral_escaneo_firmado_at: (full.laboral_escaneo_firmado_at as string | null | undefined) ?? null,
+  };
+
   return NextResponse.json({
     id: contrato.id,
     empleado: {
@@ -169,6 +180,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
         gaceta_denominacion_oficio: contrato.gaceta_denominacion_oficio ?? null,
       },
     },
+    laboralArchivos,
   });
 }
 

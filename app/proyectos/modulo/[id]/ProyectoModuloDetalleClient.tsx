@@ -116,6 +116,8 @@ type Proyecto = {
   entidad_id?: string | null;
   /** Horario por defecto en contratos PDF si el contrato no trae texto propio. */
   horario_semanal_obra_default?: string | null;
+  /** Parada del transporte gratuito (cláusula SEXTA del contrato laboral). */
+  punto_encuentro_transporte_contrato?: string | null;
   updated_at?: string;
 };
 
@@ -261,6 +263,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peLng, setPeLng] = useState('');
   const [peEntidadId, setPeEntidadId] = useState('');
   const [peHorarioSemanalObra, setPeHorarioSemanalObra] = useState('');
+  const [pePuntoEncTransporteContrato, setPePuntoEncTransporteContrato] = useState('');
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [savingProyecto, setSavingProyecto] = useState(false);
   const [proyectoSaveError, setProyectoSaveError] = useState<string | null>(null);
@@ -487,6 +490,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setPeLng(proyecto.lng != null ? String(proyecto.lng) : '');
     setPeEntidadId(proyecto.entidad_id ? String(proyecto.entidad_id) : '');
     setPeHorarioSemanalObra(proyecto.horario_semanal_obra_default ?? '');
+    setPePuntoEncTransporteContrato(proyecto.punto_encuentro_transporte_contrato ?? '');
     setProyectoSaveError(null);
   }, [proyecto]);
 
@@ -539,6 +543,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         lng,
         entidad_id: peEntidadId.trim() || null,
         horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
+        punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -912,6 +917,23 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       onChange={setPeHorarioSemanalObra}
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Parada del transporte (contrato laboral, cláusula SEXTA)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Texto que aparece en el PDF tras «desde el punto de encuentro» (hasta «hasta el sitio de la obra»).
+                    Ej.: <span className="text-zinc-400">en el sector Jorge Coll (Municipio Maneiro)</span>. Si lo dejas
+                    vacío, se usa ese ejemplo por defecto.
+                  </p>
+                  <textarea
+                    value={pePuntoEncTransporteContrato}
+                    onChange={(e) => setPePuntoEncTransporteContrato(e.target.value)}
+                    rows={2}
+                    placeholder="en el sector Jorge Coll (Municipio Maneiro)"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                  />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>

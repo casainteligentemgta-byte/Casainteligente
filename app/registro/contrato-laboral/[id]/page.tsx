@@ -16,6 +16,10 @@ type Meta = {
   datos_faltantes?: DatoFaltante[];
   tiene_datos_faltantes?: boolean;
   planilla_completar_url?: string | null;
+  tiene_pdf_archivado?: boolean;
+  tiene_constancia_aceptacion?: boolean;
+  tiene_escaneo_firmado?: boolean;
+  laboral_escaneo_firmado_at?: string | null;
 };
 
 function ContratoLaboralObreroInner() {
@@ -34,6 +38,19 @@ function ContratoLaboralObreroInner() {
     contratoId && token
       ? apiUrl(
           `/api/registro/contrato-laboral/pdf?contrato_id=${encodeURIComponent(contratoId)}&token=${encodeURIComponent(token)}`,
+        )
+      : null;
+
+  const descargaContratoArchivado =
+    contratoId && token
+      ? apiUrl(
+          `/api/registro/contrato-laboral/descarga?tipo=contrato&contrato_id=${encodeURIComponent(contratoId)}&token=${encodeURIComponent(token)}`,
+        )
+      : null;
+  const descargaConstancia =
+    contratoId && token
+      ? apiUrl(
+          `/api/registro/contrato-laboral/descarga?tipo=constancia&contrato_id=${encodeURIComponent(contratoId)}&token=${encodeURIComponent(token)}`,
         )
       : null;
 
@@ -66,6 +83,10 @@ function ContratoLaboralObreroInner() {
         datos_faltantes: Array.isArray(j.datos_faltantes) ? j.datos_faltantes : [],
         tiene_datos_faltantes: Boolean(j.tiene_datos_faltantes),
         planilla_completar_url: j.planilla_completar_url ?? null,
+        tiene_pdf_archivado: Boolean(j.tiene_pdf_archivado),
+        tiene_constancia_aceptacion: Boolean(j.tiene_constancia_aceptacion),
+        tiene_escaneo_firmado: Boolean(j.tiene_escaneo_firmado),
+        laboral_escaneo_firmado_at: j.laboral_escaneo_firmado_at ?? null,
       });
       setPdfTick((n) => n + 1);
     } catch {
@@ -121,8 +142,9 @@ function ContratoLaboralObreroInner() {
         </Link>
         <h1 className="mt-4 text-xl font-bold text-white">Contrato laboral</h1>
         <p className="mt-2 text-sm text-zinc-400">
-          Revisa el PDF. Si estás de acuerdo, acepta de forma electrónica; después podrás abrirlo para imprimirlo y firmarlo
-          en físico (huella y firma autógrafa), según indicaciones de RRHH.
+          Revisa el PDF. Si estás de acuerdo, acepta de forma electrónica: quedará constancia descargable y una copia del
+          contrato archivada en el sistema. Luego podrás imprimir, firmar en físico (huella y firma autógrafa) y RRHH
+          cargará el escaneo del documento firmado.
         </p>
 
         {loading ? <p className="mt-6 text-sm text-zinc-500">Cargando…</p> : null}
@@ -149,6 +171,19 @@ function ContratoLaboralObreroInner() {
                   <span className="ml-2 text-emerald-400">· Aceptación registrada</span>
                 ) : null}
               </p>
+              {meta.tiene_pdf_archivado ? (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Copia en archivo del contrato: <span className="text-emerald-400/90">sí</span>
+                </p>
+              ) : null}
+              {meta.tiene_escaneo_firmado ? (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Escaneo firmado en expediente: <span className="text-emerald-400/90">sí</span>
+                  {meta.laboral_escaneo_firmado_at ? (
+                    <span className="text-zinc-600"> ({new Date(meta.laboral_escaneo_firmado_at).toLocaleString('es-VE')})</span>
+                  ) : null}
+                </p>
+              ) : null}
             </div>
 
             {meta.tiene_datos_faltantes && meta.datos_faltantes?.length ? (
@@ -211,7 +246,7 @@ function ContratoLaboralObreroInner() {
                   el sistema cuando reciba el documento físico.
                 </p>
                 {pdfSrc ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                     <a
                       href={pdfSrc}
                       target="_blank"
@@ -229,6 +264,26 @@ function ContratoLaboralObreroInner() {
                     >
                       Otra pestaña (impresión)
                     </button>
+                    {descargaContratoArchivado && meta.tiene_pdf_archivado ? (
+                      <a
+                        href={descargaContratoArchivado}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-500/25"
+                      >
+                        Descargar copia archivada (enlace firmado)
+                      </a>
+                    ) : null}
+                    {descargaConstancia && meta.tiene_constancia_aceptacion ? (
+                      <a
+                        href={descargaConstancia}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex rounded-lg border border-sky-500/40 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25"
+                      >
+                        Descargar constancia de aceptación digital
+                      </a>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
