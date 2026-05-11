@@ -36,7 +36,7 @@ function esConsecutivo(run: DiaObraCodigo[]): boolean {
 
 /** Agrupa días seleccionados en tramos consecutivos (orden calendario). */
 export function agruparDiasConsecutivos(dias: DiaObraCodigo[]): DiaObraCodigo[][] {
-  const u = [...new Set(dias)].sort((a, b) => indiceDia(a) - indiceDia(b));
+  const u = ORDEN_DIAS_OBRA.filter((d) => dias.includes(d));
   const runs: DiaObraCodigo[][] = [];
   let cur: DiaObraCodigo[] = [];
   for (const d of u) {
