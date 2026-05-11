@@ -30,12 +30,34 @@ async function contar(tabla: string): Promise<ResultadoConteo> {
   }
 }
 
+/** Documentos con vencimiento pasado y persona con proyecto activo (vista 111). */
+async function contarDocumentosVencidosEnObra(): Promise<ResultadoConteo> {
+  try {
+    const supabase = await createClient();
+    const { count, error } = await supabase
+      .from('documentos_por_vencer')
+      .select('documento_id', { count: 'exact', head: true })
+      .lt('dias_hasta_vencimiento', 0)
+      .not('proyecto_id', 'is', null);
+
+    if (error) {
+      return { ok: false, total: 0, error: error.message };
+    }
+    return { ok: true, total: count ?? 0 };
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : 'Error al conectar con Supabase';
+    return { ok: false, total: 0, error: msg };
+  }
+}
+
 export default async function DashboardPage() {
-  const [empresas, personas, productos, ventas] = await Promise.all([
+  const [empresas, personas, productos, ventas, docsVencidosObra] = await Promise.all([
     contar('empresas'),
     contar('personas'),
     contar('productos'),
     contar('ventas'),
+    contarDocumentosVencidosEnObra(),
   ]);
 
   const stats = [
@@ -129,6 +151,41 @@ export default async function DashboardPage() {
         }}
       >
         <WidgetFirmasPendientes />
+      </section>
+
+      <section style={{ marginBottom: '2rem' }}>
+        <Link
+          href="/reclutamiento"
+          style={{
+            display: 'block',
+            padding: '1rem 1.25rem',
+            borderRadius: '12px',
+            textDecoration: 'none',
+            color: '#fecaca',
+            background: 'linear-gradient(145deg, rgba(127, 29, 29, 0.45), rgba(24, 24, 27, 0.95))',
+            border: '1px solid rgba(248, 113, 113, 0.45)',
+            boxShadow: '0 0 0 1px rgba(0,0,0,0.35) inset',
+          }}
+        >
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em', opacity: 0.95 }}>
+            Documentos vencidos en obra
+          </div>
+          <div style={{ marginTop: '0.35rem', fontSize: '1.85rem', fontWeight: 800, color: '#fff' }}>
+            {!docsVencidosObra.ok ? '—' : docsVencidosObra.total}
+          </div>
+          <p style={{ margin: '0.5rem 0 0', fontSize: '0.82rem', color: 'rgba(254, 202, 202, 0.88)', lineHeight: 1.45 }}>
+            Cursos u otros documentos con fecha de vencimiento pasada, en personal con proyecto asignado.
+            {!docsVencidosObra.ok && docsVencidosObra.error ? (
+              <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.75rem', color: '#fca5a5' }}>
+                {docsVencidosObra.error} — Si falta la vista, aplica la migración 111 en Supabase.
+              </span>
+            ) : (
+              <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.75rem', opacity: 0.9 }}>
+                Pulsa para abrir reclutamiento / pipeline y presionar a RRHH si el número sube.
+              </span>
+            )}
+          </p>
+        </Link>
       </section>
 
       {hayFallo && (

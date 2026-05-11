@@ -1,5 +1,6 @@
 /** Migraciones que crean cada bucket (supabase/migrations/). */
 const BUCKET_MIGRATIONS: Record<string, string> = {
+  'worker-docs': '110_worker_docs_candidate_documents.sql',
   'talento-public': '065_gaceta_postulacion_empleados_storage.sql',
   'talento-firmas': '067_firma_electronica_talento_firmas.sql',
   contratos_obreros: '074_storage_contratos_obreros.sql',

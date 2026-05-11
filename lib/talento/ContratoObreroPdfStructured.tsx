@@ -1,4 +1,5 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
 
 const styles = StyleSheet.create({
   page: { padding: 50, fontFamily: 'Helvetica', fontSize: 11, lineHeight: 1.6, color: '#000' },
@@ -21,6 +22,7 @@ export type EntidadContratoPdf = {
   rep_legal_nombre?: string | null;
   rep_legal_cedula?: string | null;
   rep_legal_cargo?: string | null;
+  /** Valor de `registro_mercantil.circunscripcion` (se imprime tras «Oficina de »). */
   rm_oficina?: string | null;
   rm_fecha?: string | null;
   rm_numero?: string | null;
@@ -218,32 +220,36 @@ export function ContratoObreroPDF({
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]'),
   );
   const repCedulaFormato = formatCedulaIdentidad(entidad.rep_legal_cedula);
-  /** Circunscripción / oficina RM (`registro_mercantil.circunscripcion`). */
-  const rmCircunscripcion = str(entidad.rm_oficina, '[circunscripción]');
+  /** Tras «Oficina de »: «Registro Mercantil Segundo de la Circunscripción Judicial…» (`registro_mercantil.circunscripcion`). */
+  const oficinaRmContrato = textoTrasLaPalabraOficinaDe(
+    str(
+      entidad.rm_oficina,
+      '',
+    ),
+  );
   const rmFecha = str(fmtFechaLargaEs(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
   const rmNumero = str(entidad.rm_numero, '[N° NO REGISTRADO]');
   const rmTomo = str(entidad.rm_tomo, '[TOMO NO REGISTRADO]');
   const rifEntidad = str(entidad.rif, '_____________');
+  const cargoRepresentacion = str(entidad.rep_legal_cargo, 'Presidente');
   const bloqueIntroClausulas = (
     <>
       <Text style={styles.header}>CONTRATO INDIVIDUAL DE TRABAJO</Text>
       {expedienteId?.trim() ? <Text style={styles.meta}>Expediente: {expedienteId.trim()}</Text> : null}
 
       <Text style={styles.paragraph}>
-        Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina
-        de <Text style={styles.bold}>"{rmCircunscripcion}"</Text> en fecha <Text style={styles.bold}>"{rmFecha}"</Text>, bajo
-        el Nº <Text style={styles.bold}>"{rmNumero}"</Text>, Tomo <Text style={styles.bold}>"{rmTomo}"</Text> de los Libros de
-        Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número:{' '}
-        <Text style={styles.bold}>{rifEntidad}</Text>, representada en este acto por su Presidente, ciudadano{' '}
-        <Text style={styles.bold}>"{rep}"</Text>, venezolano, mayor de edad, titular de la Cédula de Identidad No{' '}
-        <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato
-        se denominará EL EMPLEADOR, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>
-        , quien es de nacionalidad <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula de
-        Identidad <Text style={styles.bold}>{cedulaTrabFormato}</Text> y domiciliado en{' '}
-        <Text style={styles.bold}>"{domicilioTrab}"</Text>, quien a los mismos efectos se denominará EL TRABAJADOR; y en
-        virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza
-        de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se
-        regirá por las cláusulas siguientes:
+        Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina de{' '}
+        <Text style={styles.bold}>{oficinaRmContrato}</Text>, en fecha <Text style={styles.bold}>"{rmFecha}"</Text>, bajo el Nº{' '}
+        <Text style={styles.bold}>"{rmNumero}"</Text>, Tomo <Text style={styles.bold}>"{rmTomo}"</Text> de los Libros de Registro de Comercio, inscrita en el
+        Registro de Información Fiscal bajo el número: <Text style={styles.bold}>{rifEntidad}</Text>, representada en este acto por su{' '}
+        <Text style={styles.bold}>{cargoRepresentacion}</Text>, ciudadano <Text style={styles.bold}>"{rep}"</Text>, venezolano, mayor de edad, titular de la
+        Cédula de Identidad No <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato se
+        denominará EL EMPLEADOR, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>, quien es de nacionalidad{' '}
+        <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula de Identidad{' '}
+        <Text style={styles.bold}>{cedulaTrabFormato}</Text> y domiciliado en <Text style={styles.bold}>"{domicilioTrab}"</Text>, quien a los mismos efectos se
+        denominará EL TRABAJADOR; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza
+        de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las cláusulas
+        siguientes:
       </Text>
 
       <Text style={styles.paragraph}>

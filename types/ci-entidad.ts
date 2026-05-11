@@ -18,7 +18,7 @@ export type RegistroMercantilCi = {
   tomo?: string;
   numero?: string;
   fecha?: string;
-  /** Oficina / circunscripción del Registro Mercantil donde está inscrita la empresa. */
+  /** Tras «Oficina de » en contrato: «Registro Mercantil Segundo de la Circunscripción Judicial del Estado …». */
   circunscripcion?: string;
   /** Uno o varios representantes con datos de identificación para actos y contratos. */
   representantes?: RepresentanteMercantilCi[];

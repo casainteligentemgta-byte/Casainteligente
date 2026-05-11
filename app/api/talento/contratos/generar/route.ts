@@ -1,3 +1,4 @@
+import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import {
@@ -253,6 +254,7 @@ export async function POST(req: Request) {
     type EntidadPatronoRow = {
       nombre_legal?: string | null;
       nombre?: string | null;
+      rif?: string | null;
       domicilio_fiscal?: string | null;
       direccion_fiscal?: string | null;
       representante_legal?: string | null;
@@ -317,7 +319,7 @@ export async function POST(req: Request) {
       const { data: pr } = await supabase
         .from('ci_proyectos')
         .select(
-          'id,entidad_id,nombre,ubicacion,ubicacion_texto,obra_ubicacion,ci_entidades(nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil)',
+          'id,entidad_id,proyecto_modulo_origen_id,nombre,ubicacion,ubicacion_texto,obra_ubicacion,ci_entidades(nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil)',
         )
         .eq('id', proyectoId)
         .maybeSingle();
@@ -325,6 +327,7 @@ export async function POST(req: Request) {
         const p = pr as {
           id?: string | null;
           entidad_id?: string | null;
+          proyecto_modulo_origen_id?: string | null;
           nombre?: string | null;
           ubicacion?: string | null;
           ubicacion_texto?: string | null;
@@ -334,6 +337,29 @@ export async function POST(req: Request) {
         proyecto = p;
         const nested = p.ci_entidades;
         entidadDesdeProyecto = nested ? (Array.isArray(nested) ? (nested[0] ?? null) : nested) : null;
+
+        let eidRes = strOrNull(p.entidad_id);
+        if (!eidRes && strOrNull(p.proyecto_modulo_origen_id)) {
+          const { data: prPadre } = await supabase
+            .from('ci_proyectos')
+            .select('entidad_id')
+            .eq('id', strOrNull(p.proyecto_modulo_origen_id)!)
+            .maybeSingle();
+          eidRes = strOrNull((prPadre as { entidad_id?: string | null } | null)?.entidad_id);
+        }
+        if (!entidadDesdeProyecto && eidRes) {
+          const { data: entExtra } = await supabase
+            .from('ci_entidades')
+            .select(
+              'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+            )
+            .eq('id', eidRes)
+            .maybeSingle();
+          if (entExtra) {
+            entidadDesdeProyecto = entExtra as EntidadPatronoRow;
+            proyecto = { ...p, entidad_id: eidRes };
+          }
+        }
       }
     }
 
@@ -440,6 +466,15 @@ export async function POST(req: Request) {
       }
     }
 
+    const entidadPatronoTieneNombre = Boolean(
+      strOrNull(entPatrono?.nombre_legal) || strOrNull(entPatrono?.nombre),
+    );
+    if (proyectoId && !entidadPatronoTieneNombre) {
+      throw new Error(
+        'Deben cargarse los datos del empleador (entidad patrono): asocie entidad_id al proyecto en ci_proyectos o complete la entidad en Configuración → Entidades.',
+      );
+    }
+
     const salarioBase = Number(conf?.salario_base_mensual ?? 0);
     const salarioDiarioNum = salarioBase > 0 ? salarioBase / 30 : Number(salarioBasicoDiarioVesDesdeNivel(worker.cargo_nivel) ?? 0);
     const salarioDiario = soloDosDecimales(salarioDiarioNum);
@@ -499,7 +534,7 @@ export async function POST(req: Request) {
 
     const rmRep = primerRepresentanteRegistroMercantil(entPatrono?.registro_mercantil);
     const cargoRep =
-      strOrNull(entPatrono?.rep_legal_cargo) ?? strOrNull(rmRep.cargo) ?? 'Administrador';
+      strOrNull(entPatrono?.rep_legal_cargo) ?? strOrNull(rmRep.cargo) ?? 'Presidente';
     const nombreRep =
       strOrNull(entPatrono?.rep_legal_nombre) ??
       strOrNull(entPatrono?.representante_legal) ??
@@ -507,11 +542,6 @@ export async function POST(req: Request) {
       '[REPRESENTANTE NO REGISTRADO]';
     const cedulaRep =
       strOrNull(entPatrono?.rep_legal_cedula) ?? strOrNull(rmRep.cedula) ?? '[CÉDULA NO REGISTRADA]';
-    const profesionRep = strOrNull(rmRep.profesion) ?? 'Empresario';
-    const domRepRm = strOrNull(rmRep.domicilio);
-    const domicilioRepresentanteFrag = domRepRm ? `, domiciliado(a) en **${domRepRm}**` : '';
-    const nombreTrabajadorUpper = toUpperSafe(worker.nombres ?? worker.nombre_completo, 'EL TRABAJADOR');
-
     const rmCampos = registroMercantilCamposDesde(entPatrono?.registro_mercantil);
     const fechaRmMd = fmtFechaLargaEsContrato(rmCampos.fecha || '');
     const numeroRmMd = rmCampos.numero.trim() || '[Nº NO REGISTRADO]';
@@ -526,12 +556,14 @@ export async function POST(req: Request) {
     const nombreLegalEntidadParrafo =
       strOrNull(entPatrono?.nombre_legal) ?? strOrNull(entPatrono?.nombre) ?? nombreEntidad;
     const datosRegistroRaw = datosRegistroOficinaRm(entPatrono?.registro_mercantil).trim();
-    const datosRegistroParrafo =
-      datosRegistroRaw || '[datos_registro por completar en la entidad]';
 
-    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de Registro Mercantil **${datosRegistroParrafo}** de la Circunscripción Judicial del Estado Nueva Esparta`;
+    const textoOficinaRm = textoTrasLaPalabraOficinaDe(
+      rmCampos.circunscripcion.trim() || datosRegistroRaw || null,
+    );
 
-    const encabezadoTrasRm = `Domiciliada en **${domicilioEntidad}**, en fecha **${fechaRmMd}**, bajo el Nº **${numeroRmMd}**, Tomo **${tomoRmMd}** de los Libros de Registro de Comercio, representada en este acto por su **${cargoRep}**, ciudadano **${nombreRep}**, de profesión **${profesionRep}**, titular de la cédula de identidad Nº **${cedulaRep}**${domicilioRepresentanteFrag}, quien en lo adelante se denominará **"EL EMPLEADOR"**; y por la otra, el ciudadano **${nombreTrabajadorUpper}**, de nacionalidad **${nacionalidad}**, mayor de edad, domiciliado en **${domicilioTrabajador}**, titular de la cédula de identidad N° **${cedula}**, en adelante **"EL TRABAJADOR"**; han convenido celebrar el **CONTRATO DE TRABAJO POR TIEMPO ${tipo}**, el cual se regirá por las siguientes cláusulas:`;
+    const rifLine = strOrNull(entPatrono?.rif)?.trim() || '_____________';
+
+    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, en fecha **${fechaRmMd}**, bajo el Nº **${numeroRmMd}**, Tomo **${tomoRmMd}** de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ciudadano **"${nombreRep}"**, venezolano, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, el ciudadano **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
 
     const clausulaObjeto = `### PRIMERA: OBJETO
 **EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;
@@ -562,8 +594,6 @@ Se acuerda un salario básico diario de **${salarioDiario} VES** (**${salarioDia
 **Número de expediente:** **${expediente}**
 
 ${parrafoAperturaRm}
-
-${encabezadoTrasRm}
 
 ${clausulaObjeto}
 

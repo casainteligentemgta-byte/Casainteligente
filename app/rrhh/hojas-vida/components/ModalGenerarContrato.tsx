@@ -6,6 +6,7 @@ import { Loader2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import Link from 'next/link';
 import { Label } from '@/components/ui/label';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { cn } from '@/lib/utils';
@@ -129,7 +130,7 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
   if (proyectoId) {
     const { data: pr, error: ePr } = await client
       .from('ci_proyectos')
-      .select('id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id')
+      .select('id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id')
       .eq('id', proyectoId)
       .maybeSingle();
     if (!ePr && pr) {
@@ -141,6 +142,7 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
         ubicacion?: string | null;
         estado?: string | null;
         entidad_id?: string | null;
+        proyecto_modulo_origen_id?: string | null;
       };
       const ubic =
         [p.obra_ubicacion, p.ubicacion_texto, p.ubicacion].map((s) => String(s ?? '').trim()).find(Boolean) ?? null;
@@ -151,7 +153,19 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
         etapa_actual: p.estado ?? null,
       };
 
-      const eid = (p.entidad_id ?? '').trim();
+      let eid = (p.entidad_id ?? '').trim();
+      const origen = (p.proyecto_modulo_origen_id ?? '').trim();
+      if (!eid && origen) {
+        const { data: prPadre, error: ePadre } = await client
+          .from('ci_proyectos')
+          .select('entidad_id')
+          .eq('id', origen)
+          .maybeSingle();
+        if (!ePadre && prPadre) {
+          const pp = prPadre as { entidad_id?: string | null };
+          eid = (pp.entidad_id ?? '').trim();
+        }
+      }
       if (eid) {
         const selFull =
           'id,nombre,nombre_legal,rif,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil';
@@ -238,6 +252,9 @@ export function ModalGenerarContrato({
   });
 
   const sinProyecto = open && oid && ctxQuery.isSuccess && !ctxQuery.data?.proyecto;
+  const sinEntidadEmpleador = Boolean(
+    open && oid && ctxQuery.isSuccess && ctxQuery.data?.proyecto && !ctxQuery.data?.entidad,
+  );
 
   const datosConsolidadosEnvio = useMemo(() => {
     const d = ctxQuery.data;
@@ -264,6 +281,12 @@ export function ModalGenerarContrato({
     }
     if (!oid) {
       toast.error('Falta el identificador del obrero.');
+      return;
+    }
+    if (ctxQuery.data?.proyecto && !ctxQuery.data?.entidad) {
+      toast.error(
+        'Deben cargarse los datos del empleador (entidad): asocie una entidad al proyecto o complétela en Configuración → Entidades.',
+      );
       return;
     }
 
@@ -364,7 +387,7 @@ export function ModalGenerarContrato({
           ) : ctxQuery.isLoading ? (
             <div className="mt-8 flex flex-col items-center justify-center gap-2 py-6 text-zinc-400">
               <Loader2 className="h-8 w-8 animate-spin text-zinc-500" aria-hidden />
-              <p className="text-sm">Cargando expediente, proyecto y empleador…</p>
+              <p className="text-sm">Cargando obrero, proyecto y datos del empleador (entidad patrono)…</p>
             </div>
           ) : ctxQuery.isError ? (
             <p className="mt-4 rounded-xl border border-red-500/25 bg-red-950/20 px-3 py-2 text-sm text-red-200">
@@ -466,7 +489,7 @@ export function ModalGenerarContrato({
                   </Dialog.Close>
                   <button
                     type="submit"
-                    disabled={submitting || ctxQuery.isLoading || !ctxQuery.data}
+                    disabled={submitting || ctxQuery.isLoading || !ctxQuery.data || sinEntidadEmpleador}
                     className="min-w-[200px] rounded-xl border-0 bg-[#34C759] px-4 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-[#2eb050] disabled:opacity-50"
                   >
                     {submitting ? 'Generando…' : 'Generar contrato'}

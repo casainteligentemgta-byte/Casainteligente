@@ -1,4 +1,5 @@
 import type { CiEntidad, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
+import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
 
 /**
  * Entrada flexible: columnas reales de `ci_entidades` o alias legados usados en borradores.
@@ -97,13 +98,15 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
 
   const bloqueNombre = nombreLegal ? nombreLegal.toUpperCase() : '[NOMBRE LEGAL NO REGISTRADO]';
   const bloqueDom = domRm || direccionFiscal || '[DOMICILIO DE LA EMPRESA NO REGISTRADO]';
-  const bloqueCirc = circunscripcion || '[REGISTRO MERCANTIL / CIRCUNSCRIPCIÓN NO REGISTRADA]';
+  const bloqueCirc =
+    circunscripcion ||
+    '[Oficina de Registro Mercantil — texto completo no registrado, ej. Segundo de la Circunscripción Judicial del Estado X]';
   const bloqueNum = numero || '[NÚMERO]';
   const bloqueTomo = tomo || '[TOMO]';
   const bloqueRif = rif || '[RIF NO REGISTRADO]';
   const bloqueRep = repNombre ? repNombre.toUpperCase() : '[REPRESENTANTE NO REGISTRADO]';
   const bloqueCi = repCedula || '[CÉDULA NO REGISTRADA]';
-  const bloqueCargo = repCargo || 'Representante Legal';
+  const bloqueCargo = repCargo || 'Presidente';
   const bloqueNac = repNacionalidad || 'venezolano(a)';
   const fragEstadoCivil = repEstadoCivil ? `, de estado civil ${repEstadoCivil}` : '';
   const fragDomicilioRep = repDomicilio ? `, con domicilio en ${repDomicilio}` : '';
@@ -112,13 +115,11 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const texto = `
     Entre la sociedad mercantil ${bloqueNombre},
     domiciliada en ${bloqueDom},
-    debidamente inscrita ante el Registro Mercantil ${bloqueCirc},
-    bajo el Nro. ${bloqueNum}, Tomo ${bloqueTomo},
+    inscrita por ante la Oficina de ${bloqueCirc}, bajo el Nro. ${bloqueNum}, Tomo ${bloqueTomo},
     de fecha ${fechaRegistro}, titular del Registro de Información Fiscal (RIF) Nro. ${bloqueRif},
-    representada en este acto por el ciudadano ${bloqueRep},
+    representada en este acto por su ${bloqueCargo}, ciudadano ${bloqueRep},
     de nacionalidad ${bloqueNac}${fragEdadRep}${fragEstadoCivil}, titular de la cédula de identidad Nro. ${bloqueCi}${fragDomicilioRep}${fragProfesion},
-    en su carácter de ${bloqueCargo},
-    quien a los efectos de este contrato se denominará "EL EMPLEADOR"...
+    quien a los efectos de este contrato se denominará "EL EMPLEADOR".
   `.replace(/\s+/g, ' ').trim();
 
   return texto;

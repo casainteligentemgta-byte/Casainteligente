@@ -598,12 +598,14 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className={labelClass}>Registro Mercantil / circunscripción (donde está inscrita)</label>
+                    <label className={labelClass}>
+                      Oficina de Registro Mercantil (texto completo para el contrato)
+                    </label>
                     <input
                       value={rmCirc}
                       onChange={(e) => setRmCirc(e.target.value)}
                       className={inputClass}
-                      placeholder="Ej. Primera Circunscripción del estado Miranda"
+                      placeholder="Registro Mercantil Segundo de la Circunscripción Judicial del Estado Nueva Esparta"
                     />
                   </div>
                   <div>
