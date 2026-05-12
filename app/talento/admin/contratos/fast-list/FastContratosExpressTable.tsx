@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { createClient } from '@/lib/supabase/client';
+import { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
 import { cn } from '@/lib/utils';
 
 /** Relación many-to-one: PostgREST a veces devuelve objeto único o array de un elemento. */
@@ -23,7 +24,8 @@ export type ContratoExpressListItem = {
   obrero_cedula: string;
   obrero_nombre: string;
   proyecto_id: string;
-  bono_manual_ves: number | string | null;
+  /** Bono variable en USD; en Bs al pagar con tasa BCV del día (ver env). */
+  bono_manual_usd: number | string | null;
   salario_base_mensual_snapshot: number | string | null;
   pdf_storage_path: string;
   formalizado?: boolean | null;
@@ -46,12 +48,17 @@ function entidadRel(p: ProyectoExpressJoin | null): { nombre: string; rif: strin
 const fmtBs = (n: number) =>
   new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
-function montoTotalBs(r: ContratoExpressListItem): number {
-  const b = Number(r.bono_manual_ves);
+const fmtUsd = (n: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+function salarioSnapshotBs(r: ContratoExpressListItem): number {
   const s = Number(r.salario_base_mensual_snapshot);
-  const bon = Number.isFinite(b) && b >= 0 ? b : 0;
-  const sal = Number.isFinite(s) && s > 0 ? s : 0;
-  return sal + bon;
+  return Number.isFinite(s) && s > 0 ? s : 0;
+}
+
+function bonoUsdNum(r: ContratoExpressListItem): number {
+  const b = Number(r.bono_manual_usd);
+  return Number.isFinite(b) && b >= 0 ? b : 0;
 }
 
 function nombreProyecto(r: ContratoExpressListItem): string {
@@ -149,15 +156,15 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
   }
 
   const totalesLista = useMemo(() => {
+    const tasa = tasaBcvVesPorUsdFromEnv();
     let base = 0;
-    let bonos = 0;
+    let bonosUsd = 0;
     for (const c of rows) {
-      const s = Number(c.salario_base_mensual_snapshot);
-      const b = Number(c.bono_manual_ves);
-      if (Number.isFinite(s) && s > 0) base += s;
-      if (Number.isFinite(b) && b >= 0) bonos += b;
+      base += salarioSnapshotBs(c);
+      bonosUsd += bonoUsdNum(c);
     }
-    return { base, bonos, total: base + bonos };
+    const bonosBsRef = tasa != null ? bonoUsdABs(bonosUsd, tasa) : null;
+    return { base, bonosUsd, bonosBsRef, tasa };
   }, [rows]);
 
   if (fetchError) {
@@ -189,8 +196,9 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
         <div>
           <h1 className="text-2xl font-bold text-white">Contratos express (fast-track)</h1>
           <p className="text-sm text-zinc-400">
-            Sin registro previo en <code className="text-zinc-500">ci_empleados</code>. El total mostrado es en{' '}
-            <strong className="text-zinc-300">Bs</strong> (tabulador + bono); no se persiste USD en esta tabla.
+            Sin registro previo en <code className="text-zinc-500">ci_empleados</code>. Salario base: snapshot{' '}
+            <strong className="text-zinc-300">mensual en Bs</strong> (tabulador). Bono: <strong className="text-zinc-300">USD</strong>; en cada pago (p. ej. viernes) se convierte a Bs con la tasa oficial del BCV de ese día. Para equivalentes en pantalla, define{' '}
+            <code className="text-zinc-500">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> (Bs por USD) y actualízala el día de pago.
           </p>
         </div>
       </div>
@@ -205,12 +213,23 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
               <p className="text-2xl font-bold tabular-nums text-zinc-100">{fmtBs(totalesLista.base)} Bs</p>
             </div>
             <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-4">
-              <p className="text-sm text-amber-200/80">Total bonos manuales</p>
-              <p className="text-2xl font-bold tabular-nums text-amber-400">{fmtBs(totalesLista.bonos)} Bs</p>
+              <p className="text-sm text-amber-200/80">Total bonos (USD)</p>
+              <p className="text-2xl font-bold tabular-nums text-amber-400">{fmtUsd(totalesLista.bonosUsd)}</p>
             </div>
             <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/25 p-4">
-              <p className="text-sm text-emerald-200/80">Compromiso total mensual (referencia)</p>
-              <p className="text-2xl font-bold tabular-nums text-emerald-400">{fmtBs(totalesLista.total)} Bs</p>
+              <p className="text-sm text-emerald-200/80">Bonos en Bs (referencia, tasa BCV configurada)</p>
+              {totalesLista.bonosBsRef != null && totalesLista.tasa != null ? (
+                <>
+                  <p className="text-2xl font-bold tabular-nums text-emerald-400">{fmtBs(totalesLista.bonosBsRef)} Bs</p>
+                  <p className="mt-1 text-[11px] text-emerald-200/60">
+                    Suma de USD × {fmtBs(totalesLista.tasa)} Bs/USD (solo referencia; el pago usa la tasa del viernes).
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-zinc-500">
+                  Sin tasa: añade <code className="text-zinc-600">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> en el entorno.
+                </p>
+              )}
             </div>
           </div>
 
@@ -223,7 +242,9 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                   <TableHead>Cédula</TableHead>
                   <TableHead>Proyecto</TableHead>
                   <TableHead>Entidad</TableHead>
-                  <TableHead className="text-right">Total (Bs)</TableHead>
+                  <TableHead className="text-right">Salario (Bs/mes)</TableHead>
+                  <TableHead className="text-right">Bono (USD)</TableHead>
+                  <TableHead className="text-right">Bono ref. (Bs)</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -231,7 +252,10 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                 {rows.map((c) => {
                   const busy = busyId === c.id;
                   const formalizado = Boolean(c.formalizado_empleado_id) || c.formalizado === true;
-                  const totalBs = montoTotalBs(c);
+                  const salBs = salarioSnapshotBs(c);
+                  const bonUsd = bonoUsdNum(c);
+                  const tasa = totalesLista.tasa;
+                  const bonBsRef = tasa != null ? bonoUsdABs(bonUsd, tasa) : null;
                   return (
                     <TableRow key={c.id} className="border-zinc-800">
                       <TableCell className="whitespace-nowrap text-zinc-400">
@@ -243,11 +267,21 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                       <TableCell className="max-w-[200px] truncate text-xs text-zinc-400" title={textoEntidad(c)}>
                         {textoEntidad(c)}
                       </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-zinc-200" title="Snapshot tabulador (mensual)">
+                        {fmtBs(salBs)} Bs
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-amber-300" title="Acordado en USD">
+                        {fmtUsd(bonUsd)}
+                      </TableCell>
                       <TableCell
-                        className={cn('text-right font-semibold tabular-nums text-emerald-400')}
-                        title="Sueldo base (snapshot) + bono manual en bolívares"
+                        className={cn('text-right text-sm tabular-nums text-emerald-400/90')}
+                        title={
+                          tasa != null
+                            ? `Equivalente con tasa referencia ${tasa} Bs/USD (actualizar el día de pago BCV)`
+                            : 'Configure NEXT_PUBLIC_TASA_BCV_VES_POR_USD para ver equivalente'
+                        }
                       >
-                        {fmtBs(totalBs)} Bs
+                        {bonBsRef != null ? `${fmtBs(bonBsRef)} Bs` : '—'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex flex-wrap justify-end gap-2">

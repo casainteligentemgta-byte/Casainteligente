@@ -18,6 +18,12 @@ export type RepresentanteMercantilCi = {
 export type RegistroMercantilCi = {
   /** Domicilio social o de la empresa según consta en el registro (puede coincidir con dirección fiscal). */
   domicilio_empresa?: string;
+  /** Estado (geográfico) del domicilio según registro mercantil. En el formulario se captura antes que municipio y sector. */
+  domicilio_estado_registro?: string;
+  /** Municipio del domicilio según RM. */
+  domicilio_municipio_registro?: string;
+  /** Sector / parroquia urbana según RM; en documentos legales suele ir antes de municipio y estado. */
+  domicilio_sector_registro?: string;
   /** Tomo del libro de comercio (contrato PDF: «constando en el Tomo …»). */
   tomo?: string;
   /** Número de inscripción o asiento en el RM (contrato PDF: «bajo el Nº …»); no confundir con el RIF. */
@@ -45,6 +51,8 @@ export type CiEntidad = {
   nombre_comercial?: string | null;
   rif: string | null;
   direccion_fiscal?: string | null;
+  /** Alias o columna dedicada según migración; usada en PDFs y resolución de domicilio fiscal. */
+  domicilio_fiscal?: string | null;
   rep_legal_nombre?: string | null;
   rep_legal_cedula?: string | null;
   rep_legal_cargo?: string | null;

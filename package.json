@@ -14,6 +14,7 @@
     "start": "next start",
     "lint": "next lint",
     "verify:supabase": "node scripts/verify-supabase.mjs",
+    "verify:service-role": "node scripts/verify-service-role.mjs",
     "verify:db": "node scripts/verify-db.mjs",
     "verify:ci-empleados": "node scripts/verify-ci-empleados.mjs",
     "db:generate": "drizzle-kit generate",

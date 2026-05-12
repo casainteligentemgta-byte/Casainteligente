@@ -2,13 +2,20 @@ import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 
+/**
+ * Tipografía unificada del contrato (PDF estándar vía @react-pdf/renderer).
+ * Helvetica / Times-Roman / Courier son las fuentes embebidas; para otro cuerpo hay que registrar fuente con Font.register.
+ */
+const CONTRATO_PDF_FONT_FAMILY = 'Helvetica';
+const CONTRATO_PDF_FONT_SIZE = 9.5;
+
 const styles = StyleSheet.create({
   page: {
     paddingTop: 28,
     paddingBottom: 32,
     paddingHorizontal: 40,
-    fontFamily: 'Helvetica',
-    fontSize: 9.5,
+    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
     color: '#000',
   },
   pageFirst: {
@@ -16,18 +23,38 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
   },
   header: {
-    fontSize: 11,
+    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 8,
     lineHeight: 1.16,
+    color: '#000',
   },
-  paragraph: { marginBottom: 5, textAlign: 'justify', lineHeight: 1.26, fontSize: 9.5 },
+  paragraph: {
+    marginBottom: 5,
+    textAlign: 'justify',
+    lineHeight: 1.26,
+    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
+    color: '#000',
+  },
   paragraphIntro: { marginBottom: 3, lineHeight: 1.2 },
-  bold: { fontWeight: 'bold' },
+  bold: {
+    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
+    fontWeight: 'bold',
+    color: '#000',
+  },
   signatureSection: { flexDirection: 'row', marginTop: 12, justifyContent: 'space-between' },
   signatureBox: { width: '48%', paddingTop: 4, textAlign: 'left', lineHeight: 1.22 },
-  signatureLine: { marginBottom: 1, lineHeight: 1.2, fontSize: 9 },
+  signatureLine: {
+    marginBottom: 1,
+    lineHeight: 1.2,
+    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
+    color: '#000',
+  },
   signUnderline: {
     borderBottomWidth: 1,
     borderColor: '#000',
@@ -36,9 +63,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 4,
   },
-  meta: { fontSize: 8.5, marginBottom: 8, textAlign: 'center', color: '#333', lineHeight: 1.22 },
+  meta: {
+    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
+    marginBottom: 8,
+    textAlign: 'center',
+    color: '#000',
+    lineHeight: 1.22,
+  },
   metaFirst: { marginBottom: 3 },
-  clauseDense: { fontSize: 8.4, lineHeight: 1.18, textAlign: 'justify' },
+  /** Misma base tipográfica; solo ajusta interlineado en bloques largos (sin reducir cuerpo). */
+  clauseDense: {
+    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
+    lineHeight: 1.22,
+    textAlign: 'justify',
+    color: '#000',
+  },
 });
 
 export type EntidadContratoPdf = {
@@ -51,6 +92,8 @@ export type EntidadContratoPdf = {
   municipio_fiscal?: string | null;
   /** Opcional: estado de la sede (comparecencia). */
   estado_fiscal?: string | null;
+  /** Sector / urbanización del domicilio social según RM (comparecencia: antes de municipio y estado). */
+  sector_domicilio_registro?: string | null;
   representante_legal?: string | null;
   rep_legal_nombre?: string | null;
   rep_legal_cedula?: string | null;
@@ -287,6 +330,10 @@ export function ContratoObreroPDF({
       : '10 USD';
   const ingresoSemanalUsdPlanoTxt = ingresoSemanalUsdPlanoDesdeParam(parametros.ingresoSemanalConsolidadoUsdTexto);
 
+  const HORARIO_DETALLE_PDF_DEFAULT =
+    'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). ';
+  const horarioCuartaDetalle = (parametros.horarioSemanal ?? '').trim() || HORARIO_DETALLE_PDF_DEFAULT;
+
   const rep = limpiarNombreRepresentanteLegal(
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '________________________________________________'),
   );
@@ -299,10 +346,12 @@ export function ContratoObreroPDF({
   );
   const phMun = '___________';
   const phEdo = '___________';
+  const phSec = '___________';
   const phRepNat = '________________';
   const phRepEc = '____________';
   const municipioEmpresa = str(entidad.municipio_fiscal, phMun);
   const estadoEmpresa = str(entidad.estado_fiscal, phEdo);
+  const sectorEmpresa = str(entidad.sector_domicilio_registro, phSec);
   const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
   const nacionalidadTrab = str(empleado.nacionalidad, '__________');
@@ -327,8 +376,9 @@ export function ContratoObreroPDF({
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
         Entre <Text style={styles.bold}>{razonComparecencia}</Text>, Sociedad Mercantil domiciliada en{' '}
-        <Text style={styles.bold}>{domicilioEmpresa}</Text>, Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>
-        , Estado <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N° <Text style={styles.bold}>{rifEntidadLinea}</Text>
+        <Text style={styles.bold}>{domicilioEmpresa}</Text>, Sector <Text style={styles.bold}>{sectorEmpresa}</Text>
+        , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado{' '}
+        <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N° <Text style={styles.bold}>{rifEntidadLinea}</Text>
         , representada en este acto por el Ciudadano <Text style={styles.bold}>{rep}</Text>,{' '}
         <Text style={styles.bold}>{nacionalidadRep}</Text>, <Text style={styles.bold}>{estadoCivilRep}</Text>, mayor de
         edad, hábil en derecho, de este domicilio, titular de la Cédula de Identidad número{' '}
@@ -378,7 +428,8 @@ export function ContratoObreroPDF({
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>CUARTA: JORNADA, HORARIO Y RENDIMIENTO</Text>
         {'\n'}
-        {`La jornada semanal será de cuarenta (40) horas de trabajo efectivo: Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). `}
+        {`La jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
+        {horarioCuartaDetalle}{' '}
         <Text style={styles.bold}>CONTROL:</Text>
         {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en 4 oportunidades en un mes o la negativa a firmar el registro constituirá falta grave (Art. 102 literal "i" LOTTT).`}
       </Text>
@@ -460,7 +511,7 @@ export function ContratoObreroPDF({
           <Text style={[styles.bold, styles.signatureLine]}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{nombreTrabajador}</Text>
           <Text style={styles.signatureLine}>C.I. {cedulaTrabGuion}</Text>
-          <Text style={[styles.signatureLine, { fontSize: 8, marginTop: 2 }]}>(Huella Dactilar)</Text>
+          <Text style={[styles.signatureLine, { marginTop: 2 }]}>(Huella Dactilar)</Text>
         </View>
       </View>
     </>

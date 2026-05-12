@@ -25,8 +25,10 @@ export function supabaseAdminForRoute():
       ok: false,
       response: NextResponse.json(
         {
-          error: 'config',
+          error:
+            'Falta la configuración de Supabase en el servidor (URL o clave service_role). Revisa las variables de entorno y vuelve a desplegar.',
           hint,
+          code: 'SUPABASE_ADMIN_CONFIG',
         },
         { status: 503 },
       ),

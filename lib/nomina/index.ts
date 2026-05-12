@@ -19,3 +19,4 @@ export {
   sueldoSemanalReferenciaBolivares,
   type ConfigNominaTabuladorLike,
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
+export { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';

@@ -20,13 +20,17 @@ export const runtime = 'nodejs';
 const postBodySchema = z.object({
   proyecto_id: z.string().uuid(),
   config_nomina_id: z.string().uuid(),
-  obrero_nombre: z.string().min(2).max(200),
+  /** Preferir `obrero_nombres` + `obrero_apellidos`; si no vienen, se usa `obrero_nombre` (compatibilidad). */
+  obrero_nombre: z.string().max(220).optional().nullable(),
+  obrero_nombres: z.string().min(2).max(120).optional().nullable(),
+  obrero_apellidos: z.string().min(2).max(120).optional().nullable(),
   obrero_cedula: z.preprocess(
     (v) => normCedulaToken(String(v ?? '')),
     z.string().regex(CEDULA_VE_NORMALIZADA_REGEX, 'Formato de cédula inválido (Ej: V-12345678)'),
   ),
   obrero_direccion: z.string().max(500).optional().nullable(),
-  bono_manual_ves: z.coerce.number().nonnegative().default(0),
+  /** Bono variable en USD; en bolívares se liquida al pagar con la tasa oficial del BCV del día (p. ej. viernes). */
+  bono_manual_usd: z.coerce.number().nonnegative().default(0),
   fecha_ingreso: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -37,14 +41,34 @@ const postBodySchema = z.object({
   tipo_contrato: z.string().max(120).optional().nullable(),
   nacionalidad: z.string().max(80).optional().nullable(),
   estado_civil: z.string().max(80).optional().nullable(),
+  /** Detalle de horario semanal (cláusula CUARTA del PDF). */
+  horario_semanal_texto: z.string().max(2500).optional().nullable(),
+}).superRefine((data, ctx) => {
+  const nom = (data.obrero_nombres ?? '').trim();
+  const ape = (data.obrero_apellidos ?? '').trim();
+  const full = (data.obrero_nombre ?? '').trim();
+  if ((nom && ape) || full.length >= 2) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'Indique nombres y apellidos del trabajador (o un nombre completo en obrero_nombre).',
+    path: ['obrero_nombres'],
+  });
 });
+
+function nombreCompletoObreroDesdeBody(parsed: z.infer<typeof postBodySchema>): string {
+  const nom = (parsed.obrero_nombres ?? '').trim();
+  const ape = (parsed.obrero_apellidos ?? '').trim();
+  if (nom && ape) return `${nom} ${ape}`.trim();
+  const legacy = (parsed.obrero_nombre ?? '').trim();
+  return legacy;
+}
 
 function manualDesdeBody(
   parsed: z.infer<typeof postBodySchema>,
   fechaFirmaIso: string,
 ): ContratoExpressManualInput {
   return {
-    obreroNombre: parsed.obrero_nombre.trim(),
+    obreroNombre: nombreCompletoObreroDesdeBody(parsed),
     obreroCedula: parsed.obrero_cedula.trim(),
     obreroDireccion: parsed.obrero_direccion?.trim() || null,
     nacionalidad: parsed.nacionalidad?.trim() || null,
@@ -54,6 +78,7 @@ function manualDesdeBody(
     objetoContrato: parsed.objeto_contrato?.trim() || null,
     jornadaTrabajo: parsed.jornada_trabajo?.trim() || null,
     tipoContrato: parsed.tipo_contrato?.trim() || null,
+    horarioSemanalTexto: parsed.horario_semanal_texto?.trim() || null,
   };
 }
 
@@ -142,16 +167,20 @@ export async function POST(req: Request) {
   const snap = nomSnap as { cargo_nombre?: string | null; salario_base_mensual?: unknown } | null;
   const salSnap = snap?.salario_base_mensual != null ? Number(snap.salario_base_mensual) : null;
 
+  const obreroNombreCompleto = nombreCompletoObreroDesdeBody(body);
+
   const { error: insErr } = await admin.client.from('ci_contratos_express').insert({
     id: expressId,
     proyecto_id: body.proyecto_id,
     config_nomina_id: body.config_nomina_id,
-    obrero_nombre: body.obrero_nombre.trim(),
+    obrero_nombre: obreroNombreCompleto,
     obrero_cedula: body.obrero_cedula.trim(),
     obrero_direccion: body.obrero_direccion?.trim() || null,
-    bono_manual_ves: body.bono_manual_ves,
+    bono_manual_usd: body.bono_manual_usd,
     salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
     cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
+    horario_semanal_texto:
+      (body.horario_semanal_texto?.trim() || loaded.props.parametros.horarioSemanal?.trim() || null) as string | null,
     pdf_storage_path: storagePath,
     created_by: createdBy,
   } as never);
@@ -159,7 +188,15 @@ export async function POST(req: Request) {
   if (insErr) {
     console.error('[contratos-fast] insert', insErr.message);
     return NextResponse.json(
-      { error: insErr.message.includes('relation') ? 'Ejecute la migración 118_ci_contratos_express en Supabase.' : insErr.message },
+      {
+        error: insErr.message.includes('relation')
+          ? 'Ejecute la migración 118_ci_contratos_express en Supabase.'
+          : /bono_manual_usd|column .* does not exist/i.test(insErr.message)
+            ? 'Ejecute la migración 122_ci_contratos_express_bono_manual_usd en Supabase (bono en USD).'
+            : /horario_semanal_texto|column .* does not exist/i.test(insErr.message)
+              ? 'Ejecute la migración 126_ci_contratos_express_horario_semanal_texto en Supabase.'
+              : insErr.message,
+      },
       { status: 500 },
     );
   }

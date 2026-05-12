@@ -63,6 +63,9 @@ function limpiarRepresentante(r: RepresentanteMercantilCi): RepresentanteMercant
 
 export function registroMercantilDesdeCampos(fields: {
   domicilioEmpresa: string;
+  domicilioEstadoRegistro: string;
+  domicilioMunicipioRegistro: string;
+  domicilioSectorRegistro: string;
   tomo: string;
   numero: string;
   fecha: string;
@@ -72,6 +75,9 @@ export function registroMercantilDesdeCampos(fields: {
   const reps = (fields.representantes ?? []).map(limpiarRepresentante).filter(Boolean) as RepresentanteMercantilCi[];
   return {
     domicilio_empresa: fields.domicilioEmpresa.trim() || undefined,
+    domicilio_estado_registro: fields.domicilioEstadoRegistro.trim() || undefined,
+    domicilio_municipio_registro: fields.domicilioMunicipioRegistro.trim() || undefined,
+    domicilio_sector_registro: fields.domicilioSectorRegistro.trim() || undefined,
     tomo: fields.tomo.trim() || undefined,
     numero: fields.numero.trim() || undefined,
     fecha: fields.fecha.trim() || undefined,

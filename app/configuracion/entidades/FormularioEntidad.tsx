@@ -120,6 +120,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const [repFilas, setRepFilas] = useState<RepFormRow[]>([emptyRepFormRow()]);
 
   const [rmDomicilioEmpresa, setRmDomicilioEmpresa] = useState('');
+  const [rmEstadoRegistro, setRmEstadoRegistro] = useState('');
+  const [rmMunicipioRegistro, setRmMunicipioRegistro] = useState('');
+  const [rmSectorRegistro, setRmSectorRegistro] = useState('');
   const [rmTomo, setRmTomo] = useState('');
   const [rmNumero, setRmNumero] = useState('');
   const [rmFecha, setRmFecha] = useState('');
@@ -144,6 +147,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
     const rm = asRecord(e?.registro_mercantil ?? null);
     setRmDomicilioEmpresa(strField(rm, 'domicilio_empresa'));
+    setRmEstadoRegistro(strField(rm, 'domicilio_estado_registro'));
+    setRmMunicipioRegistro(strField(rm, 'domicilio_municipio_registro'));
+    setRmSectorRegistro(strField(rm, 'domicilio_sector_registro'));
     setRmTomo(strField(rm, 'tomo'));
     setRmNumero(strField(rm, 'numero'));
     setRmFecha(strField(rm, 'fecha'));
@@ -224,6 +230,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
       const registroMercantil: RegistroMercantilCi = registroMercantilDesdeCampos({
         domicilioEmpresa: rmDomicilioEmpresa,
+        domicilioEstadoRegistro: rmEstadoRegistro,
+        domicilioMunicipioRegistro: rmMunicipioRegistro,
+        domicilioSectorRegistro: rmSectorRegistro,
         tomo: rmTomo,
         numero: rmNumero,
         fecha: rmFecha,
@@ -584,22 +593,52 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                 <p className="text-xs text-zinc-500">
                   Objeto <code className="text-zinc-400">registro_mercantil</code> en la base de datos. El{' '}
                   <strong className="text-zinc-400">domicilio de la empresa</strong> aquí es el que se imprime en la
-                  planilla de empleo; si queda vacío, se usa la dirección fiscal (pestaña Datos). La{' '}
-                  <strong className="text-zinc-400">oficina</strong>, <strong className="text-zinc-400">tomo</strong>,{' '}
-                  <strong className="text-zinc-400">número de inscripción</strong> y{' '}
+                  planilla de empleo; si queda vacío, se usa la dirección fiscal (pestaña Datos). Captura el estado, el
+                  municipio y el sector en ese orden (en el contrato PDF se leen en orden legal: sector, municipio,
+                  estado). La <strong className="text-zinc-400">oficina</strong>,{' '}
+                  <strong className="text-zinc-400">tomo</strong>, <strong className="text-zinc-400">número de inscripción</strong> y{' '}
                   <strong className="text-zinc-400">fecha de inscripción</strong> son los que usa el{' '}
                   <strong className="text-zinc-400">contrato laboral PDF</strong> (cláusula del empleador: «constando en
                   el Tomo …, bajo el Nº …, de fecha …») cuando el proyecto obra enlaza esta entidad en{' '}
                   <code className="text-zinc-500">ci_proyectos.entidad_id</code>.
                 </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Estado (domicilio según registro)</label>
+                    <input
+                      value={rmEstadoRegistro}
+                      onChange={(e) => setRmEstadoRegistro(e.target.value)}
+                      className={inputClass}
+                      placeholder="Estado donde consta el domicilio social"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Municipio (domicilio según registro)</label>
+                    <input
+                      value={rmMunicipioRegistro}
+                      onChange={(e) => setRmMunicipioRegistro(e.target.value)}
+                      className={inputClass}
+                      placeholder="Municipio"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Sector (domicilio según registro)</label>
+                    <input
+                      value={rmSectorRegistro}
+                      onChange={(e) => setRmSectorRegistro(e.target.value)}
+                      className={inputClass}
+                      placeholder="Sector, urbanización o parroquia según asiento"
+                    />
+                  </div>
+                </div>
                 <div>
-                  <label className={labelClass}>Domicilio de la empresa (según registro)</label>
+                  <label className={labelClass}>Vía / urbanización (domicilio según registro)</label>
                   <textarea
                     value={rmDomicilioEmpresa}
                     onChange={(e) => setRmDomicilioEmpresa(e.target.value)}
                     rows={3}
                     className={`${inputClass} resize-y`}
-                    placeholder="Coincide o amplía la dirección fiscal consta en el Registro Mercantil"
+                    placeholder="Calle, avenida o texto de domicilio que precede a sector, municipio y estado en el documento"
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">

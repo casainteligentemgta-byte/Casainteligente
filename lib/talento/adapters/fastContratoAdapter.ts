@@ -58,6 +58,7 @@ function entidadDesdeLike(row: EntidadContratoLike | null | undefined): EntidadC
     direccion_fiscal: str(row.direccion_fiscal) || undefined,
     municipio_fiscal: str(row.municipio_fiscal) || undefined,
     estado_fiscal: str(row.estado_fiscal) || undefined,
+    sector_domicilio_registro: str(row.sector_domicilio_registro) || undefined,
     representante_legal: str(row.representante_legal) || undefined,
     rep_legal_nombre: str(row.rep_legal_nombre) || undefined,
     rep_legal_cedula: str(row.rep_legal_cedula) || undefined,

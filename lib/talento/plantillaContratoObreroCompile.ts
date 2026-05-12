@@ -20,6 +20,10 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     etiqueta: 'Municipio de la sede del patrono',
     ayuda: 'Opcional en BD; si falta aparece línea en blanco. Complete vía overrides RRHH si aplica.',
   },
+  PATRON_SECTOR: {
+    etiqueta: 'Sector (domicilio según registro mercantil)',
+    ayuda: '`registro_mercantil.domicilio_sector_registro` en `ci_entidades`; en el documento va antes de municipio y estado.',
+  },
   PATRON_ESTADO: {
     etiqueta: 'Estado (entidad federal) de la sede del patrono',
     ayuda: 'Opcional en BD; si falta aparece línea en blanco.',
@@ -144,6 +148,8 @@ export type FuentesContratoObrero = {
     estado_geo?: string | null;
     rep_nacionalidad?: string | null;
     rep_estado_civil?: string | null;
+    /** Sector del domicilio social según RM (orden legal en comparecencia: sector, municipio, estado). */
+    sector_geo?: string | null;
   };
 };
 
@@ -235,6 +241,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
 
   const phMun = '___________';
   const phEdo = '___________';
+  const phSec = '___________';
   const phRepNat = '________________';
   const phRepEc = '____________';
 
@@ -246,6 +253,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   return {
     PATRON_RAZON_SOCIAL: razonSocial || str(f.patron.nombre),
     PATRON_RIF: rifPlantillaLinea(str(f.patron.rif)),
+    PATRON_SECTOR: str(f.patron.sector_geo) || phSec,
     PATRON_MUNICIPIO: str(f.patron.municipio) || phMun,
     PATRON_ESTADO: str(f.patron.estado_geo) || phEdo,
     REP_LEGAL_NOMBRE: repNombre,

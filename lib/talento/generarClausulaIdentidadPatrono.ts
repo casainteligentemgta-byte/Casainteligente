@@ -1,3 +1,4 @@
+import { ubicacionEmpresaResueltaParaPdf } from '@/lib/talento/patronoDomicilioReglas';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import {
   camposRegistroMercantilContrato,
@@ -101,6 +102,15 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
 
   const bloqueNombre = nombreLegal ? nombreLegal.toUpperCase() : '[NOMBRE LEGAL NO REGISTRADO]';
   const bloqueDom = domRm || direccionFiscal || '[DOMICILIO DE LA EMPRESA NO REGISTRADO]';
+  const uEmpRm = ubicacionEmpresaResueltaParaPdf(entidad.registro_mercantil, {
+    direccion_fiscal: str(entidad.direccion_fiscal) || null,
+    domicilio_fiscal: str(entidad.domicilio_fiscal) || null,
+  });
+  const partesUbicEmpresaRm: string[] = [];
+  if (uEmpRm.sector) partesUbicEmpresaRm.push(`Sector ${uEmpRm.sector}`);
+  if (uEmpRm.municipio) partesUbicEmpresaRm.push(`Municipio ${uEmpRm.municipio}`);
+  if (uEmpRm.estado) partesUbicEmpresaRm.push(`Estado ${uEmpRm.estado}`);
+  const tailUbicEmpresaRm = partesUbicEmpresaRm.length ? `, ${partesUbicEmpresaRm.join(', ')}` : '';
   const bloqueCirc =
     circunscripcion ||
     '[Oficina de Registro Mercantil — texto completo no registrado, ej. Segundo de la Circunscripción Judicial del Estado X]';
@@ -117,7 +127,7 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
 
   const texto = `
     Entre la sociedad mercantil ${bloqueNombre},
-    domiciliada en ${bloqueDom},
+    domiciliada en ${bloqueDom}${tailUbicEmpresaRm},
     inscrita por ante la Oficina de ${bloqueCirc}, constando en el Tomo ${bloqueTomo}, bajo el Nro. ${bloqueNum},
     de fecha ${fechaRegistro}, titular del Registro de Información Fiscal (RIF) Nro. ${bloqueRif},
     representada en este acto por su ${bloqueCargo}, ciudadano ${bloqueRep},

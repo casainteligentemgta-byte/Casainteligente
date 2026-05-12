@@ -11,7 +11,11 @@ import {
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import type { ContratoObreroPdfStructuredProps } from '@/lib/talento/ContratoObreroPdfStructured';
-import { domicilioPatronoParaEntidad } from '@/lib/talento/patronoDomicilioReglas';
+import {
+  domicilioLineaComparecenciaPatrono,
+  domicilioPatronoParaEntidad,
+  ubicacionEmpresaResueltaParaPdf,
+} from '@/lib/talento/patronoDomicilioReglas';
 import {
   fusionarEmpleadoContratoDesdePlanilla,
   parseHojaVidaObrero,
@@ -123,7 +127,7 @@ export async function cargarFuentesContratoObreroPdf(
     return { ok: false, error: 'El contrato no tiene obra ni proyecto vinculado.' };
   }
 
-  const [{ data: emp, error: ee }, { data: obra, error: eo }] = await Promise.all([
+  const [{ data: emp, error: ee }, proyectoRes] = await Promise.all([
     admin
       .from('ci_empleados')
       .select(
@@ -131,14 +135,10 @@ export async function cargarFuentesContratoObreroPdf(
       )
       .eq('id', row.empleado_id)
       .maybeSingle(),
-    admin
-      .from('ci_proyectos')
-      .select(
-        'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
-      )
-      .eq('id', vinculo)
-      .maybeSingle(),
+    fetchCiProyectoCamposContratoPdf(admin, vinculo),
   ]);
+  const obra = proyectoRes.data;
+  const eo = proyectoRes.error;
 
   if (ee || !emp) {
     return { ok: false, error: ee?.message ?? 'Empleado no encontrado' };
@@ -237,6 +237,7 @@ export async function cargarFuentesContratoObreroPdf(
       punto_encuentro_transporte_contrato: strOpt(o.punto_encuentro_transporte_contrato),
     },
     patron: {
+      ...patron,
       nombre: patron.nombre,
       domicilio: domicilioPatrono,
       representante: patron.representante,
@@ -269,6 +270,70 @@ function strOpt(v: unknown): string | null {
   return s || null;
 }
 
+/** Campos de obra/proyecto para PDF; se prueba de más completo a más mínimo (columnas opcionales 086/115/117/123/124). */
+const CI_PROYECTO_SELECT_CANDIDATES = [
+  'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
+  'nombre,ubicacion_texto,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
+  'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default',
+  'nombre,ubicacion_texto,entidad_id,horario_semanal_obra_default',
+  'nombre,ubicacion_texto,obra_ubicacion,entidad_id,punto_encuentro_transporte_contrato',
+  'nombre,ubicacion_texto,entidad_id,punto_encuentro_transporte_contrato',
+  'nombre,ubicacion_texto,obra_ubicacion,entidad_id',
+  'nombre,ubicacion_texto,entidad_id',
+] as const;
+
+async function fetchCiProyectoCamposContratoPdf(
+  supabase: SupabaseClient,
+  proyectoId: string,
+): Promise<{ data: unknown; error: { message: string } | null }> {
+  const id = proyectoId.trim();
+  if (!id) return { data: null, error: { message: 'proyecto_id vacío' } };
+
+  let lastErr: { message: string } | null = null;
+  for (const sel of CI_PROYECTO_SELECT_CANDIDATES) {
+    const attempt = await supabase.from('ci_proyectos').select(sel).eq('id', id).maybeSingle();
+    if (!attempt.error) {
+      return { data: attempt.data, error: null };
+    }
+    lastErr = attempt.error;
+  }
+  return { data: null, error: lastErr };
+}
+
+/**
+ * Columnas de `ci_entidades` para PDF express / estructurado.
+ * Si no existe migración 125 (`domicilio_fiscal` / `municipio_fiscal` / `estado_fiscal`), PostgREST falla con el SELECT largo;
+ * se reintenta con listas más cortas (misma idea que `CI_PROYECTO_SELECT_CANDIDATES`).
+ */
+const CI_ENTIDAD_SELECT_CANDIDATES = [
+  'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,domicilio_fiscal,municipio_fiscal,estado_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+] as const;
+
+async function fetchCiEntidadCamposContratoPdf(
+  supabase: SupabaseClient,
+  entidadId: string,
+): Promise<{ data: unknown; error: { message: string } | null }> {
+  const id = entidadId.trim();
+  if (!id) return { data: null, error: { message: 'entidad_id vacío' } };
+  let lastErr: { message: string } | null = null;
+  for (const sel of CI_ENTIDAD_SELECT_CANDIDATES) {
+    const attempt = await supabase.from('ci_entidades').select(sel).eq('id', id).maybeSingle();
+    if (!attempt.error) {
+      return { data: attempt.data, error: null };
+    }
+    lastErr = attempt.error;
+  }
+  return { data: null, error: lastErr };
+}
+
+const PATRON_ENTIDAD_EXTRA_SELECT_CANDIDATES = [
+  'nombre_legal,rif,rep_legal_nombre,rep_legal_cedula,municipio_fiscal,estado_fiscal,registro_mercantil',
+  'nombre_legal,rif,rep_legal_nombre,rep_legal_cedula,registro_mercantil',
+  'nombre_legal,rif,rep_legal_nombre,rep_legal_cedula',
+] as const;
+
 /** RIF y representante legal desde `ci_entidades` para la plantilla biblioteca (comparecencia). */
 async function fetchPatronoEntidadExtraParaPlantilla(
   supabase: SupabaseClient,
@@ -276,19 +341,25 @@ async function fetchPatronoEntidadExtraParaPlantilla(
 ): Promise<Partial<FuentesContratoObrero['patron']>> {
   const eid = (entidadId ?? '').trim();
   if (!eid) return {};
-  const { data, error } = await supabase
-    .from('ci_entidades')
-    .select('nombre_legal,rif,rep_legal_nombre,rep_legal_cedula')
-    .eq('id', eid)
-    .maybeSingle();
-  if (error || !data || typeof data !== 'object') return {};
-  const r = data as Record<string, unknown>;
-  return {
-    nombre_legal: strOpt(r.nombre_legal) ?? undefined,
-    rif: strOpt(r.rif) ?? undefined,
-    rep_legal_nombre: strOpt(r.rep_legal_nombre) ?? undefined,
-    rep_legal_cedula: strOpt(r.rep_legal_cedula) ?? undefined,
-  };
+  for (const sel of PATRON_ENTIDAD_EXTRA_SELECT_CANDIDATES) {
+    const { data, error } = await supabase.from('ci_entidades').select(sel).eq('id', eid).maybeSingle();
+    if (error || !data || typeof data !== 'object') continue;
+    const r = data as Record<string, unknown>;
+    const ubi = ubicacionEmpresaResueltaParaPdf(r.registro_mercantil, {
+      direccion_fiscal: strOpt(r.direccion_fiscal as string | null | undefined),
+      domicilio_fiscal: strOpt(r.domicilio_fiscal as string | null | undefined),
+    });
+    return {
+      nombre_legal: strOpt(r.nombre_legal) ?? undefined,
+      rif: strOpt(r.rif) ?? undefined,
+      rep_legal_nombre: strOpt(r.rep_legal_nombre) ?? undefined,
+      rep_legal_cedula: strOpt(r.rep_legal_cedula) ?? undefined,
+      municipio: ubi.municipio ?? strOpt(r.municipio_fiscal) ?? undefined,
+      estado_geo: ubi.estado ?? strOpt(r.estado_fiscal) ?? undefined,
+      sector_geo: ubi.sector ?? undefined,
+    };
+  }
+  return {};
 }
 
 function primerRepresentanteRegistro(raw: unknown): { nombre?: string; cedula?: string; cargo?: string } {
@@ -377,13 +448,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   let horarioProyectoDefault: string | null = null;
   let puntoEncTransporteProyecto: string | null = null;
   if (proyectoId) {
-    const { data: ob } = await supabase
-      .from('ci_proyectos')
-      .select(
-        'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
-      )
-      .eq('id', proyectoId)
-      .maybeSingle();
+    const { data: ob } = await fetchCiProyectoCamposContratoPdf(supabase, proyectoId);
     if (ob) {
       const o = ob as {
         nombre: string;
@@ -610,18 +675,9 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const tareasEsp = strOpt(hv.contratacion?.cargoUOficio) ?? null;
 
   const entidadId = await resolverEntidadIdPatronoParaPdfEstructurado(supabase, empleadoId.trim());
-  /** Columnas alineadas a migraciones 063/064 (evita fallo PostgREST si no existen `nombre_legal` / `domicilio_fiscal`). */
-  const { data: ent } = entidadId
-    ? await supabase
-        .from('ci_entidades')
-        .select(
-          'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
-        )
-        .eq('id', entidadId)
-        .maybeSingle()
-    : { data: null };
-  const entidadRow = (ent ?? null) as Record<string, unknown> | null;
-  const domicilioEmpresaSegunRegistro = entidadRow
+  const entidadRes = entidadId ? await fetchCiEntidadCamposContratoPdf(supabase, entidadId) : { data: null };
+  const entidadRow = (entidadRes.data ?? null) as Record<string, unknown> | null;
+  const domPatronoFull = entidadRow
     ? domicilioPatronoParaEntidad({
         nombre_legal: strOpt(entidadRow.nombre_legal),
         nombre: strOpt(entidadRow.nombre),
@@ -630,6 +686,22 @@ export async function cargarPropsContratoObreroPdfEstructurado(
         registro_mercantil: entidadRow.registro_mercantil,
       })
     : null;
+  const domicilioLineaComparecencia = entidadRow
+    ? domicilioLineaComparecenciaPatrono({
+        registro_mercantil: entidadRow.registro_mercantil,
+        domicilio_fiscal: strOpt(entidadRow.domicilio_fiscal),
+        direccion_fiscal: strOpt(entidadRow.direccion_fiscal),
+      })
+    : null;
+  const domicilioEmpresaSegunRegistro = domicilioLineaComparecencia ?? domPatronoFull;
+  const ubiRm = entidadRow
+    ? ubicacionEmpresaResueltaParaPdf(entidadRow.registro_mercantil, {
+        direccion_fiscal: strOpt(entidadRow.direccion_fiscal),
+        domicilio_fiscal: strOpt(entidadRow.domicilio_fiscal),
+      })
+    : { estado: null, municipio: null, sector: null };
+  const municipioComparecencia = ubiRm.municipio ?? strOpt(entidadRow?.municipio_fiscal);
+  const estadoComparecencia = ubiRm.estado ?? strOpt(entidadRow?.estado_fiscal);
   const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
   const rm = parseRegistroMercantilRecord(entidadRow?.registro_mercantil);
   const rmCampos = camposRegistroMercantilDesdeRecord(rm);
@@ -639,6 +711,9 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     nombre: strOpt(entidadRow?.nombre),
     domicilio_fiscal: domicilioEmpresaSegunRegistro ?? f.patron.domicilio,
     direccion_fiscal: strOpt(entidadRow?.direccion_fiscal),
+    municipio_fiscal: municipioComparecencia ?? undefined,
+    estado_fiscal: estadoComparecencia ?? undefined,
+    sector_domicilio_registro: ubiRm.sector ?? undefined,
     representante_legal: strOpt(entidadRow?.representante_legal) ?? f.patron.representante,
     rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre,
     rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula,
@@ -755,6 +830,8 @@ export type ContratoExpressManualInput = {
   objetoContrato?: string | null;
   jornadaTrabajo?: string | null;
   tipoContrato?: string | null;
+  /** Detalle de horario (texto tras las 40 h. en cláusula CUARTA); prioridad sobre default de obra/jornada. */
+  horarioSemanalTexto?: string | null;
 };
 
 /**
@@ -772,20 +849,16 @@ export async function cargarPropsContratoObreroPdfExpress(
     return { ok: false, error: 'proyecto_id y config_nomina_id son obligatorios.' };
   }
 
-  const [{ data: obra, error: eo }, { data: nomRow, error: en }] = await Promise.all([
-    supabase
-      .from('ci_proyectos')
-      .select(
-        'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
-      )
-      .eq('id', pid)
-      .maybeSingle(),
+  const [proyectoRes, { data: nomRow, error: en }] = await Promise.all([
+    fetchCiProyectoCamposContratoPdf(supabase, pid),
     supabase
       .from('ci_config_nomina')
       .select('cargo_nombre,cargo_codigo,salario_base_mensual,cestaticket_mensual,nivel_salarial,vigencia_desde')
       .eq('id', nid)
       .maybeSingle(),
   ]);
+  const obra = proyectoRes.data;
+  const eo = proyectoRes.error;
 
   if (eo || !obra) {
     return { ok: false, error: eo?.message ?? 'Proyecto no encontrado.' };
@@ -812,19 +885,10 @@ export async function cargarPropsContratoObreroPdfExpress(
   };
 
   const entidadId = strOpt(o.entidad_id);
-  const { data: ent } = entidadId
-    ? await supabase
-        .from('ci_entidades')
-        .select(
-          'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
-        )
-        .eq('id', entidadId)
-        .maybeSingle()
-    : { data: null };
-
-  const entidadRow = (ent ?? null) as Record<string, unknown> | null;
+  const entidadRes = entidadId ? await fetchCiEntidadCamposContratoPdf(supabase, entidadId) : { data: null };
+  const entidadRow = (entidadRes.data ?? null) as Record<string, unknown> | null;
   const patronBase = await resolverPatronoDesdeEntidad(supabase, entidadId);
-  const domicilioEmpresaSegunRegistro = entidadRow
+  const domPatronoFull = entidadRow
     ? domicilioPatronoParaEntidad({
         nombre_legal: strOpt(entidadRow.nombre_legal),
         nombre: strOpt(entidadRow.nombre),
@@ -833,6 +897,22 @@ export async function cargarPropsContratoObreroPdfExpress(
         registro_mercantil: entidadRow.registro_mercantil,
       })
     : null;
+  const domicilioLineaComparecencia = entidadRow
+    ? domicilioLineaComparecenciaPatrono({
+        registro_mercantil: entidadRow.registro_mercantil,
+        domicilio_fiscal: strOpt(entidadRow.domicilio_fiscal),
+        direccion_fiscal: strOpt(entidadRow.direccion_fiscal),
+      })
+    : null;
+  const domicilioEmpresaSegunRegistro = domicilioLineaComparecencia ?? domPatronoFull;
+  const ubiRm = entidadRow
+    ? ubicacionEmpresaResueltaParaPdf(entidadRow.registro_mercantil, {
+        direccion_fiscal: strOpt(entidadRow.direccion_fiscal),
+        domicilio_fiscal: strOpt(entidadRow.domicilio_fiscal),
+      })
+    : { estado: null, municipio: null, sector: null };
+  const municipioComparecencia = ubiRm.municipio ?? strOpt(entidadRow?.municipio_fiscal);
+  const estadoComparecencia = ubiRm.estado ?? strOpt(entidadRow?.estado_fiscal);
   const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
   const rm = parseRegistroMercantilRecord(entidadRow?.registro_mercantil);
   const rmCampos = camposRegistroMercantilDesdeRecord(rm);
@@ -843,6 +923,9 @@ export async function cargarPropsContratoObreroPdfExpress(
     nombre: strOpt(entidadRow?.nombre),
     domicilio_fiscal: domicilioEmpresaSegunRegistro ?? patronBase.domicilio,
     direccion_fiscal: strOpt(entidadRow?.direccion_fiscal),
+    municipio_fiscal: municipioComparecencia ?? undefined,
+    estado_fiscal: estadoComparecencia ?? undefined,
+    sector_domicilio_registro: ubiRm.sector ?? undefined,
     representante_legal: patronBase.representante,
     rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre ?? patronExtra.rep_legal_nombre,
     rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula ?? patronExtra.rep_legal_cedula,
@@ -857,7 +940,7 @@ export async function cargarPropsContratoObreroPdfExpress(
 
   const ubic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
   const horarioSemanalResuelto = resolverTextoHorarioSemanalObra({
-    horarioContrato: null,
+    horarioContrato: strOpt(manual.horarioSemanalTexto),
     horarioProyectoDefault: strOpt(o.horario_semanal_obra_default),
     jornadaTrabajo: manual.jornadaTrabajo,
   });
