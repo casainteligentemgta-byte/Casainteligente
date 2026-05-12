@@ -790,7 +790,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   Reclutamiento
                 </Link>
                 <Link
-                  href="/rrhh/gestion-personal?solo=pendientes"
+                  href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(id)}`}
                   className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
                 >
                   Gestión laboral
@@ -814,7 +814,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   Reclutamiento
                 </Link>
                 <Link
-                  href="/rrhh/gestion-personal?solo=pendientes"
+                  href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(id)}`}
                   className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
                 >
                   Gestión laboral

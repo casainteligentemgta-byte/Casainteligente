@@ -70,6 +70,7 @@ export type FuentesContratoObrero = {
     cedula: string | null;
     direccion?: string | null;
     nacionalidad?: string | null;
+    estado_civil?: string | null;
     celular?: string | null;
     telefono?: string | null;
   };

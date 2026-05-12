@@ -732,9 +732,9 @@ export default function ResumenObrerosProyectoModulo({
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="flex w-full flex-col overflow-hidden rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 text-left transition hover:border-[#FF9500]/55 hover:bg-[#FF9500]/15 focus-within:ring-2 focus-within:ring-[#FF9500]/50">
               <Link
-                href="/rrhh/gestion-personal?solo=pendientes"
+                href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(proyectoModuloId)}`}
                 className="block p-4 focus:outline-none"
-                title="Gestionar solicitudes pendientes (vista compacta desde proyecto)"
+                title="Gestionar solicitudes pendientes solo de este módulo y obras vinculadas"
               >
                 <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-[#FF9500]/90">
                   <ClipboardList className="h-3.5 w-3.5" aria-hidden />
@@ -773,9 +773,9 @@ export default function ResumenObrerosProyectoModulo({
               </p>
             </button>
             <Link
-              href="/rrhh/gestion-personal?tab=obra"
+              href={`/rrhh/gestion-personal?tab=obra&proyecto_modulo=${encodeURIComponent(proyectoModuloId)}`}
               className="block w-full rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
-              title="Ver personal en obra y asignaciones en RRHH"
+              title="Ver personal en obra y asignaciones (solo este módulo y obras vinculadas)"
             >
               <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-emerald-300/90">
                 <UserCheck className="h-3.5 w-3.5" aria-hidden />

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPersonnel';
+import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
 
@@ -79,11 +80,17 @@ type RrhhGestionPersonalClientProps = {
   /** Resuelto en el Server Component desde `searchParams` (fiable en primer paint y SSR). */
   soloPendientesInitial?: boolean;
   tabInitial?: string;
+  /** Filtra solicitudes y asignaciones al módulo integral y sus obras Talento (`proyecto_modulo_origen_id`). */
+  proyectoModuloInitial?: string;
+  /** Filtra a un solo `ci_proyectos.id` (obra o módulo). */
+  proyectoObraInitial?: string;
 };
 
 export default function RrhhGestionPersonalClient({
   soloPendientesInitial = false,
   tabInitial,
+  proyectoModuloInitial,
+  proyectoObraInitial,
 }: RrhhGestionPersonalClientProps) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -98,7 +105,25 @@ export default function RrhhGestionPersonalClient({
   const tabFromUrl: GestionPersonalTab | null =
     rawTab === 'obra' || rawTab === 'pendientes' ? rawTab : null;
   const tab: GestionPersonalTab = soloPendientes ? 'pendientes' : tabFromUrl ?? tabInitialResolved;
+
+  const proyectoModuloFiltro = (searchParams.get('proyecto_modulo') ?? proyectoModuloInitial ?? '').trim();
+  const proyectoObraFiltro = (searchParams.get('proyecto') ?? proyectoObraInitial ?? '').trim();
+
+  const replaceGestionUrl = useCallback(
+    (patch: Record<string, string | null | undefined>) => {
+      const p = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === '') p.delete(k);
+        else p.set(k, v);
+      }
+      const qs = p.toString();
+      router.replace(qs ? `/rrhh/gestion-personal?${qs}` : '/rrhh/gestion-personal', { scroll: false });
+    },
+    [router, searchParams],
+  );
+
   const [tick, setTick] = useState(0);
+  const [alcanceNombre, setAlcanceNombre] = useState<string | null>(null);
 
   const [pending, setPending] = useState<LaborRequestRow[]>([]);
   const [loadingPending, setLoadingPending] = useState(true);
@@ -189,11 +214,36 @@ export default function RrhhGestionPersonalClient({
     let alive = true;
     (async () => {
       setLoadingPending(true);
-      const { data, error } = await supabase
+
+      let scope: string[] | null = null;
+      let nombreAlcance: string | null = null;
+      const pm = proyectoModuloFiltro;
+      const po = proyectoObraFiltro;
+      if (pm) {
+        const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, pm);
+        if (!alive) return;
+        scope = Array.from(new Set([pm, ...hijas]));
+        const { data: nom } = await supabase.from('ci_proyectos').select('nombre').eq('id', pm).maybeSingle();
+        if (!alive) return;
+        nombreAlcance = ((nom as { nombre?: string | null } | null)?.nombre ?? '').trim() || null;
+      } else if (po) {
+        scope = [po];
+        const { data: nom } = await supabase.from('ci_proyectos').select('nombre').eq('id', po).maybeSingle();
+        if (!alive) return;
+        nombreAlcance = ((nom as { nombre?: string | null } | null)?.nombre ?? '').trim() || null;
+      }
+
+      setAlcanceNombre(nombreAlcance);
+
+      let q = supabase
         .from('labor_requests')
         .select('id,project_id,specialty_codigo,specialty_nombre,quantity_requested,status,notes,created_at')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
+      if (scope != null && scope.length > 0) {
+        q = q.in('project_id', scope);
+      }
+      const { data, error } = await q;
       if (!alive) return;
       if (error) {
         setPending([]);
@@ -220,7 +270,7 @@ export default function RrhhGestionPersonalClient({
     return () => {
       alive = false;
     };
-  }, [supabase, tick]);
+  }, [supabase, tick, proyectoModuloFiltro, proyectoObraFiltro]);
 
   useEffect(() => {
     if (soloPendientes) {
@@ -232,11 +282,25 @@ export default function RrhhGestionPersonalClient({
     let alive = true;
     (async () => {
       setLoadingObra(true);
-      const { data: asg, error: e1 } = await supabase
+      let scopeIds: string[] | null = null;
+      const pm = proyectoModuloFiltro;
+      const po = proyectoObraFiltro;
+      if (pm) {
+        const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, pm);
+        if (!alive) return;
+        scopeIds = Array.from(new Set([pm, ...hijas]));
+      } else if (po) {
+        scopeIds = [po];
+      }
+      let q = supabase
         .from('project_assignments')
         .select('id,labor_request_id,worker_id,project_id,created_at')
         .order('created_at', { ascending: false })
         .limit(800);
+      if (scopeIds != null && scopeIds.length > 0) {
+        q = q.in('project_id', scopeIds);
+      }
+      const { data: asg, error: e1 } = await q;
       if (!alive) return;
       if (e1) {
         setAssignments([]);
@@ -274,7 +338,7 @@ export default function RrhhGestionPersonalClient({
     return () => {
       alive = false;
     };
-  }, [supabase, tick, soloPendientes]);
+  }, [supabase, tick, soloPendientes, proyectoModuloFiltro, proyectoObraFiltro]);
 
   const asignacionesPorProyecto = useMemo(() => {
     const m = new Map<string, AssignmentRow[]>();
@@ -382,12 +446,40 @@ export default function RrhhGestionPersonalClient({
     }
   }
 
+  const hayFiltroAlcance = Boolean(proyectoModuloFiltro || proyectoObraFiltro);
+
+  const bannerAlcanceLabor = hayFiltroAlcance ? (
+    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3 py-2 text-sm text-sky-100 sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        <span className="font-semibold text-white">Alcance del proyecto:</span>{' '}
+        {alcanceNombre ? `«${alcanceNombre}»` : 'Seleccionado'}{' '}
+        <span className="text-sky-200/90">
+          (este módulo integral y obras Talento vinculadas; solicitudes pendientes y personal en obra acotados a ese
+          alcance).
+        </span>
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="shrink-0 border-sky-600/60 text-sky-100"
+        onClick={() => replaceGestionUrl({ proyecto_modulo: null, proyecto: null })}
+      >
+        Ver todo (todos los proyectos)
+      </Button>
+    </div>
+  ) : null;
+
   const pendientesInner = (
     <>
       {loadingPending ? (
         <p className="text-sm text-zinc-500">Cargando…</p>
       ) : pending.length === 0 ? (
-        <p className="text-sm text-zinc-500">No hay solicitudes en estado pending.</p>
+        <p className="text-sm text-zinc-500">
+          {hayFiltroAlcance
+            ? 'No hay solicitudes pendientes para el alcance de este proyecto.'
+            : 'No hay solicitudes en estado pending.'}
+        </p>
       ) : (
         <Table>
           <TableHeader>
@@ -461,13 +553,14 @@ export default function RrhhGestionPersonalClient({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-white">
+      {bannerAlcanceLabor}
       {soloPendientes ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">{pendientesInner}</div>
       ) : (
         <Tabs
           value={tab}
           onValueChange={(v) => {
-            router.replace(`/rrhh/gestion-personal?tab=${encodeURIComponent(v)}`, { scroll: false });
+            replaceGestionUrl({ tab: v });
           }}
           className="w-full"
         >

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Link2, MessageSquareText, RefreshCw, ScrollText, Trash2, Users } from 'lucide-react';
+import { ClipboardList, FileText, Link2, MessageSquareText, RefreshCw, ScrollText, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ModalGenerarContrato } from '@/app/rrhh/hojas-vida/components/ModalGenerarContrato';
@@ -392,11 +392,11 @@ export default function RrhhHojasVidaPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">RRHH — Hojas de vida recibidas</h1>
             <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              Expedientes «cv_completado». <span className="text-zinc-200">Hoja de empleo</span> /{' '}
-              <span className="text-zinc-200">Hoja de vida</span> abren el visor PDF. <span className="text-zinc-200">Evaluación</span>{' '}
-              genera el enlace <code className="text-zinc-500">/talento/examen?token=…</code> (copia y abre; valida con la
-              cédula del expediente). Onboarding PDF:{' '}
-              <code className="text-zinc-500">/api/talento/hoja-vida/pdf?token=…</code>.
+              Expedientes «cv_completado» de <span className="text-zinc-200">todos los proyectos y entidades</span>.{' '}
+              <span className="text-zinc-200">Hoja de empleo</span> / <span className="text-zinc-200">Hoja de vida</span> abren el
+              visor PDF. <span className="text-zinc-200">Evaluación</span> genera el enlace{' '}
+              <code className="text-zinc-500">/talento/examen?token=…</code> (copia y abre; valida con la cédula del expediente).
+              Onboarding PDF: <code className="text-zinc-500">/api/talento/hoja-vida/pdf?token=…</code>.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -407,6 +407,14 @@ export default function RrhhHojasVidaPage() {
             >
               <Users className="h-4 w-4" aria-hidden />
               Cuadro de obreros
+            </Link>
+            <Link
+              href="/rrhh/gestion-personal?solo=pendientes"
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-500/35 bg-violet-950/40 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/55"
+              title="Solicitudes de mano de obra pendientes en todos los proyectos"
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden />
+              Solicitudes personal
             </Link>
             <Link
               href="/rrhh/oficios-salarios"

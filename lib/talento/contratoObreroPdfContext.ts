@@ -127,7 +127,7 @@ export async function cargarFuentesContratoObreroPdf(
     admin
       .from('ci_empleados')
       .select(
-        'nombre_completo,nombres,documento,cedula,direccion_domicilio,direccion_habitacion,nacionalidad,celular,telefono,hoja_vida_obrero,proyecto_modulo_id,recruitment_need_id',
+        'nombre_completo,nombres,documento,cedula,direccion_domicilio,direccion_habitacion,nacionalidad,estado_civil,celular,telefono,hoja_vida_obrero,proyecto_modulo_id,recruitment_need_id',
       )
       .eq('id', row.empleado_id)
       .maybeSingle(),
@@ -155,6 +155,7 @@ export async function cargarFuentesContratoObreroPdf(
     direccion_domicilio?: string | null;
     direccion_habitacion?: string | null;
     nacionalidad?: string | null;
+    estado_civil?: string | null;
     celular?: string | null;
     telefono?: string | null;
     hoja_vida_obrero?: unknown;
@@ -202,6 +203,7 @@ export async function cargarFuentesContratoObreroPdf(
       cedula: empleado.cedula,
       direccion: empleado.direccion,
       nacionalidad: empleado.nacionalidad,
+      estado_civil: empleado.estado_civil,
       celular: empleado.celular,
       telefono: empleado.telefono,
     },
@@ -296,7 +298,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   const { data: emp, error: ee } = await supabase
     .from('ci_empleados')
     .select(
-      'nombre_completo,nombres,documento,cedula,direccion_domicilio,direccion_habitacion,nacionalidad,celular,telefono,hoja_vida_obrero,cargo_nombre,cargo_codigo,cargo_nivel,proyecto_modulo_id,recruitment_need_id',
+      'nombre_completo,nombres,documento,cedula,direccion_domicilio,direccion_habitacion,nacionalidad,estado_civil,celular,telefono,hoja_vida_obrero,cargo_nombre,cargo_codigo,cargo_nivel,proyecto_modulo_id,recruitment_need_id',
     )
     .eq('id', eid)
     .maybeSingle();
@@ -313,6 +315,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     direccion_domicilio?: string | null;
     direccion_habitacion?: string | null;
     nacionalidad?: string | null;
+    estado_civil?: string | null;
     celular?: string | null;
     telefono?: string | null;
     hoja_vida_obrero?: unknown;
@@ -437,6 +440,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
       cedula: empleado.cedula,
       direccion: empleado.direccion,
       nacionalidad: empleado.nacionalidad,
+      estado_civil: empleado.estado_civil,
       celular: empleado.celular,
       telefono: empleado.telefono,
     },
@@ -614,6 +618,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
     nombres: f.empleado.nombre_completo,
     nacionalidad,
+    estado_civil: strOpt(f.empleado.estado_civil),
     cedula: f.empleado.cedula ?? f.empleado.documento,
     direccion_domicilio: direccionHab,
     cargo_nombre: cargoNom,
@@ -679,9 +684,14 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     ),
   };
 
+  const obraDenomRaw = (f.obra.nombre ?? '').trim();
+  const obraDenominadaPdf =
+    obraDenomRaw.length > 0 && obraDenomRaw.toLowerCase() !== 'por definir' ? obraDenomRaw : null;
+
   const contratoPdf: ContratoObreroPdfStructuredProps['contrato'] = {
     objeto_contrato: strOpt(f.contrato.objeto_contrato),
     lugar_prestacion_servicio: strOpt(f.contrato.lugar_prestacion_servicio),
+    obra_denominada: obraDenominadaPdf,
   };
 
   return {
