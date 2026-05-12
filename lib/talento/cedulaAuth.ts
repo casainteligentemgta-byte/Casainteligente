@@ -9,6 +9,9 @@ export function normCedulaToken(s: string): string {
     .toUpperCase();
 }
 
+/** Tras {@link normCedulaToken}: letra V o E y 6–9 dígitos (ej. `V12345678`). */
+export const CEDULA_VE_NORMALIZADA_REGEX = /^[VE]\d{6,9}$/;
+
 /**
  * Número nacional sin prefijo (cédula VE: letra V/E opcional + dígitos).
  * Permite coincidir `V13848186` con `13848186` cuando el expediente y la URL difieren solo en el prefijo.

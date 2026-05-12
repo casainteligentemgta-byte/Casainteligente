@@ -1,7 +1,5 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
-import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 
 const styles = StyleSheet.create({
@@ -49,10 +47,18 @@ export type EntidadContratoPdf = {
   rif?: string | null;
   domicilio_fiscal?: string | null;
   direccion_fiscal?: string | null;
+  /** Opcional: municipio de la sede (comparecencia). Si falta, línea en blanco en el PDF. */
+  municipio_fiscal?: string | null;
+  /** Opcional: estado de la sede (comparecencia). */
+  estado_fiscal?: string | null;
   representante_legal?: string | null;
   rep_legal_nombre?: string | null;
   rep_legal_cedula?: string | null;
   rep_legal_cargo?: string | null;
+  /** Opcional: nacionalidad del representante (comparecencia). */
+  rep_legal_nacionalidad?: string | null;
+  /** Opcional: estado civil del representante (comparecencia). */
+  rep_legal_estado_civil?: string | null;
   rm_oficina?: string | null;
   rm_fecha?: string | null;
   rm_numero?: string | null;
@@ -68,6 +74,10 @@ export type EmpleadoContratoPdf = {
   documento?: string | null;
   direccion_domicilio?: string | null;
   direccion_habitacion?: string | null;
+  /** Opcional: municipio del domicilio del trabajador (comparecencia). */
+  municipio_domicilio?: string | null;
+  /** Opcional: estado del domicilio del trabajador (comparecencia). */
+  estado_domicilio?: string | null;
   cargo_nombre?: string | null;
   tareas_especificas?: string | null;
 };
@@ -281,12 +291,24 @@ export function ContratoObreroPDF({
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '________________________________________________'),
   );
   const repCedulaGuion = cedulaConGuion(entidad.rep_legal_cedula);
-  const oficinaRmContrato = textoTrasLaPalabraOficinaDe(str(entidad.rm_oficina, ''));
-  const rmFecha = str(fechaLargaRegistroMercantilContratoVe(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
-  const rmNumero = str(entidad.rm_numero, '[N° NO REGISTRADO]');
-  const rmTomo = str(entidad.rm_tomo, '[TOMO NO REGISTRADO]');
   const rifEntidadLinea = rifPatronoDisplay(str(entidad.rif, ''));
-  const cargoRepresentacion = str(entidad.rep_legal_cargo, '________________________');
+  const razonComparecencia = nombreLegalSociedad.trim().replace(/\.\s*$/, '');
+  const domicilioEmpresa = str(
+    entidad.domicilio_fiscal ?? entidad.direccion_fiscal,
+    '________________________________________________________________',
+  );
+  const phMun = '___________';
+  const phEdo = '___________';
+  const phRepNat = '________________';
+  const phRepEc = '____________';
+  const municipioEmpresa = str(entidad.municipio_fiscal, phMun);
+  const estadoEmpresa = str(entidad.estado_fiscal, phEdo);
+  const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
+  const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
+  const nacionalidadTrab = str(empleado.nacionalidad, '__________');
+  const municipioTrab = str(empleado.municipio_domicilio, phMun);
+  const estadoTrabPdf = str(empleado.estado_domicilio, phEdo);
+  const repCedulaLinea = str(repCedulaGuion, '_______________');
   const compUsdMes =
     parametros.compensacionCulminacionUsdPorMes != null &&
     Number.isFinite(Number(parametros.compensacionCulminacionUsdPorMes)) &&
@@ -303,25 +325,26 @@ export function ContratoObreroPDF({
         <Text style={[styles.meta, styles.metaFirst]}>Expediente: {expedienteId.trim()}</Text>
       ) : null}
 
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        Entre la Sociedad Mercantil denominada: <Text style={styles.bold}>“{nombreLegalSociedad}”</Text> RIF. N°{' '}
-        <Text style={styles.bold}>{rifEntidadLinea}</Text>, inscrita por ante la{' '}
-        <Text style={styles.bold}>Oficina de {oficinaRmContrato}</Text>, constando en el Tomo{' '}
-        <Text style={styles.bold}>{rmTomo}</Text>, bajo el Nº <Text style={styles.bold}>{rmNumero}</Text>, de fecha{' '}
-        <Text style={styles.bold}>{rmFecha}</Text>, de los Libros de Registro de Comercio, inscrita en el Registro de
-        Información Fiscal, representada en este acto por el Ciudadano: <Text style={styles.bold}>“{rep}”</Text>, titular
-        de la Cédula de Identidad número <Text style={styles.bold}>{repCedulaGuion}</Text>, en su carácter de{' '}
-        <Text style={styles.bold}>{cargoRepresentacion}</Text>, quien en lo sucesivo se denominará{' '}
-        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte; y por la otra el ciudadano:{'\n\n'}
-        <Text style={styles.bold}>NOMBRE DEL TRABAJADOR:</Text> <Text style={styles.bold}>{nombreTrabajador}</Text>
-        {'\n'}
-        <Text style={styles.bold}>CÉDULA DE IDENTIDAD:</Text> <Text style={styles.bold}>{cedulaTrabGuion}</Text>
-        {'\n'}
-        <Text style={styles.bold}>ESTADO CIVIL:</Text> <Text style={styles.bold}>{estadoCivilTrab}</Text>
-        {'\n'}
-        <Text style={styles.bold}>DOMICILIO:</Text> <Text style={styles.bold}>“{domicilioTrab}”</Text>
-        {'\n\n'}
-        quien en lo sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido lo siguiente:
+      <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
+        Entre <Text style={styles.bold}>{razonComparecencia}</Text>, Sociedad Mercantil domiciliada en{' '}
+        <Text style={styles.bold}>{domicilioEmpresa}</Text>, Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>
+        , Estado <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N° <Text style={styles.bold}>{rifEntidadLinea}</Text>
+        , representada en este acto por el Ciudadano <Text style={styles.bold}>{rep}</Text>,{' '}
+        <Text style={styles.bold}>{nacionalidadRep}</Text>, <Text style={styles.bold}>{estadoCivilRep}</Text>, mayor de
+        edad, hábil en derecho, de este domicilio, titular de la Cédula de Identidad número{' '}
+        <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
+        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra el ciudadano{' '}
+        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor
+        de edad, hábil en derecho, <Text style={styles.bold}>{estadoCivilTrab}</Text>, titular de la cédula de identidad
+        número <Text style={styles.bold}>{cedulaTrabGuion}</Text>, domiciliado en{' '}
+        <Text style={styles.bold}>{domicilioTrab}</Text>, Municipio <Text style={styles.bold}>{municipioTrab}</Text>,
+        Estado <Text style={styles.bold}>{estadoTrabPdf}</Text>
+        ; quien en lo sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en
+        celebrar, como en efecto se celebra, el presente Contrato de Trabajo para una Obra Determinada, conforme a lo
+        establecido en el Artículo 63 de la Ley Orgánica de Trabajo de los Trabajadores y Trabajadoras, y las cláusulas
+        18 y 19 de la vigente Convención Colectiva de Trabajo para la Rama de la Industria de la Construcción, conexos,
+        afines y similares de la República Bolivariana de Venezuela, el cual se regirá por las Cláusulas que se
+        estipulan a continuación:
       </Text>
     </>
   );

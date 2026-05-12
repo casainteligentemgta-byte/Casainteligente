@@ -1,4 +1,5 @@
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
+import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
 
 export type DatoContratoFaltante = {
@@ -10,6 +11,37 @@ export type DatoContratoFaltante = {
 
 const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   PATRON_NOMBRE: { etiqueta: 'Nombre del patrono', ayuda: 'RRHH puede definirlo en la plantilla o datos de empresa.' },
+  PATRON_RAZON_SOCIAL: {
+    etiqueta: 'Razón social con tipo societario (comparecencia)',
+    ayuda: 'Desde `ci_entidades.nombre_legal` o nombre; si falta tipo, se sugiere «, C.A.».',
+  },
+  PATRON_RIF: { etiqueta: 'RIF del patrono (J-…)', ayuda: 'Campo `rif` en `ci_entidades` vinculada al proyecto.' },
+  PATRON_MUNICIPIO: {
+    etiqueta: 'Municipio de la sede del patrono',
+    ayuda: 'Opcional en BD; si falta aparece línea en blanco. Complete vía overrides RRHH si aplica.',
+  },
+  PATRON_ESTADO: {
+    etiqueta: 'Estado (entidad federal) de la sede del patrono',
+    ayuda: 'Opcional en BD; si falta aparece línea en blanco.',
+  },
+  REP_LEGAL_NOMBRE: { etiqueta: 'Nombre del representante legal', ayuda: '`rep_legal_nombre` en entidad o representante planilla.' },
+  REP_LEGAL_CEDULA: { etiqueta: 'Cédula del representante legal', ayuda: '`rep_legal_cedula` en `ci_entidades`.' },
+  REP_LEGAL_NACIONALIDAD: {
+    etiqueta: 'Nacionalidad del representante',
+    ayuda: 'Opcional; complete en overrides si no está modelado en entidad.',
+  },
+  REP_LEGAL_ESTADO_CIVIL: {
+    etiqueta: 'Estado civil del representante',
+    ayuda: 'Opcional; complete en overrides si no está modelado en entidad.',
+  },
+  EMPLEADO_MUNICIPIO: {
+    etiqueta: 'Municipio del domicilio del trabajador',
+    ayuda: 'Opcional; planilla o overrides RRHH.',
+  },
+  EMPLEADO_ESTADO_GEO: {
+    etiqueta: 'Estado (geográfico) del domicilio del trabajador',
+    ayuda: 'Opcional; planilla o overrides RRHH.',
+  },
   PATRON_DOMICILIO: {
     etiqueta: 'Domicilio fiscal del patrono',
     ayuda:
@@ -73,6 +105,8 @@ export type FuentesContratoObrero = {
     estado_civil?: string | null;
     celular?: string | null;
     telefono?: string | null;
+    municipio_domicilio?: string | null;
+    estado_geografico?: string | null;
   };
   contrato: {
     cargo_oficio_desempeño?: string | null;
@@ -96,13 +130,36 @@ export type FuentesContratoObrero = {
     /** `ci_proyectos.punto_encuentro_transporte_contrato` */
     punto_encuentro_transporte_contrato?: string | null;
   };
-  /** Valores por defecto patrono (env o planilla). */
+  /** Valores por defecto patrono (env, planilla o `ci_entidades`). */
   patron: {
     nombre: string;
+    nombre_legal?: string | null;
     domicilio: string;
     representante: string;
+    rif?: string | null;
+    rep_legal_nombre?: string | null;
+    rep_legal_cedula?: string | null;
+    municipio?: string | null;
+    /** Estado federado de la sede (no confundir con «estado civil»). */
+    estado_geo?: string | null;
+    rep_nacionalidad?: string | null;
+    rep_estado_civil?: string | null;
   };
 };
+
+function rifPlantillaLinea(raw: string): string {
+  const t = raw.trim().toUpperCase();
+  if (!t) return '________________________';
+  if (/^J[-\s]/.test(t)) return t.replace(/\s+/g, '');
+  return `J-${t.replace(/^J/, '').replace(/^[-\s]+/, '')}`;
+}
+
+function cedulaVenezuelaGuion(raw: string): string {
+  const compact = raw.replace(/\s+/g, '').replace(/^V[-\s]*/i, '').replace(/[^\d]/g, '');
+  if (compact.length >= 6 && compact.length <= 10) return `V-${compact}`;
+  const t = raw.trim();
+  return t.length ? t : '_______________';
+}
 
 function str(v: unknown): string {
   if (v == null) return '';
@@ -152,6 +209,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const nombreCompleto = nombreDesdeHoja || str(f.empleado.nombre_completo);
 
   const cedula = str(dp?.cedulaIdentidad) || str(f.empleado.cedula) || str(f.empleado.documento);
+  const cedulaEmpFmt = cedula ? cedulaVenezuelaGuion(cedula) : '';
   const direccion = str(dp?.direccionDomicilio) || str(f.empleado.direccion);
   const celular = str(dp?.celular) || str(f.empleado.celular);
   const nacionalidad = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
@@ -175,12 +233,32 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const lugarFirma =
     str(f.obra.ubicacion) || str(f.obra.nombre) || 'Caracas — República Bolivariana de Venezuela';
 
+  const phMun = '___________';
+  const phEdo = '___________';
+  const phRepNat = '________________';
+  const phRepEc = '____________';
+
+  const razonSocial = razonSocialPatronoParaContratoPdf(f.patron.nombre_legal, f.patron.nombre).trim().replace(/\.\s*$/, '');
+  const repNombre = str(f.patron.rep_legal_nombre) || str(f.patron.representante);
+  const repCed = str(f.patron.rep_legal_cedula);
+  const repCedFmt = repCed ? cedulaVenezuelaGuion(repCed) : '_______________';
+
   return {
+    PATRON_RAZON_SOCIAL: razonSocial || str(f.patron.nombre),
+    PATRON_RIF: rifPlantillaLinea(str(f.patron.rif)),
+    PATRON_MUNICIPIO: str(f.patron.municipio) || phMun,
+    PATRON_ESTADO: str(f.patron.estado_geo) || phEdo,
+    REP_LEGAL_NOMBRE: repNombre,
+    REP_LEGAL_CEDULA: repCedFmt,
+    REP_LEGAL_NACIONALIDAD: str(f.patron.rep_nacionalidad) || phRepNat,
+    REP_LEGAL_ESTADO_CIVIL: str(f.patron.rep_estado_civil) || phRepEc,
+    EMPLEADO_MUNICIPIO: str(f.empleado.municipio_domicilio) || phMun,
+    EMPLEADO_ESTADO_GEO: str(f.empleado.estado_geografico) || phEdo,
     PATRON_NOMBRE: str(f.patron.nombre),
     PATRON_DOMICILIO: str(f.patron.domicilio),
     PATRON_REPRESENTANTE: str(f.patron.representante),
     EMPLEADO_NOMBRE_COMPLETO: nombreCompleto,
-    EMPLEADO_CEDULA: cedula,
+    EMPLEADO_CEDULA: cedulaEmpFmt || cedula,
     EMPLEADO_DIRECCION: direccion,
     EMPLEADO_NACIONALIDAD: nacionalidad,
     EMPLEADO_ESTADO_CIVIL: estadoCivil,
@@ -191,7 +269,8 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_LUGAR_PRESTACION: str(f.contrato.lugar_prestacion_servicio) || str(f.obra.nombre),
     CONTRATO_OBJETO: str(f.contrato.objeto_contrato) ? ` ${str(f.contrato.objeto_contrato)}` : '',
     CONTRATO_TIPO_PLAZO: tipoPlazoHuman(f.contrato.tipo_contrato),
-    CONTRATO_JORNADA: jornadaHuman(f.contrato.jornada_trabajo),
+    CONTRATO_JORNADA:
+      jornadaHuman(f.contrato.jornada_trabajo) || str(f.contrato.horario_semanal_texto) || 'por acordar con el reglamento interno',
     CONTRATO_SALARIO_DIARIO_VES: salTxt,
     CONTRATO_SALARIO_DIARIO_VES_NUM: Number.isFinite(salNum) && salNum > 0 ? String(salNum) : '',
     CONTRATO_FORMA_PAGO: formaPagoHuman(f.contrato.forma_pago),

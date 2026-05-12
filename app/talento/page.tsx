@@ -37,6 +37,20 @@ export default function TalentoHomePage() {
           Módulo operativo para reclutamiento con examen cronometrado, semáforo de contratación, contratos legales
           parametrizables y control económico de obra.
         </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/talento/admin/contratos/fast-create"
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/20 transition-colors"
+          >
+            Generar Contrato Express (Sin Registro)
+          </Link>
+          <Link
+            href="/talento/admin/contratos/fast-list"
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-600 bg-zinc-900/80 px-4 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-800 transition-colors"
+          >
+            Listado contratos express
+          </Link>
+        </div>
       </header>
 
       <div className="grid sm:grid-cols-2 gap-4">

@@ -182,7 +182,7 @@ export async function cargarFuentesContratoObreroPdf(
     jornadaTrabajo: row.jornada_trabajo,
   });
 
-  const patron = await resolverPatronoDesdeEntidad(admin, strOpt(o.entidad_id));
+  const patronBase = await resolverPatronoDesdeEntidad(admin, strOpt(o.entidad_id));
   const domDesdeHoja = patronEmpresaDomicilioDesdeHojaJson(e.hoja_vida_obrero);
   const planillaCampos = await resolvePlanillaPatronoParaEmpleado(
     admin,
@@ -194,7 +194,14 @@ export async function cargarFuentesContratoObreroPdf(
     { proyectoModuloIdAlternativo: vinculo },
   );
   const domDesdePlanilla = strOpt(planillaCampos.empresaDomicilio);
-  const domicilioPatrono = domDesdeHoja ?? domDesdePlanilla ?? patron.domicilio;
+  const domicilioPatrono = domDesdeHoja ?? domDesdePlanilla ?? patronBase.domicilio;
+  const patronExtra = await fetchPatronoEntidadExtraParaPlantilla(admin, strOpt(o.entidad_id));
+  const patron: FuentesContratoObrero['patron'] = {
+    nombre: patronBase.nombre,
+    domicilio: domicilioPatrono,
+    representante: patronBase.representante,
+    ...patronExtra,
+  };
 
   const fuentes: FuentesContratoObrero = {
     empleado: {
@@ -260,6 +267,28 @@ function strOpt(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim();
   return s || null;
+}
+
+/** RIF y representante legal desde `ci_entidades` para la plantilla biblioteca (comparecencia). */
+async function fetchPatronoEntidadExtraParaPlantilla(
+  supabase: SupabaseClient,
+  entidadId: string | null,
+): Promise<Partial<FuentesContratoObrero['patron']>> {
+  const eid = (entidadId ?? '').trim();
+  if (!eid) return {};
+  const { data, error } = await supabase
+    .from('ci_entidades')
+    .select('nombre_legal,rif,rep_legal_nombre,rep_legal_cedula')
+    .eq('id', eid)
+    .maybeSingle();
+  if (error || !data || typeof data !== 'object') return {};
+  const r = data as Record<string, unknown>;
+  return {
+    nombre_legal: strOpt(r.nombre_legal) ?? undefined,
+    rif: strOpt(r.rif) ?? undefined,
+    rep_legal_nombre: strOpt(r.rep_legal_nombre) ?? undefined,
+    rep_legal_cedula: strOpt(r.rep_legal_cedula) ?? undefined,
+  };
 }
 
 function primerRepresentanteRegistro(raw: unknown): { nombre?: string; cedula?: string; cargo?: string } {
@@ -419,7 +448,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
 
   const hv = parseHojaVidaObrero(e.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
   const empleado = fusionarEmpleadoContratoDesdePlanilla(e, hv);
-  const patron = await resolverPatronoDesdeEntidad(supabase, entidadId);
+  const patronBase = await resolverPatronoDesdeEntidad(supabase, entidadId);
   const domDesdeHoja = patronEmpresaDomicilioDesdeHojaJson(e.hoja_vida_obrero);
   const planillaCampos = await resolvePlanillaPatronoParaEmpleado(
     supabase,
@@ -431,7 +460,14 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
     { proyectoModuloIdAlternativo: proyectoId },
   );
   const domDesdePlanilla = strOpt(planillaCampos.empresaDomicilio);
-  const domicilioPatrono = domDesdeHoja ?? domDesdePlanilla ?? patron.domicilio;
+  const domicilioPatrono = domDesdeHoja ?? domDesdePlanilla ?? patronBase.domicilio;
+  const patronExtra = await fetchPatronoEntidadExtraParaPlantilla(supabase, entidadId);
+  const patron: FuentesContratoObrero['patron'] = {
+    nombre: patronBase.nombre,
+    domicilio: domicilioPatrono,
+    representante: patronBase.representante,
+    ...patronExtra,
+  };
 
   const fuentes: FuentesContratoObrero = {
     empleado: {
@@ -691,6 +727,214 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const contratoPdf: ContratoObreroPdfStructuredProps['contrato'] = {
     objeto_contrato: strOpt(f.contrato.objeto_contrato),
     lugar_prestacion_servicio: strOpt(f.contrato.lugar_prestacion_servicio),
+    obra_denominada: obraDenominadaPdf,
+  };
+
+  return {
+    ok: true,
+    props: {
+      expedienteId: null,
+      empleado,
+      entidad,
+      configNomina,
+      parametros,
+      contrato: contratoPdf,
+    },
+  };
+}
+
+/** Entrada manual para contrato express (sin `ci_empleados`). */
+export type ContratoExpressManualInput = {
+  obreroNombre: string;
+  obreroCedula: string;
+  obreroDireccion?: string | null;
+  nacionalidad?: string | null;
+  estadoCivil?: string | null;
+  fechaIngreso?: string | null;
+  fechaFirmaContratoIso?: string | null;
+  objetoContrato?: string | null;
+  jornadaTrabajo?: string | null;
+  tipoContrato?: string | null;
+};
+
+/**
+ * Props para {@link ContratoObreroPDF} cuando no hay empleado registrado: proyecto + fila del tabulador + datos manuales.
+ */
+export async function cargarPropsContratoObreroPdfExpress(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  configNominaId: string,
+  manual: ContratoExpressManualInput,
+): Promise<{ ok: true; props: ContratoObreroPdfStructuredProps } | { ok: false; error: string }> {
+  const pid = proyectoId.trim();
+  const nid = configNominaId.trim();
+  if (!pid || !nid) {
+    return { ok: false, error: 'proyecto_id y config_nomina_id son obligatorios.' };
+  }
+
+  const [{ data: obra, error: eo }, { data: nomRow, error: en }] = await Promise.all([
+    supabase
+      .from('ci_proyectos')
+      .select(
+        'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
+      )
+      .eq('id', pid)
+      .maybeSingle(),
+    supabase
+      .from('ci_config_nomina')
+      .select('cargo_nombre,cargo_codigo,salario_base_mensual,cestaticket_mensual,nivel_salarial,vigencia_desde')
+      .eq('id', nid)
+      .maybeSingle(),
+  ]);
+
+  if (eo || !obra) {
+    return { ok: false, error: eo?.message ?? 'Proyecto no encontrado.' };
+  }
+  if (en || !nomRow || typeof nomRow !== 'object') {
+    return { ok: false, error: en?.message ?? 'Cargo / tabulador no encontrado.' };
+  }
+
+  const o = obra as {
+    nombre: string;
+    ubicacion_texto?: string | null;
+    obra_ubicacion?: string | null;
+    entidad_id?: string | null;
+    horario_semanal_obra_default?: string | null;
+    punto_encuentro_transporte_contrato?: string | null;
+  };
+
+  const nom = nomRow as {
+    cargo_nombre?: string | null;
+    cargo_codigo?: string | null;
+    salario_base_mensual?: unknown;
+    cestaticket_mensual?: unknown;
+    nivel_salarial?: number | null;
+  };
+
+  const entidadId = strOpt(o.entidad_id);
+  const { data: ent } = entidadId
+    ? await supabase
+        .from('ci_entidades')
+        .select(
+          'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+        )
+        .eq('id', entidadId)
+        .maybeSingle()
+    : { data: null };
+
+  const entidadRow = (ent ?? null) as Record<string, unknown> | null;
+  const patronBase = await resolverPatronoDesdeEntidad(supabase, entidadId);
+  const domicilioEmpresaSegunRegistro = entidadRow
+    ? domicilioPatronoParaEntidad({
+        nombre_legal: strOpt(entidadRow.nombre_legal),
+        nombre: strOpt(entidadRow.nombre),
+        domicilio_fiscal: strOpt(entidadRow.domicilio_fiscal),
+        direccion_fiscal: strOpt(entidadRow.direccion_fiscal),
+        registro_mercantil: entidadRow.registro_mercantil,
+      })
+    : null;
+  const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
+  const rm = parseRegistroMercantilRecord(entidadRow?.registro_mercantil);
+  const rmCampos = camposRegistroMercantilDesdeRecord(rm);
+  const patronExtra = await fetchPatronoEntidadExtraParaPlantilla(supabase, entidadId);
+
+  const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
+    nombre_legal: strOpt(entidadRow?.nombre_legal) ?? strOpt(entidadRow?.nombre) ?? patronBase.nombre,
+    nombre: strOpt(entidadRow?.nombre),
+    domicilio_fiscal: domicilioEmpresaSegunRegistro ?? patronBase.domicilio,
+    direccion_fiscal: strOpt(entidadRow?.direccion_fiscal),
+    representante_legal: patronBase.representante,
+    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre ?? patronExtra.rep_legal_nombre,
+    rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula ?? patronExtra.rep_legal_cedula,
+    rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? rmRep.cargo,
+    rif: strOpt(entidadRow?.rif) ?? patronExtra.rif,
+    rm_oficina: strOpt(rmCampos.circunscripcion) || null,
+    rm_fecha: strOpt(rmCampos.fecha) || null,
+    rm_numero: strOpt(rmCampos.numero) || null,
+    rm_tomo: strOpt(rmCampos.tomo) || null,
+  };
+  rellenarEntidadCasaInteligenteContratoPdf(entidad, entidadRow, patronBase.nombre);
+
+  const ubic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
+  const horarioSemanalResuelto = resolverTextoHorarioSemanalObra({
+    horarioContrato: null,
+    horarioProyectoDefault: strOpt(o.horario_semanal_obra_default),
+    jornadaTrabajo: manual.jornadaTrabajo,
+  });
+
+  const cargoNom = strOpt(nom.cargo_nombre);
+  const nombreObrero = manual.obreroNombre.trim();
+  const cedulaObrero = manual.obreroCedula.trim();
+  const dirObrero = strOpt(manual.obreroDireccion);
+
+  const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
+    nombres: nombreObrero,
+    nombre_completo: nombreObrero,
+    cedula: cedulaObrero,
+    documento: cedulaObrero,
+    direccion_domicilio: dirObrero ?? undefined,
+    direccion_habitacion: dirObrero ?? undefined,
+    nacionalidad: strOpt(manual.nacionalidad) ?? undefined,
+    estado_civil: strOpt(manual.estadoCivil) ?? undefined,
+    cargo_nombre: cargoNom,
+    tareas_especificas: cargoNom,
+  };
+
+  const smRaw = Number(nom.salario_base_mensual);
+  const ceRaw = Number(nom.cestaticket_mensual);
+  const salarioMensual = Number.isFinite(smRaw) && smRaw > 0 ? smRaw : null;
+  const cestaMensual = Number.isFinite(ceRaw) && ceRaw >= 0 ? ceRaw : null;
+
+  const salarioDiarioNum =
+    salarioMensual != null
+      ? Math.round((salarioMensual / DIAS_MES_REF_SALARIO) * 10000) / 10000
+      : null;
+
+  const codTab = strOpt(nom.cargo_codigo);
+  const nivelTab = nom.nivel_salarial;
+  const nivelDesdeTab =
+    nivelTab != null && Number.isFinite(Number(nivelTab)) && Number(nivelTab) >= 1 && Number(nivelTab) <= 9
+      ? Number(nivelTab)
+      : null;
+  const nivelGaceta =
+    nivelDesdeTab ??
+    nivelGacetaDesdeCodigoOficio(codTab) ??
+    nivelGacetaDesdeSalarioBasicoDiarioVes(salarioDiarioNum);
+
+  const ingresoUsdNum =
+    nivelGaceta != null ? ingresoSemanalConsolidadoUsdDesdeNivelGaceta(nivelGaceta, cestaMensual) : null;
+  const ingresoSemanalUsdTabulador =
+    ingresoUsdNum != null && Number.isFinite(ingresoUsdNum) ? formatearUsdContratoPdf(ingresoUsdNum) : null;
+
+  const configNomina: ContratoObreroPdfStructuredProps['configNomina'] = {
+    funciones_oficiales: cargoNom,
+    salario_base_mensual: salarioMensual,
+    cestaticket_mensual: cestaMensual,
+    salario_basico_diario_ves: salarioDiarioNum,
+  };
+
+  const fechaIngreso = strOpt(manual.fechaIngreso);
+  const fechaFirma = strOpt(manual.fechaFirmaContratoIso) ?? fechaIngreso;
+
+  const parametros: ContratoObreroPdfStructuredProps['parametros'] = {
+    tipoPlazo: strOpt(manual.tipoContrato),
+    fechaIngreso: fechaIngreso ?? undefined,
+    horarioSemanal: horarioSemanalResuelto,
+    fechaFirmaContratoIso: fechaFirma ?? fechaIngreso ?? undefined,
+    ingresoSemanalConsolidadoUsdTexto: ingresoSemanalUsdTabulador,
+    textoPuntoEncuentroTransporteSex: textoPuntoEncuentroTransporteClausulaSex(
+      strOpt(o.punto_encuentro_transporte_contrato),
+    ),
+  };
+
+  const obraNombre = (o.nombre ?? '').trim();
+  const obraDenominadaPdf =
+    obraNombre.length > 0 && obraNombre.toLowerCase() !== 'por definir' ? obraNombre : null;
+  const lugarPrestacion = ubic || obraNombre || null;
+
+  const contratoPdf: ContratoObreroPdfStructuredProps['contrato'] = {
+    objeto_contrato: strOpt(manual.objetoContrato),
+    lugar_prestacion_servicio: lugarPrestacion,
     obra_denominada: obraDenominadaPdf,
   };
 

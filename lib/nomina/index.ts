@@ -11,3 +11,11 @@ export {
   SALARIO_BASICO_DIARIO_VES_POR_NIVEL,
   TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20,
 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
+export {
+  ingresoSemanalConsolidadoUsdDesdeConfigNomina,
+  ingresoSemanalTotalBolivares,
+  ingresoSemanalTotalDesdeConfigNomina,
+  nivelEfectivoDesdeConfigNomina,
+  sueldoSemanalReferenciaBolivares,
+  type ConfigNominaTabuladorLike,
+} from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';

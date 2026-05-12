@@ -1,0 +1,175 @@
+import { createElement } from 'react';
+import { pdf } from '@react-pdf/renderer';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import {
+  cargarPropsContratoObreroPdfExpress,
+  type ContratoExpressManualInput,
+} from '@/lib/talento/contratoObreroPdfContext';
+import {
+  BUCKET_CONTRATOS_OBREROS,
+  signedUrlContratoLaboralBucket,
+} from '@/lib/talento/contratoLaboralRegistroStorage';
+import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { createClient } from '@/lib/supabase/server';
+import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+
+export const runtime = 'nodejs';
+
+const postBodySchema = z.object({
+  proyecto_id: z.string().uuid(),
+  config_nomina_id: z.string().uuid(),
+  obrero_nombre: z.string().min(2).max(200),
+  obrero_cedula: z.preprocess(
+    (v) => normCedulaToken(String(v ?? '')),
+    z.string().regex(CEDULA_VE_NORMALIZADA_REGEX, 'Formato de cédula inválido (Ej: V-12345678)'),
+  ),
+  obrero_direccion: z.string().max(500).optional().nullable(),
+  bono_manual_ves: z.coerce.number().nonnegative().default(0),
+  fecha_ingreso: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
+  objeto_contrato: z.string().max(2000).optional().nullable(),
+  jornada_trabajo: z.enum(['DIURNA', 'NOCTURNA', 'MIXTA', 'diurna', 'nocturna', 'mixta']).optional().nullable(),
+  tipo_contrato: z.string().max(120).optional().nullable(),
+  nacionalidad: z.string().max(80).optional().nullable(),
+  estado_civil: z.string().max(80).optional().nullable(),
+});
+
+function manualDesdeBody(
+  parsed: z.infer<typeof postBodySchema>,
+  fechaFirmaIso: string,
+): ContratoExpressManualInput {
+  return {
+    obreroNombre: parsed.obrero_nombre.trim(),
+    obreroCedula: parsed.obrero_cedula.trim(),
+    obreroDireccion: parsed.obrero_direccion?.trim() || null,
+    nacionalidad: parsed.nacionalidad?.trim() || null,
+    estadoCivil: parsed.estado_civil?.trim() || null,
+    fechaIngreso: parsed.fecha_ingreso?.trim() || fechaFirmaIso,
+    fechaFirmaContratoIso: fechaFirmaIso,
+    objetoContrato: parsed.objeto_contrato?.trim() || null,
+    jornadaTrabajo: parsed.jornada_trabajo?.trim() || null,
+    tipoContrato: parsed.tipo_contrato?.trim() || null,
+  };
+}
+
+/**
+ * POST — Genera PDF estructurado de contrato obrero sin expediente, lo sube a `contratos_obreros` y registra en `ci_contratos_express`.
+ */
+export async function POST(req: Request) {
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+
+  const parsed = postBodySchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Datos inválidos', details: parsed.error.flatten().fieldErrors },
+      { status: 400 },
+    );
+  }
+
+  const body = parsed.data;
+  const fechaFirmaIso =
+    body.fecha_ingreso?.trim() ||
+    (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+
+  const manual = manualDesdeBody(body, fechaFirmaIso);
+
+  const loaded = await cargarPropsContratoObreroPdfExpress(
+    admin.client,
+    body.proyecto_id,
+    body.config_nomina_id,
+    manual,
+  );
+  if (!loaded.ok) {
+    return NextResponse.json({ error: loaded.error }, { status: 400 });
+  }
+
+  const expressId = crypto.randomUUID();
+  const expedienteLabel = `EXPRESS-${expressId.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+
+  let buf: Buffer;
+  try {
+    const node = createElement(ContratoObreroPDF, {
+      ...loaded.props,
+      expedienteId: expedienteLabel,
+    });
+    const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
+    buf = Buffer.from(await blob.arrayBuffer());
+  } catch (e) {
+    console.error('[contratos-fast] pdf', e);
+    return NextResponse.json({ error: 'No se pudo generar el PDF' }, { status: 500 });
+  }
+
+  const storagePath = `express/${expressId}/contrato-estructurado.pdf`;
+  const { error: upErr } = await admin.client.storage.from(BUCKET_CONTRATOS_OBREROS).upload(storagePath, buf, {
+    contentType: 'application/pdf',
+    upsert: true,
+  });
+  if (upErr) {
+    console.error('[contratos-fast] storage', upErr.message);
+    return NextResponse.json({ error: upErr.message }, { status: 500 });
+  }
+
+  let createdBy: string | null = null;
+  try {
+    const sb = await createClient();
+    const { data: u } = await sb.auth.getUser();
+    createdBy = u.user?.id ?? null;
+  } catch {
+    /* sin sesión */
+  }
+
+  const { data: nomSnap } = await admin.client
+    .from('ci_config_nomina')
+    .select('cargo_nombre,salario_base_mensual')
+    .eq('id', body.config_nomina_id)
+    .maybeSingle();
+  const snap = nomSnap as { cargo_nombre?: string | null; salario_base_mensual?: unknown } | null;
+  const salSnap = snap?.salario_base_mensual != null ? Number(snap.salario_base_mensual) : null;
+
+  const { error: insErr } = await admin.client.from('ci_contratos_express').insert({
+    id: expressId,
+    proyecto_id: body.proyecto_id,
+    config_nomina_id: body.config_nomina_id,
+    obrero_nombre: body.obrero_nombre.trim(),
+    obrero_cedula: body.obrero_cedula.trim(),
+    obrero_direccion: body.obrero_direccion?.trim() || null,
+    bono_manual_ves: body.bono_manual_ves,
+    salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
+    cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
+    pdf_storage_path: storagePath,
+    created_by: createdBy,
+  } as never);
+
+  if (insErr) {
+    console.error('[contratos-fast] insert', insErr.message);
+    return NextResponse.json(
+      { error: insErr.message.includes('relation') ? 'Ejecute la migración 118_ci_contratos_express en Supabase.' : insErr.message },
+      { status: 500 },
+    );
+  }
+
+  const signed = await signedUrlContratoLaboralBucket(admin.client, storagePath, 3600);
+
+  return NextResponse.json({
+    id: expressId,
+    expediente_label: expedienteLabel,
+    pdf_storage_path: storagePath,
+    signed_url: 'url' in signed ? signed.url : null,
+  });
+}

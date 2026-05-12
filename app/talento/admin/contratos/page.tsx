@@ -71,6 +71,12 @@ export default function ContratosAdminPage() {
         <Link href="/talento/admin/documentos" className="text-[#FF9500] hover:text-[#FFD60A]">
           Biblioteca de documentos
         </Link>
+        <Link href="/talento/admin/contratos/fast-create" className="text-amber-500/90 hover:text-amber-400">
+          Contrato express
+        </Link>
+        <Link href="/talento/admin/contratos/fast-list" className="text-amber-500/90 hover:text-amber-400">
+          Listado express
+        </Link>
       </div>
       <h1 className="text-2xl font-bold text-white mb-2">Contratos dinámicos</h1>
       <p className="text-sm text-zinc-400 mb-6">
