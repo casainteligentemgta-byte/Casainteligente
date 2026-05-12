@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    /** Evita `Cannot find module './vendor-chunks/sonner.js'` en dev (SSR + worker de rutas). */
+    serverComponentsExternalPackages: ['sonner'],
+  },
   reactStrictMode: true,
   async redirects() {
     return [{ source: '/reclutamiento/dashboard', destination: '/reclutamiento', permanent: true }];

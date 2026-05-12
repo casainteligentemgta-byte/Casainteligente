@@ -2,7 +2,8 @@ import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
-import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
+import { formatearUsdContratoPdf } from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
+import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 
 /** Carta US Letter (~792 pt alto); márgenes e interlineado ajustados para encajar el contrato en 2 páginas. */
 const styles = StyleSheet.create({
@@ -33,11 +34,13 @@ const styles = StyleSheet.create({
   paragraph: { marginBottom: 6, textAlign: 'justify', lineHeight: 1.28, fontSize: 9.5 },
   paragraphIntro: { marginBottom: 3.5, lineHeight: 1.22 },
   bold: { fontWeight: 'bold' },
-  signatureSection: { flexDirection: 'row', marginTop: 16, justifyContent: 'space-between' },
-  signatureBox: { width: '40%', borderTopWidth: 1, borderColor: '#000', paddingTop: 6, textAlign: 'center', lineHeight: 1.28 },
+  signatureSection: { flexDirection: 'row', marginTop: 14, justifyContent: 'space-between' },
+  signatureBox: { width: '48%', borderTopWidth: 1, borderColor: '#000', paddingTop: 6, textAlign: 'center', lineHeight: 1.28 },
   signatureLine: { marginBottom: 2, lineHeight: 1.25, fontSize: 9.5 },
   meta: { fontSize: 8.5, marginBottom: 10, textAlign: 'center', color: '#333', lineHeight: 1.25 },
   metaFirst: { marginBottom: 4 },
+  /** Cláusula PRIMERA densa (cabida en carta). */
+  clauseDense: { fontSize: 8.6, lineHeight: 1.22, textAlign: 'justify' },
 });
 
 export type EntidadContratoPdf = {
@@ -96,6 +99,8 @@ export type ParametrosContratoPdf = {
    * Viene de `ci_proyectos.punto_encuentro_transporte_contrato` con fallback al texto histórico.
    */
   textoPuntoEncuentroTransporteSex?: string | null;
+  /** USD por mes o fracción en cláusula SEXTA (compensación por culminación); por defecto 100. */
+  compensacionCulminacionUsdPorMes?: number | null;
 };
 
 /** Datos del contrato de obra para partida / lugar (tabla `ci_contratos_empleado_obra`). */
@@ -166,33 +171,32 @@ function esLugarPrestacionPlaceholder(l: string): boolean {
   return false;
 }
 
-/** Texto de la fase técnica para la cláusula primera (prioriza objeto del contrato). Sin corchetes en PDF: solo oficio o texto útil. */
-function faseTecnicaParaClausulaPrimera(
-  contrato: ContratoObreroDetallePdf | null | undefined,
-  empleado: EmpleadoContratoPdf,
-  configNomina: ConfigNominaContratoPdf,
-): string {
-  const obj = (contrato?.objeto_contrato ?? '').trim();
-  if (obj) return obj;
-  const tareas = (empleado.tareas_especificas ?? '').trim();
-  const lugar = (contrato?.lugar_prestacion_servicio ?? '').trim();
-  const cargo = (empleado.cargo_nombre ?? '').trim();
-  const cargoUp = cargo ? cargo.toUpperCase() : '';
+function obraDenominadaClausulaTexto(contrato: ContratoObreroDetallePdf | null | undefined): string {
+  const l = (contrato?.lugar_prestacion_servicio ?? '').trim();
+  if (l.length && !esLugarPrestacionPlaceholder(l)) return l;
+  return '________________________________________________________________';
+}
 
-  if (tareas && lugar && !esLugarPrestacionPlaceholder(lugar)) {
-    const tNorm = tareas.toUpperCase();
-    return tNorm === cargoUp ? `${cargoUp} (${lugar})` : `${tareas} (${lugar})`;
-  }
-  if (tareas) {
-    const tNorm = tareas.toUpperCase();
-    if (cargoUp && (tNorm === cargoUp || tNorm.replace(/\s+/g, '') === cargoUp.replace(/\s+/g, ''))) return cargoUp;
-    return tareas.toUpperCase();
-  }
-  if (lugar && !esLugarPrestacionPlaceholder(lugar)) return `las labores contratadas en el ámbito de ${lugar}`;
-  const funciones = (configNomina.funciones_oficiales ?? '').trim();
-  if (funciones && cargo) return `${funciones}, en el cargo de ${cargo}`;
-  if (cargo) return cargoUp;
-  return '[PARTIDA / fase técnica — completar]';
+function lugarSedeObraClausulaTexto(contrato: ContratoObreroDetallePdf | null | undefined): string {
+  const l = (contrato?.lugar_prestacion_servicio ?? '').trim();
+  if (l.length && !esLugarPrestacionPlaceholder(l)) return l;
+  return '___________________________________________________________________________';
+}
+
+function fmtBsVes(n: number): string {
+  return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+/** RIF en formato J-XXXXXXXX (contrato). */
+function rifPatronoDisplay(rif: string): string {
+  const t = (rif ?? '').trim().toUpperCase();
+  if (!t || t === '_____________') return 'J-_____________';
+  if (/^J[-\s]/.test(t)) return t.replace(/\s+/g, '');
+  return `J-${t.replace(/^J/, '').replace(/^[-\s]+/, '')}`;
+}
+
+function fmtUsdNumeroPlano(n: number): string {
+  return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
 /** Evita dígitos de cédula u otros pegados al final del nombre por error de captura (ej. "Ortiz88"). */
@@ -230,7 +234,8 @@ export function ContratoObreroPDF({
     empleado.direccion_domicilio ?? empleado.direccion_habitacion,
     'dirección domicilio',
   );
-  const partidaFase = faseTecnicaParaClausulaPrimera(contrato ?? null, empleado, configNomina);
+  const obraDenomTxt = obraDenominadaClausulaTexto(contrato ?? null);
+  const lugarSedeTxt = lugarSedeObraClausulaTexto(contrato ?? null);
   const oficioStr = (() => {
     const c = (empleado.cargo_nombre ?? '').trim();
     return c ? c.toUpperCase() : '[OFICIO]';
@@ -239,12 +244,30 @@ export function ContratoObreroPDF({
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
   /** Equivalente USD semanal (tabulador: mes÷4); si no hay dato, guión del modelo para completar a mano. */
   const ingresoSemanalUsdTxt = str(parametros.ingresoSemanalConsolidadoUsdTexto, '$_____');
-  const textoPuntoTransporteSex = textoPuntoEncuentroTransporteClausulaSex(parametros.textoPuntoEncuentroTransporteSex);
+  const sbDia = configNomina.salario_basico_diario_ves;
+  const tieneSb =
+    sbDia != null && Number.isFinite(Number(sbDia)) && Number(sbDia) > 0 ? Number(sbDia) : null;
+  const salSemBs = tieneSb != null ? Math.round(tieneSb * (30 / 4) * 100) / 100 : null;
+  const salDiarioTxt = tieneSb != null ? fmtBsVes(tieneSb) : '__________________';
+  const salSemTxt = salSemBs != null ? fmtBsVes(salSemBs) : '__________________';
+  const cestaMen = configNomina.cestaticket_mensual;
+  const cestaSemUsdNum =
+    cestaMen != null &&
+    Number.isFinite(Number(cestaMen)) &&
+    Number(cestaMen) > 0 &&
+    TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 > 0
+      ? Number(cestaMen) / 4 / TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20
+      : null;
+  const cestaUsdTxt =
+    cestaSemUsdNum != null && Number.isFinite(cestaSemUsdNum)
+      ? formatearUsdContratoPdf(Math.round(cestaSemUsdNum * 100) / 100)
+      : '__________';
   const rep = limpiarNombreRepresentanteLegal(
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '[REPRESENTANTE]'),
   );
   const repCedulaFormato = formatCedulaIdentidad(entidad.rep_legal_cedula);
   /** Tras «Oficina de »: «Registro Mercantil Segundo de la Circunscripción Judicial…» (`registro_mercantil.circunscripcion`). */
+  /** Línea «Registro Mercantil … Estado Nueva Esparta» para la comparecencia (tras «Oficina de »). */
   const oficinaRmContrato = textoTrasLaPalabraOficinaDe(
     str(
       entidad.rm_oficina,
@@ -254,9 +277,17 @@ export function ContratoObreroPDF({
   const rmFecha = str(fechaLargaRegistroMercantilContratoVe(entidad.rm_fecha), '[FECHA NO REGISTRADA]');
   const rmNumero = str(entidad.rm_numero, '[N° NO REGISTRADO]');
   const rmTomo = str(entidad.rm_tomo, '[TOMO NO REGISTRADO]');
-  const rifEntidad = str(entidad.rif, '_____________');
+  const rifEntidadLinea = rifPatronoDisplay(str(entidad.rif, ''));
   const cargoRepresentacion = str(entidad.rep_legal_cargo, 'Presidente');
-  const bloqueIntroClausulas = (
+  const compUsdMes =
+    parametros.compensacionCulminacionUsdPorMes != null &&
+    Number.isFinite(Number(parametros.compensacionCulminacionUsdPorMes)) &&
+    Number(parametros.compensacionCulminacionUsdPorMes) > 0
+      ? Number(parametros.compensacionCulminacionUsdPorMes)
+      : 100;
+  const compUsdMesTxt = fmtUsdNumeroPlano(compUsdMes);
+
+  const bloquePortadaIntro = (
     <>
       <Text style={[styles.header, styles.headerFirst]}>CONTRATO INDIVIDUAL DE TRABAJO</Text>
       {expedienteId?.trim() ? (
@@ -264,90 +295,117 @@ export function ContratoObreroPDF({
       ) : null}
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la Oficina de{' '}
-        <Text style={styles.bold}>{oficinaRmContrato}</Text>, constando en el Tomo <Text style={styles.bold}>{rmTomo}</Text>, bajo el Nº{' '}
+        Entre, la sociedad mercantil <Text style={styles.bold}>“{nombreLegalSociedad}”</Text>, inscrita por ante la{' '}
+        <Text style={styles.bold}>
+          Oficina de {oficinaRmContrato}
+        </Text>
+        , constando en el Tomo <Text style={styles.bold}>{rmTomo}</Text>, bajo el Nº{' '}
         <Text style={styles.bold}>{rmNumero}</Text>, de fecha <Text style={styles.bold}>{rmFecha}</Text>, de los Libros de Registro de Comercio, inscrita en el
-        Registro de Información Fiscal bajo el número: <Text style={styles.bold}>{rifEntidad}</Text>, representada en este acto por su{' '}
+        Registro de Información Fiscal bajo el número: <Text style={styles.bold}>{rifEntidadLinea}</Text>, representada en este acto por su{' '}
         <Text style={styles.bold}>{cargoRepresentacion}</Text>, ciudadano <Text style={styles.bold}>"{rep}"</Text>, venezolano, mayor de edad, titular de la
         Cédula de Identidad No <Text style={styles.bold}>{repCedulaFormato}</Text>, quien en lo sucesivo y a los solos efectos del presente contrato se
-        denominará EL EMPLEADOR, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>, quien es de nacionalidad{' '}
-        <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula de Identidad{' '}
+        denominará <Text style={styles.bold}>EL EMPLEADOR</Text>, por una parte y por la otra, el ciudadano <Text style={styles.bold}>"{nombreTrabajador}"</Text>, quien es de nacionalidad <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, titular de la Cédula de Identidad{' '}
         <Text style={styles.bold}>{cedulaTrabFormato}</Text> y domiciliado en <Text style={styles.bold}>"{domicilioTrab}"</Text>, quien a los mismos efectos se
-        denominará EL TRABAJADOR; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a
-        desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las cláusulas siguientes:
-      </Text>
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>PRIMERA (OBJETO Y DELIMITACIÓN DE FUNCIONES)</Text>
-        {'\n'}
-        Este contrato se celebra bajo la modalidad de <Text style={styles.bold}>OBRA DETERMINADA</Text>
-        {' (Arts. 75 y 77, literal "a" de la LOTTT) '}para la ejecución exclusiva de la fase técnica:{' '}
-        <Text style={styles.bold}>{partidaFase}</Text>. La categoría de <Text style={styles.bold}>{oficioStr}</Text> se asigna
-        únicamente para la escala del Tabulador de la Construcción, limitando las funciones del TRABAJADOR estrictamente a la
-        meta física antes descrita en esta cláusula.
-      </Text>
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEGUNDA (DURACIÓN Y TERMINACIÓN DE LA RELACIÓN)</Text>
-        {'\n'}
-        {`La relación de trabajo tiene una duración sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada el Acta de Culminación en el Libro de Obra por el Supervisor. Las partes aclaran que la terminación es independiente de la entrega formal del inmueble al propietario del proyecto, y que cualquier labor sucesiva requerirá obligatoriamente un nuevo contrato escrito.`}
-      </Text>
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>TERCERA (JORNADA, HORARIO Y TIEMPO DE DESCANSO EFECTIVO)</Text>
-        {'\n'}
-        {`La jornada semanal de trabajo será de cuarenta (40) horas de trabajo efectivo, distribuidas de la siguiente manera:`}
-        {'\n'}
-        {`De lunes a jueves: De 7:00 a.m. a 5:00 p.m., disponiendo EL TRABAJADOR de un tiempo de descanso y alimentación de una (1) hora diaria no imputable a la jornada (de 12:00 p.m. a 1:00 p.m.), para un total de nueve (9) horas diarias de trabajo efectivo.`}
-        {'\n'}
-        {`Los viernes: De 7:00 a.m. a 11:00 a.m. continuas, equivalentes a cuatro (4) horas de trabajo efectivo.`}
-        {'\n'}
-        {`EL TRABAJADOR se obliga a mantener el rendimiento pactado en el cronograma y a firmar diariamente su avance en el Libro de Obra. El retraso injustificado o la negativa a registrar su firma constituirá falta grave a sus obligaciones (Art. 102, literal "i" de la LOTTT).`}
-      </Text>
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>CUARTA (REMUNERACIÓN CONSOLIDADA Y EXCLUSIÓN SALARIAL)</Text>
-        {'\n'}
-        Las partes acuerdan libremente, por convenimiento individual, expreso y de mutuo acuerdo, que EL TRABAJADOR percibirá un ingreso semanal consolidado equivalente en Bolívares a{' '}
-        <Text style={styles.bold}>{ingresoSemanalUsdTxt}</Text>
-        {`, el cual se calculará y pagará estrictamente a la tasa oficial del Banco Central de Venezuela (BCV) vigente para el día del pago efectivo. A los solos efectos legales, este ingreso semanal consolidado se desglosará de la siguiente manera: a) Un salario semanal, el cual constituirá el salario normal de la relación de trabajo y la base única para el cálculo de sus prestaciones sociales; y b) El pago de la alícuota semanal correspondiente al Cestaticket Socialista de Ley (conforme a la Gaceta Oficial Extraordinaria N° 6.746). Con fundamento en el artículo 133, parágrafo tercero de la LOTTT, EL TRABAJADOR acepta expresamente que cualquier cantidad de dinero o beneficio adicional que reciba de EL PATRONO por encima de los dos conceptos antes desglosados (sea por rendimiento, asistencia, incentivos de obra o ajustes extraordinarios por devaluación), carece de carácter salarial. En consecuencia, las partes pactan su exclusión de la base de cálculo de prestaciones sociales y demás conceptos laborales.`}
-      </Text>
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>QUINTA (ANTICIPOS MENSUALES Y LIQUIDACIÓN PREVENTIVA)</Text>
-        {'\n'}
-        {`De conformidad con el artículo 144 de la LOTTT y en ejecución del acuerdo individual alcanzado, EL PATRONO pagará una (1) semana de salario básico correspondiente al adelanto de prestaciones sociales acumulados para los fines de ley de salud, educación o vivienda y otros conceptos laborales.`}
-      </Text>
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEXTA (TRANSPORTE GRATUITO - BENEFICIO NO REMUNERATIVO)</Text>
-        {'\n'}
-        Con el único propósito de facilitar la asistencia y resguardar la seguridad de EL TRABAJADOR, EL PATRONO brindará de
-        manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro{' '}
-        <Text style={styles.bold}>{textoPuntoTransporteSex}</Text>
-        {` hasta el sitio donde se ejecute la obra determinada. De conformidad con el artículo 105 de la LOTTT, las partes acuerdan expresamente que este servicio de transporte constituye un beneficio social de carácter no remunerativo, por lo que no forma parte del salario, no tiene carácter salarial en especie, ni se considerará para el cálculo de ningún pasivo o derecho laboral.`}
+        denominará EL TRABAJADOR; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de
+        los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las cláusulas siguientes:
       </Text>
     </>
   );
 
-  const bloqueClausulasSeptimaANovena = (
+  const bloqueClausulasPrimeraATercera = (
     <>
-      <Text style={styles.paragraph}>
-        <Text style={styles.bold}>SÉPTIMA (SEGURIDAD Y CONFIDENCIALIDAD)</Text>
-        {'\n'}
-        {`EL TRABAJADOR se obliga al cumplimiento estricto de las normas de la LOPCYMAT y al uso permanente de los equipos de protección personal (EPP) asignados. Su negativa injustificada a usarlos se considerará falta grave y causal de despido justificado (Art. 102 LOTTT). Asimismo, se obliga a mantener absoluta reserva y confidencialidad sobre planos, contraseñas, configuraciones de red y datos de seguridad de los clientes de EL PATRONO; su divulgación o uso no autorizado causará despido justificado y acciones legales correspondientes.`}
+      <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
+        <Text style={styles.bold}>PRIMERA: LA ENTIDAD DE TRABAJO</Text>
+        {` tiene como objeto, todo lo relacionado con la explotación de actividades comerciales y de la industria de la construcción. La naturaleza de este contrato por obra determinada es para la obra `}
+        <Text style={styles.bold}>{obraDenomTxt}</Text>
+        {`, y a tales efectos contrata a "EL TRABAJADOR", para que preste sus servicios como `}
+        <Text style={styles.bold}>{oficioStr}</Text>
+        {` quien como tal, deberá ejecutar las actividades inherentes al cargo para el cual fue contratado; así como cualquier otra actividad que sea asignada dentro de la totalidad de la obra proyectada, cargo éste que se encuentra establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva de Trabajo de la Industria de la Construcción vigente. EL TRABAJADOR: a) Se compromete a poner al servicio de La Entidad de Trabajo su capacidad normal de trabajo, en forma exclusiva en las funciones propias del cargo contratado y en las labores anexas complementarias del mismo, de conformidad con las órdenes e instrucciones que le imparta La Entidad de Trabajo o sus representantes; b) No prestar directa o indirectamente, servicios laborales a otros empleadores, ni a trabajar por cuenta propia en las funciones inherentes al cargo.`}
+        {'\n\n'}
+        <Text style={styles.bold}>IDENTIFICACIÓN DEL CARGO:</Text>
+        {` EL TRABAJADOR, se compromete a prestar sus servicios a LA ENTIDAD DE TRABAJO, desempeñando el cargo de `}
+        <Text style={styles.bold}>{oficioStr}</Text>
+        {`. El trabajador, se obliga a realizar las funciones y/o responsabilidades inherentes al cargo, que consisten en realizar las siguientes tareas o actividades laborales:`}
+        {'\n\n'}
+        {`Cumplir con el horario de trabajo previamente establecido por la entidad de trabajo.`}
+        {'\n\n'}
+        {`Usar el uniforme, los equipos y accesorios de seguridad, tales como: Guantes, lentes de seguridad, impermeables, botas de goma y/o cualesquiera otra que le exija utilizar la entidad de trabajo, en razón de preservar la salud y seguridad del trabajador.`}
+        {'\n\n'}
+        {`Debe recibir, procesar y pesar la materia prima.`}
+        {'\n\n'}
+        {`Mantener ordenada y limpia el área de trabajo que le ha sido asignada.`}
+        {'\n\n'}
+        {`Cuidar y mantener en buenas condiciones de uso e higiene las maquinarias y las herramientas de trabajo.`}
+        {'\n\n'}
+        {`Llevar a cabo cualquier otra actividad que le sea ordenada por LA ENTIDAD DE TRABAJO, siempre que esta tarea, esté acorde con sus funciones y no contraríe lo dispuesto en la normativa de la ley vigente LOTTT y la contratación colectiva de la construcción.`}
       </Text>
 
-      <Text style={styles.paragraph}>
-        <Text style={styles.bold}>OCTAVA (DESPIDO JUSTIFICADO Y EXENCIÓN DE INDEMNIZACIÓN)</Text>
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>SEGUNDA: (DURACIÓN Y TERMINACIÓN)</Text>
         {'\n'}
-        {`En el eventual caso de que EL TRABAJADOR sea despedido por causas justificadas, conforme al artículo 102 de la Ley Orgánica del Trabajo o al Reglamento de la misma Ley, por incumplimiento de este contrato laboral, por incumplimiento del Reglamento Interno de la empresa, si lo hubiere, o a los instructivos internos emanados de la misma, poniéndosele fin al presente contrato laboral, LA EMPRESA estará exenta de pagar cantidad alguna de dinero como compensación o indemnización hasta el vencimiento del término natural de este contrato.`}
+        {`La relación de trabajo tiene una duración sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada el Acta de Culminación en el Libro de Obra por el Supervisor. Las partes aclaran que la terminación es independiente de la entrega formal del inmueble al propietario.`}
       </Text>
 
-      <Text style={styles.paragraph}>
-        <Text style={styles.bold}>NOVENA (DOMICILIO Y JURISDICCIÓN)</Text>
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>TERCERA: (JORNADA, HORARIO Y RENDIMIENTO)</Text>
         {'\n'}
-        {`Para todos los efectos derivados de este contrato, las partes eligen como domicilio especial, único y excluyente a la ciudad de Pampatar, Estado Nueva Esparta, a la jurisdicción de cuyos tribunales del trabajo declaran expresamente someterse.`}
+        {`La jornada semanal será de cuarenta (40) horas de trabajo efectivo, distribuidas así: Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (Con 1 hora de descanso no imputable de 12:00 p.m. a 1:00 p.m.), para 9 horas diarias efectivas. Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua de 4 horas efectivas).`}
+        {'\n'}
+        <Text style={styles.bold}>CONTROL:</Text>
+        {` EL TRABAJADOR se obliga a mantener el rendimiento según cronograma y a firmar diariamente su registro de avance en el Libro de Obra. La negativa a firmar constituirá falta grave (Art. 102, literal "i" LOTTT).`}
+      </Text>
+    </>
+  );
+
+  const bloqueClausulasCuartaAOctavaYFirmas = (
+    <>
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>CUARTA: (LUGAR DE TRABAJO Y DIRECCIÓN)</Text>
+        {'\n'}
+        {'Los servicios se prestarán en la sede de la obra ubicada en: '}
+        <Text style={styles.bold}>{lugarSedeTxt}</Text>
+        {'. '}
+        {'\n'}
+        {`LA ENTIDAD DE TRABAJO podrá ejercer su facultad de dirección y exigir el fiel cumplimiento de las metas físicas; dichas exigencias no se considerarán acoso laboral por estar dentro de los límites de la jornada y la ley.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>QUINTA: (INGRESO INTEGRAL INDEXADO)</Text>
+        {'\n'}
+        {`EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares (Bs.): `}
+        {'\n'}
+        Salario Diario (Tabulador): Bs. <Text style={styles.bold}>{salDiarioTxt}</Text>
+        {'\n'}
+        Salario Semanal (Tabulador): Bs. <Text style={styles.bold}>{salSemTxt}</Text>
+        {'\n'}
+        Bono Alimentación (Cesta Ticket): Equivalente semanal a <Text style={styles.bold}>{cestaUsdTxt}</Text>.
+        {'\n'}
+        {`Bono Especial de Complemento: De carácter NO SALARIAL (Art. 105 LOTTT), para elevar el Ingreso Familiar Semanal a un total equivalente a: `}
+        <Text style={styles.bold}>{ingresoSemanalUsdTxt}</Text>
+        {'.'}
+        {'\n'}
+        {`Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>SEXTA: (COMPENSACIÓN POR CULMINACIÓN)</Text>
+        {'\n'}
+        <Text style={styles.bold}>PARÁGRAFO ÚNICO:</Text>
+        {` Al cierre de la obra o finiquito, el trabajador recibirá una compensación equivalente a: `}
+        <Text style={styles.bold}>{compUsdMesTxt}</Text>
+        {` USD (pagaderos en Bs. al cambio BCV) por cada mes trabajado o fracción. Este monto liquida de forma integral: prestaciones sociales, vacaciones, utilidades y cualquier otro beneficio derivado de este contrato especial.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>SÉPTIMA: (SEGURIDAD, SALUD Y CONFIDENCIALIDAD)</Text>
+        {'\n'}
+        {`EL TRABAJADOR declara haber sido notificado de los riesgos de su puesto y se compromete a cumplir con la LOPCYMAT. Asimismo, conviene guardar estricta confidencialidad sobre cualquier información interna de LA ENTIDAD DE TRABAJO.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>OCTAVA: (DOMICILIO Y JURISDICCIÓN)</Text>
+        {'\n'}
+        {`Para todos los efectos derivados de este contrato, las partes eligen como domicilio especial, único y excluyente a la ciudad de Pampatar, Estado Nueva Esparta, sometiéndose a sus tribunales del trabajo.`}
         {'\n'}
         Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de Pampatar, a los{' '}
         <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> de{' '}
@@ -356,14 +414,18 @@ export function ContratoObreroPDF({
 
       <View style={styles.signatureSection}>
         <View style={styles.signatureBox}>
-          <Text style={[styles.bold, styles.signatureLine]}>POR EL EMPLEADOR</Text>
+          <Text style={[styles.bold, styles.signatureLine]}>POR LA ENTIDAD DE TRABAJO</Text>
+          <Text style={[styles.bold, styles.signatureLine]}>REPRESENTANTE LEGAL</Text>
+          <Text style={[styles.bold, styles.signatureLine]}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{rep}</Text>
-          <Text style={styles.signatureLine}>{nombreLegalSociedad}</Text>
+          <Text style={styles.signatureLine}>C.I. {repCedulaFormato}</Text>
         </View>
         <View style={styles.signatureBox}>
-          <Text style={[styles.bold, styles.signatureLine]}>EL TRABAJADOR</Text>
+          <Text style={[styles.bold, styles.signatureLine]}>POR EL TRABAJADOR</Text>
+          <Text style={[styles.bold, styles.signatureLine]}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{nombreTrabajador}</Text>
-          <Text style={styles.signatureLine}>C.I: {cedulaTrabFormato}</Text>
+          <Text style={styles.signatureLine}>C.I. {cedulaTrabFormato}</Text>
+          <Text style={[styles.signatureLine, { fontSize: 8, marginTop: 4 }]}>(Huella Dactilar)</Text>
         </View>
       </View>
     </>
@@ -372,10 +434,11 @@ export function ContratoObreroPDF({
   return (
     <Document>
       <Page size="LETTER" style={[styles.page, styles.pageFirst]}>
-        {bloqueIntroClausulas}
+        {bloquePortadaIntro}
+        {bloqueClausulasPrimeraATercera}
       </Page>
       <Page size="LETTER" style={styles.page}>
-        {bloqueClausulasSeptimaANovena}
+        {bloqueClausulasCuartaAOctavaYFirmas}
       </Page>
     </Document>
   );
