@@ -7,10 +7,10 @@ import GeneradorHojaVida from '@/components/reclutamiento/GeneradorHojaVida';
 import { UserPlus, FileText, Clock, CheckCircle, AlertCircle, Search, Briefcase } from 'lucide-react';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
-    prospecto_invitado: { label: 'Invitado', bg: 'rgba(59,130,246,0.1)', text: '#3B82F6', icon: Clock },
-    en_evaluacion:      { label: 'En Proceso', bg: 'rgba(245,158,11,0.1)', text: '#F59E0B', icon: Clock },
-    completado:         { label: 'Completado', bg: 'rgba(16,185,129,0.1)', text: '#10B981', icon: CheckCircle },
-    descartado:         { label: 'Descartado', bg: 'rgba(239,68,68,0.1)', text: '#EF4444', icon: AlertCircle },
+    pendiente_cv:       { label: 'Invitado', bg: 'rgba(59,130,246,0.1)', text: '#3B82F6', icon: Clock },
+    cv_completado:      { label: 'En Proceso', bg: 'rgba(245,158,11,0.1)', text: '#F59E0B', icon: Clock },
+    examen_completado:  { label: 'Completado', bg: 'rgba(16,185,129,0.1)', text: '#10B981', icon: CheckCircle },
+    examen_iniciado:    { label: 'En Examen', bg: 'rgba(245,158,11,0.1)', text: '#F59E0B', icon: Clock },
 };
 
 export default function ReclutamientoPage() {
@@ -46,8 +46,8 @@ export default function ReclutamientoPage() {
 
     const stats = {
         total: candidates.length,
-        invited: candidates.filter(c => c.estado_proceso === 'prospecto_invitado').length,
-        completed: candidates.filter(c => c.estado_proceso === 'completado').length,
+        invited: candidates.filter(c => c.estado_proceso === 'pendiente_cv').length,
+        completed: candidates.filter(c => ['cv_completado', 'examen_iniciado', 'examen_completado'].includes(c.estado_proceso)).length,
     };
 
     const glass = { 
@@ -115,7 +115,7 @@ export default function ReclutamientoPage() {
             ) : (
                 <div className="grid gap-3">
                     {filtered.map(c => {
-                        const config = STATUS_CONFIG[c.estado_proceso] || STATUS_CONFIG.prospecto_invitado;
+                        const config = STATUS_CONFIG[c.estado_proceso] || STATUS_CONFIG.pendiente_cv;
                         const StatusIcon = config.icon;
                         return (
                             <div key={c.id} style={glass} className="p-5 flex items-center justify-between hover:bg-white/5 transition-colors group">
@@ -145,7 +145,7 @@ export default function ReclutamientoPage() {
                                         {config.label}
                                     </div>
                                     
-                                    {c.estado_proceso === 'completado' ? (
+                                    {['cv_completado', 'examen_iniciado', 'examen_completado'].includes(c.estado_proceso) ? (
                                         <button 
                                             onClick={() => router.push(`/reclutamiento/hoja-de-vida/view/${c.id}`)}
                                             className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all"

@@ -36,10 +36,11 @@ export default function ReclutamientoPage() {
                 .insert([
                     {
                         nombres: nombre,
+                        nombre_completo: nombre,
                         celular: celular,
                         cargo: cargo,
                         token: token,
-                        estado_proceso: 'prospecto_invitado'
+                        estado_proceso: 'pendiente_cv'
                     }
                 ]);
 
@@ -53,6 +54,18 @@ export default function ReclutamientoPage() {
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const enviarWhatsApp = () => {
+        const mensaje = `¡Hola ${nombre}! 👋 Te saluda el equipo de RRHH de Casa Inteligente. Te invitamos a completar tu Hoja de Vida oficial para el cargo de ${cargo} aquí: ${linkGenerado}`;
+        const cleanPhone = celular.replace(/\D/g, '');
+        window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    };
+
+    const enviarEmail = () => {
+        const asunto = `Invitación a Proceso de Selección - Casa Inteligente`;
+        const cuerpo = `Hola ${nombre},\n\nTe invitamos a completar tu Hoja de Vida oficial para el cargo de ${cargo} en el siguiente enlace:\n\n${linkGenerado}\n\nSaludos,\nEquipo de RRHH`;
+        window.open(`mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`, '_blank');
     };
 
     return (
@@ -197,19 +210,14 @@ export default function ReclutamientoPage() {
                             <p className="font-medium text-sm" style={{ color: 'var(--label-primary)' }}>{cargo}</p>
                         </div>
 
-                        {/* QR Code Placeholder */}
+                        {/* QR Code Real */}
                         <div className="flex justify-center mb-4">
                             <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-200">
-                                <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="#1C1C1E" strokeWidth="1" strokeLinecap="square" strokeLinejoin="miter">
-                                    <rect x="3" y="3" width="7" height="7"></rect>
-                                    <rect x="14" y="3" width="7" height="7"></rect>
-                                    <rect x="3" y="14" width="7" height="7"></rect>
-                                    <rect x="14" y="14" width="3" height="3"></rect>
-                                    <rect x="18" y="18" width="3" height="3"></rect>
-                                    <rect x="14" y="18" width="3" height="3"></rect>
-                                    <rect x="18" y="14" width="3" height="3"></rect>
-                                    <path d="M6 6h1v1H6zM17 6h1v1h-1zM6 17h1v1H6zM10 14h2v2h-2zM10 18h2v2h-2zM12 16h2v2h-2z"></path>
-                                </svg>
+                                <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(linkGenerado)}`} 
+                                    alt="QR Code"
+                                    className="w-[120px] h-[120px]"
+                                />
                             </div>
                         </div>
 
@@ -217,19 +225,38 @@ export default function ReclutamientoPage() {
                             {linkGenerado}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <button className="py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center transition-opacity active:opacity-70" style={{ background: '#25D366' }}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                        <div className="grid grid-cols-3 gap-3">
+                            <button 
+                                onClick={enviarWhatsApp}
+                                className="py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center transition-opacity active:opacity-70" 
+                                style={{ background: '#25D366' }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
                                 </svg>
-                                WhatsApp
                             </button>
-                            <button className="py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center transition-opacity active:opacity-70" style={{ background: '#007AFF' }}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                            <button 
+                                onClick={enviarEmail}
+                                className="py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center transition-opacity active:opacity-70" 
+                                style={{ background: '#007AFF' }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                                     <polyline points="22,6 12,13 2,6"></polyline>
                                 </svg>
-                                Email
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    navigator.clipboard.writeText(linkGenerado);
+                                    alert('¡Enlace copiado al portapapeles!');
+                                }}
+                                className="py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center transition-opacity active:opacity-70" 
+                                style={{ background: 'var(--label-secondary)' }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
                             </button>
                         </div>
                     </div>

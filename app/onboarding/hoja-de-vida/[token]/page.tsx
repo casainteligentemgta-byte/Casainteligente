@@ -74,7 +74,7 @@ export default function HojaVidaOnboarding() {
             return;
         }
 
-        if (data.estado_proceso === 'completado') {
+        if (data.estado_proceso === 'examen_completado') {
             setCompleted(true);
         }
 
@@ -108,7 +108,7 @@ export default function HojaVidaOnboarding() {
             // 2. Update candidate status
             const { error: eError } = await supabase
                 .from('ci_empleados')
-                .update({ estado_proceso: 'en_evaluacion' })
+                .update({ estado_proceso: 'cv_completado' })
                 .eq('id', candidate.id);
 
             if (eError) throw eError;

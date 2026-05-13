@@ -42,6 +42,7 @@ export default function GenerarContrato({ params }: { params: { id: string } }) 
         .from('ci_empleados')
         .select(`
           nombres,
+          nombre_completo,
           celular,
           cargo,
           ci_hojas_vida ( direccion )
@@ -56,7 +57,7 @@ export default function GenerarContrato({ params }: { params: { id: string } }) 
       
       setFormData(prev => ({
         ...prev,
-        nombre: responseData.nombres,
+        nombre: responseData.nombres || responseData.nombre_completo || '',
         telefono: responseData.celular,
         cargo: responseData.cargo,
         direccion: hojaVida.direccion || '',
@@ -90,7 +91,7 @@ export default function GenerarContrato({ params }: { params: { id: string } }) 
       // 2. Actualizar estado del empleado a completado
       const { error: empleadoError } = await supabase
         .from('ci_empleados')
-        .update({ estado_proceso: 'completado' })
+        .update({ estado_proceso: 'examen_completado' })
         .eq('id', params.id);
 
       if (empleadoError) throw empleadoError;
