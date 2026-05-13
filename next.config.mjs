@@ -8,11 +8,6 @@ const nextConfig = {
   async redirects() {
     return [
       { source: '/reclutamiento/dashboard', destination: '/reclutamiento', permanent: true },
-      {
-        source: '/talento/admin/contratos/fast-list',
-        destination: '/talento/contratos-express',
-        permanent: false,
-      },
     ];
   },
   webpack: (config, { dev }) => {
