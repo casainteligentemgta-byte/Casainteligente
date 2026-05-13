@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Download, FileCheck, FileText, Link2, Printer, Share2, Upload, UserPlus } from 'lucide-react';
+import { Download, FileCheck, FileText, Link2, Printer, Share2, Trash2, Upload, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { toast } from 'sonner';
@@ -205,6 +205,29 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
     }
   }
 
+  async function eliminarContratoExpress(id: string, nombre: string, formalizado: boolean) {
+    const detalle = formalizado
+      ? 'Este express ya fue formalizado: el expediente en Talento (ci_empleados) no se borra. Solo se elimina el registro de esta lista y los archivos en almacenamiento.'
+      : 'Se eliminará el registro y los PDF/archivos asociados en almacenamiento. Esta acción no se puede deshacer.';
+    if (!window.confirm(`${detalle}\n\n¿Eliminar el contrato express de «${nombre}»?`)) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/talento/contratos-express/${id}`, { method: 'DELETE' });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo eliminar');
+        return;
+      }
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      toast.success('Contrato express eliminado');
+      router.refresh();
+    } catch {
+      toast.error('Error de red');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function formalizar(id: string) {
     setBusyId(id);
     try {
@@ -395,9 +418,10 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
           <p className="text-sm text-zinc-400">
             Sin registro previo en <code className="text-zinc-500">ci_empleados</code>. Cada fila queda en esta lista al
             generar el express. Puede <strong className="text-zinc-300">copiar o compartir</strong> el enlace del PDF
-            (~1 h), <strong className="text-zinc-300">imprimir</strong> desde el visor y{' '}
-            <strong className="text-zinc-300">subir el PDF o escaneo</strong> una vez firmado por el obrero. Salario
-            base: snapshot <strong className="text-zinc-300">mensual en Bs</strong> (tabulador). Bono:{' '}
+            (~1 h), <strong className="text-zinc-300">imprimir</strong> desde el visor,{' '}
+            <strong className="text-zinc-300">subir el PDF o escaneo</strong> una vez firmado por el obrero o{' '}
+            <strong className="text-zinc-300">borrar</strong> un registro express (y sus archivos) desde la columna
+            Acciones. Salario base: snapshot <strong className="text-zinc-300">mensual en Bs</strong> (tabulador). Bono:{' '}
             <strong className="text-zinc-300">USD</strong>; en cada pago se convierte a Bs con la tasa BCV del día.
             Para equivalentes en pantalla, define{' '}
             <code className="text-zinc-500">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> (Bs por USD).
@@ -449,7 +473,7 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                   <TableHead className="text-right">Salario (Bs/mes)</TableHead>
                   <TableHead className="text-right">Bono (USD)</TableHead>
                   <TableHead className="text-right">Bono ref. (Bs)</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead className="min-w-[260px] text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -488,8 +512,8 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                       >
                         {bonBsRef != null ? `${fmtBs(bonBsRef)} Bs` : '—'}
                       </TableCell>
-                      <TableCell className="min-w-[220px] text-right">
-                        <div className="inline-flex max-w-[min(100vw-2rem,420px)] flex-wrap justify-end gap-1 sm:gap-2">
+                      <TableCell className="min-w-[260px] text-right">
+                        <div className="inline-flex max-w-[min(100vw-2rem,480px)] flex-wrap justify-end gap-1 sm:gap-2">
                           <Button
                             type="button"
                             variant="outline"
@@ -574,6 +598,18 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                             onClick={() => void formalizar(c.id)}
                           >
                             <UserPlus className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            className="border-red-900/60 bg-red-950/20 px-2 text-red-300 hover:bg-red-950/40 hover:text-red-200"
+                            title="Eliminar este registro express y sus archivos en almacenamiento"
+                            onClick={() => void eliminarContratoExpress(c.id, c.obrero_nombre, formalizado)}
+                          >
+                            <Trash2 className="size-4" />
+                            <span className="ml-1 hidden sm:inline">Borrar</span>
                           </Button>
                         </div>
                       </TableCell>
