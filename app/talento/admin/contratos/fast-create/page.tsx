@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
@@ -50,6 +51,7 @@ function entidadDesdeProyecto(p: ProyectoDetalle | null): { nombre: string; rif:
 }
 
 export default function ContratoExpressCreatePage() {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [proyectos, setProyectos] = useState<ProyectoOpt[]>([]);
   const [nominas, setNominas] = useState<NominaRow[]>([]);
@@ -65,6 +67,8 @@ export default function ContratoExpressCreatePage() {
   const [nacionalidadOtro, setNacionalidadOtro] = useState('');
   const [bonoStr, setBonoStr] = useState('0');
   const [direccion, setDireccion] = useState('');
+  const [obreroMunicipioResidencia, setObreroMunicipioResidencia] = useState('');
+  const [obreroEstadoResidencia, setObreroEstadoResidencia] = useState('');
   const [estadoCivil, setEstadoCivil] = useState('');
   const [objetoContrato, setObjetoContrato] = useState('');
   const [jornada, setJornada] = useState<'DIURNA' | 'NOCTURNA' | 'MIXTA'>('DIURNA');
@@ -213,6 +217,10 @@ export default function ContratoExpressCreatePage() {
       setErr('Configure el horario semanal (marque al menos un día).');
       return;
     }
+    if (!obreroMunicipioResidencia.trim() || !obreroEstadoResidencia.trim()) {
+      setErr('Indique municipio y estado de residencia del trabajador (comparecencia en el contrato).');
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/talento/contratos-fast', {
@@ -232,6 +240,8 @@ export default function ContratoExpressCreatePage() {
           nacionalidad: nacionalidadEnvio,
           estado_civil: estadoCivil.trim() || null,
           horario_semanal_texto: horarioDetalleCuarta.trim(),
+          obrero_municipio_residencia: obreroMunicipioResidencia.trim(),
+          obrero_estado_residencia: obreroEstadoResidencia.trim(),
         }),
       });
 
@@ -242,6 +252,7 @@ export default function ContratoExpressCreatePage() {
         id?: string;
         expediente_label?: string;
         signed_url?: string | null;
+        signed_url_error?: string | null;
         pdf_storage_path?: string;
         details?: Record<string, string[] | undefined>;
       };
@@ -273,7 +284,19 @@ export default function ContratoExpressCreatePage() {
       setOkMsg(
         `Contrato generado (${data.expediente_label ?? data.id?.slice(0, 8) ?? '—'}). Ruta: ${data.pdf_storage_path ?? '—'}`,
       );
-      if (data.signed_url) setSignedUrl(data.signed_url);
+      if (data.signed_url) {
+        setSignedUrl(data.signed_url);
+        window.open(data.signed_url, '_blank', 'noopener,noreferrer');
+      } else if (data.signed_url_error) {
+        toast.warning('Contrato guardado; no se pudo abrir el PDF automáticamente', {
+          description: data.signed_url_error,
+        });
+      }
+      toast.success('Contrato guardado en el listado express', {
+        description: `${data.expediente_label ?? data.id?.slice(0, 12) ?? '—'} · En la lista: copiar enlace, imprimir, subir firmado.`,
+      });
+      router.push('/talento/admin/contratos/fast-list');
+      router.refresh();
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       const failedFetch =
@@ -308,9 +331,10 @@ export default function ContratoExpressCreatePage() {
       <h1 className="text-2xl font-bold text-white mb-2">Contrato express (sin registro)</h1>
       <p className="text-sm text-zinc-400 mb-6">
         Elige la obra para vincular patrono y referencias; el cargo del tabulador define salarios. Completa datos del
-        trabajador, jornada y horario semanal (con viernes distinto si aplica). Se genera el PDF, se guarda en{' '}
-        <code className="text-zinc-500">contratos_obreros</code> y el registro en{' '}
-        <code className="text-zinc-500">ci_contratos_express</code>.
+        trabajador, jornada y horario semanal (con viernes distinto si aplica). Al generar, el PDF se guarda en{' '}
+        <code className="text-zinc-500">contratos_obreros</code> y la fila en{' '}
+        <code className="text-zinc-500">ci_contratos_express</code> (listado express): podrás copiar enlace, imprimir y
+        subir el documento firmado desde ahí.
       </p>
 
       {loadingLists ? (
@@ -354,7 +378,7 @@ export default function ContratoExpressCreatePage() {
           ) : null}
 
           <label className="block">
-            <span className="text-zinc-400">Cargo (tabulador)</span>
+            <span className="text-zinc-400">OFICIO (TABULADOR)</span>
             <select
               className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
               value={configNominaId}
@@ -445,7 +469,7 @@ export default function ContratoExpressCreatePage() {
           ) : null}
 
           <label className="block">
-            <span className="text-zinc-400">Domicilio</span>
+            <span className="text-zinc-400">Domicilio (calle, urbanización, ciudad…)</span>
             <textarea
               className="mt-1 w-full min-h-[72px] rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
               value={direccion}
@@ -453,6 +477,29 @@ export default function ContratoExpressCreatePage() {
               placeholder="Urbanización, calle, ciudad…"
             />
           </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-zinc-400">Municipio de residencia *</span>
+              <input
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
+                value={obreroMunicipioResidencia}
+                onChange={(e) => setObreroMunicipioResidencia(e.target.value)}
+                placeholder="Ej. Maneiro"
+                autoComplete="address-level2"
+              />
+            </label>
+            <label className="block">
+              <span className="text-zinc-400">Estado de residencia *</span>
+              <input
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
+                value={obreroEstadoResidencia}
+                onChange={(e) => setObreroEstadoResidencia(e.target.value)}
+                placeholder="Ej. Nueva Esparta"
+                autoComplete="address-level1"
+              />
+            </label>
+          </div>
 
           <label className="block">
             <span className="text-zinc-400">Bono manual (USD)</span>

@@ -277,6 +277,10 @@ export function PlanillaPatronoStrip({ campos }: { campos?: PlanillaPatronoCampo
         <PatField label="Nacionalidad del representante" value={c.representanteNacionalidad} w="30%" />
       </View>
       <View style={st.employerRow}>
+        <PatField label="Municipio de residencia del representante" value={c.representanteMunicipioResidencia} flex={1} />
+        <PatField label="Estado de residencia del representante" value={c.representanteEstadoResidencia} flex={1} />
+      </View>
+      <View style={st.employerRow}>
         <PatField label="Dirección / domicilio de la empresa" value={c.empresaDomicilio} flex={1} />
       </View>
     </>
@@ -395,6 +399,10 @@ export function PatronoIdentificacionPdfBlock({
         <PatField label="Estado civil del representante" value={c.representanteEstadoCivil} w="28%" />
         <PatField label="Cargo del representante" value={c.representanteCargo} flex={1} />
         <PatField label="Nacionalidad del representante" value={c.representanteNacionalidad} w="30%" />
+      </View>
+      <View style={st.employerRow}>
+        <PatField label="Municipio de residencia del representante" value={c.representanteMunicipioResidencia} flex={1} />
+        <PatField label="Estado de residencia del representante" value={c.representanteEstadoResidencia} flex={1} />
       </View>
       <View style={st.employerRow}>
         <PatField label="Dirección / domicilio de la empresa" value={c.empresaDomicilio} flex={1} />

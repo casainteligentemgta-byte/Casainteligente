@@ -7,6 +7,8 @@ import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabulado
  * Helvetica / Times-Roman / Courier son las fuentes embebidas; para otro cuerpo hay que registrar fuente con Font.register.
  */
 const CONTRATO_PDF_FONT_FAMILY = 'Helvetica';
+/** Negrita en PDF vía familia explícita (anidar `fontWeight` con Helvetica falla en @react-pdf 4.x). */
+const CONTRATO_PDF_FONT_BOLD = 'Helvetica-Bold';
 const CONTRATO_PDF_FONT_SIZE = 9.5;
 
 const styles = StyleSheet.create({
@@ -23,9 +25,8 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
   },
   header: {
-    fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontFamily: CONTRATO_PDF_FONT_BOLD,
     fontSize: CONTRATO_PDF_FONT_SIZE,
-    fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 8,
     lineHeight: 1.16,
@@ -41,9 +42,16 @@ const styles = StyleSheet.create({
   },
   paragraphIntro: { marginBottom: 3, lineHeight: 1.2 },
   bold: {
+    fontFamily: CONTRATO_PDF_FONT_BOLD,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
+    lineHeight: 1.22,
+    color: '#000',
+  },
+  /** Comparecencia: tramo «(El) centro comercial …» en Helvetica normal (no Helvetica-Bold). */
+  introComparecenciaRegular: {
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
-    fontWeight: 'bold',
+    lineHeight: 1.22,
     color: '#000',
   },
   signatureSection: { flexDirection: 'row', marginTop: 12, justifyContent: 'space-between' },
@@ -52,6 +60,14 @@ const styles = StyleSheet.create({
     marginBottom: 1,
     lineHeight: 1.2,
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
+    fontSize: CONTRATO_PDF_FONT_SIZE,
+    color: '#000',
+  },
+  /** Etiquetas «POR LA ENTIDAD…» en negrita sin pisar la fuente con `signatureLine`. */
+  signatureLabelBold: {
+    marginBottom: 1,
+    lineHeight: 1.2,
+    fontFamily: CONTRATO_PDF_FONT_BOLD,
     fontSize: CONTRATO_PDF_FONT_SIZE,
     color: '#000',
   },
@@ -102,10 +118,18 @@ export type EntidadContratoPdf = {
   rep_legal_nacionalidad?: string | null;
   /** Opcional: estado civil del representante (comparecencia). */
   rep_legal_estado_civil?: string | null;
+  /** Vía / urbanización del domicilio del representante (comparecencia). */
+  rep_legal_domicilio?: string | null;
+  /** Municipio de residencia del representante (comparecencia). */
+  rep_legal_municipio_residencia?: string | null;
+  /** Estado de residencia del representante (comparecencia). */
+  rep_legal_estado_residencia?: string | null;
   rm_oficina?: string | null;
   rm_fecha?: string | null;
   rm_numero?: string | null;
   rm_tomo?: string | null;
+  /** Si true, «la ciudadana» en comparecencia; si false/undefined, «el ciudadano». */
+  rep_legal_femenino?: boolean | null;
 };
 
 export type EmpleadoContratoPdf = {
@@ -140,6 +164,8 @@ export type ParametrosContratoPdf = {
   fechaFirmaContratoIso?: string | null;
   fechaAsambleaVoluntadIso?: string | null;
   ingresoSemanalConsolidadoUsdTexto?: string | null;
+  /** Bono especial no salarial en USD (express u otros flujos); se suma al ingreso tabulador en cláusula SEXTA. */
+  bonoManualUsd?: number | null;
   textoPuntoEncuentroTransporteSex?: string | null;
   compensacionCulminacionUsdPorMes?: number | null;
 };
@@ -163,6 +189,102 @@ export type ContratoObreroPdfStructuredProps = {
 function str(v: string | null | undefined, fallback: string): string {
   const t = (v ?? '').trim();
   return t.length ? t : fallback;
+}
+
+/** Zona de comparecencia (antes «Sector …»); si no hay dato en entidad, texto fijado para el contrato. */
+const ZONA_COMPARECENCIA_PDF_DEFAULT = 'Playa El Angel';
+
+/** Comas “raras” del teclado / copiar-pegar → ASCII para partir el domicilio. */
+function normalizarComasDomicilioPdf(s: string): string {
+  return s
+    .replace(/\uFF0C/g, ',')
+    .replace(/\uFE50/g, ',')
+    .replace(/\uFE51/g, ',')
+    .trim();
+}
+
+/** Una sola línea: Unicode, espacios raros, comas; luego quita «Sector» (comparecencia). */
+function preprocessLineaDomicilioComparecenciaPdf(raw: string): string {
+  const oneLine = (raw ?? '')
+    .normalize('NFKC')
+    .replace(/\uFEFF/g, '')
+    .replace(/[\u00A0\u202F\u2007]/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return quitarPalabraSectorEnDomicilio(normalizarComasDomicilioPdf(oneLine));
+}
+
+function esPrefijoCentroComercialComparecencia(pref: string): boolean {
+  return /^(?:el\s+)?centro\s+comercial\b/i.test(pref.trim());
+}
+
+type FragmentosDomicilioCentroComercialPdf = {
+  textoRegular: string;
+  restoBold: string;
+  /** Texto antes de «(el) centro comercial» (p. ej. calle); va en negrita si existe. */
+  prefijoBold?: string;
+};
+
+/**
+ * Parte «(El) centro comercial …» (sin negrita) del resto del domicilio (negrita). Tolera texto previo y comas raras.
+ */
+function fragmentosDomicilioCentroComercial(domPreprocesado: string): FragmentosDomicilioCentroComercialPdf | null {
+  const s = domPreprocesado.trim();
+  if (!s) return null;
+
+  const direct = s.match(/^((?:el\s+)?centro\s+comercial[^,]*)(,\s*(.+))?$/i);
+  if (direct?.[1] && esPrefijoCentroComercialComparecencia(direct[1])) {
+    const pref = direct[1].trim();
+    const rest = (direct[3] ?? '').trim();
+    return { textoRegular: rest ? `${pref},` : pref, restoBold: rest };
+  }
+
+  const flex = s.match(/^(.*?)(\b(?:el\s+)?centro\s+comercial[^,]*)(,\s*(.+))?$/i);
+  if (flex?.[2] && esPrefijoCentroComercialComparecencia(flex[2])) {
+    const pfx = (flex[1] ?? '').trim();
+    const pref = flex[2].trim();
+    const rest = (flex[4] ?? '').trim();
+    return {
+      prefijoBold: pfx.length ? pfx : undefined,
+      textoRegular: rest ? `${pref},` : pref,
+      restoBold: rest,
+    };
+  }
+
+  return null;
+}
+
+/** Quita la palabra «Sector» del texto de domicilio o zona (p. ej. «Sector Playa El Angel» → «Playa El Angel»). */
+function quitarPalabraSectorEnDomicilio(s: string): string {
+  let out = s.normalize('NFKC').trim();
+  for (let i = 0; i < 8; i++) {
+    const next = out
+      .replace(/^sector\s+/gi, '')
+      .replace(/,?\s*\bsector\b\s*,/gi, ', ')
+      .replace(/,?\s*\bsector\b\s+/gi, ', ')
+      .replace(/\s+\bsector\b\s*,/gi, ', ')
+      .replace(/\s+\bsector\b\s+/gi, ' ')
+      .replace(/,\s*\bsector\b\s*$/gi, '')
+      .replace(/\bsector\b\s*$/gi, '')
+      .replace(/,\s*,+/g, ',')
+      .replace(/^\s*,\s*/, '')
+      .trim();
+    if (next === out) break;
+    out = next;
+  }
+  out = out
+    .replace(/\bsector\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s*,\s*,+/g, ', ')
+    .replace(/^\s*,\s*/, '')
+    .replace(/,\s*$/g, '')
+    .trim();
+  return out;
+}
+
+function normZonaComparecenciaPdf(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function partesFechaCierreFirma(iso: string | null | undefined): { dia: string; mes: string; anio: string } {
@@ -264,23 +386,33 @@ function fragmentoPuntoEncuentroTransporte(raw: string | null | undefined): stri
   return /^en\s/i.test(t) ? t : `en ${t}`;
 }
 
-function ingresoSemanalUsdPlanoDesdeParam(raw: string | null | undefined): string {
+/** Número USD positivo desde el texto de ingreso semanal tabulador (en-US, es-VE o plano). */
+function tryParseUsdNumberDesdeTextoIngresoParam(raw: string | null | undefined): number | null {
   const t = (raw ?? '').trim();
-  if (!t) return '__________ USD';
-  if (/usd/i.test(t)) return t;
-  const sinMoneda = t.replace(/^\$\s*/, '').trim();
-  let n = Number.parseFloat(sinMoneda.replace(',', '.'));
-  if (Number.isFinite(n) && n > 0) return `${fmtUsdNumeroPlano(n)} USD`;
-  const compact = sinMoneda.replace(/[^\d,.-]/g, '');
-  if (compact.includes(',') && !compact.includes('.')) {
-    n = Number.parseFloat(compact.replace(/\./g, '').replace(',', '.'));
-  } else if (compact.includes('.')) {
-    n = Number.parseFloat(compact.replace(/,/g, ''));
+  if (!t) return null;
+  if (/_{2,}/.test(t) && !/\d/.test(t)) return null;
+  let s = t
+    .replace(/\s*usd\s*$/i, '')
+    .replace(/^\$\s*/, '')
+    .replace(/\$/g, '')
+    .trim();
+  if (!s) return null;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  let norm = s;
+  if (lastComma >= 0 && lastDot >= 0) {
+    norm = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else if (lastComma >= 0 && lastDot < 0) {
+    const parts = s.split(',');
+    norm =
+      parts.length === 2 && parts[1].length <= 2
+        ? `${parts[0].replace(/\./g, '')}.${parts[1]}`
+        : s.replace(/,/g, '');
   } else {
-    n = Number.parseFloat(compact);
+    norm = s.replace(/,/g, '');
   }
-  if (Number.isFinite(n) && n > 0) return `${fmtUsdNumeroPlano(n)} USD`;
-  return `${sinMoneda} USD`;
+  const n = Number.parseFloat(norm);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export function ContratoObreroPDF({
@@ -328,7 +460,18 @@ export function ContratoObreroPDF({
     cestaSemUsdNum != null && Number.isFinite(cestaSemUsdNum)
       ? `${fmtUsdNumeroPlano(Math.round(cestaSemUsdNum * 100) / 100)} USD`
       : '10 USD';
-  const ingresoSemanalUsdPlanoTxt = ingresoSemanalUsdPlanoDesdeParam(parametros.ingresoSemanalConsolidadoUsdTexto);
+  const ingresoSemanalBaseUsdNum = tryParseUsdNumberDesdeTextoIngresoParam(
+    parametros.ingresoSemanalConsolidadoUsdTexto,
+  );
+  const bonoManualUsdNum =
+    parametros.bonoManualUsd != null && Number.isFinite(Number(parametros.bonoManualUsd))
+      ? Math.max(0, Number(parametros.bonoManualUsd))
+      : 0;
+  /** Total en cláusula SEXTA (BONO ESPECIAL): tabulador + bono manual en USD. */
+  const totalIngresoSemanalUsdClausulaSexTxt =
+    ingresoSemanalBaseUsdNum != null || bonoManualUsdNum > 0
+      ? `${fmtUsdNumeroPlano((ingresoSemanalBaseUsdNum ?? 0) + bonoManualUsdNum)} USD`
+      : '__________ USD';
 
   const HORARIO_DETALLE_PDF_DEFAULT =
     'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). ';
@@ -344,16 +487,24 @@ export function ContratoObreroPDF({
     entidad.domicilio_fiscal ?? entidad.direccion_fiscal,
     '________________________________________________________________',
   );
+  const domicilioComparecenciaPdf = preprocessLineaDomicilioComparecenciaPdf(domicilioEmpresa);
   const phMun = '___________';
   const phEdo = '___________';
-  const phSec = '___________';
   const phRepNat = '________________';
   const phRepEc = '____________';
   const municipioEmpresa = str(entidad.municipio_fiscal, phMun);
   const estadoEmpresa = str(entidad.estado_fiscal, phEdo);
-  const sectorEmpresa = str(entidad.sector_domicilio_registro, phSec);
+  const zonaComparecencia = preprocessLineaDomicilioComparecenciaPdf(
+    str(entidad.sector_domicilio_registro, ZONA_COMPARECENCIA_PDF_DEFAULT),
+  );
   const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
+  const domRepResidencia = str(
+    entidad.rep_legal_domicilio,
+    '________________________________________________________________',
+  );
+  const municipioRepResidencia = str(entidad.rep_legal_municipio_residencia, phMun);
+  const estadoRepResidencia = str(entidad.rep_legal_estado_residencia, phEdo);
   const nacionalidadTrab = str(empleado.nacionalidad, '__________');
   const municipioTrab = str(empleado.municipio_domicilio, phMun);
   const estadoTrabPdf = str(empleado.estado_domicilio, phEdo);
@@ -366,6 +517,17 @@ export function ContratoObreroPDF({
       : 100;
   const compUsdMesTxt = fmtUsdNumeroPlano(compUsdMes);
   const puntoEncTransporte = fragmentoPuntoEncuentroTransporte(parametros.textoPuntoEncuentroTransporteSex);
+  const fragDomCentroComercial = fragmentosDomicilioCentroComercial(domicilioComparecenciaPdf);
+  const restoBoldDomSinSector = fragDomCentroComercial?.restoBold
+    ? quitarPalabraSectorEnDomicilio(fragDomCentroComercial.restoBold).trim()
+    : '';
+  const restoTrasCentroComercial = restoBoldDomSinSector;
+  const omitirZonaRepetidaTrasDomicilio =
+    Boolean(restoTrasCentroComercial) &&
+    normZonaComparecenciaPdf(restoTrasCentroComercial) === normZonaComparecenciaPdf(zonaComparecencia);
+  const repLegalFemenino = entidad.rep_legal_femenino === true;
+  const artRepLegal = repLegalFemenino ? 'la' : 'el';
+  const sustRepLegal = repLegalFemenino ? 'ciudadana' : 'ciudadano';
 
   const bloquePortadaIntro = (
     <>
@@ -376,12 +538,41 @@ export function ContratoObreroPDF({
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
         Entre <Text style={styles.bold}>{razonComparecencia}</Text>, Sociedad Mercantil domiciliada en{' '}
-        <Text style={styles.bold}>{domicilioEmpresa}</Text>, Sector <Text style={styles.bold}>{sectorEmpresa}</Text>
-        , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado{' '}
-        <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N° <Text style={styles.bold}>{rifEntidadLinea}</Text>
-        , representada en este acto por el Ciudadano <Text style={styles.bold}>{rep}</Text>,{' '}
-        <Text style={styles.bold}>{nacionalidadRep}</Text>, <Text style={styles.bold}>{estadoCivilRep}</Text>, mayor de
-        edad, hábil en derecho, de este domicilio, titular de la Cédula de Identidad número{' '}
+        {fragDomCentroComercial ? (
+          <>
+            {fragDomCentroComercial.prefijoBold ? (
+              <Text style={styles.bold}>{fragDomCentroComercial.prefijoBold} </Text>
+            ) : null}
+            <Text style={styles.introComparecenciaRegular}>{fragDomCentroComercial.textoRegular} </Text>
+            {restoBoldDomSinSector ? (
+              <Text style={styles.bold}>{restoBoldDomSinSector}</Text>
+            ) : null}
+            {!omitirZonaRepetidaTrasDomicilio ? (
+              <>
+                , <Text style={styles.bold}>{zonaComparecencia}</Text>
+              </>
+            ) : null}
+            , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado{' '}
+            <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N° <Text style={styles.bold}>{rifEntidadLinea}</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.introComparecenciaRegular}>{domicilioComparecenciaPdf}</Text>
+            {zonaComparecencia.trim().length ? (
+              <>
+                , <Text style={styles.bold}>{zonaComparecencia}</Text>
+              </>
+            ) : null}
+            , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N°{' '}
+            <Text style={styles.bold}>{rifEntidadLinea}</Text>
+          </>
+        )}
+        , representada en este acto por {artRepLegal} {sustRepLegal}{' '}
+        <Text style={styles.bold}>{rep}</Text>, de nacionalidad <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, de
+        estado civil <Text style={styles.bold}>{estadoCivilRep}</Text>, hábil en derecho,{' '}
+        {repLegalFemenino ? 'domiciliada' : 'domiciliado'} en <Text style={styles.bold}>{domRepResidencia}</Text>, Municipio{' '}
+        <Text style={styles.bold}>{municipioRepResidencia}</Text>, Estado <Text style={styles.bold}>{estadoRepResidencia}</Text>
+        , titular de la Cédula de Identidad número{' '}
         <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
         <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra el ciudadano{' '}
         <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor
@@ -458,7 +649,7 @@ export function ContratoObreroPDF({
         {'\n'}
         <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
         {` Según Art. 105 LOTTT y Sentencia 218 del TSJ, para elevar el Ingreso Semanal a un total equivalente a: `}
-        <Text style={styles.bold}>{ingresoSemanalUsdPlanoTxt}</Text>
+        <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
         {'. '}
         {'\n'}
         {`Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
@@ -498,17 +689,17 @@ export function ContratoObreroPDF({
 
       <View style={styles.signatureSection}>
         <View style={styles.signatureBox}>
-          <Text style={[styles.bold, styles.signatureLine]}>POR LA ENTIDAD DE TRABAJO</Text>
+          <Text style={styles.signatureLabelBold}>POR LA ENTIDAD DE TRABAJO</Text>
           <View style={styles.signUnderline} />
-          <Text style={[styles.bold, styles.signatureLine]}>REPRESENTANTE LEGAL</Text>
-          <Text style={[styles.bold, styles.signatureLine]}>NOMBRE:</Text>
+          <Text style={styles.signatureLabelBold}>REPRESENTANTE LEGAL</Text>
+          <Text style={styles.signatureLabelBold}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{rep}</Text>
           <Text style={styles.signatureLine}>C.I. {repCedulaGuion}</Text>
         </View>
         <View style={styles.signatureBox}>
-          <Text style={[styles.bold, styles.signatureLine]}>POR EL TRABAJADOR</Text>
+          <Text style={styles.signatureLabelBold}>POR EL TRABAJADOR</Text>
           <View style={styles.signUnderline} />
-          <Text style={[styles.bold, styles.signatureLine]}>NOMBRE:</Text>
+          <Text style={styles.signatureLabelBold}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{nombreTrabajador}</Text>
           <Text style={styles.signatureLine}>C.I. {cedulaTrabGuion}</Text>
           <Text style={[styles.signatureLine, { marginTop: 2 }]}>(Huella Dactilar)</Text>

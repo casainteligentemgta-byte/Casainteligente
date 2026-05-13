@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { Download, FileText, UserPlus } from 'lucide-react';
+import { Download, FileCheck, FileText, Link2, Printer, Share2, Upload, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -28,6 +28,9 @@ export type ContratoExpressListItem = {
   bono_manual_usd: number | string | null;
   salario_base_mensual_snapshot: number | string | null;
   pdf_storage_path: string;
+  /** Migración 127: PDF o imagen firmada por el obrero. */
+  pdf_firmado_storage_path?: string | null;
+  pdf_firmado_subido_at?: string | null;
   formalizado?: boolean | null;
   formalizado_empleado_id?: string | null;
   ci_proyectos?: ProyectoExpressJoin | ProyectoExpressJoin[] | null;
@@ -81,15 +84,87 @@ type Props = {
   fetchError?: string | null;
 };
 
+/** PostgREST con RLS suele devolver `data: []` sin `error` si la sesión no ve filas; `[]` es truthy en JS. */
+function tieneFilasExpress(data: unknown[] | null | undefined): boolean {
+  return Array.isArray(data) && data.length > 0;
+}
+
+function normalizeExpressRowFromDb(row: Record<string, unknown>): ContratoExpressListItem {
+  const bono =
+    (row.bono_manual_usd as ContratoExpressListItem['bono_manual_usd']) ??
+    (row.bono_manual_ves as ContratoExpressListItem['bono_manual_usd']) ??
+    null;
+  const { bono_manual_ves: _v, ...rest } = row;
+  return { ...(rest as ContratoExpressListItem), bono_manual_usd: bono };
+}
+
+async function fetchSignedExpressPdfUrl(
+  rowId: string,
+  doc: 'generado' | 'firmado',
+): Promise<{ url?: string; error?: string }> {
+  const q = doc === 'firmado' ? '?doc=firmado' : '';
+  const res = await fetch(`/api/talento/contratos-express/${rowId}/pdf-url${q}`);
+  const j = (await res.json()) as { url?: string; error?: string };
+  if (!res.ok) return { error: j.error ?? `HTTP ${res.status}` };
+  return { url: j.url };
+}
+
 export function FastContratosExpressTable({ initialData, fetchError }: Props) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const firmadoInputRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<ContratoExpressListItem[]>(initialData);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [liveErr, setLiveErr] = useState<string | null>(null);
+  const [liveFetchDone, setLiveFetchDone] = useState(false);
+  const [firmadoUploadContratoId, setFirmadoUploadContratoId] = useState<string | null>(null);
 
   useEffect(() => {
     setRows(initialData);
   }, [initialData]);
+
+  /** Recarga desde el navegador (evita listado obsoleto por caché del servidor). */
+  useEffect(() => {
+    let cancelled = false;
+    const selects = [
+      `id,created_at,obrero_cedula,obrero_nombre,proyecto_id,bono_manual_usd,salario_base_mensual_snapshot,pdf_storage_path,pdf_firmado_storage_path,pdf_firmado_subido_at,formalizado,formalizado_empleado_id,ci_proyectos(nombre,ci_entidades(nombre,rif))`,
+      `id,created_at,obrero_cedula,obrero_nombre,proyecto_id,bono_manual_usd,salario_base_mensual_snapshot,pdf_storage_path,pdf_firmado_storage_path,pdf_firmado_subido_at,formalizado_empleado_id,ci_proyectos(nombre,ci_entidades(nombre,rif))`,
+      `id,created_at,obrero_cedula,obrero_nombre,proyecto_id,bono_manual_usd,salario_base_mensual_snapshot,pdf_storage_path,pdf_firmado_storage_path,pdf_firmado_subido_at,formalizado_empleado_id`,
+      `id,created_at,obrero_cedula,obrero_nombre,proyecto_id,bono_manual_usd,salario_base_mensual_snapshot,pdf_storage_path,formalizado,formalizado_empleado_id,ci_proyectos(nombre,ci_entidades(nombre,rif))`,
+      `id,created_at,obrero_cedula,obrero_nombre,proyecto_id,bono_manual_usd,salario_base_mensual_snapshot,pdf_storage_path,formalizado_empleado_id,ci_proyectos(nombre,ci_entidades(nombre,rif))`,
+      `id,created_at,obrero_cedula,obrero_nombre,proyecto_id,bono_manual_usd,salario_base_mensual_snapshot,pdf_storage_path,formalizado_empleado_id`,
+    ];
+    const ves = selects.map((s) => s.replace(/\bbono_manual_usd\b/g, 'bono_manual_ves'));
+
+    (async () => {
+      setLiveErr(null);
+      let lastFail: string | null = null;
+      for (const sel of [...selects, ...ves]) {
+        const r = await supabase.from('ci_contratos_express').select(sel).order('created_at', { ascending: false });
+        if (cancelled) return;
+        if (r.error) {
+          lastFail = r.error.message;
+          continue;
+        }
+        if (tieneFilasExpress(r.data)) {
+          setRows(
+            (r.data as unknown[]).map((row) => normalizeExpressRowFromDb(row as Record<string, unknown>)),
+          );
+          setLiveFetchDone(true);
+          return;
+        }
+      }
+      if (!cancelled) {
+        /** No sustituir datos del servidor (p. ej. service_role en RSC) por lista vacía vía RLS en el navegador. */
+        setLiveErr(lastFail);
+        setLiveFetchDone(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   async function handleDownload(path: string, nombre: string, rowId: string) {
     const p = (path ?? '').trim();
@@ -155,6 +230,116 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
     }
   }
 
+  async function copiarEnlaceGenerado(rowId: string) {
+    const { url, error } = await fetchSignedExpressPdfUrl(rowId, 'generado');
+    if (error || !url) {
+      toast.error(error ?? 'No se obtuvo enlace');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Enlace copiado', { description: 'Válido aprox. 1 h. Pégalo en WhatsApp, correo, etc.' });
+    } catch {
+      toast.error('No se pudo copiar al portapapeles');
+    }
+  }
+
+  async function compartirContrato(rowId: string, nombre: string) {
+    const { url, error } = await fetchSignedExpressPdfUrl(rowId, 'generado');
+    if (error || !url) {
+      toast.error(error ?? 'No se obtuvo enlace');
+      return;
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Contrato express — ${nombre}`,
+          text: 'Enlace para ver o descargar el contrato (caduca en aprox. 1 hora).',
+          url,
+        });
+        toast.success('Compartido');
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.message('Enlace copiado', { description: 'Este navegador no tiene «Compartir»; se copió al portapapeles.' });
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      toast.error('No se pudo compartir');
+    }
+  }
+
+  async function imprimirContrato(rowId: string) {
+    const { url, error } = await fetchSignedExpressPdfUrl(rowId, 'generado');
+    if (error || !url) {
+      toast.error(error ?? 'No se pudo abrir el PDF');
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+    toast.message('PDF en nueva pestaña', {
+      description: 'Use Archivo → Imprimir o Ctrl+P en el visor del PDF (impresión física o PDF).',
+    });
+  }
+
+  function abrirSelectorFirmado(contratoId: string) {
+    setFirmadoUploadContratoId(contratoId);
+    queueMicrotask(() => firmadoInputRef.current?.click());
+  }
+
+  async function onFirmadoFileChange(ev: ChangeEvent<HTMLInputElement>) {
+    const id = firmadoUploadContratoId;
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    setFirmadoUploadContratoId(null);
+    if (!file || !id) return;
+    setBusyId(id);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/talento/contratos-express/${id}/pdf-firmado`, { method: 'POST', body: fd });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo subir el archivo');
+        return;
+      }
+      toast.success('Documento firmado guardado', { description: 'Queda registrado en este listado.' });
+      router.refresh();
+    } catch {
+      toast.error('Error de red al subir');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function descargarFirmado(rowId: string, nombre: string) {
+    setBusyId(rowId);
+    try {
+      const { url, error } = await fetchSignedExpressPdfUrl(rowId, 'firmado');
+      if (error || !url) {
+        toast.error(error ?? 'No hay archivo firmado');
+        return;
+      }
+      const blob = await fetch(url).then((r) => r.blob());
+      const mime = blob.type || 'application/pdf';
+      const ext = mime.includes('png')
+        ? 'png'
+        : mime.includes('jpeg') || mime.includes('jpg')
+          ? 'jpg'
+          : mime.includes('webp')
+            ? 'webp'
+            : 'pdf';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `Contrato_firmado_${nombre.replace(/\s/g, '_')}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      toast.error('Error al descargar el documento firmado');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const totalesLista = useMemo(() => {
     const tasa = tasaBcvVesPorUsdFromEnv();
     let base = 0;
@@ -167,16 +352,28 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
     return { base, bonosUsd, bonosBsRef, tasa };
   }, [rows]);
 
-  if (fetchError) {
-    return (
-      <p className="text-sm text-red-400">
-        No se pudieron cargar los contratos: {fetchError}
-      </p>
-    );
-  }
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-10 pb-28">
+      <input
+        ref={firmadoInputRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={onFirmadoFileChange}
+      />
+      {fetchError ? (
+        <p className="mb-4 rounded-md border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-100/90">
+          Aviso al cargar en servidor: {fetchError}. Los datos de la tabla se actualizan desde tu sesión en Supabase.
+        </p>
+      ) : null}
+      {liveFetchDone && rows.length === 0 && liveErr ? (
+        <p className="mb-4 text-sm text-red-400">
+          No se pudo leer la lista desde el navegador: {liveErr}. Comprueba que la tabla{' '}
+          <code className="text-zinc-500">ci_contratos_express</code> exista y que tu usuario tenga permiso de lectura.
+        </p>
+      ) : null}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex flex-wrap gap-3">
           <Link href="/talento" className="text-zinc-500 hover:text-zinc-300">
@@ -196,15 +393,22 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
         <div>
           <h1 className="text-2xl font-bold text-white">Contratos express (fast-track)</h1>
           <p className="text-sm text-zinc-400">
-            Sin registro previo en <code className="text-zinc-500">ci_empleados</code>. Salario base: snapshot{' '}
-            <strong className="text-zinc-300">mensual en Bs</strong> (tabulador). Bono: <strong className="text-zinc-300">USD</strong>; en cada pago (p. ej. viernes) se convierte a Bs con la tasa oficial del BCV de ese día. Para equivalentes en pantalla, define{' '}
-            <code className="text-zinc-500">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> (Bs por USD) y actualízala el día de pago.
+            Sin registro previo en <code className="text-zinc-500">ci_empleados</code>. Cada fila queda en esta lista al
+            generar el express. Puede <strong className="text-zinc-300">copiar o compartir</strong> el enlace del PDF
+            (~1 h), <strong className="text-zinc-300">imprimir</strong> desde el visor y{' '}
+            <strong className="text-zinc-300">subir el PDF o escaneo</strong> una vez firmado por el obrero. Salario
+            base: snapshot <strong className="text-zinc-300">mensual en Bs</strong> (tabulador). Bono:{' '}
+            <strong className="text-zinc-300">USD</strong>; en cada pago se convierte a Bs con la tasa BCV del día.
+            Para equivalentes en pantalla, define{' '}
+            <code className="text-zinc-500">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> (Bs por USD).
           </p>
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">No hay registros. Usa «Nuevo express» para generar uno.</p>
+        <p className="text-sm text-zinc-500">
+          {!liveFetchDone ? 'Cargando lista actualizada…' : liveErr ? null : 'No hay registros. Usa «Nuevo express» para generar uno.'}
+        </p>
       ) : (
         <>
           <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -233,7 +437,7 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
             </div>
           </div>
 
-          <div className="rounded-md border border-zinc-800 bg-zinc-950/90 text-zinc-100">
+          <div className="overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950/90 text-zinc-100">
             <Table>
               <TableHeader>
                 <TableRow className="border-zinc-800 hover:bg-transparent">
@@ -256,6 +460,7 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                   const bonUsd = bonoUsdNum(c);
                   const tasa = totalesLista.tasa;
                   const bonBsRef = tasa != null ? bonoUsdABs(bonUsd, tasa) : null;
+                  const tieneFirmado = Boolean((c.pdf_firmado_storage_path ?? '').trim());
                   return (
                     <TableRow key={c.id} className="border-zinc-800">
                       <TableCell className="whitespace-nowrap text-zinc-400">
@@ -283,19 +488,82 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                       >
                         {bonBsRef != null ? `${fmtBs(bonBsRef)} Bs` : '—'}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex flex-wrap justify-end gap-2">
+                      <TableCell className="min-w-[220px] text-right">
+                        <div className="inline-flex max-w-[min(100vw-2rem,420px)] flex-wrap justify-end gap-1 sm:gap-2">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             disabled={busy}
-                            className="border-zinc-600 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                            className="border-zinc-600 bg-zinc-900 px-2 text-zinc-100 hover:bg-zinc-800"
+                            title="Descargar borrador generado (PDF)"
                             onClick={() => void handleDownload(c.pdf_storage_path, c.obrero_nombre, c.id)}
                           >
                             <Download className="size-4" />
-                            PDF
+                            <span className="ml-1 hidden sm:inline">PDF</span>
                           </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            className="border-zinc-600 bg-zinc-900 px-2 text-zinc-100 hover:bg-zinc-800"
+                            title="Copiar enlace temporal del PDF (~1 h)"
+                            onClick={() => void copiarEnlaceGenerado(c.id)}
+                          >
+                            <Link2 className="size-4" />
+                            <span className="ml-1 hidden lg:inline">Copiar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            className="border-zinc-600 bg-zinc-900 px-2 text-zinc-100 hover:bg-zinc-800"
+                            title="Compartir enlace (o copiar si el navegador no permite compartir)"
+                            onClick={() => void compartirContrato(c.id, c.obrero_nombre)}
+                          >
+                            <Share2 className="size-4" />
+                            <span className="ml-1 hidden lg:inline">Enviar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            className="border-zinc-600 bg-zinc-900 px-2 text-zinc-100 hover:bg-zinc-800"
+                            title="Abrir PDF en nueva pestaña para imprimir (físico o guardar como PDF)"
+                            onClick={() => void imprimirContrato(c.id)}
+                          >
+                            <Printer className="size-4" />
+                            <span className="ml-1 hidden lg:inline">Imprimir</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            className="border-sky-800/60 bg-sky-950/40 px-2 text-sky-200 hover:bg-sky-950/60"
+                            title="Subir PDF firmado o foto / escaneo (JPEG, PNG, WEBP)"
+                            onClick={() => abrirSelectorFirmado(c.id)}
+                          >
+                            <Upload className="size-4" />
+                            <span className="ml-1 hidden sm:inline">Firmado</span>
+                          </Button>
+                          {tieneFirmado ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={busy}
+                              className="border-emerald-800/50 bg-emerald-950/30 px-2 text-emerald-200 hover:bg-emerald-950/50"
+                              title="Descargar archivo firmado subido"
+                              onClick={() => void descargarFirmado(c.id, c.obrero_nombre)}
+                            >
+                              <FileCheck className="size-4" />
+                              <span className="ml-1 hidden sm:inline">OK</span>
+                            </Button>
+                          ) : null}
                           <Button
                             type="button"
                             variant="ghost"

@@ -5,10 +5,18 @@ export type RepresentanteMercantilCi = {
   /** Edad en años (planilla de empleo / Gaceta). */
   edad?: string;
   estado_civil?: string;
+  /** Ej. «Venezolano» o la nacionalidad indicada si no es venezolano. */
   nacionalidad?: string;
   cargo?: string;
+  /** Vía / urbanización del domicilio del representante (comparecencia). */
   domicilio?: string;
+  /** Municipio donde reside el representante (comparecencia / contrato PDF). */
+  municipio_residencia?: string;
+  /** Estado donde reside el representante. */
+  estado_residencia?: string;
   profesion?: string;
+  /** Redacción «el ciudadano» / «la ciudadana» en contrato PDF. */
+  genero?: 'M' | 'F';
 };
 
 /**

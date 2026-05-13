@@ -81,6 +81,8 @@ export function planillaPatronoDesdeEntidadRow(input: {
     representanteEstadoCivil: trimStr(rep.estado_civil),
     representanteCargo: trimStr(rep.cargo),
     representanteNacionalidad: trimStr(rep.nacionalidad),
+    representanteMunicipioResidencia: trimStr(rep.municipio_residencia),
+    representanteEstadoResidencia: trimStr(rep.estado_residencia),
     empresaDomicilio: domEmpresa,
   };
 }

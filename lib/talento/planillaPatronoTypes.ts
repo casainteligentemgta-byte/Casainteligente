@@ -12,5 +12,9 @@ export type PlanillaPatronoCampos = {
   representanteEstadoCivil?: string;
   representanteCargo?: string;
   representanteNacionalidad?: string;
+  /** Municipio de residencia del representante legal. */
+  representanteMunicipioResidencia?: string;
+  /** Estado de residencia del representante legal. */
+  representanteEstadoResidencia?: string;
   empresaDomicilio?: string;
 };

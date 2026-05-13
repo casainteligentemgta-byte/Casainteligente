@@ -11,6 +11,7 @@ import {
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import type { ContratoObreroPdfStructuredProps } from '@/lib/talento/ContratoObreroPdfStructured';
+import type { RepresentanteMercantilCi } from '@/types/ci-entidad';
 import {
   domicilioLineaComparecenciaPatrono,
   domicilioPatronoParaEntidad,
@@ -362,24 +363,57 @@ async function fetchPatronoEntidadExtraParaPlantilla(
   return {};
 }
 
-function primerRepresentanteRegistro(raw: unknown): { nombre?: string; cedula?: string; cargo?: string } {
-  if (!raw) return {};
+function pickRepCampoLoose(rep: Record<string, unknown>, ...candidatos: string[]): string | undefined {
+  for (const c of candidatos) {
+    const direct = rep[c];
+    if (typeof direct === 'string' && direct.trim()) return direct.trim();
+    const low = c.toLowerCase();
+    for (const [k, v] of Object.entries(rep)) {
+      if (k.toLowerCase() === low && typeof v === 'string' && v.trim()) return v.trim();
+    }
+  }
+  return undefined;
+}
+
+function normalizarGeneroRepresentanteRM(v: unknown): 'M' | 'F' | undefined {
+  const s = String(v ?? '').trim().toUpperCase();
+  if (!s) return undefined;
+  if (s === 'F' || s === 'FEMENINO' || s === 'FEMENINA') return 'F';
+  if (s === 'M' || s === 'MASCULINO') return 'M';
+  return undefined;
+}
+
+function primerRepresentanteRegistro(raw: unknown): RepresentanteMercantilCi | undefined {
+  if (!raw) return undefined;
   let o: unknown = raw;
   if (typeof raw === 'string') {
     try {
       o = JSON.parse(raw) as unknown;
     } catch {
-      return {};
+      return undefined;
     }
   }
-  if (!o || typeof o !== 'object' || Array.isArray(o)) return {};
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return undefined;
   const reps = (o as { representantes?: unknown }).representantes;
-  if (!Array.isArray(reps) || !reps[0] || typeof reps[0] !== 'object' || Array.isArray(reps[0])) return {};
-  const r = reps[0] as Record<string, unknown>;
-  const nombre = strOpt(r.nombre) ?? undefined;
-  const cedula = strOpt(r.cedula) ?? undefined;
-  const cargo = strOpt(r.cargo) ?? undefined;
-  return { nombre, cedula, cargo };
+  if (!Array.isArray(reps) || !reps[0] || typeof reps[0] !== 'object' || Array.isArray(reps[0])) return undefined;
+  const row = reps[0] as Record<string, unknown>;
+  const genero =
+    normalizarGeneroRepresentanteRM(pickRepCampoLoose(row, 'genero', 'sexo')) ??
+    normalizarGeneroRepresentanteRM(row.genero) ??
+    normalizarGeneroRepresentanteRM(row.sexo);
+  return {
+    nombre: pickRepCampoLoose(row, 'nombre'),
+    cedula: pickRepCampoLoose(row, 'cedula'),
+    edad: pickRepCampoLoose(row, 'edad'),
+    estado_civil: pickRepCampoLoose(row, 'estado_civil', 'estadoCivil', 'Estado_civil'),
+    nacionalidad: pickRepCampoLoose(row, 'nacionalidad', 'Nacionalidad'),
+    cargo: pickRepCampoLoose(row, 'cargo'),
+    domicilio: pickRepCampoLoose(row, 'domicilio'),
+    municipio_residencia: pickRepCampoLoose(row, 'municipio_residencia', 'municipioResidencia'),
+    estado_residencia: pickRepCampoLoose(row, 'estado_residencia', 'estadoResidencia'),
+    profesion: pickRepCampoLoose(row, 'profesion'),
+    genero: genero ?? 'M',
+  };
 }
 
 /**
@@ -715,9 +749,17 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     estado_fiscal: estadoComparecencia ?? undefined,
     sector_domicilio_registro: ubiRm.sector ?? undefined,
     representante_legal: strOpt(entidadRow?.representante_legal) ?? f.patron.representante,
-    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre,
-    rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula,
-    rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? rmRep.cargo,
+    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? strOpt(rmRep?.nombre),
+    rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? strOpt(rmRep?.cedula),
+    rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? strOpt(rmRep?.cargo),
+    rep_legal_nacionalidad:
+      strOpt(entidadRow?.['rep_legal_nacionalidad']) ?? strOpt(rmRep?.nacionalidad) ?? undefined,
+    rep_legal_estado_civil:
+      strOpt(entidadRow?.['rep_legal_estado_civil']) ?? strOpt(rmRep?.estado_civil) ?? undefined,
+    rep_legal_femenino: rmRep?.genero === 'F' || entidadRow?.['rep_legal_femenino'] === true,
+    rep_legal_domicilio: strOpt(rmRep?.domicilio) || undefined,
+    rep_legal_municipio_residencia: strOpt(rmRep?.municipio_residencia) || undefined,
+    rep_legal_estado_residencia: strOpt(rmRep?.estado_residencia) || undefined,
     rif: strOpt(entidadRow?.rif),
     rm_oficina: strOpt(rmCampos.circunscripcion) || null,
     rm_fecha: strOpt(rmCampos.fecha) || null,
@@ -832,6 +874,12 @@ export type ContratoExpressManualInput = {
   tipoContrato?: string | null;
   /** Detalle de horario (texto tras las 40 h. en cláusula CUARTA); prioridad sobre default de obra/jornada. */
   horarioSemanalTexto?: string | null;
+  /** Comparecencia: municipio de residencia del trabajador. */
+  obreroMunicipioResidencia?: string | null;
+  /** Comparecencia: estado de residencia del trabajador. */
+  obreroEstadoResidencia?: string | null;
+  /** Bono especial no salarial en USD (cláusula SEXTA del PDF). */
+  bonoManualUsd?: number | null;
 };
 
 /**
@@ -927,9 +975,17 @@ export async function cargarPropsContratoObreroPdfExpress(
     estado_fiscal: estadoComparecencia ?? undefined,
     sector_domicilio_registro: ubiRm.sector ?? undefined,
     representante_legal: patronBase.representante,
-    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? rmRep.nombre ?? patronExtra.rep_legal_nombre,
-    rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? rmRep.cedula ?? patronExtra.rep_legal_cedula,
-    rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? rmRep.cargo,
+    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? strOpt(rmRep?.nombre) ?? patronExtra.rep_legal_nombre,
+    rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? strOpt(rmRep?.cedula) ?? patronExtra.rep_legal_cedula,
+    rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? strOpt(rmRep?.cargo),
+    rep_legal_nacionalidad:
+      strOpt(entidadRow?.['rep_legal_nacionalidad']) ?? strOpt(rmRep?.nacionalidad) ?? undefined,
+    rep_legal_estado_civil:
+      strOpt(entidadRow?.['rep_legal_estado_civil']) ?? strOpt(rmRep?.estado_civil) ?? undefined,
+    rep_legal_femenino: rmRep?.genero === 'F' || entidadRow?.['rep_legal_femenino'] === true,
+    rep_legal_domicilio: strOpt(rmRep?.domicilio) || undefined,
+    rep_legal_municipio_residencia: strOpt(rmRep?.municipio_residencia) || undefined,
+    rep_legal_estado_residencia: strOpt(rmRep?.estado_residencia) || undefined,
     rif: strOpt(entidadRow?.rif) ?? patronExtra.rif,
     rm_oficina: strOpt(rmCampos.circunscripcion) || null,
     rm_fecha: strOpt(rmCampos.fecha) || null,
@@ -959,6 +1015,8 @@ export async function cargarPropsContratoObreroPdfExpress(
     direccion_habitacion: dirObrero ?? undefined,
     nacionalidad: strOpt(manual.nacionalidad) ?? undefined,
     estado_civil: strOpt(manual.estadoCivil) ?? undefined,
+    municipio_domicilio: strOpt(manual.obreroMunicipioResidencia) ?? undefined,
+    estado_domicilio: strOpt(manual.obreroEstadoResidencia) ?? undefined,
     cargo_nombre: cargoNom,
     tareas_especificas: cargoNom,
   };
@@ -1005,6 +1063,10 @@ export async function cargarPropsContratoObreroPdfExpress(
     horarioSemanal: horarioSemanalResuelto,
     fechaFirmaContratoIso: fechaFirma ?? fechaIngreso ?? undefined,
     ingresoSemanalConsolidadoUsdTexto: ingresoSemanalUsdTabulador,
+    bonoManualUsd:
+      manual.bonoManualUsd != null && Number.isFinite(Number(manual.bonoManualUsd))
+        ? Math.max(0, Number(manual.bonoManualUsd))
+        : 0,
     textoPuntoEncuentroTransporteSex: textoPuntoEncuentroTransporteClausulaSex(
       strOpt(o.punto_encuentro_transporte_contrato),
     ),

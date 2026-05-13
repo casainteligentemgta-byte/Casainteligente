@@ -43,10 +43,16 @@ type RepFormRow = {
   cedula: string;
   edad: string;
   estado_civil: string;
+  esVenezolano: boolean;
+  nacionalidadOtro: string;
   nacionalidad: string;
+  municipio_residencia: string;
+  estado_residencia: string;
   cargo: string;
   domicilio: string;
   profesion: string;
+  /** Comparecencia en contrato PDF: «el ciudadano» vs «la ciudadana». */
+  genero: 'M' | 'F';
 };
 
 function emptyRepFormRow(): RepFormRow {
@@ -56,24 +62,36 @@ function emptyRepFormRow(): RepFormRow {
     cedula: '',
     edad: '',
     estado_civil: '',
+    esVenezolano: true,
+    nacionalidadOtro: '',
     nacionalidad: '',
+    municipio_residencia: '',
+    estado_residencia: '',
     cargo: '',
     domicilio: '',
     profesion: '',
+    genero: 'M',
   };
 }
 
 function repFormDesdeMercantil(r: RepresentanteMercantilCi): RepFormRow {
+  const nat = (r.nacionalidad ?? '').trim();
+  const esVen = !nat || /^venezol/i.test(nat);
   return {
     id: newRepRowId(),
     nombre: (r.nombre ?? '').trim(),
     cedula: (r.cedula ?? '').trim(),
     edad: (r.edad ?? '').trim(),
     estado_civil: (r.estado_civil ?? '').trim(),
-    nacionalidad: (r.nacionalidad ?? '').trim(),
+    esVenezolano: esVen,
+    nacionalidadOtro: esVen ? '' : nat,
+    nacionalidad: esVen ? 'Venezolano' : nat,
+    municipio_residencia: (r.municipio_residencia ?? '').trim(),
+    estado_residencia: (r.estado_residencia ?? '').trim(),
     cargo: (r.cargo ?? '').trim(),
     domicilio: (r.domicilio ?? '').trim(),
     profesion: (r.profesion ?? '').trim(),
+    genero: r.genero === 'F' ? 'F' : 'M',
   };
 }
 
@@ -83,6 +101,12 @@ function parseRepresentantesRm(raw: unknown): RepresentanteMercantilCi[] {
   for (const item of raw) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const o = item as Record<string, unknown>;
+    const gRaw = o.genero ?? o.sexo;
+    let genero: 'M' | 'F' = 'M';
+    if (typeof gRaw === 'string') {
+      const t = gRaw.trim().toUpperCase();
+      if (t === 'F' || t === 'FEMENINO' || t === 'FEMENINA') genero = 'F';
+    }
     out.push({
       nombre: typeof o.nombre === 'string' ? o.nombre : undefined,
       cedula: typeof o.cedula === 'string' ? o.cedula : undefined,
@@ -91,7 +115,10 @@ function parseRepresentantesRm(raw: unknown): RepresentanteMercantilCi[] {
       nacionalidad: typeof o.nacionalidad === 'string' ? o.nacionalidad : undefined,
       cargo: typeof o.cargo === 'string' ? o.cargo : undefined,
       domicilio: typeof o.domicilio === 'string' ? o.domicilio : undefined,
+      municipio_residencia: typeof o.municipio_residencia === 'string' ? o.municipio_residencia : undefined,
+      estado_residencia: typeof o.estado_residencia === 'string' ? o.estado_residencia : undefined,
       profesion: typeof o.profesion === 'string' ? o.profesion : undefined,
+      genero,
     });
   }
   return out;
@@ -170,10 +197,15 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             cedula: ced,
             edad: '',
             estado_civil: '',
+            esVenezolano: true,
+            nacionalidadOtro: '',
             nacionalidad: '',
+            municipio_residencia: '',
+            estado_residencia: '',
             cargo: car,
             domicilio: '',
             profesion: '',
+            genero: 'M',
           },
         ]);
       } else {
@@ -217,16 +249,25 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
     setGuardando(true);
     try {
-      const representantesPayload: RepresentanteMercantilCi[] = repFilas.map((row) => ({
-        nombre: row.nombre.trim() || undefined,
-        cedula: row.cedula.trim() || undefined,
-        edad: row.edad.trim() || undefined,
-        estado_civil: row.estado_civil.trim() || undefined,
-        nacionalidad: row.nacionalidad.trim() || undefined,
-        cargo: row.cargo.trim() || undefined,
-        domicilio: row.domicilio.trim() || undefined,
-        profesion: row.profesion.trim() || undefined,
-      }));
+      const representantesPayload: RepresentanteMercantilCi[] = repFilas.map((row) => {
+        const nacionalidad =
+          row.esVenezolano
+            ? 'Venezolano'
+            : row.nacionalidadOtro.trim() || row.nacionalidad.trim() || undefined;
+        return {
+          nombre: row.nombre.trim() || undefined,
+          cedula: row.cedula.trim() || undefined,
+          edad: row.edad.trim() || undefined,
+          estado_civil: row.estado_civil.trim() || undefined,
+          nacionalidad,
+          cargo: row.cargo.trim() || undefined,
+          domicilio: row.domicilio.trim() || undefined,
+          municipio_residencia: row.municipio_residencia.trim() || undefined,
+          estado_residencia: row.estado_residencia.trim() || undefined,
+          profesion: row.profesion.trim() || undefined,
+          genero: row.genero,
+        };
+      });
 
       const registroMercantil: RegistroMercantilCi = registroMercantilDesdeCampos({
         domicilioEmpresa: rmDomicilioEmpresa,
@@ -447,9 +488,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
               <Tabs.Content value="representante" className="space-y-5 outline-none">
                 <p className="text-xs text-zinc-500">
-                  Deben figurar en la planilla de empleo (referencia Gaceta): nombre y apellido, C.I., edad, estado
-                  civil, cargo, nacionalidad y domicilio del representante. Varios representantes: el primero alimenta{' '}
-                  <code className="text-zinc-400">rep_legal_*</code> y la planilla usa ese mismo orden.
+                  Comparecencia en el contrato obrero (PDF): el <strong className="text-zinc-400">primer representante</strong>{' '}
+                  aporta nombre, leyenda <strong className="text-zinc-400">el ciudadano / la ciudadana</strong>, cédula,{' '}
+                  <strong className="text-zinc-400">nacionalidad</strong> y <strong className="text-zinc-400">estado civil</strong>{' '}
+                  (frase «de nacionalidad …, de estado civil …» tras el nombre). Si marca «Es venezolano», la nacionalidad en
+                  el contrato será «Venezolano». También alimentan planilla y <code className="text-zinc-400">rep_legal_*</code>{' '}
+                  en base (nombre, cédula y cargo del primero).
                 </p>
                 {repFilas.map((row, idx) => (
                   <div
@@ -485,6 +529,23 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                         className={inputClass}
                       />
                     </div>
+                    <div>
+                      <label className={labelClass}>Redacción en contrato (leyenda)</label>
+                      <select
+                        className={inputClass}
+                        value={row.genero}
+                        onChange={(e) =>
+                          setRepFilas((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id ? { ...r, genero: e.target.value === 'F' ? 'F' : 'M' } : r,
+                            ),
+                          )
+                        }
+                      >
+                        <option value="M">El ciudadano (masculino)</option>
+                        <option value="F">La ciudadana (femenino)</option>
+                      </select>
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
                         <label className={labelClass}>Cédula</label>
@@ -513,19 +574,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                         />
                       </div>
                       <div>
-                        <label className={labelClass}>Nacionalidad</label>
-                        <input
-                          value={row.nacionalidad}
-                          onChange={(e) =>
-                            setRepFilas((prev) =>
-                              prev.map((r) => (r.id === row.id ? { ...r, nacionalidad: e.target.value } : r)),
-                            )
-                          }
-                          className={inputClass}
-                          placeholder="Ej. venezolana"
-                        />
-                      </div>
-                      <div>
                         <label className={labelClass}>Estado civil</label>
                         <input
                           value={row.estado_civil}
@@ -535,20 +583,88 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                             )
                           }
                           className={inputClass}
+                          placeholder="Ej. casado"
                         />
                       </div>
-                      <div className="sm:col-span-2">
-                        <label className={labelClass}>Profesión</label>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={row.esVenezolano}
+                        onChange={(e) =>
+                          setRepFilas((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id
+                                ? { ...r, esVenezolano: e.target.checked, nacionalidadOtro: e.target.checked ? '' : r.nacionalidadOtro }
+                                : r,
+                            ),
+                          )
+                        }
+                        className="rounded border-zinc-500"
+                      />
+                      Es venezolano
+                    </label>
+                    {row.esVenezolano ? (
+                      <p className="text-[11px] text-zinc-500">
+                        Nacionalidad en contrato y registro: <span className="text-zinc-300">Venezolano</span>
+                      </p>
+                    ) : null}
+                    {!row.esVenezolano ? (
+                      <div>
+                        <label className={labelClass}>Nacionalidad</label>
                         <input
-                          value={row.profesion}
+                          value={row.nacionalidadOtro}
                           onChange={(e) =>
                             setRepFilas((prev) =>
-                              prev.map((r) => (r.id === row.id ? { ...r, profesion: e.target.value } : r)),
+                              prev.map((r) => (r.id === row.id ? { ...r, nacionalidadOtro: e.target.value } : r)),
                             )
                           }
                           className={inputClass}
+                          placeholder="Ej. colombiana"
                         />
                       </div>
+                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>Municipio de residencia</label>
+                        <input
+                          value={row.municipio_residencia}
+                          onChange={(e) =>
+                            setRepFilas((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, municipio_residencia: e.target.value } : r,
+                              ),
+                            )
+                          }
+                          className={inputClass}
+                          placeholder="Municipio donde reside"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Estado de residencia</label>
+                        <input
+                          value={row.estado_residencia}
+                          onChange={(e) =>
+                            setRepFilas((prev) =>
+                              prev.map((r) => (r.id === row.id ? { ...r, estado_residencia: e.target.value } : r)),
+                            )
+                          }
+                          className={inputClass}
+                          placeholder="Estado donde reside"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Profesión</label>
+                      <input
+                        value={row.profesion}
+                        onChange={(e) =>
+                          setRepFilas((prev) =>
+                            prev.map((r) => (r.id === row.id ? { ...r, profesion: e.target.value } : r)),
+                          )
+                        }
+                        className={inputClass}
+                      />
                     </div>
                     <div>
                       <label className={labelClass}>Cargo</label>

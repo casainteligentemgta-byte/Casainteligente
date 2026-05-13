@@ -96,6 +96,8 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const repNacionalidad = str(repRm?.nacionalidad);
   const repEstadoCivil = str(repRm?.estado_civil);
   const repDomicilio = str(repRm?.domicilio);
+  const repMunicipioRes = str(repRm?.municipio_residencia);
+  const repEstadoRes = str(repRm?.estado_residencia);
   const repProfesion = str(repRm?.profesion);
   const repEdad = str(repRm?.edad);
   const fragEdadRep = repEdad ? `, de ${repEdad} años de edad` : ', mayor de edad';
@@ -107,7 +109,7 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
     domicilio_fiscal: str(entidad.domicilio_fiscal) || null,
   });
   const partesUbicEmpresaRm: string[] = [];
-  if (uEmpRm.sector) partesUbicEmpresaRm.push(`Sector ${uEmpRm.sector}`);
+  if (uEmpRm.sector) partesUbicEmpresaRm.push(uEmpRm.sector);
   if (uEmpRm.municipio) partesUbicEmpresaRm.push(`Municipio ${uEmpRm.municipio}`);
   if (uEmpRm.estado) partesUbicEmpresaRm.push(`Estado ${uEmpRm.estado}`);
   const tailUbicEmpresaRm = partesUbicEmpresaRm.length ? `, ${partesUbicEmpresaRm.join(', ')}` : '';
@@ -123,6 +125,10 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const bloqueNac = repNacionalidad || 'venezolano(a)';
   const fragEstadoCivil = repEstadoCivil ? `, de estado civil ${repEstadoCivil}` : '';
   const fragDomicilioRep = repDomicilio ? `, con domicilio en ${repDomicilio}` : '';
+  const fragResidenciaRep =
+    repMunicipioRes && repEstadoRes
+      ? `, residenciado en el Municipio ${repMunicipioRes}, Estado ${repEstadoRes}`
+      : '';
   const fragProfesion = repProfesion ? `, de profesión ${repProfesion}` : '';
 
   const texto = `
@@ -131,7 +137,7 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
     inscrita por ante la Oficina de ${bloqueCirc}, constando en el Tomo ${bloqueTomo}, bajo el Nro. ${bloqueNum},
     de fecha ${fechaRegistro}, titular del Registro de Información Fiscal (RIF) Nro. ${bloqueRif},
     representada en este acto por su ${bloqueCargo}, ciudadano ${bloqueRep},
-    de nacionalidad ${bloqueNac}${fragEdadRep}${fragEstadoCivil}, titular de la cédula de identidad Nro. ${bloqueCi}${fragDomicilioRep}${fragProfesion},
+    de nacionalidad ${bloqueNac}${fragEdadRep}${fragEstadoCivil}, titular de la cédula de identidad Nro. ${bloqueCi}${fragDomicilioRep}${fragResidenciaRep}${fragProfesion},
     quien a los efectos de este contrato se denominará "EL EMPLEADOR".
   `.replace(/\s+/g, ' ').trim();
 
