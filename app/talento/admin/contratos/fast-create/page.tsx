@@ -28,6 +28,13 @@ type NominaRow = {
   nivel_salarial?: number | null;
 };
 
+type EntidadPatronoOpt = {
+  id: string;
+  nombre_legal: string | null;
+  nombre: string | null;
+  rif: string | null;
+};
+
 type ProyectoDetalle = {
   id: string;
   nombre: string;
@@ -59,6 +66,8 @@ export default function ContratoExpressCreatePage() {
 
   const [proyectoId, setProyectoId] = useState('');
   const [proyectoDetalle, setProyectoDetalle] = useState<ProyectoDetalle | null>(null);
+  const [entidadesPatrono, setEntidadesPatrono] = useState<EntidadPatronoOpt[]>([]);
+  const [entidadPatronoId, setEntidadPatronoId] = useState('');
   const [configNominaId, setConfigNominaId] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -101,6 +110,11 @@ export default function ContratoExpressCreatePage() {
       if (!c) return;
       if (!p.error && p.data) setProyectos(p.data as ProyectoOpt[]);
       if (!n.error && n.data) setNominas(n.data as NominaRow[]);
+      const { data: entRows, error: entErr } = await supabase
+        .from('ci_entidades')
+        .select('id,nombre_legal,nombre,rif')
+        .order('nombre_legal', { ascending: true });
+      if (!entErr && entRows) setEntidadesPatrono(entRows as EntidadPatronoOpt[]);
       setLoadingLists(false);
     })();
     return () => {
@@ -137,6 +151,12 @@ export default function ContratoExpressCreatePage() {
       c = false;
     };
   }, [proyectoId, supabase]);
+
+  useEffect(() => {
+    const eid = proyectoDetalle?.entidad_id?.trim();
+    if (eid) setEntidadPatronoId(eid);
+    else setEntidadPatronoId('');
+  }, [proyectoDetalle?.entidad_id]);
 
   useEffect(() => {
     if (!configNominaId) {
@@ -193,7 +213,11 @@ export default function ContratoExpressCreatePage() {
     setOkMsg(null);
     setSignedUrl(null);
     if (!proyectoId || !configNominaId) {
-      setErr('Seleccione proyecto y cargo del tabulador.');
+      setErr('Seleccione proyecto, entidad de trabajo y oficio del tabulador.');
+      return;
+    }
+    if (!entidadPatronoId.trim()) {
+      setErr('Seleccione la entidad de trabajo (patrono) que debe figurar en el contrato.');
       return;
     }
     if (!nombres.trim() || !apellidos.trim()) {
@@ -229,6 +253,7 @@ export default function ContratoExpressCreatePage() {
         body: JSON.stringify({
           proyecto_id: proyectoId,
           config_nomina_id: configNominaId,
+          entidad_patrono_id: entidadPatronoId.trim(),
           obrero_nombres: nombres.trim(),
           obrero_apellidos: apellidos.trim(),
           obrero_cedula: cedulaLimpia,
@@ -330,7 +355,9 @@ export default function ContratoExpressCreatePage() {
 
       <h1 className="text-2xl font-bold text-white mb-2">Contrato express (sin registro)</h1>
       <p className="text-sm text-zinc-400 mb-6">
-        Elige la obra para vincular patrono y referencias; el cargo del tabulador define salarios. Completa datos del
+        Elige la obra y la <strong className="text-zinc-300">entidad de trabajo (patrono)</strong> que saldrá en el
+        contrato; el oficio del tabulador define salarios. Si el proyecto tiene mal vinculada la entidad en la base de
+        datos, puedes corregirla aquí (p. ej. DIMAQUINAS, C.A. en lugar de otra razón social). Completa datos del
         trabajador, jornada y horario semanal (con viernes distinto si aplica). Al generar, el PDF se guarda en{' '}
         <code className="text-zinc-500">contratos_obreros</code> y la fila en{' '}
         <code className="text-zinc-500">ci_contratos_express</code> (listado express): podrás copiar enlace, imprimir y
@@ -364,18 +391,44 @@ export default function ContratoExpressCreatePage() {
                 <span className="font-medium text-white">{proyectoDetalle.nombre}</span>
               </p>
               <p className="mt-1">
-                <span className="text-zinc-500">Entidad de trabajo: </span>
+                <span className="text-zinc-500">Entidad enlazada al proyecto: </span>
                 {entidadObra?.nombre ? (
                   <span className="font-medium text-emerald-200/90">
                     {entidadObra.nombre}
                     {entidadObra.rif ? ` · ${entidadObra.rif}` : ''}
                   </span>
                 ) : (
-                  <span className="text-amber-200/80">Sin entidad enlazada en el proyecto (revisa entidad_id).</span>
+                  <span className="text-amber-200/80">Sin entidad en el proyecto (revisa entidad_id en la obra).</span>
                 )}
               </p>
             </div>
           ) : null}
+
+          <label className="block">
+            <span className="text-zinc-400">Entidad de trabajo (patrono en el PDF)</span>
+            <p className="mt-0.5 text-[11px] text-zinc-500 mb-1">
+              Razón social que comparecerá como «LA ENTIDAD DE TRABAJO». Se rellena con la entidad del proyecto; cámbiala
+              si no coincide con la empresa obligada (p. ej. otra filial o DIMAQUINAS, C.A.).
+            </p>
+            <select
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white disabled:opacity-50"
+              value={entidadPatronoId}
+              onChange={(e) => setEntidadPatronoId(e.target.value)}
+              disabled={!proyectoId}
+            >
+              <option value="">— Seleccionar entidad —</option>
+              {entidadesPatrono.map((e) => {
+                const nom = ((e.nombre_legal ?? e.nombre) ?? '').trim() || '—';
+                const rif = (e.rif ?? '').trim();
+                return (
+                  <option key={e.id} value={e.id}>
+                    {nom}
+                    {rif ? ` · ${rif}` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
 
           <label className="block">
             <span className="text-zinc-400">OFICIO (TABULADOR)</span>

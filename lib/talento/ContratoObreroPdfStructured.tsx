@@ -203,6 +203,11 @@ function normalizarComasDomicilioPdf(s: string): string {
     .trim();
 }
 
+/** Si falta coma entre el nombre del C.C. y «Sector …», insértala para poder quitar «Sector» y partir negrita. */
+function insertComaAntesSectorTrasCentroComercial(s: string): string {
+  return s.replace(/\b((?:el\s+)?centro\s+comercial[^,]*?)\s+(sector\b)/gi, '$1, $2');
+}
+
 /** Una sola línea: Unicode, espacios raros, comas; luego quita «Sector» (comparecencia). */
 function preprocessLineaDomicilioComparecenciaPdf(raw: string): string {
   const oneLine = (raw ?? '')
@@ -212,7 +217,8 @@ function preprocessLineaDomicilioComparecenciaPdf(raw: string): string {
     .replace(/[\r\n]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return quitarPalabraSectorEnDomicilio(normalizarComasDomicilioPdf(oneLine));
+  const conComaSector = insertComaAntesSectorTrasCentroComercial(oneLine);
+  return quitarPalabraSectorEnDomicilio(normalizarComasDomicilioPdf(conComaSector));
 }
 
 function esPrefijoCentroComercialComparecencia(pref: string): boolean {
@@ -236,18 +242,21 @@ function fragmentosDomicilioCentroComercial(domPreprocesado: string): Fragmentos
   const direct = s.match(/^((?:el\s+)?centro\s+comercial[^,]*)(,\s*(.+))?$/i);
   if (direct?.[1] && esPrefijoCentroComercialComparecencia(direct[1])) {
     const pref = direct[1].trim();
-    const rest = (direct[3] ?? '').trim();
-    return { textoRegular: rest ? `${pref},` : pref, restoBold: rest };
+    const rest = quitarPalabraSectorEnDomicilio((direct[3] ?? '').trim());
+    const textoRegular = quitarPalabraSectorEnDomicilio(rest ? `${pref},` : pref);
+    return { textoRegular, restoBold: rest };
   }
 
   const flex = s.match(/^(.*?)(\b(?:el\s+)?centro\s+comercial[^,]*)(,\s*(.+))?$/i);
   if (flex?.[2] && esPrefijoCentroComercialComparecencia(flex[2])) {
-    const pfx = (flex[1] ?? '').trim();
+    const pfxRaw = (flex[1] ?? '').trim();
     const pref = flex[2].trim();
-    const rest = (flex[4] ?? '').trim();
+    const rest = quitarPalabraSectorEnDomicilio((flex[4] ?? '').trim());
+    const pfxClean = pfxRaw.length ? quitarPalabraSectorEnDomicilio(pfxRaw).trim() : '';
+    const textoRegular = quitarPalabraSectorEnDomicilio(rest ? `${pref},` : pref);
     return {
-      prefijoBold: pfx.length ? pfx : undefined,
-      textoRegular: rest ? `${pref},` : pref,
+      prefijoBold: pfxClean.length ? pfxClean : undefined,
+      textoRegular,
       restoBold: rest,
     };
   }
@@ -255,9 +264,17 @@ function fragmentosDomicilioCentroComercial(domPreprocesado: string): Fragmentos
   return null;
 }
 
+/** Espacios invisibles / guionación que impiden que `\bsector\b` coincida con el texto pegado desde RM/UI. */
+function stripInvisiblesDomicilioPdf(s: string): string {
+  return s
+    .replace(/\u00AD/g, '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+    .trim();
+}
+
 /** Quita la palabra «Sector» del texto de domicilio o zona (p. ej. «Sector Playa El Angel» → «Playa El Angel»). */
 function quitarPalabraSectorEnDomicilio(s: string): string {
-  let out = s.normalize('NFKC').trim();
+  let out = stripInvisiblesDomicilioPdf(s).normalize('NFKC').trim();
   for (let i = 0; i < 8; i++) {
     const next = out
       .replace(/^sector\s+/gi, '')
@@ -280,6 +297,18 @@ function quitarPalabraSectorEnDomicilio(s: string): string {
     .replace(/^\s*,\s*/, '')
     .replace(/,\s*$/g, '')
     .trim();
+  /* Pasada extra: token «sector» tras delimitadores típicos aunque `\b` falle con caracteres raros. */
+  for (let i = 0; i < 6; i++) {
+    const next = out
+      .replace(/(^|[\s,;:'"(\[\{])sector(?=[\s,;:'")\]\}.]|$)/gi, '$1')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s*,\s*,+/g, ', ')
+      .replace(/^\s*,\s*/, '')
+      .replace(/,\s*$/g, '')
+      .trim();
+    if (next === out) break;
+    out = next;
+  }
   return out;
 }
 
@@ -497,17 +526,10 @@ export function ContratoObreroPDF({
   const zonaComparecencia = preprocessLineaDomicilioComparecenciaPdf(
     str(entidad.sector_domicilio_registro, ZONA_COMPARECENCIA_PDF_DEFAULT),
   );
+  const zonaPdf = quitarPalabraSectorEnDomicilio(zonaComparecencia).trim();
   const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
-  const domRepResidencia = str(
-    entidad.rep_legal_domicilio,
-    '________________________________________________________________',
-  );
-  const municipioRepResidencia = str(entidad.rep_legal_municipio_residencia, phMun);
-  const estadoRepResidencia = str(entidad.rep_legal_estado_residencia, phEdo);
   const nacionalidadTrab = str(empleado.nacionalidad, '__________');
-  const municipioTrab = str(empleado.municipio_domicilio, phMun);
-  const estadoTrabPdf = str(empleado.estado_domicilio, phEdo);
   const repCedulaLinea = str(repCedulaGuion, '_______________');
   const compUsdMes =
     parametros.compensacionCulminacionUsdPorMes != null &&
@@ -518,16 +540,16 @@ export function ContratoObreroPDF({
   const compUsdMesTxt = fmtUsdNumeroPlano(compUsdMes);
   const puntoEncTransporte = fragmentoPuntoEncuentroTransporte(parametros.textoPuntoEncuentroTransporteSex);
   const fragDomCentroComercial = fragmentosDomicilioCentroComercial(domicilioComparecenciaPdf);
+  const textoRegularDomPdf = fragDomCentroComercial
+    ? quitarPalabraSectorEnDomicilio(fragDomCentroComercial.textoRegular).trim()
+    : '';
   const restoBoldDomSinSector = fragDomCentroComercial?.restoBold
     ? quitarPalabraSectorEnDomicilio(fragDomCentroComercial.restoBold).trim()
     : '';
   const restoTrasCentroComercial = restoBoldDomSinSector;
   const omitirZonaRepetidaTrasDomicilio =
     Boolean(restoTrasCentroComercial) &&
-    normZonaComparecenciaPdf(restoTrasCentroComercial) === normZonaComparecenciaPdf(zonaComparecencia);
-  const repLegalFemenino = entidad.rep_legal_femenino === true;
-  const artRepLegal = repLegalFemenino ? 'la' : 'el';
-  const sustRepLegal = repLegalFemenino ? 'ciudadana' : 'ciudadano';
+    normZonaComparecenciaPdf(zonaPdf) === normZonaComparecenciaPdf(quitarPalabraSectorEnDomicilio(restoTrasCentroComercial));
 
   const bloquePortadaIntro = (
     <>
@@ -541,15 +563,17 @@ export function ContratoObreroPDF({
         {fragDomCentroComercial ? (
           <>
             {fragDomCentroComercial.prefijoBold ? (
-              <Text style={styles.bold}>{fragDomCentroComercial.prefijoBold} </Text>
+              <Text style={styles.bold}>
+                {quitarPalabraSectorEnDomicilio(fragDomCentroComercial.prefijoBold)}{' '}
+              </Text>
             ) : null}
-            <Text style={styles.introComparecenciaRegular}>{fragDomCentroComercial.textoRegular} </Text>
+            <Text style={styles.introComparecenciaRegular}>{textoRegularDomPdf} </Text>
             {restoBoldDomSinSector ? (
               <Text style={styles.bold}>{restoBoldDomSinSector}</Text>
             ) : null}
-            {!omitirZonaRepetidaTrasDomicilio ? (
+            {!omitirZonaRepetidaTrasDomicilio && zonaPdf.length ? (
               <>
-                , <Text style={styles.bold}>{zonaComparecencia}</Text>
+                , <Text style={styles.bold}>{zonaPdf}</Text>
               </>
             ) : null}
             , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado{' '}
@@ -558,33 +582,26 @@ export function ContratoObreroPDF({
         ) : (
           <>
             <Text style={styles.introComparecenciaRegular}>{domicilioComparecenciaPdf}</Text>
-            {zonaComparecencia.trim().length ? (
+            {zonaPdf.length ? (
               <>
-                , <Text style={styles.bold}>{zonaComparecencia}</Text>
+                , <Text style={styles.bold}>{zonaPdf}</Text>
               </>
             ) : null}
             , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N°{' '}
             <Text style={styles.bold}>{rifEntidadLinea}</Text>
           </>
         )}
-        , representada en este acto por {artRepLegal} {sustRepLegal}{' '}
-        <Text style={styles.bold}>{rep}</Text>, de nacionalidad <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, de
-        estado civil <Text style={styles.bold}>{estadoCivilRep}</Text>, hábil en derecho,{' '}
-        {repLegalFemenino ? 'domiciliada' : 'domiciliado'} en <Text style={styles.bold}>{domRepResidencia}</Text>, Municipio{' '}
-        <Text style={styles.bold}>{municipioRepResidencia}</Text>, Estado <Text style={styles.bold}>{estadoRepResidencia}</Text>
-        , titular de la Cédula de Identidad número{' '}
-        <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
-        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra el ciudadano{' '}
-        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor
-        de edad, hábil en derecho, <Text style={styles.bold}>{estadoCivilTrab}</Text>, titular de la cédula de identidad
-        número <Text style={styles.bold}>{cedulaTrabGuion}</Text>, domiciliado en{' '}
-        <Text style={styles.bold}>{domicilioTrab}</Text>, Municipio <Text style={styles.bold}>{municipioTrab}</Text>,
-        Estado <Text style={styles.bold}>{estadoTrabPdf}</Text>
-        ; quien en lo sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en
-        celebrar, como en efecto se celebra, el presente Contrato de Trabajo para una Obra Determinada, conforme a lo
-        establecido en el Artículo 63 de la Ley Orgánica de Trabajo de los Trabajadores y Trabajadoras, y las cláusulas
-        18 y 19 de la vigente Convención Colectiva de Trabajo para la Rama de la Industria de la Construcción, conexos,
-        afines y similares de la República Bolivariana de Venezuela, el cual se regirá por las Cláusulas que se
+        , representada en este acto por <Text style={styles.bold}>{rep}</Text>,{' '}
+        <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, <Text style={styles.bold}>{estadoCivilRep}</Text>, hábil en
+        derecho, titular de la cédula de Identidad número <Text style={styles.bold}>{repCedulaLinea}</Text> y de este domicilio, quien a
+        los efectos de este contrato se denominará <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra
+        el ciudadano <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de
+        edad, <Text style={styles.bold}>{estadoCivilTrab}</Text>, hábil en derecho, titular de la cédula de identidad número{' '}
+        <Text style={styles.bold}>{cedulaTrabGuion}</Text>, domiciliado en <Text style={styles.bold}>{domicilioTrab}</Text>; quien en lo
+        sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en celebrar, como en efecto se celebra, el
+        presente Contrato de Trabajo para una Obra Determinada, conforme a lo establecido en el Artículo 63 de la Ley Orgánica de Trabajo de
+        los Trabajadores y Trabajadoras, y las cláusulas 18 y 19 de la vigente Convención Colectiva de Trabajo para la Rama de la Industria de
+        la Construcción, conexos, afines y similares de la República Bolivariana de Venezuela, el cual se regirá por las Cláusulas que se
         estipulan a continuación:
       </Text>
     </>

@@ -31,6 +31,8 @@ const postBodySchema = z.object({
   obrero_direccion: z.string().max(500).optional().nullable(),
   /** Bono variable en USD; en bolívares se liquida al pagar con la tasa oficial del BCV del día (p. ej. viernes). */
   bono_manual_usd: z.coerce.number().nonnegative().default(0),
+  /** Si se envía, sustituye a `ci_proyectos.entidad_id` como patrono del PDF (razón social, RM, domicilio). */
+  entidad_patrono_id: z.string().uuid().optional().nullable(),
   fecha_ingreso: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -125,6 +127,7 @@ export async function POST(req: Request) {
     body.proyecto_id,
     body.config_nomina_id,
     manual,
+    { entidadPatronoId: body.entidad_patrono_id?.trim() || null },
   );
   if (!loaded.ok) {
     return NextResponse.json({ error: loaded.error }, { status: 400 });

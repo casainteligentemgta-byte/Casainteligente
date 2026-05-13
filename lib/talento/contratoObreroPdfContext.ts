@@ -890,6 +890,7 @@ export async function cargarPropsContratoObreroPdfExpress(
   proyectoId: string,
   configNominaId: string,
   manual: ContratoExpressManualInput,
+  opts?: { entidadPatronoId?: string | null },
 ): Promise<{ ok: true; props: ContratoObreroPdfStructuredProps } | { ok: false; error: string }> {
   const pid = proyectoId.trim();
   const nid = configNominaId.trim();
@@ -932,7 +933,8 @@ export async function cargarPropsContratoObreroPdfExpress(
     nivel_salarial?: number | null;
   };
 
-  const entidadId = strOpt(o.entidad_id);
+  const entidadIdProyecto = strOpt(o.entidad_id);
+  const entidadId = strOpt(opts?.entidadPatronoId) ?? entidadIdProyecto;
   const entidadRes = entidadId ? await fetchCiEntidadCamposContratoPdf(supabase, entidadId) : { data: null };
   const entidadRow = (entidadRes.data ?? null) as Record<string, unknown> | null;
   const patronBase = await resolverPatronoDesdeEntidad(supabase, entidadId);

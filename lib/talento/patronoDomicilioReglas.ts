@@ -208,6 +208,8 @@ function stripUbicacionRedundante(linea: string, u: UbicacionEmpresaSegunRegistr
   if (u.sector) {
     s = s.replace(new RegExp(`Sector\\s+${escapeRegExp(u.sector)}`, 'gi'), ' ').trim();
   }
+  /* Quita la palabra «Sector» aunque no coincida el tramo con el sector RM (acentos, orden en texto libre). */
+  s = s.replace(/\bsector\b/gi, ' ').trim();
   return s.replace(/^[,.\s;]+|[,.\s;]+$/g, '').replace(/\s+/g, ' ');
 }
 
