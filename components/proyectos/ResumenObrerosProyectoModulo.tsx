@@ -5,6 +5,7 @@ import { ClipboardList, Trash2, UserCheck, UserMinus, Users, UserX } from 'lucid
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import { hrefContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -878,33 +879,35 @@ export default function ResumenObrerosProyectoModulo({
                 No aprobaron la evaluación (semáforo rojo o rechazado). Clic: ver lista.
               </p>
             </button>
-            <Link
-              href={`/rrhh/gestion-personal?tab=obra&proyecto_modulo=${encodeURIComponent(proyectoModuloId)}`}
-              className="block w-full rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
-              title="Ver personal en obra y asignaciones (solo este módulo y obras vinculadas)"
-            >
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-emerald-300/90">
-                <UserCheck className="h-3.5 w-3.5" aria-hidden />
-                Contratados activos
-              </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{contratadosActivos}</p>
-              <p className="mt-1 text-[10px] text-zinc-500">
-                Contrato obra «firmado activo» o contrato express vigente (sin formalizar en{' '}
-                <span className="font-mono text-zinc-400">ci_empleados</span>). Clic: ir a gestión de personal RRHH.
-                {expressEnCuadro > 0 ? (
-                  <span className="mt-0.5 block text-emerald-200/80">
-                    {expressEnCuadro} en express — listado en{' '}
-                    <Link
-                      href="/talento/admin/contratos/fast-list"
-                      className="font-semibold text-emerald-200 underline decoration-emerald-500/40 hover:text-emerald-100"
-                    >
-                      Talento → Contratos express
-                    </Link>
-                    .
-                  </span>
-                ) : null}
-              </p>
-            </Link>
+            <div className="w-full overflow-hidden rounded-xl border border-emerald-500/35 bg-emerald-500/10 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/15 focus-within:ring-2 focus-within:ring-emerald-400/40">
+              <Link
+                href={`/rrhh/gestion-personal?tab=obra&proyecto_modulo=${encodeURIComponent(proyectoModuloId)}`}
+                className="block p-4 focus:outline-none"
+                title="Ver personal en obra y asignaciones (solo este módulo y obras vinculadas)"
+              >
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-emerald-300/90">
+                  <UserCheck className="h-3.5 w-3.5" aria-hidden />
+                  Contratados activos
+                </div>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-white">{contratadosActivos}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  Contrato obra «firmado activo» o contrato express vigente (sin formalizar en{' '}
+                  <span className="font-mono text-zinc-400">ci_empleados</span>). Clic: ir a gestión de personal RRHH.
+                </p>
+              </Link>
+              {expressEnCuadro > 0 ? (
+                <p className="border-t border-emerald-500/20 px-4 pb-4 pt-2 text-[10px] text-emerald-200/80">
+                  {expressEnCuadro} en express — listado en{' '}
+                  <Link
+                    href={hrefContratosExpressList()}
+                    className="font-semibold text-emerald-200 underline decoration-emerald-500/40 hover:text-emerald-100"
+                  >
+                    Talento → Contratos express
+                  </Link>
+                  .
+                </p>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => setListaModal('inactivos')}
@@ -977,7 +980,7 @@ export default function ResumenObrerosProyectoModulo({
                             <td className="px-3 py-2 font-medium text-zinc-100">
                               {esEmpleadoContratoExpress(row) ? (
                                 <Link
-                                  href="/talento/admin/contratos/fast-list"
+                                  href={hrefContratosExpressList()}
                                   className="text-amber-200 underline decoration-amber-500/40 hover:text-amber-100"
                                   title="Contrato express (fast-track): ver PDF y formalizar en Talento"
                                 >

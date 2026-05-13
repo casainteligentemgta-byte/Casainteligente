@@ -474,7 +474,13 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                   <TableHead className="text-right">Bono (USD)</TableHead>
                   <TableHead className="text-right">Bono ref. (Bs)</TableHead>
                   <TableHead className="min-w-[220px] text-right">Acciones</TableHead>
-                  <TableHead className="w-[1%] whitespace-nowrap text-center">Eliminar</TableHead>
+                  <TableHead
+                    className={cn(
+                      'sticky right-0 z-20 w-[1%] min-w-[5.5rem] whitespace-nowrap border-l border-zinc-700/90 bg-zinc-950 text-center shadow-[-8px_0_12px_-6px_rgba(0,0,0,0.45)]',
+                    )}
+                  >
+                    Borrar
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -614,14 +620,19 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                           </Button>
                         </div>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-center align-middle">
+                      <TableCell
+                        className={cn(
+                          'sticky right-0 z-10 whitespace-nowrap border-l border-zinc-700/90 bg-zinc-950 text-center align-middle shadow-[-8px_0_12px_-6px_rgba(0,0,0,0.45)]',
+                        )}
+                      >
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           disabled={busy}
-                          className="inline-flex items-center gap-1 border-red-800/70 bg-red-950/25 px-2.5 text-xs font-semibold text-red-200 hover:bg-red-950/45 hover:text-red-100"
+                          className="inline-flex min-h-9 min-w-[5.25rem] items-center justify-center gap-1 border-red-800/70 bg-red-950/40 px-2 text-xs font-semibold text-red-100 hover:bg-red-950/55 hover:text-white"
                           title="Eliminar este contrato express y sus archivos en almacenamiento"
+                          aria-label={`Borrar contrato express de ${c.obrero_nombre}`}
                           onClick={() => void eliminarContratoExpress(c.id, c.obrero_nombre, formalizado)}
                         >
                           <Trash2 className="size-4 shrink-0" aria-hidden />

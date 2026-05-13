@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { hrefContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
 
 const cards = [
   {
@@ -45,7 +46,7 @@ export default function TalentoHomePage() {
             Generar Contrato Express (Sin Registro)
           </Link>
           <Link
-            href="/talento/admin/contratos/fast-list"
+            href={hrefContratosExpressList()}
             className="inline-flex items-center gap-2 rounded-xl border border-zinc-600 bg-zinc-900/80 px-4 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             Listado contratos express

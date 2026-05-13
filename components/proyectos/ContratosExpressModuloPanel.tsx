@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FileText, RefreshCw, Users } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import { hrefContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
 import { Button } from '@/components/ui/button';
 
 type ExpressRow = {
@@ -122,7 +123,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
             <span className="ml-1.5 hidden sm:inline">Actualizar</span>
           </Button>
           <Link
-            href={`/talento/admin/contratos/fast-list?modulo_integral=${encodeURIComponent(moduloIntegralId)}`}
+            href={hrefContratosExpressList({ modulo_integral: moduloIntegralId })}
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-950/50 px-3 py-2 text-xs font-bold text-amber-50 transition hover:border-amber-400/70 hover:bg-amber-900/55"
           >
             <FileText className="size-3.5 shrink-0" aria-hidden />

@@ -17,6 +17,7 @@ import {
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 import { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { hrefContratosExpressList, navigateToContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
 import { HorarioSemanalExpressForm } from './HorarioSemanalExpressForm';
 
 type ProyectoOpt = {
@@ -335,7 +336,7 @@ export default function ContratoExpressCreatePage() {
       toast.success('Contrato guardado en el listado express', {
         description: `${data.expediente_label ?? data.id?.slice(0, 12) ?? '—'} · En la lista: copiar enlace, imprimir, subir firmado.`,
       });
-      router.push('/talento/admin/contratos/fast-list');
+      navigateToContratosExpressList(router);
       router.refresh();
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
@@ -363,7 +364,7 @@ export default function ContratoExpressCreatePage() {
         <Link href="/talento/admin/contratos" className="text-zinc-500 hover:text-zinc-300">
           Contratos dinámicos
         </Link>
-        <Link href="/talento/admin/contratos/fast-list" className="text-zinc-500 hover:text-zinc-300">
+        <Link href={hrefContratosExpressList()} className="text-zinc-500 hover:text-zinc-300">
           Listado express
         </Link>
       </div>
