@@ -1,5 +1,6 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
+import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 
 /**
@@ -179,6 +180,8 @@ export type ContratoObreroDetallePdf = {
 
 export type ContratoObreroPdfStructuredProps = {
   expedienteId?: string | null;
+  /** Contrato express: cestaticket 40 USD/mes (10 USD/semana) en textos legales, sin derivar USD desde VES del tabulador. */
+  esContratoExpress?: boolean;
   empleado: EmpleadoContratoPdf;
   entidad: EntidadContratoPdf;
   configNomina: ConfigNominaContratoPdf;
@@ -446,6 +449,7 @@ function tryParseUsdNumberDesdeTextoIngresoParam(raw: string | null | undefined)
 
 export function ContratoObreroPDF({
   expedienteId,
+  esContratoExpress = false,
   empleado,
   entidad,
   configNomina,
@@ -479,14 +483,16 @@ export function ContratoObreroPDF({
   const salDiarioTxt = tieneSb != null ? fmtBsVes(tieneSb) : '__________________';
   const cestaMen = configNomina.cestaticket_mensual;
   const cestaSemUsdNum =
+    !esContratoExpress &&
     cestaMen != null &&
     Number.isFinite(Number(cestaMen)) &&
     Number(cestaMen) > 0 &&
     TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 > 0
       ? Number(cestaMen) / 4 / TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20
       : null;
-  const cestaUsdPlanoTxt =
-    cestaSemUsdNum != null && Number.isFinite(cestaSemUsdNum)
+  const cestaUsdPlanoTxt = esContratoExpress
+    ? `${fmtUsdNumeroPlano(CESTATICKET_SEMANAL_USD)} USD`
+    : cestaSemUsdNum != null && Number.isFinite(cestaSemUsdNum)
       ? `${fmtUsdNumeroPlano(Math.round(cestaSemUsdNum * 100) / 100)} USD`
       : '10 USD';
   const ingresoSemanalBaseUsdNum = tryParseUsdNumberDesdeTextoIngresoParam(

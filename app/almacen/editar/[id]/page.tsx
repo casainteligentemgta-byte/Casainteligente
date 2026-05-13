@@ -91,6 +91,11 @@ export default function EditInventoryItemPage() {
     return furniture.filter((f) => f.deposit_id === item.deposit_id);
   }, [furniture, item?.deposit_id]);
 
+  const maxRepisasShelf = useMemo(() => {
+    const f = furnitureForDeposit.find((x) => x.id === item?.furniture_id);
+    return f ? Math.max(1, Number(f.repisas_count) || 1) : 1;
+  }, [furnitureForDeposit, item?.furniture_id]);
+
   const loadMasters = useCallback(async () => {
     setLoadErr(null);
     const [d, f, c, u] = await Promise.all([
@@ -161,7 +166,12 @@ export default function EditInventoryItemPage() {
       product_id,
       deposit_id: data.deposit_id ?? null,
       furniture_id: data.furniture_id ?? null,
-      shelf_number: data.shelf_number ?? null,
+      shelf_number: (() => {
+        const sn = data.shelf_number;
+        if (sn == null || sn === '') return null;
+        const n = Number(sn);
+        return Number.isFinite(n) ? Math.trunc(n) : null;
+      })(),
       brand: data.brand ?? null,
       model: data.model ?? null,
       serial_number: data.serial_number ?? null,
@@ -243,7 +253,7 @@ export default function EditInventoryItemPage() {
         location: item.location?.trim() ? item.location.trim() : null,
         deposit_id: item.deposit_id ?? null,
         furniture_id: item.furniture_id ?? null,
-        shelf_number: item.shelf_number != null ? Number(item.shelf_number) : null,
+        shelf_number: item.shelf_number != null ? Math.trunc(Number(item.shelf_number)) : null,
         brand: item.brand?.trim() ? item.brand.trim() : null,
         model: item.model?.trim() ? item.model.trim() : null,
         serial_number: item.serial_number?.trim() ? item.serial_number.trim() : null,
@@ -548,13 +558,27 @@ export default function EditInventoryItemPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Repisa (shelf_number)</label>
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                    Repisa (shelf_number) · 1–{maxRepisasShelf}
+                  </label>
                   <input
                     type="number"
+                    min={1}
+                    max={maxRepisasShelf}
+                    step={1}
+                    inputMode="numeric"
                     value={item.shelf_number ?? ''}
                     onChange={(e) => {
-                      const val = e.target.value === '' ? null : Number(e.target.value);
-                      setItem((prev) => (prev ? { ...prev, shelf_number: val } : prev));
+                      if (e.target.value === '') {
+                        setItem((prev) => (prev ? { ...prev, shelf_number: null } : prev));
+                        return;
+                      }
+                      const raw = Number(e.target.value);
+                      if (!Number.isFinite(raw)) return;
+                      const int = Math.trunc(raw);
+                      setItem((prev) =>
+                        prev ? { ...prev, shelf_number: Math.min(maxRepisasShelf, Math.max(1, int)) } : prev,
+                      );
                     }}
                     className="w-full bg-black border border-zinc-800 rounded-xl py-4 px-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
                     disabled={!item.furniture_id}

@@ -12,10 +12,17 @@ export {
   TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20,
 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 export {
+  CESTATICKET_MENSUAL_USD,
+  CESTATICKET_SEMANAL_USD,
+  cestaticketSemanalBolivaresAlTipoCambioBcV,
+} from '@/lib/nomina/cestaticketLegalUsd';
+export {
   ingresoSemanalConsolidadoUsdDesdeConfigNomina,
+  ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40,
   ingresoSemanalTotalBolivares,
   ingresoSemanalTotalDesdeConfigNomina,
   nivelEfectivoDesdeConfigNomina,
+  salarioBaseSemanalBolivares,
   sueldoSemanalReferenciaBolivares,
   type ConfigNominaTabuladorLike,
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
 import LaborRequestDirectorForm from '@/components/rrhh/LaborRequestDirectorForm';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
+import ContratosExpressModuloPanel from '@/components/proyectos/ContratosExpressModuloPanel';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
@@ -702,6 +703,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             tabUrl={tabUrl}
             demoListasObrero={searchParams.get('demo_listas') === '1'}
           />
+          <ContratosExpressModuloPanel moduloIntegralId={id} />
         </div>
       );
     }

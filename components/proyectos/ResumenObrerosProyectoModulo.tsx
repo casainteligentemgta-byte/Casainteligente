@@ -161,6 +161,43 @@ function mergePorId<T extends { id: string }>(a: T[], b: T[]): T[] {
   return Array.from(m.values());
 }
 
+/** Fila derivada de `ci_contratos_express` (sin `ci_empleados` hasta formalizar). */
+const CI_EXPRESS_EMPLEADO_ID_PREFIX = 'ci-express-';
+
+function esEmpleadoContratoExpress(row: { id: string }): boolean {
+  return row.id.startsWith(CI_EXPRESS_EMPLEADO_ID_PREFIX);
+}
+
+function empleadoLiteDesdeContratoExpress(raw: Record<string, unknown>): EmpleadoLite | null {
+  const exId = typeof raw.id === 'string' ? raw.id : '';
+  if (!exId) return null;
+  if (raw.formalizado_empleado_id) return null;
+  const nom = sTrim(raw.obrero_nombre);
+  const ced = sTrim(raw.obrero_cedula);
+  const parts = nom.split(/\s+/).filter(Boolean);
+  const nombres = parts.length >= 2 ? parts.slice(0, -1).join(' ') : parts[0] || '—';
+  const primer_apellido = parts.length >= 2 ? (parts[parts.length - 1] ?? '—') : '—';
+  const cargo = sTrim(raw.cargo_nombre_snapshot) || 'Contrato express (fast-track)';
+  return {
+    id: `${CI_EXPRESS_EMPLEADO_ID_PREFIX}${exId}`,
+    nombre_completo: nom || 'Obrero (contrato express)',
+    nombres,
+    primer_apellido,
+    segundo_apellido: null,
+    cedula: ced || null,
+    documento: ced || null,
+    celular: null,
+    telefono: null,
+    cargo_nombre: cargo,
+    cargo_codigo: 'EXPRESS',
+    estado: 'aprobado',
+    estado_proceso: 'cv_completado',
+    recruitment_need_id: null,
+    status_evaluacion: 'verde',
+    rol_examen: 'obrero',
+  };
+}
+
 function plazasPorNecesidad(n: Pick<NeedLite, 'cantidad_requerida'>): number {
   const r = n.cantidad_requerida;
   if (typeof r === 'number' && Number.isFinite(r) && r >= 1) return Math.min(500, Math.floor(r));
@@ -450,18 +487,69 @@ export default function ResumenObrerosProyectoModulo({
         }
         setSolicitadosWorkerIdSet(new Set(solicitadosIds));
 
+        const proyectoIdsExpress = Array.from(new Set([id, ...obraHijaIds]));
+        if (proyectoIdsExpress.length > 0) {
+          const rExFull = await supabase
+            .from('ci_contratos_express')
+            .select('id,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id,cargo_nombre_snapshot')
+            .in('proyecto_id', proyectoIdsExpress);
+          const exMsgFull = (rExFull.error?.message ?? '').toLowerCase();
+          const rExMid =
+            rExFull.error &&
+            /formalizado_empleado_id|cargo_nombre_snapshot|42703|column|does not exist|schema cache/i.test(exMsgFull)
+              ? await supabase
+                  .from('ci_contratos_express')
+                  .select('id,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id')
+                  .in('proyecto_id', proyectoIdsExpress)
+              : null;
+          const exMsgMid = (rExMid?.error?.message ?? '').toLowerCase();
+          const rExBare =
+            rExMid?.error && /formalizado_empleado_id|42703|column|does not exist|schema cache/i.test(exMsgMid)
+              ? await supabase
+                  .from('ci_contratos_express')
+                  .select('id,obrero_nombre,obrero_cedula,proyecto_id')
+                  .in('proyecto_id', proyectoIdsExpress)
+              : null;
+
+          const exChosen =
+            !rExFull.error && rExFull.data?.length !== undefined
+              ? rExFull
+              : rExMid && !rExMid.error && rExMid.data?.length !== undefined
+                ? rExMid
+                : rExBare;
+
+          const exData = exChosen && !exChosen.error ? (exChosen.data ?? []) : [];
+          if (exData.length > 0) {
+            const cedNorm = (v: string) => v.replace(/\s/g, '').toLowerCase();
+            const cedulasEmp = new Set(emps.map((e) => cedNorm(sTrim(e.cedula ?? e.documento))).filter(Boolean));
+            const expressExtras: EmpleadoLite[] = [];
+            for (const raw of exData as Record<string, unknown>[]) {
+              if (raw.formalizado_empleado_id) continue;
+              const rowLite = empleadoLiteDesdeContratoExpress(raw);
+              if (!rowLite) continue;
+              const ck = cedNorm(sTrim(rowLite.cedula ?? rowLite.documento));
+              if (ck && cedulasEmp.has(ck)) continue;
+              if (ck) cedulasEmp.add(ck);
+              expressExtras.push(rowLite);
+            }
+            if (expressExtras.length) {
+              emps = mergePorId(emps, expressExtras);
+            }
+          }
+        }
+
         emps.sort((a, b) =>
           sTrim(a.nombre_completo).localeCompare(sTrim(b.nombre_completo), 'es', { sensitivity: 'base' }),
         );
 
-        const empIds = emps.map((e) => e.id);
+        const empIdsParaContratosObra = emps.filter((e) => !esEmpleadoContratoExpress(e)).map((e) => e.id);
         const contrMap = new Map<string, string[]>();
         const filasContratoPorEmpleado = new Map<string, FilaContratoObra[]>();
-        if (empIds.length > 0) {
+        if (empIdsParaContratosObra.length > 0) {
           const ctr = await supabase
             .from('ci_contratos_empleado_obra')
             .select('empleado_id,estado_contrato,obra_id')
-            .in('empleado_id', empIds);
+            .in('empleado_id', empIdsParaContratosObra);
           if (!alive) return;
           for (const row of ctr.data ?? []) {
             const eid = String((row as { empleado_id?: unknown }).empleado_id ?? '');
@@ -476,6 +564,18 @@ export default function ResumenObrerosProyectoModulo({
             det.push({ obra_id, estado_contrato: st });
             filasContratoPorEmpleado.set(eid, det);
           }
+        }
+
+        for (const e of emps) {
+          if (!esEmpleadoContratoExpress(e)) continue;
+          const arr = contrMap.get(e.id) ?? [];
+          if (!arr.includes('firmado_activo')) {
+            arr.push('firmado_activo');
+            contrMap.set(e.id, arr);
+          }
+          const det = filasContratoPorEmpleado.get(e.id) ?? [];
+          det.push({ obra_id: null, estado_contrato: 'firmado_activo' });
+          filasContratoPorEmpleado.set(e.id, det);
         }
 
         const obraIdsContratos = new Set<string>();
@@ -633,6 +733,11 @@ export default function ResumenObrerosProyectoModulo({
     [empleados, filasContratoPorEmpleado, obraEstadoPorId],
   );
 
+  const expressEnCuadro = useMemo(
+    () => empleados.filter((e) => esEmpleadoContratoExpress(e)).length,
+    [empleados],
+  );
+
   const filasListaModal = useMemo(() => {
     if (!listaModal) return [];
     if (demoListasObrero && listaModal === 'porContratar') {
@@ -704,7 +809,8 @@ export default function ResumenObrerosProyectoModulo({
               Cuadro de obreros — RRHH del proyecto
             </h2>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Plazas solicitadas, obreros en carpeta (no aprobaron la evaluación) y contratos activos en obra vinculada.
+              Plazas solicitadas, obreros en carpeta (no aprobaron la evaluación), contratos activos en obra vinculada y
+              contratos express (fast-track) del mismo proyecto u obras hijas.
             </p>
             {demoListasObrero ? (
               <p className="mt-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-200">
@@ -783,7 +889,20 @@ export default function ResumenObrerosProyectoModulo({
               </div>
               <p className="mt-2 text-2xl font-bold tabular-nums text-white">{contratadosActivos}</p>
               <p className="mt-1 text-[10px] text-zinc-500">
-                Contrato obra «firmado activo» en este resumen. Clic: ir a gestión de personal RRHH.
+                Contrato obra «firmado activo» o contrato express vigente (sin formalizar en{' '}
+                <span className="font-mono text-zinc-400">ci_empleados</span>). Clic: ir a gestión de personal RRHH.
+                {expressEnCuadro > 0 ? (
+                  <span className="mt-0.5 block text-emerald-200/80">
+                    {expressEnCuadro} en express — listado en{' '}
+                    <Link
+                      href="/talento/admin/contratos/fast-list"
+                      className="font-semibold text-emerald-200 underline decoration-emerald-500/40 hover:text-emerald-100"
+                    >
+                      Talento → Contratos express
+                    </Link>
+                    .
+                  </span>
+                ) : null}
               </p>
             </Link>
             <button
@@ -827,7 +946,7 @@ export default function ResumenObrerosProyectoModulo({
                     {listaModal === 'enCarpeta' &&
                       'Criterio: no aprobaron la evaluación — en base de datos, status_evaluacion «rojo» o «rechazado».'}
                     {listaModal === 'porContratar' &&
-                      'Criterio: rol «obrero», o «tecnico» con oficio de vigilancia/seguridad; apto (evaluación verde o estado aprobado sin rechazo); sin contrato obra «firmado_activo». No incluye programadores.'}
+                      'Criterio: rol «obrero», o «tecnico» con oficio de vigilancia/seguridad; apto (evaluación verde o estado aprobado sin rechazo); sin contrato obra «firmado_activo». No incluye programadores ni quienes solo tienen contrato express (cuentan como contratados activos).'}
                     {listaModal === 'inactivos' &&
                       'Criterio: al menos un contrato obra cuya obra está «cerrada» en ci_obras, y sin contrato activo en obra «activa».'}
                   </p>
@@ -856,12 +975,22 @@ export default function ResumenObrerosProyectoModulo({
                         return (
                           <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
                             <td className="px-3 py-2 font-medium text-zinc-100">
-                              <Link
-                                href={`/empleados/${encodeURIComponent(row.id)}`}
-                                className="text-sky-300 underline decoration-sky-500/40 hover:text-sky-200"
-                              >
-                                {nombre}
-                              </Link>
+                              {esEmpleadoContratoExpress(row) ? (
+                                <Link
+                                  href="/talento/admin/contratos/fast-list"
+                                  className="text-amber-200 underline decoration-amber-500/40 hover:text-amber-100"
+                                  title="Contrato express (fast-track): ver PDF y formalizar en Talento"
+                                >
+                                  {nombre}
+                                </Link>
+                              ) : (
+                                <Link
+                                  href={`/empleados/${encodeURIComponent(row.id)}`}
+                                  className="text-sky-300 underline decoration-sky-500/40 hover:text-sky-200"
+                                >
+                                  {nombre}
+                                </Link>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-zinc-200">{apellido}</td>
                             <td className="px-3 py-2 tabular-nums text-zinc-300">{cedulaDesdeEmpleado(row)}</td>

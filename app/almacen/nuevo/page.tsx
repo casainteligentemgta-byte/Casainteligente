@@ -46,6 +46,8 @@ export default function NewInventoryItemPage() {
   const [catalogProducts, setCatalogProducts] = useState<CatalogProductRow[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  /** Evita mostrar «sin categorías» antes del primer fetch de maestros. */
+  const [mastersReady, setMastersReady] = useState(false);
 
   const [depositId, setDepositId] = useState('');
   const [furnitureId, setFurnitureId] = useState('');
@@ -54,7 +56,7 @@ export default function NewInventoryItemPage() {
     sap_code: '',
     name: '',
     category_id: '',
-    unit: 'UND',
+    unit: '',
     reorder_point: 0,
     location: '',
     brand: '',
@@ -71,6 +73,7 @@ export default function NewInventoryItemPage() {
 
   const loadMasters = useCallback(async () => {
     setLoadErr(null);
+    setMastersReady(false);
     const [d, f, c, u] = await Promise.all([
       supabase.from('inventory_deposits').select('id,code,name,locality,is_default').order('is_default', { ascending: false }).order('name'),
       supabase.from('inventory_furniture').select('id,deposit_id,kind,name,repisas_count').order('sort_order').order('name'),
@@ -80,6 +83,7 @@ export default function NewInventoryItemPage() {
     const err = d.error || f.error || c.error || u.error;
     if (err) {
       setLoadErr(err.message);
+      setMastersReady(true);
       return;
     }
     const depList = (d.data ?? []) as Deposit[];
@@ -94,10 +98,14 @@ export default function NewInventoryItemPage() {
       const def = depList.find((x) => x.is_default);
       return def?.id ?? depList[0]?.id ?? '';
     });
+    const unitRows = (u.data ?? []) as UnitRow[];
+    const unitCodes = new Set(unitRows.map((x) => x.code));
+    const unitFallback = unitRows.find((x) => x.code === 'UND')?.code ?? unitRows[0]?.code ?? 'UND';
+
     setItem((prev) => ({
       ...prev,
       category_id: prev.category_id || (c.data as Category[] | undefined)?.[0]?.id || '',
-      unit: prev.unit || (u.data as UnitRow[] | undefined)?.find((x) => x.code === 'UND')?.code || (u.data as UnitRow[])?.[0]?.code || 'UND',
+      unit: prev.unit && unitCodes.has(prev.unit) ? prev.unit : unitFallback,
     }));
 
     const { data: prodData, error: prodErr } = await supabase
@@ -107,6 +115,7 @@ export default function NewInventoryItemPage() {
     if (!prodErr && prodData) {
       setCatalogProducts(prodData as CatalogProductRow[]);
     }
+    setMastersReady(true);
   }, [supabase]);
 
   useEffect(() => {
@@ -128,7 +137,12 @@ export default function NewInventoryItemPage() {
   }, [depositId, furnitureForDeposit]);
 
   const selectedFurniture = furnitureForDeposit.find((f) => f.id === furnitureId);
-  const maxRepisas = selectedFurniture?.repisas_count ?? 0;
+  /** Misma regla que edición: 0 o inválido → al menos 1 repisa para clamping y UI. */
+  const maxRepisas = useMemo(() => {
+    const f = selectedFurniture;
+    if (!f) return 0;
+    return Math.max(1, Number(f.repisas_count) || 1);
+  }, [selectedFurniture]);
 
   useEffect(() => {
     if (!selectedFurniture) {
@@ -138,7 +152,8 @@ export default function NewInventoryItemPage() {
     setShelfNumber((n) => {
       if (n === '') return 1;
       const num = typeof n === 'number' ? n : 1;
-      return Math.min(maxRepisas, Math.max(1, num));
+      const int = Number.isFinite(num) ? Math.trunc(num) : 1;
+      return Math.min(maxRepisas, Math.max(1, int));
     });
   }, [selectedFurniture, maxRepisas]);
 
@@ -178,6 +193,10 @@ export default function NewInventoryItemPage() {
       alert('Nombre y categoría son obligatorios.');
       return;
     }
+    if (!item.unit.trim()) {
+      alert('Selecciona una unidad de medida (maestro de unidades en almacén).');
+      return;
+    }
     setLoading(true);
     try {
       const sapTrim = item.sap_code.trim();
@@ -193,7 +212,7 @@ export default function NewInventoryItemPage() {
         last_purchase_date: item.last_purchase_date || null,
         deposit_id: depositId || null,
         furniture_id: furnitureId || null,
-        shelf_number: shelfNumber === '' ? null : Number(shelfNumber),
+        shelf_number: shelfNumber === '' ? null : Math.trunc(Number(shelfNumber)),
         brand: item.brand.trim() || null,
         model: item.model.trim() || null,
         serial_number: item.serial_number.trim() || null,
@@ -251,6 +270,20 @@ export default function NewInventoryItemPage() {
             </p>
           </div>
         )}
+
+        {mastersReady && !loadErr && categories.length === 0 ? (
+          <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
+            <p className="font-bold">No hay categorías de material</p>
+            <p className="mt-2 text-xs text-zinc-300">
+              No se puede crear un ítem sin al menos una categoría. Abre{' '}
+              <Link href="/almacen/maestros" className="text-white underline underline-offset-2 hover:text-zinc-200">
+                Maestros de almacén
+              </Link>{' '}
+              → pestaña «Categorías» y crea una, o ejecuta la migración <code className="text-white">014_almacen_maestros_sap.sql</code>{' '}
+              si la tabla está vacía.
+            </p>
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <GlassCard className="p-8">
@@ -398,7 +431,7 @@ export default function NewInventoryItemPage() {
                 </div>
               </div>
 
-              {selectedFurniture && maxRepisas > 0 && (
+              {selectedFurniture ? (
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
                     Repisa (1–{maxRepisas})
@@ -407,16 +440,23 @@ export default function NewInventoryItemPage() {
                     type="number"
                     min={1}
                     max={maxRepisas}
+                    step={1}
+                    inputMode="numeric"
                     value={shelfNumber}
                     onChange={(e) => {
-                      const v = e.target.value === '' ? '' : Number(e.target.value);
-                      if (v === '') setShelfNumber('');
-                      else setShelfNumber(Math.min(maxRepisas, Math.max(1, v)));
+                      if (e.target.value === '') {
+                        setShelfNumber('');
+                        return;
+                      }
+                      const raw = Number(e.target.value);
+                      if (!Number.isFinite(raw)) return;
+                      const int = Math.trunc(raw);
+                      setShelfNumber(Math.min(maxRepisas, Math.max(1, int)));
                     }}
                     className="w-full sm:max-w-xs bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:border-blue-500"
                   />
                 </div>
-              )}
+              ) : null}
 
               {isHerramientas && (
                 <div className="bg-white/5 p-6 rounded-2xl border border-white/10 space-y-6">
@@ -536,6 +576,11 @@ export default function NewInventoryItemPage() {
               <button
                 type="submit"
                 disabled={loading || !categories.length}
+                title={
+                  !categories.length && mastersReady
+                    ? 'Faltan categorías de material: créalas en Maestros de almacén (pestaña Categorías).'
+                    : undefined
+                }
                 className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg hover:bg-zinc-200 transition-all shadow-xl shadow-white/5 disabled:opacity-50 flex items-center justify-center gap-3"
               >
                 {loading ? (

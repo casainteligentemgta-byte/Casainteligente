@@ -28,6 +28,7 @@ import { camposRegistroMercantilDesdeRecord, parseRegistroMercantilRecord } from
 import {
   formatearUsdContratoPdf,
   ingresoSemanalConsolidadoUsdDesdeNivelGaceta,
+  ingresoSemanalConsolidadoUsdDesdeNivelGacetaCestaticketUsd40,
   nivelGacetaDesdeCodigoOficio,
   nivelGacetaDesdeSalarioBasicoDiarioVes,
 } from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
@@ -1045,7 +1046,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     nivelGacetaDesdeSalarioBasicoDiarioVes(salarioDiarioNum);
 
   const ingresoUsdNum =
-    nivelGaceta != null ? ingresoSemanalConsolidadoUsdDesdeNivelGaceta(nivelGaceta, cestaMensual) : null;
+    nivelGaceta != null ? ingresoSemanalConsolidadoUsdDesdeNivelGacetaCestaticketUsd40(nivelGaceta) : null;
   const ingresoSemanalUsdTabulador =
     ingresoUsdNum != null && Number.isFinite(ingresoUsdNum) ? formatearUsdContratoPdf(ingresoUsdNum) : null;
 
@@ -1089,6 +1090,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     ok: true,
     props: {
       expedienteId: null,
+      esContratoExpress: true,
       empleado,
       entidad,
       configNomina,

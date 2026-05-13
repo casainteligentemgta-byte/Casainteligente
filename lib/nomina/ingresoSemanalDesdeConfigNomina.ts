@@ -1,5 +1,6 @@
 import {
   ingresoSemanalConsolidadoUsdDesdeNivelGaceta,
+  ingresoSemanalConsolidadoUsdDesdeNivelGacetaCestaticketUsd40,
   nivelGacetaDesdeCodigoOficio,
 } from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
 
@@ -41,6 +42,14 @@ export function sueldoSemanalReferenciaBolivares(cfg: ConfigNominaTabuladorLike 
   return Math.round((sal + cesta) * 100) / 100;
 }
 
+/** Solo salario base mensual del tabulador (Bs) ÷ 4; no incluye cestaticket. */
+export function salarioBaseSemanalBolivares(cfg: ConfigNominaTabuladorLike | null): number {
+  if (!cfg) return 0;
+  const sm = Number(cfg.salario_base_mensual);
+  if (!Number.isFinite(sm) || sm <= 0) return 0;
+  return Math.round((sm / SEMANAS_POR_MES_REF) * 100) / 100;
+}
+
 /**
  * Total semanal en Bs (referencia tabulador + bono complemento en Bs).
  * Si el bono está en USD, conviértelo a Bs con la tasa del día antes de sumar.
@@ -70,4 +79,16 @@ export function ingresoSemanalConsolidadoUsdDesdeConfigNomina(
   const nivel = nivelEfectivoDesdeConfigNomina(cfg);
   if (nivel == null) return null;
   return ingresoSemanalConsolidadoUsdDesdeNivelGaceta(nivel, cfg.cestaticket_mensual);
+}
+
+/**
+ * USD de referencia con cestaticket **40 USD/mes** (10 USD/semana fijos), alineado a contratos express y liquidación al tipo BCV del día.
+ */
+export function ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40(
+  cfg: ConfigNominaTabuladorLike | null,
+): number | null {
+  if (!cfg) return null;
+  const nivel = nivelEfectivoDesdeConfigNomina(cfg);
+  if (nivel == null) return null;
+  return ingresoSemanalConsolidadoUsdDesdeNivelGacetaCestaticketUsd40(nivel);
 }

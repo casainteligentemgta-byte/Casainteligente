@@ -6,8 +6,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import {
-  ingresoSemanalConsolidadoUsdDesdeConfigNomina,
-  sueldoSemanalReferenciaBolivares,
+  CESTATICKET_MENSUAL_USD,
+  CESTATICKET_SEMANAL_USD,
+  cestaticketSemanalBolivaresAlTipoCambioBcV,
+} from '@/lib/nomina/cestaticketLegalUsd';
+import {
+  ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40,
+  salarioBaseSemanalBolivares,
   type ConfigNominaTabuladorLike,
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 import { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
@@ -187,8 +192,18 @@ export default function ContratoExpressCreatePage() {
     };
   }, [configNominaId, nominas]);
 
-  const sueldoSemanalTabuladorBs = cfgTabulador ? sueldoSemanalReferenciaBolivares(cfgTabulador) : 0;
-  const ingresoSemanalUsdRef = cfgTabulador ? ingresoSemanalConsolidadoUsdDesdeConfigNomina(cfgTabulador) : null;
+  const salarioSemanalBs = cfgTabulador ? salarioBaseSemanalBolivares(cfgTabulador) : 0;
+  const ingresoSemanalUsdRef = cfgTabulador ? ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40(cfgTabulador) : null;
+
+  const pagoSemanalBcV = useMemo(() => {
+    const t = tasaBcvVesPorUsdFromEnv();
+    if (cfgTabulador == null || t == null) {
+      return { tasa: null as number | null, cestaBs: null as number | null, totalBs: null as number | null };
+    }
+    const cestaBs = cestaticketSemanalBolivaresAlTipoCambioBcV(t);
+    const sal = salarioBaseSemanalBolivares(cfgTabulador);
+    return { tasa: t, cestaBs, totalBs: Math.round((sal + cestaBs) * 100) / 100 };
+  }, [cfgTabulador]);
 
   const nacionalidadEnvio = esVenezolano
     ? 'Venezolano'
@@ -447,18 +462,41 @@ export default function ContratoExpressCreatePage() {
           </label>
 
           <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 text-emerald-50/95">
-            <p className="text-xs uppercase tracking-wide text-emerald-200/70 mb-1">Salario según tabulador</p>
+            <p className="text-xs uppercase tracking-wide text-emerald-200/70 mb-1">Salario y pago semanal (referencia)</p>
             <p className="text-sm tabular-nums">
-              <span className="text-zinc-400">Mensual (Bs):</span>{' '}
+              <span className="text-zinc-400">Salario base mensual tabulador (Bs):</span>{' '}
               <span className="font-semibold text-white">{fmtBs(sueldoBase ?? 0)}</span>
             </p>
-            <p className="text-sm tabular-nums mt-1">
-              <span className="text-zinc-400">Semanal referencia (salario + cesta ÷ 4, Bs):</span>{' '}
-              <span className="font-semibold text-emerald-200">{fmtBs(sueldoSemanalTabuladorBs)}</span>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              Cestaticket mensual de ley: {fmtUsd(CESTATICKET_MENSUAL_USD)} (alícuota semanal {fmtUsd(CESTATICKET_SEMANAL_USD)}).
             </p>
+            <p className="text-sm tabular-nums mt-1">
+              <span className="text-zinc-400">Salario semanal (solo tabulador, Bs):</span>{' '}
+              <span className="font-semibold text-emerald-200">{fmtBs(salarioSemanalBs)}</span>
+            </p>
+            {pagoSemanalBcV.tasa != null && pagoSemanalBcV.cestaBs != null && pagoSemanalBcV.totalBs != null ? (
+              <>
+                <p className="text-sm tabular-nums mt-1">
+                  <span className="text-zinc-400">
+                    Alícuota cesta ticket semanal ({fmtUsd(CESTATICKET_SEMANAL_USD)} a tasa BCV ref. {fmtBs(pagoSemanalBcV.tasa)}{' '}
+                    Bs/USD, día de pago):
+                  </span>{' '}
+                  <span className="font-semibold text-emerald-200">{fmtBs(pagoSemanalBcV.cestaBs)} Bs</span>
+                </p>
+                <p className="text-sm tabular-nums mt-1">
+                  <span className="text-zinc-400">Total semanal referencia (salario Bs + cesta en Bs):</span>{' '}
+                  <span className="font-semibold text-white">{fmtBs(pagoSemanalBcV.totalBs)} Bs</span>
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Para el equivalente en Bs del cestaticket (10 USD), define{' '}
+                <code className="text-zinc-600">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> con la tasa del día de pago.
+              </p>
+            )}
             {ingresoSemanalUsdRef != null && Number.isFinite(ingresoSemanalUsdRef) ? (
               <p className="text-sm tabular-nums mt-1">
-                <span className="text-zinc-400">Ingreso semanal consolidado ref. (USD, anexo Gaceta):</span>{' '}
+                <span className="text-zinc-400">Ingreso semanal consolidado ref. (USD, Gaceta + 10 USD cesta/semana):</span>{' '}
                 <span className="font-semibold text-sky-200">{fmtUsd(ingresoSemanalUsdRef)}</span>
               </p>
             ) : (

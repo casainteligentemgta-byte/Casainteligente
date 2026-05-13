@@ -1,4 +1,5 @@
 import { cargoPorCodigo } from '@/lib/constants/cargosObreros';
+import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import {
   SALARIO_BASICO_DIARIO_USD_REF_POR_NIVEL,
   SALARIO_BASICO_DIARIO_VES_POR_NIVEL,
@@ -59,6 +60,19 @@ export function ingresoSemanalConsolidadoUsdDesdeNivelGaceta(
     const cestaSemanalVes = cesta / SEMANAS_POR_MES_REF;
     total += cestaSemanalVes / TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20;
   }
+  return Math.round(total * 100) / 100;
+}
+
+/**
+ * Ingreso semanal consolidado en USD (anexo Gaceta): salario mensual en USD ÷ 4, más **10 USD** fijos de cestaticket
+ * semanal (40 USD/mes ÷ 4), sin convertir cesta desde bolívares del tabulador.
+ */
+export function ingresoSemanalConsolidadoUsdDesdeNivelGacetaCestaticketUsd40(nivel: number): number | null {
+  if (nivel < 1 || nivel > 9) return null;
+  const usdDia = SALARIO_BASICO_DIARIO_USD_REF_POR_NIVEL[nivel - 1];
+  if (usdDia == null || !Number.isFinite(usdDia)) return null;
+  const salarioMensualUsd = DIAS_MES_REF_TABULADOR * usdDia;
+  const total = salarioMensualUsd / SEMANAS_POR_MES_REF + CESTATICKET_SEMANAL_USD;
   return Math.round(total * 100) / 100;
 }
 

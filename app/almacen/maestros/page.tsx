@@ -87,10 +87,14 @@ export default function AlmacenMaestrosPage() {
     e.preventDefault();
     if (!depForm.code.trim() || !depForm.name.trim()) return;
     if (depForm.is_default) {
-      await supabase
+      const { error: unsetErr } = await supabase
         .from('inventory_deposits')
         .update({ is_default: false })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('is_default', true);
+      if (unsetErr) {
+        alert(unsetErr.message);
+        return;
+      }
     }
     const { error } = await supabase.from('inventory_deposits').insert({
       code: depForm.code.trim().toUpperCase(),

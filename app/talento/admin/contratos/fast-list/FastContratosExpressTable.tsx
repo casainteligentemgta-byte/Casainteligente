@@ -473,7 +473,8 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                   <TableHead className="text-right">Salario (Bs/mes)</TableHead>
                   <TableHead className="text-right">Bono (USD)</TableHead>
                   <TableHead className="text-right">Bono ref. (Bs)</TableHead>
-                  <TableHead className="min-w-[260px] text-right">Acciones</TableHead>
+                  <TableHead className="min-w-[220px] text-right">Acciones</TableHead>
+                  <TableHead className="w-[1%] whitespace-nowrap text-center">Eliminar</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -492,7 +493,19 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                       </TableCell>
                       <TableCell className="font-medium text-white">{c.obrero_nombre}</TableCell>
                       <TableCell className="font-mono text-xs text-zinc-300">{c.obrero_cedula}</TableCell>
-                      <TableCell className="text-zinc-300">{nombreProyecto(c)}</TableCell>
+                      <TableCell className="text-zinc-300">
+                        {c.proyecto_id?.trim() ? (
+                          <Link
+                            href={`/proyectos/modulo/${encodeURIComponent(c.proyecto_id.trim())}?tab=solicitados`}
+                            className="text-sky-400 hover:text-sky-300 hover:underline underline-offset-2"
+                            title="Ir al módulo integral del proyecto (pestaña solicitados)"
+                          >
+                            {nombreProyecto(c)}
+                          </Link>
+                        ) : (
+                          nombreProyecto(c)
+                        )}
+                      </TableCell>
                       <TableCell className="max-w-[200px] truncate text-xs text-zinc-400" title={textoEntidad(c)}>
                         {textoEntidad(c)}
                       </TableCell>
@@ -512,8 +525,8 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                       >
                         {bonBsRef != null ? `${fmtBs(bonBsRef)} Bs` : '—'}
                       </TableCell>
-                      <TableCell className="min-w-[260px] text-right">
-                        <div className="inline-flex max-w-[min(100vw-2rem,480px)] flex-wrap justify-end gap-1 sm:gap-2">
+                      <TableCell className="min-w-[220px] text-right">
+                        <div className="inline-flex flex-wrap justify-end gap-1 sm:gap-2">
                           <Button
                             type="button"
                             variant="outline"
@@ -599,19 +612,21 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                           >
                             <UserPlus className="size-4" />
                           </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={busy}
-                            className="border-red-900/60 bg-red-950/20 px-2 text-red-300 hover:bg-red-950/40 hover:text-red-200"
-                            title="Eliminar este registro express y sus archivos en almacenamiento"
-                            onClick={() => void eliminarContratoExpress(c.id, c.obrero_nombre, formalizado)}
-                          >
-                            <Trash2 className="size-4" />
-                            <span className="ml-1 hidden sm:inline">Borrar</span>
-                          </Button>
                         </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-center align-middle">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          className="inline-flex items-center gap-1 border-red-800/70 bg-red-950/25 px-2.5 text-xs font-semibold text-red-200 hover:bg-red-950/45 hover:text-red-100"
+                          title="Eliminar este contrato express y sus archivos en almacenamiento"
+                          onClick={() => void eliminarContratoExpress(c.id, c.obrero_nombre, formalizado)}
+                        >
+                          <Trash2 className="size-4 shrink-0" aria-hidden />
+                          Borrar
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
