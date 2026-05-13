@@ -418,12 +418,13 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
           <p className="text-sm text-zinc-400">
             Sin registro previo en <code className="text-zinc-500">ci_empleados</code>. Cada fila queda en esta lista al
             generar el express. Puede <strong className="text-zinc-300">copiar o compartir</strong> el enlace del PDF
-            (~1 h), <strong className="text-zinc-300">imprimir</strong> desde el visor,{' '}
-            <strong className="text-zinc-300">subir el PDF o escaneo</strong> una vez firmado por el obrero o{' '}
-            <strong className="text-zinc-300">borrar</strong> un registro express (y sus archivos) desde la columna
-            Acciones. Salario base: snapshot <strong className="text-zinc-300">mensual en Bs</strong> (tabulador). Bono:{' '}
-            <strong className="text-zinc-300">USD</strong>; en cada pago se convierte a Bs con la tasa BCV del día.
-            Para equivalentes en pantalla, define{' '}
+            (~1 h), <strong className="text-zinc-300">imprimir</strong> desde el visor y{' '}
+            <strong className="text-zinc-300">subir el PDF o escaneo</strong> una vez firmado por el obrero, y puede{' '}
+            <strong className="text-zinc-300">borrarlo</strong> con el botón rojo «Borrar» en la primera columna (fija al
+            hacer scroll horizontal; quita el registro y los archivos en almacenamiento). Salario base: snapshot{' '}
+            <strong className="text-zinc-300">mensual en Bs</strong>{' '}
+            (tabulador). Bono: <strong className="text-zinc-300">USD</strong>; en cada pago se convierte a Bs con la tasa
+            BCV del día. Para equivalentes en pantalla, define{' '}
             <code className="text-zinc-500">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> (Bs por USD).
           </p>
         </div>
@@ -461,10 +462,17 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950/90 text-zinc-100">
-            <Table>
+          <div className="rounded-md border border-zinc-800 bg-zinc-950/90 text-zinc-100">
+            <Table className="border-separate border-spacing-0">
               <TableHeader>
                 <TableRow className="border-zinc-800 hover:bg-transparent">
+                  <TableHead
+                    className={cn(
+                      'sticky left-0 z-20 w-[1%] min-w-[5.75rem] whitespace-nowrap border-r border-zinc-700/90 bg-zinc-950 text-center shadow-[8px_0_14px_-8px_rgba(0,0,0,0.55)]',
+                    )}
+                  >
+                    Borrar
+                  </TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Obrero</TableHead>
                   <TableHead>Cédula</TableHead>
@@ -474,13 +482,6 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                   <TableHead className="text-right">Bono (USD)</TableHead>
                   <TableHead className="text-right">Bono ref. (Bs)</TableHead>
                   <TableHead className="min-w-[220px] text-right">Acciones</TableHead>
-                  <TableHead
-                    className={cn(
-                      'sticky right-0 z-20 w-[1%] min-w-[5.5rem] whitespace-nowrap border-l border-zinc-700/90 bg-zinc-950 text-center shadow-[-8px_0_12px_-6px_rgba(0,0,0,0.45)]',
-                    )}
-                  >
-                    Borrar
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -494,6 +495,25 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                   const tieneFirmado = Boolean((c.pdf_firmado_storage_path ?? '').trim());
                   return (
                     <TableRow key={c.id} className="border-zinc-800">
+                      <TableCell
+                        className={cn(
+                          'sticky left-0 z-10 border-r border-zinc-700/90 bg-zinc-950 text-center align-middle shadow-[8px_0_14px_-8px_rgba(0,0,0,0.55)]',
+                        )}
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          className="inline-flex min-h-9 min-w-[5.25rem] items-center justify-center gap-1 border-red-800/70 bg-red-950/40 px-2 text-xs font-semibold text-red-100 hover:bg-red-950/55 hover:text-white"
+                          title="Eliminar este contrato express y sus archivos en almacenamiento"
+                          aria-label={`Borrar contrato express de ${c.obrero_nombre}`}
+                          onClick={() => void eliminarContratoExpress(c.id, c.obrero_nombre, formalizado)}
+                        >
+                          <Trash2 className="size-4 shrink-0" aria-hidden />
+                          Borrar
+                        </Button>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-zinc-400">
                         {new Date(c.created_at).toLocaleDateString('es-VE')}
                       </TableCell>
@@ -619,25 +639,6 @@ export function FastContratosExpressTable({ initialData, fetchError }: Props) {
                             <UserPlus className="size-4" />
                           </Button>
                         </div>
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          'sticky right-0 z-10 whitespace-nowrap border-l border-zinc-700/90 bg-zinc-950 text-center align-middle shadow-[-8px_0_12px_-6px_rgba(0,0,0,0.45)]',
-                        )}
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={busy}
-                          className="inline-flex min-h-9 min-w-[5.25rem] items-center justify-center gap-1 border-red-800/70 bg-red-950/40 px-2 text-xs font-semibold text-red-100 hover:bg-red-950/55 hover:text-white"
-                          title="Eliminar este contrato express y sus archivos en almacenamiento"
-                          aria-label={`Borrar contrato express de ${c.obrero_nombre}`}
-                          onClick={() => void eliminarContratoExpress(c.id, c.obrero_nombre, formalizado)}
-                        >
-                          <Trash2 className="size-4 shrink-0" aria-hidden />
-                          Borrar
-                        </Button>
                       </TableCell>
                     </TableRow>
                   );

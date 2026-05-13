@@ -106,11 +106,15 @@ export async function formalizarContratoExpressPorId(
     ex.cargo_nombre_snapshot?.trim() || nomina?.cargo_nombre?.trim() || 'Por definir';
 
   const token = randomUUID();
+  /** Express no pide móvil; si `celular` es NOT NULL en BD, placeholder hasta que RRHH lo complete. */
+  const celularExpress = 'Pendiente RRHH';
   const insertRow: Record<string, unknown> = {
     nombre_completo: ex.obrero_nombre.trim(),
     nombres: nombresLegadoDesdeTextoLibre(ex.obrero_nombre.trim()),
     documento: cedulaNorm,
     cedula: cedulaNorm,
+    celular: celularExpress,
+    telefono: celularExpress,
     cargo: cargoNombre,
     rol_buscado: cargoNombre,
     cargo_nombre: nomina?.cargo_nombre?.trim() || cargoNombre,

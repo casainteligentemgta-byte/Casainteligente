@@ -23,19 +23,28 @@ function formatDbErrorChain(e: unknown): string {
     if (typeof o.message === 'string' && o.message.trim()) parts.push(o.message.trim());
     if (typeof o.detail === 'string' && o.detail.trim()) parts.push(`Detalle: ${o.detail.trim()}`);
     if (typeof o.hint === 'string' && o.hint.trim()) parts.push(`Sugerencia: ${o.hint.trim()}`);
-    if (typeof o.code === 'string' && o.code.trim()) parts.push(`Código Postgres: ${o.code.trim()}`);
+    if (typeof o.code === 'string' && o.code.trim()) {
+      const c = o.code.trim();
+      const pgLike = /^[0-9A-Z]{5}$/.test(c);
+      parts.push(pgLike ? `Código Postgres: ${c}` : `Código: ${c}`);
+    }
     cur = o.cause ?? null;
   }
   return Array.from(new Set(parts)).join('\n\n');
 }
 
+/** Fallo de red/DNS/SSL antes de hablar con Postgres (no confundir con «tabla inexistente»). */
+function pareceErrorRedODns(msg: string): boolean {
+  return /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|getaddrinfo|ECONNRESET|certificate|UNABLE_TO_VERIFY/i.test(msg);
+}
+
 function pareceTablaNexusAusente(msg: string): boolean {
+  if (pareceErrorRedODns(msg)) return false;
   return (
     /42P01/.test(msg) ||
     /undefined_table/i.test(msg) ||
-    /relation\s+"?nexus_clients"?/i.test(msg) ||
-    /does not exist/i.test(msg) ||
-    (/Failed query/i.test(msg) && /nexus_clients/i.test(msg))
+    /relation\s+"?(public\.)?nexus_clients"?\s+does\s+not\s+exist/i.test(msg) ||
+    (/relation\s+"?(public\.)?nexus_clients"?/i.test(msg) && /does not exist/i.test(msg))
   );
 }
 
@@ -59,6 +68,7 @@ export default async function NexusClientesPage() {
     err = formatDbErrorChain(e);
   }
 
+  const errorRed = err ? pareceErrorRedODns(err) : false;
   const ayudaMigracion011 = err ? pareceTablaNexusAusente(err) : false;
 
   return (
@@ -74,7 +84,15 @@ export default async function NexusClientesPage() {
       {err ? (
         <NexusAlert variant="error" title="Error de lectura">
           <p className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--nexus-text-muted)]">{err}</p>
-          {ayudaMigracion011 ? (
+          {errorRed ? (
+            <p className="mt-3 text-[var(--nexus-text-muted)]">
+              El host de <Mono>DATABASE_URL</Mono> no resolvió en DNS o no hubo conexión (p. ej. proyecto Supabase
+              pausado/eliminado, URL antigua o typo en el host). En Supabase: <strong>Project Settings → Database</strong>{' '}
+              → vuelve a copiar la <strong>Connection string</strong> (URI) y actualiza <Mono>DATABASE_URL</Mono> en
+              Vercel o <Mono>.env.local</Mono>. No ejecutes migraciones SQL hasta que{' '}
+              <Mono>npm run verify:db</Mono> conecte bien.
+            </p>
+          ) : ayudaMigracion011 ? (
             <p className="mt-3 text-[var(--nexus-text-muted)]">
               La tabla <Mono>nexus_clients</Mono> no existe en esta base. En el mismo proyecto Postgres al que apunta{' '}
               <Mono>DATABASE_URL</Mono>: Supabase → <strong>SQL Editor</strong> → pega y ejecuta{' '}

@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileText, RefreshCw, Users } from 'lucide-react';
+import { ExternalLink, FileText, RefreshCw, Trash2, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { hrefContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
@@ -29,6 +30,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [rows, setRows] = useState<ExpressRow[]>([]);
+  const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const id = moduloIntegralId.trim();
@@ -84,6 +86,28 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
     }
   }, [moduloIntegralId, supabase]);
 
+  async function eliminarFila(id: string, nombre: string, formalizado: boolean) {
+    const detalle = formalizado
+      ? 'Este express ya fue formalizado: el expediente en Talento (ci_empleados) no se borra. Solo se elimina el registro express y los archivos en almacenamiento.'
+      : 'Se eliminará el registro y los PDF/archivos asociados. Esta acción no se puede deshacer.';
+    if (!window.confirm(`${detalle}\n\n¿Eliminar el contrato express de «${nombre}»?`)) return;
+    setBusyDeleteId(id);
+    try {
+      const res = await fetch(`/api/talento/contratos-express/${id}`, { method: 'DELETE' });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo eliminar');
+        return;
+      }
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      toast.success('Contrato express eliminado');
+    } catch {
+      toast.error('Error de red');
+    } finally {
+      setBusyDeleteId(null);
+    }
+  }
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -127,7 +151,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-950/50 px-3 py-2 text-xs font-bold text-amber-50 transition hover:border-amber-400/70 hover:bg-amber-900/55"
           >
             <FileText className="size-3.5 shrink-0" aria-hidden />
-            Talento
+            Listado express
             <ExternalLink className="size-3.5 shrink-0 opacity-80" aria-hidden />
           </Link>
         </div>
@@ -148,18 +172,20 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-amber-500/20 bg-black/25">
-            <table className="w-full min-w-[480px] text-left text-sm">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-amber-500/25 text-[10px] font-bold uppercase tracking-wide text-amber-200/90">
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3">Obrero</th>
                   <th className="px-4 py-3">Cédula</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3 text-right">Borrar</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
                   const formal = Boolean(r.formalizado_empleado_id);
+                  const busy = busyDeleteId === r.id;
                   return (
                     <tr key={r.id} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03]">
                       <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
@@ -177,6 +203,21 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
                             Express — pendiente expediente
                           </span>
                         )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={busy || loading}
+                          className="h-8 gap-1 border-red-900/55 bg-red-950/30 px-2 text-xs font-semibold text-red-200 hover:bg-red-950/50 hover:text-red-50"
+                          title="Eliminar este contrato express de la lista y el almacenamiento"
+                          aria-label={`Borrar contrato express ${r.obrero_nombre}`}
+                          onClick={() => void eliminarFila(r.id, r.obrero_nombre, formal)}
+                        >
+                          <Trash2 className="size-3.5 shrink-0" aria-hidden />
+                          Borrar
+                        </Button>
                       </td>
                     </tr>
                   );
