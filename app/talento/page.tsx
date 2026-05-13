@@ -1,4 +1,9 @@
 import Link from 'next/link';
+import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
+
+const EXPRESS_LIST_HREF = hrefListaContratosExpress();
+const EXPRESS_LIST_ES_EXTERNO =
+  EXPRESS_LIST_HREF.startsWith('http://') || EXPRESS_LIST_HREF.startsWith('https://');
 
 const cards = [
   {
@@ -8,6 +13,13 @@ const cards = [
     accent: 'from-sky-500/20 to-cyan-500/5 border-sky-500/30',
   },
   {
+    href: EXPRESS_LIST_HREF,
+    title: 'Contratos express (lista)',
+    desc: EXPRESS_LIST_ES_EXTERNO
+      ? 'Se abre el listado en el deployment configurado (Vercel / legacy fast-list).'
+      : 'Sin registro en Talento: ver filas, abrir PDF, ir al módulo del proyecto o borrar.',
+    accent: 'from-amber-500/25 to-zinc-900/50 border-amber-500/45',
+  },  {
     href: '/talento/admin/contratos',
     title: 'Contratos dinámicos',
     desc: 'Empleado aprobado + obra · monto y % inicial · modelo CENTAURO LAW',
@@ -44,14 +56,24 @@ export default function TalentoHomePage() {
           >
             Generar Contrato Express (Sin Registro)
           </Link>
+          <Link
+            href={EXPRESS_LIST_HREF}
+            {...(EXPRESS_LIST_ES_EXTERNO ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            className="inline-flex items-center gap-2 rounded-xl border-2 border-amber-500/60 bg-amber-950/40 px-4 py-2.5 text-sm font-semibold text-amber-50 shadow-sm shadow-amber-900/20 hover:bg-amber-900/50 transition-colors"
+          >
+            Lista de contratos express
+          </Link>
         </div>
       </header>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        {cards.map((c) => (
+        {cards.map((c) => {
+          const ext = c.href.startsWith('http://') || c.href.startsWith('https://');
+          return (
           <Link
             key={c.href}
             href={c.href}
+            {...(ext ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
             className={`group rounded-2xl border bg-gradient-to-br p-6 transition-all hover:scale-[1.01] hover:shadow-lg hover:shadow-black/40 ${c.accent}`}
           >
             <h2 className="text-lg font-semibold text-white mb-2 group-hover:text-sky-100">{c.title}</h2>
@@ -60,8 +82,8 @@ export default function TalentoHomePage() {
               Abrir →
             </span>
           </Link>
-        ))}
-      </div>
+          );
+        })}      </div>
 
       <p className="mt-10 text-xs text-zinc-600">
         Requiere migración SQL <code className="text-zinc-400">025_ci_talento_obras.sql</code> en Supabase.

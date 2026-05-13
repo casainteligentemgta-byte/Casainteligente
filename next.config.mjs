@@ -10,7 +10,7 @@ const nextConfig = {
       { source: '/reclutamiento/dashboard', destination: '/reclutamiento', permanent: true },
       {
         source: '/talento/admin/contratos/fast-list',
-        destination: '/talento/admin/contratos',
+        destination: '/talento/contratos-express',
         permanent: false,
       },
     ];

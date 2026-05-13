@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
+import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
 
 /**
  * Cliente Supabase con `service_role` (solo servidor).
@@ -14,5 +15,6 @@ export function createSupabaseAdminOnlyClient(): SupabaseClient | null {
   if (!url || !key) return null;
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: supabaseFetch },
   });
 }

@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
 
 /**
  * Cliente Supabase en servidor (RSC, Server Actions, Route Handlers).
@@ -13,12 +14,17 @@ export async function createClient() {
       'Falta NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en .env.local (Supabase → Project Settings → API).',
     );
   }
+  try {
+    new URL(url);
+  } catch {
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_URL no es una URL válida. Revísala en .env.local (Supabase → Project Settings → API).',
+    );
+  }
   const cookieStore = await cookies();
-  return createServerClient(
-    url,
-    key,
-    {
-      cookies: {
+  return createServerClient(url, key, {
+    global: { fetch: supabaseFetch },
+    cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
@@ -37,6 +43,5 @@ export async function createClient() {
           }
         },
       },
-    },
-  );
+    });
 }

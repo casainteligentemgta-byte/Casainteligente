@@ -2,6 +2,15 @@
 
 Ese mensaje significa que **Node (Next.js) no puede hacer la petición HTTPS** al host de Supabase. No suele ser un problema de tablas ni de RLS.
 
+### 0. Diagnóstico rápido (Next en local)
+
+Con `npm run dev` en marcha, abre en el navegador:
+
+`http://localhost:3000/api/health/supabase`
+
+- Si devuelve `"ok": true` → el **servidor** Node llega a Supabase; si la app en cliente falla, prueba otro navegador sin extensiones o confirma que entras por `localhost` (no `127.0.0.1` mezclado con cookies, aunque raro).
+- Si devuelve `"ok": false` con `cause` (p. ej. certificado, `ENOTFOUND`) → mismo problema de **red/TLS** en la máquina; sigue los pasos de abajo.
+
 ## Comprueba en este orden
 
 ### 1. URL correcta en `.env.local`
@@ -22,6 +31,31 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
 - Prueba abrir en el navegador: `https://TU-PROYECTO.supabase.co` (debe responder algo de Supabase).
 - Si usas **VPN**, prueba desactivarla o cambiar de red.
 - **Antivirus / firewall** a veces bloquean a Node.js: permite Node o prueba otra red (datos móvil).
+
+### 2b. `unable to verify the first certificate` (Windows, muy frecuente)
+
+Si `/api/health/supabase` devuelve ese texto en `error`, **Node no confía en la cadena TLS** que ves (no suele ser la URL de Supabase en sí). Causas típicas:
+
+1. **Antivirus con “inspección HTTPS” / escaneo SSL** (Kaspersky, ESET, Bitdefender, etc.): desactiva esa función *solo para desarrollo* o añade **excepción para `node.exe`** y para el dominio `*.supabase.co`.
+2. **Proxy corporativo** que reemplaza certificados: tu TI debe darte un archivo **`.pem` con el certificado raíz** de la empresa. Luego, **antes** de `npm run dev` en la misma ventana de PowerShell:
+
+   ```powershell
+   $env:NODE_EXTRA_CA_CERTS = "C:\ruta\al\corp-root.pem"
+   npm run dev
+   ```
+
+   (Ruta real al PEM que te indiquen; reinicia el servidor si cambias el archivo.)
+
+3. **Último recurso solo en tu PC y solo en desarrollo** (inseguro: no uses en producción ni lo subas a repositorio):
+
+   ```powershell
+   $env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
+   npm run dev
+   ```
+
+   Vuelve a `1` o quita la variable cuando termines de depurar.
+
+4. **Actualizar Node.js** a la última LTS a veces mejora la cadena de CAs embebida.
 
 ### 3. Reiniciar el servidor de desarrollo
 
@@ -59,5 +93,6 @@ Si tienes **varias copias** del repo (por ejemplo en Escritorio y en Imágenes),
 | Sin reiniciar `npm run dev` | Parar y volver a arrancar      |
 | Firewall / VPN         | Probar otra red o excepción        |
 | `.env.local` en otra carpeta | Un solo proyecto, una raíz   |
+| **TLS / certificado** (`unable to verify…`) | Ver **§2b** (antivirus, `NODE_EXTRA_CA_CERTS`, o último recurso dev) |
 
 Si tras esto sigue fallando, anota si **PowerShell** (`Invoke-WebRequest`) funciona o no y lo revisamos con ese dato.
