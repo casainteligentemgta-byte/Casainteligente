@@ -53,6 +53,32 @@ interface CustomerPickerRow {
     direccion: string | null;
 }
 
+const VENTAS_CUSTOMERS_CACHE_KEY = 'ventas_customers_picker_v1';
+const VENTAS_CUSTOMERS_CACHE_MAX_MS = 1000 * 60 * 60 * 24 * 14; // 14 días
+
+function loadVentasCustomersFromCache(): CustomerPickerRow[] | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(VENTAS_CUSTOMERS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { at?: number; rows?: CustomerPickerRow[] };
+        if (!Array.isArray(parsed.rows)) return null;
+        if (typeof parsed.at === 'number' && Date.now() - parsed.at > VENTAS_CUSTOMERS_CACHE_MAX_MS) return null;
+        return parsed.rows;
+    } catch {
+        return null;
+    }
+}
+
+function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(VENTAS_CUSTOMERS_CACHE_KEY, JSON.stringify({ at: Date.now(), rows }));
+    } catch {
+        /* quota u otro */
+    }
+}
+
 const MARGIN_PRESETS = [0, 10, 15, 20, 25, 30];
 
 function formatUSD(n: number) {
@@ -96,6 +122,9 @@ function VentasContent() {
     const [customers, setCustomers] = useState<CustomerPickerRow[]>([]);
     const [customersLoading, setCustomersLoading] = useState(true);
     const [customerQuery, setCustomerQuery] = useState('');
+    /** Lista desplegable abierta con ↓ (aunque el buscador esté vacío) o con el botón ▼. */
+    const [pickerForceOpen, setPickerForceOpen] = useState(false);
+    const customerInputRef = useRef<HTMLInputElement>(null);
     const legacyParamsResolved = useRef(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
     const [notes, setNotes] = useState('');
@@ -135,17 +164,33 @@ function VentasContent() {
         setClientEmail('');
         setClientDireccion('');
         setCustomerQuery('');
+        setPickerForceOpen(false);
     }, []);
+
+    const applyCustomerAndClosePicker = useCallback(
+        (c: CustomerPickerRow) => {
+            setPickerForceOpen(false);
+            applyCustomer(c);
+        },
+        [applyCustomer],
+    );
 
     useEffect(() => {
         let cancelled = false;
-        setCustomersLoading(true);
+        const cached = typeof window !== 'undefined' ? loadVentasCustomersFromCache() : null;
+        if (cached?.length) {
+            setCustomers(cached);
+            setCustomersLoading(false);
+        } else {
+            setCustomersLoading(true);
+        }
         (async () => {
             try {
                 let supabase: ReturnType<typeof createClient>;
                 try {
                     supabase = createClient();
                 } catch {
+                    if (!cancelled) setCustomersLoading(false);
                     return;
                 }
                 const { data, error } = await withTimeout(
@@ -159,10 +204,15 @@ function VentasContent() {
                     'Clientes (ventas)',
                 );
                 if (cancelled) return;
-                if (!error && data) setCustomers(data as CustomerPickerRow[]);
-                else setCustomers([]);
+                if (!error && data) {
+                    const rows = data as CustomerPickerRow[];
+                    setCustomers(rows);
+                    saveVentasCustomersToCache(rows);
+                } else if (!cached?.length) {
+                    setCustomers([]);
+                }
             } catch {
-                if (!cancelled) setCustomers([]);
+                if (!cancelled && !cached?.length) setCustomers([]);
             } finally {
                 if (!cancelled) setCustomersLoading(false);
             }
@@ -325,6 +375,11 @@ function VentasContent() {
                 (c.direccion || '').toLowerCase().includes(q),
         );
     }, [customers, customerQuery]);
+
+    const customerDropdownOpen = useMemo(() => {
+        if (customerId || customersLoading || customers.length === 0) return false;
+        return customerQuery.trim().length >= 1 || pickerForceOpen;
+    }, [customerId, customersLoading, customers.length, customerQuery, pickerForceOpen]);
 
     const handleSaveBudget = async () => {
         if (!customerId) return alert('Selecciona un cliente de la lista (Clientes).');
@@ -687,27 +742,80 @@ function VentasContent() {
                     ) : (
                         <>
                             <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginBottom: '10px', lineHeight: 1.4 }}>
-                                Elige un cliente registrado. Los datos (RIF, teléfono, correo, dirección) se usarán en la vista previa y al guardar.
+                                Elige un cliente registrado. La lista se guarda en este navegador (hasta 14 días) y se actualiza con la base de datos.
+                                Escribe al menos una letra o pulsa <strong style={{ color: 'var(--label-primary)' }}>↓</strong> / el botón ▼ para abrir el listado.
                             </p>
-                            <input
-                                type="search"
-                                value={customerQuery}
-                                onChange={(e) => setCustomerQuery(e.target.value)}
-                                placeholder="Buscar por nombre, RIF, teléfono o correo…"
-                                disabled={customersLoading}
-                                style={{
-                                    width: '100%',
-                                    marginBottom: '10px',
-                                    padding: '10px 12px',
-                                    borderRadius: '10px',
-                                    border: '1px solid rgba(255,255,255,0.12)',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    color: 'var(--label-primary)',
-                                    fontSize: '14px',
-                                    fontFamily: 'inherit',
-                                    outline: 'none',
-                                }}
-                            />
+                            <div style={{ position: 'relative', marginBottom: customerDropdownOpen ? '6px' : '10px' }}>
+                                <input
+                                    ref={customerInputRef}
+                                    type="search"
+                                    autoComplete="off"
+                                    value={customerQuery}
+                                    onChange={(e) => {
+                                        setCustomerQuery(e.target.value);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            setPickerForceOpen(true);
+                                        }
+                                        if (e.key === 'Escape') {
+                                            setPickerForceOpen(false);
+                                            (e.target as HTMLInputElement).blur();
+                                        }
+                                    }}
+                                    placeholder="Buscar por nombre, RIF, teléfono o correo…"
+                                    disabled={customersLoading}
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        padding: '10px 40px 10px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        color: 'var(--label-primary)',
+                                        fontSize: '14px',
+                                        fontFamily: 'inherit',
+                                        outline: 'none',
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    title="Abrir o cerrar listado de clientes"
+                                    aria-expanded={customerDropdownOpen}
+                                    aria-label="Abrir listado de clientes"
+                                    disabled={customersLoading || customers.length === 0}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        customerInputRef.current?.focus();
+                                        if (!customerQuery.trim()) {
+                                            setPickerForceOpen((o) => !o);
+                                        } else {
+                                            setPickerForceOpen(true);
+                                        }
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '4px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: '34px',
+                                        height: '34px',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: 'rgba(255,255,255,0.08)',
+                                        color: 'rgba(255,255,255,0.75)',
+                                        cursor: customersLoading || customers.length === 0 ? 'not-allowed' : 'pointer',
+                                        fontSize: '12px',
+                                        lineHeight: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    ▼
+                                </button>
+                            </div>
                             {customersLoading ? (
                                 <p style={{ fontSize: '13px', color: 'var(--label-secondary)' }}>Cargando clientes…</p>
                             ) : customers.length === 0 ? (
@@ -715,13 +823,19 @@ function VentasContent() {
                                     No hay clientes.{' '}
                                     <Link href="/clientes" style={{ color: '#34C759', fontWeight: 600 }}>Crear uno en Clientes</Link>
                                 </p>
-                            ) : (
-                                <div style={{
-                                    maxHeight: '220px',
-                                    overflowY: 'auto',
-                                    borderRadius: '10px',
-                                    border: '1px solid rgba(255,255,255,0.08)',
-                                }}>
+                            ) : customerDropdownOpen ? (
+                                <div
+                                    role="listbox"
+                                    aria-label="Clientes coincidentes"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    style={{
+                                        maxHeight: '220px',
+                                        overflowY: 'auto',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        marginBottom: '10px',
+                                    }}
+                                >
                                     {filteredCustomers.length === 0 ? (
                                         <p style={{ padding: '14px', fontSize: '13px', color: 'var(--label-secondary)' }}>Sin coincidencias.</p>
                                     ) : (
@@ -729,7 +843,8 @@ function VentasContent() {
                                             <button
                                                 key={c.id}
                                                 type="button"
-                                                onClick={() => applyCustomer(c)}
+                                                role="option"
+                                                onClick={() => applyCustomerAndClosePicker(c)}
                                                 style={{
                                                     display: 'block',
                                                     width: '100%',
@@ -752,6 +867,10 @@ function VentasContent() {
                                         ))
                                     )}
                                 </div>
+                            ) : (
+                                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', marginBottom: '10px' }}>
+                                    Escribe o pulsa ↓ / ▼ para ver clientes ({customers.length} en caché).
+                                </p>
                             )}
                         </>
                     )}

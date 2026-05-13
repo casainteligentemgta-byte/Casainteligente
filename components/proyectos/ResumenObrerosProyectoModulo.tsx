@@ -5,7 +5,6 @@ import { ClipboardList, Trash2, UserCheck, UserMinus, Users, UserX } from 'lucid
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
-import { hrefContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -897,12 +896,12 @@ export default function ResumenObrerosProyectoModulo({
               </Link>
               {expressEnCuadro > 0 ? (
                 <p className="border-t border-emerald-500/20 px-4 pb-4 pt-2 text-[10px] text-emerald-200/80">
-                  {expressEnCuadro} en express — listado en{' '}
+                  {expressEnCuadro} en express — ver cuadro en{' '}
                   <Link
-                    href={hrefContratosExpressList()}
+                    href={`/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}?tab=solicitados`}
                     className="font-semibold text-emerald-200 underline decoration-emerald-500/40 hover:text-emerald-100"
                   >
-                    Talento → Contratos express
+                    este módulo (Solicitados)
                   </Link>
                   .
                 </p>
@@ -980,9 +979,9 @@ export default function ResumenObrerosProyectoModulo({
                             <td className="px-3 py-2 font-medium text-zinc-100">
                               {esEmpleadoContratoExpress(row) ? (
                                 <Link
-                                  href={hrefContratosExpressList()}
+                                  href={`/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}?tab=solicitados`}
                                   className="text-amber-200 underline decoration-amber-500/40 hover:text-amber-100"
-                                  title="Contrato express (fast-track): ver PDF y formalizar en Talento"
+                                  title="Contrato express: cuadro en el módulo (Solicitados)"
                                 >
                                   {nombre}
                                 </Link>

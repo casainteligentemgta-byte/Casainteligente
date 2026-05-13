@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { hrefContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
 import { createClient } from '@/lib/supabase/client';
 
 type Emp = { id: string; nombre_completo: string; estado: string };
@@ -74,9 +73,6 @@ export default function ContratosAdminPage() {
         </Link>
         <Link href="/talento/admin/contratos/fast-create" className="text-amber-500/90 hover:text-amber-400">
           Contrato express
-        </Link>
-        <Link href={hrefContratosExpressList()} className="text-amber-500/90 hover:text-amber-400">
-          Listado express
         </Link>
       </div>
       <h1 className="text-2xl font-bold text-white mb-2">Contratos dinámicos</h1>

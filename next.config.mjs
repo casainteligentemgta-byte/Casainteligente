@@ -6,7 +6,14 @@ const nextConfig = {
   },
   reactStrictMode: true,
   async redirects() {
-    return [{ source: '/reclutamiento/dashboard', destination: '/reclutamiento', permanent: true }];
+    return [
+      { source: '/reclutamiento/dashboard', destination: '/reclutamiento', permanent: true },
+      {
+        source: '/talento/admin/contratos/fast-list',
+        destination: '/talento/admin/contratos',
+        permanent: false,
+      },
+    ];
   },
   webpack: (config, { dev }) => {
     // No reasignar `config.output` entero: en algunos entornos rompe los paths de chunks (`/_next/...`) → 404 en main.js/webpack.

@@ -17,7 +17,6 @@ import {
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 import { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
-import { hrefContratosExpressList, navigateToContratosExpressList } from '@/lib/talento/hrefContratosExpressList';
 import { HorarioSemanalExpressForm } from './HorarioSemanalExpressForm';
 
 type ProyectoOpt = {
@@ -333,11 +332,10 @@ export default function ContratoExpressCreatePage() {
           description: data.signed_url_error,
         });
       }
-      toast.success('Contrato guardado en el listado express', {
-        description: `${data.expediente_label ?? data.id?.slice(0, 12) ?? '—'} · En la lista: copiar enlace, imprimir, subir firmado.`,
+      toast.success('Contrato express guardado', {
+        description: `${data.expediente_label ?? data.id?.slice(0, 12) ?? '—'} · PDF en almacenamiento; gestión (enlace, firmado, borrar) desde el módulo del proyecto (pestaña Solicitados) o Contratos admin.`,
       });
-      navigateToContratosExpressList(router);
-      router.refresh();
+      router.push('/talento/admin/contratos');
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       const failedFetch =
@@ -364,9 +362,6 @@ export default function ContratoExpressCreatePage() {
         <Link href="/talento/admin/contratos" className="text-zinc-500 hover:text-zinc-300">
           Contratos dinámicos
         </Link>
-        <Link href={hrefContratosExpressList()} className="text-zinc-500 hover:text-zinc-300">
-          Listado express
-        </Link>
       </div>
 
       <h1 className="text-2xl font-bold text-white mb-2">Contrato express (sin registro)</h1>
@@ -376,8 +371,8 @@ export default function ContratoExpressCreatePage() {
         datos, puedes corregirla aquí (p. ej. DIMAQUINAS, C.A. en lugar de otra razón social). Completa datos del
         trabajador, jornada y horario semanal (con viernes distinto si aplica). Al generar, el PDF se guarda en{' '}
         <code className="text-zinc-500">contratos_obreros</code> y la fila en{' '}
-        <code className="text-zinc-500">ci_contratos_express</code> (listado express): podrás copiar enlace, imprimir y
-        subir el documento firmado desde ahí.
+        <code className="text-zinc-500">ci_contratos_express</code>. En el módulo integral del proyecto (pestaña
+        Solicitados) aparece el cuadro de express para enlace, imprimir, subir firmado o borrar.
       </p>
 
       {loadingLists ? (
