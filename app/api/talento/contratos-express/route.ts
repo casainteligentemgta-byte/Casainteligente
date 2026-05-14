@@ -14,7 +14,7 @@ export async function GET() {
   // --- Estrategia 1: select con join ci_proyectos ---
   const { data: d1, error: e1 } = await admin.client
     .from('ci_contratos_express')
-    .select('id,created_at,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id,ci_proyectos(nombre)')
+    .select('id,created_at,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,proyecto_id,formalizado_empleado_id,ci_proyectos(nombre)')
     .order('created_at', { ascending: false });
 
   if (!e1 && d1 !== null) {

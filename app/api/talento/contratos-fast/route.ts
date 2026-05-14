@@ -186,6 +186,8 @@ export async function POST(req: Request) {
     proyecto_id: body.proyecto_id,
     config_nomina_id: body.config_nomina_id,
     obrero_nombre: obreroNombreCompleto,
+    obrero_nombres: body.obrero_nombres?.trim() || null,
+    obrero_apellidos: body.obrero_apellidos?.trim() || null,
     obrero_cedula: body.obrero_cedula.trim(),
     obrero_direccion: body.obrero_direccion?.trim() || null,
     salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,

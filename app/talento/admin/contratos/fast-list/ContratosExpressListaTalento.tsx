@@ -45,6 +45,8 @@ type Row = {
   id: string;
   created_at: string;
   obrero_nombre: string;
+  obrero_nombres?: string | null;
+  obrero_apellidos?: string | null;
   obrero_cedula: string;
   proyecto_id: string;
   formalizado_empleado_id?: string | null;
@@ -55,6 +57,13 @@ type SortConfig = {
   key: keyof Row | 'proyecto';
   direction: 'asc' | 'desc' | null;
 };
+
+function getNombreObrero(r: Row): string {
+  if (r.obrero_nombres && r.obrero_apellidos) {
+    return `${r.obrero_nombres} ${r.obrero_apellidos}`.trim();
+  }
+  return r.obrero_nombre || 'Sin nombre';
+}
 
 function getNombreProyecto(r: Row): string {
   const p = r.ci_proyectos;
@@ -75,6 +84,12 @@ export function ContratosExpressListaTalento() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'formalized'>('all');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
   
+  // PDF Viewer State
+  const [viewingPdf, setViewingPdf] = useState<{ url: string; nombre: string } | null>(null);
+
+  // Template Viewer State
+  const [viewingTemplate, setViewingTemplate] = useState(false);
+
   // Deletion Dialog State
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, nombre: string, formalizado: boolean } | null>(null);
 
@@ -123,7 +138,7 @@ export function ContratosExpressListaTalento() {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(r =>
-        (r.obrero_nombre ?? '').toLowerCase().includes(q) ||
+        getNombreObrero(r).toLowerCase().includes(q) ||
         (r.obrero_cedula ?? '').includes(q) ||
         getNombreProyecto(r).toLowerCase().includes(q)
       );
@@ -138,6 +153,9 @@ export function ContratosExpressListaTalento() {
         if (sortConfig.key === 'proyecto') {
           valA = getNombreProyecto(a);
           valB = getNombreProyecto(b);
+        } else if (sortConfig.key === 'obrero_nombre') {
+          valA = getNombreObrero(a);
+          valB = getNombreObrero(b);
         } else {
           valA = a[sortConfig.key as keyof Row] ?? '';
           valB = b[sortConfig.key as keyof Row] ?? '';
@@ -223,7 +241,7 @@ export function ContratosExpressListaTalento() {
     }
   }
 
-  async function abrirPdfGenerado(id: string) {
+  async function abrirPdfGenerado(id: string, nombre?: string) {
     try {
       const res = await fetch(`/api/talento/contratos-express/${id}/pdf-url`);
       const j = (await res.json()) as { url?: string; error?: string };
@@ -231,7 +249,7 @@ export function ContratosExpressListaTalento() {
         toast.error(j.error ?? 'PDF no localizado en el servidor');
         return;
       }
-      window.open(j.url, '_blank', 'noopener,noreferrer');
+      setViewingPdf({ url: j.url, nombre: nombre || 'Documento Digital' });
     } catch {
       toast.error('Error al recuperar el documento digital');
     }
@@ -286,9 +304,27 @@ export function ContratosExpressListaTalento() {
       </AnimatePresence>
 
       {/* Modern Control Bar */}
-      <div className="flex flex-col xl:flex-row items-center justify-between gap-6">
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
-          {/* Status Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+            <div className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">
+              {rows.length} {rows.length === 1 ? 'Contrato' : 'Contratos'}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="h-8 text-zinc-400 hover:text-white hover:bg-white/5 gap-2 px-3 rounded-lg"
+          >
+            <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Refrescar</span>
+          </Button>
+        </div>
+
+        <div className="flex flex-col xl:flex-row items-center gap-6">
           <Tabs 
             defaultValue="all" 
             className="w-full sm:w-auto"
@@ -343,6 +379,15 @@ export function ContratosExpressListaTalento() {
         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
           <Button
             variant="ghost"
+            onClick={() => setViewingTemplate(true)}
+            className="h-12 px-6 rounded-2xl bg-zinc-900/30 border border-white/5 hover:bg-amber-500/10 hover:border-amber-500/20 text-zinc-400 hover:text-amber-500 transition-all backdrop-blur-xl gap-2 font-black text-[10px] uppercase tracking-widest"
+          >
+            <FileText className="size-4" />
+            Ver Formato RRHH
+          </Button>
+
+          <Button
+            variant="ghost"
             onClick={() => void load()}
             disabled={loading}
             className="h-12 w-12 p-0 rounded-2xl bg-zinc-900/30 border border-white/5 hover:bg-white/5 text-zinc-500 hover:text-white transition-all backdrop-blur-xl"
@@ -365,7 +410,7 @@ export function ContratosExpressListaTalento() {
           )}
           
           <Link href="/talento/admin/contratos/fast-create">
-            <Button className="h-12 bg-white text-black hover:bg-amber-400 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl px-8 shadow-2xl shadow-white/5 transition-all active:scale-95">
+            <Button className="h-12 bg-gradient-to-r from-amber-500 to-amber-600 text-black hover:from-amber-400 hover:to-amber-500 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl px-8 shadow-2xl shadow-amber-500/10 transition-all active:scale-95">
               <Plus className="size-4 mr-2 stroke-[3]" />
               Nuevo Contrato
             </Button>
@@ -520,10 +565,12 @@ export function ContratosExpressListaTalento() {
                         <TableCell className="py-6">
                           <div className="flex items-center gap-4">
                             <div className={`size-12 rounded-2xl flex items-center justify-center text-[11px] font-black transition-all duration-500 ${formal ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-zinc-900 text-zinc-500 border border-white/5'}`}>
-                              {r.obrero_nombre.substring(0, 2).toUpperCase()}
+                              {getNombreObrero(r).substring(0, 2).toUpperCase()}
                             </div>
                             <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-white text-[14px] leading-tight group-hover:text-amber-200 transition-colors tracking-tight">{r.obrero_nombre}</span>
+                              <span className="font-bold text-white text-[14px] leading-tight group-hover:text-amber-200 transition-colors tracking-tight">
+                                {getNombreObrero(r)}
+                              </span>
                               <span className="text-[10px] text-zinc-600 font-mono tracking-widest">{r.obrero_cedula}</span>
                             </div>
                           </div>
@@ -563,12 +610,12 @@ export function ContratosExpressListaTalento() {
                         </TableCell>
 
                         <TableCell className="pr-8 py-6 text-right">
-                          <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
+                          <div className="flex justify-end gap-1.5 transition-all duration-300">
                             <Button 
                               variant="ghost" 
                               size="sm" 
                               className="h-10 w-10 p-0 text-zinc-500 hover:text-amber-400 hover:bg-amber-400/10 rounded-xl transition-all" 
-                              onClick={() => void abrirPdfGenerado(r.id)}
+                              onClick={() => void abrirPdfGenerado(r.id, r.obrero_nombre)}
                               title="Visualizar Documento"
                             >
                               <FileText className="size-4.5" />
@@ -577,11 +624,12 @@ export function ContratosExpressListaTalento() {
                               variant="ghost" 
                               size="sm" 
                               disabled={isBusy}
-                              className="h-10 w-10 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all" 
-                              onClick={() => setDeleteConfirm({ id: r.id, nombre: r.obrero_nombre, formalizado: formal })}
-                              title="Eliminar Registro"
+                              className="h-10 flex items-center gap-2 px-3 text-red-400 bg-red-400/10 border border-red-500/30 hover:bg-red-500 hover:text-white rounded-xl transition-all shadow-lg shadow-red-500/5" 
+                              onClick={() => setDeleteConfirm({ id: r.id, nombre: getNombreObrero(r), formalizado: formal })}
+                              title="Eliminar Registro Permanente"
                             >
-                              {isBusy ? <RefreshCw className="size-4.5 animate-spin" /> : <Trash2 className="size-4.5" />}
+                              {isBusy ? <RefreshCw className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                              <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Eliminar</span>
                             </Button>
                             <Link href={`/talento/admin/contratos/fast-create?copy=${r.id}`}>
                               <Button 
@@ -665,6 +713,124 @@ export function ContratosExpressListaTalento() {
               Confirmar Borrado
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Viewer Modal - Premium Experience */}
+      <Dialog open={!!viewingPdf} onOpenChange={(open) => !open && setViewingPdf(null)}>
+        <DialogContent className="max-w-5xl h-[90vh] p-0 bg-[#0a0a0a] border-white/5 overflow-hidden flex flex-col gap-0 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+          <DialogHeader className="p-4 border-b border-white/[0.03] flex flex-row items-center justify-between bg-black/40 backdrop-blur-xl shrink-0">
+            <div>
+              <DialogTitle className="text-white text-sm font-black uppercase tracking-[0.2em] flex items-center gap-3">
+                <div className="size-8 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                  <FileText className="size-4 text-amber-500" />
+                </div>
+                {viewingPdf?.nombre}
+              </DialogTitle>
+              <DialogDescription className="text-zinc-500 text-[10px] uppercase tracking-wider font-bold mt-0.5">
+                Vista previa del contrato individual de trabajo
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2 pr-8">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 border-white/5 bg-white/[0.02] text-zinc-400 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest px-4"
+                onClick={() => viewingPdf && window.open(viewingPdf.url, '_blank')}
+              >
+                <ExternalLink className="size-3 mr-2" />
+                Abrir en pestaña
+              </Button>
+            </div>
+          </DialogHeader>
+          
+          <div className="flex-1 bg-[#121212] relative group">
+            {viewingPdf && (
+              <iframe 
+                src={`${viewingPdf.url}#toolbar=0`} 
+                className="w-full h-full border-none"
+                title="Visor de Contrato"
+              />
+            )}
+            
+            {/* Overlay hint for interactivity */}
+            <div className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+              <div className="bg-black/60 backdrop-blur-md border border-white/10 py-2 px-4 rounded-full flex items-center gap-3">
+                <div className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">Modo Presentación RRHH</span>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contract Template Viewer - Added for RRHH Demonstrations */}
+      <Dialog open={viewingTemplate} onOpenChange={setViewingTemplate}>
+        <DialogContent className="max-w-4xl h-[85vh] bg-[#0a0a0a] border-white/10 p-0 overflow-hidden flex flex-col shadow-[0_0_80px_rgba(245,158,11,0.15)] rounded-[2.5rem]">
+          <DialogHeader className="p-8 border-b border-white/5 bg-zinc-900/40 backdrop-blur-3xl shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl font-black text-white tracking-tighter uppercase italic">Formato Maestro de Contrato</DialogTitle>
+                <DialogDescription className="text-amber-500/60 text-[10px] font-black uppercase tracking-[0.3em] mt-1">Modelo Legal Estandarizado para RRHH</DialogDescription>
+              </div>
+              <div className="px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest">
+                Confidencial
+              </div>
+            </div>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.03),transparent)]">
+            <div className="max-w-2xl mx-auto space-y-12 text-zinc-400 font-serif leading-relaxed text-[15px]">
+              <div className="text-center space-y-4">
+                <h1 className="text-white font-black text-xl tracking-[0.2em]">CONTRATO INDIVIDUAL DE TRABAJO</h1>
+                <p className="text-[11px] font-mono opacity-40">EXP-XXXX-XXXX-202X</p>
+              </div>
+
+              <p className="indent-8 italic">
+                Entre, la sociedad mercantil **[NOMBRE DE LA ENTIDAD]**, inscrita por ante la Oficina de Registro Mercantil, representada en este acto por su Representante Legal, ciudadano **[NOMBRE DEL REPRESENTANTE]**, por una parte y por la otra, el ciudadano **[NOMBRE DEL TRABAJADOR]**, quien a los mismos efectos se denominará **EL TRABAJADOR**; se ha convenido en celebrar el presente contrato laboral...
+              </p>
+
+              <div className="space-y-8">
+                <section>
+                  <h3 className="text-white font-black text-[12px] uppercase tracking-widest mb-4">CLÁUSULA PRIMERA: OBJETO</h3>
+                  <p>EL TRABAJADOR se obliga a prestar sus servicios personales en el cargo u oficio de [CARGO], con las funciones inherentes al mismo, de conformidad con el Manual de Cargos y las instrucciones de EL EMPLEADOR.</p>
+                </section>
+
+                <section>
+                  <h3 className="text-white font-black text-[12px] uppercase tracking-widest mb-4">CLÁUSULA SEGUNDA: JORNADA Y LUGAR</h3>
+                  <p>EL TRABAJADOR cumplirá una jornada de trabajo estipulada según la normativa vigente en el proyecto [PROYECTO], ubicado en [UBICACIÓN].</p>
+                </section>
+
+                <section>
+                  <h3 className="text-white font-black text-[12px] uppercase tracking-widest mb-4">CLÁUSULA TERCERA: REMUNERACIÓN</h3>
+                  <p>Se acuerda un salario básico diario de [MONTO] VES, pagadero mediante transferencia bancaria o el método acordado entre las partes.</p>
+                </section>
+
+                <section>
+                  <h3 className="text-white font-black text-[12px] uppercase tracking-widest mb-4">CLÁUSULA CUARTA: DURACIÓN</h3>
+                  <p>El presente contrato tendrá la duración estipulada en la orden de inicio, pudiendo ser determinado o indeterminado según la naturaleza de la obra.</p>
+                </section>
+              </div>
+
+              <div className="pt-16 border-t border-white/5 grid grid-cols-2 gap-20">
+                <div className="border-t border-white/20 pt-4 text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white">EL EMPLEADOR</p>
+                </div>
+                <div className="border-t border-white/20 pt-4 text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white">EL TRABAJADOR</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 bg-black/60 border-t border-white/5 flex justify-center backdrop-blur-2xl">
+            <Button 
+              onClick={() => setViewingTemplate(false)}
+              className="bg-white text-black hover:bg-amber-400 rounded-2xl px-12 h-12 font-black text-[10px] uppercase tracking-widest transition-all"
+            >
+              Cerrar Vista de Modelo
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
