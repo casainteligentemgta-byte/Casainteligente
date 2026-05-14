@@ -2,7 +2,23 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { 
+  Briefcase, 
+  User, 
+  Banknote, 
+  Clock, 
+  MapPin, 
+  Calendar, 
+  ChevronLeft, 
+  Save,
+  CheckCircle2,
+  Info,
+  Building2,
+  FileText,
+  BadgeInfo,
+  DollarSign,
+  AlertTriangle
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -18,6 +34,12 @@ import {
 import { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { HorarioSemanalExpressForm } from './HorarioSemanalExpressForm';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 type ProyectoOpt = {
   id: string;
@@ -61,6 +83,7 @@ export default function ContratoExpressCreatePage() {
   const [proyectos, setProyectos] = useState<ProyectoOpt[]>([]);
   const [nominas, setNominas] = useState<NominaRow[]>([]);
   const [loadingLists, setLoadingLists] = useState(true);
+  const [activeTab, setActiveTab] = useState('datos');
 
   const [proyectoId, setProyectoId] = useState('');
   const [proyectoDetalle, setProyectoDetalle] = useState<ProyectoDetalle | null>(null);
@@ -107,6 +130,44 @@ export default function ContratoExpressCreatePage() {
       if (!c) return;
       if (!p.error && p.data) setProyectos(p.data as ProyectoOpt[]);
       if (!n.error && n.data) setNominas(n.data as NominaRow[]);
+      
+      // Handle Copy Logic
+      const url = new URL(window.location.href);
+      const copyId = url.searchParams.get('copy');
+      if (copyId) {
+        const { data: copyData, error: copyErr } = await supabase
+          .from('ci_contratos_express')
+          .select('*')
+          .eq('id', copyId)
+          .maybeSingle();
+        
+        if (!copyErr && copyData && c) {
+          setProyectoId(copyData.proyecto_id || '');
+          setConfigNominaId(copyData.config_nomina_id || '');
+          setNombres(copyData.obrero_nombres || '');
+          setApellidos(copyData.obrero_apellidos || '');
+          setCedula(copyData.obrero_cedula || '');
+          setDireccion(copyData.obrero_direccion || '');
+          setObreroMunicipioResidencia(copyData.obrero_municipio_residencia || '');
+          setObreroEstadoResidencia(copyData.obrero_estado_residencia || '');
+          setBonoStr(String(copyData.bono_manual_usd || '0'));
+          setObjetoContrato(copyData.objeto_contrato || '');
+          setJornada(copyData.jornada_trabajo || 'DIURNA');
+          setEstadoCivil(copyData.estado_civil || '');
+          
+          if (copyData.nacionalidad) {
+            if (copyData.nacionalidad.toLowerCase().includes('venezolan')) {
+              setEsVenezolano(true);
+            } else {
+              setEsVenezolano(false);
+              setNacionalidadOtro(copyData.nacionalidad);
+            }
+          }
+          
+          toast.info('Datos copiados del contrato seleccionado');
+        }
+      }
+
       setLoadingLists(false);
     })();
     return () => {
@@ -324,7 +385,7 @@ export default function ContratoExpressCreatePage() {
       toast.success('Contrato express guardado', {
         description: `${data.expediente_label ?? data.id?.slice(0, 12) ?? '—'} · PDF en almacenamiento; gestión (enlace, firmado, borrar) desde el módulo del proyecto (pestaña Solicitados) o Contratos admin.`,
       });
-      router.push('/talento/admin/contratos');
+      router.push('/talento/admin/contratos/fast-list');
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       const failedFetch =
@@ -343,314 +404,483 @@ export default function ContratoExpressCreatePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10 pb-28">
-      <div className="mb-6 flex flex-wrap gap-3 text-xs">
-        <Link href="/talento" className="text-zinc-500 hover:text-zinc-300">
-          ← Talento
-        </Link>
-        <Link href="/talento/admin/contratos" className="text-zinc-500 hover:text-zinc-300">
-          Contratos dinámicos
-        </Link>
-      </div>
-
-      <h1 className="text-2xl font-bold text-white mb-2">Contrato express (sin registro)</h1>
-      <p className="text-sm text-zinc-400 mb-6">
-        Elige la obra y el oficio del tabulador; los salarios salen del tabulador. Completa datos del trabajador, jornada y
-        horario semanal (con viernes distinto si aplica). Al generar, el PDF se guarda en{' '}
-        <code className="text-zinc-500">contratos_obreros</code> y la fila en{' '}
-        <code className="text-zinc-500">ci_contratos_express</code>. En el módulo integral del proyecto (pestaña
-        Solicitados) aparece el cuadro de express para enlace, imprimir, subir firmado o borrar.
-      </p>
-
-      {loadingLists ? (
-        <p className="text-sm text-zinc-500">Cargando proyectos y tabulador…</p>
-      ) : (
-        <div className="space-y-4 text-sm">
-          <label className="block">
-            <span className="text-zinc-400">Proyecto (obra)</span>
-            <select
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={proyectoId}
-              onChange={(e) => setProyectoId(e.target.value)}
-            >
-              <option value="">— Seleccionar —</option>
-              {proyectos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {proyectoId && proyectoDetalle ? (
-            <div className="rounded-lg border border-zinc-700/80 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300">
-              <p>
-                <span className="text-zinc-500">Obra: </span>
-                <span className="font-medium text-white">{proyectoDetalle.nombre}</span>
-              </p>
-              <p className="mt-1">
-                <span className="text-zinc-500">Entidad enlazada al proyecto: </span>
-                {entidadObra?.nombre ? (
-                  <span className="font-medium text-emerald-200/90">
-                    {entidadObra.nombre}
-                    {entidadObra.rif ? ` · ${entidadObra.rif}` : ''}
-                  </span>
-                ) : (
-                  <span className="text-amber-200/80">Sin entidad en el proyecto (revisa entidad_id en la obra).</span>
-                )}
-              </p>
+    <div className="min-h-screen bg-black text-zinc-100 pb-20 animate-in fade-in duration-700">
+      <div className="max-w-4xl mx-auto px-6 py-12">
+        {/* Navigation / Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-4">
+              <Link href="/talento/admin/contratos/fast-list">
+                <Button variant="ghost" size="sm" className="h-8 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 px-2">
+                  <ChevronLeft className="size-4 mr-1" />
+                  Volver a la lista
+                </Button>
+              </Link>
+              <div className="h-4 w-px bg-white/10" />
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                Modo Fast-Track
+              </Badge>
             </div>
-          ) : null}
-
-          <label className="block">
-            <span className="text-zinc-400">OFICIO (TABULADOR)</span>
-            <select
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={configNominaId}
-              onChange={(e) => setConfigNominaId(e.target.value)}
-            >
-              <option value="">— Seleccionar —</option>
-              {nominas.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.cargo_nombre}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 text-emerald-50/95">
-            <p className="text-xs uppercase tracking-wide text-emerald-200/70 mb-1">Salario y pago semanal (referencia)</p>
-            <p className="text-sm tabular-nums">
-              <span className="text-zinc-400">Salario base mensual tabulador (Bs):</span>{' '}
-              <span className="font-semibold text-white">{fmtBs(sueldoBase ?? 0)}</span>
-            </p>
-            <p className="text-[11px] text-zinc-500 mt-1">
-              Cestaticket mensual de ley: {fmtUsd(CESTATICKET_MENSUAL_USD)} (alícuota semanal {fmtUsd(CESTATICKET_SEMANAL_USD)}).
-            </p>
-            <p className="text-sm tabular-nums mt-1">
-              <span className="text-zinc-400">Salario semanal (solo tabulador, Bs):</span>{' '}
-              <span className="font-semibold text-emerald-200">{fmtBs(salarioSemanalBs)}</span>
-            </p>
-            {pagoSemanalBcV.tasa != null && pagoSemanalBcV.cestaBs != null && pagoSemanalBcV.totalBs != null ? (
-              <>
-                <p className="text-sm tabular-nums mt-1">
-                  <span className="text-zinc-400">
-                    Alícuota cesta ticket semanal ({fmtUsd(CESTATICKET_SEMANAL_USD)} a tasa BCV ref. {fmtBs(pagoSemanalBcV.tasa)}{' '}
-                    Bs/USD, día de pago):
-                  </span>{' '}
-                  <span className="font-semibold text-emerald-200">{fmtBs(pagoSemanalBcV.cestaBs)} Bs</span>
-                </p>
-                <p className="text-sm tabular-nums mt-1">
-                  <span className="text-zinc-400">Total semanal referencia (salario Bs + cesta en Bs):</span>{' '}
-                  <span className="font-semibold text-white">{fmtBs(pagoSemanalBcV.totalBs)} Bs</span>
-                </p>
-              </>
-            ) : (
-              <p className="text-[11px] text-zinc-500 mt-1">
-                Para el equivalente en Bs del cestaticket (10 USD), define{' '}
-                <code className="text-zinc-600">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code> con la tasa del día de pago.
-              </p>
-            )}
-            {ingresoSemanalUsdRef != null && Number.isFinite(ingresoSemanalUsdRef) ? (
-              <p className="text-sm tabular-nums mt-1">
-                <span className="text-zinc-400">Ingreso semanal consolidado ref. (USD, Gaceta + 10 USD cesta/semana):</span>{' '}
-                <span className="font-semibold text-sky-200">{fmtUsd(ingresoSemanalUsdRef)}</span>
-              </p>
-            ) : (
-              <p className="text-[11px] text-zinc-500 mt-1">No se pudo inferir el nivel Gaceta para el USD de referencia.</p>
-            )}
+            <h1 className="text-4xl font-black text-white tracking-tighter">Generar Contrato Express</h1>
+            <p className="text-zinc-500 text-sm font-medium">Creación de registro laboral sin expediente previo para despliegue rápido.</p>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-zinc-400">Nombres</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-                value={nombres}
-                onChange={(e) => setNombres(e.target.value)}
-                autoComplete="given-name"
-              />
-            </label>
-            <label className="block">
-              <span className="text-zinc-400">Apellidos</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-                value={apellidos}
-                onChange={(e) => setApellidos(e.target.value)}
-                autoComplete="family-name"
-              />
-            </label>
+          
+          <div className="flex items-center gap-3">
+             <div className="size-14 rounded-2xl bg-zinc-900 border border-white/5 flex items-center justify-center shadow-2xl">
+                <FileText className="size-6 text-zinc-400" />
+             </div>
           </div>
-
-          <label className="block">
-            <span className="text-zinc-400">Cédula</span>
-            <input
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={cedula}
-              onChange={(e) => setCedula(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
-
-          <label className="flex items-center gap-2 text-zinc-300">
-            <input
-              type="checkbox"
-              checked={esVenezolano}
-              onChange={(e) => {
-                setEsVenezolano(e.target.checked);
-                if (e.target.checked) setNacionalidadOtro('');
-              }}
-              className="rounded border-zinc-500"
-            />
-            Es venezolano
-          </label>
-          {!esVenezolano ? (
-            <label className="block">
-              <span className="text-zinc-400">Nacionalidad</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-                value={nacionalidadOtro}
-                onChange={(e) => setNacionalidadOtro(e.target.value)}
-                placeholder="Ej. colombiana"
-              />
-            </label>
-          ) : null}
-
-          <label className="block">
-            <span className="text-zinc-400">Domicilio (calle, urbanización, ciudad…)</span>
-            <textarea
-              className="mt-1 w-full min-h-[72px] rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={direccion}
-              onChange={(e) => setDireccion(e.target.value)}
-              placeholder="Urbanización, calle, ciudad…"
-            />
-          </label>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-zinc-400">Municipio de residencia *</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-                value={obreroMunicipioResidencia}
-                onChange={(e) => setObreroMunicipioResidencia(e.target.value)}
-                placeholder="Ej. Maneiro"
-                autoComplete="address-level2"
-              />
-            </label>
-            <label className="block">
-              <span className="text-zinc-400">Estado de residencia *</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-                value={obreroEstadoResidencia}
-                onChange={(e) => setObreroEstadoResidencia(e.target.value)}
-                placeholder="Ej. Nueva Esparta"
-                autoComplete="address-level1"
-              />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="text-zinc-400">Bono manual (USD)</span>
-            <input
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={bonoStr}
-              onChange={(e) => setBonoStr(e.target.value)}
-              inputMode="decimal"
-            />
-            <span className="mt-1 block text-[11px] text-zinc-500">
-              Se liquida en bolívares en cada pago usando la tasa BCV del día.
-            </span>
-          </label>
-
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-100/90">
-            <p className="text-xs uppercase tracking-wide text-amber-200/70 mb-1">Referencia bono</p>
-            <p className="text-sm tabular-nums">
-              <span className="text-zinc-400">Bono (USD):</span>{' '}
-              <span className="font-semibold text-amber-200">{fmtUsd(bonoNum)}</span>
-            </p>
-            {bonoRefInfo.bonoBs != null && bonoRefInfo.tasa != null ? (
-              <p className="text-sm tabular-nums mt-1">
-                <span className="text-zinc-400">Equivalente en Bs (tasa ref. {fmtBs(bonoRefInfo.tasa)} Bs/USD):</span>{' '}
-                <span className="font-semibold text-emerald-300">{fmtBs(bonoRefInfo.bonoBs)} Bs</span>
-              </p>
-            ) : (
-              <p className="text-[11px] text-zinc-500 mt-2">
-                Para equivalente en Bs, define <code className="text-zinc-600">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code>.
-              </p>
-            )}
-          </div>
-
-          <label className="block">
-            <span className="text-zinc-400">Fecha de ingreso</span>
-            <input
-              type="date"
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white [color-scheme:dark]"
-              value={fechaIngreso}
-              onChange={(e) => setFechaIngreso(e.target.value)}
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-zinc-400">Jornada de trabajo</span>
-            <select
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={jornada}
-              onChange={(e) => setJornada(e.target.value as typeof jornada)}
-            >
-              <option value="DIURNA">Diurna</option>
-              <option value="NOCTURNA">Nocturna</option>
-              <option value="MIXTA">Mixta</option>
-            </select>
-          </label>
-
-          <HorarioSemanalExpressForm
-            onChange={handleHorarioDetalle}
-            hintProyecto={proyectoDetalle?.horario_semanal_obra_default ?? null}
-          />
-
-          <label className="block">
-            <span className="text-zinc-400">Estado civil (opcional)</span>
-            <input
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={estadoCivil}
-              onChange={(e) => setEstadoCivil(e.target.value)}
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-zinc-400">Objeto del contrato / fase técnica (opcional)</span>
-            <textarea
-              className="mt-1 w-full min-h-[88px] rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white"
-              value={objetoContrato}
-              onChange={(e) => setObjetoContrato(e.target.value)}
-            />
-          </label>
-
-          {err ? <p className="text-sm text-red-400 whitespace-pre-wrap break-words">{err}</p> : null}
-          {okMsg ? <p className="text-sm text-emerald-400">{okMsg}</p> : null}
-          {signedUrl ? (
-            <p>
-              <a
-                href={signedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sky-400 hover:text-sky-300 underline"
-              >
-                Descargar PDF (enlace firmado 1 h)
-              </a>
-            </p>
-          ) : null}
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void generar()}
-            className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 py-3 text-sm font-semibold text-white shadow-lg shadow-black/30 disabled:opacity-50"
-          >
-            {saving ? 'Generando…' : 'Generar contrato'}
-          </button>
         </div>
-      )}
+
+        {loadingLists ? (
+          <div className="flex flex-col items-center justify-center py-40 gap-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-amber-500/20 blur-3xl rounded-full animate-pulse" />
+              <Clock className="size-12 text-amber-500 animate-spin relative" />
+            </div>
+            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Sincronizando infraestructuras...</p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid grid-cols-4 h-14 bg-zinc-900/50 border border-white/5 rounded-2xl p-1 mb-8 backdrop-blur-md">
+                <TabsTrigger value="datos" className="rounded-xl data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all text-xs font-bold uppercase tracking-wider">
+                  <User className="size-4 mr-2" />
+                  Identidad
+                </TabsTrigger>
+                <TabsTrigger value="pago" className="rounded-xl data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all text-xs font-bold uppercase tracking-wider">
+                  <Banknote className="size-4 mr-2" />
+                  Condiciones
+                </TabsTrigger>
+                <TabsTrigger value="horario" className="rounded-xl data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all text-xs font-bold uppercase tracking-wider">
+                  <Clock className="size-4 mr-2" />
+                  Horario
+                </TabsTrigger>
+                <TabsTrigger value="revisar" className="rounded-xl data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all text-xs font-bold uppercase tracking-wider">
+                  <CheckCircle2 className="size-4 mr-2" />
+                  Revisar
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="min-h-[500px]">
+                {/* TAB 1: IDENTIDAD */}
+                <TabsContent value="datos" className="mt-0 space-y-6 focus-visible:outline-none">
+                  <Card className="bg-zinc-900/40 border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl">
+                    <CardHeader className="pb-4">
+                      <div className="flex items-center gap-3 mb-1">
+                        <div className="size-8 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400">
+                          <Building2 className="size-4" />
+                        </div>
+                        <CardTitle className="text-xl font-black tracking-tight">Ubicación y Oficio</CardTitle>
+                      </div>
+                      <CardDescription className="text-zinc-500 font-medium">Asigne el proyecto y el cargo según el tabulador oficial.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Proyecto (Obra)</Label>
+                          <select
+                            className="w-full h-12 rounded-2xl border border-white/5 bg-black/40 px-4 text-sm text-white focus:border-amber-500/50 focus:ring-amber-500/10 transition-all outline-none appearance-none"
+                            value={proyectoId}
+                            onChange={(e) => setProyectoId(e.target.value)}
+                          >
+                            <option value="">Seleccionar Obra...</option>
+                            {proyectos.map((p) => (
+                              <option key={p.id} value={p.id}>{p.nombre}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Oficio (Tabulador)</Label>
+                          <select
+                            className="w-full h-12 rounded-2xl border border-white/5 bg-black/40 px-4 text-sm text-white focus:border-amber-500/50 focus:ring-amber-500/10 transition-all outline-none appearance-none"
+                            value={configNominaId}
+                            onChange={(e) => setConfigNominaId(e.target.value)}
+                          >
+                            <option value="">Seleccionar Oficio...</option>
+                            {nominas.map((r) => (
+                              <option key={r.id} value={r.id}>{r.cargo_nombre}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {proyectoId && proyectoDetalle && (
+                        <div className="p-4 rounded-2xl bg-zinc-800/30 border border-white/5 flex items-start gap-4">
+                          <div className="size-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0 mt-1">
+                            <Info className="size-5" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest font-black text-zinc-500 mb-1">Entidad Patrona Detectada</p>
+                            {entidadObra?.nombre ? (
+                              <div className="space-y-0.5">
+                                <p className="text-white font-bold">{entidadObra.nombre}</p>
+                                <p className="text-[10px] text-zinc-500 font-mono uppercase">RIF: {entidadObra.rif || 'N/A'}</p>
+                              </div>
+                            ) : (
+                              <p className="text-amber-500/80 text-xs font-bold">Sin entidad vinculada. Revisa la configuración del proyecto.</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-zinc-900/40 border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl">
+                    <CardHeader className="pb-4">
+                      <div className="flex items-center gap-3 mb-1">
+                        <div className="size-8 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400">
+                          <User className="size-4" />
+                        </div>
+                        <CardTitle className="text-xl font-black tracking-tight">Datos del Colaborador</CardTitle>
+                      </div>
+                      <CardDescription className="text-zinc-500 font-medium">Información de identificación y contacto del trabajador.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Nombres</Label>
+                          <Input 
+                            value={nombres} 
+                            onChange={(e) => setNombres(e.target.value)} 
+                            className="h-12 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50" 
+                            placeholder="Ej. Juan Carlos"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Apellidos</Label>
+                          <Input 
+                            value={apellidos} 
+                            onChange={(e) => setApellidos(e.target.value)} 
+                            className="h-12 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50" 
+                            placeholder="Ej. Pérez García"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Cédula / ID</Label>
+                          <Input 
+                            value={cedula} 
+                            onChange={(e) => setCedula(e.target.value)} 
+                            className="h-12 bg-black/40 border-white/5 rounded-2xl font-mono focus:border-amber-500/50" 
+                            placeholder="V-12345678"
+                          />
+                        </div>
+                        <div className="space-y-2 flex flex-col justify-end">
+                          <div className="flex items-center gap-4 h-12 px-4 rounded-2xl bg-black/20 border border-white/5">
+                            <Label className="flex items-center gap-2 cursor-pointer text-sm text-zinc-400 hover:text-white transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={esVenezolano}
+                                onChange={(e) => {
+                                  setEsVenezolano(e.target.checked);
+                                  if (e.target.checked) setNacionalidadOtro('');
+                                }}
+                                className="size-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500/20"
+                              />
+                              Venezolano
+                            </Label>
+                            {!esVenezolano && (
+                              <Input 
+                                value={nacionalidadOtro} 
+                                onChange={(e) => setNacionalidadOtro(e.target.value)}
+                                className="flex-1 h-8 bg-zinc-800/50 border-white/5 rounded-xl text-xs"
+                                placeholder="Indique nacionalidad"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Dirección de Domicilio</Label>
+                        <textarea
+                          className="w-full min-h-[80px] rounded-2xl border border-white/5 bg-black/40 px-4 py-3 text-sm text-white focus:border-amber-500/50 focus:ring-amber-500/10 transition-all outline-none"
+                          value={direccion}
+                          onChange={(e) => setDireccion(e.target.value)}
+                          placeholder="Calle, urbanización, casa, punto de referencia..."
+                        />
+                      </div>
+
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Municipio de Residencia</Label>
+                          <Input 
+                            value={obreroMunicipioResidencia} 
+                            onChange={(e) => setObreroMunicipioResidencia(e.target.value)} 
+                            className="h-12 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50" 
+                            placeholder="Ej. Maneiro"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Estado de Residencia</Label>
+                          <Input 
+                            value={obreroEstadoResidencia} 
+                            onChange={(e) => setObreroEstadoResidencia(e.target.value)} 
+                            className="h-12 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50" 
+                            placeholder="Ej. Nueva Esparta"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex justify-end pt-4">
+                    <Button onClick={() => setActiveTab('pago')} className="h-14 bg-white text-black hover:bg-zinc-200 font-black text-xs uppercase tracking-widest rounded-2xl px-10 shadow-xl shadow-white/5 border-0 transition-all hover:scale-105">
+                      Siguiente: Condiciones
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                {/* TAB 2: PAGO Y CONDICIONES */}
+                <TabsContent value="pago" className="mt-0 space-y-6 focus-visible:outline-none">
+                  <Card className="bg-zinc-900/40 border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl">
+                    <CardHeader className="pb-4">
+                      <div className="flex items-center gap-3 mb-1">
+                        <div className="size-8 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400">
+                          <Banknote className="size-4" />
+                        </div>
+                        <CardTitle className="text-xl font-black tracking-tight">Condiciones Económicas</CardTitle>
+                      </div>
+                      <CardDescription className="text-zinc-500 font-medium">Salarios calculados automáticamente según tabulador y complementos.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-8">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="p-6 rounded-[2rem] bg-emerald-500/5 border border-emerald-500/10 space-y-4">
+                           <div>
+                            <p className="text-[10px] uppercase tracking-widest font-black text-emerald-500/70 mb-1">Salario Tabulador</p>
+                            <p className="text-3xl font-black text-white tracking-tighter">
+                              {fmtBs(sueldoBase ?? 0)} <span className="text-xs font-normal text-zinc-500 uppercase tracking-widest ml-1">Bs/Mes</span>
+                            </p>
+                           </div>
+                           <div className="h-px bg-emerald-500/10 w-full" />
+                           <div className="space-y-2">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-zinc-500">Semanal Base</span>
+                                <span className="text-emerald-400 font-bold tabular-nums">{fmtBs(salarioSemanalBs)} Bs</span>
+                              </div>
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-zinc-500">Cestaticket Semanal</span>
+                                <span className="text-emerald-400 font-bold tabular-nums">{fmtBs(pagoSemanalBcV.cestaBs ?? 0)} Bs</span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm pt-2 border-t border-emerald-500/5 font-black">
+                                <span className="text-white">Total Semanal Bs</span>
+                                <span className="text-white tabular-nums">{fmtBs(pagoSemanalBcV.totalBs ?? 0)} Bs</span>
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <div className="space-y-2">
+                            <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Bono Manual Complementario (USD)</Label>
+                            <div className="relative group">
+                              <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
+                              <Input 
+                                value={bonoStr} 
+                                onChange={(e) => setBonoStr(e.target.value)} 
+                                className="h-14 pl-11 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50 text-lg font-bold" 
+                                placeholder="0.00"
+                                inputMode="decimal"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="p-5 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
+                            <BadgeInfo className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                            <div>
+                               <p className="text-[10px] uppercase tracking-widest font-black text-amber-500/70 mb-1">Referencia Bono en Bs</p>
+                               <p className="text-lg font-bold text-white tabular-nums">
+                                 {fmtBs(bonoRefInfo.bonoBs ?? 0)} <span className="text-[10px] font-normal text-zinc-500 uppercase tracking-widest ml-1">Ves</span>
+                               </p>
+                               <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-tighter">Calculado a tasa BCV: {fmtBs(bonoRefInfo.tasa ?? 0)} Bs/USD</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Fecha de Ingreso</Label>
+                          <div className="relative group">
+                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
+                             <Input 
+                               type="date"
+                               value={fechaIngreso} 
+                               onChange={(e) => setFechaIngreso(e.target.value)} 
+                               className="h-12 pl-11 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50 [color-scheme:dark]" 
+                             />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Jornada de Trabajo</Label>
+                          <select
+                            className="w-full h-12 rounded-2xl border border-white/5 bg-black/40 px-4 text-sm text-white focus:border-amber-500/50 focus:ring-amber-500/10 transition-all outline-none appearance-none"
+                            value={jornada}
+                            onChange={(e) => setJornada(e.target.value as typeof jornada)}
+                          >
+                            <option value="DIURNA">Diurna</option>
+                            <option value="NOCTURNA">Nocturna</option>
+                            <option value="MIXTA">Mixta</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-6 md:grid-cols-2">
+                         <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Estado Civil</Label>
+                          <Input 
+                            value={estadoCivil} 
+                            onChange={(e) => setEstadoCivil(e.target.value)} 
+                            className="h-12 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50" 
+                            placeholder="Ej. Soltero, Casado..."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Objeto / Fase Técnica</Label>
+                          <Input 
+                            value={objetoContrato} 
+                            onChange={(e) => setObjetoContrato(e.target.value)} 
+                            className="h-12 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50" 
+                            placeholder="Ej. Albañilería, Pintura..."
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex justify-between pt-4">
+                    <Button variant="ghost" onClick={() => setActiveTab('datos')} className="h-14 rounded-2xl px-8 text-zinc-500 hover:text-white hover:bg-white/5 font-bold">
+                      Volver
+                    </Button>
+                    <Button onClick={() => setActiveTab('horario')} className="h-14 bg-white text-black hover:bg-zinc-200 font-black text-xs uppercase tracking-widest rounded-2xl px-10 shadow-xl shadow-white/5 border-0 transition-all hover:scale-105">
+                      Siguiente: Horario
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                {/* TAB 3: HORARIO */}
+                <TabsContent value="horario" className="mt-0 space-y-6 focus-visible:outline-none">
+                  <Card className="bg-zinc-900/40 border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl">
+                    <CardHeader className="pb-4">
+                      <div className="flex items-center gap-3 mb-1">
+                        <div className="size-8 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400">
+                          <Clock className="size-4" />
+                        </div>
+                        <CardTitle className="text-xl font-black tracking-tight">Distribución Horaria</CardTitle>
+                      </div>
+                      <CardDescription className="text-zinc-500 font-medium">Defina los días y franjas horarias de trabajo (Cláusula CUARTA).</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <HorarioSemanalExpressForm
+                        onChange={handleHorarioDetalle}
+                        hintProyecto={proyectoDetalle?.horario_semanal_obra_default ?? null}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex justify-between pt-4">
+                    <Button variant="ghost" onClick={() => setActiveTab('pago')} className="h-14 rounded-2xl px-8 text-zinc-500 hover:text-white hover:bg-white/5 font-bold">
+                      Volver
+                    </Button>
+                    <Button onClick={() => setActiveTab('revisar')} className="h-14 bg-white text-black hover:bg-zinc-200 font-black text-xs uppercase tracking-widest rounded-2xl px-10 shadow-xl shadow-white/5 border-0 transition-all hover:scale-105">
+                      Siguiente: Revisar
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                {/* TAB 4: REVISAR Y GENERAR */}
+                <TabsContent value="revisar" className="mt-0 space-y-6 focus-visible:outline-none">
+                  <Card className="bg-zinc-900/40 border-white/5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl overflow-hidden">
+                    <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 px-8 py-6 border-b border-white/5">
+                      <CardTitle className="text-2xl font-black tracking-tight text-white">Confirmación Final</CardTitle>
+                      <CardDescription className="text-amber-500/70 font-bold uppercase tracking-widest text-[10px] mt-1">Verifique los datos antes de emitir el documento legal.</CardDescription>
+                    </div>
+                    <CardContent className="p-8 space-y-8">
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="space-y-6">
+                            <div className="space-y-1">
+                              <p className="text-[10px] uppercase tracking-widest font-black text-zinc-500">Colaborador</p>
+                              <p className="text-xl font-bold text-white uppercase">{nombres} {apellidos}</p>
+                              <p className="text-xs font-mono text-zinc-400">{cedula}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[10px] uppercase tracking-widest font-black text-zinc-500">Oficio y Obra</p>
+                              <p className="text-white font-bold">{nominas.find(n => n.id === configNominaId)?.cargo_nombre || '—'}</p>
+                              <p className="text-xs text-zinc-400">{proyectos.find(p => p.id === proyectoId)?.nombre || '—'}</p>
+                            </div>
+                          </div>
+
+                          <div className="p-6 rounded-3xl bg-zinc-950/60 border border-white/5 space-y-4 shadow-inner">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] uppercase tracking-widest font-black text-zinc-500">Ingreso Estimado</span>
+                              <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">{fmtUsd(ingresoSemanalUsdRef ?? 0)} USD/Sem</Badge>
+                            </div>
+                            <div className="space-y-2 pt-2">
+                              <div className="flex justify-between text-xs text-zinc-400 font-medium">
+                                <span>Salario Bs</span>
+                                <span>{fmtBs(salarioSemanalBs)} Bs</span>
+                              </div>
+                              <div className="flex justify-between text-xs text-zinc-400 font-medium">
+                                <span>Bono USD</span>
+                                <span>{fmtUsd(bonoNum)} USD</span>
+                              </div>
+                              <div className="pt-2 border-t border-white/5 flex justify-between font-black text-white">
+                                <span>Total Ref. Bs</span>
+                                <span>{fmtBs((pagoSemanalBcV.totalBs || 0) + (bonoRefInfo.bonoBs || 0))} Bs</span>
+                              </div>
+                            </div>
+                          </div>
+                       </div>
+
+                       <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-2">
+                          <p className="text-[10px] uppercase tracking-widest font-black text-zinc-500">Cláusula de Horario</p>
+                          <p className="text-xs text-zinc-400 leading-relaxed italic">"{horarioDetalleCuarta || 'No configurado'}"</p>
+                       </div>
+
+                       {err && (
+                         <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-start gap-3 animate-in shake duration-300">
+                           <AlertTriangle className="size-5 text-red-500 shrink-0" />
+                           <p className="text-xs text-red-400 font-bold leading-relaxed whitespace-pre-wrap">{err}</p>
+                         </div>
+                       )}
+
+                       {okMsg && (
+                         <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-3">
+                           <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
+                           <p className="text-xs text-emerald-400 font-bold leading-relaxed">{okMsg}</p>
+                         </div>
+                       )}
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-4">
+                    <Button variant="ghost" onClick={() => setActiveTab('horario')} className="w-full md:w-auto h-14 rounded-2xl px-8 text-zinc-500 hover:text-white hover:bg-white/5 font-bold">
+                      Seguir Editando
+                    </Button>
+                    <Button 
+                      disabled={saving}
+                      onClick={() => void generar()}
+                      className="w-full md:flex-1 h-16 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black text-sm uppercase tracking-[0.2em] rounded-[2rem] shadow-2xl shadow-orange-950/20 border-0 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                    >
+                      {saving ? (
+                        <>
+                          <RefreshCw className="size-5 mr-3 animate-spin" />
+                          Generando PDF...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="size-5 mr-3" />
+                          Generar y Emitir Contrato
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </TabsContent>
+              </div>
+            </Tabs>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
 }
