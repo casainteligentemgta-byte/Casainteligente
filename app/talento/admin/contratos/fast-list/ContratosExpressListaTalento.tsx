@@ -122,9 +122,9 @@ export function ContratosExpressListaTalento() {
     // Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(r => 
-        r.obrero_nombre.toLowerCase().includes(q) || 
-        r.obrero_cedula.includes(q) ||
+      result = result.filter(r =>
+        (r.obrero_nombre ?? '').toLowerCase().includes(q) ||
+        (r.obrero_cedula ?? '').includes(q) ||
         getNombreProyecto(r).toLowerCase().includes(q)
       );
     }
