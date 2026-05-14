@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // ─── Paquetes que se ejecutan en el servidor Node.js (fuera del bundle Edge/SSR) ───
-  // serverComponentsExternalPackages fue renombrado en Next 15; mantenemos ambos para compatibilidad.
-  serverExternalPackages: [
+  // serverComponentsExternalPackages es el nombre esperado en versiones recientes de Next.js
+  serverComponentsExternalPackages: [
     '@react-pdf/renderer', // genera PDFs en servidor; muy pesado para bundlear
     'canvas',              // dependencia nativa de react-pdf
     'sonner',              // evita "Cannot find module ./vendor-chunks/sonner.js" en dev
