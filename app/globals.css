@@ -118,10 +118,12 @@
 
   /* Fondo principal: evita negro plano y da profundidad coherente con el dock iOS */
   .app-root-bg {
-    background-image:
-      radial-gradient(ellipse 130% 90% at 50% -25%, rgba(0, 122, 255, 0.14), transparent 55%),
-      radial-gradient(ellipse 70% 55% at 100% 40%, rgba(88, 86, 214, 0.1), transparent 50%),
-      radial-gradient(ellipse 60% 50% at 0% 80%, rgba(0, 242, 254, 0.06), transparent 45%);
+    background-color: #050508;
+    background-image: 
+      radial-gradient(circle at 0% 0%, rgba(0, 122, 255, 0.15) 0%, transparent 40%),
+      radial-gradient(circle at 100% 0%, rgba(88, 86, 214, 0.12) 0%, transparent 40%),
+      radial-gradient(circle at 50% 100%, rgba(0, 242, 254, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 100% 100%, rgba(52, 199, 89, 0.05) 0%, transparent 30%);
     background-repeat: no-repeat;
     background-attachment: fixed;
   }
@@ -145,19 +147,19 @@
 
   /* Glass morphism */
   .glass {
-    background: var(--glass-bg);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   }
 
   .glass-strong {
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.06);
     backdrop-filter: blur(40px) saturate(200%);
     -webkit-backdrop-filter: blur(40px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 12px 48px 0 rgba(0, 0, 0, 0.5);
   }
 
   /* iOS card */
@@ -180,23 +182,27 @@
 
   /* iOS Button */
   .ios-btn-primary {
-    background: var(--ios-blue);
+    background: linear-gradient(135deg, var(--ios-blue), var(--ios-indigo));
     color: white;
-    border-radius: var(--radius-full);
-    font-weight: 600;
-    font-size: 17px;
-    letter-spacing: -0.02em;
+    border-radius: var(--radius-lg);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
     padding: 16px 32px;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     cursor: pointer;
-    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    box-shadow: 0 4px 16px rgba(0, 122, 255, 0.35);
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    box-shadow: 0 8px 24px -6px rgba(0, 122, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
   }
 
   .ios-btn-primary:hover {
-    background: var(--ios-blue-dark);
-    box-shadow: 0 6px 24px rgba(0, 122, 255, 0.45);
-    transform: translateY(-1px);
+    background: linear-gradient(135deg, #0084ff, #6b69e0);
+    box-shadow: 0 12px 32px -8px rgba(0, 122, 255, 0.6);
+    transform: translateY(-2px);
   }
 
   .ios-btn-primary:active {

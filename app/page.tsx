@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { GlassCardMotion } from '@/components/nexus/GlassCard';
+import { motion } from 'framer-motion';
 
 export default function DashboardPage() {
     const [productCount, setProductCount] = useState<number | null>(null);
@@ -10,10 +12,8 @@ export default function DashboardPage() {
 
     useEffect(() => {
         const supabase = createClient();
-        // Contar productos
         supabase.from('products').select('id', { count: 'exact', head: true })
             .then(({ count }) => setProductCount(count ?? 0));
-        // Contar clientes
         supabase.from('customers').select('id', { count: 'exact', head: true })
             .then(({ count }) => setClientCount(count ?? 0));
     }, []);
@@ -24,170 +24,132 @@ export default function DashboardPage() {
     const dayLabel = `${dayName.charAt(0).toUpperCase() + dayName.slice(1)}, ${dateStr}`;
 
     return (
-        <div className="min-h-screen" style={{ background: 'var(--bg-primary)', paddingBottom: '100px' }}>
+        <div className="min-h-screen pb-28">
 
             {/* ── Header ── */}
-            <div className="px-5 pt-14 pb-6">
+            <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="px-6 pt-16 pb-8"
+            >
                 <div className="flex items-start justify-between">
-                    <div>
-                        <p className="font-medium" style={{ fontSize: '15px', color: 'var(--label-tertiary)' }}>
+                    <div className="space-y-1">
+                        <p className="text-xs font-bold uppercase tracking-widest text-[var(--nexus-text-dim)]">
                             {dayLabel}
                         </p>
-                        <h1
-                            className="font-bold tracking-tight mt-0.5"
-                            style={{ fontSize: '34px', color: 'var(--label-primary)', lineHeight: 1.1 }}
-                        >
+                        <h1 className="text-4xl font-bold tracking-tight text-white">
                             Dashboard
                         </h1>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <Link
                             href="/nexus"
-                            className="rounded-full px-3 py-1.5 text-xs font-semibold text-[#00F2FE] ring-1 ring-[rgba(0,242,254,0.35)] hover:bg-[rgba(0,242,254,0.1)]"
+                            className="rounded-full px-4 py-2 text-xs font-bold uppercase tracking-tighter text-[var(--nexus-cyan)] ring-1 ring-[rgba(0,242,254,0.3)] hover:bg-[rgba(0,242,254,0.1)] transition-all"
                         >
                             Nexus
                         </Link>
-                        <div
-                            className="flex items-center justify-center rounded-full font-bold text-white"
-                            style={{
-                                width: '44px', height: '44px',
-                                background: 'linear-gradient(135deg, #007AFF, #5856D6)',
-                                fontSize: '16px',
-                                boxShadow: '0 4px 12px rgba(0,122,255,0.35)',
-                                flexShrink: 0,
-                            }}
-                        >
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[var(--ios-blue)] to-[var(--ios-indigo)] flex items-center justify-center text-white font-bold shadow-[0_4px_12px_rgba(0,122,255,0.3)] border border-white/20">
                             CI
                         </div>
                     </div>
                 </div>
-            </div>
+            </motion.div>
 
             {/* ── Stats Grid ── */}
-            <div className="px-5 grid grid-cols-2 gap-3 mb-6">
+            <div className="px-6 grid grid-cols-2 gap-4">
 
                 {/* ── Clientes ── */}
-                <div style={{ position: 'relative' }}>
-                    <Link
-                        href="/clientes"
-                        className="rounded-2xl p-4 transition-all duration-150 active:scale-95"
-                        style={{
-                            background: 'rgba(0,122,255,0.10)',
-                            border: '1px solid rgba(0,122,255,0.2)',
-                            textDecoration: 'none', display: 'block',
-                            boxShadow: '0 4px 20px rgba(0,122,255,0.12)',
-                        }}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <span style={{ fontSize: '24px' }}>👥</span>
-                            <div style={{ width: '28px', height: '28px' }} />
-                        </div>
-                        <p className="font-bold" style={{ fontSize: '26px', color: '#007AFF', letterSpacing: '-0.03em' }}>
-                            {clientCount ?? '—'}
-                        </p>
-                        <p className="text-sm font-medium mt-0.5" style={{ color: '#007AFF', opacity: 0.7 }}>
-                            Clientes
-                        </p>
+                <div className="relative group">
+                    <Link href="/clientes" className="block h-full">
+                        <GlassCardMotion 
+                            delay={0.1}
+                            className="h-full !bg-blue-500/5 border-blue-500/20 active:scale-95 transition-transform"
+                        >
+                            <div className="flex items-start justify-between mb-4">
+                                <span className="text-2xl">👥</span>
+                                <div className="w-7 h-7" />
+                            </div>
+                            <p className="text-3xl font-bold tracking-tighter text-[var(--ios-blue)]">
+                                {clientCount ?? '—'}
+                            </p>
+                            <p className="text-xs font-bold uppercase tracking-widest text-[var(--ios-blue)] opacity-60 mt-1">
+                                Clientes
+                            </p>
+                        </GlassCardMotion>
                     </Link>
                     <Link
                         href="/clientes/nuevo"
-                        style={{
-                            position: 'absolute', top: '16px', right: '16px', zIndex: 10,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            width: '28px', height: '28px', borderRadius: '8px',
-                            background: '#007AFF', boxShadow: '0 2px 8px rgba(0,122,255,0.4)',
-                            textDecoration: 'none',
-                        }}
+                        className="absolute top-4 right-4 z-10 w-8 h-8 rounded-lg bg-[var(--ios-blue)] flex items-center justify-center shadow-[0_4px_12px_rgba(0,122,255,0.4)] hover:scale-110 active:scale-90 transition-all"
                     >
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
                         </svg>
                     </Link>
                 </div>
 
                 {/* ── Ventas ── */}
-                <div
-                    className="rounded-2xl p-4"
-                    style={{
-                        background: 'rgba(52,199,89,0.08)',
-                        border: '1px solid rgba(52,199,89,0.15)',
-                        boxShadow: '0 4px 20px rgba(52,199,89,0.08)',
-                    }}
+                <GlassCardMotion 
+                    delay={0.2}
+                    className="!bg-green-500/5 border-green-500/20"
                 >
-                    <div className="flex items-start justify-between mb-3">
-                        <span style={{ fontSize: '24px' }}>📈</span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                            style={{ background: 'rgba(52,199,89,0.15)', color: '#34C759' }}>
+                    <div className="flex items-start justify-between mb-4">
+                        <span className="text-2xl">📈</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-[var(--ios-green)] uppercase">
                             +8.3%
                         </span>
                     </div>
-                    <p className="font-bold" style={{ fontSize: '26px', color: 'var(--label-primary)', letterSpacing: '-0.03em' }}>
+                    <p className="text-3xl font-bold tracking-tighter text-white">
                         $48.2K
                     </p>
-                    <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--label-secondary)' }}>
+                    <p className="text-xs font-bold uppercase tracking-widest text-[var(--nexus-text-muted)] mt-1">
                         Ventas
                     </p>
-                </div>
+                </GlassCardMotion>
 
                 {/* ── Proyectos ── */}
-                <div
-                    className="rounded-2xl p-4"
-                    style={{
-                        background: 'rgba(255,149,0,0.08)',
-                        border: '1px solid rgba(255,149,0,0.15)',
-                        boxShadow: '0 4px 20px rgba(255,149,0,0.08)',
-                    }}
+                <GlassCardMotion 
+                    delay={0.3}
+                    className="!bg-orange-500/5 border-orange-500/20"
                 >
-                    <div className="flex items-start justify-between mb-3">
-                        <span style={{ fontSize: '24px' }}>🏗️</span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                            style={{ background: 'rgba(255,149,0,0.15)', color: '#FF9500' }}>
+                    <div className="flex items-start justify-between mb-4">
+                        <span className="text-2xl">🏗️</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-[var(--ios-orange)] uppercase">
                             +3
                         </span>
                     </div>
-                    <p className="font-bold" style={{ fontSize: '26px', color: 'var(--label-primary)', letterSpacing: '-0.03em' }}>
+                    <p className="text-3xl font-bold tracking-tighter text-white">
                         18
                     </p>
-                    <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--label-secondary)' }}>
+                    <p className="text-xs font-bold uppercase tracking-widest text-[var(--nexus-text-muted)] mt-1">
                         Proyectos
                     </p>
-                </div>
+                </GlassCardMotion>
 
                 {/* ── Productos ── */}
-                <div style={{ position: 'relative' }}>
-                    <Link
-                        href="/productos"
-                        className="rounded-2xl p-4 transition-all duration-150 active:scale-95"
-                        style={{
-                            background: 'rgba(255,149,0,0.10)',
-                            border: '1px solid rgba(255,149,0,0.2)',
-                            textDecoration: 'none', display: 'block',
-                            boxShadow: '0 4px 20px rgba(255,149,0,0.12)',
-                        }}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <span style={{ fontSize: '24px' }}>📦</span>
-                            <div style={{ width: '28px', height: '28px' }} />
-                        </div>
-                        <p className="font-bold" style={{ fontSize: '26px', color: '#FF9500', letterSpacing: '-0.03em' }}>
-                            {productCount ?? '—'}
-                        </p>
-                        <p className="text-sm font-medium mt-0.5" style={{ color: '#FF9500', opacity: 0.7 }}>
-                            Productos
-                        </p>
+                <div className="relative group">
+                    <Link href="/productos" className="block h-full">
+                        <GlassCardMotion 
+                            delay={0.4}
+                            className="h-full !bg-orange-500/5 border-orange-500/20 active:scale-95 transition-transform"
+                        >
+                            <div className="flex items-start justify-between mb-4">
+                                <span className="text-2xl">📦</span>
+                                <div className="w-7 h-7" />
+                            </div>
+                            <p className="text-3xl font-bold tracking-tighter text-[var(--ios-orange)]">
+                                {productCount ?? '—'}
+                            </p>
+                            <p className="text-xs font-bold uppercase tracking-widest text-[var(--ios-orange)] opacity-60 mt-1">
+                                Productos
+                            </p>
+                        </GlassCardMotion>
                     </Link>
                     <Link
                         href="/productos/nuevo"
-                        style={{
-                            position: 'absolute', top: '16px', right: '16px', zIndex: 10,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            width: '28px', height: '28px', borderRadius: '8px',
-                            background: '#FF9500', boxShadow: '0 2px 8px rgba(255,149,0,0.4)',
-                            textDecoration: 'none',
-                        }}
+                        className="absolute top-4 right-4 z-10 w-8 h-8 rounded-lg bg-[var(--ios-orange)] flex items-center justify-center shadow-[0_4px_12px_rgba(255,149,0,0.4)] hover:scale-110 active:scale-90 transition-all"
                     >
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
                         </svg>
                     </Link>
                 </div>

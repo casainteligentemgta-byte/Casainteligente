@@ -27,13 +27,13 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const isNexus = path.startsWith('/nexus');
   /** Vista previa del presupuesto: pantalla completa sin dock ni distracciones (y sin caché de miniaturas en otros módulos). */
   const isPresupuestoPreview = path === '/ventas/preview';
-  /** Entrevista candidato: pantalla completa sin dock (anti-distracción). */
-  const isRecruitmentCandidate = path === '/reclutamiento';
+  /** Entrevista candidato u onboarding: pantalla completa sin dock (anti-distracción). */
+  const isRecruitment = path.startsWith('/reclutamiento');
   /** Postulación pública: sin dock CRM (evita «Inicio» y otros módulos). */
   const isPublicRegistro = path.startsWith('/registro');
 
   const chromeMinimal =
-    isNexus || isPresupuestoPreview || isRecruitmentCandidate || isPublicRegistro;
+    isNexus || isPresupuestoPreview || isRecruitment || isPublicRegistro;
 
   return (
     <>
