@@ -453,10 +453,6 @@ function HojaDeVidaMovilInner({ params }: Props) {
       </div>
     </div>
   );
-        )}
-      </div>
-    </div>
-  );
 }
 
 export default function HojaDeVidaMovil({ params }: Props) {
