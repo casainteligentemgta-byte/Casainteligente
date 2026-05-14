@@ -242,30 +242,45 @@ export function ContratosExpressListaTalento() {
       {/* Stats Board - Premium Glass Design */}
       <AnimatePresence mode="wait">
         {!loading && !err && rows.length > 0 && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+            transition={{ duration: 0.4, staggerChildren: 0.08 }}
+            className="grid grid-cols-2 lg:grid-cols-4 gap-3"
           >
             {[
-              { label: 'Registros Totales', value: rows.length, icon: FileText, color: 'zinc' },
-              { label: 'Formalizados', value: rows.filter(r => !!r.formalizado_empleado_id).length, icon: CheckSquare, color: 'emerald' },
-              { label: 'En Borrador', value: rows.filter(r => !r.formalizado_empleado_id).length, icon: RefreshCw, color: 'amber' },
-              { label: 'Registros Hoy', value: rows.filter(r => new Date(r.created_at).toDateString() === new Date().toDateString()).length, icon: Calendar, color: 'sky' }
-            ].map((stat, i) => (
-              <div 
-                key={i}
-                className="relative group overflow-hidden bg-zinc-900/30 border border-white/5 p-6 rounded-[2rem] backdrop-blur-xl transition-all hover:bg-zinc-900/50 hover:border-white/10"
-              >
-                <div className="relative z-10 flex flex-col gap-1">
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] font-black">{stat.label}</p>
-                  <h3 className={`text-4xl font-black ${stat.color === 'emerald' ? 'text-emerald-400' : stat.color === 'amber' ? 'text-amber-400' : stat.color === 'sky' ? 'text-sky-400' : 'text-white'}`}>
-                    {stat.value}
-                  </h3>
-                </div>
-                <stat.icon className={`absolute -right-4 -bottom-4 size-24 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity duration-500 ${stat.color === 'emerald' ? 'text-emerald-400' : stat.color === 'amber' ? 'text-amber-400' : stat.color === 'sky' ? 'text-sky-400' : 'text-white'}`} />
-              </div>
-            ))}
+              { label: 'Total', value: rows.length, max: rows.length, icon: FileText, color: 'zinc', accent: 'bg-white/10' },
+              { label: 'Formalizados', value: rows.filter(r => !!r.formalizado_empleado_id).length, max: rows.length, icon: CheckSquare, color: 'emerald', accent: 'bg-emerald-500' },
+              { label: 'Borradores', value: rows.filter(r => !r.formalizado_empleado_id).length, max: rows.length, icon: RefreshCw, color: 'amber', accent: 'bg-amber-500' },
+              { label: 'Hoy', value: rows.filter(r => new Date(r.created_at).toDateString() === new Date().toDateString()).length, max: rows.length, icon: Calendar, color: 'sky', accent: 'bg-sky-500' },
+            ].map((stat, i) => {
+              const pct = stat.max > 0 ? Math.round((stat.value / stat.max) * 100) : 0;
+              const textColor = stat.color === 'emerald' ? 'text-emerald-400' : stat.color === 'amber' ? 'text-amber-400' : stat.color === 'sky' ? 'text-sky-400' : 'text-white';
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.07 }}
+                  className="relative group overflow-hidden bg-zinc-900/30 border border-white/5 p-5 rounded-[1.75rem] backdrop-blur-xl transition-all duration-300 hover:bg-zinc-900/50 hover:border-white/10 hover:shadow-xl"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <p className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] font-black">{stat.label}</p>
+                    <stat.icon className={`size-3.5 ${textColor} opacity-30 group-hover:opacity-60 transition-opacity`} />
+                  </div>
+                  <h3 className={`text-3xl font-black tabular-nums ${textColor}`}>{stat.value}</h3>
+                  {/* Progress bar */}
+                  <div className="mt-4 h-[2px] rounded-full bg-white/5 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.8, delay: i * 0.07 + 0.3, ease: 'easeOut' }}
+                      className={`h-full rounded-full ${stat.accent} opacity-60`}
+                    />
+                  </div>
+                </motion.div>
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -288,22 +303,41 @@ export function ContratosExpressListaTalento() {
 
           {/* Search Input */}
           <div className="relative w-full sm:w-80 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-600 group-focus-within:text-amber-500 transition-colors" />
-            <Input 
-              placeholder="Filtrar por nombre o cédula..."
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-600 group-focus-within:text-amber-500 transition-colors duration-200" />
+            <Input
+              placeholder="Buscar nombre, cédula o proyecto..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-11 pr-10 h-12 bg-zinc-900/30 border-white/5 focus:border-amber-500/30 focus:ring-amber-500/5 rounded-2xl text-sm placeholder:text-zinc-600 transition-all backdrop-blur-xl"
+              className="pl-11 pr-10 h-12 bg-zinc-900/30 border-white/5 focus:border-amber-500/40 focus:ring-2 focus:ring-amber-500/10 rounded-2xl text-sm placeholder:text-zinc-600 transition-all duration-200 backdrop-blur-xl"
             />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-white transition-colors"
-              >
-                <X className="size-4" />
-              </button>
-            )}
+            <AnimatePresence>
+              {searchQuery && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.7 }}
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 size-6 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition-all"
+                >
+                  <X className="size-3" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
+          {/* Active search badge */}
+          <AnimatePresence>
+            {searchQuery && (
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-black uppercase tracking-widest whitespace-nowrap"
+              >
+                <Filter className="size-2.5" />
+                {filteredAndSortedRows.length} resultado{filteredAndSortedRows.length !== 1 ? 's' : ''}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
@@ -364,18 +398,40 @@ export function ContratosExpressListaTalento() {
           </div>
         ) : filteredAndSortedRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-40 text-center px-10">
-            <div className="size-24 rounded-[2.5rem] bg-zinc-900/50 flex items-center justify-center border border-white/5 mb-8 shadow-inner group">
-              <FileText className="size-10 text-zinc-700 group-hover:text-zinc-500 transition-colors" />
-            </div>
-            <h3 className="text-2xl font-black text-white mb-3">Archivo Vacío</h3>
-            <p className="text-sm text-zinc-500 max-w-sm mx-auto mb-12 leading-relaxed">
-              No se localizaron registros {statusFilter !== 'all' ? `en estado "${statusFilter}"` : 'Fast-Track'} bajo los criterios de búsqueda actuales.
-            </p>
-            <Link href="/talento/admin/contratos/fast-create">
-              <Button className="bg-white text-black hover:bg-amber-400 rounded-2xl px-12 h-14 font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl transition-all">
-                Crear Registro Maestro
-              </Button>
-            </Link>
+            {searchQuery || statusFilter !== 'all' ? (
+              // Empty due to active filter
+              <>
+                <div className="size-24 rounded-[2.5rem] bg-amber-500/5 flex items-center justify-center border border-amber-500/10 mb-8">
+                  <Filter className="size-10 text-amber-500/40" />
+                </div>
+                <h3 className="text-2xl font-black text-white mb-3">Sin Coincidencias</h3>
+                <p className="text-sm text-zinc-500 max-w-sm mx-auto mb-8 leading-relaxed">
+                  Ningún contrato coincide con {searchQuery ? `"${searchQuery}"` : ''}{statusFilter !== 'all' ? ` en estado ${statusFilter === 'draft' ? 'borrador' : 'formalizado'}` : ''}.
+                </p>
+                <button
+                  onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+                  className="text-[10px] font-black uppercase tracking-widest text-amber-500 hover:text-amber-400 transition-colors border border-amber-500/20 rounded-2xl px-8 h-10 hover:bg-amber-500/5"
+                >
+                  Limpiar Filtros
+                </button>
+              </>
+            ) : (
+              // Truly empty
+              <>
+                <div className="size-24 rounded-[2.5rem] bg-zinc-900/50 flex items-center justify-center border border-white/5 mb-8 shadow-inner">
+                  <FileText className="size-10 text-zinc-700" />
+                </div>
+                <h3 className="text-2xl font-black text-white mb-3">Archivo Vacío</h3>
+                <p className="text-sm text-zinc-500 max-w-sm mx-auto mb-12 leading-relaxed">
+                  No hay contratos Fast-Track registrados aún.
+                </p>
+                <Link href="/talento/admin/contratos/fast-create">
+                  <Button className="bg-white text-black hover:bg-amber-400 rounded-2xl px-12 h-14 font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl transition-all">
+                    Crear Primer Contrato
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -394,41 +450,41 @@ export function ContratosExpressListaTalento() {
                     </button>
                   </TableHead>
                   
-                  <TableHead 
-                    className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.25em] py-6 cursor-pointer group/th"
+                  <TableHead
+                    className={`text-[10px] font-black uppercase tracking-[0.25em] py-6 cursor-pointer group/th transition-colors ${sortConfig.key === 'obrero_nombre' ? 'text-amber-400' : 'text-zinc-500'}`}
                     onClick={() => handleSort('obrero_nombre')}
                   >
                     <div className="flex items-center gap-2 group-hover/th:text-white transition-colors">
                       Identidad
-                      {sortConfig.key === 'obrero_nombre' ? (
-                        sortConfig.direction === 'asc' ? <ChevronUp className="size-3 text-amber-500" /> : <ChevronDown className="size-3 text-amber-500" />
-                      ) : <ArrowUpDown className="size-3 opacity-0 group-hover/th:opacity-100 transition-opacity" />}
+                      {sortConfig.key === 'obrero_nombre'
+                        ? sortConfig.direction === 'asc' ? <ChevronUp className="size-3 text-amber-500" /> : <ChevronDown className="size-3 text-amber-500" />
+                        : <ArrowUpDown className="size-3 opacity-0 group-hover/th:opacity-100 transition-opacity" />}
                     </div>
                   </TableHead>
 
-                  <TableHead 
-                    className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.25em] py-6 cursor-pointer group/th"
+                  <TableHead
+                    className={`text-[10px] font-black uppercase tracking-[0.25em] py-6 cursor-pointer group/th transition-colors ${sortConfig.key === 'proyecto' ? 'text-amber-400' : 'text-zinc-500'}`}
                     onClick={() => handleSort('proyecto')}
                   >
                     <div className="flex items-center gap-2 group-hover/th:text-white transition-colors">
-                      Ubicación Operativa
-                      {sortConfig.key === 'proyecto' ? (
-                        sortConfig.direction === 'asc' ? <ChevronUp className="size-3 text-amber-500" /> : <ChevronDown className="size-3 text-amber-500" />
-                      ) : <ArrowUpDown className="size-3 opacity-0 group-hover/th:opacity-100 transition-opacity" />}
+                      Proyecto
+                      {sortConfig.key === 'proyecto'
+                        ? sortConfig.direction === 'asc' ? <ChevronUp className="size-3 text-amber-500" /> : <ChevronDown className="size-3 text-amber-500" />
+                        : <ArrowUpDown className="size-3 opacity-0 group-hover/th:opacity-100 transition-opacity" />}
                     </div>
                   </TableHead>
 
                   <TableHead className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.25em] py-6 text-center">Estado</TableHead>
                   
-                  <TableHead 
-                    className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.25em] py-6 text-center cursor-pointer group/th"
+                  <TableHead
+                    className={`text-[10px] font-black uppercase tracking-[0.25em] py-6 text-center cursor-pointer group/th transition-colors ${sortConfig.key === 'created_at' ? 'text-amber-400' : 'text-zinc-500'}`}
                     onClick={() => handleSort('created_at')}
                   >
                     <div className="flex items-center justify-center gap-2 group-hover/th:text-white transition-colors">
                       Fecha
-                      {sortConfig.key === 'created_at' ? (
-                        sortConfig.direction === 'asc' ? <ChevronUp className="size-3 text-amber-500" /> : <ChevronDown className="size-3 text-amber-500" />
-                      ) : <ArrowUpDown className="size-3 opacity-0 group-hover/th:opacity-100 transition-opacity" />}
+                      {sortConfig.key === 'created_at'
+                        ? sortConfig.direction === 'asc' ? <ChevronUp className="size-3 text-amber-500" /> : <ChevronDown className="size-3 text-amber-500" />
+                        : <ArrowUpDown className="size-3 opacity-0 group-hover/th:opacity-100 transition-opacity" />}
                     </div>
                   </TableHead>
 
