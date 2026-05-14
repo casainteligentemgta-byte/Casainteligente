@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Calculator, RefreshCw, Trash2 } from 'lucide-react';
+import { Calculator, RefreshCw, Trash2, FileJson } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
@@ -11,6 +11,10 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { calcularCostoHoraTotal, HORAS_MES_LEGAL } from '@/lib/finanzas/costoHoraNomina';
 import { createClient } from '@/lib/supabase/client';
+import { CARGOS_OBREROS } from '@/lib/constants/cargosObreros';
+import { filasTabuladorGacetaReferencia } from '@/lib/nomina/tabuladorGacetaReferencia';
+import { CESTATICKET_MENSUAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
+import { tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
 
 type Row = {
   id: string;
@@ -32,10 +36,11 @@ export default function AdminConfigNominaPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [aplicando, setAplicando] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('ci_config_nomina').select('*').order('cargo_nombre');
+    const { data, error } = await supabase.from('ci_config_nomina').select('*').order('cargo_codigo');
     setLoading(false);
     if (error) {
       toast.error(error.message);
@@ -148,6 +153,46 @@ export default function AdminConfigNominaPage() {
     }
   }
 
+  async function syncGaceta() {
+    if (!window.confirm('¿Sincronizar tabulador con todos los oficios de la Gaceta 6.752? Se agregarán los cargos faltantes.')) return;
+    setSincronizando(true);
+    try {
+      const gaceta = filasTabuladorGacetaReferencia();
+      const existingCodigos = new Set(rows.map(r => r.cargo_codigo).filter(Boolean));
+      
+      const missing = gaceta.filter(g => !existingCodigos.has(g.codigo));
+      
+      if (missing.length === 0) {
+        toast.info('El tabulador ya contiene todos los oficios de la Gaceta.');
+        return;
+      }
+
+      const toInsert = missing.map(m => {
+        const tasa = tasaBcvVesPorUsdFromEnv() ?? 36.5; // Fallback razonable si no hay env
+        const cestaticketVes = Math.round(CESTATICKET_MENSUAL_USD * tasa * 100) / 100;
+
+        return {
+          cargo_nombre: m.nombre,
+          cargo_codigo: m.codigo,
+          salario_base_mensual: m.salarioBasicoMensualRef30,
+          factor_prestacional: 1.6,
+          cestaticket_mensual: Math.max(1300, cestaticketVes), // Garantizar al menos el indexado de 1300
+        };
+      });
+
+      const { error } = await supabase.from('ci_config_nomina').insert(toInsert);
+      
+      if (error) throw error;
+      
+      await load();
+      toast.success(`Sincronizados ${missing.length} cargos nuevos.`);
+    } catch (e: any) {
+      toast.error(e.message || 'Error al sincronizar');
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] px-4 py-8 text-zinc-200 md:px-8" style={{ backgroundColor: '#0A0A0F' }}>
       <div className="mx-auto max-w-6xl space-y-6">
@@ -163,8 +208,12 @@ export default function AdminConfigNominaPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void syncGaceta()} disabled={sincronizando || loading}>
+              <FileJson className={sincronizando ? 'animate-spin' : 'mr-2 h-4 w-4'} aria-hidden />
+              {sincronizando ? 'Sincronizando…' : 'Sincronizar Gaceta'}
+            </Button>
             <Button type="button" variant="elitePrimary" onClick={() => void aplicarProyectos()} disabled={aplicando}>
-              <RefreshCw className={aplicando ? 'animate-spin' : ''} aria-hidden />
+              <RefreshCw className={aplicando ? 'animate-spin mr-2' : 'mr-2'} aria-hidden />
               {aplicando ? 'Aplicando…' : 'Aplicar a proyectos activos'}
             </Button>
             <Button type="button" variant="elite" onClick={() => void addRow()}>
