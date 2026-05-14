@@ -883,4 +883,3 @@ export default function ContratoExpressCreatePage() {
     </div>
   );
 }
-}
