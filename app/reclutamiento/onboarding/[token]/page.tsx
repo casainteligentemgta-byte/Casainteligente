@@ -213,7 +213,10 @@ function HojaDeVidaMovilInner({ params }: Props) {
       return;
     }
     setLegal(merged);
-    setStep(4);  return (
+    setStep(4);
+  }
+
+  return (
     <div className="min-h-screen app-root-bg flex flex-col font-sans pb-28 text-white">
       <header className="glass sticky top-0 z-50 px-6 py-5 border-b border-white/5 backdrop-blur-xl">
         <h1 className="text-xl font-bold tracking-tight text-white">CASA INTELIGENTE</h1>
