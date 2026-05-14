@@ -18,7 +18,8 @@ import {
   FileText,
   BadgeInfo,
   DollarSign,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
