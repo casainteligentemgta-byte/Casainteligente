@@ -15,10 +15,8 @@ import {
   UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  generarExamenAdaptativo,
-  PREGUNTAS_PERSONALIDAD,
-} from '@/lib/talento/exam';
+import { PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
+import { preguntasParaDetalle } from '@/lib/rrhh/parseRespuestasExamen';
 import { fetchEmpleadosHojasVida, type EmpleadoHojaVidaRow } from '@/lib/rrhh/fetchEmpleadosHojasVida';
 import {
   empleadoTieneEvaluacionCompleta,
@@ -63,7 +61,7 @@ export default function RrhhReclutamientoClient() {
   const [ultimoEnlace, setUltimoEnlace] = useState<string | null>(null);
   const [detalleEmpleadoId, setDetalleEmpleadoId] = useState<string | null>(null);
 
-  const examenPreview = useMemo(() => generarExamenAdaptativo(rolPreview), [rolPreview]);
+  const examenPreview = useMemo(() => preguntasParaDetalle(rolPreview), [rolPreview]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
