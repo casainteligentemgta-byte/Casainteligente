@@ -451,13 +451,11 @@ export default function RrhhGestionPersonalClient({
   const hayFiltroAlcance = Boolean(proyectoModuloFiltro || proyectoObraFiltro);
 
   const bannerAlcanceLabor = hayFiltroAlcance ? (
-    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Solicitados</h1>
-        <p className="text-sm text-zinc-400 mt-1">
-          Alcance: <span className="text-sky-400 font-medium">{alcanceNombre ? `«${alcanceNombre}»` : 'Seleccionado'}</span>
-        </p>
-      </div>
+    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3 py-2 text-sm text-sky-100 sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        <span className="font-semibold text-white">SOLICITADOS.</span>{' '}
+        {alcanceNombre ?? 'Seleccionado'}
+      </p>
       <Button
         type="button"
         variant="outline"

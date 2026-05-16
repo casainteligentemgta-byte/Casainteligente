@@ -19,7 +19,8 @@ const cards = [
       ? 'Se abre el listado en el deployment configurado (Vercel / legacy fast-list).'
       : 'Sin registro en Talento: ver filas, abrir PDF, ir al módulo del proyecto o borrar.',
     accent: 'from-amber-500/25 to-zinc-900/50 border-amber-500/45',
-  },  {
+  },
+  {
     href: '/talento/admin/contratos',
     title: 'Contratos dinámicos',
     desc: 'Empleado aprobado + obra · monto y % inicial · modelo CENTAURO LAW',

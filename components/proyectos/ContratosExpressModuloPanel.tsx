@@ -99,6 +99,9 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
         return;
       }
       setRows((prev) => prev.filter((r) => r.id !== id));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
+      }
       toast.success('Contrato express eliminado');
     } catch {
       toast.error('Error de red');

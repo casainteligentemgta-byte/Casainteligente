@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { ClipboardList, Trash2, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
+import { ClipboardList, FileText, Trash2, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
+import ContratosExpressModuloPanel from '@/components/proyectos/ContratosExpressModuloPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
@@ -20,6 +21,12 @@ export type ResumenObrerosProyectoModuloProps = {
    * muestra un obrero ficticio y los contadores de esas tarjetas son al menos 1.
    */
   demoListasObrero?: boolean;
+  /** Título del bloque (p. ej. «SMART RRHH» en `/rrhh/hojas-vida`). */
+  tituloSeccion?: string;
+  /** Párrafo bajo el título; `null` lo oculta. */
+  subtituloSeccion?: string | null;
+  /** Oculta el enlace «Hojas de vida RRHH» (p. ej. en la propia pantalla de hojas de vida). */
+  ocultarEnlaceHojasVida?: boolean;
 };
 
 /** Fila ficticia para pruebas UI (no persiste en BD). UUID solo para keys/links estables en demo. */
@@ -295,11 +302,17 @@ function esInactivoPorObraCulminada(
   return !tieneContratoActivoEnObraAbierta(eid, filasPorEmpleado, obraEstadoPorId);
 }
 
+const SUBTITULO_CUADRO_DEFAULT =
+  'Plazas solicitadas, obreros en carpeta (no aprobaron la evaluación), contratos activos en obra vinculada y contratos express (fast-track) del mismo proyecto u obras hijas.';
+
 export default function ResumenObrerosProyectoModulo({
   proyectoModuloId,
   listaRefresco = 0,
   tabUrl = '',
   demoListasObrero = false,
+  tituloSeccion = 'Cuadro de obreros — RRHH del proyecto',
+  subtituloSeccion = SUBTITULO_CUADRO_DEFAULT,
+  ocultarEnlaceHojasVida = false,
 }: ResumenObrerosProyectoModuloProps) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -316,6 +329,8 @@ export default function ResumenObrerosProyectoModulo({
   const [filasContratoPorEmpleado, setFilasContratoPorEmpleado] = useState<Map<string, FilaContratoObra[]>>(() => new Map());
   const [obraEstadoPorId, setObraEstadoPorId] = useState<Map<string, string>>(() => new Map());
   const [listaModal, setListaModal] = useState<ListaModalTipo | null>(null);
+  const [expressPanelAbierto, setExpressPanelAbierto] = useState(false);
+  const [contratosExpressCount, setContratosExpressCount] = useState(0);
   const [viewportTick, setViewportTick] = useState(0);
   /** Solicitudes `labor_requests` pendientes (director) en módulo u obras hijas. */
   const [cuadroPlazasLaborPendientes, setCuadroPlazasLaborPendientes] = useState(0);
@@ -487,6 +502,7 @@ export default function ResumenObrerosProyectoModulo({
         }
         setSolicitadosWorkerIdSet(new Set(solicitadosIds));
 
+        let expressTotalFilas = 0;
         const proyectoIdsExpress = Array.from(new Set([id, ...obraHijaIds]));
         if (proyectoIdsExpress.length > 0) {
           const rExFull = await supabase
@@ -519,6 +535,7 @@ export default function ResumenObrerosProyectoModulo({
                 : rExBare;
 
           const exData = exChosen && !exChosen.error ? (exChosen.data ?? []) : [];
+          expressTotalFilas = exData.length;
           if (exData.length > 0) {
             const cedNorm = (v: string) => v.replace(/\s/g, '').toLowerCase();
             const cedulasEmp = new Set(emps.map((e) => cedNorm(sTrim(e.cedula ?? e.documento))).filter(Boolean));
@@ -620,6 +637,7 @@ export default function ResumenObrerosProyectoModulo({
         setCuadroAsignadosLabor(solicitadosEnLista);
         setVacantesActivas(needsActivas.length);
         setEnCarpeta(enCarpetaEval);
+        setContratosExpressCount(expressTotalFilas);
         setContratadosActivos(activos);
         setEmpleados(emps);
         setContratoPorEmpleado(contrMap);
@@ -637,6 +655,7 @@ export default function ResumenObrerosProyectoModulo({
         setPlazasVacantesResumen(0);
         setVacantesActivas(0);
         setEnCarpeta(0);
+        setContratosExpressCount(0);
         setContratadosActivos(0);
         setEmpleados([]);
         setContratoPorEmpleado(new Map());
@@ -734,11 +753,6 @@ export default function ResumenObrerosProyectoModulo({
     [empleados, filasContratoPorEmpleado, obraEstadoPorId],
   );
 
-  const expressEnCuadro = useMemo(
-    () => empleados.filter((e) => esEmpleadoContratoExpress(e)).length,
-    [empleados],
-  );
-
   const filasListaModal = useMemo(() => {
     if (!listaModal) return [];
     if (demoListasObrero && listaModal === 'porContratar') {
@@ -785,7 +799,7 @@ export default function ResumenObrerosProyectoModulo({
   const tituloListaModal = useMemo(() => {
     switch (listaModal) {
       case 'enCarpeta':
-        return 'En carpeta — no aprobaron la evaluación';
+        return 'No aprobado — no aprobaron la evaluación';
       case 'inactivos':
         return 'Contratados inactivos (obra culminada)';
       case 'porContratar':
@@ -807,12 +821,11 @@ export default function ResumenObrerosProyectoModulo({
           </div>
           <div>
             <h2 id="resumen-obreros-proyecto-titulo" className="text-base font-bold tracking-tight text-white">
-              Cuadro de obreros — RRHH del proyecto
+              {tituloSeccion}
             </h2>
-            <p className="mt-0.5 text-[11px] text-zinc-500">
-              Plazas solicitadas, obreros en carpeta (no aprobaron la evaluación), contratos activos en obra vinculada y
-              contratos express (fast-track) del mismo proyecto u obras hijas.
-            </p>
+            {subtituloSeccion ? (
+              <p className="mt-0.5 text-[11px] text-zinc-500">{subtituloSeccion}</p>
+            ) : null}
             {demoListasObrero ? (
               <p className="mt-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-200">
                 Modo prueba: listas simuladas (<code className="font-mono text-amber-100/90">?demo_listas=1</code>)
@@ -820,14 +833,16 @@ export default function ResumenObrerosProyectoModulo({
             ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <Link
-            href="/rrhh/hojas-vida"
-            className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-100 hover:bg-white/10"
-          >
-            Hojas de vida RRHH
-          </Link>
-        </div>
+        {!ocultarEnlaceHojasVida ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/rrhh/hojas-vida/archivo"
+              className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-100 hover:bg-white/10"
+            >
+              Hojas de vida
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       {loading ? (
@@ -845,7 +860,7 @@ export default function ResumenObrerosProyectoModulo({
             >
               <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-sky-300/90">
                 <Users className="h-3.5 w-3.5" aria-hidden />
-                En carpeta
+                No aprobado
               </div>
               <p className="mt-2 text-2xl font-bold tabular-nums text-white">{enCarpetaMostrar}</p>
               <p className="mt-1 text-[10px] text-zinc-500">
@@ -868,18 +883,22 @@ export default function ResumenObrerosProyectoModulo({
                   <span className="font-mono text-zinc-400">ci_empleados</span>). Clic: ir a gestión de personal RRHH.
                 </p>
               </Link>
-              {expressEnCuadro > 0 ? (
-                <p className="border-t border-emerald-500/20 px-4 pb-4 pt-2 text-[10px] text-emerald-200/80">
-                  {expressEnCuadro} en express — ver cuadro en{' '}
-                  <Link
-                    href={`/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}?tab=solicitados`}
-                    className="font-semibold text-emerald-200 underline decoration-emerald-500/40 hover:text-emerald-100"
-                  >
-                    este módulo (Solicitados)
-                  </Link>
-                  .
-                </p>
-              ) : null}
+              <div className="border-t border-emerald-500/25 px-3 pb-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setExpressPanelAbierto(true)}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-950/45 px-3 py-2.5 text-left transition hover:border-amber-400/55 hover:bg-amber-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
+                  title="Ver cuadro de obreros — contratos express (fast-track)"
+                >
+                  <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-amber-100/95">
+                    <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Contratados express
+                  </span>
+                  <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-sm font-bold tabular-nums text-amber-50">
+                    {contratosExpressCount}
+                  </span>
+                </button>
+              </div>
             </div>
             <button
               type="button"
@@ -1008,6 +1027,12 @@ export default function ResumenObrerosProyectoModulo({
                   </table>
                 )}
               </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={expressPanelAbierto} onOpenChange={setExpressPanelAbierto}>
+            <DialogContent className="max-h-[92vh] overflow-y-auto border-amber-500/25 bg-zinc-950 p-0 sm:max-w-[min(96vw,920px)]">
+              <ContratosExpressModuloPanel moduloIntegralId={proyectoModuloId} />
             </DialogContent>
           </Dialog>
         </>
