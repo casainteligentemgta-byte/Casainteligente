@@ -477,10 +477,10 @@ export function ContratoObreroPDF({
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
 
-  const sbDia = configNomina.salario_basico_diario_ves;
-  const tieneSb =
-    sbDia != null && Number.isFinite(Number(sbDia)) && Number(sbDia) > 0 ? Number(sbDia) : null;
-  const salDiarioTxt = tieneSb != null ? fmtBsVes(tieneSb) : '__________________';
+  const sbMen = configNomina.salario_base_mensual;
+  const tieneSbMen =
+    sbMen != null && Number.isFinite(Number(sbMen)) && Number(sbMen) > 0 ? Number(sbMen) : null;
+  const salSemanalTxt = tieneSbMen != null ? fmtBsVes(tieneSbMen / 4) : '__________________';
   const cestaMen = configNomina.cestaticket_mensual;
   const cestaSemUsdNum =
     !esContratoExpress &&
@@ -616,33 +616,29 @@ export function ContratoObreroPDF({
   const bloqueClausulasPrimeraACuarta = (
     <>
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
-        <Text style={styles.bold}>PRIMERA: OBJETO Y MODALIDAD</Text>
-        {'\n'}
-        {`Este contrato se celebra bajo la modalidad de OBRA DETERMINADA (Arts. 63, 75 y 77 literal "a" de la LOTTT), específicamente para la ejecución de la fase técnica de: `}
+        <Text style={styles.bold}>PRIMERA: OBJETO Y MODALIDAD.</Text>
+        {` Este contrato se celebra bajo la modalidad de OBRA DETERMINADA (Arts. 63, 75 y 77 literal "a" de la LOTTT), específicamente para la ejecución de la fase técnica de: `}
         <Text style={styles.bold}>{faseTecnicaTxt}</Text>
-        {` dentro de la obra denominada: `}
+        {`, dentro de la obra denominada: `}
         <Text style={styles.bold}>{obraDenomTxt}</Text>
         {`. LA ENTIDAD DE TRABAJO tiene como objeto la explotación de actividades comerciales y de la industria de la construcción, y a tales efectos contrata a EL TRABAJADOR para que desempeñe el cargo de: `}
         <Text style={styles.bold}>{oficioStr}</Text>
-        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. EL TRABAJADOR se obliga a: Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
+        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEGUNDA: PERIODO DE PRUEBA</Text>
-        {'\n'}
-        {`Conforme al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE NOVENTA (90) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
+        <Text style={styles.bold}>SEGUNDA: PERIODO DE PRUEBA.</Text>
+        {` Conforme al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE NOVENTA (90) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>TERCERA: DURACIÓN Y TERMINACIÓN</Text>
-        {'\n'}
-        {`La relación de trabajo está sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada la Acta de Culminación en el Libro de Obra por el Supervisor. La terminación es independiente de la entrega formal del inmueble al propietario.`}
+        <Text style={styles.bold}>TERCERA: DURACIÓN Y TERMINACIÓN.</Text>
+        {` La relación de trabajo está sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada el Acta de Culminación en el Libro de Obra por el Supervisor. La terminación es independiente de la entrega formal del inmueble al propietario.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>CUARTA: JORNADA, HORARIO Y RENDIMIENTO</Text>
-        {'\n'}
-        {`La jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
+        <Text style={styles.bold}>CUARTA: JORNADA, HORARIO Y RENDIMIENTO.</Text>
+        {` La jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
         {horarioCuartaDetalle}{' '}
         <Text style={styles.bold}>CONTROL:</Text>
         {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en 4 oportunidades en un mes o la negativa a firmar el registro constituirá falta grave (Art. 102 literal "i" LOTTT).`}
@@ -653,60 +649,51 @@ export function ContratoObreroPDF({
   const bloqueClausulasQuintaANovenaYFirmas = (
     <>
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>QUINTA: LUGAR DE TRABAJO Y DIRECCIÓN</Text>
-        {'\n'}
-        {'Los servicios se prestarán en: '}
+        <Text style={styles.bold}>QUINTA: LUGAR DE TRABAJO Y DIRECCIÓN.</Text>
+        {` Los servicios se prestarán en: `}
         <Text style={styles.bold}>{lugarQuintaTxt}</Text>
-        {'. LA ENTIDAD DE TRABAJO ejercerá su facultad de dirección para el mejor desempeño de la obra; dichas exigencias técnicas y de rendimiento no se considerarán acoso laboral.'}
+        {`. LA ENTIDAD DE TRABAJO ejercerá su facultad de dirección para el mejor desempeño de la obra; dichas exigencias técnicas y de rendimiento no se considerarán acoso laboral.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEXTA: INGRESO INTEGRAL INDEXADO</Text>
+        <Text style={styles.bold}>SEXTA: INGRESO INTEGRAL INDEXADO.</Text>
+        {` EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares. `}
         {'\n'}
-        {`EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares:`}
+        a.- <Text style={styles.bold}>{salSemanalTxt}</Text>
+        {` (Bs.) por concepto de Salario Semanal según Tabulador; `}
         {'\n'}
-        a.- <Text style={styles.bold}>{salDiarioTxt}</Text>
-        {` (Bs.) por concepto de Salario Diario según Tabulador, `}
+        b.- Cesta Ticket (Indexado): Equivalente a <Text style={styles.bold}>{cestaUsdPlanoTxt}</Text> semanales; y
         {'\n'}
-        b.- Cesta Ticket (Indexado): Equivalente semanal a <Text style={styles.bold}>{cestaUsdPlanoTxt}</Text>.
-        {'\n'}
-        <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
+        c.- <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
         {` Según Art. 105 LOTTT y Sentencia 218 del TSJ, para elevar el Ingreso Semanal a un total equivalente a: `}
         <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
         {'. '}
-        {'\n'}
         {`Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SÉPTIMA: COMPENSACIÓN POR CULMINACIÓN</Text>
-        {'\n'}
+        <Text style={styles.bold}>SÉPTIMA: COMPENSACIÓN POR CULMINACIÓN.</Text>
+        {` `}
         <Text style={styles.bold}>PARÁGRAFO ÚNICO:</Text>
         {` Al cierre de obra o finiquito, se recibirá una compensación de: `}
         <Text style={styles.bold}>{compUsdMesTxt}</Text>
-        {` USD (a tasa BCV) por cada mes trabajado o fracción. Este monto liquida de forma integral: prestaciones sociales, utilidades, vacaciones y cualquier otro beneficio derivado de este contrato especial.`}
+        {` USD (a tasa BCV) por cada mes trabajado o fracción. Este monto liquida de forma integral: prestaciones sociales, utilidades, vacaciones y cualquier otro beneficio derivado de este contrato especial y de la Convención Colectiva.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
-        <Text style={styles.bold}>OCTAVA: ÉTICA, CONFIDENCIALIDAD Y JURISDICCIÓN</Text>
-        {'\n'}
-        {`EL TRABAJADOR guardará reserva absoluta sobre información técnica y se abstendrá de prácticas desleales. `}
+        <Text style={styles.bold}>OCTAVA: ÉTICA, CONFIDENCIALIDAD Y JURISDICCIÓN.</Text>
+        {` EL TRABAJADOR, guardará reserva absoluta sobre información técnica y se abstendrá de prácticas desleales. `}
         {'\n\n'}
-        <Text style={styles.bold}>NOVENA (TRANSPORTE GRATUITO - BENEFICIO SOCIAL NO REMUNERATIVO)</Text>
-        {'\n'}
-        <Text style={styles.bold}>OBJETO:</Text>
+        <Text style={styles.bold}>NOVENA (TRANSPORTE GRATUITO - BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
         {` Con el firme propósito de facilitar la asistencia, puntualidad y resguardar la seguridad de EL TRABAJADOR, LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio donde se ejecute la obra determinada. `}
-        {'\n'}
         <Text style={styles.bold}>NATURALEZA JURÍDICA:</Text>
         {` De conformidad con lo establecido en el Artículo 105 de la LOTTT, las partes acuerdan expresamente que este servicio de transporte constituye un beneficio social de carácter no remunerativo. En consecuencia, ambas partes reconocen que: No forma parte del salario bajo ninguna circunstancia. No tiene carácter de salario en especie. No será considerado ni computado para el cálculo de prestaciones sociales, vacaciones, utilidades, bonos ni ningún otro pasivo o derecho laboral derivado de la relación de trabajo. `}
-        {'\n'}
         <Text style={styles.bold}>CONDICIONES:</Text>
-        {` El uso de este servicio es opcional para el trabajador y está sujeto al cumplimiento de las normas de conducta y seguridad dictadas por la empresa durante el trayecto. `}
+        {` El uso de este servicio es opcional para el trabajador y está sujeto al cumplimiento de las normas de conducta y seguridad dictadas por la empresa durante el trayecto.`}
         {'\n\n'}
-        {`Las partes eligen como domicilio especial la ciudad de Pampatar, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. `}
-        {'\n'}
-        Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de Pampatar, a los{' '}
-        <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> de{' '}
+        <Text style={styles.bold}>DECIMA (DOMICILIO PROCESAL).</Text>
+        {` Las partes eligen como domicilio especial la ciudad de Pampatar, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de Pampatar, a los `}
+        <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> del año{' '}
         <Text style={styles.bold}>{anioFirma}</Text>.
       </Text>
 
