@@ -196,84 +196,33 @@ export async function POST(req: Request) {
     created_by: createdBy,
   };
 
-  /** Reintentos: columnas 122/126, y sin `created_by` si la FK a `auth.users` falla (sesión distinta de proyecto, etc.). */
-  const primaryVariants: Record<string, unknown>[] = [
-    { ...baseRow, bono_manual_usd: body.bono_manual_usd, horario_semanal_texto: horarioVal },
-    { ...baseRow, bono_manual_ves: body.bono_manual_usd, horario_semanal_texto: horarioVal },
-    { ...baseRow, bono_manual_usd: body.bono_manual_usd },
-    { ...baseRow, bono_manual_ves: body.bono_manual_usd },
-  ];
-  const sinCreatedBy = primaryVariants.map((p) => {
-    const { created_by: _c, ...rest } = p;
-    return rest;
-  });
-  const stripSnapshots = (p: Record<string, unknown>) => {
-    const { salario_base_mensual_snapshot: _s, cargo_nombre_snapshot: _cg, ...rest } = p;
-    return rest;
+  const payload = {
+    ...baseRow,
+    bono_manual_usd: body.bono_manual_usd,
+    horario_semanal_texto: horarioVal,
   };
-  const withSnapshots = [...primaryVariants, ...sinCreatedBy];
-  const insertVariants: Record<string, unknown>[] = [...withSnapshots, ...withSnapshots.map(stripSnapshots)];
 
-  function isSchemaColumnError(msg: string): boolean {
-    return (
-      /column .* does not exist|42703|Could not find the .* column/i.test(msg) ||
-      /horario_semanal_texto|bono_manual_usd|bono_manual_ves/i.test(msg)
-    );
-  }
-
-  function isCreatedByFkError(msg: string): boolean {
-    return /created_by/i.test(msg) && /foreign key|fkey|violates|auth\.users/i.test(msg);
-  }
-
-  let insErr: { message: string } | null = null;
-  for (const payload of insertVariants) {
-    const { data, error } = await admin.client
-      .from('ci_contratos_express')
-      .insert(payload as never)
-      .select('id')
-      .maybeSingle();
-    if (!error && data && (data as { id?: string }).id === expressId) {
-      insErr = null;
-      break;
-    }
-    insErr = error ?? { message: 'El INSERT no devolvió el id del contrato express.' };
-    const msg = insErr.message;
-    if (isSchemaColumnError(msg) || isCreatedByFkError(msg)) {
-      continue;
-    }
-    break;
-  }
-
-  if (!insErr) {
-    const { data: rowOk, error: rowErr } = await admin.client
-      .from('ci_contratos_express')
-      .select('id')
-      .eq('id', expressId)
-      .maybeSingle();
-    if (rowErr || !rowOk) {
-      console.error('[contratos-fast] verify row', rowErr?.message);
-      return NextResponse.json(
-        {
-          error:
-            'No se pudo confirmar el registro en ci_contratos_express tras el INSERT. Revise RLS/triggers o que la URL de Supabase coincida con la del service_role.',
-          hint: rowErr?.message,
-        },
-        { status: 500 },
-      );
-    }
-  }
+  const { data, error: insErr } = await admin.client
+    .from('ci_contratos_express')
+    .insert(payload as never)
+    .select('id')
+    .maybeSingle();
 
   if (insErr) {
     console.error('[contratos-fast] insert', insErr.message);
     return NextResponse.json(
       {
-        error: insErr.message.includes('relation')
-          ? 'Ejecute la migración 118_ci_contratos_express en Supabase.'
-          : /bono_manual_usd|bono_manual_ves|column .* does not exist/i.test(insErr.message)
-            ? 'Revise migraciones 118 y 122 (bono: columna bono_manual_usd o bono_manual_ves).'
-            : /horario_semanal_texto|column .* does not exist/i.test(insErr.message)
-              ? 'Ejecute la migración 126_ci_contratos_express_horario_semanal_texto en Supabase.'
-              : insErr.message,
+        error: insErr.message,
+      },
+      { status: 500 },
+    );
+  }
+
+  if (!data || (data as { id?: string }).id !== expressId) {
+    console.error('[contratos-fast] verify row: ID mismatch or no data');
+    return NextResponse.json(
+      {
+        error: 'El INSERT no devolvió el id del contrato express o no se pudo confirmar.',
       },
       { status: 500 },
     );

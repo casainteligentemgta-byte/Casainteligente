@@ -130,8 +130,8 @@ export async function formalizarContratoExpressPorId(
     respuestas_logica: {},
     token,
     token_registro: token,
-    semaforo: 'verde',
-    status_evaluacion: 'verde',
+    semaforo: 'rojo',
+    status_evaluacion: 'pendiente_regularizar',
     estatus_evaluacion: 'completado',
   };
 

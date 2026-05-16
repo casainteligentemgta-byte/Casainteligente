@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
     const nombre = (body.nombre_completo ?? '').trim();
     const inicioIso = body.examen_inicio_at;
-    const rp = body.respuestas_personalidad ?? {};
+    const rp = body.respuestas_personalidad ?? (body as any).respuestas ?? {};
     const rl = body.respuestas_logica ?? {};
 
     const inviteEmpId = (body.empleado_id ?? '').trim();
@@ -100,10 +100,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 });
       }
       const emp = empRow as { rol_examen: string; rol_buscado: string | null };
-      if (emp.rol_examen !== 'programador' && emp.rol_examen !== 'tecnico') {
+      const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante'];
+      if (!rolesPermitidos.includes(emp.rol_examen)) {
         return NextResponse.json({ error: 'Rol de examen inválido en invitación' }, { status: 500 });
       }
-      rol = emp.rol_examen as RolExamen;
+      rol = emp.rol_examen as any;
       if (!rolBuscado) {
         rolBuscado = (emp.rol_buscado ?? '').trim() || null;
       }
@@ -113,13 +114,13 @@ export async function POST(req: Request) {
       empleadoIdUpdate = inviteEmpId;
       examenTokenMark = inviteTok;
     } else {
-      const r = body.rol_examen;
-      if (r !== 'programador' && r !== 'tecnico') {
+      const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante'];
+      if (!rolesPermitidos.includes(body.rol_examen as string)) {
         return NextResponse.json({ error: 'nombre y rol_examen válidos requeridos' }, { status: 400 });
       }
-      rol = r;
+      rol = body.rol_examen as any;
       if (!rolBuscado) {
-        return NextResponse.json({ error: 'rol_buscado requerido (rol o puesto al que aplica)' }, { status: 400 });
+        return NextResponse.json({ error: 'rol_buscado requerido' }, { status: 400 });
       }
     }
 
@@ -153,19 +154,75 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Completa las 5 preguntas de lógica' }, { status: 400 });
     }
 
-    const pp = puntajePersonalidad(rp);
-    const { puntaje: pl, gma0a5 } = puntajeLogica(rol, rl);
-    const total = puntajeTotal(pp, pl);
-    const nivelInt = nivelIntegridadRiesgo(rp);
+    let pp = 0;
+    let pl = 0;
+    let gma0a5 = 0;
+    let total = 0;
+    let nivelInt = 0;
+    let semaforo = 'rojo';
+    let estado = 'reprobado';
+    let motivo = '';
+    let status_tripode = 'rechazado';
+
     const colorDisc = body.color_disc != null ? String(body.color_disc).trim() || null : null;
-    const tripode = calcularSemaforoTalento({
-      puntajeLogica: gma0a5,
-      nivelIntegridad: nivelInt,
-      completoEnTiempo,
-      colorDISC: colorDisc,
-    });
-    const semaforo = semaforoDbFromTripode(tripode) ?? 'amarillo';
-    const estado = estadoContratacionFromTripode(tripode);
+
+    if ((rol as string) === 'obrero' || (rol as string) === 'vigilante') {
+      let respuestasA = 0;
+      let respuestasB = 0;
+      let respuestasC = 0;
+
+      if (Object.keys(rp).length === 0) {
+        return NextResponse.json({ 
+          success: true, 
+          semaforo: 'rojo', 
+          statusEvaluacion: 'pendiente_regularizar'
+        });
+      }
+
+      Object.values(rp).forEach((valor) => {
+        if (valor === 'A') respuestasA++;
+        if (valor === 'B') respuestasB++;
+        if (valor === 'C') respuestasC++;
+      });
+
+      if (respuestasC >= 3) {
+        semaforo = 'rojo';
+        estado = 'reprobado';
+        motivo = 'Conductas de riesgo detectadas (3 o más respuestas C)';
+        status_tripode = 'rechazado';
+      } else if (respuestasA >= 14 && respuestasC === 0) {
+        semaforo = 'verde';
+        estado = 'aprobado';
+        motivo = 'Perfil seguro e ideal';
+        status_tripode = 'aprobado';
+      } else {
+        semaforo = 'amarillo';
+        estado = 'aprobado_con_observaciones';
+        motivo = 'Perfil pasivo o con observaciones menores';
+        status_tripode = 'aprobado';
+      }
+      pp = (respuestasA / 20) * 100;
+      total = pp;
+    } else {
+      pp = puntajePersonalidad(rp);
+      const { puntaje: pl_val, gma0a5: gma } = puntajeLogica(rol, rl);
+      pl = pl_val;
+      gma0a5 = gma;
+      total = puntajeTotal(pp, pl);
+      nivelInt = nivelIntegridadRiesgo(rp);
+      const tripodeObj = calcularSemaforoTalento({
+        puntajeLogica: gma0a5,
+        nivelIntegridad: nivelInt,
+        completoEnTiempo,
+        colorDISC: colorDisc,
+      });
+      semaforo = semaforoDbFromTripode(tripodeObj) ?? 'amarillo';
+      estado = estadoContratacionFromTripode(tripodeObj);
+      motivo = tripodeObj.motivo;
+      status_tripode = tripodeObj.status;
+    }
+
+    const tripode = { motivo, status: status_tripode };
 
     const nombresCol = nombresLegadoDesdeTextoLibre(nombre);
     const baseRow = {

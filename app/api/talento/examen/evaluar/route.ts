@@ -51,13 +51,14 @@ export async function POST(req: Request) {
     const rol = body.rol_examen;
     const rolBuscado = (body.rol_buscado ?? '').trim() || null;
     const inicioIso = body.examen_inicio_at;
-    const rp = body.respuestas_personalidad ?? {};
+    const rp = body.respuestas_personalidad ?? (body as any).respuestas ?? {};
     const rl = body.respuestas_logica ?? {};
 
     if (!empleadoId) {
       return NextResponse.json({ error: 'empleado_id requerido' }, { status: 400 });
     }
-    if (!nombre || (rol !== 'programador' && rol !== 'tecnico')) {
+    const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante'];
+    if (!nombre || !rolesPermitidos.includes(rol as string)) {
       return NextResponse.json({ error: 'nombre_completo y rol_examen válidos requeridos' }, { status: 400 });
     }
     if (!rolBuscado) {
@@ -72,7 +73,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'examen_inicio_at inválido' }, { status: 400 });
     }
 
-    const examen = generarExamenAdaptativo(rol);
+    const examen = generarExamenAdaptativo(rol as string);
+    
+    if (((rol as string) === 'obrero' || (rol as string) === 'vigilante') && Object.keys(rp).length === 0) {
+      return NextResponse.json({ 
+        success: true, 
+        semaforo: 'rojo', 
+        statusEvaluacion: 'pendiente_regularizar'
+      });
+    }
+
     if (Object.keys(rp).length < examen.personalidad.length) {
       return NextResponse.json({ error: 'Completa las 20 preguntas de personalidad' }, { status: 400 });
     }
@@ -83,21 +93,67 @@ export async function POST(req: Request) {
     const elapsed = Date.now() - inicio;
     const completoEnTiempo = elapsed <= QUINCE_MIN_MS + GRACIA_MS;
 
-    const pp = puntajePersonalidad(rp);
-    const { puntaje: pl, gma0a5 } = puntajeLogica(rol, rl);
-    const total = puntajeTotal(pp, pl);
-    const nivelInt = nivelIntegridadRiesgo(rp);
+    let pp = 0;
+    let pl = 0;
+    let gma0a5 = 0;
+    let total = 0;
+    let nivelInt = 0;
     const colorDisc = body.color_disc != null ? String(body.color_disc).trim() || null : null;
 
-    const tripode = calcularSemaforoTalento({
-      puntajeLogica: gma0a5,
-      nivelIntegridad: nivelInt,
-      completoEnTiempo,
-      colorDISC: colorDisc,
-    });
+    let semaforo = 'rojo';
+    let estado = 'reprobado';
+    let motivo = '';
+    let status_tripode = 'rechazado';
 
-    const semaforo = semaforoDbFromTripode(tripode);
-    const estado = estadoContratacionFromTripode(tripode);
+    if ((rol as string) === 'obrero' || (rol as string) === 'vigilante') {
+      let respuestasA = 0;
+      let respuestasB = 0;
+      let respuestasC = 0;
+
+      Object.values(rp).forEach((valor) => {
+        if (valor === 'A') respuestasA++;
+        if (valor === 'B') respuestasB++;
+        if (valor === 'C') respuestasC++;
+      });
+
+      if (respuestasC >= 3) {
+        semaforo = 'rojo';
+        estado = 'reprobado';
+        motivo = 'Conductas de riesgo detectadas (3 o más respuestas C)';
+        status_tripode = 'rechazado';
+      } else if (respuestasA >= 14 && respuestasC === 0) {
+        semaforo = 'verde';
+        estado = 'aprobado';
+        motivo = 'Perfil seguro e ideal';
+        status_tripode = 'aprobado';
+      } else {
+        semaforo = 'amarillo';
+        estado = 'aprobado_con_observaciones';
+        motivo = 'Perfil pasivo o con observaciones menores';
+        status_tripode = 'aprobado';
+      }
+      pp = (respuestasA / 20) * 100;
+      total = pp;
+    } else {
+      pp = puntajePersonalidad(rp);
+      const { puntaje: pl_val, gma0a5: gma } = puntajeLogica(rol as RolExamen, rl);
+      pl = pl_val;
+      gma0a5 = gma;
+      total = puntajeTotal(pp, pl);
+      nivelInt = nivelIntegridadRiesgo(rp);
+      const tripodeObj = calcularSemaforoTalento({
+        puntajeLogica: gma0a5,
+        nivelIntegridad: nivelInt,
+        completoEnTiempo,
+        colorDISC: colorDisc,
+      });
+      semaforo = semaforoDbFromTripode(tripodeObj) ?? 'amarillo';
+      estado = estadoContratacionFromTripode(tripodeObj);
+      motivo = tripodeObj.motivo;
+      status_tripode = tripodeObj.status;
+    }
+
+    const tripode = { motivo, status: status_tripode };
 
     const updateRow = {
       nombre_completo: nombre,

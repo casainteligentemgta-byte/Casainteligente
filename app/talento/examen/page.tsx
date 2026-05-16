@@ -358,26 +358,47 @@ function ExamenTalentoPageInner() {
           </div>
 
           <section>
-            <h2 className="text-sm font-semibold text-zinc-300 mb-3">Personalidad (1 = bajo · 5 = alto)</h2>
+            <h2 className="text-sm font-semibold text-zinc-300 mb-3">
+              {(rolExamen as string) === 'obrero' || (rolExamen as string) === 'vigilante' ? 'Evaluación Situacional' : 'Personalidad (1 = bajo · 5 = alto)'}
+            </h2>
             <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
-              {PREGUNTAS_PERSONALIDAD.map((p) => (
+              {examen.personalidad.map((p: any) => (
                 <div key={p.id} className="rounded-xl border border-zinc-800/80 p-4 bg-black/40">
-                  <p className="text-xs text-zinc-500 mb-1">{p.bloque}</p>
-                  <p className="text-sm text-zinc-200 mb-3">{p.texto}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        disabled={expirado}
-                        onClick={() => setPers((prev) => ({ ...prev, [p.id]: n }))}
-                        className={`min-w-[2.5rem] rounded-lg py-2 text-sm font-medium ${
-                          pers[p.id] === n ? 'bg-sky-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                        } disabled:opacity-40`}
-                      >
-                        {n}
-                      </button>
-                    ))}
+                  <p className="text-xs text-zinc-500 mb-1">{p.bloque || p.categoria}</p>
+                  <p className="text-sm text-zinc-200 mb-3">{p.texto || p.pregunta}</p>
+                  <div className="flex flex-col gap-2">
+                    {p.opciones ? (
+                      p.opciones.map((op: any) => (
+                        <button
+                          key={op.valor}
+                          type="button"
+                          disabled={expirado}
+                          onClick={() => setPers((prev) => ({ ...prev, [p.id]: op.valor }))}
+                          className={`block w-full text-left rounded-lg px-3 py-2 text-sm ${
+                            pers[p.id] === op.valor ? 'bg-sky-600 text-white' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
+                          } disabled:opacity-40`}
+                        >
+                          <span className="font-semibold mr-2">{op.valor}.</span>
+                          {op.texto}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            disabled={expirado}
+                            onClick={() => setPers((prev) => ({ ...prev, [p.id]: n }))}
+                            className={`min-w-[2.5rem] rounded-lg py-2 text-sm font-medium ${
+                              pers[p.id] === n ? 'bg-sky-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                            } disabled:opacity-40`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -389,11 +410,11 @@ function ExamenTalentoPageInner() {
               Lógica {rolExamen === 'programador' ? '(software)' : '(instalaciones)'}
             </h2>
             <div className="space-y-4">
-              {examen.logica.map((q) => (
+              {examen.logica.map((q: any) => (
                 <div key={q.id} className="rounded-xl border border-zinc-800/80 p-4 bg-black/40">
                   <p className="text-sm text-zinc-200 mb-3">{q.texto}</p>
                   <div className="space-y-2">
-                    {q.opciones.map((op, idx) => (
+                    {q.opciones.map((op: any, idx: number) => (
                       <button
                         key={idx}
                         type="button"
@@ -419,7 +440,7 @@ function ExamenTalentoPageInner() {
             disabled={
               expirado ||
               enviando ||
-              Object.keys(pers).length < PREGUNTAS_PERSONALIDAD.length ||
+              Object.keys(pers).length < examen.personalidad.length ||
               Object.keys(log).length < examen.logica.length
             }
             onClick={() => void enviar()}

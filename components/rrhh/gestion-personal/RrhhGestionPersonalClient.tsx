@@ -5,6 +5,7 @@ import { Copy, MessageCircle, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +13,7 @@ import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPerson
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
+import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 
 type LaborRequestRow = {
   id: string;
@@ -449,20 +451,18 @@ export default function RrhhGestionPersonalClient({
   const hayFiltroAlcance = Boolean(proyectoModuloFiltro || proyectoObraFiltro);
 
   const bannerAlcanceLabor = hayFiltroAlcance ? (
-    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3 py-2 text-sm text-sky-100 sm:flex-row sm:items-center sm:justify-between">
-      <p>
-        <span className="font-semibold text-white">Alcance del proyecto:</span>{' '}
-        {alcanceNombre ? `«${alcanceNombre}»` : 'Seleccionado'}{' '}
-        <span className="text-sky-200/90">
-          (este módulo integral y obras Talento vinculadas; solicitudes pendientes y personal en obra acotados a ese
-          alcance).
-        </span>
-      </p>
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Solicitados</h1>
+        <p className="text-sm text-zinc-400 mt-1">
+          Alcance: <span className="text-sky-400 font-medium">{alcanceNombre ? `«${alcanceNombre}»` : 'Seleccionado'}</span>
+        </p>
+      </div>
       <Button
         type="button"
         variant="outline"
         size="sm"
-        className="shrink-0 border-sky-600/60 text-sky-100"
+        className="shrink-0 border-white/10 text-zinc-300 hover:bg-white/5 backdrop-blur-sm"
         onClick={() => replaceGestionUrl({ proyecto_modulo: null, proyecto: null })}
       >
         Ver todo (todos los proyectos)
@@ -472,6 +472,10 @@ export default function RrhhGestionPersonalClient({
 
   const pendientesInner = (
     <>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold tracking-tight text-white">Solicitados</h2>
+        <p className="text-sm text-zinc-400 mt-1">Gestión de personal requerido</p>
+      </div>
       {loadingPending ? (
         <p className="text-sm text-zinc-500">Cargando…</p>
       ) : pending.length === 0 ? (
@@ -481,81 +485,106 @@ export default function RrhhGestionPersonalClient({
             : 'No hay solicitudes en estado pending.'}
         </p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Especialidad</TableHead>
-              <TableHead>Cantidad</TableHead>
-              <TableHead>Proyecto</TableHead>
-              <TableHead className="min-w-[220px] text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <AnimatePresence>
             {pending.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="text-zinc-300">{new Date(r.created_at).toLocaleString('es-VE')}</TableCell>
-                <TableCell>
-                  <span className="font-medium text-white">{r.specialty_codigo}</span>
-                  <span className="ml-2 text-xs text-zinc-500">{r.specialty_nombre ?? ''}</span>
-                </TableCell>
-                <TableCell className="tabular-nums">{r.quantity_requested}</TableCell>
-                <TableCell className="max-w-[200px] truncate text-zinc-400" title={r.project_id}>
-                  {nombreProyecto.get(r.project_id) ?? r.project_id.slice(0, 8)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="elite"
-                      className="gap-1.5"
-                      title="Copiar enlace público del formato de hoja de vida"
-                      onClick={() => void copiarEnlaceHojaVida(r)}
-                    >
-                      <Copy className="h-3.5 w-3.5" aria-hidden />
-                      Copiar enlace HV
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="elite"
-                      className="gap-1.5 border-emerald-500/30 text-emerald-100 hover:bg-emerald-950/40"
-                      title="Abrir WhatsApp con mensaje e enlace (eliges el contacto)"
-                      onClick={() => abrirWhatsAppPlanilla(r)}
-                    >
-                      <MessageCircle className="h-3.5 w-3.5" aria-hidden />
-                      WhatsApp
-                    </Button>
-                    <Button type="button" size="sm" variant="elitePrimary" onClick={() => void abrirAsignacion(r)}>
-                      Asignar obreros
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="border-red-800/60 text-red-200 hover:bg-red-950/50"
-                      title="Eliminar solicitud"
-                      onClick={() => void borrarSolicitud(r)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                      Borrar
-                    </Button>
+              <motion.div
+                key={r.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="group relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-zinc-900/50 to-zinc-950/50 p-5 backdrop-blur-xl transition-all duration-300 hover:border-white/10 hover:shadow-2xl hover:shadow-sky-500/5"
+              >
+                <div className="absolute inset-0 -z-10 bg-gradient-to-br from-sky-500/5 to-purple-500/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-bold tracking-tight text-white">{r.specialty_codigo}</h3>
+                    <p className="text-sm text-zinc-400">{r.specialty_nombre ?? 'Sin nombre de especialidad'}</p>
                   </div>
-                </TableCell>
-              </TableRow>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                    <span className="text-sm font-bold tabular-nums">{r.quantity_requested}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-2 text-xs text-zinc-500">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-zinc-400">Proyecto:</span>
+                    <span className="truncate" title={r.project_id}>
+                      {nombreProyecto.get(r.project_id) ?? r.project_id.slice(0, 8)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-zinc-400">Fecha:</span>
+                    <span>{new Date(r.created_at).toLocaleString('es-VE')}</span>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-white/5 pt-4">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="elite"
+                    className="gap-1.5 h-8 text-xs"
+                    title="Copiar enlace público del formato de hoja de vida"
+                    onClick={() => void copiarEnlaceHojaVida(r)}
+                  >
+                    <Copy className="h-3 w-3" aria-hidden />
+                    Enlace HV
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="elite"
+                    className="gap-1.5 h-8 text-xs border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                    title="Abrir WhatsApp con mensaje e enlace"
+                    onClick={() => abrirWhatsAppPlanilla(r)}
+                  >
+                    <MessageCircle className="h-3 w-3" aria-hidden />
+                    WhatsApp
+                  </Button>
+                  <Button 
+                    type="button" 
+                    size="sm" 
+                    variant="elitePrimary" 
+                    className="h-8 text-xs bg-sky-600 hover:bg-sky-700 text-white"
+                    onClick={() => void abrirAsignacion(r)}
+                  >
+                    Asignar
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    title="Eliminar solicitud"
+                    onClick={() => void borrarSolicitud(r)}
+                  >
+                    <Trash2 className="h-3 w-3" aria-hidden />
+                    Borrar
+                  </Button>
+                </div>
+              </motion.div>
             ))}
-          </TableBody>
-        </Table>
+          </AnimatePresence>
+        </div>
       )}
     </>
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 text-white">
+    <div className="mx-auto max-w-7xl px-4 py-8 text-white">
       {bannerAlcanceLabor}
+
+      {proyectoModuloFiltro && (
+        <div className="mb-6">
+          <ResumenObrerosProyectoModulo proyectoModuloId={proyectoModuloFiltro} />
+        </div>
+      )}
+
       {soloPendientes ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">{pendientesInner}</div>
+        <div className="rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-xl p-6 shadow-2xl shadow-black/40">{pendientesInner}</div>
       ) : (
         <Tabs
           value={tab}
@@ -564,16 +593,16 @@ export default function RrhhGestionPersonalClient({
           }}
           className="w-full"
         >
-          <TabsList className="grid w-full max-w-2xl grid-cols-2">
-            <TabsTrigger value="pendientes">Solicitudes pendientes</TabsTrigger>
-            <TabsTrigger value="obra">Personal en obra</TabsTrigger>
+          <TabsList className="grid w-full max-w-2xl grid-cols-2 bg-zinc-900/50 p-1 rounded-xl border border-white/5 mb-6">
+            <TabsTrigger value="pendientes" className="rounded-lg data-[state=active]:bg-sky-600 data-[state=active]:text-white">Solicitudes pendientes</TabsTrigger>
+            <TabsTrigger value="obra" className="rounded-lg data-[state=active]:bg-sky-600 data-[state=active]:text-white">Personal en obra</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pendientes" className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
+          <TabsContent value="pendientes" className="rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-xl p-6 shadow-2xl shadow-black/40">
             {pendientesInner}
           </TabsContent>
 
-        <TabsContent value="obra" className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
+          <TabsContent value="obra" className="rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-xl p-6 shadow-2xl shadow-black/40">
           {loadingObra ? (
             <p className="text-sm text-zinc-500">Cargando…</p>
           ) : asignacionesPorProyecto.length === 0 ? (

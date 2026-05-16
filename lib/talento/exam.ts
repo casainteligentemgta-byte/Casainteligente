@@ -30,6 +30,209 @@ export const PREGUNTAS_PERSONALIDAD: PreguntaPersonalidad[] = [
   { id: 'p20', bloque: 'Valores', texto: 'Trato a compañeros y subcontratistas con respeto constante.' },
 ];
 
+export const PREGUNTAS_OBRERO = [
+  {
+    id: "obr_01",
+    categoria: "seguridad",
+    pregunta: "Estás trabajando en altura y notas que tu arnés de seguridad tiene una costura rota. ¿Qué haces?",
+    opciones: [
+      { texto: "Dejo de trabajar de inmediato, notifico al supervisor y pido un cambio de equipo.", valor: "A" },
+      { texto: "Sigo usándolo con cuidado para no retrasar el avance del día.", valor: "B" },
+      { texto: "No digo nada y espero a que el supervisor se dé cuenta en la revisión.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_02",
+    categoria: "seguridad",
+    pregunta: "Ves a un compañero fumando en un área con materiales inflamables. ¿Qué haces?",
+    opciones: [
+      { texto: "Le pido que apague el cigarrillo y aviso al supervisor.", valor: "A" },
+      { texto: "Me alejo del área para no estar en riesgo.", valor: "B" },
+      { texto: "No digo nada para no tener problemas con él.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_03",
+    categoria: "herramientas",
+    pregunta: "Encuentras una herramienta costosa tirada en el suelo y nadie la está usando. ¿Qué haces?",
+    opciones: [
+      { texto: "La recojo y la entrego al almacén o al supervisor.", valor: "A" },
+      { texto: "La dejo donde está para que su dueño la encuentre.", valor: "B" },
+      { texto: "La guardo en mi bolso para usarla después.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_04",
+    categoria: "seguridad",
+    pregunta: "El supervisor te pide realizar una tarea para la que no tienes el equipo de protección adecuado. ¿Qué haces?",
+    opciones: [
+      { texto: "Le explico que necesito el equipo de protección antes de empezar.", valor: "A" },
+      { texto: "Hago la tarea rápido para no perder tiempo.", valor: "B" },
+      { texto: "La hago sin decir nada para no contradecir al jefe.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_05",
+    categoria: "puntualidad",
+    pregunta: "Te das cuenta de que vas a llegar tarde a tu turno por un problema con el transporte. ¿Qué haces?",
+    opciones: [
+      { texto: "Aviso a mi supervisor antes de la hora de entrada.", valor: "A" },
+      { texto: "Llego y pido disculpas al entrar.", valor: "B" },
+      { texto: "Entro a trabajar sin decir nada para que no lo noten.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_06",
+    categoria: "seguridad",
+    pregunta: "Notas que un cable de una máquina eléctrica está pelado. ¿Qué haces?",
+    opciones: [
+      { texto: "Desconecto la máquina y reporto el daño de inmediato.", valor: "A" },
+      { texto: "Tengo cuidado de no tocar esa parte del cable.", valor: "B" },
+      { texto: "Sigo usando la máquina para terminar el trabajo.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_07",
+    categoria: "integridad",
+    pregunta: "Un compañero te pide que firmes la lista de asistencia por él porque llegará tarde. ¿Qué haces?",
+    opciones: [
+      { texto: "Me niego y le digo que debe firmar él mismo.", valor: "A" },
+      { texto: "Le digo que le avise al supervisor.", valor: "B" },
+      { texto: "Firma por él para ayudarlo.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_08",
+    categoria: "orden",
+    pregunta: "Al terminar la jornada sobra una pequeña cantidad de material. ¿Qué haces?",
+    opciones: [
+      { texto: "Lo devuelvo al almacén o lo dejo en el área designada.", valor: "A" },
+      { texto: "Lo dejo en el sitio donde estaba trabajando.", valor: "B" },
+      { texto: "Me lo llevo a casa ya que es poco y no se notará.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_09",
+    categoria: "seguridad",
+    pregunta: "Ves a una persona desconocida caminando por la obra sin casco ni identificación. ¿Qué haces?",
+    opciones: [
+      { texto: "Aviso de inmediato al personal de seguridad o al supervisor.", valor: "A" },
+      { texto: "Le pregunto qué busca y lo guío.", valor: "B" },
+      { texto: "Ignoro a la persona y sigo con mi trabajo.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_10",
+    categoria: "equipo",
+    pregunta: "Tu compañero de cuadrilla se quita los lentes de seguridad porque dice que le molestan. ¿Qué haces?",
+    opciones: [
+      { texto: "Le recuerdo que es obligatorio y peligroso no usarlos.", valor: "A" },
+      { texto: "No le digo nada, es su decisión.", valor: "B" },
+      { texto: "Me quito los míos también para estar igual.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_11",
+    categoria: "operacion",
+    pregunta: "Te asignan una tarea nueva que nunca has realizado y no estás seguro de cómo hacerla. ¿Qué haces?",
+    opciones: [
+      { texto: "Pido a un compañero experimentado o al supervisor que me explique.", valor: "A" },
+      { texto: "Intento hacerla observando a otros.", valor: "B" },
+      { texto: "Digo que sé hacerla y trato de adivinar.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_12",
+    categoria: "seguridad",
+    pregunta: "Encuentras un charco de aceite en un pasillo transitado. ¿Qué haces?",
+    opciones: [
+      { texto: "Limpio el área o coloco una señalización y aviso.", valor: "A" },
+      { texto: "Camino con cuidado para no pisarlo.", valor: "B" },
+      { texto: "Paso de largo sin hacer nada.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_13",
+    categoria: "conducta",
+    pregunta: "Un grupo de compañeros está hablando mal de la empresa y del supervisor. ¿Qué haces?",
+    opciones: [
+      { texto: "No participo en la conversación y me concentro en mi trabajo.", valor: "A" },
+      { texto: "Escucho sin opinar.", valor: "B" },
+      { texto: "Me uno a ellos y comparto mis quejas.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_14",
+    categoria: "responsabilidad",
+    pregunta: "Te piden quedarte una hora extra para terminar un vaciado crítico. ¿Qué haces?",
+    opciones: [
+      { texto: "Acepto apoyar al equipo para terminar la tarea.", valor: "A" },
+      { texto: "Digo que no puedo y me voy.", valor: "B" },
+      { texto: "Me quejo con todos pero me quedo de mala gana.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_15",
+    categoria: "seguridad",
+    pregunta: "Falta iluminación en el área donde debes trabajar de noche. ¿Qué haces?",
+    opciones: [
+      { texto: "Reporto la falta de luz y espero a que se solucione.", valor: "A" },
+      { texto: "Uso la linterna de mi teléfono.", valor: "B" },
+      { texto: "Trabajo a oscuras con más cuidado.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_16",
+    categoria: "conducta",
+    pregunta: "Un supervisor te llama la atención de forma fuerte e irrespetuosa. ¿Qué haces?",
+    opciones: [
+      { texto: "Mantengo la calma y reporto el incidente a RRHH después.", valor: "A" },
+      { texto: "Le pido que no me hable así.", valor: "B" },
+      { texto: "Le grito de vuelta para defenderme.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_17",
+    categoria: "seguridad",
+    pregunta: "Encuentras el candado de bloqueo de un equipo roto o quitado. ¿Qué haces?",
+    opciones: [
+      { texto: "No opero el equipo y aviso al encargado de seguridad.", valor: "A" },
+      { texto: "Pregunto si ya terminaron de usarlo.", valor: "B" },
+      { texto: "Prendo el equipo para ver si funciona.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_18",
+    categoria: "integridad",
+    pregunta: "Alguien de afuera te ofrece dinero por dejarlo sacar un saco de cemento. ¿Qué haces?",
+    opciones: [
+      { texto: "Rechazo la oferta y lo reporto de inmediato.", valor: "A" },
+      { texto: "Le digo que no y me voy.", valor: "B" },
+      { texto: "Acepto el dinero, un saco no hará falta.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_19",
+    categoria: "seguridad",
+    pregunta: "Ves que el extintor de tu área está vencido. ¿Qué haces?",
+    opciones: [
+      { texto: "Lo reporto al supervisor para que lo cambien.", valor: "A" },
+      { texto: "Espero a que pasen revisando.", valor: "B" },
+      { texto: "No le doy importancia, rara vez se usan.", valor: "C" }
+    ]
+  },
+  {
+    id: "obr_20",
+    categoria: "equipo",
+    pregunta: "Un compañero se siente mal y dice que está mareado. ¿Qué haces?",
+    opciones: [
+      { texto: "Lo ayudo a sentarse y aviso al supervisor o médico.", valor: "A" },
+      { texto: "Le digo que descanse un rato.", valor: "B" },
+      { texto: "Le digo que siga trabajando para terminar rápido.", valor: "C" }
+    ]
+  }
+];
+
 const LOGICA_PROGRAMADOR: PreguntaLogica[] = [
   {
     id: 'lp1',
@@ -114,7 +317,14 @@ const LOGICA_TECNICO: PreguntaLogica[] = [
 /**
  * Genera el examen de 25 preguntas: 20 personalidad fijas + 5 lógica según rol.
  */
-export function generarExamenAdaptativo(rol: RolExamen): ExamenGenerado {
+export function generarExamenAdaptativo(rol: string): any {
+  if (rol === 'obrero' || rol === 'vigilante') {
+    return {
+      rol,
+      personalidad: PREGUNTAS_OBRERO,
+      logica: [],
+    };
+  }
   const logica = rol === 'programador' ? LOGICA_PROGRAMADOR : LOGICA_TECNICO;
   return {
     rol,

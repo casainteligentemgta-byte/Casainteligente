@@ -117,6 +117,25 @@ export function ContratosExpressListaTalento() {
     void load();
   }, [load]);
 
+  const handleForceAceptar = async (empleadoId: string, rowId: string) => {
+    setBusyId(rowId);
+    try {
+      const res = await fetch(`/api/talento/contratos/${empleadoId}/force-aceptar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: 'Aceptación manual vía Fast-List' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al procesar bypass');
+      toast.success('Contrato aceptado por bypass exitosamente');
+      void load();
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Error desconocido');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleSort = (key: SortConfig['key']) => {
     setSortConfig(prev => ({
       key,
@@ -620,6 +639,19 @@ export function ContratosExpressListaTalento() {
                             >
                               <FileText className="size-4.5" />
                             </Button>
+                            {r.formalizado_empleado_id && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                disabled={busyId === r.id}
+                                className="h-10 flex items-center gap-2 px-3 text-emerald-400 bg-emerald-400/10 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white rounded-xl transition-all shadow-lg shadow-emerald-500/5" 
+                                onClick={() => handleForceAceptar(r.formalizado_empleado_id!, r.id)}
+                                title="Bypass Aceptación Contrato"
+                              >
+                                {busyId === r.id ? <RefreshCw className="size-4 animate-spin" /> : <AlertCircle className="size-4" />}
+                                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Bypass</span>
+                              </Button>
+                            )}
                             <Button 
                               variant="ghost" 
                               size="sm" 

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
-import LaborRequestDirectorForm from '@/components/rrhh/LaborRequestDirectorForm';
+
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import ContratosExpressModuloPanel from '@/components/proyectos/ContratosExpressModuloPanel';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
@@ -690,13 +690,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     if (tabSolicitados) {
       return (
         <div className="space-y-4">
-          <div id="solicitar-mano-obra" className="scroll-mt-24">
-            <LaborRequestDirectorForm
-              moduloIntegralId={id}
-              nombreProyecto={proyecto.nombre}
-              onCreada={() => setRrhhVacantesTick((n) => n + 1)}
-            />
-          </div>
+
           <ResumenObrerosProyectoModulo
             proyectoModuloId={id}
             listaRefresco={rrhhVacantesTick}
@@ -709,11 +703,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     }
     return (
       <>
-        <LaborRequestDirectorForm
-          moduloIntegralId={id}
-          nombreProyecto={proyecto.nombre}
-          onCreada={() => setRrhhVacantesTick((n) => n + 1)}
-        />
+
         <SugerenciaCuadrilla
           nombreObra={proyecto.nombre}
           ubicacionObra={proyecto.ubicacion_texto}

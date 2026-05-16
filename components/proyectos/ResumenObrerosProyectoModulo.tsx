@@ -625,9 +625,10 @@ export default function ResumenObrerosProyectoModulo({
         setContratoPorEmpleado(contrMap);
         setFilasContratoPorEmpleado(new Map(filasContratoPorEmpleado));
         setObraEstadoPorId(new Map(obraEstadoMap));
-      } catch {
+      } catch (err: any) {
         if (!alive) return;
-        setError('No se pudo cargar el resumen de obreros.');
+        console.error('Error en ResumenObrerosProyectoModulo:', err);
+        setError(`No se pudo cargar el resumen de obreros: ${err.message || err}`);
         setProjectIdsForLabor([]);
         setSolicitadosWorkerIdSet(new Set());
         setSolicitadosPlazas(0);
@@ -835,34 +836,7 @@ export default function ResumenObrerosProyectoModulo({
         <p className="mt-4 text-sm text-red-400">{error}</p>
       ) : (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <div className="flex w-full flex-col overflow-hidden rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 text-left transition hover:border-[#FF9500]/55 hover:bg-[#FF9500]/15 focus-within:ring-2 focus-within:ring-[#FF9500]/50">
-              <Link
-                href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(proyectoModuloId)}`}
-                className="block p-4 focus:outline-none"
-                title="Gestionar solicitudes pendientes solo de este módulo y obras vinculadas"
-              >
-                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-[#FF9500]/90">
-                  <ClipboardList className="h-3.5 w-3.5" aria-hidden />
-                  Solicitados
-                </div>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-white">{solicitadosPlazas}</p>
-                <p className="mt-1 text-[10px] leading-snug text-zinc-500">
-                  {cuadroPlazasLaborPendientes > 0 ? (
-                    <>
-                      Plazas en solicitud de mano de obra (pendientes RRHH): {cuadroPlazasLaborPendientes}. Asignados en
-                      obra: {cuadroAsignadosLabor}.
-                    </>
-                  ) : cuadroAsignadosLabor > 0 ? (
-                    <>Obreros ya asignados vía solicitud: {cuadroAsignadosLabor}.</>
-                  ) : (
-                    <>Sin plazas en <span className="font-mono text-zinc-400">labor_requests</span> ni asignaciones.</>
-                  )}{' '}
-                  Ref. reclutamiento: {plazasVacantesResumen} plaza(s) en {vacantesActivas} vacante(s). Clic: gestión
-                  laboral RRHH.
-                </p>
-              </Link>
-            </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <button
               type="button"
               onClick={() => setListaModal('enCarpeta')}
