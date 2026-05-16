@@ -1,9 +1,5 @@
-import {
-  generarExamenAdaptativo,
-  PREGUNTAS_PERSONALIDAD,
-  type RolExamen,
-} from '@/lib/talento/exam';
-import type { PreguntaLogica, PreguntaPersonalidad } from '@/types/talento';
+import { generarExamenAdaptativo, PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
+import type { PreguntaLogica, PreguntaPersonalidad, RolExamen } from '@/types/talento';
 
 export type RespuestasMap = Record<string, number>;
 
