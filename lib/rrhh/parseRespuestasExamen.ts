@@ -3,6 +3,7 @@ import {
   PREGUNTAS_PERSONALIDAD,
   type RolExamen,
 } from '@/lib/talento/exam';
+import type { PreguntaLogica, PreguntaPersonalidad } from '@/types/talento';
 
 export type RespuestasMap = Record<string, number>;
 
@@ -163,10 +164,13 @@ export function etiquetasLikert(valor: number): string {
   return map[valor] ?? String(valor);
 }
 
-export function preguntasParaDetalle(rol: RolExamen) {
-  const examen = generarExamenAdaptativo(rol);
+export function preguntasParaDetalle(rol: RolExamen): {
+  personalidad: PreguntaPersonalidad[];
+  logica: PreguntaLogica[];
+} {
+  const examen = generarExamenAdaptativo(rol) as { logica?: PreguntaLogica[] };
   return {
     personalidad: PREGUNTAS_PERSONALIDAD,
-    logica: examen.logica,
+    logica: examen.logica ?? [],
   };
 }
