@@ -26,6 +26,8 @@ const OnboardingHojaVidaLegalForm = dynamic(() => import('@/components/reclutami
 import { GlassCard, GlassCardMotion } from '@/components/nexus/GlassCard';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import DocumentUpload from '@/components/reclutamiento/DocumentUpload';
+
 type Props = { params: { token: string } };
 
 async function uploadCedulaPhoto(
@@ -266,20 +268,11 @@ function HojaDeVidaMovilInner({ params }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-zinc-400 mb-2">Foto de cédula (frente)</label>
-                  <label className="border-2 border-dashed border-white/10 rounded-2xl p-8 text-center bg-white/[0.02] hover:bg-white/[0.05] transition-all block cursor-pointer group">
-                    <span className="text-4xl mb-3 block group-hover:scale-110 transition-transform">📷</span>
-                    <span className="text-sm font-medium text-[var(--nexus-cyan)]">
-                      {cedulaFoto ? `Archivo: ${cedulaFoto.name}` : 'Toca para tomar o elegir foto'}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={(e) => setCedulaFoto(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
+                  <DocumentUpload 
+                    label="Foto de cédula (frente)" 
+                    currentFileName={cedulaFoto?.name}
+                    onUploadSuccess={(file) => setCedulaFoto(file)} 
+                  />
                 </div>
               </GlassCard>
             </motion.div>
