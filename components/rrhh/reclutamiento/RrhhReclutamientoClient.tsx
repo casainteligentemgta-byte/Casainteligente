@@ -11,6 +11,7 @@ import {
   Link2,
   RefreshCw,
   Send,
+  Trash2,
   UserCheck,
   UserX,
 } from 'lucide-react';
@@ -60,6 +61,7 @@ export default function RrhhReclutamientoClient() {
   const [invBusy, setInvBusy] = useState(false);
   const [ultimoEnlace, setUltimoEnlace] = useState<string | null>(null);
   const [detalleEmpleadoId, setDetalleEmpleadoId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const examenPreview = useMemo(() => preguntasParaDetalle(rolPreview), [rolPreview]);
 
@@ -203,6 +205,36 @@ export default function RrhhReclutamientoClient() {
     setInvEmpleadoId(r.id);
     setInvCedula(docMostrado(r) === '—' ? '' : docMostrado(r));
   };
+
+  const borrarEmpleado = useCallback(
+    async (r: EmpleadoHojaVidaRow) => {
+      const nombre = (r.nombre_completo ?? '').trim() || 'este trabajador';
+      if (
+        !window.confirm(
+          `¿Eliminar a «${nombre}» de la lista?\n\nSe borrará el expediente (ci_empleados). Esta acción no se puede deshacer.`,
+        )
+      ) {
+        return;
+      }
+      setDeletingId(r.id);
+      const { error: delErr } = await supabase.from('ci_empleados').delete().eq('id', r.id);
+      setDeletingId(null);
+      if (delErr) {
+        toast.error(delErr.message ?? 'No se pudo eliminar el trabajador.');
+        return;
+      }
+      toast.success('Trabajador eliminado.');
+      setEmpleados((prev) => prev.filter((x) => x.id !== r.id));
+      setExpressRows((prev) =>
+        prev.map((x) =>
+          x.empleado_id === r.id
+            ? { ...x, empleado_id: null, empleado_tiene_evaluacion: false }
+            : x,
+        ),
+      );
+    },
+    [supabase],
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-8">
@@ -489,6 +521,17 @@ export default function RrhhReclutamientoClient() {
                     >
                       Archivo HV
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => void borrarEmpleado(r)}
+                      disabled={deletingId === r.id}
+                      title="Eliminar trabajador de la lista"
+                      aria-label={`Eliminar a ${(r.nombre_completo ?? '').trim() || 'trabajador'}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-950/25 px-3 py-2 text-xs font-semibold text-red-300 transition hover:border-red-400/50 hover:bg-red-950/40 disabled:opacity-50"
+                    >
+                      <Trash2 className={`h-3.5 w-3.5 ${deletingId === r.id ? 'animate-pulse' : ''}`} aria-hidden />
+                      Eliminar
+                    </button>
                   </div>
                 </li>
               );
@@ -528,6 +571,17 @@ export default function RrhhReclutamientoClient() {
                       className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100"
                     >
                       Generar enlace examen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void borrarEmpleado(r)}
+                      disabled={deletingId === r.id}
+                      title="Eliminar trabajador de la lista"
+                      aria-label={`Eliminar a ${(r.nombre_completo ?? '').trim() || 'trabajador'}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-950/25 px-3 py-2 text-xs font-semibold text-red-300 transition hover:border-red-400/50 hover:bg-red-950/40 disabled:opacity-50"
+                    >
+                      <Trash2 className={`h-3.5 w-3.5 ${deletingId === r.id ? 'animate-pulse' : ''}`} aria-hidden />
+                      Eliminar
                     </button>
                   </li>
                 ))}

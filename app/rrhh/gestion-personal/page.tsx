@@ -17,6 +17,7 @@ type PageProps = {
 
 export default function RrhhGestionPersonalPage({ searchParams }: PageProps) {
   const soloPendientesInitial = firstQueryValue(searchParams.solo) === 'pendientes';
+  const vistaSolicitudInitial = firstQueryValue(searchParams.vista) === 'solicitud';
   const tabInitial = firstQueryValue(searchParams.tab);
   const proyectoModuloInitial = (firstQueryValue(searchParams.proyecto_modulo) ?? '').trim() || undefined;
   const proyectoObraInitial = (firstQueryValue(searchParams.proyecto) ?? '').trim() || undefined;
@@ -26,6 +27,7 @@ export default function RrhhGestionPersonalPage({ searchParams }: PageProps) {
       <Suspense fallback={<p className="p-8 text-sm text-zinc-500">Cargando panel…</p>}>
         <RrhhGestionPersonalClient
           soloPendientesInitial={soloPendientesInitial}
+          vistaSolicitudInitial={vistaSolicitudInitial}
           tabInitial={tabInitial}
           proyectoModuloInitial={proyectoModuloInitial}
           proyectoObraInitial={proyectoObraInitial}

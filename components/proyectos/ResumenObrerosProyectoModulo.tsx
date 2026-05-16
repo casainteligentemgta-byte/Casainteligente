@@ -5,6 +5,7 @@ import { ClipboardList, FileText, Trash2, UserCheck, UserMinus, Users, UserX } f
 import ContratosExpressModuloPanel from '@/components/proyectos/ContratosExpressModuloPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { hrefGestionPersonalSolicitados } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -851,7 +852,25 @@ export default function ResumenObrerosProyectoModulo({
         <p className="mt-4 text-sm text-red-400">{error}</p>
       ) : (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <Link
+              href={hrefGestionPersonalSolicitados({ proyectoModuloId })}
+              className="block w-full rounded-xl border border-violet-500/35 bg-violet-500/10 p-4 text-left transition hover:border-violet-400/50 hover:bg-violet-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
+              title="Ver solicitudes de personal por oficio y asignar obreros"
+            >
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-violet-300/90">
+                <ClipboardList className="h-3.5 w-3.5" aria-hidden />
+                Solicitados
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{solicitadosPlazas}</p>
+              <p className="mt-1 text-[10px] leading-snug text-zinc-500">
+                {cuadroPlazasLaborPendientes > 0
+                  ? 'Plazas pedidas por oficio (tabulador) pendientes de asignar en este módulo u obras hijas. Clic: ver listado.'
+                  : cuadroAsignadosLabor > 0
+                    ? `Obreros ya asignados a solicitudes de personal. Clic: ver listado (${cuadroAsignadosLabor} en obra).`
+                    : 'Solicitudes de personal obrero (oficio y cantidad). Clic: ver listado y registrar nuevas.'}
+              </p>
+            </Link>
             <button
               type="button"
               onClick={() => setListaModal('enCarpeta')}

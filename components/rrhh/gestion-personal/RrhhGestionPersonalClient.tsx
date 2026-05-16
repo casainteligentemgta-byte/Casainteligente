@@ -14,6 +14,9 @@ import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesde
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
+import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import Link from 'next/link';
+import { ResumenSolicitadosOficiosToolbar } from '@/components/rrhh/gestion-personal/ResumenSolicitadosOficiosToolbar';
 
 type LaborRequestRow = {
   id: string;
@@ -81,6 +84,8 @@ function mensajeWhatsAppPlanilla(link: string, specialtyNombre: string | null, c
 type RrhhGestionPersonalClientProps = {
   /** Resuelto en el Server Component desde `searchParams` (fiable en primer paint y SSR). */
   soloPendientesInitial?: boolean;
+  /** Formulario de solicitud obrero (oficio) + listado de solicitados. */
+  vistaSolicitudInitial?: boolean;
   tabInitial?: string;
   /** Filtra solicitudes y asignaciones al módulo integral y sus obras Talento (`proyecto_modulo_origen_id`). */
   proyectoModuloInitial?: string;
@@ -90,6 +95,7 @@ type RrhhGestionPersonalClientProps = {
 
 export default function RrhhGestionPersonalClient({
   soloPendientesInitial = false,
+  vistaSolicitudInitial = false,
   tabInitial,
   proyectoModuloInitial,
   proyectoObraInitial,
@@ -98,9 +104,11 @@ export default function RrhhGestionPersonalClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const soloFromClient = searchParams.get('solo') === 'pendientes';
+  const vistaSolicitudFromClient = searchParams.get('vista') === 'solicitud';
   /** Si servidor y cliente difieren (hook desfasado), prevalece el valor del Server Component. */
   const soloPendientes =
     soloPendientesInitial === soloFromClient ? soloFromClient : soloPendientesInitial;
+  const vistaSolicitud = vistaSolicitudInitial || vistaSolicitudFromClient;
 
   const tabInitialResolved = tabFromInitial(tabInitial);
   const rawTab = searchParams.get('tab');
@@ -126,7 +134,6 @@ export default function RrhhGestionPersonalClient({
 
   const [tick, setTick] = useState(0);
   const [alcanceNombre, setAlcanceNombre] = useState<string | null>(null);
-
   const [pending, setPending] = useState<LaborRequestRow[]>([]);
   const [loadingPending, setLoadingPending] = useState(true);
 
@@ -450,6 +457,40 @@ export default function RrhhGestionPersonalClient({
 
   const hayFiltroAlcance = Boolean(proyectoModuloFiltro || proyectoObraFiltro);
 
+  const resumenOficiosSolicitados = useMemo(() => {
+    const map = new Map<
+      string,
+      { codigo: string; nombre: string | null; plazas: number; solicitudes: number }
+    >();
+    for (const r of pending) {
+      const cod = r.specialty_codigo.trim() || '—';
+      const cur = map.get(cod) ?? {
+        codigo: cod,
+        nombre: r.specialty_nombre,
+        plazas: 0,
+        solicitudes: 0,
+      };
+      cur.plazas += Math.max(0, r.quantity_requested);
+      cur.solicitudes += 1;
+      map.set(cod, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => a.codigo.localeCompare(b.codigo, 'es'));
+  }, [pending]);
+
+  const totalPlazasPendientes = useMemo(
+    () => pending.reduce((a, r) => a + Math.max(0, r.quantity_requested), 0),
+    [pending],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash !== '#cuadro-solicitados') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('cuadro-solicitados')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [loadingPending, proyectoModuloFiltro, proyectoObraFiltro]);
+
   const bannerAlcanceLabor = hayFiltroAlcance ? (
     <div className="mb-4 flex flex-col gap-2 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3 py-2 text-sm text-sky-100 sm:flex-row sm:items-center sm:justify-between">
       <p>
@@ -471,9 +512,59 @@ export default function RrhhGestionPersonalClient({
   const pendientesInner = (
     <>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight text-white">Solicitados</h2>
-        <p className="text-sm text-zinc-400 mt-1">Gestión de personal requerido</p>
+        <h2 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h2>
+        {!hayFiltroAlcance ? (
+          <p className="mt-1 text-sm text-zinc-400">
+            Gestión de personal requerido por oficio (tabulador GOE).
+          </p>
+        ) : null}
       </div>
+
+      {hayFiltroAlcance && !loadingPending && resumenOficiosSolicitados.length > 0 ? (
+        <section className="mb-6 overflow-hidden rounded-2xl border border-violet-500/35 bg-violet-950/25">
+          <div className="border-b border-violet-500/25 px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wide text-violet-200">Resumen por oficio</h3>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  {totalPlazasPendientes} plaza(s) en {pending.length} solicitud(es) pendiente(s)
+                </p>
+              </div>
+              <ResumenSolicitadosOficiosToolbar
+                proyectoModuloId={proyectoModuloFiltro || undefined}
+                proyectoObraId={proyectoObraFiltro || undefined}
+                alcanceNombre={alcanceNombre}
+              />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                  <th className="px-4 py-2.5 sm:px-5">Oficio (tabulador)</th>
+                  <th className="px-4 py-2.5 text-right">Plazas</th>
+                  <th className="px-4 py-2.5 text-right sm:pr-5">Solicitudes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumenOficiosSolicitados.map((row) => (
+                  <tr key={row.codigo} className="border-b border-white/5 last:border-0">
+                    <td className="px-4 py-3 sm:px-5">
+                      <span className="font-mono font-semibold text-violet-100">{row.codigo}</span>
+                      {row.nombre ? (
+                        <span className="mt-0.5 block text-xs text-zinc-400">{row.nombre}</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-white">{row.plazas}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-zinc-300 sm:pr-5">{row.solicitudes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       {loadingPending ? (
         <p className="text-sm text-zinc-500">Cargando…</p>
       ) : pending.length === 0 ? (
@@ -573,16 +664,85 @@ export default function RrhhGestionPersonalClient({
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 text-white">
+      {vistaSolicitud ? (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RRHH</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Solicitud de personal obrero</h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              Registra plazas por oficio (tabulador) y revisa los solicitados pendientes de asignación.
+            </p>
+          </div>
+          <Link
+            href="/rrhh/hojas-vida"
+            className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/10"
+          >
+            ← Hojas de vida / RRHH
+          </Link>
+        </div>
+      ) : null}
+
       {bannerAlcanceLabor}
 
-      {proyectoModuloFiltro && (
+      {proyectoModuloFiltro && !vistaSolicitud && !soloPendientes ? (
         <div className="mb-6">
           <ResumenObrerosProyectoModulo proyectoModuloId={proyectoModuloFiltro} />
         </div>
-      )}
+      ) : null}
 
-      {soloPendientes ? (
-        <div className="rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-xl p-6 shadow-2xl shadow-black/40">{pendientesInner}</div>
+      {vistaSolicitud ? (
+        <div className="space-y-8">
+          <section className="rounded-2xl border border-violet-500/25 bg-violet-950/15 p-6 shadow-2xl shadow-black/40">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-violet-100">Nueva solicitud (oficio)</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Registra plazas por oficio y cantidad en el tabulador GOE 6.752.
+                </p>
+              </div>
+              <Link
+                href={hrefSolicitudPersonalObrero({
+                  proyectoModuloId: proyectoModuloFiltro || null,
+                  proyectoObraId: proyectoObraFiltro || null,
+                })}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-violet-400/50 bg-violet-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-violet-500"
+              >
+                Solicitud de personal obrero
+              </Link>
+            </div>
+          </section>
+          <section className="rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-xl p-6 shadow-2xl shadow-black/40">
+            {pendientesInner}
+          </section>
+        </div>
+      ) : soloPendientes ? (
+        <>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RRHH · SMART</p>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h1>
+              {alcanceNombre ? (
+                <p className="mt-1 text-sm text-violet-200">
+                  Proyecto: <span className="font-semibold text-white">{alcanceNombre}</span>
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-zinc-400">Oficios solicitados y plazas pendientes de asignar.</p>
+              )}
+            </div>
+            <Link
+              href="/rrhh/hojas-vida"
+              className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/10"
+            >
+              ← Hojas de vida / RRHH
+            </Link>
+          </div>
+          <div
+            id="cuadro-solicitados"
+            className="scroll-mt-24 rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-xl p-6 shadow-2xl shadow-black/40"
+          >
+            {pendientesInner}
+          </div>
+        </>
       ) : (
         <Tabs
           value={tab}

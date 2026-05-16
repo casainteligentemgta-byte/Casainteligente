@@ -35,6 +35,16 @@ function esColumnaTipoProyectoAusente(msg: string): boolean {
   return m.includes('does not exist') && m.includes('tipo_proyecto');
 }
 
+function esColumnaObraEstadoLegacyAusente(msg: string): boolean {
+  const m = (msg ?? '').toLowerCase();
+  return m.includes('does not exist') && m.includes('obra_estado_legacy');
+}
+
+function esColumnaInexistente(msg: string): boolean {
+  const m = (msg ?? '').toLowerCase();
+  return m.includes('does not exist') || m.includes('42703') || m.includes('schema cache');
+}
+
 export async function loadOpcionesProyectoReclutamiento(
   supabase: SupabaseClient,
   opts?: LoadOpcionesProyectoReclutamientoOpts,
@@ -107,7 +117,33 @@ export async function loadOpcionesProyectoReclutamiento(
   }
 
   if (obrRes.error) {
-    errors.push(obrRes.error.message ?? 'No se pudieron cargar proyectos (Talento).');
+    const msg = obrRes.error.message ?? '';
+    if (esColumnaObraEstadoLegacyAusente(msg) || (esColumnaInexistente(msg) && msg.includes('obra_estado'))) {
+      let retry = supabase
+        .from('ci_proyectos')
+        .select('id,nombre')
+        .eq('tipo_proyecto', 'talento')
+        .order('created_at', { ascending: false })
+        .limit(250);
+      const retryRes = await retry;
+      if (retryRes.error) {
+        errors.push('No se pudieron cargar obras Talento (columna obra_estado_legacy ausente).');
+      } else {
+        for (const r of retryRes.data ?? []) {
+          const id = String((r as { id: unknown }).id);
+          const nombre = String((r as { nombre?: unknown }).nombre ?? 'Sin nombre');
+          opciones.push({
+            key: `t:${id}`,
+            etiqueta: `${nombre} · ${etiquetaFuenteProyecto('talento')}`,
+            fuente: 'talento',
+            proyectoModuloId: null,
+            proyectoObraId: id,
+          });
+        }
+      }
+    } else {
+      errors.push(obrRes.error.message ?? 'No se pudieron cargar proyectos (Talento).');
+    }
   } else {
     for (const r of obrRes.data ?? []) {
       const id = String((r as { id: unknown }).id);
@@ -119,6 +155,29 @@ export async function loadOpcionesProyectoReclutamiento(
         proyectoModuloId: null,
         proyectoObraId: id,
       });
+    }
+  }
+
+  if (opciones.length === 0 && errors.length === 0) {
+    const { data, error } = await supabase
+      .from('ci_proyectos')
+      .select('id,nombre')
+      .order('created_at', { ascending: false })
+      .limit(250);
+    if (error) {
+      errors.push(error.message ?? 'No se pudieron cargar proyectos.');
+    } else {
+      for (const r of data ?? []) {
+        const id = String((r as { id: unknown }).id);
+        const nombre = String((r as { nombre?: unknown }).nombre ?? 'Sin nombre');
+        opciones.push({
+          key: `i:${id}`,
+          etiqueta: nombre,
+          fuente: 'integral',
+          proyectoModuloId: id,
+          proyectoObraId: null,
+        });
+      }
     }
   }
 
