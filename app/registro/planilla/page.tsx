@@ -2,8 +2,11 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { ModalCompletarContrato } from '@/components/talento/ModalCompletarContrato';
+import { puedeEditarOficioHojaEmpleoStaff } from '@/lib/rrhh/empleadoOficioHojaEmpleo';
+import { apiUrl } from '@/lib/http/apiUrl';
 
 export type PlanillaDocTipo = 'hoja_empleo' | 'hoja_vida';
 
@@ -39,6 +42,12 @@ function PlanillaIframe() {
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => Boolean(empleadoId && cedula));
+  const staffPuedeEditarOficio = useMemo(() => puedeEditarOficioHojaEmpleoStaff(volverTo), [volverTo]);
+  const [oficioDraft, setOficioDraft] = useState('');
+  const [oficioCargado, setOficioCargado] = useState(false);
+  const [oficioGuardando, setOficioGuardando] = useState(false);
+  const [mostrarEditarOficio, setMostrarEditarOficio] = useState(false);
+  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!src) return;
@@ -78,11 +87,71 @@ function PlanillaIframe() {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [src]);
+  }, [src, pdfRefreshKey]);
 
   const setTipo = useCallback((t: PlanillaDocTipo) => {
     setDocTipo(t);
   }, []);
+
+  useEffect(() => {
+    if (!staffPuedeEditarOficio || !empleadoId) {
+      setOficioCargado(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('ci_empleados')
+        .select('cargo_nombre,rol_buscado,hoja_vida_obrero')
+        .eq('id', empleadoId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setOficioCargado(true);
+        return;
+      }
+      const row = data as {
+        cargo_nombre?: string | null;
+        rol_buscado?: string | null;
+        hoja_vida_obrero?: { contratacion?: { cargoUOficio?: string } } | null;
+      };
+      const desdeHoja = (row.hoja_vida_obrero?.contratacion?.cargoUOficio ?? '').trim();
+      const label = desdeHoja || (row.cargo_nombre ?? '').trim() || (row.rol_buscado ?? '').trim();
+      setOficioDraft(label);
+      setOficioCargado(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [empleadoId, staffPuedeEditarOficio, supabase]);
+
+  const guardarOficioHojaEmpleo = useCallback(async () => {
+    if (!empleadoId) return;
+    const valor = oficioDraft.trim();
+    if (!valor) {
+      toast.error('Indica el cargo u oficio a desempeñar');
+      return;
+    }
+    setOficioGuardando(true);
+    try {
+      const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(empleadoId)}/oficio-hoja-empleo`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cargoUOficio: valor }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo guardar el oficio');
+        return;
+      }
+      toast.success('Oficio actualizado. Regenera o recarga el PDF para ver el cambio.');
+      setPdfRefreshKey((k) => k + 1);
+    } catch {
+      toast.error('Error de red al guardar');
+    } finally {
+      setOficioGuardando(false);
+    }
+  }, [empleadoId, oficioDraft]);
 
   if (!empleadoId || !cedula) {
     return (
@@ -166,6 +235,40 @@ function PlanillaIframe() {
           </button>
         </div>
       </div>
+      {staffPuedeEditarOficio && docTipo === 'hoja_empleo' ? (
+        <div className="shrink-0 border-b border-amber-500/20 bg-amber-950/20 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setMostrarEditarOficio((v) => !v)}
+            className="text-xs font-semibold text-amber-200 hover:text-amber-100"
+          >
+            {mostrarEditarOficio ? 'Ocultar' : 'Editar'} oficio en hoja de empleo (RRHH / Admin)
+          </button>
+          {mostrarEditarOficio ? (
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                Cargo u oficio a desempeñar
+                <input
+                  type="text"
+                  value={oficioDraft}
+                  onChange={(e) => setOficioDraft(e.target.value)}
+                  disabled={!oficioCargado || oficioGuardando}
+                  maxLength={240}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 disabled:opacity-50"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void guardarOficioHojaEmpleo()}
+                disabled={!oficioCargado || oficioGuardando}
+                className="shrink-0 rounded-lg border border-amber-500/45 bg-amber-500/15 px-4 py-2 text-xs font-bold text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
+              >
+                {oficioGuardando ? 'Guardando…' : 'Guardar oficio'}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {docTipo === 'hoja_empleo' ? (
         <p className="shrink-0 border-b border-white/5 px-3 py-1.5 text-[10px] leading-snug text-zinc-500">
           Incluye datos de patrono, obra y contratación junto con la información del trabajador para expediente laboral.

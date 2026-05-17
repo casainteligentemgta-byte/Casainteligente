@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, MessageCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, MessageCircle, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -511,29 +511,40 @@ export default function RrhhGestionPersonalClient({
 
   const pendientesInner = (
     <>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h2>
-        {!hayFiltroAlcance ? (
-          <p className="mt-1 text-sm text-zinc-400">
-            Gestión de personal requerido por oficio (tabulador GOE).
-          </p>
-        ) : null}
-      </div>
+      {!soloPendientes ? (
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h2>
+          {!hayFiltroAlcance ? (
+            <p className="mt-1 text-sm text-zinc-400">
+              Gestión de personal requerido por oficio (tabulador GOE).
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {hayFiltroAlcance && !loadingPending && resumenOficiosSolicitados.length > 0 ? (
         <section className="mb-6 overflow-hidden rounded-2xl border border-violet-500/35 bg-violet-950/25">
-          <div className="border-b border-violet-500/25 px-4 py-3 sm:px-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-violet-200">Resumen por oficio</h3>
-                <p className="mt-0.5 text-xs text-zinc-400">
-                  {totalPlazasPendientes} plaza(s) en {pending.length} solicitud(es) pendiente(s)
-                </p>
-              </div>
+          <div className={`border-b border-violet-500/25 ${soloPendientes ? 'px-3 py-2 sm:px-4' : 'px-4 py-3 sm:px-5'}`}>
+            <div
+              className={
+                soloPendientes
+                  ? 'flex justify-end'
+                  : 'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'
+              }
+            >
+              {!soloPendientes ? (
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-violet-200">Resumen por oficio</h3>
+                  <p className="mt-0.5 text-xs text-zinc-400">
+                    {totalPlazasPendientes} plaza(s) en {pending.length} solicitud(es) pendiente(s)
+                  </p>
+                </div>
+              ) : null}
               <ResumenSolicitadosOficiosToolbar
                 proyectoModuloId={proyectoModuloFiltro || undefined}
                 proyectoObraId={proyectoObraFiltro || undefined}
                 alcanceNombre={alcanceNombre}
+                iconsOnly={soloPendientes}
               />
             </div>
           </div>
@@ -665,24 +676,29 @@ export default function RrhhGestionPersonalClient({
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 text-white">
       {vistaSolicitud ? (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
+        <div className="mb-6">
+          <div className="mb-3 flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 shrink-0 border-white/15 bg-zinc-900/50 text-zinc-200 hover:bg-white/10"
+              asChild
+            >
+              <Link href="/rrhh/hojas-vida" aria-label="Volver a RRHH">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </Button>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RRHH</p>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Solicitud de personal obrero</h1>
-            <p className="mt-1 text-sm text-zinc-400">
-              Registra plazas por oficio (tabulador) y revisa los solicitados pendientes de asignación.
-            </p>
           </div>
-          <Link
-            href="/rrhh/hojas-vida"
-            className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/10"
-          >
-            ← Hojas de vida / RRHH
-          </Link>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Solicitud de personal obrero</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Registra plazas por oficio (tabulador) y revisa los solicitados pendientes de asignación.
+          </p>
         </div>
       ) : null}
 
-      {bannerAlcanceLabor}
+      {!soloPendientes ? bannerAlcanceLabor : null}
 
       {proyectoModuloFiltro && !vistaSolicitud && !soloPendientes ? (
         <div className="mb-6">
@@ -717,25 +733,31 @@ export default function RrhhGestionPersonalClient({
         </div>
       ) : soloPendientes ? (
         <>
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RRHH · SMART</p>
-              <h1 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h1>
-              {alcanceNombre ? (
-                <p className="mt-1 text-sm text-violet-200">
-                  Proyecto: <span className="font-semibold text-white">{alcanceNombre}</span>
+          <header className="mb-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 border-white/15 bg-zinc-900/50 text-zinc-200 hover:bg-white/10"
+                  asChild
+                >
+                  <Link href="/rrhh/hojas-vida" aria-label="Volver a RRHH">
+                    <ArrowLeft className="h-5 w-5" />
+                  </Link>
+                </Button>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RRHH</p>
+              </div>
+              <div className="min-w-0 text-right">
+                <h1 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h1>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Proyecto:{' '}
+                  <span className="font-semibold text-white">{alcanceNombre?.trim() || '—'}</span>
                 </p>
-              ) : (
-                <p className="mt-1 text-sm text-zinc-400">Oficios solicitados y plazas pendientes de asignar.</p>
-              )}
+              </div>
             </div>
-            <Link
-              href="/rrhh/hojas-vida"
-              className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/10"
-            >
-              ← Hojas de vida / RRHH
-            </Link>
-          </div>
+          </header>
           <div
             id="cuadro-solicitados"
             className="scroll-mt-24 rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-xl p-6 shadow-2xl shadow-black/40"

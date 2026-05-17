@@ -113,11 +113,25 @@ function ContratoLaboralObreroInner() {
     if (!contratoId || !token) return;
     setAceptando(true);
     setError(null);
+    let geo: { lat: number; lng: number; precision?: number } | undefined;
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) reject(new Error('no_geo'));
+        else navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 12000, maximumAge: 60000 });
+      });
+      geo = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        precision: pos.coords.accuracy,
+      };
+    } catch {
+      geo = undefined;
+    }
     try {
       const res = await fetch(apiUrl('/api/registro/contrato-laboral/aceptar'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contrato_id: contratoId, token }),
+        body: JSON.stringify({ contrato_id: contratoId, token, geolocalizacion: geo }),
       });
       const j = (await res.json().catch(() => ({}))) as { error?: string; obrero_aceptacion_contrato_at?: string };
       if (!res.ok) {

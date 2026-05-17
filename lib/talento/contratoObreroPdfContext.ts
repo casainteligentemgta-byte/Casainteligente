@@ -351,11 +351,23 @@ async function fetchPatronoEntidadExtraParaPlantilla(
       direccion_fiscal: strOpt(r.direccion_fiscal as string | null | undefined),
       domicilio_fiscal: strOpt(r.domicilio_fiscal as string | null | undefined),
     });
+    const rmRep = (() => {
+      const rm = r.registro_mercantil;
+      if (!rm || typeof rm !== 'object' || Array.isArray(rm)) return null;
+      const arr = (rm as { representantes?: unknown }).representantes;
+      if (!Array.isArray(arr) || !arr[0] || typeof arr[0] !== 'object') return null;
+      return arr[0] as Record<string, unknown>;
+    })();
     return {
       nombre_legal: strOpt(r.nombre_legal) ?? undefined,
       rif: strOpt(r.rif) ?? undefined,
-      rep_legal_nombre: strOpt(r.rep_legal_nombre) ?? undefined,
-      rep_legal_cedula: strOpt(r.rep_legal_cedula) ?? undefined,
+      rep_legal_nombre: strOpt(r.rep_legal_nombre) ?? strOpt(rmRep?.nombre as string | undefined) ?? undefined,
+      rep_legal_cedula: strOpt(r.rep_legal_cedula) ?? strOpt(rmRep?.cedula as string | undefined) ?? undefined,
+      rep_legal_cargo: strOpt(r.rep_legal_cargo) ?? strOpt(rmRep?.cargo as string | undefined) ?? undefined,
+      rep_nacionalidad: strOpt(rmRep?.nacionalidad as string | undefined) ?? undefined,
+      rep_estado_civil: strOpt(rmRep?.estado_civil as string | undefined) ?? undefined,
+      rep_legal_femenino: rmRep?.genero === 'F' || r.rep_legal_femenino === true,
+      registro_mercantil: r.registro_mercantil,
       municipio: ubi.municipio ?? strOpt(r.municipio_fiscal) ?? undefined,
       estado_geo: ubi.estado ?? strOpt(r.estado_fiscal) ?? undefined,
       sector_geo: ubi.sector ?? undefined,
@@ -588,9 +600,8 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
       punto_encuentro_transporte_contrato: puntoEncTransporteProyecto,
     },
     patron: {
-      nombre: patron.nombre,
+      ...patron,
       domicilio: domicilioPatrono,
-      representante: patron.representante,
     },
   };
 

@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server';
 import {
   generarExamenAdaptativo,
+  logicaDelExamen,
+  personalidadDelExamen,
   nivelIntegridadRiesgo,
   puntajeLogica,
   puntajePersonalidad,
   puntajeTotal,
 } from '@/lib/talento/exam';
+import { evaluarObreroPorToken } from '@/lib/talento/evaluarObreroPorToken';
+import { esRolEvaluacionExamen } from '@/lib/talento/evaluarSemaforoObrero';
 import {
   calcularSemaforoTalento,
   estadoContratacionFromTripode,
   semaforoDbFromTripode,
 } from '@/lib/talento/semaphore';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
 import { notifyTalentoWhatsAppExpiracion } from '@/lib/talento/whatsapp';
 import type { RolExamen } from '@/types/talento';
@@ -23,16 +28,34 @@ const HINT_CI_EMPLEADOS =
   'Ejecuta en Supabase (SQL Editor) supabase/manual_ci_empleados_solo.sql o las migraciones 025–028. Luego Project Settings → API → Reload schema.';
 
 /**
- * POST: recibe el JSON del examen, calcula el trípode y actualiza `ci_empleados`.
- * Si `status_evaluacion` es `rechazado` (tiempo), dispara webhook WhatsApp.
+ * POST — Evaluación automatizada unificada.
+ *
+ * Flujo obrero/vigilante (FormularioEvaluacion):
+ * ```json
+ * {
+ *   "token": "token_unico_del_obrero",
+ *   "rol": "obrero",
+ *   "respuestas": {
+ *     "obr_01": "A",
+ *     "obr_02": "A",
+ *     "obr_03": "B",
+ *     "obr_04": "A",
+ *     "obr_20": "C"
+ *   }
+ * }
+ * ```
+ * Claves `obr_01`…`obr_20`; valores `"A"` | `"B"` | `"C"`.
+ * Si `respuestas` está vacío → `{ success: true, semaforo: "rojo", statusEvaluacion: "pendiente_regularizar" }`.
+ * Con 20 respuestas → semáforo ABC, guardado en `ci_empleados` e invitación marcada usada.
+ *
+ * programador | técnico: examen completo vía `submit` o body legacy abajo.
  */
 export async function POST(req: Request) {
   try {
-    const sb = supabaseForRoute();
-    if (!sb.ok) return sb.response;
-    const supabase = sb.client;
-
     const body = (await req.json()) as {
+      token?: string;
+      respuestas?: Record<string, string>;
+      rol?: string;
       empleado_id?: string;
       nombre_completo?: string;
       email?: string;
@@ -46,20 +69,91 @@ export async function POST(req: Request) {
       rol_buscado?: string | null;
     };
 
+    const token = (body.token ?? '').trim();
+    const rolToken = (body.rol ?? '').trim().toLowerCase();
+    const respuestasToken = body.respuestas;
+
+    if (token || respuestasToken !== undefined || rolToken) {
+      if (!token || !rolToken) {
+        return NextResponse.json(
+          { error: 'token y rol son requeridos' },
+          { status: 400 },
+        );
+      }
+
+      const respuestas = respuestasToken ?? {};
+      if (Object.keys(respuestas).length === 0) {
+        return NextResponse.json({
+          success: true,
+          semaforo: 'rojo',
+          statusEvaluacion: 'pendiente_regularizar',
+        });
+      }
+
+      if (!esRolEvaluacionExamen(rolToken)) {
+        return NextResponse.json(
+          { error: 'Rol no apto para evaluación automatizada' },
+          { status: 400 },
+        );
+      }
+
+      if (rolToken === 'programador' || rolToken === 'tecnico') {
+        return NextResponse.json(
+          {
+            error:
+              'Programador y técnico deben completar el examen Likert + lógica en /talento/examen (submit).',
+          },
+          { status: 400 },
+        );
+      }
+
+      const admin = supabaseAdminForRoute();
+      if (!admin.ok) return admin.response;
+
+      const out = await evaluarObreroPorToken(admin.client, {
+        token,
+        rol: rolToken,
+        respuestas,
+      });
+
+      if ('error' in out) {
+        return NextResponse.json({ error: out.error }, { status: out.status });
+      }
+
+      return NextResponse.json({
+        success: true,
+        semaforo: out.semaforo,
+        statusEvaluacion: out.statusEvaluacion,
+        estado: out.estado,
+        motivo: out.motivo,
+        resumen: out.resumen,
+        id: out.id,
+      });
+    }
+
+    const sb = supabaseForRoute();
+    if (!sb.ok) return sb.response;
+    const supabase = sb.client;
+
     const empleadoId = (body.empleado_id ?? '').trim();
     const nombre = (body.nombre_completo ?? '').trim();
-    const rol = body.rol_examen;
+    const rol = (body.rol_examen ?? '').trim();
     const rolBuscado = (body.rol_buscado ?? '').trim() || null;
     const inicioIso = body.examen_inicio_at;
-    const rp = body.respuestas_personalidad ?? (body as any).respuestas ?? {};
+    const rp = body.respuestas_personalidad ?? {};
     const rl = body.respuestas_logica ?? {};
 
     if (!empleadoId) {
       return NextResponse.json({ error: 'empleado_id requerido' }, { status: 400 });
     }
-    const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante'];
-    if (!nombre || !rolesPermitidos.includes(rol as string)) {
-      return NextResponse.json({ error: 'nombre_completo y rol_examen válidos requeridos' }, { status: 400 });
+    if (rol !== 'programador' && rol !== 'tecnico') {
+      return NextResponse.json(
+        { error: 'Rol no apto para evaluación automatizada' },
+        { status: 400 },
+      );
+    }
+    if (!nombre) {
+      return NextResponse.json({ error: 'nombre_completo requerido' }, { status: 400 });
     }
     if (!rolBuscado) {
       return NextResponse.json({ error: 'rol_buscado requerido (rol o puesto al que aplica)' }, { status: 400 });
@@ -73,20 +167,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'examen_inicio_at inválido' }, { status: 400 });
     }
 
-    const examen = generarExamenAdaptativo(rol as string);
-    
-    if (((rol as string) === 'obrero' || (rol as string) === 'vigilante') && Object.keys(rp).length === 0) {
-      return NextResponse.json({ 
-        success: true, 
-        semaforo: 'rojo', 
-        statusEvaluacion: 'pendiente_regularizar'
-      });
-    }
+    const examen = generarExamenAdaptativo(rol);
+    const preguntasPers = personalidadDelExamen(examen);
+    const preguntasLog = logicaDelExamen(examen);
 
-    if (Object.keys(rp).length < examen.personalidad.length) {
+    if (Object.keys(rp).length < preguntasPers.length) {
       return NextResponse.json({ error: 'Completa las 20 preguntas de personalidad' }, { status: 400 });
     }
-    if (Object.keys(rl).length < examen.logica.length) {
+    if (Object.keys(rl).length < preguntasLog.length) {
       return NextResponse.json({ error: 'Completa las 5 preguntas de lógica' }, { status: 400 });
     }
 
@@ -105,53 +193,22 @@ export async function POST(req: Request) {
     let motivo = '';
     let status_tripode = 'rechazado';
 
-    if ((rol as string) === 'obrero' || (rol as string) === 'vigilante') {
-      let respuestasA = 0;
-      let respuestasB = 0;
-      let respuestasC = 0;
-
-      Object.values(rp).forEach((valor) => {
-        if (valor === 'A') respuestasA++;
-        if (valor === 'B') respuestasB++;
-        if (valor === 'C') respuestasC++;
-      });
-
-      if (respuestasC >= 3) {
-        semaforo = 'rojo';
-        estado = 'reprobado';
-        motivo = 'Conductas de riesgo detectadas (3 o más respuestas C)';
-        status_tripode = 'rechazado';
-      } else if (respuestasA >= 14 && respuestasC === 0) {
-        semaforo = 'verde';
-        estado = 'aprobado';
-        motivo = 'Perfil seguro e ideal';
-        status_tripode = 'aprobado';
-      } else {
-        semaforo = 'amarillo';
-        estado = 'aprobado_con_observaciones';
-        motivo = 'Perfil pasivo o con observaciones menores';
-        status_tripode = 'aprobado';
-      }
-      pp = (respuestasA / 20) * 100;
-      total = pp;
-    } else {
-      pp = puntajePersonalidad(rp);
-      const { puntaje: pl_val, gma0a5: gma } = puntajeLogica(rol as RolExamen, rl);
-      pl = pl_val;
-      gma0a5 = gma;
-      total = puntajeTotal(pp, pl);
-      nivelInt = nivelIntegridadRiesgo(rp);
-      const tripodeObj = calcularSemaforoTalento({
-        puntajeLogica: gma0a5,
-        nivelIntegridad: nivelInt,
-        completoEnTiempo,
-        colorDISC: colorDisc,
-      });
-      semaforo = semaforoDbFromTripode(tripodeObj) ?? 'amarillo';
-      estado = estadoContratacionFromTripode(tripodeObj);
-      motivo = tripodeObj.motivo;
-      status_tripode = tripodeObj.status;
-    }
+    pp = puntajePersonalidad(rp);
+    const { puntaje: pl_val, gma0a5: gma } = puntajeLogica(rol as RolExamen, rl);
+    pl = pl_val;
+    gma0a5 = gma;
+    total = puntajeTotal(pp, pl);
+    nivelInt = nivelIntegridadRiesgo(rp);
+    const tripodeObj = calcularSemaforoTalento({
+      puntajeLogica: gma0a5,
+      nivelIntegridad: nivelInt,
+      completoEnTiempo,
+      colorDISC: colorDisc,
+    });
+    semaforo = semaforoDbFromTripode(tripodeObj) ?? 'amarillo';
+    estado = estadoContratacionFromTripode(tripodeObj);
+    motivo = tripodeObj.motivo;
+    status_tripode = tripodeObj.status;
 
     const tripode = { motivo, status: status_tripode };
 

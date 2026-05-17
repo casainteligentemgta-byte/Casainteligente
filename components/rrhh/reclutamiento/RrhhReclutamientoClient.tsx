@@ -23,6 +23,9 @@ import {
   empleadoTieneEvaluacionCompleta,
   estadoEvaluacionFila,
   etiquetaEstadoEvaluacion,
+} from '@/lib/rrhh/evaluacionObrero';
+import { esStatusPendienteRegularizar } from '@/lib/talento/estadoEvaluacionExpress';
+import {
   normCedula,
   type ExpressSinEvaluacion,
 } from '@/lib/rrhh/evaluacionObrero';
@@ -481,11 +484,13 @@ export default function RrhhReclutamientoClient() {
                     <p className="mt-1 text-xs">
                       <span
                         className={`rounded border px-1.5 py-0.5 font-semibold ${
-                          est === 'evaluado'
-                            ? 'border-emerald-500/35 bg-emerald-950/40 text-emerald-200'
-                            : est === 'en_curso'
-                              ? 'border-amber-500/35 bg-amber-950/40 text-amber-200'
-                              : 'border-rose-500/35 bg-rose-950/40 text-rose-200'
+                          esStatusPendienteRegularizar(r.status_evaluacion)
+                            ? 'border-orange-500/40 bg-orange-950/45 text-orange-200'
+                            : est === 'evaluado'
+                              ? 'border-emerald-500/35 bg-emerald-950/40 text-emerald-200'
+                              : est === 'en_curso'
+                                ? 'border-amber-500/35 bg-amber-950/40 text-amber-200'
+                                : 'border-rose-500/35 bg-rose-950/40 text-rose-200'
                         }`}
                       >
                         {etiquetaEstadoEvaluacion(r)}

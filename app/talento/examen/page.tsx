@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import ExamenTimer from '@/components/ExamenTimer';
 import { generarExamenAdaptativo, PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
 import { formatDocumentoCedulaVE, parseDocumentoCedulaVE, type PrefijoCedulaVE } from '@/lib/talento/documento';
-import type { RolExamen } from '@/types/talento';
+import type { ExamenGenerado, RolExamen } from '@/types/talento';
 
 const DURACION_SEG = 15 * 60;
 
@@ -139,7 +139,7 @@ function ExamenTalentoPageInner() {
   }, [urlToken]);
 
   const examen = useMemo(
-    () => (rolExamen ? generarExamenAdaptativo(rolExamen) : null),
+    () => (rolExamen ? (generarExamenAdaptativo(rolExamen) as ExamenGenerado) : null),
     [rolExamen],
   );
 

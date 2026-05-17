@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import {
   generarExamenAdaptativo,
+  logicaDelExamen,
+  personalidadDelExamen,
   nivelIntegridadRiesgo,
   puntajeLogica,
   puntajePersonalidad,
@@ -147,10 +149,12 @@ export async function POST(req: Request) {
     }
 
     const examen = generarExamenAdaptativo(rol);
-    if (Object.keys(rp).length < examen.personalidad.length) {
+    const preguntasPers = personalidadDelExamen(examen);
+    const preguntasLog = logicaDelExamen(examen);
+    if (Object.keys(rp).length < preguntasPers.length) {
       return NextResponse.json({ error: 'Completa las 20 preguntas de personalidad' }, { status: 400 });
     }
-    if (Object.keys(rl).length < examen.logica.length) {
+    if (Object.keys(rl).length < preguntasLog.length) {
       return NextResponse.json({ error: 'Completa las 5 preguntas de lógica' }, { status: 400 });
     }
 

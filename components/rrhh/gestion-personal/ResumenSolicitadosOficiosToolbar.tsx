@@ -9,6 +9,8 @@ type Props = {
   proyectoModuloId?: string;
   proyectoObraId?: string;
   alcanceNombre?: string | null;
+  /** Solo iconos, sin etiquetas de texto. */
+  iconsOnly?: boolean;
 };
 
 function queryResumenDocumento(proyectoModuloId?: string, proyectoObraId?: string): string | null {
@@ -21,7 +23,12 @@ function queryResumenDocumento(proyectoModuloId?: string, proyectoObraId?: strin
   return p.toString();
 }
 
-export function ResumenSolicitadosOficiosToolbar({ proyectoModuloId, proyectoObraId, alcanceNombre }: Props) {
+export function ResumenSolicitadosOficiosToolbar({
+  proyectoModuloId,
+  proyectoObraId,
+  alcanceNombre,
+  iconsOnly = false,
+}: Props) {
   const qs = queryResumenDocumento(proyectoModuloId, proyectoObraId);
   if (!qs) return null;
 
@@ -93,49 +100,59 @@ export function ResumenSolicitadosOficiosToolbar({ proyectoModuloId, proyectoObr
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   };
 
+  const violetBtn =
+    'border-violet-400/40 bg-violet-950/40 text-violet-100 hover:bg-violet-900/50';
+  const waBtn = 'border-emerald-500/40 bg-emerald-950/30 text-emerald-100 hover:bg-emerald-900/40';
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
       <Button
         type="button"
         variant="outline"
-        size="sm"
-        className="border-violet-400/40 bg-violet-950/40 text-violet-100 hover:bg-violet-900/50"
+        size={iconsOnly ? 'icon' : 'sm'}
+        className={violetBtn}
         onClick={imprimir}
+        title="Imprimir"
+        aria-label="Imprimir"
       >
-        <Printer className="mr-1.5 h-3.5 w-3.5" />
-        Imprimir
+        <Printer className={iconsOnly ? 'h-4 w-4' : 'mr-1.5 h-3.5 w-3.5'} />
+        {iconsOnly ? null : 'Imprimir'}
       </Button>
       <Button
         type="button"
         variant="outline"
-        size="sm"
-        className="border-violet-400/40 bg-violet-950/40 text-violet-100 hover:bg-violet-900/50"
+        size={iconsOnly ? 'icon' : 'sm'}
+        className={violetBtn}
         onClick={() => void guardarPdf()}
+        title="Guardar PDF"
+        aria-label="Guardar PDF"
       >
-        <FileDown className="mr-1.5 h-3.5 w-3.5" />
-        Guardar PDF
+        <FileDown className={iconsOnly ? 'h-4 w-4' : 'mr-1.5 h-3.5 w-3.5'} />
+        {iconsOnly ? null : 'Guardar PDF'}
       </Button>
       <Button
         type="button"
         variant="outline"
-        size="sm"
-        className="border-violet-400/40 bg-violet-950/40 text-violet-100 hover:bg-violet-900/50"
+        size={iconsOnly ? 'icon' : 'sm'}
+        className={violetBtn}
         onClick={() => void copiarEnlacePdf()}
         title="Copiar enlace al PDF (requiere sesión)"
+        aria-label="Copiar enlace al PDF"
       >
-        <Link2 className="mr-1.5 h-3.5 w-3.5" />
-        Enlace PDF
+        <Link2 className={iconsOnly ? 'h-4 w-4' : 'mr-1.5 h-3.5 w-3.5'} />
+        {iconsOnly ? null : 'Enlace PDF'}
       </Button>
       <Button
         type="button"
         variant="outline"
-        size="sm"
-        className="border-emerald-500/40 bg-emerald-950/30 text-emerald-100 hover:bg-emerald-900/40"
+        size={iconsOnly ? 'icon' : 'sm'}
+        className={waBtn}
         onClick={enviarWhatsAppPdf}
         title="Compartir enlace del PDF por WhatsApp"
+        aria-label="Enviar por WhatsApp"
       >
-        <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-        WhatsApp
+        <MessageCircle className={iconsOnly ? 'h-4 w-4' : 'mr-1.5 h-3.5 w-3.5'} />
+        {iconsOnly ? null : 'WhatsApp'}
       </Button>
     </div>
   );

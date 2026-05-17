@@ -3,7 +3,6 @@
 import { useMemo, useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
-import { compressImageForUpload } from '@/lib/reclutamiento/compressImageForUpload';
 import {
   emptyHojaVidaObreroCompleta,
   hojaVidaDesdeRow,
@@ -27,33 +26,10 @@ import { GlassCard, GlassCardMotion } from '@/components/nexus/GlassCard';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import DocumentUpload from '@/components/reclutamiento/DocumentUpload';
+import { uploadOnboardingCedulaPhoto } from '@/lib/reclutamiento/uploadReclutamientoMedia';
+import { apiUrl } from '@/lib/http/apiUrl';
 
 type Props = { params: { token: string } };
-
-async function uploadCedulaPhoto(
-  file: File,
-  token: string,
-  supabase: ReturnType<typeof createClient>,
-): Promise<{ url: string | null; error: string | null }> {
-  const ext = file.type === 'image/png' ? 'png' : 'jpg';
-  const path = `reclutamiento/onboarding/${token}/${crypto.randomUUID()}.${ext}`;
-  const buckets = ['ci-proyectos-media', 'product-media', 'productos'];
-  for (const bucket of buckets) {
-    const { error } = await supabase.storage.from(bucket).upload(path, file, {
-      cacheControl: '3600',
-      upsert: false,
-    });
-    if (!error) {
-      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-      return { url: data.publicUrl, error: null };
-    }
-    const msg = (error.message || '').toLowerCase();
-    if (!(msg.includes('bucket') && msg.includes('not found'))) {
-      return { url: null, error: error.message };
-    }
-  }
-  return { url: null, error: 'No se encontró bucket para subir foto de cédula.' };
-}
 
 const TOTAL_PASOS = 4;
 
@@ -64,6 +40,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
   const [submitPhase, setSubmitPhase] = useState<'idle' | 'compress' | 'upload' | 'save'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [cedulaFoto, setCedulaFoto] = useState<File | null>(null);
+  const [cedulaFotoUrl, setCedulaFotoUrl] = useState<string | null>(null);
   const [mostrarVista, setMostrarVista] = useState(false);
   const [formData, setFormData] = useState({
     cedula: '',
@@ -72,23 +49,77 @@ function HojaDeVidaMovilInner({ params }: Props) {
   });
   const [legal, setLegal] = useState<HojaVidaObreroCompleta>(() => emptyHojaVidaObreroCompleta());
   const [planillaPatrono, setPlanillaPatrono] = useState<PlanillaPatronoCampos | null>(null);
+  const [tokenValidando, setTokenValidando] = useState(true);
+  const [tokenInvalido, setTokenInvalido] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      const { data, error: err } = await supabase
-        .from('ci_empleados')
-        .select('*')
-        .eq('token_registro', params.token)
-        .maybeSingle();
-      if (!alive || err || !data) return;
-      const row = data as Record<string, unknown>;
-      setLegal(hojaVidaDesdeRow(row));
+    void (async () => {
+      setTokenValidando(true);
+      setTokenInvalido(null);
       try {
-        const campos = await resolvePlanillaPatronoParaEmpleado(supabase, row);
-        if (alive) setPlanillaPatrono(campos);
+        const res = await fetch(apiUrl('/api/expediente/validar-token'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: params.token }),
+        });
+        const j = (await res.json().catch(() => ({}))) as {
+          valid?: boolean;
+          error?: string;
+          empleado?: { nombre?: string; cargo?: string };
+        };
+        if (!alive) return;
+        if (!res.ok || !j.valid) {
+          setTokenInvalido(j.error ?? 'Enlace no válido o inexistente');
+          setTokenValidando(false);
+          return;
+        }
+
+        const { data, error: err } = await supabase
+          .from('ci_empleados')
+          .select('*')
+          .eq('token_registro', params.token)
+          .maybeSingle();
+        if (!alive) return;
+        if (err || !data) {
+          const leg = await supabase.from('ci_empleados').select('*').eq('token', params.token).maybeSingle();
+          if (!alive || leg.error || !leg.data) {
+            setTokenInvalido('No se encontró el expediente del enlace');
+            setTokenValidando(false);
+            return;
+          }
+          const rowLeg = leg.data as Record<string, unknown>;
+          const hvLeg = hojaVidaDesdeRow(rowLeg);
+          if (j.empleado?.cargo && !hvLeg.contratacion.cargoUOficio.trim()) {
+            hvLeg.contratacion.cargoUOficio = j.empleado.cargo.trim();
+          }
+          setLegal(hvLeg);
+          try {
+            const campos = await resolvePlanillaPatronoParaEmpleado(supabase, rowLeg);
+            if (alive) setPlanillaPatrono(campos);
+          } catch {
+            if (alive) setPlanillaPatrono(null);
+          }
+          setTokenValidando(false);
+          return;
+        }
+
+        const row = data as Record<string, unknown>;
+        const hv = hojaVidaDesdeRow(row);
+        if (j.empleado?.cargo && !hv.contratacion.cargoUOficio.trim()) {
+          hv.contratacion.cargoUOficio = j.empleado.cargo.trim();
+        }
+        setLegal(hv);
+        try {
+          const campos = await resolvePlanillaPatronoParaEmpleado(supabase, row);
+          if (alive) setPlanillaPatrono(campos);
+        } catch {
+          if (alive) setPlanillaPatrono(null);
+        }
       } catch {
-        if (alive) setPlanillaPatrono(null);
+        if (alive) setTokenInvalido('No se pudo validar el enlace. Revisa tu conexión.');
+      } finally {
+        if (alive) setTokenValidando(false);
       }
     })();
     return () => {
@@ -130,16 +161,11 @@ function HojaDeVidaMovilInner({ params }: Props) {
     setIsSubmitting(true);
     setSubmitPhase('idle');
     setError(null);
-    let fotoUrl: string | null = null;
-    if (cedulaFoto) {
+    let fotoUrl: string | null = cedulaFotoUrl;
+    if (cedulaFoto && !fotoUrl) {
       try {
-        setSubmitPhase('compress');
-        const blob = await compressImageForUpload(cedulaFoto);
-        const fileToSend = new File([blob], 'cedula-casa-inteligente.jpg', {
-          type: blob.type.startsWith('image/') ? blob.type : 'image/jpeg',
-        });
         setSubmitPhase('upload');
-        const up = await uploadCedulaPhoto(fileToSend, params.token, supabase);
+        const up = await uploadOnboardingCedulaPhoto(cedulaFoto, params.token, supabase);
         if (up.error) {
           setIsSubmitting(false);
           setSubmitPhase('idle');
@@ -151,7 +177,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
       } catch (e) {
         setIsSubmitting(false);
         setSubmitPhase('idle');
-        setError(e instanceof Error ? e.message : 'No se pudo preparar la imagen.');
+        setError(e instanceof Error ? e.message : 'No se pudo subir la imagen.');
         return;
       }
     } else {
@@ -214,8 +240,30 @@ function HojaDeVidaMovilInner({ params }: Props) {
       setError('Token inválido o no encontrado.');
       return;
     }
+    void fetch(apiUrl('/api/expediente/marcar-token-usado'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: params.token }),
+    }).catch(() => undefined);
     setLegal(merged);
     setStep(4);
+  }
+
+  if (tokenValidando) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0A0A0F] px-6 text-center text-sm text-zinc-400">
+        Validando enlace…
+      </div>
+    );
+  }
+
+  if (tokenInvalido) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0A0A0F] px-6 text-center">
+        <p className="text-lg font-bold text-amber-200">Enlace no disponible</p>
+        <p className="mt-2 max-w-sm text-sm text-zinc-400">{tokenInvalido}</p>
+      </div>
+    );
   }
 
   return (
@@ -268,10 +316,21 @@ function HojaDeVidaMovilInner({ params }: Props) {
                   />
                 </div>
                 <div>
-                  <DocumentUpload 
-                    label="Foto de cédula (frente)" 
+                  <DocumentUpload
+                    label="Foto de cédula (frente)"
                     currentFileName={cedulaFoto?.name}
-                    onUploadSuccess={(file) => setCedulaFoto(file)} 
+                    preferCamera
+                    uploadOnSelect={async (file) => {
+                      const up = await uploadOnboardingCedulaPhoto(file, params.token, supabase);
+                      if (up.error) throw new Error(up.error);
+                      return { publicUrl: up.url ?? undefined };
+                    }}
+                    onUploadError={(msg) => setError(msg)}
+                    onUploadSuccess={({ file, publicUrl }) => {
+                      setCedulaFoto(file);
+                      if (publicUrl) setCedulaFotoUrl(publicUrl);
+                      setError(null);
+                    }}
                   />
                 </div>
               </GlassCard>

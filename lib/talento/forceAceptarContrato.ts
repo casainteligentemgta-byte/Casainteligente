@@ -1,34 +1,49 @@
+import { aceptarContratoPorAdminBypass } from '@/lib/contratos/rrhhContratoFlow';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
-export async function forceAceptarContrato(empleadoId: string, adminId: string, motivo: string) {
+const MOTIVO_BYPASS_DEFAULT = 'Aceptación manual / Desatasco de flujo en pruebas';
+
+/**
+ * Simula la aceptación digital con auditoría de bypass admin.
+ * Persiste en `ci_contratos_empleado_obra` (no existe tabla `ci_contratos` en este proyecto).
+ *
+ * @param contratoId - UUID del contrato, o del empleado (último contrato) en flujos legacy fast-list.
+ */
+export async function forceAceptarContrato(
+  contratoId: string,
+  adminId: string,
+  motivo: string = MOTIVO_BYPASS_DEFAULT,
+) {
   const admin = supabaseAdminForRoute();
   if (!admin.ok) throw new Error('No se pudo inicializar el cliente de admin');
 
-  // 1. Buscar el contrato pendiente para ese empleado
-  const { data: contrato, error: selError } = await admin.client
+  const id = contratoId.trim();
+  const motivoFinal = motivo.trim() || MOTIVO_BYPASS_DEFAULT;
+
+  let out = await aceptarContratoPorAdminBypass(admin.client, {
+    contratoId: id,
+    adminId,
+    motivo: motivoFinal,
+  });
+
+  // Fast-list envía `formalizado_empleado_id` en la ruta `/contratos/[id]/force-aceptar`
+  if ('error' in out && out.status === 404) {
+    out = await aceptarContratoPorAdminBypass(admin.client, {
+      empleadoId: id,
+      adminId,
+      motivo: motivoFinal,
+    });
+  }
+
+  if ('error' in out) {
+    return { data: null, error: { message: out.error } };
+  }
+
+  const { data, error } = await admin.client
     .from('ci_contratos_empleado_obra')
-    .select('id')
-    .eq('empleado_id', empleadoId)
-    .eq('estado_contrato', 'generado')
+    .select('*')
+    .eq('id', out.contratoId)
     .maybeSingle();
-
-  if (selError) throw selError;
-  if (!contrato) throw new Error('No se encontró un contrato pendiente para este empleado.');
-
-  // 2. Esta función simula la aceptación pero audita que fue un Bypass
-  const { data, error } = await (admin.client
-    .from('ci_contratos_empleado_obra')
-    .update({
-      estado_contrato: 'firmado_electronico',
-      obrero_aceptacion_contrato_at: new Date().toISOString(),
-      obrero_aceptacion_cliente: {
-        bypass_by_admin: true,
-        admin_id: adminId,
-        motivo: motivo || "Aceptación manual / Desatasco de flujo en pruebas"
-      }
-    } as never) as any)
-    .eq('id', (contrato as any).id)
-    .select();
 
   return { data, error };
 }

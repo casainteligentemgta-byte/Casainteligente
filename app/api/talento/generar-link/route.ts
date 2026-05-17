@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
+import { crearExpedienteToken } from '@/lib/reclutamiento/validarExpedienteToken';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { RolExamen } from '@/types/talento';
 
@@ -119,6 +120,12 @@ export async function POST(req: Request) {
   }
 
   const row = empleado as { id: string };
+
+  await crearExpedienteToken(supabase, {
+    token,
+    empleadoId: row.id,
+    expiresAt: expiraAt,
+  });
 
   const { error: errExa } = await supabase.from('ci_examenes').insert({
     empleado_id: row.id,

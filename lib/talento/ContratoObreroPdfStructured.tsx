@@ -1,5 +1,9 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
+import {
+  oficinaRegistroMercantilComparecencia,
+} from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
+import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
 import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 
@@ -516,7 +520,15 @@ export function ContratoObreroPDF({
     str(entidad.rep_legal_nombre ?? entidad.representante_legal, '________________________________________________'),
   );
   const repCedulaGuion = cedulaConGuion(entidad.rep_legal_cedula);
-  const rifEntidadLinea = rifPatronoDisplay(str(entidad.rif, ''));
+  const repCargoLinea = str(entidad.rep_legal_cargo, 'Representante Legal');
+  const repArticuloLinea = entidad.rep_legal_femenino ? 'la Ciudadana' : 'el Ciudadano';
+  const inscripcionRmLinea = (() => {
+    const oficina = oficinaRegistroMercantilComparecencia(entidad.rm_oficina);
+    const fecha = fechaLargaRegistroMercantilContratoVe(entidad.rm_fecha) ?? '___';
+    const num = str(entidad.rm_numero, '___');
+    const tomo = str(entidad.rm_tomo, '___');
+    return `inscrita por ante ${oficina}, en fecha ${fecha}, quedando anotada bajo el N° ${num}, Tomo ${tomo},`;
+  })();
   const razonComparecencia = nombreLegalSociedad.trim().replace(/\.\s*$/, '');
   const domicilioEmpresa = str(
     entidad.domicilio_fiscal ?? entidad.direccion_fiscal,
@@ -582,8 +594,8 @@ export function ContratoObreroPDF({
                 , <Text style={styles.bold}>{zonaPdf}</Text>
               </>
             ) : null}
-            , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado{' '}
-            <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N° <Text style={styles.bold}>{rifEntidadLinea}</Text>
+            , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text> del estado{' '}
+            <Text style={styles.bold}>{estadoEmpresa}</Text>, {inscripcionRmLinea}{' '}
           </>
         ) : (
           <>
@@ -593,17 +605,19 @@ export function ContratoObreroPDF({
                 , <Text style={styles.bold}>{zonaPdf}</Text>
               </>
             ) : null}
-            , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text>, Estado <Text style={styles.bold}>{estadoEmpresa}</Text>, Rif. N°{' '}
-            <Text style={styles.bold}>{rifEntidadLinea}</Text>
+            , Municipio <Text style={styles.bold}>{municipioEmpresa}</Text> del estado{' '}
+            <Text style={styles.bold}>{estadoEmpresa}</Text>, {inscripcionRmLinea}{' '}
           </>
         )}
-        , representada en este acto por <Text style={styles.bold}>{rep}</Text>,{' '}
-        <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, <Text style={styles.bold}>{estadoCivilRep}</Text>, hábil en
-        derecho, titular de la cédula de Identidad número <Text style={styles.bold}>{repCedulaLinea}</Text> y de este domicilio, quien a
-        los efectos de este contrato se denominará <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra
-        el ciudadano <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de
-        edad, <Text style={styles.bold}>{estadoCivilTrab}</Text>, hábil en derecho, titular de la cédula de identidad número{' '}
-        <Text style={styles.bold}>{cedulaTrabGuion}</Text>, domiciliado en <Text style={styles.bold}>{domicilioTrab}</Text>; quien en lo
+        representada en este acto por su <Text style={styles.bold}>{repCargoLinea}</Text>{' '}
+        <Text style={styles.bold}>{repArticuloLinea}</Text> <Text style={styles.bold}>{rep}</Text>,{' '}
+        <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, hábil en derecho,{' '}
+        <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de Identidad número{' '}
+        <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
+        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra el ciudadano{' '}
+        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, hábil en
+        derecho, <Text style={styles.bold}>{estadoCivilTrab}</Text>, titular de la cédula de identidad número{' '}
+        <Text style={styles.bold}>{cedulaTrabGuion}</Text>, de este domicilio; quien en lo
         sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en celebrar, como en efecto se celebra, el
         presente Contrato de Trabajo para una Obra Determinada, conforme a lo establecido en el Artículo 63 de la Ley Orgánica de Trabajo de
         los Trabajadores y Trabajadoras, y las cláusulas 18 y 19 de la vigente Convención Colectiva de Trabajo para la Rama de la Industria de

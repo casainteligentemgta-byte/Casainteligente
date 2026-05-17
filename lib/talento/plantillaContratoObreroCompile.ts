@@ -1,6 +1,9 @@
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
+import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
+import { CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
+import { textoInscripcionRegistroMercantilComparecencia } from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -38,6 +41,23 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     etiqueta: 'Estado civil del representante',
     ayuda: 'Opcional; complete en overrides si no está modelado en entidad.',
   },
+  REP_LEGAL_CARGO: { etiqueta: 'Cargo del representante legal', ayuda: '`rep_legal_cargo` en entidad o RM.' },
+  REP_LEGAL_ARTICULO_CIUDADANO: { etiqueta: 'Tratamiento (el/la Ciudadano/a)', ayuda: 'Según género del representante en RM.' },
+  PATRON_INSCRIPCION_RM: {
+    etiqueta: 'Inscripción en Registro Mercantil',
+    ayuda: 'Tomo, número y fecha desde `ci_entidades.registro_mercantil`.',
+  },
+  CONTRATO_FASE_TECNICA: { etiqueta: 'Fase técnica (cláusula primera)', ayuda: 'Campo objeto del contrato / fase de obra.' },
+  CONTRATO_HORARIO_CUARTA: { etiqueta: 'Horario detallado (cláusula cuarta)', ayuda: 'Horario semanal del contrato o del proyecto.' },
+  CONTRATO_LUGAR_QUINTA: { etiqueta: 'Lugar de prestación (cláusula quinta)', ayuda: 'Obra / ubicación del proyecto.' },
+  CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario mensual tabulador ÷ 4.' },
+  CONTRATO_CESTA_TICKET_USD_SEMANAL: { etiqueta: 'Cesta ticket semanal USD', ayuda: 'Por defecto 10 USD.' },
+  CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Tabulador + bono especial.' },
+  CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
+  CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal', ayuda: 'Por defecto Pampatar.' },
+  CONTRATO_DIA_FIRMA: { etiqueta: 'Día de firma', ayuda: 'Fecha de firma o ingreso.' },
+  CONTRATO_MES_FIRMA: { etiqueta: 'Mes de firma', ayuda: 'Fecha de firma o ingreso.' },
+  CONTRATO_ANIO_FIRMA: { etiqueta: 'Año de firma', ayuda: 'Fecha de firma o ingreso.' },
   EMPLEADO_MUNICIPIO: {
     etiqueta: 'Municipio del domicilio del trabajador',
     ayuda: 'Opcional; planilla o overrides RRHH.',
@@ -150,8 +170,29 @@ export type FuentesContratoObrero = {
     rep_estado_civil?: string | null;
     /** Sector del domicilio social según RM (orden legal en comparecencia: sector, municipio, estado). */
     sector_geo?: string | null;
+    registro_mercantil?: unknown;
+    rep_legal_cargo?: string | null;
+    rep_legal_femenino?: boolean;
   };
 };
+
+const DIAS_MES_REF_SALARIO_PLANTILLA = 30;
+
+function partesFechaFirmaContrato(iso?: string | null): { dia: string; mes: string; anio: string } {
+  const t = (iso ?? '').trim();
+  const ymd = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymd) {
+    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 12, 0, 0);
+    if (!Number.isNaN(d.getTime())) {
+      return {
+        dia: d.toLocaleDateString('es-VE', { day: 'numeric' }),
+        mes: d.toLocaleDateString('es-VE', { month: 'long' }),
+        anio: d.toLocaleDateString('es-VE', { year: 'numeric' }),
+      };
+    }
+  }
+  return { dia: '________', mes: '____________________', anio: '________' };
+}
 
 function rifPlantillaLinea(raw: string): string {
   const t = raw.trim().toUpperCase();
@@ -249,8 +290,31 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const repNombre = str(f.patron.rep_legal_nombre) || str(f.patron.representante);
   const repCed = str(f.patron.rep_legal_cedula);
   const repCedFmt = repCed ? cedulaVenezuelaGuion(repCed) : '_______________';
+  const repCargo = str(f.patron.rep_legal_cargo) || 'Representante Legal';
+  const repArticulo = f.patron.rep_legal_femenino ? 'la Ciudadana' : 'el Ciudadano';
+
+  const salMensualEst =
+    Number.isFinite(salNum) && salNum > 0 ? salNum * DIAS_MES_REF_SALARIO_PLANTILLA : null;
+  const salSemanalTxt =
+    salMensualEst != null
+      ? (salMensualEst / 4).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '__________________';
+
+  const horarioCuarta = str(f.contrato.horario_semanal_texto) || CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT;
+  const faseTecnica = str(f.contrato.objeto_contrato) || '_______________________________________________';
+  const lugarQuinta =
+    str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion) || str(f.obra.nombre) || '______________________________';
+
+  const fechaFirmaIso = str(f.contrato.fecha_firma_contrato) || new Date().toISOString().slice(0, 10);
+  const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaFirmaContrato(fechaFirmaIso);
+
+  const puntoEnc = textoPuntoEncuentroTransporteClausulaSex(f.obra.punto_encuentro_transporte_contrato);
+  const puntoEncFragmento = /^en\s/i.test(puntoEnc) ? puntoEnc : `en ${puntoEnc}`;
 
   return {
+    PATRON_INSCRIPCION_RM: textoInscripcionRegistroMercantilComparecencia(f.patron.registro_mercantil),
+    REP_LEGAL_CARGO: repCargo,
+    REP_LEGAL_ARTICULO_CIUDADANO: repArticulo,
     PATRON_RAZON_SOCIAL: razonSocial || str(f.patron.nombre),
     PATRON_RIF: rifPlantillaLinea(str(f.patron.rif)),
     PATRON_SECTOR: str(f.patron.sector_geo) || phSec,
@@ -290,7 +354,18 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_DENOMINACION_GACETA: str(f.contrato.gaceta_denominacion_oficio),
     OBRA_NOMBRE: str(f.obra.nombre),
     OBRA_UBICACION: str(f.obra.ubicacion),
-    OBRA_PUNTO_ENC_TRANSPORTE: textoPuntoEncuentroTransporteClausulaSex(f.obra.punto_encuentro_transporte_contrato),
+    OBRA_PUNTO_ENC_TRANSPORTE: puntoEncFragmento,
+    CONTRATO_FASE_TECNICA: faseTecnica,
+    CONTRATO_HORARIO_CUARTA: horarioCuarta,
+    CONTRATO_LUGAR_QUINTA: lugarQuinta,
+    CONTRATO_SALARIO_SEMANAL_VES: salSemanalTxt,
+    CONTRATO_CESTA_TICKET_USD_SEMANAL: `${CESTATICKET_SEMANAL_USD} USD`,
+    CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
+    CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
+    CONTRATO_DOMICILIO_PROCESAL: 'Pampatar',
+    CONTRATO_DIA_FIRMA: diaFirma,
+    CONTRATO_MES_FIRMA: mesFirma,
+    CONTRATO_ANIO_FIRMA: anioFirma,
   };
 }
 

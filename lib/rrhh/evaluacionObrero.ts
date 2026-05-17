@@ -1,4 +1,5 @@
 import type { EmpleadoHojaVidaRow } from '@/lib/rrhh/fetchEmpleadosHojasVida';
+import { esStatusPendienteRegularizar } from '@/lib/talento/estadoEvaluacionExpress';
 
 export type EstadoEvaluacionFila = 'evaluado' | 'pendiente' | 'en_curso';
 
@@ -8,6 +9,7 @@ export function empleadoTieneEvaluacionCompleta(row: {
   status_evaluacion?: string | null;
   semaforo?: string | null;
 }): boolean {
+  if (esStatusPendienteRegularizar(row.status_evaluacion)) return false;
   if ((row.examen_completado_at ?? '').trim()) return true;
   if (row.puntaje_total != null && Number.isFinite(row.puntaje_total)) return true;
   const st = (row.status_evaluacion ?? '').trim().toLowerCase();
@@ -17,6 +19,7 @@ export function empleadoTieneEvaluacionCompleta(row: {
 }
 
 export function estadoEvaluacionFila(row: EmpleadoHojaVidaRow): EstadoEvaluacionFila {
+  if (esStatusPendienteRegularizar(row.status_evaluacion)) return 'pendiente';
   if (empleadoTieneEvaluacionCompleta(row)) return 'evaluado';
   const st = (row.status_evaluacion ?? '').trim().toLowerCase();
   if (st === 'amarillo' || st === 'en_curso') return 'en_curso';
@@ -24,6 +27,9 @@ export function estadoEvaluacionFila(row: EmpleadoHojaVidaRow): EstadoEvaluacion
 }
 
 export function etiquetaEstadoEvaluacion(row: EmpleadoHojaVidaRow): string {
+  if (esStatusPendienteRegularizar(row.status_evaluacion)) {
+    return 'Evaluación pendiente (express)';
+  }
   const e = estadoEvaluacionFila(row);
   if (e === 'evaluado') {
     const sem = (row.semaforo ?? '').trim() || (row.status_evaluacion ?? '').trim();

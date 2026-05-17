@@ -201,7 +201,7 @@ function empleadoLiteDesdeContratoExpress(raw: Record<string, unknown>): Emplead
     estado: 'aprobado',
     estado_proceso: 'cv_completado',
     recruitment_need_id: null,
-    status_evaluacion: 'verde',
+    status_evaluacion: 'pendiente_regularizar',
     rol_examen: 'obrero',
   };
 }
@@ -231,9 +231,10 @@ function evaluacionAprobada(row: EmpleadoLite): boolean {
   return statusEvaluacionCodigo(row) === 'verde';
 }
 
-/** No aprobaron la evaluación (resultado explícito negativo). */
+/** Sin evaluación completada o express pendiente de examen. */
 function evaluacionNoAprobada(row: EmpleadoLite): boolean {
   const s = statusEvaluacionCodigo(row);
+  if (s === 'pendiente_regularizar') return true;
   return s === 'rojo' || s === 'rechazado';
 }
 

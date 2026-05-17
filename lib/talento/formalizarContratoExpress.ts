@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { ESTADO_EVALUACION_EXPRESS_INICIAL } from '@/lib/talento/estadoEvaluacionExpress';
 
 type ExpressRow = {
   id: string;
@@ -123,15 +124,15 @@ export async function formalizarContratoExpressPorId(
     proyecto_modulo_id: ex.proyecto_id,
     direccion_habitacion: ex.obrero_direccion?.trim() || null,
     domicilio_declarado: ex.obrero_direccion?.trim() || null,
-    rol_examen: 'obrero',
+    rol_examen: ESTADO_EVALUACION_EXPRESS_INICIAL.rol_examen,
     estado: 'aprobado',
     estado_proceso: 'cv_completado',
-    respuestas_personalidad: {},
-    respuestas_logica: {},
+    respuestas_personalidad: ESTADO_EVALUACION_EXPRESS_INICIAL.respuestas_personalidad,
+    respuestas_logica: ESTADO_EVALUACION_EXPRESS_INICIAL.respuestas_logica,
     token,
     token_registro: token,
-    semaforo: 'rojo',
-    status_evaluacion: 'pendiente_regularizar',
+    semaforo: ESTADO_EVALUACION_EXPRESS_INICIAL.semaforo,
+    status_evaluacion: ESTADO_EVALUACION_EXPRESS_INICIAL.status_evaluacion,
     estatus_evaluacion: 'completado',
   };
 
