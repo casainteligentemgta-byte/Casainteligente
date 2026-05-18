@@ -552,8 +552,7 @@ export default function RrhhGestionPersonalClient({
             <table className="w-full min-w-[420px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                  <th className="px-4 py-2.5 sm:px-5">Oficio (tabulador)</th>
-                  <th className="px-4 py-2.5 text-right">Plazas</th>
+                  <th className="px-4 py-2.5 sm:px-5">Plazas · oficio (tabulador)</th>
                   <th className="px-4 py-2.5 text-right sm:pr-5">Solicitudes</th>
                 </tr>
               </thead>
@@ -561,12 +560,17 @@ export default function RrhhGestionPersonalClient({
                 {resumenOficiosSolicitados.map((row) => (
                   <tr key={row.codigo} className="border-b border-white/5 last:border-0">
                     <td className="px-4 py-3 sm:px-5">
-                      <span className="font-mono font-semibold text-violet-100">{row.codigo}</span>
-                      {row.nombre ? (
-                        <span className="mt-0.5 block text-xs text-zinc-400">{row.nombre}</span>
-                      ) : null}
+                      <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm leading-snug">
+                        <span className="tabular-nums font-bold text-white">{row.plazas}</span>
+                        <span className="text-zinc-600" aria-hidden>
+                          ·
+                        </span>
+                        <span className="font-mono font-semibold text-violet-100">{row.codigo}</span>
+                        {row.nombre ? (
+                          <span className="text-zinc-400">— {row.nombre}</span>
+                        ) : null}
+                      </p>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-bold text-white">{row.plazas}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-zinc-300 sm:pr-5">{row.solicitudes}</td>
                   </tr>
                 ))}
@@ -598,15 +602,16 @@ export default function RrhhGestionPersonalClient({
               >
                 <div className="absolute inset-0 -z-10 bg-gradient-to-br from-sky-500/5 to-purple-500/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-bold tracking-tight text-white">{r.specialty_codigo}</h3>
-                    <p className="text-sm text-zinc-400">{r.specialty_nombre ?? 'Sin nombre de especialidad'}</p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                    <span className="text-sm font-bold tabular-nums">{r.quantity_requested}</span>
-                  </div>
-                </div>
+                <h3 className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-base font-bold leading-snug tracking-tight text-white sm:text-lg">
+                  <span className="tabular-nums text-sky-300">{r.quantity_requested}</span>
+                  <span className="font-normal text-zinc-600" aria-hidden>
+                    ·
+                  </span>
+                  <span className="font-mono text-violet-100">{r.specialty_codigo}</span>
+                  <span className="font-normal text-zinc-400">
+                    — {r.specialty_nombre ?? 'Sin nombre de especialidad'}
+                  </span>
+                </h3>
 
                 <div className="mt-4 grid grid-cols-1 gap-2 text-xs text-zinc-500">
                   <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ClipboardList, FileText, Trash2, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
+import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import ContratosExpressModuloPanel from '@/components/proyectos/ContratosExpressModuloPanel';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -28,6 +29,17 @@ export type ResumenObrerosProyectoModuloProps = {
   subtituloSeccion?: string | null;
   /** Oculta el enlace «Hojas de vida RRHH» (p. ej. en la propia pantalla de hojas de vida). */
   ocultarEnlaceHojasVida?: boolean;
+  /** Varios módulos: agrega datos (p. ej. «Todos» en SMART RRHH). Si no se pasa, solo `proyectoModuloId`. */
+  proyectosModuloIds?: string[];
+  /** Filtro en enlaces del cuadro; `null` = sin filtro por proyecto (alcance «Todos»). */
+  proyectoModuloIdFiltroEnlaces?: string | null;
+  /** Selector de obra junto al título (controlado desde la página). */
+  selectorObra?: {
+    valor: string;
+    onChange: (value: string) => void;
+    opciones: { id: string; nombre: string }[];
+    mostrarTodos: boolean;
+  };
 };
 
 /** Fila ficticia para pruebas UI (no persiste en BD). UUID solo para keys/links estables en demo. */
@@ -106,7 +118,7 @@ type FilaContratoObra = {
   estado_contrato: string;
 };
 
-type ListaModalTipo = 'enCarpeta' | 'inactivos' | 'porContratar';
+type ListaModalTipo = 'enCarpeta' | 'activos' | 'inactivos' | 'porContratar';
 
 type LaborRequestLite = {
   id: string;
@@ -265,6 +277,10 @@ function entraEnListaPorContratar(row: EmpleadoLite, contrMap: Map<string, strin
   return esPersonalCampoPorContratar(row) && evaluacionAptaPorContratar(row) && b !== 'contratado_activo';
 }
 
+function entraEnListaContratadosActivos(row: EmpleadoLite, contrMap: Map<string, string[]>): boolean {
+  return bucketContrato(contrMap.get(row.id) ?? []) === 'contratado_activo';
+}
+
 /** Contratado en firma activa sobre obra aún abierta (no cuenta como «inactivo por obra cerrada»). */
 function tieneContratoActivoEnObraAbierta(
   eid: string,
@@ -305,7 +321,7 @@ function esInactivoPorObraCulminada(
 }
 
 const SUBTITULO_CUADRO_DEFAULT =
-  'Plazas solicitadas, obreros en carpeta (no aprobaron la evaluación), contratos activos en obra vinculada y contratos express (fast-track) del mismo proyecto u obras hijas.';
+  'Plazas solicitadas, obreros no aprobados en evaluación, contratos activos en obra vinculada y contratos express (fast-track) del mismo proyecto u obras hijas.';
 
 export default function ResumenObrerosProyectoModulo({
   proyectoModuloId,
@@ -315,6 +331,9 @@ export default function ResumenObrerosProyectoModulo({
   tituloSeccion = 'Cuadro de obreros — RRHH del proyecto',
   subtituloSeccion = SUBTITULO_CUADRO_DEFAULT,
   ocultarEnlaceHojasVida = false,
+  proyectosModuloIds,
+  proyectoModuloIdFiltroEnlaces,
+  selectorObra,
 }: ResumenObrerosProyectoModuloProps) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -333,6 +352,7 @@ export default function ResumenObrerosProyectoModulo({
   const [listaModal, setListaModal] = useState<ListaModalTipo | null>(null);
   const [expressPanelAbierto, setExpressPanelAbierto] = useState(false);
   const [contratosExpressCount, setContratosExpressCount] = useState(0);
+  const [proyectoIdsExpressAlcance, setProyectoIdsExpressAlcance] = useState<string[]>([]);
   const [viewportTick, setViewportTick] = useState(0);
   /** Solicitudes `labor_requests` pendientes (director) en módulo u obras hijas. */
   const [cuadroPlazasLaborPendientes, setCuadroPlazasLaborPendientes] = useState(0);
@@ -365,26 +385,46 @@ export default function ResumenObrerosProyectoModulo({
     };
   }, []);
 
+  const moduloIdsAlcance = useMemo(() => {
+    const extra = (proyectosModuloIds ?? []).map((s) => s.trim()).filter(Boolean);
+    if (extra.length > 0) return Array.from(new Set(extra));
+    const one = proyectoModuloId.trim();
+    return one ? [one] : [];
+  }, [proyectoModuloId, proyectosModuloIds]);
+
+  const idFiltroEnlaces = proyectoModuloIdFiltroEnlaces?.trim() || null;
+
   useEffect(() => {
-    const id = proyectoModuloId.trim();
-    if (!id) {
+    if (!moduloIdsAlcance.length) {
       setLoading(false);
       setError('Proyecto no válido.');
       setProjectIdsForLabor([]);
       setSolicitadosWorkerIdSet(new Set());
+      setProyectoIdsExpressAlcance([]);
       return;
     }
 
     let alive = true;
+    let requestId = 0;
     (async () => {
+      const myRequest = ++requestId;
       setLoading(true);
       setError(null);
 
       try {
-        const obraHijaIds = await idsObrasHijasDesdeModuloIntegral(supabase, id);
+        const obraHijaIdsSet = new Set<string>();
+        for (const mid of moduloIdsAlcance) {
+          const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, mid);
+          for (const h of hijas) obraHijaIdsSet.add(h);
+        }
+        const obraHijaIds = Array.from(obraHijaIdsSet);
         if (!alive) return;
 
-        const filtroModulo = `proyecto_modulo_id.eq.${id},proyecto_id.eq.${id}`;
+        const filtroOr = moduloIdsAlcance.flatMap((mid) => [
+          `proyecto_modulo_id.eq.${mid}`,
+          `proyecto_id.eq.${mid}`,
+        ]);
+        const filtroModulo = filtroOr.join(',');
         const selNeeds = 'id,cantidad_requerida,protocol_active,cargo_nombre,title,created_at';
         const r1 = await supabase.from('recruitment_needs').select(selNeeds).or(filtroModulo).order('created_at', { ascending: false });
 
@@ -414,7 +454,7 @@ export default function ResumenObrerosProyectoModulo({
 
         const selEmp =
           'id,nombre_completo,nombres,primer_apellido,segundo_apellido,cedula,documento,celular,telefono,cargo_nombre,cargo_codigo,estado,estado_proceso,recruitment_need_id,status_evaluacion,rol_examen,created_at';
-        const e1 = await supabase.from('ci_empleados').select(selEmp).eq('proyecto_modulo_id', id).order('nombre_completo');
+        const e1 = await supabase.from('ci_empleados').select(selEmp).in('proyecto_modulo_id', moduloIdsAlcance).order('nombre_completo');
         if (!alive) return;
 
         let emps: EmpleadoLite[] = (e1.data ?? []) as EmpleadoLite[];
@@ -452,8 +492,9 @@ export default function ResumenObrerosProyectoModulo({
         }
 
         /** Obreros asignados vía `project_assignments` (solicitud de personal); suelen no tener `proyecto_modulo_id`. */
-        const projectIdsAsignacion = Array.from(new Set([id, ...obraHijaIds]));
+        const projectIdsAsignacion = Array.from(new Set([...moduloIdsAlcance, ...obraHijaIds]));
         setProjectIdsForLabor(projectIdsAsignacion);
+        setProyectoIdsExpressAlcance(projectIdsAsignacion);
 
         let laborPendientesRows: LaborRequestLite[] = [];
         const { data: lrData, error: lrErr } = await supabase
@@ -505,7 +546,7 @@ export default function ResumenObrerosProyectoModulo({
         setSolicitadosWorkerIdSet(new Set(solicitadosIds));
 
         let expressTotalFilas = 0;
-        const proyectoIdsExpress = Array.from(new Set([id, ...obraHijaIds]));
+        const proyectoIdsExpress = projectIdsAsignacion;
         if (proyectoIdsExpress.length > 0) {
           const rExFull = await supabase
             .from('ci_contratos_express')
@@ -663,15 +704,19 @@ export default function ResumenObrerosProyectoModulo({
         setContratoPorEmpleado(new Map());
         setFilasContratoPorEmpleado(new Map());
         setObraEstadoPorId(new Map());
+        setProyectoIdsExpressAlcance([]);
       } finally {
-        if (alive) setLoading(false);
+        if (alive && myRequest === requestId) setLoading(false);
       }
     })();
 
     return () => {
       alive = false;
     };
-  }, [proyectoModuloId, supabase, listaRefresco, viewportTick, tabUrl]);
+  }, [moduloIdsAlcance, supabase, listaRefresco, viewportTick, tabUrl]);
+
+  const tituloId = `resumen-obreros-${moduloIdsAlcance.join('-').slice(0, 40) || 'proyecto'}`;
+  const numResumen = (n: number) => (loading ? '…' : String(n));
 
   const porContratarObrerosCount = useMemo(
     () => empleados.filter((e) => entraEnListaPorContratar(e, contratoPorEmpleado)).length,
@@ -771,6 +816,8 @@ export default function ResumenObrerosProyectoModulo({
       switch (listaModal) {
         case 'enCarpeta':
           return evaluacionNoAprobada(e);
+        case 'activos':
+          return entraEnListaContratadosActivos(e, contratoPorEmpleado);
         case 'inactivos':
           return esInactivoPorObraCulminada(e.id, filasContratoPorEmpleado, obraEstadoPorId);
         case 'porContratar':
@@ -801,7 +848,9 @@ export default function ResumenObrerosProyectoModulo({
   const tituloListaModal = useMemo(() => {
     switch (listaModal) {
       case 'enCarpeta':
-        return 'No aprobado — no aprobaron la evaluación';
+        return 'NO APROBADO — No Aprobaron La Evaluación.';
+      case 'activos':
+        return 'Contratados activos — con contrato vigente';
       case 'inactivos':
         return 'Contratados inactivos (obra culminada)';
       case 'porContratar':
@@ -814,7 +863,7 @@ export default function ResumenObrerosProyectoModulo({
   return (
     <section
       className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-b from-fuchsia-950/40 to-zinc-950/80 p-5 shadow-[0_0_32px_rgba(192,38,211,0.08)] backdrop-blur-xl"
-      aria-labelledby="resumen-obreros-proyecto-titulo"
+      aria-labelledby={tituloId}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
         <div className="flex gap-3">
@@ -822,9 +871,29 @@ export default function ResumenObrerosProyectoModulo({
             <Users className="h-5 w-5 text-fuchsia-200" aria-hidden />
           </div>
           <div>
-            <h2 id="resumen-obreros-proyecto-titulo" className="text-base font-bold tracking-tight text-white">
-              {tituloSeccion}
-            </h2>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 id={tituloId} className="text-base font-bold tracking-tight text-white">
+                {tituloSeccion}
+              </h2>
+              {selectorObra && selectorObra.opciones.length > 0 ? (
+                <label className="inline-flex items-center gap-2">
+                  <span className="sr-only">Obra o alcance</span>
+                  <select
+                    value={selectorObra.valor}
+                    onChange={(e) => selectorObra.onChange(e.target.value)}
+                    className="max-w-[min(100%,14rem)] rounded-lg border border-fuchsia-500/35 bg-zinc-900/80 px-2.5 py-1.5 text-xs font-semibold text-fuchsia-100 outline-none ring-offset-zinc-950 focus:border-fuchsia-400/60 focus:ring-2 focus:ring-fuchsia-500/25"
+                    aria-label="Filtrar cuadro SMART RRHH por obra"
+                  >
+                    {selectorObra.mostrarTodos ? <option value="">Todos</option> : null}
+                    {selectorObra.opciones.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
             {subtituloSeccion ? (
               <p className="mt-0.5 text-[11px] text-zinc-500">{subtituloSeccion}</p>
             ) : null}
@@ -847,15 +916,18 @@ export default function ResumenObrerosProyectoModulo({
         ) : null}
       </div>
 
-      {loading ? (
-        <p className="mt-4 text-sm text-zinc-500">Cargando resumen…</p>
-      ) : error ? (
-        <p className="mt-4 text-sm text-red-400">{error}</p>
-      ) : (
-        <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {error ? (
+        <p className="mt-4 rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      ) : null}
+      {loading ? <p className="mt-2 text-xs text-zinc-500">Actualizando contadores…</p> : null}
+
+      <div
+        className={`mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 ${loading ? 'opacity-90' : ''}`}
+      >
             <Link
-              href={hrefGestionPersonalSolicitados({ proyectoModuloId })}
+              href={hrefGestionPersonalSolicitados({ proyectoModuloId: idFiltroEnlaces })}
               className="block w-full rounded-xl border border-violet-500/35 bg-violet-500/10 p-4 text-left transition hover:border-violet-400/50 hover:bg-violet-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
               title="Ver solicitudes de personal por oficio y asignar obreros"
             >
@@ -863,7 +935,7 @@ export default function ResumenObrerosProyectoModulo({
                 <ClipboardList className="h-3.5 w-3.5" aria-hidden />
                 Solicitados
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{solicitadosPlazas}</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{numResumen(solicitadosPlazas)}</p>
               <p className="mt-1 text-[10px] leading-snug text-zinc-500">
                 {cuadroPlazasLaborPendientes > 0
                   ? 'Plazas pedidas por oficio (tabulador) pendientes de asignar en este módulo u obras hijas. Clic: ver listado.'
@@ -875,34 +947,34 @@ export default function ResumenObrerosProyectoModulo({
             <button
               type="button"
               onClick={() => setListaModal('enCarpeta')}
-              title="Obreros vinculados al proyecto que no aprobaron la evaluación"
+              title="No Aprobaron La Evaluación"
               className="w-full rounded-xl border border-sky-500/35 bg-sky-500/10 p-4 text-left transition hover:border-sky-400/50 hover:bg-sky-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
             >
               <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-sky-300/90">
                 <Users className="h-3.5 w-3.5" aria-hidden />
-                No aprobado
+                NO APROBADO
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{enCarpetaMostrar}</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{numResumen(enCarpetaMostrar)}</p>
               <p className="mt-1 text-[10px] text-zinc-500">
-                No aprobaron la evaluación (semáforo rojo o rechazado). Clic: ver lista.
+                No Aprobaron La Evaluación. Clic: ver lista.
               </p>
             </button>
             <div className="w-full overflow-hidden rounded-xl border border-emerald-500/35 bg-emerald-500/10 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/15 focus-within:ring-2 focus-within:ring-emerald-400/40">
-              <Link
-                href={`/rrhh/gestion-personal?tab=obra&proyecto_modulo=${encodeURIComponent(proyectoModuloId)}`}
-                className="block p-4 focus:outline-none"
-                title="Ver personal en obra y asignaciones (solo este módulo y obras vinculadas)"
+              <button
+                type="button"
+                onClick={() => setListaModal('activos')}
+                className="block w-full p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
+                title="Ver cuadro de obreros con contrato activo"
               >
                 <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-emerald-300/90">
                   <UserCheck className="h-3.5 w-3.5" aria-hidden />
                   Contratados activos
                 </div>
-                <p className="mt-2 text-2xl font-bold tabular-nums text-white">{contratadosActivos}</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-white">{numResumen(contratadosActivos)}</p>
                 <p className="mt-1 text-[10px] text-zinc-500">
-                  Contrato obra «firmado activo» o contrato express vigente (sin formalizar en{' '}
-                  <span className="font-mono text-zinc-400">ci_empleados</span>). Clic: ir a gestión de personal RRHH.
+                  Contrato obra «firmado activo» o express vigente. Clic: ver cuadro de obreros con contrato.
                 </p>
-              </Link>
+              </button>
               <div className="border-t border-emerald-500/25 px-3 pb-3 pt-2">
                 <button
                   type="button"
@@ -915,7 +987,7 @@ export default function ResumenObrerosProyectoModulo({
                     Contratados express
                   </span>
                   <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-sm font-bold tabular-nums text-amber-50">
-                    {contratosExpressCount}
+                    {numResumen(contratosExpressCount)}
                   </span>
                 </button>
               </div>
@@ -929,7 +1001,7 @@ export default function ResumenObrerosProyectoModulo({
                 <UserX className="h-3.5 w-3.5" aria-hidden />
                 Contratados inactivos
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{contratadosInactivosMostrar}</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{numResumen(contratadosInactivosMostrar)}</p>
               <p className="mt-1 text-[10px] text-zinc-500">
                 Contrato vinculado a obra en estado «cerrada» y sin contrato activo en obra abierta. Clic: lista.
               </p>
@@ -943,23 +1015,21 @@ export default function ResumenObrerosProyectoModulo({
                 <UserMinus className="h-3.5 w-3.5" aria-hidden />
                 Por contratar
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{porContratarMostrar}</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-white">{numResumen(porContratarMostrar)}</p>
               <p className="mt-1 text-[10px] leading-snug text-zinc-500">
                 <span className="font-semibold text-zinc-400">Obrero</span> o{' '}
                 <span className="font-semibold text-zinc-400">vigilancia</span> (técnico + oficio), apto (verde o
                 estado aprobado sin rojo) y sin contrato obra «firmado activo». Clic: lista.
               </p>
             </button>
-          </div>
+      </div>
 
-          <Dialog open={listaModal !== null} onOpenChange={(open) => !open && setListaModal(null)}>
+      <Dialog open={listaModal !== null} onOpenChange={(open) => !open && setListaModal(null)}>
             <DialogContent className="max-h-[85vh] overflow-hidden border-fuchsia-500/20 bg-zinc-950 p-0 sm:max-w-[min(96vw,900px)]">
               <DialogHeader className="border-b border-white/10 px-5 py-4 pr-12">
                 <DialogTitle className="text-base">{tituloListaModal || 'Listado'}</DialogTitle>
-                {(listaModal === 'porContratar' || listaModal === 'enCarpeta' || listaModal === 'inactivos') && (
+                {(listaModal === 'porContratar' || listaModal === 'inactivos') && (
                   <p className="text-xs text-zinc-500">
-                    {listaModal === 'enCarpeta' &&
-                      'Criterio: no aprobaron la evaluación — en base de datos, status_evaluacion «rojo» o «rechazado».'}
                     {listaModal === 'porContratar' &&
                       'Criterio: rol «obrero», o «tecnico» con oficio de vigilancia/seguridad; apto (evaluación verde o estado aprobado sin rechazo); sin contrato obra «firmado_activo». No incluye programadores ni quienes solo tienen contrato express (cuentan como contratados activos).'}
                     {listaModal === 'inactivos' &&
@@ -979,6 +1049,9 @@ export default function ResumenObrerosProyectoModulo({
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2">Cédula</th>
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2">Teléfono</th>
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2">Oficio</th>
+                        {listaModal === 'activos' ? (
+                          <th className="sticky top-0 bg-zinc-950 px-3 py-2 text-center">Contrato</th>
+                        ) : null}
                         <th className="sticky top-0 bg-zinc-950 px-3 py-2 text-right">Eliminar</th>
                       </tr>
                     </thead>
@@ -1011,6 +1084,14 @@ export default function ResumenObrerosProyectoModulo({
                             <td className="px-3 py-2 tabular-nums text-zinc-300">{cedulaDesdeEmpleado(row)}</td>
                             <td className="px-3 py-2 tabular-nums text-zinc-300">{telefonoDesdeEmpleado(row)}</td>
                             <td className="px-3 py-2 text-zinc-300">{oficioDesdeEmpleado(row)}</td>
+                            {listaModal === 'activos' ? (
+                              <td className="px-3 py-2 text-center">
+                                <AccionesContratoPdfFila
+                                  empleadoRowId={row.id}
+                                  nombreObrero={[nombre, apellido].filter((x) => x && x !== '—').join(' ')}
+                                />
+                              </td>
+                            ) : null}
                             <td className="px-3 py-2 text-right">
                               {puedeEliminar ? (
                                 <Button
@@ -1050,13 +1131,14 @@ export default function ResumenObrerosProyectoModulo({
             </DialogContent>
           </Dialog>
 
-          <Dialog open={expressPanelAbierto} onOpenChange={setExpressPanelAbierto}>
-            <DialogContent className="max-h-[92vh] overflow-y-auto border-amber-500/25 bg-zinc-950 p-0 sm:max-w-[min(96vw,920px)]">
-              <ContratosExpressModuloPanel moduloIntegralId={proyectoModuloId} />
-            </DialogContent>
-          </Dialog>
-        </>
-      )}
+      <Dialog open={expressPanelAbierto} onOpenChange={setExpressPanelAbierto}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto border-amber-500/25 bg-zinc-950 p-0 sm:max-w-[min(96vw,920px)]">
+          <ContratosExpressModuloPanel
+            moduloIntegralId={proyectoModuloId}
+            proyectoIdsAlcance={proyectoIdsExpressAlcance}
+          />
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

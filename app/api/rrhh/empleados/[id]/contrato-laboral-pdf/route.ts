@@ -1,43 +1,9 @@
-import { createElement } from 'react';
-import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import {
-  cargarPropsContratoObreroPdfEstructurado,
-  compilarContratoObreroDesdeEmpleadoId,
-  parseOverridesContratoRequestBody,
-} from '@/lib/talento/contratoObreroPdfContext';
-import { construirExpedienteRefPorEmpleado } from '@/lib/talento/contratoExpedienteRef';
-import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
-import { ContratoLaboralObreroPdfDocument } from '@/lib/talento/ContratoLaboralObreroPdfStub';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { generarBufferContratoLaboralEmpleado } from '@/lib/rrhh/empleadoContratoLaboralPdfBuffer';
+import { parseOverridesContratoRequestBody } from '@/lib/talento/contratoObreroPdfContext';
 
 export const runtime = 'nodejs';
-
-async function pdfPlantillaBiblioteca(
-  supabase: SupabaseClient,
-  empleadoId: string,
-  expedienteRef: string,
-  overrides?: Record<string, string>,
-) {
-  const out = await compilarContratoObreroDesdeEmpleadoId(supabase, empleadoId, overrides);
-  if (!out.ok) {
-    return { ok: false as const, error: out.error };
-  }
-  const pie =
-    out.faltantes.length > 0
-      ? 'Revise los recuadros [… COMPLETAR …]: complete la planilla de empleo, el expediente o los valores manuales indicados antes de la firma.'
-      : null;
-  const node = createElement(ContratoLaboralObreroPdfDocument, {
-    expedienteId: expedienteRef,
-    titulo: 'CONTRATO INDIVIDUAL DE TRABAJO',
-    cuerpoTexto: out.texto,
-    pieLegal: pie,
-  });
-  const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
-  const buf = Buffer.from(await blob.arrayBuffer());
-  return { ok: true as const, buf };
-}
 
 async function handleRequest(req: Request, empleadoId: string, overrides?: Record<string, string>) {
   if (!empleadoId) {
@@ -48,45 +14,16 @@ async function handleRequest(req: Request, empleadoId: string, overrides?: Recor
 
   try {
     const supabase = await createClient();
-    const expedienteRef = await construirExpedienteRefPorEmpleado(supabase, empleadoId);
-
-    if (formato === 'estructurado') {
-      if (overrides && Object.keys(overrides).length > 0) {
-        return NextResponse.json(
-          { error: 'El PDF estructurado no admite overrides; use la plantilla biblioteca (sin query formato).' },
-          { status: 400 },
-        );
-      }
-      const st = await cargarPropsContratoObreroPdfEstructurado(supabase, empleadoId);
-      if (!st.ok) {
-        return NextResponse.json({ error: st.error }, { status: 404 });
-      }
-      const node = createElement(ContratoObreroPDF, {
-        ...st.props,
-        expedienteId: expedienteRef,
-      });
-      const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
-      const buf = Buffer.from(await blob.arrayBuffer());
-      return new NextResponse(buf, {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `inline; filename="contrato-obrero-estructurado-${empleadoId.slice(0, 8)}.pdf"`,
-          'Cache-Control': 'private, no-store',
-        },
-      });
-    }
-
-    const built = await pdfPlantillaBiblioteca(supabase, empleadoId, expedienteRef, overrides);
+    const built = await generarBufferContratoLaboralEmpleado(supabase, empleadoId, { formato, overrides });
     if (!built.ok) {
       return NextResponse.json({ error: built.error }, { status: 404 });
     }
 
-    return new NextResponse(built.buf, {
+    return new NextResponse(new Uint8Array(built.buf), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="contrato-obrero-${empleadoId.slice(0, 8)}.pdf"`,
+        'Content-Disposition': `inline; filename="${built.filename}"`,
         'Cache-Control': 'private, no-store',
       },
     });

@@ -46,7 +46,21 @@ Si `/api/health/supabase` devuelve ese texto en `error`, **Node no confía en la
 
    (Ruta real al PEM que te indiquen; reinicia el servidor si cambias el archivo.)
 
-3. **Último recurso solo en tu PC y solo en desarrollo** (inseguro: no uses en producción ni lo subas a repositorio):
+3. **Opción integrada en este proyecto (solo desarrollo local)** — en `.env.local`:
+
+   ```env
+   SUPABASE_DEV_INSECURE_TLS=1
+   ```
+
+   Reinicia con `npm run dev`, o arranca directo con:
+
+   ```powershell
+   npm run dev:tls
+   ```
+
+   Afecta solo al `fetch` de Supabase en el servidor Next (no subas esta variable a Vercel).
+
+4. **Último recurso solo en tu PC** (inseguro: no uses en producción ni lo subas a repositorio):
 
    ```powershell
    $env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
@@ -55,7 +69,7 @@ Si `/api/health/supabase` devuelve ese texto en `error`, **Node no confía en la
 
    Vuelve a `1` o quita la variable cuando termines de depurar.
 
-4. **Actualizar Node.js** a la última LTS a veces mejora la cadena de CAs embebida.
+5. **Actualizar Node.js** a la última LTS a veces mejora la cadena de CAs embebida.
 
 ### 3. Reiniciar el servidor de desarrollo
 

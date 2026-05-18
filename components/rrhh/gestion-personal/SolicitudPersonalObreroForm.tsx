@@ -205,9 +205,26 @@ export default function SolicitudPersonalObreroForm({
           {lineas.map((linea) => (
             <li
               key={linea.id}
-              className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/30 p-3 sm:flex-row sm:flex-wrap sm:items-end"
+              className="flex flex-row flex-wrap items-end gap-2 rounded-xl border border-white/10 bg-black/30 p-3"
             >
-              <div className="min-w-0 flex-1 sm:min-w-[240px]">
+              <div className="w-[4.5rem] shrink-0 sm:w-20">
+                <span className={sublabelClass}>Cant.</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={linea.cantidad}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setLineas((prev) =>
+                      prev.map((l) => (l.id === linea.id ? { ...l, cantidad: v } : l)),
+                    );
+                  }}
+                  className={inputCantidadClass}
+                  aria-label="Cantidad de obreros"
+                />
+              </div>
+              <div className="min-w-0 flex-1 basis-[12rem]">
                 <span className={sublabelClass}>Oficio</span>
                 <select
                   value={linea.cargoCodigo}
@@ -238,23 +255,6 @@ export default function SolicitudPersonalObreroForm({
                     );
                   })}
                 </select>
-              </div>
-              <div className="w-full sm:w-32">
-                <span className={sublabelClass}>Cantidad</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={500}
-                  value={linea.cantidad}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setLineas((prev) =>
-                      prev.map((l) => (l.id === linea.id ? { ...l, cantidad: v } : l)),
-                    );
-                  }}
-                  className={inputCantidadClass}
-                  aria-label="Cantidad de obreros"
-                />
               </div>
               {lineas.length > 1 ? (
                 <button

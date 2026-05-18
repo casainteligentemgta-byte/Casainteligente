@@ -223,8 +223,7 @@ export default function InventoryMasterPage() {
             {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-4xl font-black tracking-tighter mb-1">INVENTARIO</h1>
-                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest">Global Assets & Stock Management</p>
+                    <h1 className="text-4xl font-black tracking-tighter">INVENTARIO</h1>
                 </div>
                 <div className="flex gap-3">
                     <Link href="/almacen/kardex">

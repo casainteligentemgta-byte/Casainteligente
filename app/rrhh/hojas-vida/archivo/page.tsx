@@ -312,6 +312,12 @@ export default function RrhhHojasVidaArchivoPage() {
             ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/rrhh/trabajadores"
+              className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/35 bg-fuchsia-950/40 px-4 py-2.5 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-900/50"
+            >
+              Trabajadores por proyecto
+            </Link>
             <button
               type="button"
               onClick={() => void cargar()}

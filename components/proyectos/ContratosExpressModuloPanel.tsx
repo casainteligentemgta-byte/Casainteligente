@@ -6,6 +6,7 @@ import { ExternalLink, FileText, RefreshCw, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import { Button } from '@/components/ui/button';
 
 type ExpressRow = {
@@ -18,13 +19,15 @@ type ExpressRow = {
 
 type Props = {
   moduloIntegralId: string;
+  /** Si se define, lista express de todos estos `proyecto_id` (p. ej. alcance «Todos»). */
+  proyectoIdsAlcance?: string[];
 };
 
 /**
  * Cuadro fijo en módulo integral (?tab=solicitados): obreros contratados vía express (fast-track)
  * para este módulo y proyectos/obra hija (`proyecto_id` en `ci_contratos_express`).
  */
-export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props) {
+export default function ContratosExpressModuloPanel({ moduloIntegralId, proyectoIdsAlcance }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -32,17 +35,22 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const id = moduloIntegralId.trim();
-    if (!id) {
-      setLoading(false);
-      setRows([]);
-      return;
-    }
     setLoading(true);
     setErr(null);
     try {
-      const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, id);
-      const proyectoIds = Array.from(new Set([id, ...hijas]));
+      let proyectoIds: string[];
+      if (proyectoIdsAlcance?.length) {
+        proyectoIds = Array.from(new Set(proyectoIdsAlcance.map((s) => s.trim()).filter(Boolean)));
+      } else {
+        const id = moduloIntegralId.trim();
+        if (!id) {
+          setLoading(false);
+          setRows([]);
+          return;
+        }
+        const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, id);
+        proyectoIds = Array.from(new Set([id, ...hijas]));
+      }
       if (proyectoIds.length === 0) {
         setRows([]);
         return;
@@ -83,7 +91,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
     } finally {
       setLoading(false);
     }
-  }, [moduloIntegralId, supabase]);
+  }, [moduloIntegralId, proyectoIdsAlcance, supabase]);
 
   async function eliminarFila(id: string, nombre: string, formalizado: boolean) {
     const detalle = formalizado
@@ -181,6 +189,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
                   <th className="px-4 py-3">Obrero</th>
                   <th className="px-4 py-3">Cédula</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3 text-center">Contrato</th>
                   <th className="px-4 py-3 text-right">Borrar</th>
                 </tr>
               </thead>
@@ -205,6 +214,12 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId }: Props)
                             Express — pendiente expediente
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <AccionesContratoPdfFila
+                          empleadoRowId={`ci-express-${r.id}`}
+                          nombreObrero={r.obrero_nombre}
+                        />
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-right">
                         <Button

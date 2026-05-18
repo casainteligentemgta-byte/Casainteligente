@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
+    "dev:tls": "powershell -ExecutionPolicy Bypass -File scripts/dev-with-insecure-tls.ps1",
     "dev:any": "next dev",
     "dev:reset": "powershell -ExecutionPolicy Bypass -File scripts/reset-dev.ps1",
     "ports:free": "powershell -ExecutionPolicy Bypass -File scripts/kill-dev-ports.ps1",

@@ -1,9 +1,6 @@
 /**
- * `fetch` usado por Supabase: si falla la red/TLS, Node suele lanzar solo `TypeError: fetch failed`.
- * Aquí se re-lanza con texto que incluye `error.cause` cuando exista (p. ej. ENOTFOUND, certificado).
- *
- * Desarrollo local (Windows + antivirus/proxy): `SUPABASE_DEV_INSECURE_TLS=1` en `.env.local`
- * o `npm run dev:tls` — ver docs/ERROR-FETCH-FAILED-SUPABASE.md §2b.
+ * fetch saliente en servidor (Gemini, etc.) con mensajes claros si falla red/TLS.
+ * Misma política TLS dev que supabaseFetch (SUPABASE_DEV_INSECURE_TLS / dev:tls).
  */
 
 function isTlsCertificateError(causeStr: string, base: string): boolean {
@@ -27,11 +24,11 @@ function devInsecureTlsEnabled(): boolean {
 if (devInsecureTlsEnabled() && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   console.warn(
-    '[supabase] SUPABASE_DEV_INSECURE_TLS activo → NODE_TLS_REJECT_UNAUTHORIZED=0 (solo desarrollo local; no producción).',
+    '[outboundFetch] SUPABASE_DEV_INSECURE_TLS activo → NODE_TLS_REJECT_UNAUTHORIZED=0 (solo desarrollo).'
   );
 }
 
-function formatFetchError(err: unknown): Error {
+export function formatOutboundFetchError(err: unknown, context: string): Error {
   const base = err instanceof Error ? err.message : String(err);
   let causeStr = '';
   const c = err instanceof Error ? err.cause : undefined;
@@ -43,25 +40,27 @@ function formatFetchError(err: unknown): Error {
     causeStr = String(c);
   }
 
-  let hint =
-    ' Comprueba NEXT_PUBLIC_SUPABASE_URL, .env.local en la raíz del proyecto y reinicia `npm run dev`. Red/VPN/firewall: ver docs/ERROR-FETCH-FAILED-SUPABASE.md';
+  let hint = ` (${context}). Compruebe internet, VPN/firewall y reinicie npm run dev.`;
 
   if (isTlsCertificateError(causeStr, base) && typeof window === 'undefined') {
     if (devInsecureTlsEnabled()) {
-      hint +=
-        ' Ya tienes SUPABASE_DEV_INSECURE_TLS=1; reinicia el servidor. Si persiste, desactiva inspección HTTPS del antivirus o usa NODE_EXTRA_CA_CERTS (§2b del doc).';
+      hint += ' TLS dev activo; reinicie el servidor.';
     } else {
       hint +=
-        ' Certificado TLS (Windows/antivirus): añade SUPABASE_DEV_INSECURE_TLS=1 en .env.local y reinicia, o ejecuta `npm run dev:tls`. Ver docs/ERROR-FETCH-FAILED-SUPABASE.md §2b.';
+        ' Error de certificado: añada SUPABASE_DEV_INSECURE_TLS=1 en .env.local o use npm run dev:tls.';
     }
   }
 
-  const msg = causeStr ? `${base} (${causeStr}).${hint}` : `${base}.${hint}`;
+  const msg = causeStr ? `${base} (${causeStr})${hint}` : `${base}${hint}`;
   return new Error(msg, { cause: err });
 }
 
-export function supabaseFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export function outboundFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  context = 'conexión externa'
+): Promise<Response> {
   return fetch(input, init).catch((err: unknown) => {
-    throw formatFetchError(err);
+    throw formatOutboundFetchError(err, context);
   });
 }

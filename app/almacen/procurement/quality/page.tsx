@@ -37,7 +37,8 @@ export default function QualityDashboard() {
                 .select(`
           *,
           global_inventory(name, unit, sap_code),
-          purchase_invoices(invoice_number, supplier_name)
+          purchase_invoices(invoice_number, supplier_name, document_file_name, document_storage_path),
+          purchase_details(description, item_code)
         `)
                 .eq('status', 'PENDIENTE')
                 .order('created_at', { ascending: false });
@@ -69,6 +70,19 @@ export default function QualityDashboard() {
             alert('Error en el internamiento. Ver consola.');
         } finally {
             setProcessing(null);
+        }
+    };
+
+    const openInvoiceDocument = async (invoiceId: string) => {
+        try {
+            const res = await fetch(`/api/almacen/procurement/invoices/${invoiceId}/document`);
+            const data = (await res.json()) as { url?: string; error?: string };
+            if (!res.ok || !data.url) {
+                throw new Error(data.error || 'No se pudo abrir el documento.');
+            }
+            window.open(data.url, '_blank', 'noopener,noreferrer');
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'Error al abrir documento.');
         }
     };
 
@@ -155,10 +169,33 @@ export default function QualityDashboard() {
                                                     RECUPERADO
                                                 </span>
                                             </div>
-                                            <h3 className="text-xl font-black">{insp.global_inventory?.name}</h3>
+                                            <h3 className="text-xl font-black">
+                                                {insp.line_description ||
+                                                    insp.purchase_details?.description ||
+                                                    insp.global_inventory?.name}
+                                            </h3>
+                                            {insp.purchase_details?.item_code ? (
+                                                <p className="text-[10px] font-bold text-zinc-600 mt-1">
+                                                    Ref: {insp.purchase_details.item_code}
+                                                </p>
+                                            ) : null}
                                             <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
                                                 {insp.purchase_invoices?.supplier_name} • Factura #{insp.purchase_invoices?.invoice_number}
                                             </p>
+                                            {insp.purchase_invoices?.document_storage_path ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        openInvoiceDocument(insp.invoice_id)
+                                                    }
+                                                    className="mt-2 text-[10px] font-black text-blue-400 hover:text-blue-300 uppercase tracking-widest"
+                                                >
+                                                    Ver factura / presupuesto
+                                                    {insp.purchase_invoices?.document_file_name
+                                                        ? ` (${insp.purchase_invoices.document_file_name})`
+                                                        : ''}
+                                                </button>
+                                            ) : null}
                                         </div>
                                     </div>
                                     <div className="text-right">

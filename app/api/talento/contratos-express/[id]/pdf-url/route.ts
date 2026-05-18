@@ -1,18 +1,10 @@
 import { NextResponse } from 'next/server';
-import { signedUrlContratoLaboralBucket } from '@/lib/talento/contratoLaboralRegistroStorage';
+import { createClient } from '@/lib/supabase/server';
+import { resolverContratoPdfExpress } from '@/lib/rrhh/resolverContratoPdfServer';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
-
-function isMissingColumn(msg: string): boolean {
-  return /column|does not exist|42703/i.test(msg);
-}
-
-type ExpressPathsRow = {
-  id?: string;
-  pdf_storage_path?: string | null;
-  pdf_firmado_storage_path?: string | null;
-};
 
 /** GET — URL firmada temporal (`expires_sec`). `?doc=firmado` usa el archivo subido tras firma del obrero. */
 export async function GET(req: Request, context: { params: { id: string } }) {
@@ -21,54 +13,43 @@ export async function GET(req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });
   }
 
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) return admin.response;
-
   const url = new URL(req.url);
   const wantFirmado = url.searchParams.get('doc')?.toLowerCase() === 'firmado';
 
-  let row: ExpressPathsRow | null = null;
-  let selErr: { message: string } | null = null;
-
-  const full = await admin.client
-    .from('ci_contratos_express')
-    .select('id,pdf_storage_path,pdf_firmado_storage_path')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (full.error && isMissingColumn(full.error.message)) {
-    const lite = await admin.client.from('ci_contratos_express').select('id,pdf_storage_path').eq('id', id).maybeSingle();
-    row = (lite.data as ExpressPathsRow | null) ?? null;
-    selErr = lite.error;
-  } else {
-    row = (full.data as ExpressPathsRow | null) ?? null;
-    selErr = full.error;
+  let client: SupabaseClient;
+  try {
+    client = await createClient();
+  } catch {
+    const admin = supabaseAdminForRoute();
+    if (!admin.ok) return admin.response;
+    client = admin.client;
   }
 
-  if (selErr || !row) {
-    return NextResponse.json({ error: selErr?.message ?? 'Registro no encontrado' }, { status: 404 });
+  const out = await resolverContratoPdfExpress(client, id, { preferFirmado: wantFirmado });
+  if (!out.ok) {
+    return NextResponse.json({ error: out.error }, { status: out.status });
   }
 
-  let path: string;
-  if (wantFirmado) {
-    path = String(row.pdf_firmado_storage_path ?? '').trim();
-    if (!path) {
-      return NextResponse.json(
-        { error: 'Aún no hay documento firmado subido para este contrato express.' },
-        { status: 404 },
-      );
-    }
-  } else {
-    path = String(row.pdf_storage_path ?? '').trim();
-    if (!path) {
-      return NextResponse.json({ error: 'Sin ruta de PDF' }, { status: 400 });
-    }
+  if (out.source === 'generate') {
+    return NextResponse.json(
+      { error: 'Sin PDF en almacenamiento. Regenerelo desde Talento o RRHH.' },
+      { status: 404 },
+    );
   }
 
-  const signed = await signedUrlContratoLaboralBucket(admin.client, path, 3600);
-  if ('error' in signed) {
-    return NextResponse.json({ error: signed.error }, { status: 500 });
+  if (!out.signedUrl) {
+    return NextResponse.json(
+      {
+        error:
+          'El PDF está registrado pero no se pudo firmar la URL. Use el visor desde el módulo del proyecto (icono PDF).',
+      },
+      { status: 500 },
+    );
   }
 
-  return NextResponse.json({ url: signed.url, expires_sec: 3600, doc: wantFirmado ? 'firmado' : 'generado' });
+  return NextResponse.json({
+    url: out.signedUrl,
+    expires_sec: out.expires_sec,
+    doc: wantFirmado ? 'firmado' : 'generado',
+  });
 }

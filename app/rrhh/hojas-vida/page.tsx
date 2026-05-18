@@ -1,138 +1,239 @@
 'use client';
 
+
+
 import Link from 'next/link';
+
 import { useRouter } from 'next/navigation';
-import { ClipboardList, FileText, ScrollText, UserRound, Users } from 'lucide-react';
-import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
+
 import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+
 import { useEffect, useMemo, useState } from 'react';
+
+import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
+
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
+
+import { loadProyectosSmartRrhhHojasVida, type ProyectoModuloIntegral } from '@/lib/proyectos/proyectosUnificados';
+
 import { createClient } from '@/lib/supabase/client';
 
+
+
+/** '' = todos los proyectos SMART; uuid = una obra concreta. */
+
+type AlcanceObra = string;
+
+
+
 export default function RrhhHojasVidaPage() {
+
   const router = useRouter();
+
   const supabase = useMemo(() => createClient(), []);
-  const [proyectoModuloIntegralId, setProyectoModuloIntegralId] = useState<string | null>(null);
+
+  const [proyectosModulo, setProyectosModulo] = useState<ProyectoModuloIntegral[]>([]);
+
+  const [alcanceObra, setAlcanceObra] = useState<AlcanceObra>('');
+
+  const [cargandoProyectos, setCargandoProyectos] = useState(true);
+
+  const [errorProyectos, setErrorProyectos] = useState<string | null>(null);
+
+
+
+  const mostrarOpcionTodos = proyectosModulo.length > 1;
+
+
+
+  const proyectoModuloIdsActivos = useMemo(() => {
+
+    if (!proyectosModulo.length) return [];
+
+    if (alcanceObra) return [alcanceObra];
+
+    return proyectosModulo.map((p) => p.id);
+
+  }, [alcanceObra, proyectosModulo]);
+
+
+
+  const proyectoModuloIdPrincipal = proyectoModuloIdsActivos[0] ?? '';
+
+  const proyectoModuloIdFiltroEnlaces = alcanceObra || null;
+
+
 
   useEffect(() => {
+
     if (typeof window === 'undefined') return;
+
     const hash = window.location.hash;
+
     if (hash === '#solicitud-personal' || hash === '#oficio-cantidad') {
-      router.replace(hrefSolicitudPersonalObrero({ proyectoModuloId: proyectoModuloIntegralId }));
+
+      router.replace(
+
+        hrefSolicitudPersonalObrero({
+
+          proyectoModuloId: proyectoModuloIdFiltroEnlaces ?? (proyectoModuloIdPrincipal || null),
+
+        }),
+
+      );
+
     }
-  }, [router, proyectoModuloIntegralId]);
+
+  }, [router, proyectoModuloIdFiltroEnlaces, proyectoModuloIdPrincipal]);
+
+
 
   useEffect(() => {
+
     let alive = true;
+
     void (async () => {
-      const withTipo = await supabase
-        .from('ci_proyectos')
-        .select('id,tipo_proyecto')
-        .order('created_at', { ascending: false })
-        .limit(60);
+
+      setCargandoProyectos(true);
+
+      setErrorProyectos(null);
+
+      const { proyectos, errors } = await loadProyectosSmartRrhhHojasVida(supabase);
+
       if (!alive) return;
-      if (!withTipo.error && withTipo.data?.length) {
-        const rows = withTipo.data as { id: string; tipo_proyecto?: string | null }[];
-        const integral = rows.find((r) => (r.tipo_proyecto ?? 'integral') !== 'talento');
-        if (integral?.id) {
-          setProyectoModuloIntegralId(integral.id);
-          return;
-        }
-      }
-      const leg = await supabase.from('ci_proyectos').select('id').order('created_at', { ascending: false }).limit(1);
-      if (!alive) return;
-      const id0 = (leg.data?.[0] as { id?: string } | undefined)?.id;
-      if (id0 && !leg.error) {
-        setProyectoModuloIntegralId(id0);
-      } else {
-        setProyectoModuloIntegralId(null);
-      }
+
+      setProyectosModulo(proyectos);
+
+      setAlcanceObra((prev) => {
+
+        if (prev && proyectos.some((p) => p.id === prev)) return prev;
+
+        if (proyectos.length <= 1) return proyectos[0]?.id ?? '';
+
+        return '';
+
+      });
+
+      if (errors.length) setErrorProyectos(errors.join(' · '));
+
+      setCargandoProyectos(false);
+
     })();
+
     return () => {
+
       alive = false;
+
     };
+
   }, [supabase]);
 
-  const hrefSolicitud = hrefSolicitudPersonalObrero({ proyectoModuloId: proyectoModuloIntegralId });
+
+
+  const resumenKey = proyectoModuloIdsActivos.join(',') || 'sin-proyecto';
+
+
 
   return (
+
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6">
+
       <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente</p>
+
       <h1 className="text-2xl font-bold tracking-tight text-white">RRHH</h1>
 
+
+
       <header className="mb-6 mt-8">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Link
-            href={hrefSolicitud}
-            className="inline-flex items-center gap-2 rounded-xl border border-violet-400/50 bg-violet-600/30 px-4 py-2.5 text-sm font-bold text-violet-50 transition hover:bg-violet-600/45"
-          >
-            <ClipboardList className="h-4 w-4" aria-hidden />
-            Solicitud de personal obrero
-          </Link>
-          <Link
-            href="/rrhh/reclutamiento"
-            className="inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-950/45 px-3 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/55"
-          >
-            <Users className="h-4 w-4 shrink-0" aria-hidden />
-            Reclutamiento
-          </Link>
-          <Link
-            href="/rrhh/hojas-vida/archivo"
-            className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-950/45 px-3 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-900/55"
-          >
-            <UserRound className="h-4 w-4 shrink-0" aria-hidden />
-            Hojas de vida
-          </Link>
-          <Link
-            href={hrefListaContratosExpress()}
-            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/45 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-900/55"
-          >
-            <FileText className="h-4 w-4 shrink-0" aria-hidden />
-            Express
-          </Link>
-          <Link
-            href="/rrhh/oficios-salarios"
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
-          >
-            <ScrollText className="h-4 w-4" />
-            Oficios y salarios
-          </Link>
-        </div>
+
+        <RrhhSubnavEnlaces
+
+          proyectoModuloId={proyectoModuloIdFiltroEnlaces ?? (proyectoModuloIdPrincipal || null)}
+
+        />
+
       </header>
 
-      {proyectoModuloIntegralId ? (
-        <section className="mb-10">
+
+
+      {cargandoProyectos ? (
+
+        <p className="mb-8 text-sm text-zinc-500">Cargando cuadro SMART RRHH…</p>
+
+      ) : proyectoModuloIdsActivos.length > 0 ? (
+
+        <div className="mb-10">
+
+          {errorProyectos ? (
+
+            <p className="mb-4 rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/90">
+
+              {errorProyectos}
+
+            </p>
+
+          ) : null}
+
+
+
           <ResumenObrerosProyectoModulo
-            proyectoModuloId={proyectoModuloIntegralId}
+
+            key={resumenKey}
+
+            proyectoModuloId={proyectoModuloIdPrincipal}
+
+            proyectosModuloIds={mostrarOpcionTodos && !alcanceObra ? proyectosModulo.map((p) => p.id) : undefined}
+
+            proyectoModuloIdFiltroEnlaces={proyectoModuloIdFiltroEnlaces}
+
             tabUrl="rrhh"
+
             tituloSeccion="SMART RRHH"
+
             subtituloSeccion={null}
+
             ocultarEnlaceHojasVida
+
+            selectorObra={{
+
+              valor: alcanceObra,
+
+              onChange: setAlcanceObra,
+
+              opciones: proyectosModulo,
+
+              mostrarTodos: mostrarOpcionTodos,
+
+            }}
+
           />
-        </section>
+
+        </div>
+
       ) : (
+
         <p className="mb-8 rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
-          No se encontró un proyecto módulo integral para los cuadros SMART RRHH. Crea un proyecto en{' '}
+
+          No se encontró un proyecto módulo integral para el cuadro SMART RRHH.
+
+          {errorProyectos ? ` ${errorProyectos}` : null} Crea un proyecto en{' '}
+
           <Link href="/proyectos/modulo" className="font-semibold text-amber-200 underline underline-offset-2">
+
             Proyectos
+
           </Link>
+
           .
+
         </p>
+
       )}
 
-      <section className="rounded-2xl border border-sky-500/25 bg-sky-950/25 p-6">
-        <h2 className="text-lg font-bold text-white">Archivo de hojas de vida</h2>
-        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Listado de obreros que cargaron hoja de vida (activos o inactivos, aprobados o no).
-        </p>
-        <Link
-          href="/rrhh/hojas-vida/archivo"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-sky-400/45 bg-sky-500/15 px-5 py-2.5 text-sm font-bold text-sky-100 transition hover:bg-sky-500/25"
-        >
-          <UserRound className="h-4 w-4" aria-hidden />
-          Abrir archivo
-        </Link>
-      </section>
     </div>
+
   );
+
 }
+
+
