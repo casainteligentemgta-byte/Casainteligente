@@ -67,25 +67,26 @@ export async function fetchTrabajadoresTodosProyectos(
     .map((p) => ({ id: s(p.id), nombre: nombreById.get(s(p.id)) ?? 'Sin nombre' }))
     .filter((p) => p.id);
 
-  let empRes = await supabase
+  const empFull = await supabase
     .from('ci_empleados')
     .select(COLS_EMP)
     .order('nombre_completo', { ascending: true })
     .limit(2500);
 
-  if (empRes.error) {
-    empRes = await supabase
+  let empleados: EmpleadoHojaVidaRow[] = [];
+  if (!empFull.error && empFull.data) {
+    empleados = empFull.data as EmpleadoHojaVidaRow[];
+  } else {
+    const empMin = await supabase
       .from('ci_empleados')
       .select(COLS_EMP_MIN)
       .order('nombre_completo', { ascending: true })
       .limit(2500);
+    if (empMin.error) {
+      return { proyectos, trabajadores: [], error: empMin.error.message };
+    }
+    empleados = (empMin.data ?? []) as EmpleadoHojaVidaRow[];
   }
-
-  if (empRes.error) {
-    return { proyectos, trabajadores: [], error: empRes.error.message };
-  }
-
-  const empleados = (empRes.data ?? []) as EmpleadoHojaVidaRow[];
   const proyectoIdsPorWorker = new Map<string, Set<string>>();
 
   const addProyecto = (workerId: string, proyectoId: string) => {

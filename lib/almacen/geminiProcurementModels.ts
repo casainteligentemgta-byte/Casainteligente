@@ -15,5 +15,5 @@ export function procurementModelCandidates(): string[] {
   const list = preferred
     ? [preferred, ...GEMINI_PROCUREMENT_FALLBACK_MODELS.filter((m) => m !== preferred)]
     : [...GEMINI_PROCUREMENT_FALLBACK_MODELS];
-  return [...new Set(list)];
+  return Array.from(new Set(list));
 }
