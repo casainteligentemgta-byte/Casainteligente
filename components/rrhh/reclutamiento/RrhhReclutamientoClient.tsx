@@ -16,7 +16,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
+import { esPreguntaSituacionalObra, etiquetaRolExamenUI } from '@/lib/talento/exam';
 import { preguntasParaDetalle } from '@/lib/rrhh/parseRespuestasExamen';
 import { fetchEmpleadosHojasVida, type EmpleadoHojaVidaRow } from '@/lib/rrhh/fetchEmpleadosHojasVida';
 import {
@@ -317,8 +317,8 @@ export default function RrhhReclutamientoClient() {
               Banco de preguntas del examen
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              20 ítems de personalidad (Likert 1–5) + 5 de lógica según rol. Duración: 15 minutos. Así se ve lo que
-              responde el candidato en{' '}
+              Obrero / técnico obra: 20 preguntas (4 opciones) + 5 lógica. Programador: 20 frecuencia + 5 lógica. Duración:
+              15 minutos. Así se ve lo que responde el candidato en{' '}
               <Link href="/talento/examen" className="text-violet-300 underline hover:text-violet-200" target="_blank">
                 /talento/examen
               </Link>
@@ -336,7 +336,7 @@ export default function RrhhReclutamientoClient() {
                       : 'border-white/15 text-zinc-400 hover:bg-white/5'
                   }`}
                 >
-                  {rol === 'tecnico' ? 'Obrero / técnico obra' : 'Programador'}
+                  {rol === 'tecnico' ? 'Obrero' : 'Programador'}
                 </button>
               ))}
             </div>
@@ -344,20 +344,33 @@ export default function RrhhReclutamientoClient() {
 
           <section className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <h3 className="text-sm font-bold text-zinc-200">Personalidad ({PREGUNTAS_PERSONALIDAD.length})</h3>
+              <h3 className="text-sm font-bold text-zinc-200">
+                Conducta / personalidad ({examenPreview.personalidad.length})
+              </h3>
               <ol className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1 text-sm text-zinc-300">
-                {PREGUNTAS_PERSONALIDAD.map((p, i) => (
+                {examenPreview.personalidad.map((p, i) => (
                   <li key={p.id} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
                     <span className="text-[10px] font-bold uppercase text-zinc-500">{p.bloque}</span>
                     <p className="mt-0.5">
                       {i + 1}. {p.texto}
                     </p>
+                    {esPreguntaSituacionalObra(p) ? (
+                      <ul className="mt-2 space-y-0.5 pl-2 text-xs text-zinc-500">
+                        {p.opciones.map((op, j) => (
+                          <li key={op}>
+                            {String.fromCharCode(65 + j)}) {op}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </li>
                 ))}
               </ol>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <h3 className="text-sm font-bold text-zinc-200">Lógica — {rolPreview} ({examenPreview.logica.length})</h3>
+              <h3 className="text-sm font-bold text-zinc-200">
+                Lógica — {etiquetaRolExamenUI(rolPreview)} ({examenPreview.logica.length})
+              </h3>
               <ol className="mt-3 max-h-[420px] space-y-3 overflow-y-auto pr-1 text-sm text-zinc-300">
                 {examenPreview.logica.map((q, i) => (
                   <li key={q.id} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">

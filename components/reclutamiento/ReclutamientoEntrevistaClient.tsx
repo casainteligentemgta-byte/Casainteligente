@@ -338,7 +338,7 @@ export default function ReclutamientoEntrevistaClient() {
         <p className="text-xs text-zinc-300 mt-1 max-w-prose">
           Si RRHH te envió un enlace con vacante, primero completa la <strong className="text-zinc-200">hoja de vida</strong>{' '}
           (datos básicos arriba); puedes hacerlo antes, durante o después de la entrevista guiada. Luego responde con los
-          botones de abajo (escala 1–5, Sí/No o A–D). El texto libre es opcional.
+          botones de abajo (Nunca / A veces / Casi siempre / Siempre, Sí/No o A–D). El texto libre es opcional.
         </p>
         <p className="text-[11px] text-zinc-500 mt-2 max-w-prose">
           Esta sesión puede registrar cambios de foco, copiar/pegar y tiempo de respuesta con fines de

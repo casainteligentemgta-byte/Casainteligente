@@ -101,7 +101,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              'Programador y técnico deben completar el examen Likert + lógica en /talento/examen (submit).',
+              'Programador y técnico deben completar el examen de personalidad + lógica en /talento/examen (submit).',
           },
           { status: 400 },
         );
@@ -193,12 +193,12 @@ export async function POST(req: Request) {
     let motivo = '';
     let status_tripode = 'rechazado';
 
-    pp = puntajePersonalidad(rp);
+    pp = puntajePersonalidad(rp, rol);
     const { puntaje: pl_val, gma0a5: gma } = puntajeLogica(rol as RolExamen, rl);
     pl = pl_val;
     gma0a5 = gma;
     total = puntajeTotal(pp, pl);
-    nivelInt = nivelIntegridadRiesgo(rp);
+    nivelInt = nivelIntegridadRiesgo(rp, rol);
     const tripodeObj = calcularSemaforoTalento({
       puntajeLogica: gma0a5,
       nivelIntegridad: nivelInt,

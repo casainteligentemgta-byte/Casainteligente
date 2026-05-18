@@ -1,10 +1,22 @@
 import type {
   ExamenGenerado,
+  ItemPersonalidadExamen,
   PreguntaExamenMovil,
   PreguntaLogica,
   PreguntaPersonalidad,
   RolExamen,
 } from '@/types/talento';
+import {
+  esPreguntaSituacionalObra,
+  PREGUNTAS_SITUACIONALES_OBRA,
+  puntajeOpcionSituacionalObra,
+} from '@/lib/talento/preguntasActitudObraObrero';
+import {
+  normalizarValorPersonalidad,
+  type ValorFrecuenciaPersonalidad,
+} from '@/lib/talento/escalaFrecuenciaPersonalidad';
+
+export { ESCALA_FRECUENCIA_PERSONALIDAD } from '@/lib/talento/escalaFrecuenciaPersonalidad';
 export type PreguntaObrero = {
   id: string;
   categoria: string;
@@ -333,7 +345,7 @@ export const PREGUNTAS_OBRERO: PreguntaObrero[] = [
   },
 ];
 
-/** 20 ítems fijos (Likert 1–5): estabilidad emocional, trabajo en equipo, integridad operativa. */
+/** 20 ítems fijos (Nunca → Siempre): conducta, equipo, integridad operativa. */
 export const PREGUNTAS_PERSONALIDAD: PreguntaPersonalidad[] = [
   { id: 'p01', bloque: 'Conducta', texto: 'Mantengo la calidad del trabajo bajo presión de plazos ajustados.' },
   { id: 'p02', bloque: 'Conducta', texto: 'Prefiero aclarar requisitos antes de ejecutar tareas ambiguas.' },
@@ -395,48 +407,67 @@ const LOGICA_PROGRAMADOR: PreguntaLogica[] = [
   },
 ];
 
-const LOGICA_TECNICO: PreguntaLogica[] = [
+/** Lógica práctica de obra — personal obrero (rol `tecnico` en sistema). */
+export const LOGICA_OBRERO: PreguntaLogica[] = [
   {
     id: 'lt1',
-    texto: 'Antes de trabajar en un circuito alimentado, ¿qué debe verificarse primero?',
+    texto: 'Mañana hay vaciado de concreto. ¿Qué conviene hacer hoy primero?',
     opciones: [
-      'Solo el color del cable',
-      'Orden de fase en tablero',
-      'Ausencia de tensión (puesta a tierra / bloqueo LOTO cuando aplique)',
-      'Temperatura ambiente',
+      'Vaciar hoy mismo para adelantar.',
+      'Revisar encofrado, varilla y limpieza del área con el encargado.',
+      'Esperar sin avisar a nadie.',
+      'Comprar pintura para después del vaciado.',
+    ],
+    correcta: 1,
+  },
+  {
+    id: 'lt2',
+    texto: 'La lista pide 24 sacos de cemento y en obra solo ves 20. ¿Qué haces antes de mezclar?',
+    opciones: [
+      'Mezclo con 20 y le echo más agua.',
+      'Tomo sacos de otra cuadrilla sin decir.',
+      'Aviso al encargado y espero confirmación o el faltante.',
+      'Mezclo igual y ya verán.',
     ],
     correcta: 2,
   },
   {
-    id: 'lt2',
-    texto: 'En instalación de cámaras IP en exterior, ¿qué factor es crítico además de la resolución?',
-    opciones: ['Solo el precio del monitor', 'Índice de protección (IP) y sellado', 'Color del empaque', 'Número de ventiladores RGB'],
-    correcta: 1,
-  },
-  {
     id: 'lt3',
-    texto: 'Un cable UTP para Gigabit en canal horizontal típico debería ser como mínimo:',
-    opciones: ['Cat5 (sin más)', 'Cat5e o superior según norma del proyecto', 'Cable coaxial RG59', 'Par telefónico plano'],
-    correcta: 1,
+    texto: 'Vas a subir una escalera en terreno irregular. ¿Qué es lo más seguro?',
+    opciones: [
+      'Poner piedras solo bajo una pata.',
+      'Usar la escalera más corta aunque no llegue.',
+      'Apoyarla en un cable para que no se mueva.',
+      'Nivelar la base o usar escalera estable con patas antideslizantes.',
+    ],
+    correcta: 3,
   },
   {
     id: 'lt4',
-    texto: 'Medición de tierra de protección: buscamos resistencia:',
-    opciones: ['Infinita', 'La más baja posible dentro de norma', 'Igual a la fase', 'Aleatoria'],
+    texto: 'Antes de subir a un andamio, ¿qué va primero?',
+    opciones: [
+      'Subir rápido para no perder tiempo.',
+      'Arnés, revisar el andamio y confirmar con el encargado.',
+      'No usar arnés si «no es tan alto».',
+      'Mandar al más nuevo sin explicarle nada.',
+    ],
     correcta: 1,
   },
   {
     id: 'lt5',
-    texto: 'Señal débil en punto de acceso inalámbrico. ¿Qué hipótesis revisar primero?',
+    texto: 'Por la tarde puede llover. Por la mañana toca muro al sol. ¿Qué priorizas?',
     opciones: [
-      'Cambiar logo de la empresa',
-      'Fuente de alimentación PoE, canal RF, obstáculos y orientación de antenas',
-      'Solo reiniciar el router del vecino',
-      'Pintar la pared',
+      'Echar todo el cemento afuera sin importar la lluvia.',
+      'Irme sin decir nada.',
+      'Cubrir material, proteger lo expuesto y avisar al encargado.',
+      'Esconder herramientas bajo la lluvia sin avisar.',
     ],
-    correcta: 1,
+    correcta: 2,
   },
 ];
+
+/** @deprecated Usar `LOGICA_OBRERO`. */
+const LOGICA_TECNICO = LOGICA_OBRERO;
 
 export type ExamenAdaptativoResult = ExamenGenerado | PreguntaObrero[];
 
@@ -444,11 +475,18 @@ export function esExamenObrero(examen: ExamenAdaptativoResult): examen is Pregun
   return Array.isArray(examen);
 }
 
+/** 20 ítems para rol tecnico: situaciones y hábitos de obra (4 opciones cada una). */
+export function personalidadExamenTecnicoObra(): ItemPersonalidadExamen[] {
+  return PREGUNTAS_SITUACIONALES_OBRA;
+}
+
 function obtenerPreguntasTech(rol: RolExamen): ExamenGenerado {
   const logica = rol === 'programador' ? LOGICA_PROGRAMADOR : LOGICA_TECNICO;
+  const personalidad =
+    rol === 'tecnico' ? personalidadExamenTecnicoObra() : PREGUNTAS_PERSONALIDAD;
   return {
     rol,
-    personalidad: PREGUNTAS_PERSONALIDAD,
+    personalidad,
     logica,
   };
 }
@@ -465,9 +503,17 @@ export function logicaDelExamen(examen: ExamenAdaptativoResult): PreguntaLogica[
 
 /**
  * Genera el banco de preguntas según rol.
- * - programador / técnico: 20 Likert + 5 lógica
+ * - programador: 20 personalidad (frecuencia) + 5 lógica
+ * - tecnico (obrero en UI): 20 conducta (4 opciones) + 5 lógica de obra
  * - obrero / vigilante: 20 situacionales ABC (`PREGUNTAS_OBRERO`)
  */
+/** Etiqueta visible en UI (el rol interno `tecnico` se muestra como Obrero). */
+export function etiquetaRolExamenUI(rol: RolExamen | string): string {
+  if (rol === 'programador') return 'Programador';
+  if (rol === 'tecnico') return 'Obrero';
+  return String(rol);
+}
+
 export function generarExamenAdaptativo(rol: string): ExamenAdaptativoResult {
   switch (rol) {
     case 'programador':
@@ -505,20 +551,39 @@ export function respuestasMovilALogica(
   return out;
 }
 
-export function puntajePersonalidad(respuestas: Record<string, number>): number {
+export function puntajePersonalidad(
+  respuestas: Record<string, number>,
+  rol?: RolExamen | string,
+): number {
+  if (rol === 'tecnico') return puntajePersonalidadTecnicoObra(respuestas);
   const ids = PREGUNTAS_PERSONALIDAD.map((p) => p.id);
   let sum = 0;
   let n = 0;
   for (const id of ids) {
-    const v = respuestas[id];
-    if (typeof v === 'number' && v >= 1 && v <= 5) {
+    const v = normalizarValorPersonalidad(Number(respuestas[id]));
+    if (v != null) {
       sum += v;
       n += 1;
     }
   }
   if (n === 0) return 0;
   const avg = sum / n;
-  return ((avg - 1) / 4) * 100;
+  return ((avg - 1) / 3) * 100;
+}
+
+/** Personalidad obra: 20 ítems situacionales (índice de opción 0–3). */
+export function puntajePersonalidadTecnicoObra(respuestas: Record<string, number>): number {
+  let sum = 0;
+  let n = 0;
+  for (const q of PREGUNTAS_SITUACIONALES_OBRA) {
+    const v = Number(respuestas[q.id]);
+    if (Number.isInteger(v) && v >= 0 && v <= 3) {
+      sum += puntajeOpcionSituacionalObra(v, q.mejor, q.riesgo);
+      n += 1;
+    }
+  }
+  if (n === 0) return 0;
+  return sum / n;
 }
 
 export function puntajeLogica(
@@ -535,29 +600,53 @@ export function puntajeLogica(
   return { puntaje: (correctas / qs.length) * 100, correctas, gma0a5 };
 }
 
-/** Ítems de personalidad usados para riesgo integridad (1–5 Likert; baja respuesta ⇒ más riesgo). */
+/** Ítems frecuencia programador (1–4; baja respuesta ⇒ más riesgo). */
 const IDS_INTEGRIDAD_RIESGO = ['p05', 'p06', 'p09', 'p17', 'p18', 'p19'] as const;
 
 /**
  * Nivel de riesgo de integridad 0–10 (mayor = peor).
  * Basado en respuestas bajas en ítems de ética, seguridad y conducta bajo presión.
  */
-export function nivelIntegridadRiesgo(respuestas: Record<string, number>): number {
+export function nivelIntegridadRiesgo(
+  respuestas: Record<string, number>,
+  rol?: RolExamen | string,
+): number {
+  if (rol === 'tecnico') {
+    let suma = 0;
+    let n = 0;
+    for (const q of PREGUNTAS_SITUACIONALES_OBRA) {
+      const v = Number(respuestas[q.id]);
+      if (Number.isInteger(v) && v >= 0 && v <= 3) {
+        suma += v === q.riesgo ? 3 : v === q.mejor ? 0 : 1.5;
+        n += 1;
+      } else {
+        suma += 1.5;
+        n += 1;
+      }
+    }
+    const maxRaw = n * 3;
+    return Math.round(((suma / maxRaw) * 10 + Number.EPSILON) * 100) / 100;
+  }
+
   let suma = 0;
   let n = 0;
   for (const id of IDS_INTEGRIDAD_RIESGO) {
-    const v = respuestas[id];
-    if (typeof v === 'number' && v >= 1 && v <= 5) {
-      suma += 5 - v;
+    const v = normalizarValorPersonalidad(Number(respuestas[id]));
+    if (v != null) {
+      suma += 4 - v;
       n += 1;
     } else {
-      suma += 3;
+      suma += 2;
       n += 1;
     }
   }
-  const maxRaw = IDS_INTEGRIDAD_RIESGO.length * 4;
+  const maxRaw = IDS_INTEGRIDAD_RIESGO.length * 3;
   return Math.round(((suma / maxRaw) * 10 + Number.EPSILON) * 100) / 100;
 }
+
+export { esPreguntaSituacionalObra, PREGUNTAS_SITUACIONALES_OBRA };
+
+export type { ValorFrecuenciaPersonalidad };
 
 /** Combinación lineal simple (ajustable). */
 export function puntajeTotal(pers: number, log: number): number {

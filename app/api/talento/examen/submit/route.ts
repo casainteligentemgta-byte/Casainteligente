@@ -208,12 +208,12 @@ export async function POST(req: Request) {
       pp = (respuestasA / 20) * 100;
       total = pp;
     } else {
-      pp = puntajePersonalidad(rp);
+      pp = puntajePersonalidad(rp, rol);
       const { puntaje: pl_val, gma0a5: gma } = puntajeLogica(rol, rl);
       pl = pl_val;
       gma0a5 = gma;
       total = puntajeTotal(pp, pl);
-      nivelInt = nivelIntegridadRiesgo(rp);
+      nivelInt = nivelIntegridadRiesgo(rp, rol);
       const tripodeObj = calcularSemaforoTalento({
         puntajeLogica: gma0a5,
         nivelIntegridad: nivelInt,

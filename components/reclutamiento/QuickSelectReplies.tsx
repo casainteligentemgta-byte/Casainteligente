@@ -1,5 +1,7 @@
 'use client';
 
+import { ESCALA_FRECUENCIA_PERSONALIDAD } from '@/lib/talento/escalaFrecuenciaPersonalidad';
+
 type Props = {
   disabled: boolean;
   /** Si la sesión ya está lista para enviar (evita confusión mientras carga). */
@@ -30,17 +32,17 @@ export default function QuickSelectReplies({ disabled, sessionReady = true, onSe
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1.5">Escala 1–5</p>
+        <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1.5">Frecuencia</p>
         <div className="flex flex-wrap gap-1.5">
-          {[1, 2, 3, 4, 5].map((n) => (
+          {ESCALA_FRECUENCIA_PERSONALIDAD.map((op) => (
             <button
-              key={n}
+              key={op.valor}
               type="button"
               disabled={disabled}
-              onClick={() => void onSend(`Likert 1–5 (5 = máximo acuerdo): ${n}.`)}
+              onClick={() => void onSend(`Frecuencia: ${op.etiqueta}.`)}
               className={btnAccent}
             >
-              {n}
+              {op.etiqueta}
             </button>
           ))}
         </div>

@@ -1,5 +1,5 @@
-import { generarExamenAdaptativo, PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
-import type { PreguntaLogica, PreguntaPersonalidad, RolExamen } from '@/types/talento';
+import { esExamenObrero, generarExamenAdaptativo } from '@/lib/talento/exam';
+import type { ItemPersonalidadExamen, PreguntaLogica, RolExamen } from '@/types/talento';
 
 export type RespuestasMap = Record<string, number>;
 
@@ -149,24 +149,21 @@ export function construirDetalleDesdeFilas(params: {
   };
 }
 
-export function etiquetasLikert(valor: number): string {
-  const map: Record<number, string> = {
-    1: 'Totalmente en desacuerdo',
-    2: 'En desacuerdo',
-    3: 'Neutral',
-    4: 'De acuerdo',
-    5: 'Totalmente de acuerdo',
-  };
-  return map[valor] ?? String(valor);
-}
+export {
+  etiquetaFrecuenciaPersonalidad,
+  etiquetaFrecuenciaPersonalidad as etiquetasLikert,
+} from '@/lib/talento/escalaFrecuenciaPersonalidad';
 
 export function preguntasParaDetalle(rol: RolExamen): {
-  personalidad: PreguntaPersonalidad[];
+  personalidad: ItemPersonalidadExamen[];
   logica: PreguntaLogica[];
 } {
-  const examen = generarExamenAdaptativo(rol) as { logica?: PreguntaLogica[] };
+  const examen = generarExamenAdaptativo(rol);
+  if (esExamenObrero(examen)) {
+    return { personalidad: [], logica: [] };
+  }
   return {
-    personalidad: PREGUNTAS_PERSONALIDAD,
-    logica: examen.logica ?? [],
+    personalidad: examen.personalidad,
+    logica: examen.logica,
   };
 }

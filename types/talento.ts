@@ -10,6 +10,18 @@ export interface PreguntaPersonalidad {
   texto: string;
 }
 
+/** Ítem situacional (4 opciones) para examen obrero / técnico obra. */
+export interface PreguntaSituacionalObra {
+  id: string;
+  bloque: string;
+  texto: string;
+  opciones: [string, string, string, string];
+  mejor: 0 | 1 | 2 | 3;
+  riesgo: 0 | 1 | 2 | 3;
+}
+
+export type ItemPersonalidadExamen = PreguntaPersonalidad | PreguntaSituacionalObra;
+
 export interface PreguntaLogica {
   id: string;
   texto: string;
@@ -19,7 +31,7 @@ export interface PreguntaLogica {
 
 export interface ExamenGenerado {
   rol: RolExamen;
-  personalidad: PreguntaPersonalidad[];
+  personalidad: ItemPersonalidadExamen[];
   logica: PreguntaLogica[];
 }
 

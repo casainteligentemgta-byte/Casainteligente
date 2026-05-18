@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'rea
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import ExamenTimer from '@/components/ExamenTimer';
-import { generarExamenAdaptativo, PREGUNTAS_PERSONALIDAD } from '@/lib/talento/exam';
+import {
+  ESCALA_FRECUENCIA_PERSONALIDAD,
+  esPreguntaSituacionalObra,
+  generarExamenAdaptativo,
+} from '@/lib/talento/exam';
 import { formatDocumentoCedulaVE, parseDocumentoCedulaVE, type PrefijoCedulaVE } from '@/lib/talento/documento';
 import type { ExamenGenerado, RolExamen } from '@/types/talento';
 
@@ -235,7 +239,7 @@ function ExamenTalentoPageInner() {
 
       <h1 className="text-2xl font-bold text-white mb-2">Evaluación adaptativa</h1>
       <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
-        Veinte ítems de personalidad (escala 1–5) y cinco de lógica según tu perfil técnico. Con el{' '}
+        Veinte ítems de personalidad (Nunca, A veces, Casi siempre, Siempre) y cinco de lógica según tu perfil técnico. Con el{' '}
         <strong className="text-zinc-300">enlace de invitación</strong>, tu nombre, apellidos en razón social, cédula y
         WhatsApp se <strong className="text-zinc-300">precargan</strong> desde tu postulación. Al pulsar{' '}
         <strong className="text-zinc-300">Iniciar evaluación</strong> arranca el cronómetro: tienes{' '}
@@ -359,42 +363,48 @@ function ExamenTalentoPageInner() {
 
           <section>
             <h2 className="text-sm font-semibold text-zinc-300 mb-3">
-              {(rolExamen as string) === 'obrero' || (rolExamen as string) === 'vigilante' ? 'Evaluación Situacional' : 'Personalidad (1 = bajo · 5 = alto)'}
+              {rolExamen === 'tecnico'
+                ? 'Conducta en obra (20 preguntas, 4 opciones cada una)'
+                : 'Personalidad (Nunca · A veces · Casi siempre · Siempre)'}
             </h2>
             <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
-              {examen.personalidad.map((p: any) => (
+              {examen.personalidad.map((p) => (
                 <div key={p.id} className="rounded-xl border border-zinc-800/80 p-4 bg-black/40">
-                  <p className="text-xs text-zinc-500 mb-1">{p.bloque || p.categoria}</p>
-                  <p className="text-sm text-zinc-200 mb-3">{p.texto || p.pregunta}</p>
+                  <p className="text-xs text-zinc-500 mb-1">{p.bloque}</p>
+                  <p className="text-sm text-zinc-200 mb-3">{p.texto}</p>
                   <div className="flex flex-col gap-2">
-                    {p.opciones ? (
-                      p.opciones.map((op: any) => (
+                    {esPreguntaSituacionalObra(p) ? (
+                      p.opciones.map((texto, idx) => (
                         <button
-                          key={op.valor}
+                          key={idx}
                           type="button"
                           disabled={expirado}
-                          onClick={() => setPers((prev) => ({ ...prev, [p.id]: op.valor }))}
+                          onClick={() => setPers((prev) => ({ ...prev, [p.id]: idx }))}
                           className={`block w-full text-left rounded-lg px-3 py-2 text-sm ${
-                            pers[p.id] === op.valor ? 'bg-sky-600 text-white' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
+                            pers[p.id] === idx
+                              ? 'bg-sky-600 text-white'
+                              : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
                           } disabled:opacity-40`}
                         >
-                          <span className="font-semibold mr-2">{op.valor}.</span>
-                          {op.texto}
+                          <span className="font-semibold mr-2">{String.fromCharCode(65 + idx)}.</span>
+                          {texto}
                         </button>
                       ))
                     ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {[1, 2, 3, 4, 5].map((n) => (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {ESCALA_FRECUENCIA_PERSONALIDAD.map((op) => (
                           <button
-                            key={n}
+                            key={op.valor}
                             type="button"
                             disabled={expirado}
-                            onClick={() => setPers((prev) => ({ ...prev, [p.id]: n }))}
-                            className={`min-w-[2.5rem] rounded-lg py-2 text-sm font-medium ${
-                              pers[p.id] === n ? 'bg-sky-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                            onClick={() => setPers((prev) => ({ ...prev, [p.id]: op.valor }))}
+                            className={`rounded-lg px-2 py-3 text-center text-xs font-bold leading-tight sm:text-sm ${
+                              pers[p.id] === op.valor
+                                ? 'bg-sky-600 text-white'
+                                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                             } disabled:opacity-40`}
                           >
-                            {n}
+                            {op.etiqueta}
                           </button>
                         ))}
                       </div>
@@ -407,7 +417,7 @@ function ExamenTalentoPageInner() {
 
           <section>
             <h2 className="text-sm font-semibold text-zinc-300 mb-3">
-              Lógica {rolExamen === 'programador' ? '(software)' : '(instalaciones)'}
+              Lógica {rolExamen === 'programador' ? '(software)' : '(obra práctica)'}
             </h2>
             <div className="space-y-4">
               {examen.logica.map((q: any) => (

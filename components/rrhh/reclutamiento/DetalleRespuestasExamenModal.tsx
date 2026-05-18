@@ -5,10 +5,11 @@ import { X, FileSearch, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
   construirDetalleDesdeFilas,
-  etiquetasLikert,
+  etiquetaFrecuenciaPersonalidad,
   preguntasParaDetalle,
   type DetalleRespuestasExamen,
 } from '@/lib/rrhh/parseRespuestasExamen';
+import { esPreguntaSituacionalObra, etiquetaRolExamenUI } from '@/lib/talento/exam';
 
 type Props = {
   open: boolean;
@@ -173,10 +174,22 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
 
               {preguntas && Object.keys(detalle.respuestasPersonalidad).length > 0 ? (
                 <section>
-                  <h3 className="text-sm font-bold text-violet-200">Personalidad (Likert 1–5)</h3>
+                  <h3 className="text-sm font-bold text-violet-200">
+                    {detalle.rolExamen === 'tecnico'
+                      ? 'Conducta en obra (20 preguntas)'
+                      : 'Personalidad (frecuencia)'}
+                  </h3>
                   <ol className="mt-2 space-y-2">
                     {preguntas.personalidad.map((p, i) => {
                       const v = detalle.respuestasPersonalidad[p.id];
+                      let etiqueta = 'Sin respuesta';
+                      if (v != null) {
+                        if (esPreguntaSituacionalObra(p) && v >= 0 && v < p.opciones.length) {
+                          etiqueta = `${String.fromCharCode(65 + v)}) ${p.opciones[v]}`;
+                        } else {
+                          etiqueta = etiquetaFrecuenciaPersonalidad(v);
+                        }
+                      }
                       return (
                         <li
                           key={p.id}
@@ -188,9 +201,7 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
                           <p className="mt-0.5 text-zinc-200">
                             {i + 1}. {p.texto}
                           </p>
-                          <p className="mt-1 text-xs font-semibold text-violet-200/90">
-                            {v != null ? `${v} — ${etiquetasLikert(v)}` : 'Sin respuesta'}
-                          </p>
+                          <p className="mt-1 text-xs font-semibold text-violet-200/90">{etiqueta}</p>
                         </li>
                       );
                     })}
@@ -201,7 +212,7 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
               {preguntas && Object.keys(detalle.respuestasLogica).length > 0 ? (
                 <section>
                   <h3 className="text-sm font-bold text-cyan-200">
-                    Lógica — {detalle.rolExamen === 'programador' ? 'programador' : 'obrero / técnico'}
+                    Lógica — {etiquetaRolExamenUI(detalle.rolExamen)}
                   </h3>
                   <ol className="mt-2 space-y-3">
                     {preguntas.logica.map((q, i) => {
