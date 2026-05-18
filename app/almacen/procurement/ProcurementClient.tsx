@@ -4,6 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProcurementDocument } from '@/lib/almacen/procurementDocumentStorage';
 import {
+    registerCompraDesdeRecepcion,
+    type LineaCompraContabilidadInput,
+} from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import {
     FileText,
     Upload,
     Plus,
@@ -60,8 +64,8 @@ function formatProcurementSaveError(error: unknown): string {
         if (code === '42501' || /row-level security/i.test(msg)) {
             return 'Sin permiso en Supabase (RLS). Ejecute la migración 134_procurement_rls_anon.sql en el SQL Editor y vuelva a intentar.';
         }
-        if (/column.*does not exist/i.test(msg)) {
-            return 'Faltan columnas en la base de datos. Ejecute las migraciones 132 y 133 en Supabase.';
+        if (/column.*does not exist/i.test(msg) || /contabilidad_compras/i.test(msg)) {
+            return 'Faltan tablas o columnas en la base de datos. Ejecute las migraciones 132 a 135 en Supabase.';
         }
         if (/fetch failed/i.test(msg)) {
             return 'No se pudo conectar con Supabase. Reinicie npm run dev o use npm run dev:tls (ver docs/ERROR-FETCH-FAILED-SUPABASE.md).';
@@ -184,6 +188,9 @@ export default function ProcurementClient() {
 
             if (invError) throw invError;
 
+            let documentStoragePath: string | null = null;
+            let documentFileName: string | null = null;
+
             if (sourceDocument) {
                 try {
                     const uploaded = await uploadProcurementDocument(
@@ -191,6 +198,8 @@ export default function ProcurementClient() {
                         invData.id,
                         sourceDocument
                     );
+                    documentStoragePath = uploaded.path;
+                    documentFileName = uploaded.fileName;
                     const { error: docMetaError } = await supabase
                         .from('purchase_invoices')
                         .update({
@@ -212,6 +221,8 @@ export default function ProcurementClient() {
                     );
                 }
             }
+
+            const lineasContabilidad: LineaCompraContabilidadInput[] = [];
 
             for (const line of validLines) {
                 const desc = line.description.trim();
@@ -261,7 +272,29 @@ export default function ProcurementClient() {
                     .insert(qualityRow);
 
                 if (qualityError) throw qualityError;
+
+                lineasContabilidad.push({
+                    purchase_detail_id: detailData.id,
+                    material_id: newMaterial.id,
+                    descripcion: desc,
+                    item_code: line.item_code.trim() || null,
+                    unidad: (line.unit || 'UND').trim() || 'UND',
+                    cantidad: line.quantity,
+                    precio_unitario: line.unit_price,
+                });
             }
+
+            await registerCompraDesdeRecepcion(supabase, {
+                purchase_invoice_id: invData.id,
+                invoice_number: payload.invoice_number,
+                supplier_rif: payload.supplier_rif,
+                supplier_name: payload.supplier_name,
+                fecha: payload.date,
+                total_amount: payload.total_amount,
+                document_storage_path: documentStoragePath,
+                document_file_name: documentFileName,
+                lineas: lineasContabilidad,
+            });
 
             router.push('/almacen/procurement/quality');
         } catch (error) {
