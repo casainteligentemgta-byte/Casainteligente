@@ -12,6 +12,7 @@ export type LineaCompraContabilidadInput = {
 
 export type RegistrarCompraContabilidadInput = {
   purchase_invoice_id: string;
+  proyecto_id: string;
   invoice_number: string;
   supplier_rif: string;
   supplier_name: string;
@@ -40,6 +41,7 @@ export async function registerCompraDesdeRecepcion(
     .from('contabilidad_compras')
     .insert({
       purchase_invoice_id: input.purchase_invoice_id,
+      proyecto_id: input.proyecto_id,
       invoice_number: input.invoice_number,
       supplier_rif: input.supplier_rif,
       supplier_name: input.supplier_name,

@@ -7,6 +7,11 @@ import {
     registerCompraDesdeRecepcion,
     type LineaCompraContabilidadInput,
 } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { fetchDefaultDepositId } from '@/lib/almacen/formatInventoryLocation';
+import {
+    esProyectoSmartRrhhPorNombre,
+    loadCatalogoProyectosApp,
+} from '@/lib/proyectos/proyectosUnificados';
 import {
     FileText,
     Upload,
@@ -64,8 +69,8 @@ function formatProcurementSaveError(error: unknown): string {
         if (code === '42501' || /row-level security/i.test(msg)) {
             return 'Sin permiso en Supabase (RLS). Ejecute la migración 134_procurement_rls_anon.sql en el SQL Editor y vuelva a intentar.';
         }
-        if (/column.*does not exist/i.test(msg) || /contabilidad_compras/i.test(msg)) {
-            return 'Faltan tablas o columnas en la base de datos. Ejecute las migraciones 132 a 135 en Supabase.';
+        if (/column.*does not exist/i.test(msg) || /contabilidad_compras|proyecto_id/i.test(msg)) {
+            return 'Faltan tablas o columnas en la base de datos. Ejecute las migraciones 132 a 138 en Supabase.';
         }
         if (/fetch failed/i.test(msg)) {
             return 'No se pudo conectar con Supabase. Reinicie npm run dev o use npm run dev:tls (ver docs/ERROR-FETCH-FAILED-SUPABASE.md).';
@@ -93,8 +98,39 @@ export default function ProcurementClient() {
     const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [proyectoId, setProyectoId] = useState('');
+    const [proyectos, setProyectos] = useState<Array<{ id: string; nombre: string }>>([]);
     const documentPreviewRef = useRef<string | null>(null);
     const router = useRouter();
+
+    useEffect(() => {
+        const supabase = createClient();
+        void (async () => {
+            const { proyectos: lista, error: catErr } = await loadCatalogoProyectosApp(supabase);
+            if (catErr || !lista.length) return;
+            setProyectos(lista);
+            const saved =
+                typeof window !== 'undefined'
+                    ? sessionStorage.getItem('procurement_proyecto_id')
+                    : null;
+            if (saved && lista.some((p) => p.id === saved)) {
+                setProyectoId(saved);
+                return;
+            }
+            const principal = lista.find((p) => esProyectoSmartRrhhPorNombre(p.nombre));
+            if (principal?.id) {
+                setProyectoId(principal.id);
+            } else if (lista[0]?.id) {
+                setProyectoId(lista[0].id);
+            }
+        })();
+    }, []);
+
+    useEffect(() => {
+        if (proyectoId && typeof window !== 'undefined') {
+            sessionStorage.setItem('procurement_proyecto_id', proyectoId);
+        }
+    }, [proyectoId]);
 
     const attachSourceDocument = (file: File | null) => {
         if (documentPreviewRef.current) {
@@ -151,6 +187,10 @@ export default function ProcurementClient() {
             setSubmitError('Indique el nombre del proveedor.');
             return;
         }
+        if (!proyectoId) {
+            setSubmitError('Seleccione el proyecto al que pertenece esta compra.');
+            return;
+        }
 
         const validLines = items.filter((it) => it.description.trim());
         if (validLines.length === 0) {
@@ -178,6 +218,7 @@ export default function ProcurementClient() {
                 date: invoice.date,
                 total_amount: calculateTotal(),
                 status: 'PENDIENTE',
+                proyecto_id: proyectoId,
             };
 
             const { data: invData, error: invError } = await supabase
@@ -223,6 +264,7 @@ export default function ProcurementClient() {
             }
 
             const lineasContabilidad: LineaCompraContabilidadInput[] = [];
+            const defaultDepositId = await fetchDefaultDepositId(supabase);
 
             for (const line of validLines) {
                 const desc = line.description.trim();
@@ -234,6 +276,7 @@ export default function ProcurementClient() {
                         stock_quarantine: line.quantity,
                         last_purchase_price: line.unit_price,
                         last_purchase_date: invoice.date,
+                        deposit_id: defaultDepositId,
                     })
                     .select('id')
                     .single();
@@ -286,6 +329,7 @@ export default function ProcurementClient() {
 
             await registerCompraDesdeRecepcion(supabase, {
                 purchase_invoice_id: invData.id,
+                proyecto_id: proyectoId,
                 invoice_number: payload.invoice_number,
                 supplier_rif: payload.supplier_rif,
                 supplier_name: payload.supplier_name,
@@ -552,6 +596,51 @@ export default function ProcurementClient() {
                                 <span>{aiSuccess}</span>
                             </div>
                         ) : null}
+                        <ProcPanel className="p-8">
+                            <h3 className="text-lg font-black uppercase tracking-widest text-zinc-500 mb-6">
+                                Proyecto de la compra
+                            </h3>
+                            <div className="space-y-2 mb-2">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                                    Imputar a proyecto / obra
+                                </label>
+                                <select
+                                    value={proyectoId}
+                                    onChange={(e) => setProyectoId(e.target.value)}
+                                    className="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
+                                >
+                                    <option value="">Seleccione proyecto…</option>
+                                    {proyectos.filter((p) => esProyectoSmartRrhhPorNombre(p.nombre)).length > 0 ? (
+                                        <optgroup label="Obras principales">
+                                            {proyectos
+                                                .filter((p) => esProyectoSmartRrhhPorNombre(p.nombre))
+                                                .map((p) => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.nombre}
+                                                    </option>
+                                                ))}
+                                        </optgroup>
+                                    ) : null}
+                                    {proyectos.filter((p) => !esProyectoSmartRrhhPorNombre(p.nombre)).length > 0 ? (
+                                        <optgroup label="Otros proyectos">
+                                            {proyectos
+                                                .filter((p) => !esProyectoSmartRrhhPorNombre(p.nombre))
+                                                .map((p) => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.nombre}
+                                                    </option>
+                                                ))}
+                                        </optgroup>
+                                    ) : null}
+                                </select>
+                                {proyectos.length === 0 ? (
+                                    <p className="text-xs font-bold text-amber-500">
+                                        No hay proyectos en ci_proyectos. Cree uno en Proyectos.
+                                    </p>
+                                ) : null}
+                            </div>
+                        </ProcPanel>
+
                         <ProcPanel className="p-8">
                             <h3 className="text-lg font-black uppercase tracking-widest text-zinc-500 mb-6 flex items-center gap-2">
                                 <FileText size={18} />

@@ -333,3 +333,45 @@ export async function loadOpcionesProyectoReclutamiento(
 
   return { opciones, errors };
 }
+
+/** Catálogo id + nombre para selects (compras, almacén, etc.). */
+export type ProyectoCatalogo = { id: string; nombre: string };
+
+/** Video de frente y Rancho Flamboyant primero; el resto por nombre. Proyectos nuevos en BD al recargar. */
+export function ordenarProyectosCatalogoApp(proyectos: ProyectoCatalogo[]): ProyectoCatalogo[] {
+  return [...proyectos].sort(
+    (a, b) =>
+      prioridadSmartRrhh(a.nombre) - prioridadSmartRrhh(b.nombre) ||
+      a.nombre.localeCompare(b.nombre, 'es'),
+  );
+}
+
+export async function loadCatalogoProyectosApp(
+  supabase: SupabaseClient,
+): Promise<{ proyectos: ProyectoCatalogo[]; error: string | null }> {
+  const { data, error } = await supabase.from('ci_proyectos').select('id,nombre').limit(1000);
+
+  if (error) {
+    return { proyectos: [], error: error.message ?? 'No se pudieron cargar proyectos.' };
+  }
+
+  const proyectos = ordenarProyectosCatalogoApp(
+    (data ?? []).map((r) => ({
+      id: String((r as { id: unknown }).id),
+      nombre: String((r as { nombre?: unknown }).nombre ?? 'Sin nombre').trim() || 'Sin nombre',
+    })),
+  );
+
+  return { proyectos, error: null };
+}
+
+export function mergeProyectosCatalogo(
+  actual: ProyectoCatalogo[],
+  extra: ProyectoCatalogo[],
+): ProyectoCatalogo[] {
+  const map = new Map<string, ProyectoCatalogo>();
+  for (const p of [...actual, ...extra]) {
+    if (p.id) map.set(p.id, p);
+  }
+  return ordenarProyectosCatalogoApp(Array.from(map.values()));
+}

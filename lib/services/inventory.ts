@@ -20,7 +20,7 @@ export class InventoryService {
         quantity: number;
         reference_id?: string;
         unit_price?: number; // Needed for 101 (Entry)
-        user_id: string;
+        user_id?: string | null;
     }) {
         const { material_id, type, quantity, reference_id, unit_price, user_id } = params;
 
@@ -83,7 +83,7 @@ export class InventoryService {
             previous_cost: prevCost,
             new_cost: newCost,
             reference_id: reference_id || null,
-            user_id
+            user_id: user_id ?? null,
         };
 
         const { error: movementError } = await this.supabase
@@ -98,51 +98,10 @@ export class InventoryService {
     /**
      * Process a Quality Inspection approval
      */
-    static async approveQuality(inspection_id: string, user_id: string) {
-        const { data: inspection, error: fetchError } = await this.supabase
-            .from('quality_inspections')
-            .select('*, purchase_details(unit_price)')
-            .eq('id', inspection_id)
-            .single();
-
-        if (fetchError || !inspection) throw new Error('Inspection not found');
-
-        // 1. Update Inspection Status
-        const { error: updateInspError } = await this.supabase
-            .from('quality_inspections')
-            .update({
-                status: 'APROBADO',
-                inspector_id: user_id,
-                inspected_at: new Date().toISOString()
-            })
-            .eq('id', inspection_id);
-
-        if (updateInspError) throw updateInspError;
-
-        // 2. Reduce quarantine stock
-        const { data: item } = await this.supabase
-            .from('global_inventory')
-            .select('stock_quarantine')
-            .eq('id', inspection.material_id)
-            .single();
-
-        await this.supabase
-            .from('global_inventory')
-            .update({
-                stock_quarantine: (Number(item?.stock_quarantine) || 0) - inspection.quantity
-            })
-            .eq('id', inspection.material_id);
-
-        // 3. Register 101 Movement (Internamiento)
-        const unitPrice = (inspection.purchase_details as any)?.unit_price || 0;
-
-        return await this.registerMovement({
-            material_id: inspection.material_id,
-            type: '101',
-            quantity: inspection.quantity,
-            reference_id: inspection.invoice_id,
-            unit_price: unitPrice,
-            user_id
-        });
+    static async approveQuality(inspection_id: string, user_id?: string | null) {
+        const { approveQualityInspection } = await import(
+            '@/lib/almacen/approveQualityInspection'
+        );
+        return approveQualityInspection(this.supabase, inspection_id, user_id);
     }
 }

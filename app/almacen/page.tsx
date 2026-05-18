@@ -22,6 +22,11 @@ import {
     Share2
 } from 'lucide-react';
 import { InventoryItem } from '@/types/inventory';
+import {
+    formatInventoryLocationLabel,
+    type DepositRow,
+    type FurnitureRow,
+} from '@/lib/almacen/formatInventoryLocation';
 import Link from 'next/link';
 
 /** Coincide nombres entre inventario y catálogo comercial (`products.nombre`). */
@@ -97,6 +102,9 @@ export default function InventoryMasterPage() {
     const [catalogImagenByName, setCatalogImagenByName] = useState<Record<string, string>>({});
     /** `products.imagen` por `products.id` cuando el ítem tiene `product_id`. */
     const [catalogImagenByProductId, setCatalogImagenByProductId] = useState<Record<number, string>>({});
+    const [depositsById, setDepositsById] = useState<Map<string, DepositRow>>(new Map());
+    const [furnitureById, setFurnitureById] = useState<Map<string, FurnitureRow>>(new Map());
+    const [mastersWarning, setMastersWarning] = useState<string | null>(null);
 
     const supabase = createClient();
 
@@ -114,15 +122,45 @@ export default function InventoryMasterPage() {
                 // For now, let's just fetch all or filter if we had categories
             }
 
-            const [invRes, prodRes] = await Promise.all([
+            const [invRes, prodRes, depRes, furRes] = await Promise.all([
                 invQuery,
                 supabase.from('products').select('nombre, imagen').not('imagen', 'is', null),
+                supabase.from('inventory_deposits').select('id,name,locality'),
+                supabase.from('inventory_furniture').select('id,deposit_id,name'),
             ]);
 
             if (invRes.error) throw invRes.error;
 
             const inventoryItems = invRes.data as InventoryItem[];
             setItems(inventoryItems);
+
+            const depMap = new Map<string, DepositRow>();
+            for (const d of (depRes.data ?? []) as DepositRow[]) {
+                if (d.id) depMap.set(d.id, d);
+            }
+            setDepositsById(depMap);
+
+            const furMap = new Map<string, FurnitureRow>();
+            for (const f of (furRes.data ?? []) as FurnitureRow[]) {
+                if (f.id) furMap.set(f.id, f);
+            }
+            setFurnitureById(furMap);
+
+            if (depRes.error) {
+                setMastersWarning(
+                    `No se cargaron depósitos (ubicación): ${depRes.error.message}. Ejecute migración 014 en Supabase.`
+                );
+            } else if (depMap.size === 0) {
+                setMastersWarning(
+                    'No hay depósitos en inventory_deposits. Cree al menos uno en Almacén → Maestros.'
+                );
+            } else {
+                setMastersWarning(null);
+            }
+
+            if (furRes.error) {
+                console.warn('inventory_furniture:', furRes.error.message);
+            }
 
             if (!prodRes.error && prodRes.data) {
                 setCatalogImagenByName(buildCatalogImageLookup(prodRes.data));
@@ -260,6 +298,12 @@ export default function InventoryMasterPage() {
                 </div>
             </div>
 
+            {mastersWarning ? (
+                <div className="mb-6 p-4 rounded-2xl bg-amber-600/10 border border-amber-600/30 text-amber-200 text-sm font-bold">
+                    {mastersWarning}
+                </div>
+            ) : null}
+
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <GlassCard className="p-6">
@@ -395,7 +439,11 @@ export default function InventoryMasterPage() {
                                     <td className="p-5">
                                         <div className="flex items-center gap-2 text-zinc-400 font-bold text-sm capitalize">
                                             <div className="w-2 h-2 rounded-full bg-zinc-700"></div>
-                                            {item.location || 'No asignada'}
+                                            {formatInventoryLocationLabel(
+                                                item,
+                                                depositsById,
+                                                furnitureById
+                                            )}
                                         </div>
                                     </td>
                                     <td className="p-5 text-right md:text-left">

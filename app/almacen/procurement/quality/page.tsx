@@ -15,13 +15,17 @@ import {
     ClipboardCheck
 } from 'lucide-react';
 import { QualityInspection } from '@/types/inventory';
-import { InventoryService } from '@/lib/services/inventory';
+import {
+    approveQualityInspection,
+    formatApproveError,
+} from '@/lib/almacen/approveQualityInspection';
 import Link from 'next/link';
 
 export default function QualityDashboard() {
     const [inspections, setInspections] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     const supabase = createClient();
 
@@ -54,20 +58,14 @@ export default function QualityDashboard() {
 
     const handleApprove = async (id: string) => {
         setProcessing(id);
+        setActionError(null);
         try {
-            // Use the service to handle complex logic (101 movement, cost update, etc.)
-            // Note: We need the user ID. For now, we use a placeholder or get it from auth.
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('User not authenticated');
-
-            await InventoryService.approveQuality(id, user.id);
-
-            // Refresh list
-            setInspections(prev => prev.filter(i => i.id !== id));
-            alert('Internamiento exitoso (Movimiento 101 registrado)');
+            await approveQualityInspection(supabase, id, user?.id ?? null);
+            setInspections((prev) => prev.filter((i) => i.id !== id));
         } catch (error) {
             console.error('Error approving quality:', error);
-            alert('Error en el internamiento. Ver consola.');
+            setActionError(formatApproveError(error));
         } finally {
             setProcessing(null);
         }
@@ -127,6 +125,13 @@ export default function QualityDashboard() {
                         </div>
                     </div>
                 </div>
+
+                {actionError ? (
+                    <div className="bg-red-600/10 border border-red-600/30 p-4 rounded-2xl mb-6 flex gap-3 items-start text-red-400 text-sm font-bold">
+                        <XCircle size={20} className="shrink-0 mt-0.5" />
+                        <span>{actionError}</span>
+                    </div>
+                ) : null}
 
                 {/* Info Box */}
                 <div className="bg-blue-600/10 border border-blue-600/20 p-6 rounded-3xl mb-8 flex gap-4 items-start">
@@ -207,15 +212,18 @@ export default function QualityDashboard() {
 
                                 <div className="flex gap-3 pt-6 border-t border-zinc-800/50">
                                     <button
-                                        onClick={() => handleReject(insp.id)}
-                                        className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-sm bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 transition-all"
+                                        type="button"
+                                        onClick={() => void handleReject(insp.id)}
+                                        disabled={processing === insp.id}
+                                        className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-sm bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 transition-all disabled:opacity-50"
                                     >
                                         <XCircle size={18} />
                                         RECHAZAR
                                     </button>
                                     <button
-                                        onClick={() => handleApprove(insp.id)}
-                                        disabled={processing === insp.id}
+                                        type="button"
+                                        onClick={() => void handleApprove(insp.id)}
+                                        disabled={processing !== null}
                                         className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
                                     >
                                         {processing === insp.id ? (
