@@ -25,8 +25,8 @@ function resolvePublicBase(req: Request): string {
 }
 
 /**
- * POST { empleadoId, cedula } — Crea `ci_examenes` si falta (mismo token que `token_registro` del empleado).
- * Comprueba que la cédula coincida con el expediente (mitiga enumeración solo con UUID).
+ * POST { empleadoId, cedula? } — Crea `ci_examenes` si falta (mismo token que `token_registro` del empleado).
+ * Si envías `cedula`, debe coincidir con el expediente; si no, se usa la cédula guardada en BD.
  */
 export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
@@ -43,9 +43,6 @@ export async function POST(req: Request) {
   const cedulaIn = (body.cedula ?? '').trim();
   if (!empleadoId || !UUID_RE.test(empleadoId)) {
     return NextResponse.json({ error: 'empleadoId inválido' }, { status: 400 });
-  }
-  if (!cedulaIn) {
-    return NextResponse.json({ error: 'cedula requerida' }, { status: 400 });
   }
 
   const { data: row, error: qErr } = await admin.client
@@ -68,9 +65,16 @@ export async function POST(req: Request) {
     token_registro: string | null;
   };
   const docDb = normDoc(String(r.cedula ?? r.documento ?? ''));
-  const docIn = normDoc(cedulaIn);
-  if (!docDb || docDb !== docIn) {
-    return NextResponse.json({ error: 'La cédula no coincide con este expediente' }, { status: 403 });
+  if (cedulaIn) {
+    const docIn = normDoc(cedulaIn);
+    if (!docDb || docDb !== docIn) {
+      return NextResponse.json({ error: 'La cédula no coincide con este expediente' }, { status: 403 });
+    }
+  } else if (!docDb) {
+    return NextResponse.json(
+      { error: 'El expediente no tiene cédula registrada. Complétala en hoja de vida antes de enviar el examen.' },
+      { status: 409 },
+    );
   }
 
   const token = String(r.token_registro ?? r.token ?? '').trim();

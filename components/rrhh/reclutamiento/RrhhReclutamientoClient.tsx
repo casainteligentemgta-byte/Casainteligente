@@ -59,8 +59,7 @@ export default function RrhhReclutamientoClient() {
   const [filtroEval, setFiltroEval] = useState<'todos' | 'evaluados' | 'pendientes'>('todos');
   const [busqueda, setBusqueda] = useState('');
 
-  const [invEmpleadoId, setInvEmpleadoId] = useState('');
-  const [invCedula, setInvCedula] = useState('');
+  const [destinoEnlace, setDestinoEnlace] = useState<{ empleadoId: string; etiqueta: string } | null>(null);
   const [invBusy, setInvBusy] = useState(false);
   const [ultimoEnlace, setUltimoEnlace] = useState<string | null>(null);
   const [detalleEmpleadoId, setDetalleEmpleadoId] = useState<string | null>(null);
@@ -164,49 +163,85 @@ export default function RrhhReclutamientoClient() {
     };
   }, [empleados, expressSinEvaluar.length]);
 
-  const emitirEnlace = useCallback(
-    async (empleadoId: string, cedula: string) => {
-      const eid = empleadoId.trim();
-      const doc = cedula.trim();
-      if (!eid || !doc) {
-        toast.error('Indica expediente (UUID) y cédula.');
-        return;
-      }
+  const copiarUrlExamen = useCallback(async (url: string) => {
+    setUltimoEnlace(url);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Enlace copiado al portapapeles');
+    } catch {
+      toast.message('Enlace generado (copia manual desde el botón «Copiar»)');
+    }
+  }, []);
+
+  const generarEnlaceExamen = useCallback(
+    async (empleadoId?: string) => {
       setInvBusy(true);
       try {
-        const res = await fetch(apiUrl('/api/registro/emitir-invitacion-examen'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ empleadoId: eid, cedula: doc }),
-        });
-        const j = (await res.json().catch(() => ({}))) as { exam_url?: string; error?: string };
-        if (!res.ok) {
-          toast.error(j.error ?? 'No se pudo generar el enlace');
+        const eid = (empleadoId ?? '').trim();
+        if (eid) {
+          const res = await fetch(apiUrl('/api/registro/emitir-invitacion-examen'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empleadoId: eid }),
+          });
+          const j = (await res.json().catch(() => ({}))) as {
+            exam_url?: string;
+            error?: string;
+            hint?: string;
+          };
+          if (!res.ok) {
+            toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo generar el enlace');
+            return;
+          }
+          if (!j.exam_url) {
+            toast.error('Respuesta sin URL de examen');
+            return;
+          }
+          await copiarUrlExamen(j.exam_url);
           return;
         }
-        if (!j.exam_url) {
+
+        const res = await fetch(apiUrl('/api/talento/generar-link'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: 'Candidato (evaluación)',
+            rol_examen: rolPreview,
+            rol_buscado: rolPreview === 'tecnico' ? 'Obrero' : 'Programador',
+            public_base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+          }),
+        });
+        const j = (await res.json().catch(() => ({}))) as {
+          url?: string;
+          error?: string;
+          hint?: string;
+        };
+        if (!res.ok) {
+          toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo generar el enlace');
+          return;
+        }
+        const url = (j.url ?? '').trim();
+        if (!url) {
           toast.error('Respuesta sin URL de examen');
           return;
         }
-        setUltimoEnlace(j.exam_url);
-        try {
-          await navigator.clipboard.writeText(j.exam_url);
-          toast.success('Enlace copiado al portapapeles');
-        } catch {
-          toast.message('Enlace generado (copia manual)');
-        }
+        await copiarUrlExamen(url);
       } catch {
         toast.error('Error de red');
       } finally {
         setInvBusy(false);
       }
     },
-    [],
+    [copiarUrlExamen, rolPreview],
   );
 
-  const rellenarDesdeFila = (r: EmpleadoHojaVidaRow) => {
-    setInvEmpleadoId(r.id);
-    setInvCedula(docMostrado(r) === '—' ? '' : docMostrado(r));
+  const seleccionarParaEnlace = (r: EmpleadoHojaVidaRow) => {
+    const nombre = (r.nombre_completo ?? '').trim() || 'Sin nombre';
+    const doc = docMostrado(r);
+    setDestinoEnlace({
+      empleadoId: r.id,
+      etiqueta: doc !== '—' ? `${nombre} · ${doc}` : nombre,
+    });
   };
 
   const borrarEmpleado = useCallback(
@@ -397,34 +432,35 @@ export default function RrhhReclutamientoClient() {
               Enviar a evaluar
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Genera el enlace <code className="text-zinc-500">/talento/examen?token=…</code> validado con la cédula del
-              expediente. También puedes elegir una fila en «Todas las evaluaciones» o «Pendientes».
+              Genera y copia el enlace <code className="text-zinc-500">/talento/examen?token=…</code>. Si elegiste a
+              alguien en «Pendientes» o «Evaluaciones», el enlace va a su expediente; si no, se crea un candidato nuevo
+              con el rol del botón {etiquetaRolExamenUI(rolPreview)} arriba.
             </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs text-zinc-500">
-                ID expediente (UUID)
-                <input
-                  value={invEmpleadoId}
-                  onChange={(e) => setInvEmpleadoId(e.target.value)}
-                  placeholder="00000000-0000-…"
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-zinc-100"
-                />
-              </label>
-              <label className="block text-xs text-zinc-500">
-                Cédula (validación)
-                <input
-                  value={invCedula}
-                  onChange={(e) => setInvCedula(e.target.value)}
-                  placeholder="V-12345678"
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-zinc-100"
-                />
-              </label>
+            <div className="mt-3 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm">
+              {destinoEnlace ? (
+                <p className="text-emerald-200/95">
+                  <span className="font-semibold text-emerald-100">Expediente:</span> {destinoEnlace.etiqueta}
+                </p>
+              ) : (
+                <p className="text-zinc-400">
+                  Enlace genérico para candidato nuevo ({etiquetaRolExamenUI(rolPreview)}).
+                </p>
+              )}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
+              {destinoEnlace ? (
+                <button
+                  type="button"
+                  onClick={() => setDestinoEnlace(null)}
+                  className="rounded-xl border border-white/15 px-3 py-2.5 text-sm text-zinc-400 hover:bg-white/5"
+                >
+                  Quitar selección
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={invBusy}
-                onClick={() => void emitirEnlace(invEmpleadoId, invCedula)}
+                onClick={() => void generarEnlaceExamen(destinoEnlace?.empleadoId)}
                 className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2.5 text-sm font-bold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
               >
                 <Link2 className="h-4 w-4" />
@@ -526,7 +562,7 @@ export default function RrhhReclutamientoClient() {
                     <button
                       type="button"
                       onClick={() => {
-                        rellenarDesdeFila(r);
+                        seleccionarParaEnlace(r);
                         setTab('examen');
                       }}
                       className="rounded-lg border border-emerald-500/35 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/40"
@@ -583,8 +619,8 @@ export default function RrhhReclutamientoClient() {
                     <button
                       type="button"
                       onClick={() => {
-                        rellenarDesdeFila(r);
-                        void emitirEnlace(r.id, docMostrado(r) === '—' ? '' : docMostrado(r));
+                        seleccionarParaEnlace(r);
+                        void generarEnlaceExamen(r.id);
                       }}
                       className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100"
                     >
@@ -641,7 +677,7 @@ export default function RrhhReclutamientoClient() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => void emitirEnlace(x.empleado_id!, x.obrero_cedula)}
+                            onClick={() => void generarEnlaceExamen(x.empleado_id!)}
                             className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100"
                           >
                             Enviar examen

@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'rea
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import ExamenTimer from '@/components/ExamenTimer';
+import ExamenTalentoPasoAPaso from '@/components/talento/ExamenTalentoPasoAPaso';
 import {
   ESCALA_FRECUENCIA_PERSONALIDAD,
   esPreguntaSituacionalObra,
   generarExamenAdaptativo,
 } from '@/lib/talento/exam';
+import { examenGeneradoAPasos } from '@/lib/talento/examenPasos';
 import { formatDocumentoCedulaVE, parseDocumentoCedulaVE, type PrefijoCedulaVE } from '@/lib/talento/documento';
 import type { ExamenGenerado, RolExamen } from '@/types/talento';
 
@@ -147,6 +149,11 @@ function ExamenTalentoPageInner() {
     [rolExamen],
   );
 
+  const pasosExamen = useMemo(
+    () => (examen && rolExamen === 'tecnico' ? examenGeneradoAPasos(examen) : []),
+    [examen, rolExamen],
+  );
+
   const iniciarExamen = () => {
     const docStr = formatDocumentoCedulaVE(docPrefijo, docNumero);
     if (!nombre.trim() || !rolBuscado.trim() || !rolExamen) {
@@ -167,8 +174,11 @@ function ExamenTalentoPageInner() {
     setFase('examen');
   };
 
-  const enviar = useCallback(async () => {
+  const enviar = useCallback(
+    async (respuestas?: { personalidad: Record<string, number>; logica: Record<string, number> }) => {
     if (!examen || !rolExamen || examenInicio == null || expirado) return;
+    const rp = respuestas?.personalidad ?? pers;
+    const rl = respuestas?.logica ?? log;
     setEnviando(true);
     setError(null);
     try {
@@ -183,8 +193,8 @@ function ExamenTalentoPageInner() {
           rol_buscado: rolBuscado.trim(),
           rol_examen: rolExamen,
           examen_inicio_at: new Date(examenInicio).toISOString(),
-          respuestas_personalidad: pers,
-          respuestas_logica: log,
+          respuestas_personalidad: rp,
+          respuestas_logica: rl,
           ...(empleadoInvId && examenInvToken
             ? { empleado_id: empleadoInvId, examen_token: examenInvToken }
             : {}),
@@ -207,7 +217,8 @@ function ExamenTalentoPageInner() {
     } finally {
       setEnviando(false);
     }
-  }, [
+  },
+  [
     examen,
     rolExamen,
     examenInicio,
@@ -239,13 +250,19 @@ function ExamenTalentoPageInner() {
 
       <h1 className="text-2xl font-bold text-white mb-2">Evaluación adaptativa</h1>
       <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
-        Veinte ítems de personalidad (Nunca, A veces, Casi siempre, Siempre) y cinco de lógica según tu perfil técnico. Con el{' '}
-        <strong className="text-zinc-300">enlace de invitación</strong>, tu nombre, apellidos en razón social, cédula y
-        WhatsApp se <strong className="text-zinc-300">precargan</strong> desde tu postulación. Al pulsar{' '}
-        <strong className="text-zinc-300">Iniciar evaluación</strong> arranca el cronómetro: tienes{' '}
-        <strong className="text-zinc-300">15 minutos</strong> para enviar; lo ideal es{' '}
-        <strong className="text-zinc-300">terminar de una vez</strong>, sin pausas largas. Si se agota el tiempo, el envío
-        completo se bloquea.
+        {rolExamen === 'tecnico' ? (
+          <>
+            Veinticinco preguntas de conducta en obra y lógica práctica,{' '}
+            <strong className="text-zinc-300">una por una</strong> en pantalla. Con el enlace de invitación tus datos se
+            precargan. Al pulsar <strong className="text-zinc-300">Iniciar evaluación</strong> arranca el cronómetro de{' '}
+            <strong className="text-zinc-300">15 minutos</strong>.
+          </>
+        ) : (
+          <>
+            Veinte ítems de personalidad y cinco de lógica según tu perfil. Con el enlace de invitación tus datos se
+            precargan. Al iniciar tienes <strong className="text-zinc-300">15 minutos</strong> para enviar.
+          </>
+        )}
       </p>
 
       {inviteError && (
@@ -333,7 +350,7 @@ function ExamenTalentoPageInner() {
         </div>
       ) : null}
 
-      {fase === 'examen' && examen && examenInicio != null && (
+      {fase === 'examen' && examen && examenInicio != null && rolExamen === 'programador' && (
         <ExamenTimer
           resetKey={examenInicio}
           expiraEnSegundos={DURACION_SEG}
@@ -341,7 +358,24 @@ function ExamenTalentoPageInner() {
         />
       )}
 
-      {fase === 'examen' && examen && (
+      {fase === 'examen' && examen && rolExamen === 'tecnico' && examenInicio != null && (
+        <ExamenTalentoPasoAPaso
+          pasos={pasosExamen}
+          expiraEnSegundos={DURACION_SEG}
+          timerResetKey={examenInicio}
+          onTimerFinish={() => void onTimerFinish()}
+          disabled={expirado}
+          enviando={enviando}
+          error={error}
+          onSubmit={(r) => {
+            setPers(r.personalidad);
+            setLog(r.logica);
+            void enviar(r);
+          }}
+        />
+      )}
+
+      {fase === 'examen' && examen && rolExamen === 'programador' && (
         <div className="space-y-6">
           <div
             className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border px-4 py-3 ${
@@ -363,9 +397,7 @@ function ExamenTalentoPageInner() {
 
           <section>
             <h2 className="text-sm font-semibold text-zinc-300 mb-3">
-              {rolExamen === 'tecnico'
-                ? 'Conducta en obra (20 preguntas, 4 opciones cada una)'
-                : 'Personalidad (Nunca · A veces · Casi siempre · Siempre)'}
+              Personalidad (Nunca · A veces · Casi siempre · Siempre)
             </h2>
             <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
               {examen.personalidad.map((p) => (
@@ -417,7 +449,7 @@ function ExamenTalentoPageInner() {
 
           <section>
             <h2 className="text-sm font-semibold text-zinc-300 mb-3">
-              Lógica {rolExamen === 'programador' ? '(software)' : '(obra práctica)'}
+              Lógica (software)
             </h2>
             <div className="space-y-4">
               {examen.logica.map((q: any) => (
