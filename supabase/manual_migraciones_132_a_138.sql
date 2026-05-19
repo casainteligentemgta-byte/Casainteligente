@@ -300,3 +300,7 @@ create policy "Permitir borrar quality_inspections authenticated"
   on public.quality_inspections for delete to authenticated using (true);
 
 notify pgrst, 'reload schema';
+
+-- ── 141 (reparación): si el error persiste tras 132-138, ejecute también:
+--     supabase/migrations/141_procurement_schema_repair.sql
+-- Incluye deposit_id, purchase_detail_id, contabilidad_compras y reload schema.

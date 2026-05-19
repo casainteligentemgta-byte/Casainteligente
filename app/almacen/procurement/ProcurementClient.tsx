@@ -62,22 +62,41 @@ function todayIsoDate(): string {
 }
 
 function formatProcurementSaveError(error: unknown): string {
+    const hintMigraciones =
+        'Ejecute supabase/manual_migraciones_132_a_138.sql y 141_procurement_schema_repair.sql en Supabase → SQL Editor, luego Settings → API → Reload schema.';
+
     if (error && typeof error === 'object' && 'message' in error) {
         const msg = String((error as { message: string }).message);
         const code =
             'code' in error ? String((error as { code?: string }).code ?? '') : '';
-        if (code === '42501' || /row-level security/i.test(msg)) {
-            return 'Sin permiso en Supabase (RLS). Ejecute la migración 134_procurement_rls_anon.sql en el SQL Editor y vuelva a intentar.';
+        const details =
+            'details' in error && (error as { details?: string }).details
+                ? String((error as { details?: string }).details)
+                : '';
+        const full = [msg, details].filter(Boolean).join(' — ');
+
+        if (code === '42501' || /row-level security/i.test(full)) {
+            return `${full} Sin permiso (RLS): migración 134 o 141.`;
         }
-        if (/column.*does not exist/i.test(msg) || /contabilidad_compras|proyecto_id/i.test(msg)) {
-            return 'Faltan tablas o columnas en la base de datos. Ejecute las migraciones 132 a 138 en Supabase.';
+        if (
+            /column.*does not exist|schema cache|could not find.*column|relation.*does not exist|contabilidad_compras|proyecto_id/i.test(
+                full,
+            )
+        ) {
+            return `${full} ${hintMigraciones}`;
         }
-        if (/fetch failed/i.test(msg)) {
+        if (/fetch failed/i.test(full)) {
             return 'No se pudo conectar con Supabase. Reinicie npm run dev o use npm run dev:tls (ver docs/ERROR-FETCH-FAILED-SUPABASE.md).';
         }
-        return msg;
+        return full;
     }
-    if (error instanceof Error) return error.message;
+    if (error instanceof Error) {
+        const m = error.message;
+        if (/contabilidad|proyecto_id|schema cache|does not exist/i.test(m)) {
+            return `${m} ${hintMigraciones}`;
+        }
+        return m;
+    }
     return 'Error desconocido al guardar la factura.';
 }
 
@@ -268,20 +287,38 @@ export default function ProcurementClient() {
 
             for (const line of validLines) {
                 const desc = line.description.trim();
-                const { data: newMaterial, error: matError } = await supabase
+                const materialBase: Record<string, unknown> = {
+                    name: desc,
+                    unit: (line.unit || 'UND').trim() || 'UND',
+                    stock_quarantine: line.quantity,
+                    last_purchase_price: line.unit_price,
+                    last_purchase_date: invoice.date,
+                };
+                if (defaultDepositId) {
+                    materialBase.deposit_id = defaultDepositId;
+                }
+
+                let newMaterial: { id: string };
+                const matRes = await supabase
                     .from('global_inventory')
-                    .insert({
-                        name: desc,
-                        unit: (line.unit || 'UND').trim() || 'UND',
-                        stock_quarantine: line.quantity,
-                        last_purchase_price: line.unit_price,
-                        last_purchase_date: invoice.date,
-                        deposit_id: defaultDepositId,
-                    })
+                    .insert(materialBase)
                     .select('id')
                     .single();
 
-                if (matError) throw matError;
+                if (matRes.error && /deposit_id/i.test(matRes.error.message)) {
+                    const { deposit_id: _d, ...sinDeposito } = materialBase;
+                    const retry = await supabase
+                        .from('global_inventory')
+                        .insert(sinDeposito)
+                        .select('id')
+                        .single();
+                    if (retry.error) throw retry.error;
+                    newMaterial = retry.data as { id: string };
+                } else if (matRes.error) {
+                    throw matRes.error;
+                } else {
+                    newMaterial = matRes.data as { id: string };
+                }
 
                 const detailRow: Record<string, unknown> = {
                     invoice_id: invData.id,
