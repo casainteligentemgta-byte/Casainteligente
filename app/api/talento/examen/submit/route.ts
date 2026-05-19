@@ -14,6 +14,7 @@ import {
   semaforoDbFromTripode,
 } from '@/lib/talento/semaphore';
 import { randomUUID } from 'crypto';
+import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
@@ -229,13 +230,15 @@ export async function POST(req: Request) {
     const tripode = { motivo, status: status_tripode };
 
     const nombresCol = nombresLegadoDesdeTextoLibre(nombre);
+    const telefonoTrim = body.telefono?.trim() || null;
     const baseRow = {
       nombre_completo: nombre,
       nombres: nombresCol,
       cargo: rolBuscado ?? 'Por definir',
       email: body.email?.trim() || null,
       documento: body.documento?.trim() || null,
-      telefono: body.telefono?.trim() || null,
+      telefono: telefonoTrim,
+      celular: celularParaInserto(telefonoTrim),
       rol_buscado: rolBuscado,
       rol_examen: rol,
       respuestas_personalidad: rp,

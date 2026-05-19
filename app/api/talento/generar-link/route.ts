@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
+import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { crearExpedienteToken } from '@/lib/reclutamiento/validarExpedienteToken';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -91,6 +92,7 @@ export async function POST(req: Request) {
     nombres: nombresLegadoDesdeTextoLibre(nombre),
     cargo: rolBuscado,
     telefono: whatsapp || null,
+    celular: celularParaInserto(null, whatsapp),
     token,
     token_registro: token,
     estado_proceso: 'pendiente_cv',

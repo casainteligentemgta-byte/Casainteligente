@@ -11,6 +11,7 @@ import {
 } from '@/lib/talento/hojaVidaObreroCompleta';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 
 const HojaVidaObreroVista = dynamic(() => import('@/components/talento/HojaVidaObreroVista'), {
   ssr: false,
@@ -208,6 +209,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
       cedula: t(merged.datosPersonales.cedulaIdentidad),
       documento: t(merged.datosPersonales.cedulaIdentidad),
       telefono: t(merged.datosPersonales.celular) || null,
+      celular: celularParaInserto(t(merged.datosPersonales.celular)),
       email: t(merged.datosPersonales.correoElectronico) || null,
       fecha_nacimiento: t(merged.datosPersonales.fechaNacimiento) || null,
       direccion_habitacion: t(merged.datosPersonales.direccionDomicilio) || null,

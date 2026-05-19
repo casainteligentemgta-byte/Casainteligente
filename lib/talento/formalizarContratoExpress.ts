@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { ESTADO_EVALUACION_EXPRESS_INICIAL } from '@/lib/talento/estadoEvaluacionExpress';
@@ -107,8 +108,7 @@ export async function formalizarContratoExpressPorId(
     ex.cargo_nombre_snapshot?.trim() || nomina?.cargo_nombre?.trim() || 'Por definir';
 
   const token = randomUUID();
-  /** Express no pide móvil; si `celular` es NOT NULL en BD, placeholder hasta que RRHH lo complete. */
-  const celularExpress = 'Pendiente RRHH';
+  const celularExpress = celularParaInserto(null);
   const insertRow: Record<string, unknown> = {
     nombre_completo: ex.obrero_nombre.trim(),
     nombres: nombresLegadoDesdeTextoLibre(ex.obrero_nombre.trim()),
