@@ -107,7 +107,7 @@ export default function GastosObraCharts({ evolucion, topTipo, disciplinas }: Pr
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip formatter={(v) => formatUsd(Number(v ?? 0))} />
+              <Tooltip content={<TooltipUsd />} />
               <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 11 }} />
             </PieChart>
           </ResponsiveContainer>

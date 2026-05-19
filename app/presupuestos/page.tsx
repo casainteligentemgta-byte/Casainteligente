@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import PresupuestosFiltrosModal from '@/components/presupuestos/PresupuestosFiltrosModal';
 
 interface Budget {
     id: string;
@@ -60,7 +61,10 @@ export default function PresupuestosPage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'todos' | ClasificacionPresupuesto>('todos');
     const [sortBy, setSortBy] = useState<'fecha' | 'nomenclatura'>('fecha');
-    const [searchTerm, setSearchTerm] = useState('');
+    const [filtroNombre, setFiltroNombre] = useState('');
+    const [filtroRif, setFiltroRif] = useState('');
+    const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
+    const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
     const [stats, setStats] = useState({
         total: 0,
         noEnviado: 0,
@@ -71,6 +75,7 @@ export default function PresupuestosPage() {
         pagados: 0,
     });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
+    const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
 
     const fetchBudgets = async () => {
         setLoading(true);
@@ -78,6 +83,12 @@ export default function PresupuestosPage() {
         let query = supabase.from('budgets').select('*');
 
         if (filter !== 'todos') query = query.eq('status', filter);
+        const nombre = filtroNombre.trim();
+        const rif = filtroRif.trim();
+        if (nombre) query = query.ilike('customer_name', `%${nombre}%`);
+        if (rif) query = query.ilike('customer_rif', `%${rif}%`);
+        if (filtroFechaDesde) query = query.gte('created_at', `${filtroFechaDesde}T00:00:00`);
+        if (filtroFechaHasta) query = query.lte('created_at', `${filtroFechaHasta}T23:59:59.999`);
 
         const { data, error } = await query;
         if (!error && data) {
@@ -117,24 +128,16 @@ export default function PresupuestosPage() {
                 sorted.sort((a, b) => getNumeroOrden(a) - getNumeroOrden(b));
             }
 
-            if (searchTerm) {
-                sorted = sorted.filter(b =>
-                    b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    b.customer_rif.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    getPresupuestoNumero(b, fallbackMap[b.id]).toLowerCase().includes(searchTerm.toLowerCase())
-                );
-            }
             setBudgets(sorted);
 
-            // Calculate stats from all data
             const s = {
-                total: data.reduce((acc, b) => acc + b.subtotal, 0),
-                noEnviado: data.filter(b => b.status === 'no_enviado').length,
-                enviado: data.filter(b => b.status === 'enviado').length,
-                aprobados: data.filter(b => b.status === 'aprobado').length,
-                noAprobados: data.filter(b => b.status === 'no_aprobado').length,
-                cobrados: data.filter(b => b.status === 'cobrado').length,
-                pagados: data.filter(b => b.status === 'pagado').length,
+                total: sorted.reduce((acc, b) => acc + b.subtotal, 0),
+                noEnviado: sorted.filter(b => b.status === 'no_enviado').length,
+                enviado: sorted.filter(b => b.status === 'enviado').length,
+                aprobados: sorted.filter(b => b.status === 'aprobado').length,
+                noAprobados: sorted.filter(b => b.status === 'no_aprobado').length,
+                cobrados: sorted.filter(b => b.status === 'cobrado').length,
+                pagados: sorted.filter(b => b.status === 'pagado').length,
             };
             setStats(s);
         }
@@ -143,7 +146,42 @@ export default function PresupuestosPage() {
 
     useEffect(() => {
         fetchBudgets();
-    }, [filter, sortBy, searchTerm]);
+    }, [filter, sortBy, filtroNombre, filtroRif, filtroFechaDesde, filtroFechaHasta]);
+
+    const hayFiltrosActivos =
+        filter !== 'todos' ||
+        filtroNombre.trim() !== '' ||
+        filtroRif.trim() !== '' ||
+        filtroFechaDesde !== '' ||
+        filtroFechaHasta !== '';
+
+    const limpiarFiltros = () => {
+        setFilter('todos');
+        setFiltroNombre('');
+        setFiltroRif('');
+        setFiltroFechaDesde('');
+        setFiltroFechaHasta('');
+    };
+
+    const inputFiltroStyle: CSSProperties = {
+        width: '100%',
+        background: 'rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: '10px',
+        padding: '10px 12px',
+        color: 'white',
+        fontSize: '13px',
+        outline: 'none',
+    };
+
+    const labelFiltroStyle: CSSProperties = {
+        color: 'rgba(255,255,255,0.45)',
+        fontSize: '10px',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: '6px',
+        display: 'block',
+    };
 
     const updateStatus = async (id: string, status: ClasificacionPresupuesto) => {
         const supabase = createClient();
@@ -214,87 +252,47 @@ export default function PresupuestosPage() {
                     </div>
                 </div>
 
-                {/* Search and Sort Bar */}
-                <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div style={{ ...glass, padding: '12px' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
-                            Clasificación de presupuestos
-                        </p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => (
-                                <span
-                                    key={k}
-                                    style={{
-                                        ...CLASIFICACION_COLORS[k],
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        padding: '4px 10px',
-                                        borderRadius: '999px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                    }}
-                                >
-                                    <span>{CLASIFICACION_COLORS[k].icon}</span>
-                                    <span>{CLASIFICACION_COLORS[k].label}</span>
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div style={{ position: 'relative' }}>
-                        <input
-                            type="text"
-                            placeholder="Buscar por cliente, RIF o Nro..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{
-                                width: '100%',
-                                background: 'rgba(255,255,255,0.05)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: '12px',
-                                padding: '12px 16px',
+                {/* Barra: filtrar + orden */}
+                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                    <button
+                        type="button"
+                        onClick={() => setFiltrosAbiertos(true)}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            background: hayFiltrosActivos ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.06)',
+                            color: hayFiltrosActivos ? '#007AFF' : 'rgba(255,255,255,0.85)',
+                            border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '12px',
+                            padding: '10px 16px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        <span aria-hidden>🔍</span>
+                        Filtrar
+                        {hayFiltrosActivos ? (
+                            <span style={{
+                                background: '#007AFF',
                                 color: 'white',
-                                fontSize: '14px',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                            {(['todos', 'no_enviado', 'enviado', 'aprobado', 'no_aprobado', 'cobrado', 'pagado'] as const).map((f) => (
-                                <button
-                                    key={f}
-                                    onClick={() => setFilter(f)}
-                                    style={{
-                                        background: filter === f ? 'rgba(0,122,255,0.15)' : 'transparent',
-                                        color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.4)',
-                                        border: filter === f ? '1px solid rgba(0,122,255,0.3)' : '1px solid transparent',
-                                        borderRadius: '10px', padding: '6px 14px',
-                                        fontSize: '12px', fontWeight: 700, cursor: 'pointer',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                >
-                                    {f === 'todos'
-                                        ? 'Todos'
-                                        : f === 'no_enviado'
-                                            ? 'No enviado'
-                                            : f === 'enviado'
-                                                ? 'Enviado'
-                                                : f === 'aprobado'
-                                                    ? 'Aprobado'
-                                                    : f === 'no_aprobado'
-                                                        ? 'No aprobado'
-                                                        : f === 'cobrado'
-                                                            ? 'Cobrado'
-                                                            : 'Pagado'}
-                                </button>
-                            ))}
-                        </div>
-
+                                fontSize: '10px',
+                                fontWeight: 800,
+                                borderRadius: '999px',
+                                padding: '2px 7px',
+                                minWidth: '18px',
+                                textAlign: 'center',
+                            }}>
+                                ●
+                            </span>
+                        ) : null}
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Ordenar</p>
                         <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '10px' }}>
                             <button
+                                type="button"
                                 onClick={() => setSortBy('fecha')}
                                 style={{
                                     background: sortBy === 'fecha' ? 'rgba(255,255,255,0.1)' : 'transparent',
@@ -305,6 +303,7 @@ export default function PresupuestosPage() {
                                 Fecha
                             </button>
                             <button
+                                type="button"
                                 onClick={() => setSortBy('nomenclatura')}
                                 style={{
                                     background: sortBy === 'nomenclatura' ? 'rgba(255,255,255,0.1)' : 'transparent',
@@ -318,12 +317,33 @@ export default function PresupuestosPage() {
                     </div>
                 </div>
 
+                <PresupuestosFiltrosModal
+                    open={filtrosAbiertos}
+                    onClose={() => setFiltrosAbiertos(false)}
+                    filter={filter}
+                    onFilterChange={setFilter}
+                    filtroNombre={filtroNombre}
+                    onFiltroNombreChange={setFiltroNombre}
+                    filtroRif={filtroRif}
+                    onFiltroRifChange={setFiltroRif}
+                    filtroFechaDesde={filtroFechaDesde}
+                    onFiltroFechaDesdeChange={setFiltroFechaDesde}
+                    filtroFechaHasta={filtroFechaHasta}
+                    onFiltroFechaHastaChange={setFiltroFechaHasta}
+                    hayFiltrosActivos={hayFiltrosActivos}
+                    onLimpiar={limpiarFiltros}
+                    panelStyle={glass}
+                    inputStyle={inputFiltroStyle}
+                    labelStyle={labelFiltroStyle}
+                />
                 {loading ? (
                     <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', marginTop: '40px' }}>Cargando...</p>
                 ) : budgets.length === 0 ? (
                     <div style={{ textAlign: 'center', marginTop: '60px' }}>
                         <p style={{ fontSize: '40px' }}>📄</p>
-                        <p style={{ color: 'rgba(255,255,255,0.3)', marginTop: '10px' }}>No hay presupuestos</p>
+                        <p style={{ color: 'rgba(255,255,255,0.3)', marginTop: '10px' }}>
+                            {hayFiltrosActivos ? 'Ningún presupuesto coincide con los filtros' : 'No hay presupuestos'}
+                        </p>
                     </div>
                 ) : (
                     <div style={{ display: 'grid', gap: '12px' }}>
