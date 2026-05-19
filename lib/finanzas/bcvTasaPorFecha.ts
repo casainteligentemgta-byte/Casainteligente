@@ -1,6 +1,9 @@
 import { tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
 import { outboundFetch } from '@/lib/network/outboundFetch';
 
+export { calcularGastoBimonetario, montoUsdAVes, montoVesAUsd } from '@/lib/finanzas/currency-converter';
+export type { BimonetarioResult, MonedaOrigen } from '@/lib/finanzas/currency-converter';
+
 const BCV_HISTORY_URL = 'https://bcv.today/api/v1/history';
 const BCV_RATE_URL = 'https://bcv.today/api/v1/rate.json';
 
@@ -59,14 +62,6 @@ export async function obtenerTasaBcvVesPorUsd(fecha: string): Promise<TasaBcvRes
   if (env) return { fecha: iso, tasa_bcv_ves_por_usd: env, fuente: 'env' };
 
   return { fecha: iso, tasa_bcv_ves_por_usd: 36.5, fuente: 'fallback' };
-}
-
-/** Convierte monto en bolívares a USD con la tasa BCV (Bs por USD). */
-export function montoVesAUsd(totalVes: number, tasaBcvVesPorUsd: number): number {
-  const ves = Number(totalVes);
-  const tasa = Number(tasaBcvVesPorUsd);
-  if (!Number.isFinite(ves) || ves < 0 || !Number.isFinite(tasa) || tasa <= 0) return 0;
-  return Math.round((ves / tasa) * 100) / 100;
 }
 
 /** Obtiene tasa BCV vía API interna (navegador) o consulta directa (servidor). */

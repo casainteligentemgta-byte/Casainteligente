@@ -10,6 +10,8 @@ import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosP
 import ModalNuevaVacante from './components/ModalNuevaVacante';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
+import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
+import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 
 const LOAD_TIMEOUT_MS = 45_000;
@@ -684,7 +686,14 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     if (!proyecto) return null;
     /** `tab=finanzas` o `tab=rrhh`: consolidado de utilidad real (mismo dashboard). */
     if (tabUrl === 'finanzas' || tabUrl === 'rrhh') {
-      return <DashboardUtilidadReal proyectoId={id} className="" />;
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-start gap-4">
+            <ImportarPresupuestoLulo proyectoId={id} />
+          </div>
+          <DashboardUtilidadReal proyectoId={id} className="" />
+        </div>
+      );
     }
     if (tabSolicitados) {
       return (
@@ -1197,6 +1206,8 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   ) : null}
                 </div>
               </section>
+
+              <ControlPlanosObra proyectoId={id} className="mb-6" />
 
               <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
                 <h2 className="text-sm font-bold uppercase text-zinc-500">Fotos / planos</h2>

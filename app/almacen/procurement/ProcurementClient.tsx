@@ -7,7 +7,12 @@ import {
     registerCompraDesdeRecepcion,
     type LineaCompraContabilidadInput,
 } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
-import { montoVesAUsd, resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
+import { calcularGastoBimonetario } from '@/lib/finanzas/currency-converter';
+import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
+import {
+    payloadCompraBimonetario,
+    resolverMontosCompraBimonetario,
+} from '@/lib/contabilidad/comprasBimonetario';
 import { fetchDefaultDepositId } from '@/lib/almacen/formatInventoryLocation';
 import {
     esProyectoSmartRrhhPorNombre,
@@ -214,8 +219,10 @@ export default function ProcurementClient() {
         return Math.abs(total - suma);
     };
 
-    const totalUsdPreview = () =>
-        tasaBcv && tasaBcv > 0 ? montoVesAUsd(totalVes(), tasaBcv) : null;
+    const totalUsdPreview = () => {
+        if (!tasaBcv || tasaBcv <= 0) return null;
+        return calcularGastoBimonetario(totalVes(), 'VES', tasaBcv).montoUsd;
+    };
 
     const refrescarTasaBcv = async (fecha: string) => {
         if (!fecha?.trim()) return;
@@ -272,26 +279,22 @@ export default function ProcurementClient() {
 
         try {
             const totalBolivares = totalVes();
-            let tasa = tasaBcv;
-            if (tasa == null || tasa <= 0) {
-                const tasaRes = await resolverTasaBcvVesPorUsd(invoice.date);
-                tasa = tasaRes.tasa_bcv_ves_por_usd;
-                setTasaBcv(tasa);
-                setTasaBcvFuente(tasaRes.fuente);
-            }
-            const totalUsd = montoVesAUsd(totalBolivares, tasa);
+            const montos = await resolverMontosCompraBimonetario({
+                montoTotal: totalBolivares,
+                moneda: 'VES',
+                fecha: invoice.date,
+                tasaBcvDigitada: tasaBcv,
+            });
+            setTasaBcv(montos.tasaApplied);
 
             const payload = {
                 invoice_number: invoice.invoice_number.trim(),
                 supplier_rif: invoice.supplier_rif.trim() || 'S/R',
                 supplier_name: invoice.supplier_name.trim(),
                 date: invoice.date,
-                total_amount: totalBolivares,
-                moneda: 'VES',
-                tasa_bcv_ves_por_usd: tasa,
-                total_amount_usd: totalUsd,
                 status: 'PENDIENTE',
                 proyecto_id: proyectoId,
+                ...payloadCompraBimonetario(montos),
             };
 
             const { data: invData, error: invError } = await supabase
@@ -425,9 +428,10 @@ export default function ProcurementClient() {
                 supplier_rif: payload.supplier_rif,
                 supplier_name: payload.supplier_name,
                 fecha: payload.date,
-                total_amount: payload.total_amount,
-                tasa_bcv_ves_por_usd: tasa,
-                total_amount_usd: totalUsd,
+                total_amount: montos.totalAmountLegacy,
+                moneda: montos.monedaOriginal,
+                tasa_bcv_ves_por_usd: montos.tasaApplied,
+                total_amount_usd: montos.montoUsd,
                 document_storage_path: documentStoragePath,
                 document_file_name: documentFileName,
                 lineas: lineasContabilidad,

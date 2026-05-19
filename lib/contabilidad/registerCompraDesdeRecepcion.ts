@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { montoVesAUsd, resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
+import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
+import {
+  payloadCompraBimonetario,
+  resolverMontosCompraBimonetario,
+} from '@/lib/contabilidad/comprasBimonetario';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id: string;
@@ -18,8 +22,9 @@ export type RegistrarCompraContabilidadInput = {
   supplier_rif: string;
   supplier_name: string;
   fecha: string;
-  /** Monto total en bolívares (como en la factura). */
+  /** Monto total en la moneda de origen de la factura. */
   total_amount: number;
+  moneda?: MonedaOrigen | string | null;
   tasa_bcv_ves_por_usd?: number | null;
   total_amount_usd?: number | null;
   document_storage_path?: string | null;
@@ -41,12 +46,22 @@ export async function registerCompraDesdeRecepcion(
     return { compraId: existente.id };
   }
 
-  const tasaRes = await resolverTasaBcvVesPorUsd(input.fecha, input.tasa_bcv_ves_por_usd);
-  const tasa = tasaRes.tasa_bcv_ves_por_usd;
-  const totalUsd =
-    input.total_amount_usd != null && input.total_amount_usd >= 0
-      ? input.total_amount_usd
-      : montoVesAUsd(input.total_amount, tasa);
+  const montos = await resolverMontosCompraBimonetario({
+    montoTotal: input.total_amount,
+    moneda: input.moneda ?? 'VES',
+    fecha: input.fecha,
+    tasaBcvDigitada: input.tasa_bcv_ves_por_usd,
+  });
+
+  if (
+    input.total_amount_usd != null &&
+    input.total_amount_usd >= 0 &&
+    Number.isFinite(input.total_amount_usd)
+  ) {
+    montos.montoUsd = input.total_amount_usd;
+  }
+
+  const bimonetario = payloadCompraBimonetario(montos);
 
   const { data: compra, error: compraError } = await supabase
     .from('contabilidad_compras')
@@ -57,10 +72,7 @@ export async function registerCompraDesdeRecepcion(
       supplier_rif: input.supplier_rif,
       supplier_name: input.supplier_name,
       fecha: input.fecha,
-      total_amount: input.total_amount,
-      moneda: 'VES',
-      tasa_bcv_ves_por_usd: tasa,
-      total_amount_usd: totalUsd,
+      ...bimonetario,
       origen: 'RECEPCION_MERCANCIA',
       estado: 'REGISTRADA',
       document_storage_path: input.document_storage_path ?? null,
