@@ -691,6 +691,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           <div className="flex flex-wrap items-start gap-4">
             <ImportarPresupuestoLulo proyectoId={id} />
           </div>
+          <ControlPlanosObra proyectoId={id} />
           <DashboardUtilidadReal proyectoId={id} className="" />
         </div>
       );
@@ -1041,6 +1042,15 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
                     </button>
                   </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-start gap-4">
+                  <ImportarPresupuestoLulo proyectoId={id} />
+                  <Link
+                    href={`/proyectos/modulo/${id}?tab=finanzas`}
+                    className="rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-4 py-3 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/40"
+                  >
+                    Utilidad real y finanzas del módulo →
+                  </Link>
                 </div>
               </>
             ) : null}
