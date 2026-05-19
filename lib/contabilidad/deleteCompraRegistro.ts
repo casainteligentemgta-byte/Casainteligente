@@ -2,11 +2,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 
 export function formatDeleteCompraError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message: string }).message);
+  const raw =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message: string }).message)
+        : 'No se pudo eliminar la compra.';
+
+  if (/purchase_details_material_id_fkey|23503|foreign key/i.test(raw)) {
+    return `${raw} — Ejecute la migración 142 en Supabase y vuelva a intentar (borrado en orden: contabilidad → detalle factura → material).`;
   }
-  return 'No se pudo eliminar la compra.';
+  return raw;
 }
 
 /**
@@ -61,6 +67,13 @@ export async function deleteCompraRegistro(
   const materialIds = Array.from(
     new Set((inspections ?? []).map((i) => i.material_id).filter(Boolean) as string[])
   );
+
+  /** Contabilidad y líneas primero (referencian purchase_details). */
+  const { error: delCompraErr } = await supabase
+    .from('contabilidad_compras')
+    .delete()
+    .eq('id', compraId);
+  if (delCompraErr) throw delCompraErr;
 
   const { error: delInspErr } = await supabase
     .from('quality_inspections')
