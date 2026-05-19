@@ -7,6 +7,7 @@ import {
     registerCompraDesdeRecepcion,
     type LineaCompraContabilidadInput,
 } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { montoVesAUsd, resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import { fetchDefaultDepositId } from '@/lib/almacen/formatInventoryLocation';
 import {
     esProyectoSmartRrhhPorNombre,
@@ -118,6 +119,11 @@ export default function ProcurementClient() {
     const [isSaving, setIsSaving] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [proyectoId, setProyectoId] = useState('');
+    const [tasaBcv, setTasaBcv] = useState<number | null>(null);
+    const [tasaBcvFuente, setTasaBcvFuente] = useState<string | null>(null);
+    const [cargandoTasa, setCargandoTasa] = useState(false);
+    /** Si el usuario editó el total a mano, no sobrescribir al cambiar líneas. */
+    const [totalManual, setTotalManual] = useState(false);
     const [proyectos, setProyectos] = useState<Array<{ id: string; nombre: string }>>([]);
     const documentPreviewRef = useRef<string | null>(null);
     const router = useRouter();
@@ -191,9 +197,44 @@ export default function ProcurementClient() {
         setItems(newItems);
     };
 
-    const calculateTotal = () => {
-        return items.reduce((acc, item) => acc + item.quantity * item.unit_price, 0);
+    const sumaLineas = () =>
+        items.reduce((acc, item) => acc + item.quantity * item.unit_price, 0);
+
+    const totalVes = () => {
+        const suma = sumaLineas();
+        if (totalManual && invoice.total_amount > 0) return invoice.total_amount;
+        if (invoice.total_amount > 0) return invoice.total_amount;
+        return suma;
     };
+
+    const diferenciaTotalLineas = () => {
+        const suma = sumaLineas();
+        const total = totalVes();
+        if (suma <= 0 || total <= 0) return 0;
+        return Math.abs(total - suma);
+    };
+
+    const totalUsdPreview = () =>
+        tasaBcv && tasaBcv > 0 ? montoVesAUsd(totalVes(), tasaBcv) : null;
+
+    const refrescarTasaBcv = async (fecha: string) => {
+        if (!fecha?.trim()) return;
+        setCargandoTasa(true);
+        try {
+            const res = await resolverTasaBcvVesPorUsd(fecha);
+            setTasaBcv(res.tasa_bcv_ves_por_usd);
+            setTasaBcvFuente(res.fuente);
+        } catch {
+            setTasaBcv(null);
+            setTasaBcvFuente(null);
+        } finally {
+            setCargandoTasa(false);
+        }
+    };
+
+    useEffect(() => {
+        void refrescarTasaBcv(invoice.date);
+    }, [invoice.date]);
 
     const handleSubmit = async () => {
         setSubmitError(null);
@@ -230,12 +271,25 @@ export default function ProcurementClient() {
         }
 
         try {
+            const totalBolivares = totalVes();
+            let tasa = tasaBcv;
+            if (tasa == null || tasa <= 0) {
+                const tasaRes = await resolverTasaBcvVesPorUsd(invoice.date);
+                tasa = tasaRes.tasa_bcv_ves_por_usd;
+                setTasaBcv(tasa);
+                setTasaBcvFuente(tasaRes.fuente);
+            }
+            const totalUsd = montoVesAUsd(totalBolivares, tasa);
+
             const payload = {
                 invoice_number: invoice.invoice_number.trim(),
                 supplier_rif: invoice.supplier_rif.trim() || 'S/R',
                 supplier_name: invoice.supplier_name.trim(),
                 date: invoice.date,
-                total_amount: calculateTotal(),
+                total_amount: totalBolivares,
+                moneda: 'VES',
+                tasa_bcv_ves_por_usd: tasa,
+                total_amount_usd: totalUsd,
                 status: 'PENDIENTE',
                 proyecto_id: proyectoId,
             };
@@ -372,6 +426,8 @@ export default function ProcurementClient() {
                 supplier_name: payload.supplier_name,
                 fecha: payload.date,
                 total_amount: payload.total_amount,
+                tasa_bcv_ves_por_usd: tasa,
+                total_amount_usd: totalUsd,
                 document_storage_path: documentStoragePath,
                 document_file_name: documentFileName,
                 lineas: lineasContabilidad,
@@ -457,18 +513,21 @@ export default function ProcurementClient() {
                 0
             );
 
+            const totalAi =
+                payload.total_amount != null && Number(payload.total_amount) > 0
+                    ? Number(payload.total_amount)
+                    : lineTotal;
             setInvoice({
                 invoice_number: payload.invoice_number?.trim() || '',
                 supplier_rif: payload.supplier_rif?.trim() || '',
                 supplier_name: payload.supplier_name?.trim() || '',
                 date: payload.date || todayIsoDate(),
-                total_amount:
-                    payload.total_amount != null && Number(payload.total_amount) > 0
-                        ? Number(payload.total_amount)
-                        : lineTotal,
+                total_amount: totalAi,
             });
+            setTotalManual(Math.abs(totalAi - lineTotal) > 0.02);
             setItems(mappedItems);
             setMode('MANUAL');
+            void refrescarTasaBcv(payload.date || todayIsoDate());
 
             const withDesc = mappedItems.filter((it) => it.description).length;
             const headerOk =
@@ -487,7 +546,9 @@ export default function ProcurementClient() {
             } else {
                 parts.push('Agregue los artículos manualmente si faltan en el detalle');
             }
-            parts.push('Documento listo para guardarse al finalizar');
+            parts.push(
+                'Montos en bolívares: revise total, líneas y tasa BCV antes de guardar'
+            );
             setAiSuccess(parts.join('. ') + '.');
         } catch (err) {
             let message =
@@ -679,10 +740,14 @@ export default function ProcurementClient() {
                         </ProcPanel>
 
                         <ProcPanel className="p-8">
-                            <h3 className="text-lg font-black uppercase tracking-widest text-zinc-500 mb-6 flex items-center gap-2">
+                            <h3 className="text-lg font-black uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-2">
                                 <FileText size={18} />
                                 Encabezado de Factura
                             </h3>
+                            <p className="text-xs font-bold text-zinc-500 mb-6">
+                                Montos en <span className="text-amber-200">bolívares (Bs)</span>. Si la
+                                lectura automática falló, corrija total, líneas o tasa BCV antes de guardar.
+                            </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
@@ -748,6 +813,84 @@ export default function ProcurementClient() {
                                         suppressHydrationWarning
                                         className="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
                                     />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                                        Total factura (Bs)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        value={invoice.total_amount > 0 ? invoice.total_amount : ''}
+                                        onChange={(e) => {
+                                            setTotalManual(true);
+                                            setInvoice({
+                                                ...invoice,
+                                                total_amount: Number(e.target.value) || 0,
+                                            });
+                                        }}
+                                        placeholder="Total en bolívares"
+                                        className="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
+                                    />
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTotalManual(false);
+                                                setInvoice({
+                                                    ...invoice,
+                                                    total_amount: sumaLineas(),
+                                                });
+                                            }}
+                                            className="text-[10px] font-bold text-sky-400 hover:text-sky-300 underline underline-offset-2"
+                                        >
+                                            Usar suma de líneas
+                                            {items.length > 0
+                                                ? ` (Bs. ${sumaLineas().toLocaleString('es-VE', { minimumFractionDigits: 2 })})`
+                                                : ''}
+                                        </button>
+                                        {diferenciaTotalLineas() > 0.02 && items.length > 0 ? (
+                                            <span className="text-[10px] font-bold text-amber-400">
+                                                Difiere de líneas
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                                        Tasa BCV (Bs / USD)
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={tasaBcv ?? ''}
+                                            onChange={(e) => {
+                                                const v = Number(e.target.value);
+                                                setTasaBcv(Number.isFinite(v) && v > 0 ? v : null);
+                                                setTasaBcvFuente('manual');
+                                            }}
+                                            placeholder="Bs por 1 USD"
+                                            className="min-w-0 flex-1 bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => void refrescarTasaBcv(invoice.date)}
+                                            disabled={cargandoTasa}
+                                            className="shrink-0 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-[10px] font-black uppercase tracking-wide text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                                        >
+                                            {cargandoTasa ? '…' : 'BCV'}
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-zinc-500">
+                                        {cargandoTasa
+                                            ? 'Consultando tasa del día…'
+                                            : tasaBcv
+                                              ? `Fuente: ${tasaBcvFuente ?? 'bcv'} · editable si la fecha no coincide`
+                                              : 'Indique tasa o pulse BCV para la fecha de la factura'}
+                                    </p>
                                 </div>
                             </div>
                         </ProcPanel>
@@ -849,6 +992,8 @@ export default function ProcurementClient() {
                                                 </label>
                                                 <input
                                                     type="number"
+                                                    min={0}
+                                                    step="0.01"
                                                     value={item.quantity}
                                                     onChange={(e) =>
                                                         updateItem(
@@ -862,10 +1007,12 @@ export default function ProcurementClient() {
                                             </div>
                                             <div className="w-32 space-y-2">
                                                 <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">
-                                                    Precio unit. ($)
+                                                    Precio unit. (Bs)
                                                 </label>
                                                 <input
                                                     type="number"
+                                                    min={0}
+                                                    step="0.01"
                                                     value={item.unit_price}
                                                     onChange={(e) =>
                                                         updateItem(
@@ -882,7 +1029,7 @@ export default function ProcurementClient() {
                                                     Subtotal
                                                 </label>
                                                 <div className="p-3 bg-zinc-900/50 rounded-xl font-black text-sm text-zinc-400">
-                                                    $
+                                                    Bs.{' '}
                                                     {(item.quantity * item.unit_price).toFixed(2)}
                                                 </div>
                                             </div>
@@ -899,14 +1046,29 @@ export default function ProcurementClient() {
                                 )}
                             </div>
 
-                            {items.length > 0 ? (
-                                <div className="mt-8 p-6 bg-zinc-900/50 rounded-3xl border border-zinc-800">
-                                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest mb-1">
-                                        Total de Compra
+                            {items.length > 0 || invoice.total_amount > 0 ? (
+                                <div className="mt-8 p-6 bg-zinc-900/50 rounded-3xl border border-zinc-800 space-y-2">
+                                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">
+                                        Resumen (bolívares)
                                     </p>
-                                    <h4 className="text-3xl font-black">
-                                        ${calculateTotal().toFixed(2)}
+                                    <p className="text-xs text-zinc-500">
+                                        Suma líneas: Bs.{' '}
+                                        {sumaLineas().toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                                        {totalManual ? ' · total manual en encabezado' : ''}
+                                    </p>
+                                    <h4 className="text-2xl font-black text-zinc-200">
+                                        Total a guardar: Bs.{' '}
+                                        {totalVes().toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                                     </h4>
+                                    {totalUsdPreview() != null ? (
+                                        <p className="text-emerald-400 font-black text-xl">
+                                            ≈ ${totalUsdPreview()!.toLocaleString('en-US', { minimumFractionDigits: 2 })}{' '}
+                                            USD
+                                            {tasaBcv
+                                                ? ` (tasa ${tasaBcv.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Bs/USD)`
+                                                : ''}
+                                        </p>
+                                    ) : null}
                                 </div>
                             ) : null}
                         </ProcPanel>

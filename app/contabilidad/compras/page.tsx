@@ -27,6 +27,8 @@ import {
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
 import { FileText, Filter, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react';
+import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
+import { montoUsdCompra } from '@/lib/contabilidad/comprasMontos';
 
 type CompraRow = {
     id: string;
@@ -37,6 +39,8 @@ type CompraRow = {
     supplier_name: string;
     fecha: string;
     total_amount: number;
+    total_amount_usd?: number | null;
+    tasa_bcv_ves_por_usd?: number | null;
     origen: string;
     estado: string;
     document_file_name: string | null;
@@ -113,23 +117,6 @@ function lineCount(row: CompraRow): number {
         return nested[0].count;
     }
     return 0;
-}
-
-function lineaCoincideBusqueda(linea: LineaDetalle, term: string): boolean {
-    const t = term.trim().toLowerCase();
-    if (!t) return true;
-    const desc = (linea.descripcion || '').toLowerCase();
-    const code = (linea.item_code || '').toLowerCase();
-    return desc.includes(t) || code.includes(t);
-}
-
-function lineasParaMostrar(row: CompraRow, busqueda: string): LineaDetalle[] {
-    const det = lineasDetalle(row);
-    if (!det.length) return [];
-    const t = busqueda.trim();
-    if (!t) return [];
-    const filtradas = det.filter((l) => lineaCoincideBusqueda(l, t));
-    return (filtradas.length ? filtradas : det).slice(0, 6);
 }
 
 function nombreDesdeJoin(row: CompraRow): string | null {
@@ -251,11 +238,19 @@ export default function ComprasPage() {
                 ? 'contabilidad_compra_lineas(descripcion,item_code,subtotal,cantidad)'
                 : 'contabilidad_compra_lineas(count)';
 
+            let min = parseMontoFiltro(montoMin);
+            let max = parseMontoFiltro(montoMax);
+            if (min !== null && max !== null && min > max) {
+                const swap = min;
+                min = max;
+                max = swap;
+            }
+
             const buildComprasQuery = () => {
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,origen,estado,document_file_name,created_at,ci_proyectos(nombre),${lineasSelect}`
+                        `id,purchase_invoice_id,proyecto_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,created_at,ci_proyectos(nombre),${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -271,15 +266,6 @@ export default function ComprasPage() {
                 if (proveedorFiltro) {
                     q = q.eq('supplier_name', proveedorFiltro);
                 }
-                let min = parseMontoFiltro(montoMin);
-                let max = parseMontoFiltro(montoMax);
-                if (min !== null && max !== null && min > max) {
-                    const swap = min;
-                    min = max;
-                    max = swap;
-                }
-                if (min !== null) q = q.gte('total_amount', min);
-                if (max !== null) q = q.lte('total_amount', max);
                 if (orBusqueda) q = q.or(orBusqueda);
                 return q;
             };
@@ -349,6 +335,13 @@ export default function ComprasPage() {
                 }
             }
 
+            if (min !== null) {
+                filas = filas.filter((c) => montoUsdCompra(c) >= min!);
+            }
+            if (max !== null) {
+                filas = filas.filter((c) => montoUsdCompra(c) <= max!);
+            }
+
             setCompras(filas);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'No se pudieron cargar las compras.');
@@ -388,7 +381,7 @@ export default function ComprasPage() {
         }
     };
 
-    const totalEgresos = compras.reduce((acc, c) => acc + Number(c.total_amount || 0), 0);
+    const totalEgresos = compras.reduce((acc, c) => acc + montoUsdCompra(c), 0);
     const showList = !loading && compras.length > 0;
     const periodoLabel = etiquetaPeriodo(periodo, fechaRef, rangoActivo);
 
@@ -757,35 +750,21 @@ export default function ComprasPage() {
                                                 marginTop: '6px',
                                             }}
                                         >
-                                            {c.fecha} · {lineCount(c)} línea(s)
+                                            {c.fecha} · {lineCount(c)} producto(s)
                                         </p>
-                                        {lineasParaMostrar(c, busquedaAplicada).length > 0 ? (
-                                            <div
-                                                style={{
-                                                    marginTop: '10px',
-                                                    padding: '10px 12px',
-                                                    borderRadius: '10px',
-                                                    background: 'rgba(255,255,255,0.04)',
-                                                    border: '1px solid rgba(255,255,255,0.06)',
-                                                }}
-                                            >
-                                                {lineasParaMostrar(c, busquedaAplicada).map((l, i) => (
-                                                    <p
-                                                        key={`${l.descripcion}-${i}`}
-                                                        style={{
-                                                            color: 'rgba(255,255,255,0.55)',
-                                                            fontSize: '11px',
-                                                            marginTop: i > 0 ? '6px' : 0,
-                                                            lineHeight: 1.35,
-                                                        }}
-                                                    >
-                                                        {l.descripcion}
-                                                        {l.item_code ? ` · ${l.item_code}` : ''} — $
-                                                        {Number(l.subtotal).toFixed(2)}
-                                                    </p>
-                                                ))}
-                                            </div>
-                                        ) : null}
+                                        <CompraProductosToggle
+                                            compraId={c.id}
+                                            lineCountHint={lineCount(c)}
+                                            lineasIniciales={lineasDetalle(c).map((l) => ({
+                                                descripcion: l.descripcion,
+                                                item_code: l.item_code,
+                                                subtotal: l.subtotal,
+                                                cantidad: l.cantidad,
+                                                unidad: null,
+                                                precio_unitario:
+                                                    l.cantidad > 0 ? l.subtotal / l.cantidad : null,
+                                            }))}
+                                        />
                                         {c.document_file_name ? (
                                             <p
                                                 style={{
@@ -804,8 +783,21 @@ export default function ComprasPage() {
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                         <p style={{ color: '#FF3B30', fontSize: '20px', fontWeight: 800 }}>
-                                            ${Number(c.total_amount).toFixed(2)}
+                                            ${montoUsdCompra(c).toFixed(2)}
                                         </p>
+                                        {c.tasa_bcv_ves_por_usd && Number(c.tasa_bcv_ves_por_usd) > 0 ? (
+                                            <p
+                                                style={{
+                                                    color: 'rgba(255,255,255,0.4)',
+                                                    fontSize: '10px',
+                                                    fontWeight: 700,
+                                                    marginTop: '4px',
+                                                }}
+                                            >
+                                                Bs. {Number(c.total_amount).toLocaleString('es-VE', { minimumFractionDigits: 2 })}{' '}
+                                                · tasa {Number(c.tasa_bcv_ves_por_usd).toLocaleString('es-VE', { maximumFractionDigits: 2 })}
+                                            </p>
+                                        ) : null}
                                         <button
                                             type="button"
                                             onClick={() => void handleDelete(c)}

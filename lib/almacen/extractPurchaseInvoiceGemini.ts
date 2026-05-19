@@ -35,6 +35,8 @@ const MAX_BYTES = 12 * 1024 * 1024;
 
 const EXTRACTION_PROMPT = `Extrae datos de esta factura o nota de entrega venezolana.
 
+MONEDA: Los montos de la factura están en BOLÍVARES (VES). quantity, unit_price y total_amount son siempre en Bs, sin convertir a dólares.
+
 OBLIGATORIO — Tabla de detalle (cuerpo de la factura):
 - Lee TODAS las filas de la tabla: Descripción/Concepto/Artículo, Cantidad, Precio unitario.
 - Cada fila va en items[] con:
@@ -47,7 +49,7 @@ OBLIGATORIO — Tabla de detalle (cuerpo de la factura):
 - Si la tabla tiene muchas filas, inclúyelas todas.
 
 Encabezado:
-- invoice_number, supplier_name, supplier_rif (emisor, no el cliente), date (YYYY-MM-DD), total_amount.
+- invoice_number, supplier_name, supplier_rif (emisor, no el cliente), date (YYYY-MM-DD), total_amount (total en Bs, con IVA si así figura en el documento).
 
 El proveedor es quien EMITE la factura, no el comprador.`;
 

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { montoVesAUsd, resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id: string;
@@ -17,7 +18,10 @@ export type RegistrarCompraContabilidadInput = {
   supplier_rif: string;
   supplier_name: string;
   fecha: string;
+  /** Monto total en bolívares (como en la factura). */
   total_amount: number;
+  tasa_bcv_ves_por_usd?: number | null;
+  total_amount_usd?: number | null;
   document_storage_path?: string | null;
   document_file_name?: string | null;
   lineas: LineaCompraContabilidadInput[];
@@ -37,6 +41,13 @@ export async function registerCompraDesdeRecepcion(
     return { compraId: existente.id };
   }
 
+  const tasaRes = await resolverTasaBcvVesPorUsd(input.fecha, input.tasa_bcv_ves_por_usd);
+  const tasa = tasaRes.tasa_bcv_ves_por_usd;
+  const totalUsd =
+    input.total_amount_usd != null && input.total_amount_usd >= 0
+      ? input.total_amount_usd
+      : montoVesAUsd(input.total_amount, tasa);
+
   const { data: compra, error: compraError } = await supabase
     .from('contabilidad_compras')
     .insert({
@@ -47,6 +58,9 @@ export async function registerCompraDesdeRecepcion(
       supplier_name: input.supplier_name,
       fecha: input.fecha,
       total_amount: input.total_amount,
+      moneda: 'VES',
+      tasa_bcv_ves_por_usd: tasa,
+      total_amount_usd: totalUsd,
       origen: 'RECEPCION_MERCANCIA',
       estado: 'REGISTRADA',
       document_storage_path: input.document_storage_path ?? null,

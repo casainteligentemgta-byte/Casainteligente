@@ -30,7 +30,22 @@ export type LoadOpcionesProyectoReclutamientoOpts = {
 export type ProyectoModuloIntegral = {
   id: string;
   nombre: string;
+  entidad_id?: string | null;
 };
+
+/** Entidad de trabajo (`ci_entidades`) compartida por la mayoría de proyectos del listado. */
+export function entidadIdPredominante(
+  proyectos: { entidad_id?: string | null }[],
+): string | null {
+  const counts = new Map<string, number>();
+  for (const p of proyectos) {
+    const id = (p.entidad_id ?? '').trim();
+    if (!id) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  if (!counts.size) return null;
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]![0];
+}
 
 function normNombreProyecto(nombre: string): string {
   return nombre
@@ -52,14 +67,82 @@ function filaEsModuloIntegral(tipo: string | null | undefined): boolean {
 }
 
 function mapFilasModuloIntegral(
-  rows: { id: unknown; nombre?: unknown; tipo_proyecto?: string | null }[],
+  rows: {
+    id: unknown;
+    nombre?: unknown;
+    tipo_proyecto?: string | null;
+    entidad_id?: string | null;
+  }[],
 ): ProyectoModuloIntegral[] {
   return rows
     .filter((r) => filaEsModuloIntegral(r.tipo_proyecto))
     .map((r) => ({
       id: String(r.id),
       nombre: String(r.nombre ?? 'Sin nombre').trim() || 'Sin nombre',
+      entidad_id: r.entidad_id != null ? String(r.entidad_id) : null,
     }));
+}
+
+/**
+ * Módulos integrales vinculados a una entidad de trabajo (`ci_proyectos.entidad_id`).
+ * Usado en SMART RRHH «Todos»: suma solicitados de todos los proyectos del mismo patrono.
+ */
+export async function loadProyectosModuloIntegralPorEntidad(
+  supabase: SupabaseClient,
+  entidadId: string,
+): Promise<{ proyectos: ProyectoModuloIntegral[]; errors: string[] }> {
+  const eid = entidadId.trim();
+  if (!eid) return { proyectos: [], errors: [] };
+
+  const errors: string[] = [];
+  const res = await supabase
+    .from('ci_proyectos')
+    .select('id,nombre,tipo_proyecto,entidad_id')
+    .eq('entidad_id', eid)
+    .or('tipo_proyecto.eq.integral,tipo_proyecto.is.null')
+    .order('nombre', { ascending: true })
+    .limit(250);
+
+  if (res.error && esColumnaTipoProyectoAusente(res.error.message ?? '')) {
+    const leg = await supabase
+      .from('ci_proyectos')
+      .select('id,nombre,entidad_id')
+      .eq('entidad_id', eid)
+      .order('nombre', { ascending: true })
+      .limit(250);
+    if (leg.error) {
+      errors.push(leg.error.message ?? 'No se pudieron cargar proyectos de la entidad.');
+      return { proyectos: [], errors };
+    }
+    const proyectos = (leg.data ?? []).map((r) => ({
+      id: String((r as { id: unknown }).id),
+      nombre: String((r as { nombre?: unknown }).nombre ?? 'Sin nombre').trim() || 'Sin nombre',
+      entidad_id: eid,
+    }));
+    return { proyectos, errors };
+  }
+
+  if (res.error) {
+    const m = (res.error.message ?? '').toLowerCase();
+    if (m.includes('entidad_id') || m.includes('does not exist') || m.includes('schema cache')) {
+      errors.push(
+        'Falta ci_proyectos.entidad_id. Asigne entidad de trabajo en cada proyecto o aplique migración 071.',
+      );
+      return { proyectos: [], errors };
+    }
+    errors.push(res.error.message ?? 'No se pudieron cargar proyectos de la entidad.');
+    return { proyectos: [], errors };
+  }
+
+  const proyectos = mapFilasModuloIntegral(
+    (res.data ?? []) as {
+      id: unknown;
+      nombre?: unknown;
+      tipo_proyecto?: string | null;
+      entidad_id?: string | null;
+    }[],
+  );
+  return { proyectos, errors };
 }
 
 /**
@@ -73,7 +156,7 @@ export async function loadProyectosModuloIntegral(
 
   let res = await supabase
     .from('ci_proyectos')
-    .select('id,nombre,tipo_proyecto')
+    .select('id,nombre,tipo_proyecto,entidad_id')
     .or('tipo_proyecto.eq.integral,tipo_proyecto.is.null')
     .order('nombre', { ascending: true })
     .limit(250);
@@ -150,7 +233,7 @@ export async function loadProyectosSmartRrhhHojasVida(
   const errors: string[] = [];
   const { data, error } = await supabase
     .from('ci_proyectos')
-    .select('id,nombre,tipo_proyecto')
+    .select('id,nombre,tipo_proyecto,entidad_id')
     .order('nombre', { ascending: true })
     .limit(250);
 
@@ -162,12 +245,11 @@ export async function loadProyectosSmartRrhhHojasVida(
     return { proyectos: [], errors };
   }
 
-  const porNombre = ((data ?? []) as { id: unknown; nombre?: unknown; tipo_proyecto?: string | null }[])
-    .filter((r) => esProyectoSmartRrhhPorNombre(String(r.nombre ?? '')))
-    .map((r) => ({
-      id: String(r.id),
-      nombre: String(r.nombre ?? 'Sin nombre').trim() || 'Sin nombre',
-    }));
+  const porNombre = mapFilasModuloIntegral(
+    ((data ?? []) as { id: unknown; nombre?: unknown; tipo_proyecto?: string | null; entidad_id?: string | null }[]).filter(
+      (r) => esProyectoSmartRrhhPorNombre(String(r.nombre ?? '')),
+    ),
+  );
 
   if (porNombre.length > 0) {
     porNombre.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));

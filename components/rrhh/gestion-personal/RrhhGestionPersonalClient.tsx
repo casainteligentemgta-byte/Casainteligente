@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPersonnel';
-import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
+import { loadProyectosModuloIntegralPorEntidad } from '@/lib/proyectos/proyectosUnificados';
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
@@ -118,6 +119,13 @@ export default function RrhhGestionPersonalClient({
 
   const proyectoModuloFiltro = (searchParams.get('proyecto_modulo') ?? proyectoModuloInitial ?? '').trim();
   const proyectoObraFiltro = (searchParams.get('proyecto') ?? proyectoObraInitial ?? '').trim();
+  const todosProyectosFiltro = searchParams.get('todos') === '1';
+  const entidadFiltro = (searchParams.get('entidad') ?? '').trim();
+  const proyectoModuloIdsFiltro = useMemo(() => {
+    const raw = searchParams.get('proyecto_modulo_ids')?.trim() ?? '';
+    if (!raw) return [];
+    return raw.split(',').map((s) => s.trim()).filter(Boolean);
+  }, [searchParams]);
 
   const replaceGestionUrl = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -228,10 +236,48 @@ export default function RrhhGestionPersonalClient({
       let nombreAlcance: string | null = null;
       const pm = proyectoModuloFiltro;
       const po = proyectoObraFiltro;
-      if (pm) {
-        const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, pm);
+      if (entidadFiltro) {
+        const { proyectos, errors: entErr } = await loadProyectosModuloIntegralPorEntidad(
+          supabase,
+          entidadFiltro,
+        );
         if (!alive) return;
-        scope = Array.from(new Set([pm, ...hijas]));
+        if (entErr.length && !proyectos.length) {
+          setPending([]);
+          setLoadingPending(false);
+          return;
+        }
+        const modulos = proyectos.map((p) => p.id);
+        scope = modulos.length ? await projectIdsAlcanceLaborDesdeModulos(supabase, modulos) : [];
+        const { data: ent } = await supabase
+          .from('ci_entidades')
+          .select('nombre')
+          .eq('id', entidadFiltro)
+          .maybeSingle();
+        if (!alive) return;
+        const nomEnt = ((ent as { nombre?: string | null } | null)?.nombre ?? '').trim();
+        nombreAlcance = nomEnt
+          ? `Todos los proyectos · ${nomEnt}`
+          : 'Todos los proyectos de la entidad';
+      } else if (todosProyectosFiltro) {
+        scope = null;
+        nombreAlcance = 'Todos los proyectos';
+      } else if (proyectoModuloIdsFiltro.length > 0) {
+        scope = await projectIdsAlcanceLaborDesdeModulos(supabase, proyectoModuloIdsFiltro);
+        if (!alive) return;
+        nombreAlcance =
+          proyectoModuloIdsFiltro.length === 1
+            ? (
+                await supabase
+                  .from('ci_proyectos')
+                  .select('nombre')
+                  .eq('id', proyectoModuloIdsFiltro[0]!)
+                  .maybeSingle()
+              ).data?.nombre?.trim() || null
+            : `Todos los proyectos (${proyectoModuloIdsFiltro.length})`;
+      } else if (pm) {
+        scope = await projectIdsAlcanceLaborDesdeModulos(supabase, [pm]);
+        if (!alive) return;
         const { data: nom } = await supabase.from('ci_proyectos').select('nombre').eq('id', pm).maybeSingle();
         if (!alive) return;
         nombreAlcance = ((nom as { nombre?: string | null } | null)?.nombre ?? '').trim() || null;
@@ -240,6 +286,9 @@ export default function RrhhGestionPersonalClient({
         const { data: nom } = await supabase.from('ci_proyectos').select('nombre').eq('id', po).maybeSingle();
         if (!alive) return;
         nombreAlcance = ((nom as { nombre?: string | null } | null)?.nombre ?? '').trim() || null;
+      } else {
+        scope = null;
+        nombreAlcance = 'Todos los proyectos';
       }
 
       setAlcanceNombre(nombreAlcance);
@@ -279,7 +328,15 @@ export default function RrhhGestionPersonalClient({
     return () => {
       alive = false;
     };
-  }, [supabase, tick, proyectoModuloFiltro, proyectoObraFiltro]);
+  }, [
+    supabase,
+    tick,
+    proyectoModuloFiltro,
+    proyectoObraFiltro,
+    todosProyectosFiltro,
+    entidadFiltro,
+    proyectoModuloIdsFiltro,
+  ]);
 
   useEffect(() => {
     if (soloPendientes) {
@@ -294,10 +351,19 @@ export default function RrhhGestionPersonalClient({
       let scopeIds: string[] | null = null;
       const pm = proyectoModuloFiltro;
       const po = proyectoObraFiltro;
-      if (pm) {
-        const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, pm);
+      if (entidadFiltro) {
+        const { proyectos } = await loadProyectosModuloIntegralPorEntidad(supabase, entidadFiltro);
         if (!alive) return;
-        scopeIds = Array.from(new Set([pm, ...hijas]));
+        const modulos = proyectos.map((p) => p.id);
+        scopeIds = modulos.length ? await projectIdsAlcanceLaborDesdeModulos(supabase, modulos) : [];
+      } else if (todosProyectosFiltro) {
+        scopeIds = null;
+      } else if (proyectoModuloIdsFiltro.length > 0) {
+        scopeIds = await projectIdsAlcanceLaborDesdeModulos(supabase, proyectoModuloIdsFiltro);
+        if (!alive) return;
+      } else if (pm) {
+        scopeIds = await projectIdsAlcanceLaborDesdeModulos(supabase, [pm]);
+        if (!alive) return;
       } else if (po) {
         scopeIds = [po];
       }
@@ -347,7 +413,16 @@ export default function RrhhGestionPersonalClient({
     return () => {
       alive = false;
     };
-  }, [supabase, tick, soloPendientes, proyectoModuloFiltro, proyectoObraFiltro]);
+  }, [
+    supabase,
+    tick,
+    soloPendientes,
+    proyectoModuloFiltro,
+    proyectoObraFiltro,
+    todosProyectosFiltro,
+    entidadFiltro,
+    proyectoModuloIdsFiltro,
+  ]);
 
   const asignacionesPorProyecto = useMemo(() => {
     const m = new Map<string, AssignmentRow[]>();
@@ -455,7 +530,19 @@ export default function RrhhGestionPersonalClient({
     }
   }
 
-  const hayFiltroAlcance = Boolean(proyectoModuloFiltro || proyectoObraFiltro);
+  const hayFiltroAlcance = Boolean(
+    proyectoModuloFiltro ||
+      proyectoObraFiltro ||
+      todosProyectosFiltro ||
+      entidadFiltro ||
+      proyectoModuloIdsFiltro.length > 0,
+  );
+  const alcanceTodosProyectos =
+    todosProyectosFiltro ||
+    (!proyectoModuloFiltro &&
+      !proyectoObraFiltro &&
+      !entidadFiltro &&
+      proyectoModuloIdsFiltro.length === 0);
 
   const resumenOficiosSolicitados = useMemo(() => {
     const map = new Map<
@@ -543,6 +630,11 @@ export default function RrhhGestionPersonalClient({
               <ResumenSolicitadosOficiosToolbar
                 proyectoModuloId={proyectoModuloFiltro || undefined}
                 proyectoObraId={proyectoObraFiltro || undefined}
+                proyectoModuloIds={
+                  proyectoModuloIdsFiltro.length > 1 ? proyectoModuloIdsFiltro : undefined
+                }
+                entidadId={entidadFiltro || undefined}
+                todosLosProyectos={alcanceTodosProyectos}
                 alcanceNombre={alcanceNombre}
                 iconsOnly={soloPendientes}
               />
@@ -758,7 +850,9 @@ export default function RrhhGestionPersonalClient({
                 <h1 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h1>
                 <p className="mt-1 text-sm text-zinc-400">
                   Proyecto:{' '}
-                  <span className="font-semibold text-white">{alcanceNombre?.trim() || '—'}</span>
+                  <span className="font-semibold text-white">
+                    {alcanceNombre?.trim() || 'Todos los proyectos'}
+                  </span>
                 </p>
               </div>
             </div>

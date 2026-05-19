@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { hrefGestionPersonalSolicitados } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -39,7 +40,10 @@ export type ResumenObrerosProyectoModuloProps = {
     onChange: (value: string) => void;
     opciones: { id: string; nombre: string }[];
     mostrarTodos: boolean;
+    etiquetaTodos?: string;
   };
+  /** Entidad de trabajo común al elegir «Todos» (suma todos los proyectos del patrono). */
+  entidadIdAlcance?: string | null;
 };
 
 /** Fila ficticia para pruebas UI (no persiste en BD). UUID solo para keys/links estables en demo. */
@@ -334,6 +338,7 @@ export default function ResumenObrerosProyectoModulo({
   proyectosModuloIds,
   proyectoModuloIdFiltroEnlaces,
   selectorObra,
+  entidadIdAlcance = null,
 }: ResumenObrerosProyectoModuloProps) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -412,12 +417,8 @@ export default function ResumenObrerosProyectoModulo({
       setError(null);
 
       try {
-        const obraHijaIdsSet = new Set<string>();
-        for (const mid of moduloIdsAlcance) {
-          const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, mid);
-          for (const h of hijas) obraHijaIdsSet.add(h);
-        }
-        const obraHijaIds = Array.from(obraHijaIdsSet);
+        const projectIdsAsignacion = await projectIdsAlcanceLaborDesdeModulos(supabase, moduloIdsAlcance);
+        const obraHijaIds = projectIdsAsignacion.filter((id) => !moduloIdsAlcance.includes(id));
         if (!alive) return;
 
         const filtroOr = moduloIdsAlcance.flatMap((mid) => [
@@ -492,7 +493,6 @@ export default function ResumenObrerosProyectoModulo({
         }
 
         /** Obreros asignados vía `project_assignments` (solicitud de personal); suelen no tener `proyecto_modulo_id`. */
-        const projectIdsAsignacion = Array.from(new Set([...moduloIdsAlcance, ...obraHijaIds]));
         setProjectIdsForLabor(projectIdsAsignacion);
         setProyectoIdsExpressAlcance(projectIdsAsignacion);
 
@@ -884,7 +884,9 @@ export default function ResumenObrerosProyectoModulo({
                     className="max-w-[min(100%,14rem)] rounded-lg border border-fuchsia-500/35 bg-zinc-900/80 px-2.5 py-1.5 text-xs font-semibold text-fuchsia-100 outline-none ring-offset-zinc-950 focus:border-fuchsia-400/60 focus:ring-2 focus:ring-fuchsia-500/25"
                     aria-label="Filtrar cuadro SMART RRHH por obra"
                   >
-                    {selectorObra.mostrarTodos ? <option value="">Todos</option> : null}
+                    {selectorObra.mostrarTodos ? (
+                      <option value="">{selectorObra.etiquetaTodos ?? 'Todos'}</option>
+                    ) : null}
                     {selectorObra.opciones.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.nombre}
@@ -927,7 +929,13 @@ export default function ResumenObrerosProyectoModulo({
         className={`mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 ${loading ? 'opacity-90' : ''}`}
       >
             <Link
-              href={hrefGestionPersonalSolicitados({ proyectoModuloId: idFiltroEnlaces })}
+              href={hrefGestionPersonalSolicitados({
+                proyectoModuloId: idFiltroEnlaces,
+                entidadId:
+                  !idFiltroEnlaces && entidadIdAlcance?.trim() ? entidadIdAlcance.trim() : null,
+                proyectoModuloIds:
+                  !entidadIdAlcance && moduloIdsAlcance.length > 1 ? moduloIdsAlcance : undefined,
+              })}
               className="block w-full rounded-xl border border-violet-500/35 bg-violet-500/10 p-4 text-left transition hover:border-violet-400/50 hover:bg-violet-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
               title="Ver solicitudes de personal por oficio y asignar obreros"
             >

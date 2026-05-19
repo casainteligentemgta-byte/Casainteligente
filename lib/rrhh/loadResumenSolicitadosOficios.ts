@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
+import { loadProyectosModuloIntegralPorEntidad } from '@/lib/proyectos/proyectosUnificados';
 
 export type ResumenOficioFila = {
   codigo: string;
@@ -43,23 +44,62 @@ function agregarFilasResumen(pending: LaborRequestRow[]): ResumenOficioFila[] {
   return Array.from(map.values()).sort((a, b) => a.codigo.localeCompare(b.codigo, 'es'));
 }
 
-/** Carga solicitudes pending y resumen por oficio para un módulo integral u obra. */
+/** Carga solicitudes pending y resumen por oficio para un módulo, obra o todos los proyectos. */
 export async function loadResumenSolicitadosOficios(
   supabase: SupabaseClient,
-  opts: { proyectoModuloId?: string; proyectoObraId?: string },
+  opts: {
+    proyectoModuloId?: string;
+    proyectoObraId?: string;
+    /** Varios módulos integrales (alcance «Todos» en SMART RRHH). */
+    proyectoModuloIds?: string[];
+    /** Sin filtro por proyecto: todas las solicitudes pending. */
+    todosLosProyectos?: boolean;
+    /** Todos los módulos integrales de esta entidad de trabajo (`ci_entidades.id`). */
+    entidadId?: string;
+  },
 ): Promise<ResumenSolicitadosPayload | { error: string }> {
   const pm = (opts.proyectoModuloId ?? '').trim();
   const po = (opts.proyectoObraId ?? '').trim();
-  if (!pm && !po) {
-    return { error: 'Indique proyecto_modulo o proyecto' };
+  const modulosExtra = (opts.proyectoModuloIds ?? []).map((s) => s.trim()).filter(Boolean);
+  const todos = opts.todosLosProyectos === true;
+  const entidadId = (opts.entidadId ?? '').trim();
+
+  if (!pm && !po && !modulosExtra.length && !todos && !entidadId) {
+    return { error: 'Indique proyecto_modulo, proyecto, entidad o todos los proyectos' };
   }
 
   let scope: string[] | null = null;
   let alcanceNombre = 'Proyecto';
 
-  if (pm) {
-    const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, pm);
-    scope = Array.from(new Set([pm, ...hijas]));
+  if (entidadId) {
+    const { proyectos, errors } = await loadProyectosModuloIntegralPorEntidad(supabase, entidadId);
+    if (errors.length && !proyectos.length) {
+      return { error: errors[0] ?? 'No hay proyectos para esta entidad' };
+    }
+    const modulos = proyectos.map((p) => p.id);
+    scope = modulos.length ? await projectIdsAlcanceLaborDesdeModulos(supabase, modulos) : [];
+    const { data: ent } = await supabase.from('ci_entidades').select('nombre').eq('id', entidadId).maybeSingle();
+    const nomEnt = ((ent as { nombre?: string | null } | null)?.nombre ?? '').trim();
+    alcanceNombre = nomEnt
+      ? `Todos los proyectos · ${nomEnt}`
+      : `Todos los proyectos de la entidad`;
+  } else if (todos) {
+    scope = null;
+    alcanceNombre = 'Todos los proyectos';
+  } else if (modulosExtra.length > 0) {
+    scope = await projectIdsAlcanceLaborDesdeModulos(supabase, modulosExtra);
+    if (modulosExtra.length === 1) {
+      const { data: nom } = await supabase
+        .from('ci_proyectos')
+        .select('nombre')
+        .eq('id', modulosExtra[0]!)
+        .maybeSingle();
+      alcanceNombre = ((nom as { nombre?: string | null } | null)?.nombre ?? '').trim() || alcanceNombre;
+    } else {
+      alcanceNombre = `Todos los proyectos (${modulosExtra.length})`;
+    }
+  } else if (pm) {
+    scope = await projectIdsAlcanceLaborDesdeModulos(supabase, [pm]);
     const { data: nom } = await supabase.from('ci_proyectos').select('nombre').eq('id', pm).maybeSingle();
     alcanceNombre = ((nom as { nombre?: string | null } | null)?.nombre ?? '').trim() || alcanceNombre;
   } else {

@@ -27,17 +27,29 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const proyectoModulo = url.searchParams.get('proyecto_modulo')?.trim() ?? '';
   const proyectoObra = url.searchParams.get('proyecto')?.trim() ?? '';
+  const todosLosProyectos = url.searchParams.get('todos') === '1';
+  const entidadId = url.searchParams.get('entidad')?.trim() ?? '';
+  const modulosCsv = url.searchParams.get('proyecto_modulo_ids')?.trim() ?? '';
+  const proyectoModuloIds = modulosCsv
+    ? modulosCsv.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
   const format = url.searchParams.get('format')?.toLowerCase() ?? '';
   const autoPrint = url.searchParams.get('print') === '1';
 
-  if (!proyectoModulo && !proyectoObra) {
-    return NextResponse.json({ error: 'Indique proyecto_modulo o proyecto' }, { status: 400 });
+  if (!proyectoModulo && !proyectoObra && !todosLosProyectos && !proyectoModuloIds.length && !entidadId) {
+    return NextResponse.json(
+      { error: 'Indique proyecto_modulo, proyecto, entidad, proyecto_modulo_ids o todos=1' },
+      { status: 400 },
+    );
   }
 
   const supabase = await createClient();
   const loaded = await loadResumenSolicitadosOficios(supabase, {
     proyectoModuloId: proyectoModulo || undefined,
     proyectoObraId: proyectoObra || undefined,
+    proyectoModuloIds: proyectoModuloIds.length ? proyectoModuloIds : undefined,
+    entidadId: entidadId || undefined,
+    todosLosProyectos,
   });
 
   if ('error' in loaded) {

@@ -8,17 +8,32 @@ import { apiUrl, assertHttpOrigin } from '@/lib/http/apiUrl';
 type Props = {
   proyectoModuloId?: string;
   proyectoObraId?: string;
+  proyectoModuloIds?: string[];
+  entidadId?: string;
+  todosLosProyectos?: boolean;
   alcanceNombre?: string | null;
   /** Solo iconos, sin etiquetas de texto. */
   iconsOnly?: boolean;
 };
 
-function queryResumenDocumento(proyectoModuloId?: string, proyectoObraId?: string): string | null {
+function queryResumenDocumento(opts: {
+  proyectoModuloId?: string;
+  proyectoObraId?: string;
+  proyectoModuloIds?: string[];
+  entidadId?: string;
+  todosLosProyectos?: boolean;
+}): string | null {
   const p = new URLSearchParams();
-  const pm = (proyectoModuloId ?? '').trim();
-  const po = (proyectoObraId ?? '').trim();
-  if (pm) p.set('proyecto_modulo', pm);
+  const pm = (opts.proyectoModuloId ?? '').trim();
+  const po = (opts.proyectoObraId ?? '').trim();
+  const ent = (opts.entidadId ?? '').trim();
+  const ids = (opts.proyectoModuloIds ?? []).map((s) => s.trim()).filter(Boolean);
+  if (ent) p.set('entidad', ent);
+  else if (opts.todosLosProyectos) p.set('todos', '1');
+  else if (ids.length > 1) p.set('proyecto_modulo_ids', ids.join(','));
+  else if (pm) p.set('proyecto_modulo', pm);
   else if (po) p.set('proyecto', po);
+  else if (ids.length === 1) p.set('proyecto_modulo', ids[0]!);
   else return null;
   return p.toString();
 }
@@ -26,10 +41,19 @@ function queryResumenDocumento(proyectoModuloId?: string, proyectoObraId?: strin
 export function ResumenSolicitadosOficiosToolbar({
   proyectoModuloId,
   proyectoObraId,
+  proyectoModuloIds,
+  entidadId,
+  todosLosProyectos,
   alcanceNombre,
   iconsOnly = false,
 }: Props) {
-  const qs = queryResumenDocumento(proyectoModuloId, proyectoObraId);
+  const qs = queryResumenDocumento({
+    proyectoModuloId,
+    proyectoObraId,
+    proyectoModuloIds,
+    entidadId,
+    todosLosProyectos,
+  });
   if (!qs) return null;
 
   const htmlUrl = apiUrl(`/api/rrhh/solicitados-resumen/documento?${qs}`);

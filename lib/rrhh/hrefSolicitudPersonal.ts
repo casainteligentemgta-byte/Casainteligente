@@ -14,10 +14,21 @@ export function hrefSolicitudPersonalObrero(opts?: HrefSolicitudPersonalOpts): s
   return q ? `/rrhh/solicitud-personal?${q}` : '/rrhh/solicitud-personal';
 }
 
-/** Cuadro de solicitados (oficios + plazas) filtrado por proyecto módulo. */
-export function hrefGestionPersonalSolicitados(opts?: { proyectoModuloId?: string | null }): string {
+/** Cuadro de solicitados (oficios + plazas) filtrado por proyecto módulo o todos. */
+export function hrefGestionPersonalSolicitados(opts?: {
+  proyectoModuloId?: string | null;
+  proyectoModuloIds?: string[];
+  entidadId?: string | null;
+  todosLosProyectos?: boolean;
+}): string {
   const params = new URLSearchParams({ solo: 'pendientes' });
   const mod = opts?.proyectoModuloId?.trim();
-  if (mod) params.set('proyecto_modulo', mod);
+  const ent = opts?.entidadId?.trim();
+  const ids = (opts?.proyectoModuloIds ?? []).map((s) => s.trim()).filter(Boolean);
+  if (ent) params.set('entidad', ent);
+  else if (opts?.todosLosProyectos) params.set('todos', '1');
+  else if (ids.length > 1) params.set('proyecto_modulo_ids', ids.join(','));
+  else if (mod) params.set('proyecto_modulo', mod);
+  else if (ids.length === 1) params.set('proyecto_modulo', ids[0]!);
   return `/rrhh/gestion-personal?${params}#cuadro-solicitados`;
 }
