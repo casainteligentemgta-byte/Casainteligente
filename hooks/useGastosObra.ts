@@ -12,6 +12,7 @@ import {
   mesesUnicos,
   porDisciplina,
   sumCosto,
+  top10PorProveedor,
   top10PorTipo,
   valoresUnicos,
 } from '@/lib/gastos-obra/gastosObraUtils';
@@ -30,23 +31,30 @@ function mapRow(row: Record<string, unknown>): GastoObra {
   };
 }
 
-const filtrosIniciales: GastosObraFiltros = {
+export const FILTROS_INICIALES: GastosObraFiltros = {
   mes: FILTRO_TODOS,
   tipo: FILTRO_TODOS,
   disciplina: FILTRO_TODOS,
 };
 
+/**
+ * Hook principal: lectura de `gastos_obra`, filtros reactivos en cliente,
+ * KPIs derivados y persistencia con actualización optimista del estado local.
+ */
 export function useGastosObra() {
   const supabase = useMemo(() => createClient(), []);
   const [rawData, setRawData] = useState<GastoObra[]>([]);
-  const [filtros, setFiltros] = useState<GastosObraFiltros>(filtrosIniciales);
+  const [filtros, setFiltros] = useState<GastosObraFiltros>(FILTROS_INICIALES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase.from('gastos_obra').select('*').order('fecha', { ascending: false });
+    const { data, error: qErr } = await supabase
+      .from('gastos_obra')
+      .select('id, fecha, tipo, disciplina, proveedor, descripcion, costo')
+      .order('fecha', { ascending: false });
 
     if (qErr) {
       setError(qErr.message);
@@ -60,6 +68,10 @@ export function useGastosObra() {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  const limpiarFiltros = useCallback(() => {
+    setFiltros(FILTROS_INICIALES);
+  }, []);
 
   const filteredData = useMemo(() => aplicaFiltros(rawData, filtros), [rawData, filtros]);
 
@@ -85,8 +97,33 @@ export function useGastosObra() {
     [rawData, filtros],
   );
   const chartTopTipo = useMemo(() => top10PorTipo(filteredData), [filteredData]);
+  const chartTopProveedor = useMemo(() => top10PorProveedor(filteredData), [filteredData]);
   const chartDisciplina = useMemo(() => porDisciplina(filteredData), [filteredData]);
   const proveedores = useMemo(() => agruparPorProveedor(filteredData), [filteredData]);
+
+  const hayFiltrosActivos =
+    filtros.mes !== FILTRO_TODOS ||
+    filtros.tipo !== FILTRO_TODOS ||
+    filtros.disciplina !== FILTRO_TODOS;
+
+  const patchLocal = useCallback(
+    (field: GastoObraEditableField, valor: string | number, transactionId?: string, proveedorAnterior?: string) => {
+      setRawData((prev) => {
+        if (field === 'proveedor' && proveedorAnterior && !transactionId) {
+          return prev.map((r) =>
+            r.proveedor === proveedorAnterior ? { ...r, proveedor: String(valor) } : r,
+          );
+        }
+        if (!transactionId) return prev;
+        return prev.map((r) => {
+          if (r.id !== transactionId) return r;
+          if (field === 'costo') return { ...r, costo: Number(valor) };
+          return { ...r, [field]: String(valor) };
+        });
+      });
+    },
+    [],
+  );
 
   const actualizarCampo = useCallback(
     async (params: {
@@ -96,17 +133,28 @@ export function useGastosObra() {
       proveedorAnterior?: string;
     }) => {
       const { field, nuevoValor, transactionId, proveedorAnterior } = params;
-      const valor = nuevoValor.trim();
-      if (!valor) {
+      const valorStr = nuevoValor.trim();
+      if (!valorStr) {
         toast.error('El valor no puede estar vacío');
         return false;
       }
 
+      let payload: Record<string, string | number>;
+      if (field === 'costo') {
+        const n = Number(valorStr.replace(',', '.'));
+        if (!Number.isFinite(n) || n < 0) {
+          toast.error('Ingresa un monto válido');
+          return false;
+        }
+        payload = { costo: n };
+      } else {
+        payload = { [field]: valorStr };
+      }
+
       let q;
       if (field === 'proveedor' && proveedorAnterior && !transactionId) {
-        q = await supabase.from('gastos_obra').update({ proveedor: valor }).eq('proveedor', proveedorAnterior);
+        q = await supabase.from('gastos_obra').update({ proveedor: valorStr }).eq('proveedor', proveedorAnterior);
       } else if (transactionId) {
-        const payload: Record<string, string> = { [field]: valor };
         q = await supabase.from('gastos_obra').update(payload).eq('id', transactionId);
       } else {
         toast.error('Falta identificador de transacción');
@@ -118,11 +166,12 @@ export function useGastosObra() {
         return false;
       }
 
+      const valorPatch = field === 'costo' ? Number(payload.costo) : valorStr;
+      patchLocal(field, valorPatch, transactionId, proveedorAnterior);
       toast.success('Registro actualizado');
-      await cargar();
       return true;
     },
-    [supabase, cargar],
+    [supabase, patchLocal],
   );
 
   return {
@@ -130,6 +179,8 @@ export function useGastosObra() {
     filteredData,
     filtros,
     setFiltros,
+    limpiarFiltros,
+    hayFiltrosActivos,
     loading,
     error,
     opcionesMes,
@@ -138,9 +189,12 @@ export function useGastosObra() {
     kpis,
     chartEvolucion,
     chartTopTipo,
+    chartTopProveedor,
     chartDisciplina,
     proveedores,
     recargar: cargar,
     actualizarCampo,
   };
 }
+
+export { useGastosObra as useGastos };

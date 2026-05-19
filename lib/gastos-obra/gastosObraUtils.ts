@@ -71,6 +71,20 @@ export function top10PorTipo(data: GastoObra[]): AgrupadoTipo[] {
     .slice(0, 10);
 }
 
+export type AgrupadoProveedor = { proveedor: string; costo: number };
+
+export function top10PorProveedor(data: GastoObra[]): AgrupadoProveedor[] {
+  const map = new Map<string, number>();
+  for (const row of data) {
+    const k = row.proveedor?.trim() || 'Sin proveedor';
+    map.set(k, (map.get(k) ?? 0) + Number(row.costo));
+  }
+  return Array.from(map.entries())
+    .map(([proveedor, costo]) => ({ proveedor, costo }))
+    .sort((a, b) => b.costo - a.costo)
+    .slice(0, 10);
+}
+
 export type AgrupadoDisciplina = { disciplina: string; costo: number };
 
 export function porDisciplina(data: GastoObra[]): AgrupadoDisciplina[] {

@@ -1,17 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import { Loader2, X } from 'lucide-react';
 import type { GastoObraEditableField } from '@/types/gastos-obra';
 
 const LABELS: Record<GastoObraEditableField, string> = {
@@ -19,6 +9,7 @@ const LABELS: Record<GastoObraEditableField, string> = {
   tipo: 'Tipo de gasto',
   disciplina: 'Área / disciplina',
   proveedor: 'Proveedor',
+  costo: 'Monto (USD)',
 };
 
 type Props = {
@@ -49,6 +40,17 @@ export default function GastosObraEditModal({
     if (open) setValor(valorActual);
   }, [open, valorActual]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setGuardando(true);
@@ -57,52 +59,78 @@ export default function GastosObraEditModal({
     if (ok) onClose();
   }
 
-  const inputType = field === 'fecha' ? 'date' : 'text';
+  const inputType = field === 'fecha' ? 'date' : field === 'costo' ? 'number' : 'text';
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="border-gray-200 bg-white text-gray-900 sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Editar {LABELS[field]}</DialogTitle>
-          <DialogDescription className="text-gray-500">
-            {bulkProveedor && field === 'proveedor'
-              ? `Se actualizarán todas las filas del proveedor «${proveedorAnterior}».`
-              : transactionId
-                ? 'Cambio en esta transacción únicamente.'
-                : 'Actualiza el valor en Supabase.'}
-          </DialogDescription>
-        </DialogHeader>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-gasto-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Cerrar"
+      />
+      <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h2 id="edit-gasto-title" className="text-lg font-bold tracking-tight text-slate-900">
+              Editar {LABELS[field]}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {bulkProveedor && field === 'proveedor'
+                ? `Se actualizarán todas las filas de «${proveedorAnterior}».`
+                : 'El cambio se guarda en Supabase y actualiza el dashboard al instante.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-gasto-valor" className="text-gray-700">
+          <div>
+            <label htmlFor="edit-gasto-valor" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               {LABELS[field]}
-            </Label>
-            <Input
+            </label>
+            <input
               id="edit-gasto-valor"
               type={inputType}
+              step={field === 'costo' ? '0.01' : undefined}
+              min={field === 'costo' ? '0' : undefined}
               value={valor}
               onChange={(e) => setValor(e.target.value)}
-              className="border-gray-200 bg-white text-gray-900"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100"
               required
+              autoFocus
             />
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={onClose} className="border-gray-200">
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
               Cancelar
-            </Button>
-            <Button
+            </button>
+            <button
               type="submit"
               disabled={guardando}
-              className="bg-orange-600 text-white hover:bg-orange-700"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-60"
             >
-              {guardando ? 'Guardando…' : 'Guardar'}
-            </Button>
-          </DialogFooter>
+              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {guardando ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
-
-
-

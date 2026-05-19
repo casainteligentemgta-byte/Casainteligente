@@ -8,7 +8,7 @@ export type GastoObra = {
   costo: number;
 };
 
-export type GastoObraEditableField = 'fecha' | 'tipo' | 'disciplina' | 'proveedor';
+export type GastoObraEditableField = 'fecha' | 'tipo' | 'disciplina' | 'proveedor' | 'costo';
 
 export type GastosObraFiltros = {
   mes: string;
