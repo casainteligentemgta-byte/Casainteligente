@@ -1,12 +1,13 @@
 'use client';
 
-import { Building2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Building2, Pencil, Plus, Trash2, UserCog } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad } from '@/types/ci-entidad';
+import AsignarRolUsuario from '@/components/configuracion/AsignarRolUsuario';
 
 /** Carga diferida: el formulario (Radix Tabs + muchos campos) no forma parte del chunk inicial de la ruta; evita fallos de carga tipo `/_next/undefined` en dev tras HMR o splits raros de webpack. */
 const FormularioEntidad = dynamic(() => import('./FormularioEntidad'), {
@@ -29,6 +30,7 @@ export default function EntidadesPatronoClient() {
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<CiEntidad | null>(null);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
+  const [entidadIdParaRol, setEntidadIdParaRol] = useState<string | undefined>(undefined);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -116,6 +118,10 @@ export default function EntidadesPatronoClient() {
           </button>
         </div>
 
+        <section id="asignar-rol-usuario" className="mb-8">
+          <AsignarRolUsuario entidadIdInicial={entidadIdParaRol} />
+        </section>
+
         {cargando ? (
           <p className="text-sm text-zinc-500">Cargando entidades…</p>
         ) : error ? (
@@ -170,6 +176,17 @@ export default function EntidadesPatronoClient() {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEntidadIdParaRol(row.id);
+                      document.getElementById('asignar-rol-usuario')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:bg-[#FF9500]/20 sm:flex-none"
+                  >
+                    <UserCog className="h-3.5 w-3.5" />
+                    Asignar rol
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
