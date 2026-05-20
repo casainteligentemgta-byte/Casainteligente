@@ -6,6 +6,7 @@ import {
   pickField,
   pickNumber,
 } from '@/lib/proyectos/luloFieldMapping';
+import { extractFullLuloMdb, type LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import type { GastoObraLuloInsert, LuloMdbParseResult } from '@/types/lulo-import';
 
 const PARTIDA_COLUMN_HINTS = [
@@ -29,7 +30,7 @@ const GASTO_COLUMN_HINTS = [
 const PARTIDA_TABLE_HINTS = /partida|presupuesto|budget|detalle|items|rubro|apo/i;
 const GASTO_TABLE_HINTS = /gasto|costo|factura|compra|egreso|movimiento|transacc/i;
 
-function scoreTableColumns(columnNames: string[], hintGroups: string[][]): number {
+export function scoreTableColumns(columnNames: string[], hintGroups: string[][]): number {
   const lower = columnNames.map((c) => c.toLowerCase());
   let score = 0;
   for (const group of hintGroups) {
@@ -38,32 +39,12 @@ function scoreTableColumns(columnNames: string[], hintGroups: string[][]): numbe
   return score;
 }
 
-function pickBestTable(
-  reader: MDBReader,
-  tableNames: string[],
-  hintGroups: string[][],
-  namePattern: RegExp,
-): string | null {
-  let best: { name: string; score: number; rows: number } | null = null;
+function partidaKey(p: PartidaLuloInsert): string {
+  return `${p.codigo_partida}|${p.descripcion}|${p.monto_total_estimado}|${p.cantidad_presupuestada}`;
+}
 
-  for (const name of tableNames) {
-    if (name.startsWith('MSys')) continue;
-    try {
-      const table = reader.getTable(name);
-      const cols = table.getColumnNames();
-      let score = scoreTableColumns(cols, hintGroups);
-      if (namePattern.test(name)) score += 5;
-      const rows = table.rowCount;
-      if (rows === 0) continue;
-      if (!best || score > best.score || (score === best.score && rows > best.rows)) {
-        best = { name, score, rows };
-      }
-    } catch {
-      /* tabla inaccesible */
-    }
-  }
-
-  return best && best.score >= 4 ? best.name : null;
+function gastoKey(g: GastoObraLuloInsert): string {
+  return `${g.fecha}|${g.proveedor}|${g.descripcion}|${g.costo}`;
 }
 
 function rowToPartida(row: Record<string, unknown>, proyectoId: string): PartidaLuloInsert | null {
@@ -120,49 +101,78 @@ function extractTableRows(reader: MDBReader, tableName: string): Record<string, 
   return table.getData() as Record<string, unknown>[];
 }
 
-/**
- * Lee un buffer MDB/ACCDB (Lulo / Access) y extrae partidas de presupuesto y gastos de obra.
- */
-export function parsePresupuestoLuloMdb(buffer: Buffer, proyectoId: string): LuloMdbParseResult {
-  const reader = new MDBReader(buffer);
-  const tableNames = reader.getTableNames({ normalTables: true, systemTables: false });
+export type LuloMdbParseResultExtended = LuloMdbParseResult & {
+  fullDump: LuloMdbFullDump;
+  tablasPartidas: string[];
+  tablasGastos: string[];
+};
 
-  const partidasTable = pickBestTable(reader, tableNames, PARTIDA_COLUMN_HINTS, PARTIDA_TABLE_HINTS);
-  const gastosTable = pickBestTable(reader, tableNames, GASTO_COLUMN_HINTS, GASTO_TABLE_HINTS);
+/**
+ * Lee MDB/ACCDB: volcado completo + partidas/gastos de todas las tablas compatibles.
+ */
+export function parsePresupuestoLuloMdb(
+  buffer: Buffer,
+  proyectoId: string,
+  importarGastos = true,
+): LuloMdbParseResultExtended {
+  const reader = new MDBReader(buffer);
+  const fullDump = extractFullLuloMdb(buffer);
+  const tableNames = reader.getTableNames({ normalTables: true, systemTables: false });
 
   const partidas: PartidaLuloInsert[] = [];
   const gastos: GastoObraLuloInsert[] = [];
+  const partidaKeys = new Set<string>();
+  const gastoKeys = new Set<string>();
+  const tablasPartidas: string[] = [];
+  const tablasGastos: string[] = [];
   let filasOmitidas = 0;
 
-  if (partidasTable) {
-    for (const row of extractTableRows(reader, partidasTable)) {
-      const p = rowToPartida(row, proyectoId);
-      if (p) partidas.push(p);
-      else filasOmitidas++;
+  for (const name of tableNames) {
+    if (name.startsWith('MSys')) continue;
+    let cols: string[] = [];
+    let rows: Record<string, unknown>[] = [];
+    try {
+      const table = reader.getTable(name);
+      cols = table.getColumnNames();
+      if (table.rowCount === 0) continue;
+      rows = extractTableRows(reader, name);
+    } catch {
+      continue;
     }
-  }
 
-  if (gastosTable && gastosTable !== partidasTable) {
-    for (const row of extractTableRows(reader, gastosTable)) {
-      const g = rowToGasto(row, proyectoId);
-      if (g) gastos.push(g);
-      else filasOmitidas++;
-    }
-  } else if (!gastosTable) {
-    // Si no hay tabla de gastos dedicada, intentar filas con fecha+costo en otras tablas
-    for (const name of tableNames) {
-      if (name === partidasTable || name.startsWith('MSys')) continue;
-      const cols = reader.getTable(name).getColumnNames().map((c) => c.toLowerCase());
-      const looksLikeGasto =
-        cols.some((c) => c.includes('fecha')) &&
-        cols.some((c) => /costo|monto|importe/.test(c)) &&
-        scoreTableColumns(cols, GASTO_COLUMN_HINTS) >= 6;
-      if (!looksLikeGasto) continue;
-      for (const row of extractTableRows(reader, name)) {
-        const g = rowToGasto(row, proyectoId);
-        if (g) gastos.push(g);
+    const partidaScore = scoreTableColumns(cols, PARTIDA_COLUMN_HINTS);
+    const gastoScore = scoreTableColumns(cols, GASTO_COLUMN_HINTS);
+    const namePartidaBonus = PARTIDA_TABLE_HINTS.test(name) ? 5 : 0;
+    const nameGastoBonus = GASTO_TABLE_HINTS.test(name) ? 5 : 0;
+    const pScore = partidaScore + namePartidaBonus;
+    const gScore = gastoScore + nameGastoBonus;
+
+    if (pScore >= 4 && pScore >= gScore) {
+      tablasPartidas.push(name);
+      for (const row of rows) {
+        const p = rowToPartida(row, proyectoId);
+        if (!p) {
+          filasOmitidas++;
+          continue;
+        }
+        const key = partidaKey(p);
+        if (partidaKeys.has(key)) continue;
+        partidaKeys.add(key);
+        partidas.push(p);
       }
-      break;
+    } else if (importarGastos && gScore >= 4) {
+      tablasGastos.push(name);
+      for (const row of rows) {
+        const g = rowToGasto(row, proyectoId);
+        if (!g) {
+          filasOmitidas++;
+          continue;
+        }
+        const key = gastoKey(g);
+        if (gastoKeys.has(key)) continue;
+        gastoKeys.add(key);
+        gastos.push(g);
+      }
     }
   }
 
@@ -171,12 +181,17 @@ export function parsePresupuestoLuloMdb(buffer: Buffer, proyectoId: string): Lul
   return {
     partidas,
     gastos,
+    fullDump,
+    tablasPartidas,
+    tablasGastos,
     meta: {
       tableNames,
-      partidasTable,
-      gastosTable: gastosTable ?? (gastos.length > 0 ? '(detectada)' : null),
+      partidasTable: tablasPartidas[0] ?? null,
+      gastosTable: tablasGastos[0] ?? null,
       presupuestoTotalUsd: Math.round(presupuestoTotalUsd * 100) / 100,
       filasOmitidas,
+      tablasPartidas,
+      tablasGastos,
     },
   };
 }

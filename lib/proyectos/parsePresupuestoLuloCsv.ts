@@ -1,3 +1,12 @@
+import {
+  normalizeLuloRow,
+  pickFecha,
+  pickField,
+  pickNumber,
+} from '@/lib/proyectos/luloFieldMapping';
+import type { GastoObraLuloInsert } from '@/types/lulo-import';
+import { extractFullLuloCsv, type LuloCsvFullDump } from '@/lib/proyectos/extractLuloFull';
+
 export type PartidaLuloInsert = {
   proyecto_id: string;
   codigo_partida: string;
@@ -9,57 +18,7 @@ export type PartidaLuloInsert = {
   origen: string;
 };
 
-function detectDelimiter(text: string): ',' | ';' {
-  const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0) ?? '';
-  const commas = (firstLine.match(/,/g) ?? []).length;
-  const semicolons = (firstLine.match(/;/g) ?? []).length;
-  return semicolons > commas ? ';' : ',';
-}
-
-/** Parsea una línea CSV respetando comillas dobles. */
-function parseCsvLine(line: string, delimiter: ',' | ';'): string[] {
-  const out: string[] = [];
-  let cur = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-    if (!inQuotes && ch === delimiter) {
-      out.push(cur);
-      cur = '';
-      continue;
-    }
-    cur += ch;
-  }
-  out.push(cur);
-  return out.map((c) => c.trim());
-}
-
-function parseCsvRecords(text: string, delimiter: ',' | ';'): Record<string, string>[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length < 2) return [];
-  const headers = parseCsvLine(lines[0], delimiter).map((h) => h.replace(/^\uFEFF/, '').trim());
-  const rows: Record<string, string>[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cells = parseCsvLine(lines[i], delimiter);
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h] = cells[idx] ?? '';
-    });
-    rows.push(row);
-  }
-  return rows;
-}
-
-function pickField(row: Record<string, string>, keys: string[]): string {
+function pickFieldCsv(row: Record<string, string>, keys: string[]): string {
   for (const key of keys) {
     const direct = row[key];
     if (direct != null && String(direct).trim() !== '') return String(direct).trim();
@@ -69,44 +28,125 @@ function pickField(row: Record<string, string>, keys: string[]): string {
   return '';
 }
 
-function pickNumber(row: Record<string, string>, keys: string[]): number {
-  const raw = pickField(row, keys).replace(/\s/g, '').replace(',', '.');
+function pickNumberCsv(row: Record<string, string>, keys: string[]): number {
+  const raw = pickFieldCsv(row, keys).replace(/\s/g, '').replace(',', '.');
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
 
-export function parsePresupuestoLuloCsv(text: string, proyectoId: string): PartidaLuloInsert[] {
-  const delimiter = detectDelimiter(text);
-  const records = parseCsvRecords(text, delimiter);
+function rowToPartidaCsv(row: Record<string, string>, proyectoId: string): PartidaLuloInsert | null {
+  const descripcion = pickFieldCsv(row, ['descripcion', 'Descripcion', 'DESCRIPCION', 'desc', 'concepto']);
+  const codigo = pickFieldCsv(row, ['codigo_partida', 'Codigo', 'codigo', 'CODIGO', 'partida', 'rubro']);
+  if (!descripcion && !codigo) return null;
+
+  const cantidad = pickNumberCsv(row, ['cantidad', 'Cantidad', 'cantidad_presupuestada', 'CANTIDAD']);
+  const precio = pickNumberCsv(row, [
+    'precio_unitario',
+    'Precio',
+    'precio_unitario_estimado',
+    'PRECIO',
+    'precio',
+  ]);
+  const montoCsv = pickNumberCsv(row, ['monto_total', 'Monto', 'monto_total_estimado', 'total', 'importe']);
+  const monto = montoCsv > 0 ? montoCsv : Math.round(cantidad * precio * 100) / 100;
+
+  return {
+    proyecto_id: proyectoId,
+    codigo_partida: codigo,
+    descripcion: descripcion || codigo,
+    unidad: pickFieldCsv(row, ['unidad', 'Unidad', 'UNIDAD']) || 'UND',
+    cantidad_presupuestada: cantidad,
+    precio_unitario_estimado: precio,
+    monto_total_estimado: monto,
+    origen: 'lulo_csv',
+  };
+}
+
+function rowToGastoCsv(row: Record<string, string>, proyectoId: string): GastoObraLuloInsert | null {
+  const r = normalizeLuloRow(row);
+  const costo = pickNumber(r, ['costo', 'monto', 'importe', 'valor', 'total']);
+  const proveedor = pickField(r, ['proveedor', 'supplier', 'razon_social']);
+  const descripcion = pickField(r, ['descripcion', 'desc', 'concepto', 'detalle']);
+  const tipo = pickField(r, ['tipo', 'tipogasto', 'categoria']);
+  if (costo <= 0 && !proveedor && !descripcion) return null;
+
+  return {
+    proyecto_id: proyectoId,
+    fecha: pickFecha(r, ['fecha', 'date', 'fec']),
+    tipo: tipo || 'General',
+    disciplina: pickField(r, ['disciplina', 'area', 'especialidad', 'rubro']) || 'Sin área',
+    proveedor: proveedor || 'Sin proveedor',
+    descripcion: descripcion || tipo || '—',
+    costo,
+    origen: 'lulo_csv',
+  };
+}
+
+function scoreCsvAsGasto(headers: string[]): number {
+  const lower = headers.map((h) => h.toLowerCase());
+  let score = 0;
+  if (lower.some((c) => c.includes('fecha'))) score += 2;
+  if (lower.some((c) => /costo|monto|importe/.test(c))) score += 2;
+  if (lower.some((c) => c.includes('proveedor'))) score += 2;
+  return score;
+}
+
+export type LuloCsvParseResult = {
+  partidas: PartidaLuloInsert[];
+  gastos: GastoObraLuloInsert[];
+  fullDump: LuloCsvFullDump;
+  meta: {
+    presupuestoTotalUsd: number;
+    filasOmitidas: number;
+    esTablaGastos: boolean;
+  };
+};
+
+export function parsePresupuestoLuloCsvComplete(
+  text: string,
+  proyectoId: string,
+  importarGastos = true,
+): LuloCsvParseResult {
+  const fullDump = extractFullLuloCsv(text);
   const partidas: PartidaLuloInsert[] = [];
+  const gastos: GastoObraLuloInsert[] = [];
+  let filasOmitidas = 0;
 
-  for (const row of records) {
-    const descripcion = pickField(row, ['descripcion', 'Descripcion', 'DESCRIPCION', 'desc']);
-    const codigo = pickField(row, ['codigo_partida', 'Codigo', 'codigo', 'CODIGO', 'partida']);
-    if (!descripcion && !codigo) continue;
+  const esGasto = scoreCsvAsGasto(fullDump.headers) >= 6;
 
-    const cantidad = pickNumber(row, ['cantidad', 'Cantidad', 'cantidad_presupuestada', 'CANTIDAD']);
-    const precio = pickNumber(row, [
-      'precio_unitario',
-      'Precio',
-      'precio_unitario_estimado',
-      'PRECIO',
-      'precio',
-    ]);
-    const montoCsv = pickNumber(row, ['monto_total', 'Monto', 'monto_total_estimado', 'total']);
-    const monto = montoCsv > 0 ? montoCsv : Math.round(cantidad * precio * 100) / 100;
-
-    partidas.push({
-      proyecto_id: proyectoId,
-      codigo_partida: codigo,
-      descripcion: descripcion || codigo,
-      unidad: pickField(row, ['unidad', 'Unidad', 'UNIDAD']) || 'UND',
-      cantidad_presupuestada: cantidad,
-      precio_unitario_estimado: precio,
-      monto_total_estimado: monto,
-      origen: 'lulo_csv',
-    });
+  for (const row of fullDump.rows) {
+    if (esGasto && importarGastos) {
+      const g = rowToGastoCsv(row, proyectoId);
+      if (g) gastos.push(g);
+      else filasOmitidas++;
+    } else {
+      const p = rowToPartidaCsv(row, proyectoId);
+      if (p) partidas.push(p);
+      else if (importarGastos) {
+        const g = rowToGastoCsv(row, proyectoId);
+        if (g) gastos.push(g);
+        else filasOmitidas++;
+      } else {
+        filasOmitidas++;
+      }
+    }
   }
 
-  return partidas;
+  const presupuestoTotalUsd = partidas.reduce((s, p) => s + p.monto_total_estimado, 0);
+
+  return {
+    partidas,
+    gastos,
+    fullDump,
+    meta: {
+      presupuestoTotalUsd: Math.round(presupuestoTotalUsd * 100) / 100,
+      filasOmitidas,
+      esTablaGastos: esGasto,
+    },
+  };
+}
+
+/** @deprecated Use parsePresupuestoLuloCsvComplete */
+export function parsePresupuestoLuloCsv(text: string, proyectoId: string): PartidaLuloInsert[] {
+  return parsePresupuestoLuloCsvComplete(text, proyectoId, false).partidas;
 }

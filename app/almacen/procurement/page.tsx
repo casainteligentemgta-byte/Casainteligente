@@ -1,4 +1,5 @@
 import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
 
 const ProcurementClient = dynamic(() => import('./ProcurementClient'), {
     ssr: false,
@@ -17,5 +18,9 @@ const ProcurementClient = dynamic(() => import('./ProcurementClient'), {
 });
 
 export default function ProcurementPage() {
-    return <ProcurementClient />;
+    return (
+        <Suspense fallback={null}>
+            <ProcurementClient />
+        </Suspense>
+    );
 }

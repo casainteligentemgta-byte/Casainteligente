@@ -439,6 +439,21 @@ export default function ComprasPage() {
                         Compras
                     </h1>
                 </div>
+                <Link
+                    href="/contabilidad/compras/canal"
+                    style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: '#7dd3fc',
+                        textDecoration: 'none',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(56,189,248,0.35)',
+                        background: 'rgba(14,116,144,0.2)',
+                    }}
+                >
+                    Telegram
+                </Link>
                 <button
                     type="button"
                     onClick={() => void load()}

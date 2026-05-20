@@ -31,7 +31,7 @@ import {
     ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ProcurementDocumentAttach } from '@/components/almacen/ProcurementDocumentAttach';
 type PurchaseLine = {
     description: string;
@@ -132,6 +132,98 @@ export default function ProcurementClient() {
     const [proyectos, setProyectos] = useState<Array<{ id: string; nombre: string }>>([]);
     const documentPreviewRef = useRef<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    const applyExtractedPayload = (
+        payload: {
+            invoice_number?: string;
+            supplier_rif?: string;
+            supplier_name?: string;
+            date?: string;
+            total_amount?: number | null;
+            items?: Array<{
+                description: string;
+                item_code?: string;
+                unit?: string;
+                quantity: number;
+                unit_price: number;
+            }>;
+        },
+        successPrefix?: string,
+    ) => {
+        const extractedItems = Array.isArray(payload.items) ? payload.items : [];
+        const mappedItems: PurchaseLine[] = extractedItems.map((it) => ({
+            description: (it.description || '').trim(),
+            item_code: (it.item_code || '').trim(),
+            unit: (it.unit || 'UND').trim() || 'UND',
+            quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
+            unit_price: Number(it.unit_price) >= 0 ? Number(it.unit_price) : 0,
+        }));
+        const lineTotal = mappedItems.reduce((acc, it) => acc + it.quantity * it.unit_price, 0);
+        const totalAi =
+            payload.total_amount != null && Number(payload.total_amount) > 0
+                ? Number(payload.total_amount)
+                : lineTotal;
+        setInvoice({
+            invoice_number: payload.invoice_number?.trim() || '',
+            supplier_rif: payload.supplier_rif?.trim() || '',
+            supplier_name: payload.supplier_name?.trim() || '',
+            date: payload.date || todayIsoDate(),
+            total_amount: totalAi,
+        });
+        setTotalManual(Math.abs(totalAi - lineTotal) > 0.02);
+        setItems(mappedItems);
+        setMode('MANUAL');
+        void refrescarTasaBcv(payload.date || todayIsoDate());
+        setAiSuccess(
+            (successPrefix ? `${successPrefix}. ` : '') +
+                'Revise datos y guarde la recepción.',
+        );
+    };
+
+    useEffect(() => {
+        const fromTelegram = searchParams.get('fromTelegram');
+        if (!fromTelegram) return;
+
+        const raw =
+            typeof window !== 'undefined'
+                ? sessionStorage.getItem('telegram_pending_invoice')
+                : null;
+        if (raw) {
+            try {
+                const parsed = JSON.parse(raw) as {
+                    pendingId?: string;
+                    extracted?: Parameters<typeof applyExtractedPayload>[0];
+                };
+                if (parsed.pendingId === fromTelegram && parsed.extracted) {
+                    applyExtractedPayload(
+                        parsed.extracted,
+                        'Factura cargada desde Telegram',
+                    );
+                    return;
+                }
+            } catch {
+                /* fetch API */
+            }
+        }
+
+        void (async () => {
+            try {
+                const res = await fetch(`/api/facturas-canal/pendientes/${fromTelegram}`);
+                const data = await res.json();
+                if (!res.ok || !data.extracted) {
+                    setAiError(data.error ?? 'No se encontró la factura de Telegram');
+                    return;
+                }
+                applyExtractedPayload(
+                    data.extracted as Parameters<typeof applyExtractedPayload>[0],
+                    'Factura cargada desde Telegram',
+                );
+            } catch {
+                setAiError('Error al cargar factura de Telegram');
+            }
+        })();
+    }, [searchParams]);
 
     useEffect(() => {
         const supabase = createClient();
@@ -437,6 +529,23 @@ export default function ProcurementClient() {
                 lineas: lineasContabilidad,
             });
 
+            const fromTelegram = searchParams.get('fromTelegram');
+            if (fromTelegram) {
+                try {
+                    await fetch(`/api/facturas-canal/pendientes/${fromTelegram}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            estado: 'confirmado',
+                            purchase_invoice_id: invData.id,
+                        }),
+                    });
+                    sessionStorage.removeItem('telegram_pending_invoice');
+                } catch {
+                    /* no bloquear flujo */
+                }
+            }
+
             router.push('/almacen/procurement/quality');
         } catch (error) {
             console.error('Error saving invoice:', error);
@@ -503,36 +612,12 @@ export default function ProcurementClient() {
                 throw new Error(payload.error || 'No se pudo extraer la factura.');
             }
 
-            const extractedItems = Array.isArray(payload.items) ? payload.items : [];
-            const mappedItems: PurchaseLine[] = extractedItems.map((it) => ({
-                description: (it.description || '').trim(),
-                item_code: (it.item_code || '').trim(),
-                unit: (it.unit || 'UND').trim() || 'UND',
-                quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
-                unit_price: Number(it.unit_price) >= 0 ? Number(it.unit_price) : 0,
-            }));
-
-            const lineTotal = mappedItems.reduce(
-                (acc, it) => acc + it.quantity * it.unit_price,
-                0
-            );
-
-            const totalAi =
-                payload.total_amount != null && Number(payload.total_amount) > 0
-                    ? Number(payload.total_amount)
-                    : lineTotal;
-            setInvoice({
-                invoice_number: payload.invoice_number?.trim() || '',
-                supplier_rif: payload.supplier_rif?.trim() || '',
-                supplier_name: payload.supplier_name?.trim() || '',
-                date: payload.date || todayIsoDate(),
-                total_amount: totalAi,
-            });
-            setTotalManual(Math.abs(totalAi - lineTotal) > 0.02);
-            setItems(mappedItems);
-            setMode('MANUAL');
-            void refrescarTasaBcv(payload.date || todayIsoDate());
-
+            applyExtractedPayload(payload);
+            const mappedItems = Array.isArray(payload.items)
+                ? payload.items.map((it) => ({
+                      description: (it.description || '').trim(),
+                  }))
+                : [];
             const withDesc = mappedItems.filter((it) => it.description).length;
             const headerOk =
                 Boolean(payload.invoice_number?.trim()) &&

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Upload, FileSpreadsheet, Loader2, Database } from 'lucide-react';
+import { Upload, FileSpreadsheet, Loader2, Database, Table2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type ImportarProps = {
@@ -170,6 +171,14 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             Última importación: {ultimoResumen}
           </p>
         ) : null}
+
+        <Link
+          href={`/proyectos/modulo/${proyectoId}/lulo`}
+          className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-300 hover:bg-white/10"
+        >
+          <Table2 className="h-3.5 w-3.5" />
+          Ver y editar tablas importadas
+        </Link>
       </div>
     </div>
   );

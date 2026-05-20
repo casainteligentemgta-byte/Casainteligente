@@ -20,5 +20,16 @@ export type LuloMdbParseResult = {
     gastosTable: string | null;
     presupuestoTotalUsd: number;
     filasOmitidas: number;
+    tablasPartidas?: string[];
+    tablasGastos?: string[];
   };
+};
+
+export type LuloSnapshotResumen = {
+  partidas: number;
+  gastos: number;
+  presupuestoTotalUsd: number;
+  tablas?: number;
+  filasTotales?: number;
+  formato: 'mdb' | 'csv';
 };

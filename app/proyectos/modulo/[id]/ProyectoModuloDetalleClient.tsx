@@ -690,6 +690,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         <div className="space-y-6">
           <div className="flex flex-wrap items-start gap-4">
             <ImportarPresupuestoLulo proyectoId={id} />
+            <Link
+              href={`/proyectos/modulo/${id}/lulo`}
+              className="rounded-xl border border-sky-500/30 bg-sky-950/30 px-4 py-3 text-xs font-semibold text-sky-100 hover:bg-sky-900/40"
+            >
+              Gestionar datos Lulo importados →
+            </Link>
           </div>
           <ControlPlanosObra proyectoId={id} />
           <DashboardUtilidadReal proyectoId={id} className="" />
