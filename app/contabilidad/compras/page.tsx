@@ -363,8 +363,22 @@ export default function ComprasPage() {
     }, [periodo, rangoActivo, fechaDesde]);
 
     const handleDelete = async (c: CompraRow) => {
+        const duplicadasMismaFactura = compras.filter(
+            (row) =>
+                row.id !== c.id &&
+                String(row.invoice_number ?? '').trim().replace(/^#+/, '') ===
+                    String(c.invoice_number ?? '').trim().replace(/^#+/, '') &&
+                (!c.supplier_rif ||
+                    String(row.supplier_rif ?? '').trim().toUpperCase() ===
+                        String(c.supplier_rif ?? '').trim().toUpperCase()),
+        );
+        const avisoDuplicado =
+            duplicadasMismaFactura.length > 0
+                ? `\n\nHay ${duplicadasMismaFactura.length + 1} registro(s) con factura #${c.invoice_number}. Se eliminarán todos.`
+                : '';
+
         const ok = window.confirm(
-            `¿Eliminar la compra de ${c.supplier_name} (factura #${c.invoice_number})?\n\nSe quitará de contabilidad, cuarentena y materiales pendientes.`
+            `¿Eliminar la compra de ${c.supplier_name} (factura #${c.invoice_number})?${avisoDuplicado}\n\nSe quitará de contabilidad, cuarentena y materiales pendientes.`
         );
         if (!ok) return;
 
@@ -372,10 +386,15 @@ export default function ComprasPage() {
         setError(null);
         try {
             const supabase = createClient();
-            await deleteCompraRegistro(supabase, c.id);
-            setCompras((prev) => prev.filter((row) => row.id !== c.id));
+            const result = await deleteCompraRegistro(supabase, c.id);
+            const removed = new Set(result.deletedIds);
+            setCompras((prev) => prev.filter((row) => !removed.has(row.id)));
+            if (result.duplicateCount > 1) {
+                void load();
+            }
         } catch (e) {
             setError(formatDeleteCompraError(e));
+            void load();
         } finally {
             setDeletingId(null);
         }
