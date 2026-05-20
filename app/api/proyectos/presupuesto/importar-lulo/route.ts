@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { formatMdbReadError, toMdbNodeBuffer } from '@/lib/proyectos/mdbBuffer';
 import { parsePresupuestoLuloCsvComplete } from '@/lib/proyectos/parsePresupuestoLuloCsv';
 import { parsePresupuestoLuloMdb } from '@/lib/proyectos/parsePresupuestoLuloMdb';
 import type { LuloSnapshotResumen } from '@/types/lulo-import';
@@ -6,6 +7,8 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+/** MDB/ACCDB de Lulo pueden ser grandes */
+export const maxDuration = 120;
 
 const BATCH_SIZE = 200;
 
@@ -47,7 +50,7 @@ export async function POST(req: Request) {
     let meta: Record<string, unknown> = { formato };
 
     if (formato === 'mdb') {
-      const buffer = Buffer.from(await file.arrayBuffer());
+      const buffer = toMdbNodeBuffer(await file.arrayBuffer());
       const parsed = parsePresupuestoLuloMdb(buffer, proyectoId, importarGastos);
       partidasInsert = parsed.partidas;
       gastosInsert = parsed.gastos;
@@ -63,12 +66,15 @@ export async function POST(req: Request) {
     }
 
     if (partidasInsert.length === 0 && gastosInsert.length === 0) {
+      const diag =
+        typeof meta.diagnosticoResumen === 'string' ? meta.diagnosticoResumen : '';
+      const base =
+        formato === 'mdb'
+          ? 'No se encontraron partidas ni gastos válidos en el MDB. Revisa que el archivo sea de Lulo/Access.'
+          : 'No se encontraron partidas ni gastos válidos en el CSV.';
       return NextResponse.json(
         {
-          error:
-            formato === 'mdb'
-              ? 'No se encontraron partidas ni gastos válidos en el MDB.'
-              : 'No se encontraron partidas ni gastos válidos en el CSV.',
+          error: diag ? `${base} ${diag}` : base,
           meta,
         },
         { status: 400 },
@@ -161,8 +167,12 @@ export async function POST(req: Request) {
       resumen,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error al importar el presupuesto.';
+    const raw = err instanceof Error ? err.message : 'Error al importar el presupuesto.';
+    const friendly = formatMdbReadError(err);
+    if (friendly !== raw) {
+      return NextResponse.json({ error: friendly }, { status: 400 });
+    }
     console.error('[POST /api/proyectos/presupuesto/importar-lulo]', err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: raw }, { status: 500 });
   }
 }

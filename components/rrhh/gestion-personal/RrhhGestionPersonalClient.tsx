@@ -18,6 +18,9 @@ import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosP
 import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
 import Link from 'next/link';
 import { ResumenSolicitadosOficiosToolbar } from '@/components/rrhh/gestion-personal/ResumenSolicitadosOficiosToolbar';
+import BonoUsdEditor from '@/components/rrhh/BonoUsdEditor';
+import { isBonoColumnMissingError, parseBonoUsd } from '@/lib/rrhh/projectAssignmentBono';
+import { idsObrerosConContratoSuscrito } from '@/lib/rrhh/obreroContratoSuscrito';
 
 type LaborRequestRow = {
   id: string;
@@ -36,6 +39,7 @@ type AssignmentRow = {
   worker_id: string;
   project_id: string;
   created_at: string;
+  bono_usd: number;
 };
 
 type EmpleadoRow = {
@@ -62,6 +66,46 @@ async function contarAsignaciones(
     .eq('labor_request_id', laborRequestId);
   if (error) return 0;
   return count ?? 0;
+}
+
+const ASSIGN_SELECT_BASE = 'id,labor_request_id,worker_id,project_id,created_at';
+const ASSIGN_SELECT_BONO = `${ASSIGN_SELECT_BASE},bono_usd`;
+
+function filaAsignacion(raw: Record<string, unknown>): AssignmentRow {
+  const bonoRaw = raw.bono_usd;
+  const bono =
+    typeof bonoRaw === 'number' && Number.isFinite(bonoRaw)
+      ? Math.max(0, Math.round(bonoRaw * 100) / 100)
+      : 0;
+  return {
+    id: String(raw.id ?? ''),
+    labor_request_id: String(raw.labor_request_id ?? ''),
+    worker_id: String(raw.worker_id ?? ''),
+    project_id: String(raw.project_id ?? ''),
+    created_at: String(raw.created_at ?? ''),
+    bono_usd: bono,
+  };
+}
+
+async function cargarAsignaciones(
+  supabase: ReturnType<typeof createClient>,
+  filtro?: { laborRequestIds?: string[]; projectIds?: string[] | null; limit?: number },
+): Promise<AssignmentRow[]> {
+  const cols = ASSIGN_SELECT_BONO;
+  let q = supabase.from('project_assignments').select(cols).order('created_at', { ascending: false });
+  if (filtro?.limit) q = q.limit(filtro.limit);
+  if (filtro?.laborRequestIds?.length) q = q.in('labor_request_id', filtro.laborRequestIds);
+  if (filtro?.projectIds != null && filtro.projectIds.length > 0) q = q.in('project_id', filtro.projectIds);
+  let { data, error } = await q;
+  if (error && isBonoColumnMissingError(error.message)) {
+    let q2 = supabase.from('project_assignments').select(ASSIGN_SELECT_BASE).order('created_at', { ascending: false });
+    if (filtro?.limit) q2 = q2.limit(filtro.limit);
+    if (filtro?.laborRequestIds?.length) q2 = q2.in('labor_request_id', filtro.laborRequestIds);
+    if (filtro?.projectIds != null && filtro.projectIds.length > 0) q2 = q2.in('project_id', filtro.projectIds);
+    ({ data, error } = await q2);
+  }
+  if (error) return [];
+  return (data ?? []).map((r) => filaAsignacion(r as Record<string, unknown>));
 }
 
 const TABS = ['pendientes', 'obra'] as const;
@@ -155,9 +199,36 @@ export default function RrhhGestionPersonalClient({
   const [yaAsignados, setYaAsignados] = useState(0);
   const [loadingDialog, setLoadingDialog] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
+  /** Bono USD por obrero al asignar (worker_id → texto del input). */
+  const [bonoPorObrero, setBonoPorObrero] = useState<Record<string, string>>({});
+  const [asignadosPorSolicitud, setAsignadosPorSolicitud] = useState<Map<string, AssignmentRow[]>>(new Map());
+  /** Obreros con contrato ya suscrito: el bono de la asignación queda en solo lectura. */
+  const [obrerosConContrato, setObrerosConContrato] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    const workerIds = Array.from(
+      new Set([
+        ...assignments.map((a) => a.worker_id),
+        ...Array.from(asignadosPorSolicitud.values())
+          .flat()
+          .map((a) => a.worker_id),
+      ]),
+    );
+    if (!workerIds.length) {
+      setObrerosConContrato(new Set());
+      return;
+    }
+    let alive = true;
+    void idsObrerosConContratoSuscrito(supabase, workerIds).then((s) => {
+      if (alive) setObrerosConContrato(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [supabase, assignments, asignadosPorSolicitud, tick]);
 
   const copiarEnlaceHojaVida = useCallback(async (r: LaborRequestRow) => {
     const href = hrefFormatoHojaVidaLabor(r.project_id, r.specialty_codigo);
@@ -322,6 +393,35 @@ export default function RrhhGestionPersonalClient({
             return m;
           });
         }
+        const reqIds = pend.map((p) => p.id);
+        if (reqIds.length) {
+          const asgRows = await cargarAsignaciones(supabase, { laborRequestIds: reqIds });
+          if (!alive) return;
+          const porReq = new Map<string, AssignmentRow[]>();
+          for (const a of asgRows) {
+            if (!porReq.has(a.labor_request_id)) porReq.set(a.labor_request_id, []);
+            porReq.get(a.labor_request_id)!.push(a);
+          }
+          setAsignadosPorSolicitud(porReq);
+          const eids = Array.from(new Set(asgRows.map((a) => a.worker_id)));
+          if (eids.length) {
+            const { data: emps } = await supabase
+              .from('ci_empleados')
+              .select('id,nombre_completo')
+              .in('id', eids);
+            if (!alive) return;
+            setNombreEmpleado((prev) => {
+              const m = new Map(prev);
+              for (const raw of emps ?? []) {
+                const r = raw as { id: string; nombre_completo?: string | null };
+                m.set(r.id, (r.nombre_completo ?? '').trim() || r.id.slice(0, 8));
+              }
+              return m;
+            });
+          }
+        } else {
+          setAsignadosPorSolicitud(new Map());
+        }
       }
       setLoadingPending(false);
     })();
@@ -367,22 +467,11 @@ export default function RrhhGestionPersonalClient({
       } else if (po) {
         scopeIds = [po];
       }
-      let q = supabase
-        .from('project_assignments')
-        .select('id,labor_request_id,worker_id,project_id,created_at')
-        .order('created_at', { ascending: false })
-        .limit(800);
-      if (scopeIds != null && scopeIds.length > 0) {
-        q = q.in('project_id', scopeIds);
-      }
-      const { data: asg, error: e1 } = await q;
+      const rows = await cargarAsignaciones(supabase, {
+        projectIds: scopeIds,
+        limit: 800,
+      });
       if (!alive) return;
-      if (e1) {
-        setAssignments([]);
-        setLoadingObra(false);
-        return;
-      }
-      const rows = (asg ?? []) as AssignmentRow[];
       setAssignments(rows);
       const pids = Array.from(new Set(rows.map((r) => r.project_id)));
       const eids = Array.from(new Set(rows.map((r) => r.worker_id)));
@@ -441,6 +530,7 @@ export default function RrhhGestionPersonalClient({
   async function abrirAsignacion(req: LaborRequestRow) {
     setDialogReq(req);
     setSel(new Set());
+    setBonoPorObrero({});
     setLoadingDialog(true);
     const n = await contarAsignaciones(supabase, req.id);
     setYaAsignados(n);
@@ -477,16 +567,37 @@ export default function RrhhGestionPersonalClient({
   function toggleSel(id: string) {
     setSel((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else {
+      if (next.has(id)) {
+        next.delete(id);
+        setBonoPorObrero((b) => {
+          const copy = { ...b };
+          delete copy[id];
+          return copy;
+        });
+      } else {
         if (next.size >= cupoRestante) {
           toast.message('Cupo completo', { description: `Solo puedes asignar ${cupoRestante} obrero(s) más.` });
           return prev;
         }
         next.add(id);
+        setBonoPorObrero((b) => ({ ...b, [id]: b[id] ?? '0' }));
       }
       return next;
     });
+  }
+
+  function actualizarBonoLocal(assignmentId: string, laborRequestId: string, bono: number) {
+    setAsignadosPorSolicitud((prev) => {
+      const m = new Map(prev);
+      const list = m.get(laborRequestId);
+      if (!list) return prev;
+      m.set(
+        laborRequestId,
+        list.map((a) => (a.id === assignmentId ? { ...a, bono_usd: bono } : a)),
+      );
+      return m;
+    });
+    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, bono_usd: bono } : a)));
   }
 
   async function confirmarAsignacion() {
@@ -500,12 +611,25 @@ export default function RrhhGestionPersonalClient({
     const ids = Array.from(sel);
     try {
       for (const wid of ids) {
+        const bono = parseBonoUsd(bonoPorObrero[wid] ?? '0');
         const { error: ins } = await supabase.from('project_assignments').insert({
           labor_request_id: req.id,
           worker_id: wid,
           project_id: req.project_id,
+          bono_usd: bono,
         });
-        if (ins) throw new Error(ins.message);
+        if (ins) {
+          if (isBonoColumnMissingError(ins.message)) {
+            const { error: ins2 } = await supabase.from('project_assignments').insert({
+              labor_request_id: req.id,
+              worker_id: wid,
+              project_id: req.project_id,
+            });
+            if (ins2) throw new Error(ins2.message);
+          } else {
+            throw new Error(ins.message);
+          }
+        }
         const { error: up } = await supabase.from('ci_empleados').update({ estatus: 'asignado' }).eq('id', wid);
         if (up) throw new Error(up.message);
       }
@@ -718,6 +842,46 @@ export default function RrhhGestionPersonalClient({
                   </div>
                 </div>
 
+                {(asignadosPorSolicitud.get(r.id) ?? []).length > 0 ? (
+                  <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300/90">
+                      Obreros asignados · Bono (USD)
+                    </p>
+                    <p className="text-[9px] text-zinc-600">
+                      Editable hasta que el obrero suscriba el contrato; después queda fijo.
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {(asignadosPorSolicitud.get(r.id) ?? []).map((a) => (
+                        <li
+                          key={a.id}
+                          className="flex flex-wrap items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="min-w-0 font-medium text-zinc-200">
+                            {nombreEmpleado.get(a.worker_id) ?? a.worker_id.slice(0, 8)}
+                            {!obrerosConContrato.has(a.worker_id) ? (
+                              <Link
+                                href={`/talento/admin/contratos/fast-create?worker=${encodeURIComponent(a.worker_id)}&proyecto=${encodeURIComponent(r.project_id)}`}
+                                className="mt-0.5 block text-[10px] font-semibold text-sky-400/90 hover:text-sky-300"
+                              >
+                                Generar contrato express →
+                              </Link>
+                            ) : (
+                              <span className="mt-0.5 block text-[10px] text-zinc-600">Contrato suscrito</span>
+                            )}
+                          </span>
+                          <BonoUsdEditor
+                            assignmentId={a.id}
+                            value={a.bono_usd}
+                            compact
+                            readOnly={obrerosConContrato.has(a.worker_id)}
+                            onSaved={(bono) => actualizarBonoLocal(a.id, r.id, bono)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
                 <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-white/5 pt-4">
                   <Button
                     type="button"
@@ -898,6 +1062,7 @@ export default function RrhhGestionPersonalClient({
                       <TableRow>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Obrero</TableHead>
+                        <TableHead>Bono (USD)</TableHead>
                         <TableHead>Solicitud</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -907,6 +1072,14 @@ export default function RrhhGestionPersonalClient({
                           <TableCell className="text-zinc-400">{new Date(a.created_at).toLocaleString('es-VE')}</TableCell>
                           <TableCell className="font-medium text-white">
                             {nombreEmpleado.get(a.worker_id) ?? a.worker_id.slice(0, 8)}
+                          </TableCell>
+                          <TableCell>
+                            <BonoUsdEditor
+                              assignmentId={a.id}
+                              value={a.bono_usd}
+                              readOnly={obrerosConContrato.has(a.worker_id)}
+                              onSaved={(bono) => actualizarBonoLocal(a.id, a.labor_request_id, bono)}
+                            />
                           </TableCell>
                           <TableCell className="font-mono text-xs text-zinc-500">{a.labor_request_id.slice(0, 8)}…</TableCell>
                         </TableRow>
@@ -935,6 +1108,27 @@ export default function RrhhGestionPersonalClient({
               ) : null}
             </DialogDescription>
           </DialogHeader>
+          {dialogReq && (asignadosPorSolicitud.get(dialogReq.id) ?? []).length > 0 ? (
+            <div className="mb-4 rounded-lg border border-amber-500/25 bg-amber-950/25 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300/90">Ya asignados</p>
+              <ul className="mt-2 space-y-2">
+                {(asignadosPorSolicitud.get(dialogReq.id) ?? []).map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-zinc-200">
+                      {nombreEmpleado.get(a.worker_id) ?? a.worker_id.slice(0, 8)}
+                    </span>
+                    <BonoUsdEditor
+                      assignmentId={a.id}
+                      value={a.bono_usd}
+                      compact
+                      readOnly={obrerosConContrato.has(a.worker_id)}
+                      onSaved={(bono) => actualizarBonoLocal(a.id, dialogReq.id, bono)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {loadingDialog ? (
             <p className="text-sm text-zinc-500">Cargando candidatos…</p>
           ) : candidatos.length === 0 ? (
@@ -944,21 +1138,47 @@ export default function RrhhGestionPersonalClient({
               {candidatos.map((w) => (
                 <li
                   key={w.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 hover:bg-zinc-800/80"
-                  onClick={() => toggleSel(w.id)}
+                  className={`rounded-lg border px-3 py-2 ${
+                    sel.has(w.id)
+                      ? 'border-sky-500/40 bg-sky-950/30'
+                      : 'border-zinc-800 bg-zinc-900/60'
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    readOnly
-                    checked={sel.has(w.id)}
-                    className="h-4 w-4 rounded border-zinc-600"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-white">{w.nombre_completo}</p>
-                    <p className="truncate text-xs text-zinc-500">
-                      {(w.cargo_codigo ?? '').trim()} · {(w.cargo_nombre ?? '').trim()}
-                    </p>
+                  <div
+                    className="flex cursor-pointer items-center gap-3 hover:opacity-90"
+                    onClick={() => toggleSel(w.id)}
+                  >
+                    <input
+                      type="checkbox"
+                      readOnly
+                      checked={sel.has(w.id)}
+                      className="h-4 w-4 rounded border-zinc-600"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-white">{w.nombre_completo}</p>
+                      <p className="truncate text-xs text-zinc-500">
+                        {(w.cargo_codigo ?? '').trim()} · {(w.cargo_nombre ?? '').trim()}
+                      </p>
+                    </div>
                   </div>
+                  {sel.has(w.id) ? (
+                    <div
+                      className="mt-2 flex items-center justify-end gap-2 border-t border-white/5 pt-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-[10px] font-semibold uppercase text-amber-400/90">Bono USD</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={bonoPorObrero[w.id] ?? '0'}
+                        onChange={(e) =>
+                          setBonoPorObrero((b) => ({ ...b, [w.id]: e.target.value }))
+                        }
+                        className="w-24 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-right text-sm font-semibold tabular-nums text-amber-200 focus:border-amber-500/50 focus:outline-none"
+                        aria-label={`Bono USD para ${w.nombre_completo}`}
+                      />
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>

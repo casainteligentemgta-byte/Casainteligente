@@ -6,15 +6,33 @@ import {
   ArrowLeft,
   Database,
   FileSpreadsheet,
-  Loader2,
+  Settings,
   Pencil,
   Save,
   Trash2,
-  ChevronDown,
-  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
+import LuloTablaFiltrable, { type LuloColumnaDef } from '@/components/proyectos/LuloTablaFiltrable';
+import { parseFetchJson } from '@/lib/utils/parseFetchJson';
+
+const COLUMNAS_PARTIDAS: LuloColumnaDef[] = [
+  { key: 'codigo_partida', label: 'Código', mono: true },
+  { key: 'descripcion', label: 'Descripción', maxWidth: 280 },
+  { key: 'unidad', label: 'Und', align: 'center' },
+  { key: 'cantidad_presupuestada', label: 'Cant.', align: 'right' },
+  { key: 'precio_unitario_estimado', label: 'P.U.', align: 'right' },
+  { key: 'monto_total_estimado', label: 'Monto', align: 'right' },
+];
+
+const COLUMNAS_GASTOS: LuloColumnaDef[] = [
+  { key: 'fecha', label: 'Fecha' },
+  { key: 'proveedor', label: 'Proveedor', maxWidth: 160 },
+  { key: 'descripcion', label: 'Descripción', maxWidth: 220 },
+  { key: 'tipo', label: 'Tipo' },
+  { key: 'disciplina', label: 'Disciplina' },
+  { key: 'costo', label: 'Costo', align: 'right' },
+];
 
 type Partida = {
   id: string;
@@ -76,7 +94,7 @@ export default function LuloDatosManager({ proyectoId, proyectoNombre }: Props) 
     payload: LuloPayload;
     nombre_archivo: string;
   } | null>(null);
-  const [expandedTable, setExpandedTable] = useState<string | null>(null);
+  const [tablaMdbSeleccionada, setTablaMdbSeleccionada] = useState<string>('');
   const [editingPartida, setEditingPartida] = useState<string | null>(null);
   const [editPartidaForm, setEditPartidaForm] = useState<Partial<Partida>>({});
   const [saving, setSaving] = useState(false);
@@ -85,11 +103,35 @@ export default function LuloDatosManager({ proyectoId, proyectoNombre }: Props) 
     setLoading(true);
     try {
       const res = await fetch(`/api/proyectos/${proyectoId}/lulo`);
-      const data = await res.json();
+      const data = await parseFetchJson<{
+        error?: string;
+        partidas?: Partida[];
+        gastos?: Gasto[];
+        snapshots?: SnapshotMeta[];
+      }>(res);
       if (!res.ok) throw new Error(data.error || 'Error al cargar');
       setPartidas(data.partidas ?? []);
       setGastos(data.gastos ?? []);
-      setSnapshots(data.snapshots ?? []);
+      const snaps = data.snapshots ?? [];
+      setSnapshots(snaps);
+      if (snaps[0]?.id) {
+        const snapRes = await fetch(`/api/proyectos/lulo/snapshots/${snaps[0].id}`);
+        const snapData = await parseFetchJson<{
+          error?: string;
+          id: string;
+          nombre_archivo: string;
+          payload: LuloPayload;
+        }>(snapRes);
+        if (snapRes.ok) {
+          setSnapshotDetail({
+            id: snapData.id,
+            payload: snapData.payload,
+            nombre_archivo: snapData.nombre_archivo,
+          });
+          const tables = snapData.payload?.tables ?? [];
+          if (tables[0]?.name) setTablaMdbSeleccionada(tables[0].name);
+        }
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error de carga');
     } finally {
@@ -104,13 +146,21 @@ export default function LuloDatosManager({ proyectoId, proyectoNombre }: Props) 
   const loadSnapshot = async (id: string) => {
     try {
       const res = await fetch(`/api/proyectos/lulo/snapshots/${id}`);
-      const data = await res.json();
+      const data = await parseFetchJson<{
+        error?: string;
+        id: string;
+        nombre_archivo: string;
+        payload: LuloPayload;
+      }>(res);
       if (!res.ok) throw new Error(data.error);
+      const payload = data.payload as LuloPayload;
       setSnapshotDetail({
         id: data.id,
-        payload: data.payload as LuloPayload,
+        payload,
         nombre_archivo: data.nombre_archivo,
       });
+      const tables = payload.tables ?? [];
+      if (tables[0]?.name) setTablaMdbSeleccionada(tables[0].name);
       setTab('tablas');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo abrir el volcado');
@@ -163,6 +213,30 @@ export default function LuloDatosManager({ proyectoId, proyectoNombre }: Props) 
 
   const mdbTables = useMemo(() => snapshotDetail?.payload?.tables ?? [], [snapshotDetail]);
   const csvRows = useMemo(() => snapshotDetail?.payload?.rows ?? [], [snapshotDetail]);
+
+  const tablaMdbActiva = useMemo(
+    () => mdbTables.find((t) => t.name === tablaMdbSeleccionada) ?? mdbTables[0] ?? null,
+    [mdbTables, tablaMdbSeleccionada],
+  );
+
+  const columnasMdb: LuloColumnaDef[] = useMemo(
+    () => (tablaMdbActiva?.columns ?? []).map((c) => ({ key: c, label: c, maxWidth: 200 })),
+    [tablaMdbActiva],
+  );
+
+  const filasPartidas = useMemo(
+    () => partidas.map((p) => ({ ...p } as Record<string, unknown>)),
+    [partidas],
+  );
+
+  const filasGastos = useMemo(
+    () =>
+      gastos.map((g) => ({
+        ...g,
+        descripcion: g.descripcion ?? '',
+      })) as Record<string, unknown>[],
+    [gastos],
+  );
 
   const totalPartidas = partidas.reduce((s, p) => s + Number(p.monto_total_estimado), 0);
   const totalGastos = gastos.reduce((s, g) => s + Number(g.costo), 0);
@@ -236,281 +310,238 @@ export default function LuloDatosManager({ proyectoId, proyectoNombre }: Props) 
           >
             {t === 'partidas' ? `Partidas (${partidas.length})` : null}
             {t === 'gastos' ? `Gastos (${gastos.length})` : null}
-            {t === 'tablas' ? 'Tablas del archivo' : null}
+            {t === 'tablas' ? `MDB / volcado (${mdbTables.length || csvRows.length ? 'con datos' : '—'})` : null}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-zinc-500 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Cargando…
+        <div
+          className="flex flex-col items-center gap-2 py-8 text-zinc-500 text-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <Settings className="h-8 w-8 animate-spin text-sky-400" aria-hidden />
+          <span>Cargando datos de Lulo…</span>
         </div>
       ) : null}
 
       {!loading && tab === 'partidas' ? (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full text-xs">
-            <thead className="bg-white/5 text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 text-left">Código</th>
-                <th className="px-3 py-2 text-left">Descripción</th>
-                <th className="px-3 py-2">Und</th>
-                <th className="px-3 py-2 text-right">Cant.</th>
-                <th className="px-3 py-2 text-right">P.U.</th>
-                <th className="px-3 py-2 text-right">Monto</th>
-                <th className="px-3 py-2" />
+        <LuloTablaFiltrable
+          titulo="Partidas importadas"
+          columnas={COLUMNAS_PARTIDAS}
+          filas={filasPartidas}
+          vacio="Sin partidas Lulo. Importa un archivo MDB o CSV arriba."
+          renderFila={(row) => {
+            const p = row as unknown as Partida;
+            const id = String(p.id);
+            return (
+              <tr key={id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                {editingPartida === id ? (
+                  <>
+                    <td className="px-2 py-1">
+                      <input
+                        className="w-full rounded bg-black/40 border border-white/10 px-2 py-1"
+                        value={editPartidaForm.codigo_partida ?? p.codigo_partida}
+                        onChange={(e) =>
+                          setEditPartidaForm((f) => ({ ...f, codigo_partida: e.target.value }))
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        className="w-full min-w-[140px] rounded bg-black/40 border border-white/10 px-2 py-1"
+                        value={editPartidaForm.descripcion ?? p.descripcion}
+                        onChange={(e) =>
+                          setEditPartidaForm((f) => ({ ...f, descripcion: e.target.value }))
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        className="w-14 rounded bg-black/40 border border-white/10 px-2 py-1"
+                        value={editPartidaForm.unidad ?? p.unidad}
+                        onChange={(e) =>
+                          setEditPartidaForm((f) => ({ ...f, unidad: e.target.value }))
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        type="number"
+                        className="w-20 rounded bg-black/40 border border-white/10 px-2 py-1 text-right"
+                        value={editPartidaForm.cantidad_presupuestada ?? p.cantidad_presupuestada}
+                        onChange={(e) =>
+                          setEditPartidaForm((f) => ({
+                            ...f,
+                            cantidad_presupuestada: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        type="number"
+                        className="w-24 rounded bg-black/40 border border-white/10 px-2 py-1 text-right"
+                        value={
+                          editPartidaForm.precio_unitario_estimado ?? p.precio_unitario_estimado
+                        }
+                        onChange={(e) =>
+                          setEditPartidaForm((f) => ({
+                            ...f,
+                            precio_unitario_estimado: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        type="number"
+                        className="w-24 rounded bg-black/40 border border-white/10 px-2 py-1 text-right"
+                        value={editPartidaForm.monto_total_estimado ?? p.monto_total_estimado}
+                        onChange={(e) =>
+                          setEditPartidaForm((f) => ({
+                            ...f,
+                            monto_total_estimado: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void savePartida(id)}
+                        className="text-emerald-400 hover:text-emerald-300"
+                      >
+                        <Save className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-3 py-2 font-mono text-zinc-400">{p.codigo_partida}</td>
+                    <td className="px-3 py-2">{p.descripcion}</td>
+                    <td className="px-3 py-2 text-center">{p.unidad}</td>
+                    <td className="px-3 py-2 text-right">{p.cantidad_presupuestada}</td>
+                    <td className="px-3 py-2 text-right">{p.precio_unitario_estimado}</td>
+                    <td className="px-3 py-2 text-right font-semibold">
+                      {Number(p.monto_total_estimado).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingPartida(id);
+                          setEditPartidaForm({});
+                        }}
+                        className="text-zinc-500 hover:text-white mr-2"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deletePartida(id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </>
+                )}
               </tr>
-            </thead>
-            <tbody>
-              {partidas.map((p) => (
-                <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                  {editingPartida === p.id ? (
-                    <>
-                      <td className="px-2 py-1">
-                        <input
-                          className="w-full rounded bg-black/40 border border-white/10 px-2 py-1"
-                          value={editPartidaForm.codigo_partida ?? p.codigo_partida}
-                          onChange={(e) =>
-                            setEditPartidaForm((f) => ({ ...f, codigo_partida: e.target.value }))
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input
-                          className="w-full min-w-[140px] rounded bg-black/40 border border-white/10 px-2 py-1"
-                          value={editPartidaForm.descripcion ?? p.descripcion}
-                          onChange={(e) =>
-                            setEditPartidaForm((f) => ({ ...f, descripcion: e.target.value }))
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input
-                          className="w-14 rounded bg-black/40 border border-white/10 px-2 py-1"
-                          value={editPartidaForm.unidad ?? p.unidad}
-                          onChange={(e) =>
-                            setEditPartidaForm((f) => ({ ...f, unidad: e.target.value }))
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input
-                          type="number"
-                          className="w-20 rounded bg-black/40 border border-white/10 px-2 py-1 text-right"
-                          value={editPartidaForm.cantidad_presupuestada ?? p.cantidad_presupuestada}
-                          onChange={(e) =>
-                            setEditPartidaForm((f) => ({
-                              ...f,
-                              cantidad_presupuestada: Number(e.target.value),
-                            }))
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input
-                          type="number"
-                          className="w-24 rounded bg-black/40 border border-white/10 px-2 py-1 text-right"
-                          value={
-                            editPartidaForm.precio_unitario_estimado ?? p.precio_unitario_estimado
-                          }
-                          onChange={(e) =>
-                            setEditPartidaForm((f) => ({
-                              ...f,
-                              precio_unitario_estimado: Number(e.target.value),
-                            }))
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input
-                          type="number"
-                          className="w-24 rounded bg-black/40 border border-white/10 px-2 py-1 text-right"
-                          value={editPartidaForm.monto_total_estimado ?? p.monto_total_estimado}
-                          onChange={(e) =>
-                            setEditPartidaForm((f) => ({
-                              ...f,
-                              monto_total_estimado: Number(e.target.value),
-                            }))
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap">
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void savePartida(p.id)}
-                          className="text-emerald-400 hover:text-emerald-300"
-                        >
-                          <Save className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="px-3 py-2 font-mono text-zinc-400">{p.codigo_partida}</td>
-                      <td className="px-3 py-2">{p.descripcion}</td>
-                      <td className="px-3 py-2 text-center">{p.unidad}</td>
-                      <td className="px-3 py-2 text-right">{p.cantidad_presupuestada}</td>
-                      <td className="px-3 py-2 text-right">{p.precio_unitario_estimado}</td>
-                      <td className="px-3 py-2 text-right font-semibold">
-                        {Number(p.monto_total_estimado).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingPartida(p.id);
-                            setEditPartidaForm({});
-                          }}
-                          className="text-zinc-500 hover:text-white mr-2"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void deletePartida(p.id)}
-                          className="text-red-400 hover:text-red-300"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {partidas.length === 0 ? (
-            <p className="p-6 text-center text-sm text-zinc-500">Sin partidas Lulo. Importa un archivo arriba.</p>
-          ) : null}
-        </div>
+            );
+          }}
+        />
       ) : null}
 
       {!loading && tab === 'gastos' ? (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full text-xs">
-            <thead className="bg-white/5 text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 text-left">Fecha</th>
-                <th className="px-3 py-2 text-left">Proveedor</th>
-                <th className="px-3 py-2 text-left">Descripción</th>
-                <th className="px-3 py-2">Tipo</th>
-                <th className="px-3 py-2 text-right">Costo</th>
-                <th className="px-3 py-2" />
+        <LuloTablaFiltrable
+          titulo="Gastos de obra importados"
+          columnas={COLUMNAS_GASTOS}
+          filas={filasGastos}
+          vacio="Sin gastos importados desde Lulo."
+          renderFila={(row) => {
+            const g = row as unknown as Gasto;
+            const id = String(g.id);
+            return (
+              <tr key={id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                <td className="px-3 py-2">{g.fecha}</td>
+                <td className="px-3 py-2 max-w-[160px] truncate" title={g.proveedor}>
+                  {g.proveedor}
+                </td>
+                <td className="px-3 py-2 max-w-[220px] truncate" title={g.descripcion ?? ''}>
+                  {g.descripcion}
+                </td>
+                <td className="px-3 py-2 text-zinc-500">{g.tipo}</td>
+                <td className="px-3 py-2 text-zinc-500">{g.disciplina}</td>
+                <td className="px-3 py-2 text-right font-semibold">
+                  {Number(g.costo).toLocaleString()}
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => void deleteGasto(id)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {gastos.map((g) => (
-                <tr key={g.id} className="border-t border-white/5">
-                  <td className="px-3 py-2">{g.fecha}</td>
-                  <td className="px-3 py-2">{g.proveedor}</td>
-                  <td className="px-3 py-2">{g.descripcion}</td>
-                  <td className="px-3 py-2 text-zinc-500">{g.tipo}</td>
-                  <td className="px-3 py-2 text-right font-semibold">
-                    {Number(g.costo).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => void deleteGasto(g.id)}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {gastos.length === 0 ? (
-            <p className="p-6 text-center text-sm text-zinc-500">Sin gastos importados.</p>
-          ) : null}
-        </div>
+            );
+          }}
+        />
       ) : null}
 
       {!loading && tab === 'tablas' ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {!snapshotDetail ? (
             <p className="text-sm text-zinc-500">
-              Selecciona una importación guardada arriba para ver todas las tablas del MDB o filas del CSV.
+              Importa un MDB o CSV arriba, o selecciona una importación guardada para ver el volcado en tabla
+              filtrable.
             </p>
-          ) : mdbTables.length > 0 ? (
-            mdbTables.map((t) => (
-              <div key={t.name} className="rounded-xl border border-white/10 overflow-hidden">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-4 py-3 bg-white/5 text-left text-sm font-semibold"
-                  onClick={() =>
-                    setExpandedTable(expandedTable === t.name ? null : t.name)
-                  }
-                >
-                  {expandedTable === t.name ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                  {t.name}{' '}
-                  <span className="text-zinc-500 font-normal">
-                    ({t.rowCount} filas · {t.columns.length} columnas)
-                  </span>
-                </button>
-                {expandedTable === t.name ? (
-                  <div className="overflow-x-auto max-h-[400px]">
-                    <table className="w-full text-[11px]">
-                      <thead className="sticky top-0 bg-zinc-900">
-                        <tr>
-                          {t.columns.map((c) => (
-                            <th key={c} className="px-2 py-1 text-left text-zinc-500 border-b border-white/10">
-                              {c}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {t.rows.slice(0, 500).map((row, i) => (
-                          <tr key={i} className="border-t border-white/5">
-                            {t.columns.map((c) => (
-                              <td key={c} className="px-2 py-1 max-w-[200px] truncate">
-                                {String(row[c] ?? '')}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {t.rows.length > 500 ? (
-                      <p className="p-2 text-zinc-600 text-xs">Mostrando 500 de {t.rows.length} filas</p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ))
-          ) : csvRows.length > 0 ? (
-            <div className="overflow-x-auto rounded-xl border border-white/10 max-h-[500px]">
-              <table className="w-full text-[11px]">
-                <thead className="sticky top-0 bg-zinc-900">
-                  <tr>
-                    {(snapshotDetail.payload.headers ?? Object.keys(csvRows[0] ?? {})).map((h) => (
-                      <th key={h} className="px-2 py-1 text-left text-zinc-500">
-                        {h}
-                      </th>
+          ) : mdbTables.length > 0 && tablaMdbActiva ? (
+            <>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-xs text-zinc-500">
+                  Archivo:{' '}
+                  <span className="text-zinc-300 font-medium">{snapshotDetail.nombre_archivo}</span>
+                </p>
+                <label className="flex items-center gap-2 text-xs text-zinc-400">
+                  Tabla Access:
+                  <select
+                    value={tablaMdbActiva.name}
+                    onChange={(e) => setTablaMdbSeleccionada(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-zinc-200 focus:border-sky-500/40 focus:outline-none"
+                  >
+                    {mdbTables.map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {t.name} ({t.rowCount} filas)
+                      </option>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {csvRows.slice(0, 500).map((row, i) => (
-                    <tr key={i} className="border-t border-white/5">
-                      {(snapshotDetail.payload.headers ?? Object.keys(row)).map((h) => (
-                        <td key={h} className="px-2 py-1 max-w-[180px] truncate">
-                          {row[h]}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </select>
+                </label>
+              </div>
+              <LuloTablaFiltrable
+                titulo={`Tabla: ${tablaMdbActiva.name}`}
+                columnas={columnasMdb}
+                filas={tablaMdbActiva.rows}
+                vacio="Esta tabla no tiene filas en el volcado."
+                maxFilasVisibles={2000}
+              />
+            </>
+          ) : csvRows.length > 0 ? (
+            <LuloTablaFiltrable
+              titulo={`CSV: ${snapshotDetail.nombre_archivo}`}
+              columnas={(snapshotDetail.payload.headers ?? Object.keys(csvRows[0] ?? {})).map((h) => ({
+                key: h,
+                label: h,
+                maxWidth: 200,
+              }))}
+              filas={csvRows as unknown as Record<string, unknown>[]}
+              vacio="CSV sin filas."
+              maxFilasVisibles={2000}
+            />
           ) : (
             <p className="text-sm text-zinc-500">Volcado vacío.</p>
           )}

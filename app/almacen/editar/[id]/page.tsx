@@ -14,6 +14,7 @@ import {
   Settings2,
   AlertTriangle,
 } from 'lucide-react';
+import InventarioClasificacionFields from '@/components/almacen/InventarioClasificacionFields';
 
 type Deposit = { id: string; code: string; name: string; locality: string | null; is_default: boolean };
 type Furniture = {
@@ -58,6 +59,9 @@ type InventoryEditItem = {
   status: 'OPERATIVO' | 'EN REPARACION' | 'BAJA' | null;
   observations: string | null;
   image_url: string | null;
+  entidad_id: string | null;
+  proyecto_id: string | null;
+  presupuesto_partida_id: string | null;
 };
 
 const STATUS_OPTIONS: { value: NonNullable<InventoryEditItem['status']>; label: string }[] = [
@@ -178,6 +182,10 @@ export default function EditInventoryItemPage() {
       status: (data.status ?? null) as InventoryEditItem['status'],
       observations: data.observations ?? null,
       image_url: data.image_url ?? null,
+      entidad_id: (data as { entidad_id?: string | null }).entidad_id ?? null,
+      proyecto_id: (data as { proyecto_id?: string | null }).proyecto_id ?? null,
+      presupuesto_partida_id:
+        (data as { presupuesto_partida_id?: string | null }).presupuesto_partida_id ?? null,
     };
 
     setItem(normalized);
@@ -260,7 +268,9 @@ export default function EditInventoryItemPage() {
         status: isHerramientas ? item.status ?? null : null,
         observations: item.observations?.trim() ? item.observations.trim() : null,
         product_id: item.product_id ?? null,
-        // Mantener sap_code, image_url: no es necesario tocarlos si no se envían en payload.
+        entidad_id: item.entidad_id ?? null,
+        proyecto_id: item.proyecto_id ?? null,
+        presupuesto_partida_id: item.presupuesto_partida_id ?? null,
       };
 
       // Si trae sap_code y el usuario lo escribió, lo actualizamos (opcional)
@@ -359,6 +369,26 @@ export default function EditInventoryItemPage() {
                   />
                 </div>
               </div>
+
+              <InventarioClasificacionFields
+                value={{
+                  entidad_id: item.entidad_id,
+                  proyecto_id: item.proyecto_id,
+                  presupuesto_partida_id: item.presupuesto_partida_id,
+                }}
+                onChange={(next) =>
+                  setItem((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          entidad_id: next.entidad_id,
+                          proyecto_id: next.proyecto_id,
+                          presupuesto_partida_id: next.presupuesto_partida_id,
+                        }
+                      : prev,
+                  )
+                }
+              />
 
               <div className="space-y-2 rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-4">
                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">

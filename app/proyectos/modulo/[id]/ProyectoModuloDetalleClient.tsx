@@ -7,6 +7,16 @@ import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
 
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
+import InventarioEquiposProyecto from '@/components/proyectos/InventarioEquiposProyecto';
+import {
+  PROYECTO_EQUIPO_SELECT,
+  PROYECTO_EQUIPO_SELECT_LEGACY,
+  etiquetaCategoriaEquipo,
+  isMaquinariaColumnMissing,
+  mapProyectoEquipoRow,
+  normalizarCategoriaEquipo,
+  type ProyectoEquipoRow,
+} from '@/lib/proyectos/proyectoEquipos';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
@@ -134,14 +144,7 @@ type EntidadOpt = {
   registro_mercantil?: unknown;
 };
 
-type Equipo = {
-  id: string;
-  nombre_equipo: string;
-  marca: string | null;
-  modelo: string | null;
-  serial: string | null;
-  cantidad: number;
-};
+type Equipo = ProyectoEquipoRow;
 
 type Archivo = {
   id: string;
@@ -182,19 +185,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [archivos, setArchivos] = useState<Archivo[]>([]);
   const [visitas, setVisitas] = useState<Visita[]>([]);
 
-  const [savingEquipo, setSavingEquipo] = useState(false);
   const [savingArchivo, setSavingArchivo] = useState(false);
   const [savingVisita, setSavingVisita] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [editEquipoId, setEditEquipoId] = useState<string | null>(null);
   const [editVisitaId, setEditVisitaId] = useState<string | null>(null);
   const [editArchivoId, setEditArchivoId] = useState<string | null>(null);
-
-  const [eqNombre, setEqNombre] = useState('');
-  const [eqMarca, setEqMarca] = useState('');
-  const [eqModelo, setEqModelo] = useState('');
-  const [eqSerial, setEqSerial] = useState('');
-  const [eqCantidad, setEqCantidad] = useState('1');
 
   const [arTipo, setArTipo] = useState('foto_proyecto');
   const [arTitulo, setArTitulo] = useState('');
@@ -204,12 +199,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [vFechaHora, setVFechaHora] = useState(() => new Date().toISOString().slice(0, 16));
   const [vInforme, setVInforme] = useState('');
   const [vFotoAntes, setVFotoAntes] = useState<File | null>(null);
-
-  const [eeNombre, setEeNombre] = useState('');
-  const [eeMarca, setEeMarca] = useState('');
-  const [eeModelo, setEeModelo] = useState('');
-  const [eeSerial, setEeSerial] = useState('');
-  const [eeCantidad, setEeCantidad] = useState('1');
 
   const [evTecnico, setEvTecnico] = useState('');
   const [evFechaHora, setEvFechaHora] = useState('');
@@ -289,12 +278,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [p, e, a, v] = await withTimeout(
+      const [p, e0, a, v] = await withTimeout(
         Promise.all([
           supabase.from('ci_proyectos').select('*').eq('id', id).maybeSingle(),
           supabase
             .from('ci_proyecto_equipos')
-            .select('id,nombre_equipo,marca,modelo,serial,cantidad')
+            .select(PROYECTO_EQUIPO_SELECT)
             .eq('proyecto_id', id)
             .order('created_at', { ascending: false }),
           supabase
@@ -310,6 +299,14 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         ]),
         LOAD_TIMEOUT_MS,
       );
+      let e = e0;
+      if (e.error && isMaquinariaColumnMissing(e.error.message)) {
+        e = await supabase
+          .from('ci_proyecto_equipos')
+          .select(PROYECTO_EQUIPO_SELECT_LEGACY)
+          .eq('proyecto_id', id)
+          .order('created_at', { ascending: false });
+      }
       if (p.error || !p.data) {
         setProyecto(null);
         setEquipos([]);
@@ -319,7 +316,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         return;
       }
       setProyecto(p.data as Proyecto);
-      setEquipos((e.data ?? []) as Equipo[]);
+      setEquipos((e.data ?? []).map((r) => mapProyectoEquipoRow(r as Record<string, unknown>)));
       setArchivos((a.data ?? []) as Archivo[]);
       setVisitas((v.data ?? []) as Visita[]);
       if (e.error?.message) setError((prev) => prev ?? e.error.message);
@@ -344,31 +341,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     }
     void load();
   }, [load, id]);
-
-  async function addEquipo(e: React.FormEvent) {
-    e.preventDefault();
-    if (!eqNombre.trim()) return;
-    setSavingEquipo(true);
-    const { error: insErr } = await supabase.from('ci_proyecto_equipos').insert({
-      proyecto_id: id,
-      nombre_equipo: eqNombre.trim(),
-      marca: eqMarca.trim() || null,
-      modelo: eqModelo.trim() || null,
-      serial: eqSerial.trim() || null,
-      cantidad: Number(eqCantidad || 1),
-    });
-    setSavingEquipo(false);
-    if (insErr) {
-      setError(insErr.message);
-      return;
-    }
-    setEqNombre('');
-    setEqMarca('');
-    setEqModelo('');
-    setEqSerial('');
-    setEqCantidad('1');
-    void load();
-  }
 
   async function addArchivo(e: React.FormEvent) {
     e.preventDefault();
@@ -558,28 +530,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     void load();
   }
 
-  async function saveEquipoEdit() {
-    if (!editEquipoId) return;
-    setBusyId(editEquipoId);
-    const { error: upErr } = await supabase
-      .from('ci_proyecto_equipos')
-      .update({
-        nombre_equipo: eeNombre.trim(),
-        marca: eeMarca.trim() || null,
-        modelo: eeModelo.trim() || null,
-        serial: eeSerial.trim() || null,
-        cantidad: Number(eeCantidad || 1),
-      })
-      .eq('id', editEquipoId);
-    setBusyId(null);
-    if (upErr) {
-      setError(upErr.message);
-      return;
-    }
-    setEditEquipoId(null);
-    void load();
-  }
-
   async function saveVisitaEdit() {
     if (!editVisitaId) return;
     setBusyId(editVisitaId);
@@ -632,8 +582,19 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     const items = equipos.length
       ? equipos
           .map((e, idx) => {
+            const cat = etiquetaCategoriaEquipo(e.categoria);
             const detalle = [e.marca, e.modelo].filter(Boolean).join(' ');
-            return `${idx + 1}. ${e.nombre_equipo} - Cantidad: ${e.cantidad}${detalle ? ` (${detalle})` : ''}${e.serial ? ` - Serial: ${e.serial}` : ''}`;
+            let extra = '';
+            if (normalizarCategoriaEquipo(e.categoria) === 'maquinaria_alquilada') {
+              const partes = [
+                e.arrendatario ? `Arrendatario: ${e.arrendatario}` : null,
+                e.arrendatario_rif ? `RIF: ${e.arrendatario_rif}` : null,
+                e.fecha_arriendo_inicio ? `Desde: ${e.fecha_arriendo_inicio}` : null,
+                e.costo_arriendo != null ? `Costo: ${e.moneda_arriendo ?? 'USD'} ${e.costo_arriendo}` : null,
+              ].filter(Boolean);
+              if (partes.length) extra = ` · ${partes.join(' · ')}`;
+            }
+            return `${idx + 1}. [${cat}] ${e.nombre_equipo} - Cantidad: ${e.cantidad}${detalle ? ` (${detalle})` : ''}${e.serial ? ` - Serial: ${e.serial}` : ''}${extra}`;
           })
           .join('\n')
       : 'Sin equipos cargados.';
@@ -742,9 +703,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           },
           inventarioActual: equipos.map((e) => ({
             nombre: e.nombre_equipo,
+            categoria: normalizarCategoriaEquipo(e.categoria),
             marca: e.marca,
             modelo: e.modelo,
             cantidad: e.cantidad,
+            arrendatario: e.arrendatario,
+            costo_arriendo: e.costo_arriendo,
           })),
         }),
       });
@@ -1065,112 +1029,17 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               {modoEdicion || !tabVistaTalento ? (
               <>
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
-              <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-                <h2 className="text-sm font-bold uppercase text-zinc-500">Inventario de equipos</h2>
-                <form onSubmit={(e) => void addEquipo(e)} className="mt-3 grid gap-2">
-                  <input
-                    value={eqNombre}
-                    onChange={(e) => setEqNombre(e.target.value)}
-                    placeholder="Equipo *"
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                  />
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <input
-                      value={eqMarca}
-                      onChange={(e) => setEqMarca(e.target.value)}
-                      placeholder="Marca"
-                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                    />
-                    <input
-                      value={eqModelo}
-                      onChange={(e) => setEqModelo(e.target.value)}
-                      placeholder="Modelo"
-                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                    />
-                    <input
-                      value={eqSerial}
-                      onChange={(e) => setEqSerial(e.target.value)}
-                      placeholder="Serial"
-                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                    />
-                  </div>
-                  <input
-                    value={eqCantidad}
-                    onChange={(e) => setEqCantidad(e.target.value)}
-                    placeholder="Cantidad"
-                    className="max-w-[180px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                  />
-                  <button disabled={savingEquipo} className="w-fit rounded-xl bg-[#007AFF] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0062CC] disabled:opacity-50">
-                    {savingEquipo ? 'Guardando...' : 'Agregar equipo'}
-                  </button>
-                </form>
-                <ul className="mt-4 space-y-2 text-sm">
-                  {equipos.map((e) => (
-                    <li key={e.id} className="rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 py-2">
-                      {editEquipoId === e.id ? (
-                        <div className="space-y-2">
-                          <input
-                            value={eeNombre}
-                            onChange={(x) => setEeNombre(x.target.value)}
-                            className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-zinc-500 outline-none"
-                          />
-                          <div className="grid gap-2 sm:grid-cols-4">
-                            <input
-                              value={eeMarca}
-                              onChange={(x) => setEeMarca(x.target.value)}
-                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-zinc-500 outline-none"
-                            />
-                            <input
-                              value={eeModelo}
-                              onChange={(x) => setEeModelo(x.target.value)}
-                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-zinc-500 outline-none"
-                            />
-                            <input
-                              value={eeSerial}
-                              onChange={(x) => setEeSerial(x.target.value)}
-                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-zinc-500 outline-none"
-                            />
-                            <input
-                              value={eeCantidad}
-                              onChange={(x) => setEeCantidad(x.target.value)}
-                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-zinc-500 outline-none"
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => void saveEquipoEdit()} className="rounded-lg bg-[#007AFF] px-2 py-1 text-xs font-semibold text-white hover:bg-[#0062CC]">Guardar</button>
-                            <button onClick={() => setEditEquipoId(null)} className="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10">Cancelar</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span>
-                            <span className="font-semibold text-white">{e.nombre_equipo}</span> · {e.marca ?? '—'} {e.modelo ?? ''} · Serial: {e.serial ?? '—'} · Cant: {e.cantidad}
-                          </span>
-                          <span className="flex gap-1">
-                            <button
-                              onClick={() => {
-                                setEditEquipoId(e.id);
-                                setEeNombre(e.nombre_equipo);
-                                setEeMarca(e.marca ?? '');
-                                setEeModelo(e.modelo ?? '');
-                                setEeSerial(e.serial ?? '');
-                                setEeCantidad(String(e.cantidad));
-                              }}
-                              className="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10"
-                            >
-                              Editar
-                            </button>
-                            <button onClick={() => void deleteById('ci_proyecto_equipos', e.id)} disabled={busyId === e.id} className="rounded-lg border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10">
-                              {busyId === e.id ? '...' : 'Borrar'}
-                            </button>
-                          </span>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+              <div className="lg:col-span-2">
+                <InventarioEquiposProyecto
+                  proyectoId={id}
+                  equipos={equipos}
+                  onRefresh={() => void load()}
+                  onError={setError}
+                />
+              </div>
 
-                <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+              <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl lg:col-span-2">
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
                   <p className="text-xs font-bold uppercase text-zinc-400">Transmision al trabajador</p>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     <input

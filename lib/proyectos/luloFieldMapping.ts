@@ -1,8 +1,10 @@
-/** Normaliza filas CSV/MDB a mapa clave→texto en minúsculas. */
+import { normalizeColumnKey, pickFieldFuzzy } from '@/lib/proyectos/luloColumnInfer';
+
+/** Normaliza filas CSV/MDB a mapa clave→texto en minúsculas (claves sin acentos). */
 export function normalizeLuloRow(row: Record<string, unknown>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(row)) {
-    const key = k.trim().toLowerCase();
+    const key = normalizeColumnKey(k);
     if (v == null || v === '') {
       out[key] = '';
       continue;
@@ -21,16 +23,11 @@ export function normalizeLuloRow(row: Record<string, unknown>): Record<string, s
 }
 
 export function pickField(row: Record<string, string>, keys: string[]): string {
-  for (const key of keys) {
-    const k = key.toLowerCase();
-    const v = row[k];
-    if (v != null && v !== '') return v;
-  }
-  return '';
+  return pickFieldFuzzy(row, keys);
 }
 
 export function pickNumber(row: Record<string, string>, keys: string[]): number {
-  const raw = pickField(row, keys).replace(/\s/g, '').replace(',', '.');
+  const raw = pickFieldFuzzy(row, keys).replace(/\s/g, '').replace(/,/g, '.');
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }

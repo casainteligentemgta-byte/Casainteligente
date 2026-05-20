@@ -22,6 +22,14 @@ export type LuloMdbParseResult = {
     filasOmitidas: number;
     tablasPartidas?: string[];
     tablasGastos?: string[];
+    diagnosticoResumen?: string;
+    tablasDiagnostico?: Array<{
+      name: string;
+      rowCount: number;
+      columns: string[];
+      partidaScore: number;
+      gastoScore: number;
+    }>;
   };
 };
 

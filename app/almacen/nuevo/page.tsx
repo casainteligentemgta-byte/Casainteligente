@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import InventarioClasificacionFields from '@/components/almacen/InventarioClasificacionFields';
 
 type Deposit = { id: string; code: string; name: string; locality: string | null; is_default: boolean };
 type Furniture = {
@@ -68,6 +69,11 @@ export default function NewInventoryItemPage() {
     product_id: null as number | null,
   });
   const [loading, setLoading] = useState(false);
+  const [clasificacion, setClasificacion] = useState({
+    entidad_id: null as string | null,
+    proyecto_id: null as string | null,
+    presupuesto_partida_id: null as string | null,
+  });
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -219,6 +225,9 @@ export default function NewInventoryItemPage() {
         status: isHerramientas ? item.status : null,
         observations: item.observations.trim() || null,
         product_id: item.product_id ?? null,
+        entidad_id: clasificacion.entidad_id,
+        proyecto_id: clasificacion.proyecto_id,
+        presupuesto_partida_id: clasificacion.presupuesto_partida_id,
       };
       if (sapTrim) payload.sap_code = sapTrim;
 
@@ -304,6 +313,11 @@ export default function NewInventoryItemPage() {
                   />
                 </div>
               </div>
+
+              <InventarioClasificacionFields
+                value={clasificacion}
+                onChange={setClasificacion}
+              />
 
               <div className="space-y-2 rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-4">
                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">

@@ -1,15 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ─── Paquetes que se ejecutan en el servidor Node.js (fuera del bundle Edge/SSR) ───
-  // serverComponentsExternalPackages es el nombre esperado en versiones recientes de Next.js
-  serverComponentsExternalPackages: [
-    '@react-pdf/renderer', // genera PDFs en servidor; muy pesado para bundlear
-    'canvas',              // dependencia nativa de react-pdf
-    'sonner',              // evita "Cannot find module ./vendor-chunks/sonner.js" en dev
-    'mdb-reader',          // lectura Access MDB/ACCDB (import Lulo)
-  ],
-
   reactStrictMode: true,
+
+  // Next 14: paquetes nativos solo en Node (no en el bundle del cliente)
+  experimental: {
+    serverComponentsExternalPackages: [
+      '@react-pdf/renderer',
+      'canvas',
+      'sonner',
+      'mdb-reader',
+      'browserify-aes',
+      'create-hash',
+      'fast-xml-parser',
+      'pako',
+    ],
+  },
 
   // ─── Compresión gzip/brotli en producción ───────────────────────────────────────
   compress: true,
@@ -60,6 +65,29 @@ const nextConfig = {
     if (dev) {
       if (config.output) config.output.chunkLoadTimeout = 300_000;
       config.cache = false;
+    }
+
+    if (isServer) {
+      // No bundlear mdb-reader: Node resuelve la entrada "node" del paquete en runtime
+      const prev = config.externals;
+      const mdbExternal = ({ request }, callback) => {
+        if (request === 'mdb-reader' || (typeof request === 'string' && request.startsWith('mdb-reader/'))) {
+          return callback(null, `commonjs ${request}`);
+        }
+        callback();
+      };
+      if (Array.isArray(prev)) {
+        config.externals = [...prev, mdbExternal];
+      } else if (typeof prev === 'function') {
+        config.externals = (ctx, cb) => {
+          mdbExternal(ctx, (err, result) => {
+            if (result) return cb(err, result);
+            prev(ctx, cb);
+          });
+        };
+      } else {
+        config.externals = [mdbExternal];
+      }
     }
 
     // Excluir canvas del bundle del cliente (solo lo necesita el servidor para react-pdf)

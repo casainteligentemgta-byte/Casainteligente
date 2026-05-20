@@ -3,13 +3,39 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Upload, FileSpreadsheet, Loader2, Database, Table2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Database, Table2, Search, Settings } from 'lucide-react';
+
+function EngranajeProcesando({ texto, grande = false }: { texto: string; grande?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-center gap-2 ${grande ? 'flex-col py-4' : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-label={texto}
+    >
+      <Settings
+        className={`animate-spin shrink-0 text-sky-400 ${grande ? 'h-9 w-9' : 'h-3.5 w-3.5'}`}
+        aria-hidden
+      />
+      <span className={`text-zinc-400 ${grande ? 'text-xs text-center' : 'text-xs'}`}>{texto}</span>
+    </div>
+  );
+}
 import { toast } from 'sonner';
+import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 
 type ImportarProps = {
   proyectoId: string;
   onSuccess?: () => void;
   className?: string;
+};
+
+type TablaInspeccion = {
+  name: string;
+  rowCount: number;
+  columns: string[];
+  partidaScore?: number;
+  gastoScore?: number;
 };
 
 type ImportResponse = {
@@ -22,7 +48,11 @@ type ImportResponse = {
     partidasTable?: string | null;
     gastosTable?: string | null;
     tableNames?: string[];
+    diagnosticoResumen?: string;
+    tablasDiagnostico?: TablaInspeccion[];
   };
+  tables?: TablaInspeccion[];
+  diagnosticoResumen?: string;
 };
 
 export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, className = '' }: ImportarProps) {
@@ -32,8 +62,46 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
   const [reemplazar, setReemplazar] = useState(false);
   const [importarGastos, setImportarGastos] = useState(true);
   const [ultimoResumen, setUltimoResumen] = useState<string | null>(null);
+  const [inspeccionando, setInspeccionando] = useState(false);
+  const [inspeccion, setInspeccion] = useState<string | null>(null);
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
 
   const esMdb = file?.name.toLowerCase().endsWith('.mdb') || file?.name.toLowerCase().endsWith('.accdb');
+  const procesando = uploading || inspeccionando;
+
+  const handleInspeccionar = async () => {
+    if (!file || !esMdb) {
+      toast.error('Selecciona un archivo .mdb o .accdb');
+      return;
+    }
+    setInspeccionando(true);
+    setInspeccion(null);
+    setErrorDetalle(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/api/proyectos/presupuesto/inspeccionar-mdb', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await parseFetchJson<ImportResponse>(res);
+      if (!res.ok) throw new Error(data.error || 'No se pudo inspeccionar el MDB');
+      const lineas: string[] = [];
+      if (data.diagnosticoResumen) lineas.push(data.diagnosticoResumen);
+      for (const t of data.tables ?? []) {
+        lineas.push(
+          `• ${t.name}: ${t.rowCount} filas, columnas [${t.columns.slice(0, 8).join(', ')}${t.columns.length > 8 ? '…' : ''}]`,
+        );
+      }
+      setInspeccion(lineas.join('\n') || 'MDB leído; no hay tablas con datos.');
+      toast.success('Vista previa del MDB lista');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      toast.error(message);
+    } finally {
+      setInspeccionando(false);
+    }
+  };
 
   const handleUpload = async () => {
     if (!file) {
@@ -47,6 +115,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
     setUploading(true);
     setUltimoResumen(null);
+    setErrorDetalle(null);
     const formData = new FormData();
     formData.append('file', file);
     formData.append('proyectoId', proyectoId.trim());
@@ -59,8 +128,17 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
         body: formData,
       });
 
-      const data = (await res.json()) as ImportResponse;
-      if (!res.ok) throw new Error(data.error || 'Error en la carga');
+      const data = await parseFetchJson<ImportResponse>(res);
+      if (!res.ok) {
+        const detalle =
+          data.meta?.diagnosticoResumen ||
+          data.meta?.tablasDiagnostico
+            ?.slice(0, 4)
+            .map((t) => `${t.name} (${t.rowCount} filas, score ${t.partidaScore})`)
+            .join(' · ');
+        if (detalle) setErrorDetalle(detalle);
+        throw new Error(data.error || 'Error en la carga');
+      }
 
       const lineas: string[] = [];
       if (data.partidas != null) lineas.push(`${data.partidas} partidas`);
@@ -120,13 +198,61 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
         <input
           type="file"
           accept=".csv,text/csv,.mdb,.accdb"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setInspeccion(null);
+            setErrorDetalle(null);
+          }}
           className="w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white/5 file:text-white hover:file:bg-white/10"
         />
 
+        {procesando ? (
+          <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-3">
+            <EngranajeProcesando
+              grande
+              texto={
+                inspeccionando
+                  ? 'Leyendo tablas del Access…'
+                  : esMdb
+                    ? 'Analizando e importando el MDB…'
+                    : 'Procesando el presupuesto CSV…'
+              }
+            />
+          </div>
+        ) : null}
+
         {esMdb ? (
-          <p className="text-[11px] text-sky-400/90">
-            MDB detectado: se analizarán tablas de partidas y gastos automáticamente.
+          <>
+            <p className="text-[11px] text-sky-400/90">
+              MDB detectado: se analizarán tablas de partidas y gastos automáticamente.
+            </p>
+            <button
+              type="button"
+              onClick={handleInspeccionar}
+              disabled={inspeccionando || !file}
+              className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {inspeccionando ? (
+                <EngranajeProcesando texto="Inspeccionando…" />
+              ) : (
+                <>
+                  <Search className="h-3.5 w-3.5" />
+                  Inspeccionar MDB (sin importar)
+                </>
+              )}
+            </button>
+          </>
+        ) : null}
+
+        {inspeccion ? (
+          <pre className="text-[10px] leading-relaxed text-zinc-500 whitespace-pre-wrap max-h-32 overflow-y-auto rounded-lg border border-white/10 bg-black/30 p-2">
+            {inspeccion}
+          </pre>
+        ) : null}
+
+        {errorDetalle ? (
+          <p className="text-[10px] leading-relaxed text-amber-400/90 border border-amber-500/20 rounded-lg p-2 bg-amber-500/5">
+            {errorDetalle}
           </p>
         ) : null}
 
@@ -157,7 +283,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           className="w-full bg-[#34C759] hover:bg-[#2eb04f] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-medium py-2 px-4 rounded-lg text-xs transition-colors flex items-center justify-center gap-2"
         >
           {uploading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <EngranajeProcesando texto={esMdb ? 'Importando…' : 'Procesando…'} />
           ) : (
             <>
               <Upload className="h-3.5 w-3.5" />

@@ -34,6 +34,11 @@ import {
   type ConfigNominaTabuladorLike,
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 import { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
+import {
+  bonoUsdDesdeAsignacionObrero,
+  idsObrerosConContratoSuscrito,
+} from '@/lib/rrhh/obreroContratoSuscrito';
+import { formatBonoUsd } from '@/lib/rrhh/projectAssignmentBono';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { HorarioSemanalExpressForm } from './HorarioSemanalExpressForm';
 import { Button } from '@/components/ui/button';
@@ -97,6 +102,8 @@ export default function ContratoExpressCreatePage() {
   const [esVenezolano, setEsVenezolano] = useState(true);
   const [nacionalidadOtro, setNacionalidadOtro] = useState('');
   const [bonoStr, setBonoStr] = useState('0');
+  /** Contrato ya suscrito: el bono del express no se edita aquí (venía de la asignación). */
+  const [bonoBloqueado, setBonoBloqueado] = useState(false);
   const [direccion, setDireccion] = useState('');
   const [obreroMunicipioResidencia, setObreroMunicipioResidencia] = useState('');
   const [obreroEstadoResidencia, setObreroEstadoResidencia] = useState('');
@@ -167,6 +174,41 @@ export default function ContratoExpressCreatePage() {
           }
           
           toast.info('Datos copiados del contrato seleccionado');
+        }
+      } else {
+        const workerId = (url.searchParams.get('worker') || url.searchParams.get('empleado') || '').trim();
+        const proyectoParam = (url.searchParams.get('proyecto') || '').trim();
+        if (workerId && c) {
+          const { data: emp } = await supabase
+            .from('ci_empleados')
+            .select('id,nombre_completo,cedula,documento')
+            .eq('id', workerId)
+            .maybeSingle();
+          if (emp && c) {
+            const nom = String((emp as { nombre_completo?: string }).nombre_completo ?? '').trim();
+            const parts = nom.split(/\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+              setNombres(parts.slice(0, -1).join(' '));
+              setApellidos(parts[parts.length - 1]!);
+            } else if (parts.length === 1) {
+              setNombres(parts[0]!);
+            }
+            const ced = String(
+              (emp as { cedula?: string; documento?: string }).cedula ??
+                (emp as { documento?: string }).documento ??
+                '',
+            ).trim();
+            if (ced) setCedula(ced);
+          }
+          if (proyectoParam) setProyectoId(proyectoParam);
+          const bono = await bonoUsdDesdeAsignacionObrero(
+            supabase,
+            workerId,
+            proyectoParam ? [proyectoParam] : undefined,
+          );
+          if (c && bono > 0) setBonoStr(formatBonoUsd(bono));
+          const locked = await idsObrerosConContratoSuscrito(supabase, [workerId]);
+          if (c) setBonoBloqueado(locked.has(workerId));
         }
       }
 
@@ -673,13 +715,28 @@ export default function ContratoExpressCreatePage() {
 
                         <div className="space-y-6">
                           <div className="space-y-2">
-                            <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">Bono Manual Complementario (USD)</Label>
+                            <Label className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500 ml-1">
+                              Bono Manual Complementario (USD)
+                            </Label>
+                            {bonoBloqueado ? (
+                              <p className="text-[10px] text-zinc-500">
+                                Este obrero ya suscribió contrato: define el bono en la solicitud antes del express, o
+                                revísalo en el contrato ya generado.
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-zinc-600">
+                                Editable antes de generar y suscribir el contrato express. Si viene de una asignación
+                                RRHH, se precarga desde el cuadro de solicitados.
+                              </p>
+                            )}
                             <div className="relative group">
                               <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
                               <Input 
                                 value={bonoStr} 
                                 onChange={(e) => setBonoStr(e.target.value)} 
-                                className="h-14 pl-11 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50 text-lg font-bold" 
+                                disabled={bonoBloqueado}
+                                readOnly={bonoBloqueado}
+                                className="h-14 pl-11 bg-black/40 border-white/5 rounded-2xl focus:border-amber-500/50 text-lg font-bold disabled:cursor-not-allowed disabled:opacity-60" 
                                 placeholder="0.00"
                                 inputMode="decimal"
                               />

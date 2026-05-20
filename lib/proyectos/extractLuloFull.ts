@@ -1,5 +1,6 @@
-import MDBReader from 'mdb-reader';
 import { serializeLuloRow } from '@/lib/proyectos/luloSerialize';
+import { assertMdbFileBuffer, toMdbNodeBuffer } from '@/lib/proyectos/mdbBuffer';
+import { createMdbReader } from '@/lib/proyectos/loadMdbReader';
 
 export type LuloMdbTableDump = {
   name: string;
@@ -21,8 +22,10 @@ export type LuloCsvFullDump = {
   rows: Record<string, string>[];
 };
 
-export function extractFullLuloMdb(buffer: Buffer): LuloMdbFullDump {
-  const reader = new MDBReader(buffer);
+export function extractFullLuloMdb(buffer: Buffer | ArrayBuffer | Uint8Array): LuloMdbFullDump {
+  const nodeBuffer = toMdbNodeBuffer(buffer);
+  assertMdbFileBuffer(nodeBuffer);
+  const reader = createMdbReader(nodeBuffer);
   const tableNames = reader.getTableNames({ normalTables: true, systemTables: false });
   const tables: LuloMdbTableDump[] = [];
 

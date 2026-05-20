@@ -35,6 +35,20 @@ export interface InventoryItem {
     serial_number?: string;
     observations?: string;
     status?: 'OPERATIVO' | 'EN REPARACION' | 'BAJA';
+    /** Entidad legal (ci_entidades). */
+    entidad_id?: string | null;
+    /** Proyecto de obra (ci_proyectos). */
+    proyecto_id?: string | null;
+    /** Partida presupuesto Lulo (ci_presupuesto_partidas). */
+    presupuesto_partida_id?: string | null;
+    entidad?: { id: string; nombre: string; rif?: string | null } | null;
+    proyecto?: { id: string; nombre: string; entidad_id?: string | null } | null;
+    partida?: {
+        id: string;
+        codigo_partida: string;
+        descripcion: string;
+        proyecto_id?: string;
+    } | null;
     created_at?: string;
     updated_at?: string;
 }

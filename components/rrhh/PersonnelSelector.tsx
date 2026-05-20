@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPersonnel';
+import { formatBonoUsd, isBonoColumnMissingError, parseBonoUsd } from '@/lib/rrhh/projectAssignmentBono';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -95,6 +96,7 @@ export default function PersonnelSelector({
   const [search, setSearch] = useState('');
   const [onlySpecialty, setOnlySpecialty] = useState(true);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [bonoUsdText, setBonoUsdText] = useState('0');
   const [submitting, setSubmitting] = useState(false);
 
   const destinoTrasAsignar = useMemo(
@@ -234,25 +236,48 @@ export default function PersonnelSelector({
     }
     setSubmitting(true);
     try {
+      const bono = parseBonoUsd(bonoUsdText);
       const insertPayload: Record<string, unknown> = {
         labor_request_id: request.id,
         worker_id: selectedWorkerId,
         project_id: request.project_id,
+        bono_usd: bono,
       };
       if (hasEndDateColumn) {
         insertPayload.start_date = new Date().toISOString();
         insertPayload.end_date = null;
       }
 
-      const { error: ins } = await supabase.from('project_assignments').insert(
+      let { error: ins } = await supabase.from('project_assignments').insert(
         insertPayload as {
           labor_request_id: string;
           worker_id: string;
           project_id: string;
+          bono_usd?: number;
           start_date?: string;
           end_date?: string | null;
         },
       );
+      if (ins && isBonoColumnMissingError(ins.message)) {
+        const fallback: Record<string, unknown> = {
+          labor_request_id: request.id,
+          worker_id: selectedWorkerId,
+          project_id: request.project_id,
+        };
+        if (hasEndDateColumn) {
+          fallback.start_date = new Date().toISOString();
+          fallback.end_date = null;
+        }
+        ({ error: ins } = await supabase.from('project_assignments').insert(
+          fallback as {
+            labor_request_id: string;
+            worker_id: string;
+            project_id: string;
+            start_date?: string;
+            end_date?: string | null;
+          },
+        ));
+      }
       if (ins) throw new Error(ins.message);
 
       const { error: up } = await supabase.from('ci_empleados').update({ estatus: 'asignado' }).eq('id', selectedWorkerId);
@@ -360,7 +385,10 @@ export default function PersonnelSelector({
                 <button
                   type="button"
                   disabled={solicitudCerrada}
-                  onClick={() => setSelectedWorkerId(p.id)}
+                  onClick={() => {
+                    setSelectedWorkerId(p.id);
+                    setBonoUsdText('0');
+                  }}
                   className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
                     sel
                       ? 'border-fuchsia-400/60 bg-fuchsia-500/15'
@@ -380,6 +408,25 @@ export default function PersonnelSelector({
           })}
         </ul>
       )}
+
+      {selectedWorkerId ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/25 bg-amber-950/25 px-3 py-2">
+          <span className="text-xs font-semibold text-amber-300/90">Bono (USD)</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-500">$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={bonoUsdText}
+              onChange={(e) => setBonoUsdText(e.target.value)}
+              onBlur={() => setBonoUsdText(formatBonoUsd(parseBonoUsd(bonoUsdText)))}
+              disabled={solicitudCerrada || submitting}
+              className="w-28 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-right text-sm font-semibold tabular-nums text-amber-200 focus:border-amber-500/50 focus:outline-none"
+              aria-label="Bono en USD para el obrero seleccionado"
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 pt-3">
         <Button

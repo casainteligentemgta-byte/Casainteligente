@@ -1,8 +1,10 @@
+import { formatMdbReadError, toMdbNodeBuffer } from '@/lib/proyectos/mdbBuffer';
 import { inspectLuloMdb } from '@/lib/proyectos/parsePresupuestoLuloMdb';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /** POST: sube MDB y devuelve tablas/columnas sin escribir en BD (vista previa). */
 export async function POST(req: Request) {
@@ -16,11 +18,11 @@ export async function POST(req: Request) {
     if (!name.endsWith('.mdb') && !name.endsWith('.accdb')) {
       return NextResponse.json({ error: 'Solo archivos .mdb o .accdb' }, { status: 400 });
     }
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = toMdbNodeBuffer(await file.arrayBuffer());
     const inspection = inspectLuloMdb(buffer);
     return NextResponse.json({ success: true, ...inspection });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'No se pudo leer el MDB';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = formatMdbReadError(err);
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
