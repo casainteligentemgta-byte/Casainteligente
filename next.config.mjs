@@ -6,6 +6,7 @@ const nextConfig = {
     '@react-pdf/renderer', // genera PDFs en servidor; muy pesado para bundlear
     'canvas',              // dependencia nativa de react-pdf
     'sonner',              // evita "Cannot find module ./vendor-chunks/sonner.js" en dev
+    'mdb-reader',          // lectura Access MDB/ACCDB (import Lulo)
   ],
 
   reactStrictMode: true,

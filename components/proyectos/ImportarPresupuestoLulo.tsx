@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Loader2, Database } from 'lucide-react';
 import { toast } from 'sonner';
 
 type ImportarProps = {
@@ -11,15 +11,32 @@ type ImportarProps = {
   className?: string;
 };
 
+type ImportResponse = {
+  error?: string;
+  message?: string;
+  partidas?: number;
+  gastos?: number;
+  presupuestoTotalUsd?: number;
+  meta?: {
+    partidasTable?: string | null;
+    gastosTable?: string | null;
+    tableNames?: string[];
+  };
+};
+
 export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, className = '' }: ImportarProps) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [reemplazar, setReemplazar] = useState(false);
+  const [importarGastos, setImportarGastos] = useState(true);
+  const [ultimoResumen, setUltimoResumen] = useState<string | null>(null);
+
+  const esMdb = file?.name.toLowerCase().endsWith('.mdb') || file?.name.toLowerCase().endsWith('.accdb');
 
   const handleUpload = async () => {
     if (!file) {
-      toast.error('Selecciona un archivo CSV primero');
+      toast.error('Selecciona un archivo primero');
       return;
     }
     if (!proyectoId.trim()) {
@@ -28,10 +45,12 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     }
 
     setUploading(true);
+    setUltimoResumen(null);
     const formData = new FormData();
     formData.append('file', file);
     formData.append('proyectoId', proyectoId.trim());
     if (reemplazar) formData.append('reemplazar', '1');
+    if (!importarGastos) formData.append('importarGastos', '0');
 
     try {
       const res = await fetch('/api/proyectos/presupuesto/importar-lulo', {
@@ -39,10 +58,26 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
         body: formData,
       });
 
-      const data = (await res.json()) as { error?: string; message?: string };
+      const data = (await res.json()) as ImportResponse;
       if (!res.ok) throw new Error(data.error || 'Error en la carga');
 
-      toast.success(data.message || 'Presupuesto cargado correctamente.');
+      const lineas: string[] = [];
+      if (data.partidas != null) lineas.push(`${data.partidas} partidas`);
+      if (data.gastos != null && data.gastos > 0) lineas.push(`${data.gastos} gastos`);
+      if (data.presupuestoTotalUsd != null) {
+        lineas.push(
+          `Presupuesto total ~${data.presupuestoTotalUsd.toLocaleString('en-US', {
+            style: 'currency',
+            currency: 'USD',
+          })}`,
+        );
+      }
+      if (data.meta?.partidasTable) lineas.push(`Tabla partidas: ${data.meta.partidasTable}`);
+      if (data.meta?.gastosTable) lineas.push(`Tabla gastos: ${data.meta.gastosTable}`);
+
+      const resumen = lineas.join(' · ');
+      setUltimoResumen(resumen);
+      toast.success(data.message || 'Importación completada.');
       setFile(null);
       onSuccess?.();
       router.refresh();
@@ -56,25 +91,43 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
   return (
     <div
-      className={`bg-[#0A0A0F] border border-white/10 p-5 rounded-xl text-white max-w-sm ${className}`.trim()}
+      className={`bg-[#0A0A0F] border border-white/10 p-5 rounded-xl text-white max-w-md ${className}`.trim()}
     >
       <div className="flex items-center gap-2 mb-3">
-        <FileSpreadsheet className="text-[#34C759] h-5 w-5 shrink-0" />
+        {esMdb ? (
+          <Database className="text-sky-400 h-5 w-5 shrink-0" />
+        ) : (
+          <FileSpreadsheet className="text-[#34C759] h-5 w-5 shrink-0" />
+        )}
         <h4 className="text-sm font-semibold">Importar desde Lulo Software</h4>
       </div>
 
       <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
-        Exporta tu presupuesto de Lulo a Excel, guárdalo como formato `.csv` e impórtalo para fijar el
-        costo tope del proyecto.
+        Sube el archivo <strong className="text-zinc-300">.mdb / .accdb</strong> de Lulo (Access) o un{' '}
+        <strong className="text-zinc-300">.csv</strong> exportado. Se importan{' '}
+        <span className="text-emerald-400">partidas de presupuesto</span>
+        {importarGastos ? (
+          <>
+            {' '}
+            y <span className="text-sky-400">gastos de obra</span>
+          </>
+        ) : null}{' '}
+        vinculados a este proyecto.
       </p>
 
       <div className="space-y-3">
         <input
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,text/csv,.mdb,.accdb"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white/5 file:text-white hover:file:bg-white/10"
         />
+
+        {esMdb ? (
+          <p className="text-[11px] text-sky-400/90">
+            MDB detectado: se analizarán tablas de partidas y gastos automáticamente.
+          </p>
+        ) : null}
 
         <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
           <input
@@ -83,7 +136,17 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             onChange={(e) => setReemplazar(e.target.checked)}
             className="rounded border-white/20 bg-white/5"
           />
-          Reemplazar partidas Lulo anteriores de este proyecto
+          Reemplazar importaciones Lulo anteriores de este proyecto
+        </label>
+
+        <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={importarGastos}
+            onChange={(e) => setImportarGastos(e.target.checked)}
+            className="rounded border-white/20 bg-white/5"
+          />
+          Importar gastos de obra (si el MDB los incluye)
         </label>
 
         <button
@@ -97,10 +160,16 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           ) : (
             <>
               <Upload className="h-3.5 w-3.5" />
-              Procesar presupuesto meta
+              {esMdb ? 'Analizar e importar MDB' : 'Procesar presupuesto CSV'}
             </>
           )}
         </button>
+
+        {ultimoResumen ? (
+          <p className="text-[11px] leading-relaxed text-zinc-500 border-t border-white/10 pt-3">
+            Última importación: {ultimoResumen}
+          </p>
+        ) : null}
       </div>
     </div>
   );
