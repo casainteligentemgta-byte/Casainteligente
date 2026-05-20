@@ -41,3 +41,53 @@ export type LuloSnapshotResumen = {
   filasTotales?: number;
   formato: 'mdb' | 'csv';
 };
+
+export type LuloMdbParseMetaBase = {
+  tableNames: string[];
+  partidasTable: string | null;
+  gastosTable: string | null;
+  presupuestoTotalUsd: number;
+  filasOmitidas: number;
+  tablasPartidas?: string[];
+  tablasGastos?: string[];
+  diagnosticoResumen?: string;
+  tablasDiagnostico?: Array<{
+    name: string;
+    rowCount: number;
+    columns: string[];
+    partidaScore: number;
+    gastoScore: number;
+  }>;
+};
+
+/** Parser completó partidas/gastos. */
+export type LuloMdbParseSuccess = LuloMdbParseResult & {
+  success: true;
+  fullDump?: import('@/lib/proyectos/extractLuloFull').LuloMdbFullDump;
+  tablasPartidas?: string[];
+  tablasGastos?: string[];
+};
+
+/** Columnas no reconocidas: el usuario debe emparejar en UI. */
+export type LuloMdbParseNeedsMapping = {
+  success: false;
+  requireMapping: true;
+  detectedColumns: string[];
+  suggestedTable: string | null;
+  meta: LuloMdbParseMetaBase;
+  fullDump?: import('@/lib/proyectos/extractLuloFull').LuloMdbFullDump;
+};
+
+/** No hay tabla Partidas/Presupuesto: el usuario debe elegir tabla. */
+export type LuloMdbParseNeedsTableSelection = {
+  success: false;
+  requireTableSelection: true;
+  availableTables: string[];
+  meta: LuloMdbParseMetaBase;
+  fullDump?: import('@/lib/proyectos/extractLuloFull').LuloMdbFullDump;
+};
+
+export type LuloMdbParseOutcome =
+  | LuloMdbParseSuccess
+  | LuloMdbParseNeedsMapping
+  | LuloMdbParseNeedsTableSelection;

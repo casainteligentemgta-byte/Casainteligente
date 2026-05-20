@@ -23,6 +23,9 @@ function EngranajeProcesando({ texto, grande = false }: { texto: string; grande?
 }
 import { toast } from 'sonner';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
+import { LuloMapeoColumnasElite } from '@/components/proyectos/LuloMapeoColumnasElite';
+import { LuloSeleccionTablaElite } from '@/components/proyectos/LuloSeleccionTablaElite';
+import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 
 type ImportarProps = {
   proyectoId: string;
@@ -39,6 +42,13 @@ type TablaInspeccion = {
 };
 
 type ImportResponse = {
+  success?: boolean;
+  requireMapping?: boolean;
+  requireTableSelection?: boolean;
+  availableTables?: string[];
+  detectedColumns?: string[];
+  suggestedTable?: string | null;
+  hint?: string;
   error?: string;
   message?: string;
   partidas?: number;
@@ -55,6 +65,17 @@ type ImportResponse = {
   diagnosticoResumen?: string;
 };
 
+type MappingPending = {
+  detectedColumns: string[];
+  suggestedTable: string | null;
+  hint?: string;
+};
+
+type TableSelectionPending = {
+  availableTables: string[];
+  hint?: string;
+};
+
 export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, className = '' }: ImportarProps) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -65,6 +86,11 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
   const [inspeccionando, setInspeccionando] = useState(false);
   const [inspeccion, setInspeccion] = useState<string | null>(null);
   const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
+  const [mappingPending, setMappingPending] = useState<MappingPending | null>(null);
+  const [tableSelectionPending, setTableSelectionPending] = useState<TableSelectionPending | null>(
+    null,
+  );
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
 
   const esMdb = file?.name.toLowerCase().endsWith('.mdb') || file?.name.toLowerCase().endsWith('.accdb');
   const procesando = uploading || inspeccionando;
@@ -103,7 +129,10 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     }
   };
 
-  const handleUpload = async () => {
+  const runImport = async (
+    customMapping?: LuloCustomPartidaMapping,
+    tableOverride?: string,
+  ) => {
     if (!file) {
       toast.error('Selecciona un archivo primero');
       return;
@@ -121,6 +150,11 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     formData.append('proyectoId', proyectoId.trim());
     if (reemplazar) formData.append('reemplazar', '1');
     if (!importarGastos) formData.append('importarGastos', '0');
+    const tabla = tableOverride ?? selectedTable ?? customMapping?.tableName;
+    if (tabla) formData.append('tableName', tabla);
+    if (customMapping) {
+      formData.append('customMapping', JSON.stringify(customMapping));
+    }
 
     try {
       const res = await fetch('/api/proyectos/presupuesto/importar-lulo', {
@@ -129,6 +163,38 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       });
 
       const data = await parseFetchJson<ImportResponse>(res);
+
+      if (res.status === 422 && data.requireTableSelection) {
+        const tables =
+          data.availableTables?.length
+            ? data.availableTables
+            : data.meta?.tableNames ?? [];
+        setTableSelectionPending({ availableTables: tables, hint: data.hint });
+        setMappingPending(null);
+        toast.message('Selecciona la tabla del presupuesto', {
+          description: data.hint ?? 'El MDB no tiene tabla Partidas ni Presupuesto.',
+        });
+        return;
+      }
+
+      if (res.status === 422 && data.requireMapping) {
+        const cols =
+          data.detectedColumns?.length
+            ? data.detectedColumns
+            : data.meta?.tablasDiagnostico?.[0]?.columns ?? [];
+        setMappingPending({
+          detectedColumns: cols,
+          suggestedTable:
+            data.suggestedTable ?? data.meta?.partidasTable ?? selectedTable ?? null,
+          hint: data.hint,
+        });
+        setTableSelectionPending(null);
+        toast.message('Mapeo de columnas requerido', {
+          description: data.hint ?? 'Empareja las columnas del MDB antes de importar.',
+        });
+        return;
+      }
+
       if (!res.ok) {
         const detalle =
           data.meta?.diagnosticoResumen ||
@@ -137,8 +203,11 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             .map((t) => `${t.name} (${t.rowCount} filas, score ${t.partidaScore})`)
             .join(' · ');
         if (detalle) setErrorDetalle(detalle);
-        throw new Error(data.error || 'Error en la carga');
+        throw new Error(data.error || data.hint || 'Error en la carga');
       }
+
+      setMappingPending(null);
+      setTableSelectionPending(null);
 
       const lineas: string[] = [];
       if (data.partidas != null) lineas.push(`${data.partidas} partidas`);
@@ -167,6 +236,61 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       setUploading(false);
     }
   };
+
+  const handleUpload = () => void runImport();
+
+  const handleImportWithMapping = (mapping: LuloCustomPartidaMapping) => {
+    void runImport({
+      ...mapping,
+      tableName: mapping.tableName ?? selectedTable ?? undefined,
+    });
+  };
+
+  const handleTableSelected = (tableName: string) => {
+    setSelectedTable(tableName);
+    setTableSelectionPending(null);
+    void runImport(undefined, tableName);
+  };
+
+  if (tableSelectionPending) {
+    return (
+      <div
+        className={`w-full max-w-xl mx-auto text-white ${className}`.trim()}
+        data-lulo-step="table-selection"
+      >
+        <LuloSeleccionTablaElite
+          availableTables={tableSelectionPending.availableTables}
+          hint={tableSelectionPending.hint}
+          fileName={file?.name ?? null}
+          importing={uploading}
+          onCancel={() => {
+            setTableSelectionPending(null);
+            setSelectedTable(null);
+          }}
+          onConfirm={handleTableSelected}
+        />
+      </div>
+    );
+  }
+
+  if (mappingPending) {
+    return (
+      <div className={`text-white w-full max-w-lg mx-auto ${className}`.trim()}>
+        <LuloMapeoColumnasElite
+          detectedColumns={mappingPending.detectedColumns}
+          suggestedTable={mappingPending.suggestedTable}
+          hint={mappingPending.hint}
+          fileName={file?.name ?? null}
+          importing={uploading}
+          onCancel={() => {
+            setMappingPending(null);
+            setSelectedTable(null);
+          }}
+          onConfirm={handleImportWithMapping}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -202,6 +326,9 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             setFile(e.target.files?.[0] ?? null);
             setInspeccion(null);
             setErrorDetalle(null);
+            setMappingPending(null);
+            setTableSelectionPending(null);
+            setSelectedTable(null);
           }}
           className="w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white/5 file:text-white hover:file:bg-white/10"
         />

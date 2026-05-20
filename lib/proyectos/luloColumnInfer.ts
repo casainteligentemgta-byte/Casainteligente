@@ -39,12 +39,15 @@ export function pickNumberFuzzy(row: Record<string, string>, keys: string[]): nu
 }
 
 const DESC_PAT =
-  /descrip|concept|detalle|nombre|activid|obra|item|recurso|insumo|titulo|resumen|especific|trabajo|servicio/;
-const COD_PAT = /codigo|cod_|^cod$|partida|part_|^part$|rubro|capitulo|cap_|item|numero|^num$|id_part/;
-const CANT_PAT = /cantidad|cant_|^cant$|qty|cantidadpresup|cant_presup|volumen|metraje/;
-const PRECIO_PAT = /precio|unitario|p_unit|punit|costo_unit|costounit|pu$|^pu_|pvp|preciou/;
-const MONTO_PAT = /monto|total|importe|subtotal|valor|costo|preciototal|pt$|^pt_/;
-const UND_PAT = /unidad|und_|^und$|um$|medida|uom/;
+  /descrip|concept|detalle|nombre|activid|obra|item|recurso|insumo|titulo|resumen|especific|trabajo|servicio|partida|composicion|analisis|especificacion|denominacion|glosa|texto/;
+const COD_PAT =
+  /codigo|cod_|^cod$|partida|part_|^part$|rubro|capitulo|cap_|subcap|item|numero|^num$|id_part|clave|nro|num_|^item$|wbs|estructura/;
+const CANT_PAT = /cantidad|cant_|^cant$|qty|cantidadpresup|cant_presup|volumen|metraje|^cant\.|cant\./;
+const PRECIO_PAT =
+  /precio|unitario|p_unit|punit|costo_unit|costounit|pu$|^pu_|^pu\.|pvp|preciou|parcial|p_u|costo_u/;
+const MONTO_PAT =
+  /monto|total|importe|subtotal|valor|costo|preciototal|pt$|^pt_|parcial|monto_total|importe_total|costo_total|presupuesto/;
+const UND_PAT = /unidad|und_|^und$|um$|medida|uom|^u\.|unid/;
 
 export function fieldFromCol(row: Record<string, string>, col: string | null): string {
   if (!col) return '';

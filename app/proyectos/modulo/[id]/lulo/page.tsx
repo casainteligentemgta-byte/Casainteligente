@@ -15,7 +15,7 @@ export default async function ProyectoLuloPage({ params }: { params: { id: strin
   if (!proyecto) notFound();
 
   return (
-    <main className="min-h-screen bg-[#050508] px-4 py-8 md:px-8">
+    <main className="min-h-screen bg-[#0A0A0F] px-4 py-8 md:px-8">
       <LuloDatosManager proyectoId={proyecto.id} proyectoNombre={proyecto.nombre} />
     </main>
   );

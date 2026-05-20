@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { formatMdbReadError, toMdbNodeBuffer } from '@/lib/proyectos/mdbBuffer';
 import { parsePresupuestoLuloCsvComplete } from '@/lib/proyectos/parsePresupuestoLuloCsv';
 import { parsePresupuestoLuloMdb } from '@/lib/proyectos/parsePresupuestoLuloMdb';
+import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 import type { LuloSnapshotResumen } from '@/types/lulo-import';
 import { NextResponse } from 'next/server';
 
@@ -38,6 +39,24 @@ export async function POST(req: Request) {
     const reemplazar = formData.get('reemplazar') === 'true' || formData.get('reemplazar') === '1';
     const importarGastos =
       formData.get('importarGastos') !== 'false' && formData.get('importarGastos') !== '0';
+    const tableName =
+      String(formData.get('tableName') ?? formData.get('selectedTable') ?? '').trim() || undefined;
+    const customMappingRaw =
+      formData.get('customMapping') ?? formData.get('columnMapping');
+    let customMapping: LuloCustomPartidaMapping | undefined;
+    if (typeof customMappingRaw === 'string' && customMappingRaw.trim()) {
+      try {
+        customMapping = JSON.parse(customMappingRaw) as LuloCustomPartidaMapping;
+      } catch {
+        return NextResponse.json(
+          {
+            error: 'customMapping no es JSON válido.',
+            hint: 'Envía un objeto con codigo, descripcion, unidad, cantidad, precio (nombres de columna del MDB).',
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     if (!(file instanceof File) || !proyectoId) {
       return NextResponse.json({ error: 'Archivo o proyectoId faltante' }, { status: 400 });
@@ -51,7 +70,46 @@ export async function POST(req: Request) {
 
     if (formato === 'mdb') {
       const buffer = toMdbNodeBuffer(await file.arrayBuffer());
-      const parsed = parsePresupuestoLuloMdb(buffer, proyectoId, importarGastos);
+      const parsed = parsePresupuestoLuloMdb(buffer, proyectoId, {
+        importarGastos,
+        customMapping,
+        selectedTable: tableName,
+      });
+
+      if (!parsed.success) {
+        if ('requireTableSelection' in parsed && parsed.requireTableSelection) {
+          return NextResponse.json(
+            {
+              success: false,
+              requireTableSelection: true,
+              availableTables: parsed.availableTables,
+              meta: parsed.meta,
+              hint:
+                'No se encontró una tabla Partidas o Presupuesto. Elige la tabla que contiene el presupuesto.',
+            },
+            { status: 422 },
+          );
+        }
+        if ('requireMapping' in parsed && parsed.requireMapping) {
+          return NextResponse.json(
+            {
+              success: false,
+              requireMapping: true,
+              detectedColumns: parsed.detectedColumns,
+              suggestedTable: parsed.suggestedTable,
+              meta: parsed.meta,
+              hint:
+                'El MDB no incluye CodPar, DesPar, UniPar, CanPar y PrePar. Empareja columnas (customMapping) e importa de nuevo.',
+            },
+            { status: 422 },
+          );
+        }
+        return NextResponse.json(
+          { error: 'No se pudo interpretar el archivo MDB.' },
+          { status: 422 },
+        );
+      }
+
       partidasInsert = parsed.partidas;
       gastosInsert = parsed.gastos;
       payload = parsed.fullDump as unknown as Record<string, unknown>;
@@ -70,11 +128,15 @@ export async function POST(req: Request) {
         typeof meta.diagnosticoResumen === 'string' ? meta.diagnosticoResumen : '';
       const base =
         formato === 'mdb'
-          ? 'No se encontraron partidas ni gastos válidos en el MDB. Revisa que el archivo sea de Lulo/Access.'
+          ? 'No se encontraron partidas ni gastos válidos en el MDB. Revisa que el archivo sea de Lulo/Access (sin contraseña).'
           : 'No se encontraron partidas ni gastos válidos en el CSV.';
+      const inspeccion =
+        formato === 'mdb'
+          ? ' Pulsa «Inspeccionar MDB» antes de importar para ver tablas y columnas del archivo.'
+          : '';
       return NextResponse.json(
         {
-          error: diag ? `${base} ${diag}` : base,
+          error: diag ? `${base}${inspeccion} ${diag}` : `${base}${inspeccion}`,
           meta,
         },
         { status: 400 },
