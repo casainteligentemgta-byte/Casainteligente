@@ -299,13 +299,16 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         ]),
         LOAD_TIMEOUT_MS,
       );
-      let e = e0;
-      if (e.error && isMaquinariaColumnMissing(e.error.message)) {
-        e = await supabase
+      let equiposData: unknown[] | null = e0.data;
+      let equiposErr = e0.error;
+      if (equiposErr && isMaquinariaColumnMissing(equiposErr.message)) {
+        const legacy = await supabase
           .from('ci_proyecto_equipos')
           .select(PROYECTO_EQUIPO_SELECT_LEGACY)
           .eq('proyecto_id', id)
           .order('created_at', { ascending: false });
+        equiposData = legacy.data;
+        equiposErr = legacy.error;
       }
       if (p.error || !p.data) {
         setProyecto(null);
@@ -316,10 +319,10 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         return;
       }
       setProyecto(p.data as Proyecto);
-      setEquipos((e.data ?? []).map((r) => mapProyectoEquipoRow(r as Record<string, unknown>)));
+      setEquipos((equiposData ?? []).map((r) => mapProyectoEquipoRow(r as Record<string, unknown>)));
       setArchivos((a.data ?? []) as Archivo[]);
       setVisitas((v.data ?? []) as Visita[]);
-      if (e.error?.message) setError((prev) => prev ?? e.error.message);
+      if (equiposErr?.message) setError((prev) => prev ?? equiposErr.message);
       if (a.error?.message) setError((prev) => prev ?? a.error.message);
       if (v.error?.message) setError((prev) => prev ?? v.error.message);
     } catch (err) {

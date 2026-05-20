@@ -82,7 +82,7 @@ export async function idsObrerosConContratoSuscrito(
       if (!firmado && !formalizado) continue;
       const ck = cedulaNorm(row.obrero_cedula);
       if (!ck) continue;
-      for (const [wid, wck] of cedulaPorWorker) {
+      for (const [wid, wck] of Array.from(cedulaPorWorker.entries())) {
         if (wck === ck) locked.add(wid);
       }
     }

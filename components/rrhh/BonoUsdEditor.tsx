@@ -26,6 +26,8 @@ export default function BonoUsdEditor({
   onSaved,
   className = '',
   compact = false,
+  readOnly = false,
+  readOnlyHint = 'Contrato ya suscrito: el bono no se puede modificar.',
 }: Props) {
   const [text, setText] = useState(formatBonoUsd(value));
   const [saving, setSaving] = useState(false);

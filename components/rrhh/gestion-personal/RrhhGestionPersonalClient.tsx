@@ -96,16 +96,20 @@ async function cargarAsignaciones(
   if (filtro?.limit) q = q.limit(filtro.limit);
   if (filtro?.laborRequestIds?.length) q = q.in('labor_request_id', filtro.laborRequestIds);
   if (filtro?.projectIds != null && filtro.projectIds.length > 0) q = q.in('project_id', filtro.projectIds);
-  let { data, error } = await q;
-  if (error && isBonoColumnMissingError(error.message)) {
+  const res = await q;
+  let rowsRaw: Record<string, unknown>[] = (res.data ?? []) as Record<string, unknown>[];
+  let loadErr = res.error;
+  if (loadErr && isBonoColumnMissingError(loadErr.message)) {
     let q2 = supabase.from('project_assignments').select(ASSIGN_SELECT_BASE).order('created_at', { ascending: false });
     if (filtro?.limit) q2 = q2.limit(filtro.limit);
     if (filtro?.laborRequestIds?.length) q2 = q2.in('labor_request_id', filtro.laborRequestIds);
     if (filtro?.projectIds != null && filtro.projectIds.length > 0) q2 = q2.in('project_id', filtro.projectIds);
-    ({ data, error } = await q2);
+    const res2 = await q2;
+    rowsRaw = (res2.data ?? []) as Record<string, unknown>[];
+    loadErr = res2.error;
   }
-  if (error) return [];
-  return (data ?? []).map((r) => filaAsignacion(r as Record<string, unknown>));
+  if (loadErr) return [];
+  return rowsRaw.map((r) => filaAsignacion(r));
 }
 
 const TABS = ['pendientes', 'obra'] as const;
