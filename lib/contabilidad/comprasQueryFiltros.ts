@@ -27,7 +27,7 @@ export function parseMontoFiltro(value: string): number | null {
 /** IDs de compras con líneas que coinciden por descripción o código. */
 export async function compraIdsPorArticulo(
   supabase: SupabaseClient,
-  term: string
+  term: string,
 ): Promise<string[]> {
   const pattern = patronIlike(term);
   if (!pattern) return [];
@@ -39,6 +39,28 @@ export async function compraIdsPorArticulo(
 
   const ids = new Set<string>();
   for (const row of [...(byDesc.data ?? []), ...(byCode.data ?? [])]) {
+    if (row.compra_id) ids.add(row.compra_id);
+  }
+  return Array.from(ids);
+}
+
+/** IDs de compras con al menos una línea en rango de cantidad. */
+export async function compraIdsPorCantidad(
+  supabase: SupabaseClient,
+  cantidadMin: number | null,
+  cantidadMax: number | null,
+): Promise<string[]> {
+  if (cantidadMin === null && cantidadMax === null) return [];
+
+  let q = supabase.from('contabilidad_compra_lineas').select('compra_id').limit(800);
+  if (cantidadMin !== null) q = q.gte('cantidad', cantidadMin);
+  if (cantidadMax !== null) q = q.lte('cantidad', cantidadMax);
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  const ids = new Set<string>();
+  for (const row of data ?? []) {
     if (row.compra_id) ids.add(row.compra_id);
   }
   return Array.from(ids);

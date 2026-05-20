@@ -15,11 +15,20 @@ import {
 } from '@/lib/contabilidad/comprasFiltros';
 import {
     compraIdsPorArticulo,
+    compraIdsPorCantidad,
     dedupeProveedores,
     orFiltroBusquedaCompras,
     parseMontoFiltro,
+    patronIlike,
     type ProveedorOpcion,
 } from '@/lib/contabilidad/comprasQueryFiltros';
+import {
+    compraCumpleFiltroRif,
+    compraCumpleFiltrosLineas,
+    compraCumpleFiltrosMontos,
+    filtrarLineasComprasConfirmadas,
+} from '@/lib/contabilidad/filtrosFacturaCanal';
+import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
 import {
     esProyectoSmartRrhhPorNombre,
     loadCatalogoProyectosApp,
@@ -56,6 +65,7 @@ type LineaDetalle = {
     item_code: string | null;
     subtotal: number;
     cantidad: number;
+    precio_unitario?: number;
 };
 
 type ProyectoOpcion = ProyectoCatalogo;
@@ -151,8 +161,15 @@ export default function ComprasPage() {
     const [fechaHasta, setFechaHasta] = useState('');
     const [proyectoFiltro, setProyectoFiltro] = useState<string>('');
     const [proveedorFiltro, setProveedorFiltro] = useState<string>('');
-    const [montoMin, setMontoMin] = useState('');
-    const [montoMax, setMontoMax] = useState('');
+    const [rifFiltro, setRifFiltro] = useState('');
+    const [articuloFiltro, setArticuloFiltro] = useState('');
+    const [cantidadMin, setCantidadMin] = useState('');
+    const [cantidadMax, setCantidadMax] = useState('');
+    const [montoMinBs, setMontoMinBs] = useState('');
+    const [montoMaxBs, setMontoMaxBs] = useState('');
+    const [montoMinUsd, setMontoMinUsd] = useState('');
+    const [montoMaxUsd, setMontoMaxUsd] = useState('');
+    const [vistaListado, setVistaListado] = useState<'facturas' | 'lineas'>('lineas');
     const [busqueda, setBusqueda] = useState('');
     const [busquedaAplicada, setBusquedaAplicada] = useState('');
 
@@ -227,24 +244,47 @@ export default function ComprasPage() {
         try {
             const supabase = createClient();
 
-            const idsArticulo = busquedaAplicada
+            const idsArticuloBusqueda = busquedaAplicada
                 ? await compraIdsPorArticulo(supabase, busquedaAplicada)
                 : [];
             const orBusqueda = busquedaAplicada
-                ? orFiltroBusquedaCompras(busquedaAplicada, idsArticulo)
+                ? orFiltroBusquedaCompras(busquedaAplicada, idsArticuloBusqueda)
                 : null;
 
-            const lineasSelect = busquedaAplicada
-                ? 'contabilidad_compra_lineas(descripcion,item_code,subtotal,cantidad)'
-                : 'contabilidad_compra_lineas(count)';
-
-            let min = parseMontoFiltro(montoMin);
-            let max = parseMontoFiltro(montoMax);
-            if (min !== null && max !== null && min > max) {
-                const swap = min;
-                min = max;
-                max = swap;
+            const artTerm = articuloFiltro.trim();
+            let minCant = parseMontoFiltro(cantidadMin);
+            let maxCant = parseMontoFiltro(cantidadMax);
+            if (minCant !== null && maxCant !== null && minCant > maxCant) {
+                [minCant, maxCant] = [maxCant, minCant];
             }
+
+            let idsPorLinea: string[] | null = null;
+            if (artTerm) {
+                idsPorLinea = await compraIdsPorArticulo(supabase, artTerm);
+            }
+            if (minCant !== null || maxCant !== null) {
+                const idsCant = await compraIdsPorCantidad(supabase, minCant, maxCant);
+                idsPorLinea =
+                    idsPorLinea === null
+                        ? idsCant
+                        : idsPorLinea.filter((id) => idsCant.includes(id));
+            }
+
+            const lineasSelect =
+                'contabilidad_compra_lineas(descripcion,item_code,subtotal,cantidad,precio_unitario)';
+
+            let minBs = parseMontoFiltro(montoMinBs);
+            let maxBs = parseMontoFiltro(montoMaxBs);
+            if (minBs !== null && maxBs !== null && minBs > maxBs) {
+                [minBs, maxBs] = [maxBs, minBs];
+            }
+            let minUsd = parseMontoFiltro(montoMinUsd);
+            let maxUsd = parseMontoFiltro(montoMaxUsd);
+            if (minUsd !== null && maxUsd !== null && minUsd > maxUsd) {
+                [minUsd, maxUsd] = [maxUsd, minUsd];
+            }
+
+            const rifPattern = patronIlike(rifFiltro);
 
             const buildComprasQuery = () => {
                 let q = supabase
@@ -266,7 +306,19 @@ export default function ComprasPage() {
                 if (proveedorFiltro) {
                     q = q.eq('supplier_name', proveedorFiltro);
                 }
+                if (rifPattern) {
+                    q = q.ilike('supplier_rif', rifPattern);
+                }
+                if (minBs !== null) q = q.gte('total_amount', minBs);
+                if (maxBs !== null) q = q.lte('total_amount', maxBs);
                 if (orBusqueda) q = q.or(orBusqueda);
+                if (idsPorLinea !== null) {
+                    if (idsPorLinea.length === 0) {
+                        q = q.eq('id', '00000000-0000-0000-0000-000000000000');
+                    } else {
+                        q = q.in('id', idsPorLinea.slice(0, 400));
+                    }
+                }
                 return q;
             };
 
@@ -335,12 +387,28 @@ export default function ComprasPage() {
                 }
             }
 
-            if (min !== null) {
-                filas = filas.filter((c) => montoUsdCompra(c) >= min!);
-            }
-            if (max !== null) {
-                filas = filas.filter((c) => montoUsdCompra(c) <= max!);
-            }
+            const filtrosAvanzados = {
+                rif: rifFiltro,
+                articulo: articuloFiltro,
+                cantidadMin,
+                cantidadMax,
+                montoMinBs,
+                montoMaxBs,
+                montoMinUsd,
+                montoMaxUsd,
+            };
+
+            filas = filas.filter((c) => {
+                if (!compraCumpleFiltroRif(c, rifFiltro)) return false;
+                if (!compraCumpleFiltrosMontos(c, filtrosAvanzados)) return false;
+                const lineas = lineasDetalle(c).map((l) => ({
+                    descripcion: l.descripcion,
+                    item_code: l.item_code,
+                    cantidad: Number(l.cantidad) || 0,
+                }));
+                if (!compraCumpleFiltrosLineas(lineas, filtrosAvanzados)) return false;
+                return true;
+            });
 
             setCompras(filas);
         } catch (e) {
@@ -349,7 +417,22 @@ export default function ComprasPage() {
         } finally {
             setLoading(false);
         }
-    }, [periodo, rangoActivo, proyectoFiltro, proveedorFiltro, montoMin, montoMax, busquedaAplicada, proyectos]);
+    }, [
+        periodo,
+        rangoActivo,
+        proyectoFiltro,
+        proveedorFiltro,
+        rifFiltro,
+        articuloFiltro,
+        cantidadMin,
+        cantidadMax,
+        montoMinBs,
+        montoMaxBs,
+        montoMinUsd,
+        montoMaxUsd,
+        busquedaAplicada,
+        proyectos,
+    ]);
 
     useEffect(() => {
         void load();
@@ -401,8 +484,90 @@ export default function ComprasPage() {
     };
 
     const totalEgresos = compras.reduce((acc, c) => acc + montoUsdCompra(c), 0);
+
+    const filtrosLineas = useMemo(
+        () => ({
+            fechaDesde: rangoActivo?.desde ?? '',
+            fechaHasta: rangoActivo?.hasta ?? '',
+            proveedor: proveedorFiltro,
+            rif: rifFiltro,
+            articulo: articuloFiltro,
+            cantidadMin,
+            cantidadMax,
+            montoMinBs,
+            montoMaxBs,
+            montoMinUsd,
+            montoMaxUsd,
+        }),
+        [
+            rangoActivo,
+            proveedorFiltro,
+            rifFiltro,
+            articuloFiltro,
+            cantidadMin,
+            cantidadMax,
+            montoMinBs,
+            montoMaxBs,
+            montoMinUsd,
+            montoMaxUsd,
+        ],
+    );
+
+    const lineasFiltradas = useMemo(() => {
+        const payload = compras.map((c) => ({
+            id: c.id,
+            fecha: c.fecha,
+            invoice_number: c.invoice_number,
+            supplier_name: c.supplier_name,
+            supplier_rif: c.supplier_rif,
+            total_amount: c.total_amount,
+            total_amount_usd: c.total_amount_usd,
+            tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
+            origen: c.origen,
+            estado: c.estado,
+            proyectoNombre: proyectoNombre(c, proyectosMap),
+            lineas: lineasDetalle(c).map((l) => {
+                const cantidad = Number(l.cantidad) || 0;
+                const precio =
+                    l.precio_unitario != null && Number(l.precio_unitario) >= 0
+                        ? Number(l.precio_unitario)
+                        : cantidad > 0
+                          ? Number(l.subtotal) / cantidad
+                          : 0;
+                return {
+                    descripcion: l.descripcion,
+                    item_code: l.item_code,
+                    cantidad,
+                    precio_unitario: precio,
+                    subtotal: Number(l.subtotal) || 0,
+                };
+            }),
+        }));
+        return filtrarLineasComprasConfirmadas(payload, filtrosLineas);
+    }, [compras, filtrosLineas, proyectosMap]);
+
+    const totalLineasBs = useMemo(
+        () =>
+            lineasFiltradas.reduce((acc, row) => {
+                const bs = row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
+                return acc + bs;
+            }, 0),
+        [lineasFiltradas],
+    );
+
     const showList = !loading && compras.length > 0;
+    const showLineas = !loading && lineasFiltradas.length > 0;
     const periodoLabel = etiquetaPeriodo(periodo, fechaRef, rangoActivo);
+
+    const scrollToCompra = (compraId: string) => {
+        setVistaListado('facturas');
+        requestAnimationFrame(() => {
+            document.getElementById(`compra-card-${compraId}`)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            });
+        });
+    };
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
@@ -550,23 +715,72 @@ export default function ComprasPage() {
                         </div>
                     ) : null}
 
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
-                            PROVEEDOR
-                        </label>
-                        <select
-                            value={proveedorFiltro}
-                            onChange={(e) => setProveedorFiltro(e.target.value)}
-                            style={{ ...inputStyle, marginTop: '6px' }}
-                        >
-                            <option value="">Todos los proveedores</option>
-                            {proveedores.map((p) => (
-                                <option key={p.nombre} value={p.nombre}>
-                                    {p.nombre}
-                                    {p.rif ? ` · ${p.rif}` : ''}
-                                </option>
-                            ))}
-                        </select>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '12px',
+                            marginBottom: '16px',
+                        }}
+                    >
+                        <div>
+                            <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
+                                PROVEEDOR
+                            </label>
+                            <select
+                                value={proveedorFiltro}
+                                onChange={(e) => setProveedorFiltro(e.target.value)}
+                                style={{ ...inputStyle, marginTop: '6px' }}
+                            >
+                                <option value="">Todos</option>
+                                {proveedores.map((p) => (
+                                    <option key={p.nombre} value={p.nombre}>
+                                        {p.nombre}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
+                                RIF
+                            </label>
+                            <input
+                                type="search"
+                                value={rifFiltro}
+                                onChange={(e) => setRifFiltro(e.target.value)}
+                                placeholder="J-12345678-9"
+                                style={{ ...inputStyle, marginTop: '6px' }}
+                            />
+                        </div>
+                    </div>
+
+                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
+                        MONTO TOTAL (Bs)
+                    </p>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '10px',
+                            marginBottom: '12px',
+                        }}
+                    >
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Mín. Bs"
+                            value={montoMinBs}
+                            onChange={(e) => setMontoMinBs(e.target.value)}
+                            style={inputMontoStyle}
+                        />
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Máx. Bs"
+                            value={montoMaxBs}
+                            onChange={(e) => setMontoMaxBs(e.target.value)}
+                            style={inputMontoStyle}
+                        />
                     </div>
 
                     <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
@@ -575,38 +789,65 @@ export default function ComprasPage() {
                     <div
                         style={{
                             display: 'grid',
-                            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                            gridTemplateColumns: '1fr 1fr',
                             gap: '10px',
                             marginBottom: '16px',
-                            maxWidth: '100%',
                         }}
                     >
-                        <div style={{ minWidth: 0 }}>
-                            <label style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', fontWeight: 700 }}>
-                                MÍN.
-                            </label>
-                            <input
-                                type="text"
-                                inputMode="decimal"
-                                placeholder="0"
-                                value={montoMin}
-                                onChange={(e) => setMontoMin(e.target.value)}
-                                style={{ ...inputMontoStyle, marginTop: '6px', width: '100%' }}
-                            />
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                            <label style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', fontWeight: 700 }}>
-                                MÁX.
-                            </label>
-                            <input
-                                type="text"
-                                inputMode="decimal"
-                                placeholder="—"
-                                value={montoMax}
-                                onChange={(e) => setMontoMax(e.target.value)}
-                                style={{ ...inputMontoStyle, marginTop: '6px', width: '100%' }}
-                            />
-                        </div>
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Mín. USD"
+                            value={montoMinUsd}
+                            onChange={(e) => setMontoMinUsd(e.target.value)}
+                            style={inputMontoStyle}
+                        />
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Máx. USD"
+                            value={montoMaxUsd}
+                            onChange={(e) => setMontoMaxUsd(e.target.value)}
+                            style={inputMontoStyle}
+                        />
+                    </div>
+
+                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
+                        ARTÍCULO Y CANTIDAD (líneas)
+                    </p>
+                    <div style={{ marginBottom: '10px' }}>
+                        <input
+                            type="search"
+                            value={articuloFiltro}
+                            onChange={(e) => setArticuloFiltro(e.target.value)}
+                            placeholder="Descripción o código de artículo"
+                            style={inputStyle}
+                        />
+                    </div>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '10px',
+                            marginBottom: '16px',
+                        }}
+                    >
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Cant. mín."
+                            value={cantidadMin}
+                            onChange={(e) => setCantidadMin(e.target.value)}
+                            style={inputMontoStyle}
+                        />
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Cant. máx."
+                            value={cantidadMax}
+                            onChange={(e) => setCantidadMax(e.target.value)}
+                            style={inputMontoStyle}
+                        />
                     </div>
 
                     <div style={{ marginBottom: '16px' }}>
@@ -673,8 +914,7 @@ export default function ComprasPage() {
                             style={{ ...inputStyle, marginTop: '6px' }}
                         />
                         <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px', marginTop: '8px', lineHeight: 1.4 }}>
-                            Busca por nombre o RIF del proveedor, monto exacto, número de factura o descripción/código de
-                            artículo en las líneas.
+                            Búsqueda rápida adicional (factura, proveedor, RIF, monto o artículo).
                         </p>
                     </div>
 
@@ -736,15 +976,47 @@ export default function ComprasPage() {
                     <div style={{ textAlign: 'center', marginTop: '48px', color: 'rgba(255,255,255,0.35)' }}>
                         <p style={{ fontSize: '18px', fontWeight: 700 }}>Sin compras con estos filtros</p>
                         <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                            Ajuste período, proveedor, montos o la búsqueda.
+                            Ajuste fecha, proveedor, RIF, montos Bs/USD, artículo o cantidad.
                         </p>
                     </div>
                 ) : null}
 
-                {showList ? (
+                {!loading && compras.length > 0 ? (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setVistaListado('lineas')}
+                            style={periodBtn(vistaListado === 'lineas')}
+                        >
+                            Por línea / artículo
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setVistaListado('facturas')}
+                            style={periodBtn(vistaListado === 'facturas')}
+                        >
+                            Por factura
+                        </button>
+                    </div>
+                ) : null}
+
+                {!loading && vistaListado === 'lineas' && compras.length > 0 ? (
+                    showLineas ? (
+                        <ComprasLineasTable
+                            filas={lineasFiltradas}
+                            onScrollToCompra={scrollToCompra}
+                        />
+                    ) : (
+                        <div style={{ textAlign: 'center', marginTop: '24px', color: 'rgba(255,255,255,0.35)' }}>
+                            <p style={{ fontSize: '15px', fontWeight: 700 }}>Sin líneas con estos filtros</p>
+                        </div>
+                    )
+                ) : null}
+
+                {showList && vistaListado === 'facturas' ? (
                     <div style={{ display: 'grid', gap: '12px' }}>
                         {compras.map((c) => (
-                            <div key={c.id} style={{ ...glass, padding: '18px' }}>
+                            <div id={`compra-card-${c.id}`} key={c.id} style={{ ...glass, padding: '18px' }}>
                                 <div
                                     style={{
                                         display: 'flex',

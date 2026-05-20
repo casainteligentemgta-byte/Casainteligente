@@ -44,6 +44,84 @@ async function tableExists(sql, name) {
   return rows.length > 0;
 }
 
+function parsePgUrl(url) {
+  const m = url.match(
+    /^postgresql:\/\/([^:]+):([^@]*)@([^:/]+)(?::(\d+))?\/([^?]+)(?:\?(.*))?$/,
+  );
+  if (!m) return null;
+  const [, user, password, host, port, database, query] = m;
+  const ssl =
+    query && /sslmode=require/i.test(query) ? { rejectUnauthorized: false } : undefined;
+  return {
+    user: decodeURIComponent(user),
+    password: decodeURIComponent(password),
+    host,
+    port: port ? Number(port) : 5432,
+    database,
+    ssl,
+  };
+}
+
+async function tryPooler(parsed, opts, projectRef) {
+  const regions = ['us-east-1', 'us-west-1', 'eu-west-1', 'eu-central-1', 'sa-east-1'];
+  const prefixes = ['aws-1', 'aws-0'];
+  for (const prefix of prefixes) {
+    for (const region of regions) {
+      const host = `${prefix}-${region}.pooler.supabase.com`;
+      const user = parsed.user.includes('.') ? parsed.user : `postgres.${projectRef}`;
+      try {
+        const sql = postgres({
+          ...parsed,
+          ...opts,
+          host,
+          port: 6543,
+          user,
+        });
+        await sql`select 1`;
+        console.log(`✅ Conectado vía pooler ${host}:6543 (${user})\n`);
+        return sql;
+      } catch {
+        /* siguiente región */
+      }
+    }
+  }
+  return null;
+}
+
+async function connectPostgres(url, projectRef) {
+  const opts = { max: 1, prepare: false, connect_timeout: 25 };
+  const poolerUrl = process.env.DATABASE_POOLER_URL?.trim();
+  if (poolerUrl) {
+    const parsed = parsePgUrl(poolerUrl);
+    if (parsed) {
+      const sql = postgres({ ...parsed, ...opts });
+      await sql`select 1`;
+      console.log('✅ Conectado con DATABASE_POOLER_URL\n');
+      return sql;
+    }
+  }
+
+  const parsed = parsePgUrl(url);
+  const cfg = parsed ? { ...parsed, ...opts } : url;
+  let sql = postgres(cfg);
+  try {
+    await sql`select 1`;
+    console.log('✅ Conectado a Postgres\n');
+    return sql;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await sql.end({ timeout: 1 }).catch(() => {});
+    if (!parsed) throw e;
+
+    if (/ENOTFOUND|getaddrinfo/i.test(msg) && parsed.host.startsWith('db.')) {
+      console.warn(`⚠️  ${parsed.host} sin IPv4 en este equipo; probando pooler Supabase…`);
+      const pooled = await tryPooler(parsed, opts, projectRef);
+      if (pooled) return pooled;
+    }
+    throw e;
+  }
+}
+
 async function main() {
   if (!fs.existsSync(envPath)) {
     console.error('❌ Falta .env.local con DATABASE_URL');
@@ -56,12 +134,11 @@ async function main() {
     process.exit(1);
   }
 
-  const sql = postgres(url, { max: 1, prepare: false, connect_timeout: 20 });
+  const projectRef =
+    env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] ?? '';
+  let sql = await connectPostgres(url, projectRef || 'unknown');
 
   try {
-    await sql`select 1`;
-    console.log('✅ Conectado a Postgres\n');
-
     const checks = {
       '146_ci_presupuesto_partidas.sql': () => tableExists(sql, 'ci_presupuesto_partidas'),
       '149_gastos_obra_proyecto_origen.sql': async () => {
@@ -104,7 +181,7 @@ async function main() {
 
     console.log('\n✅ Migraciones Lulo/Telegram revisadas.');
   } finally {
-    await sql.end({ timeout: 5 }).catch(() => {});
+    if (sql) await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
 
