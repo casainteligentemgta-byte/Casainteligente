@@ -107,11 +107,11 @@ export default function FacturasCanalClient() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <MessageCircle className="h-6 w-6 text-sky-400" />
-            Facturas por Telegram
+            Facturas por Telegram / WhatsApp
           </h1>
           <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
-            Envía fotos o PDF de facturas al bot. Se extraen con IA y quedan aquí para confirmar en
-            recepción de mercancía.
+            Envía fotos o PDF al bot de Telegram o al número de WhatsApp Business. Se extraen con IA
+            y quedan aquí para confirmar en recepción de mercancía.
           </p>
           <p className="mt-2 text-xs text-zinc-500">
             Variables: <code className="text-zinc-400">TELEGRAM_BOT_TOKEN</code>,{' '}

@@ -110,7 +110,6 @@ export async function POST(req: Request) {
       pendingId: pending.id,
       chatId,
       fileId,
-      chatLabel,
     });
 
     return NextResponse.json({ ok: true, pendingId: pending.id });

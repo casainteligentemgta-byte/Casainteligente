@@ -17,6 +17,8 @@
     "verify:supabase": "node scripts/verify-supabase.mjs",
     "verify:service-role": "node scripts/verify-service-role.mjs",
     "verify:db": "node scripts/verify-db.mjs",
+    "db:apply-lulo-telegram": "node scripts/apply-migrations-lulo-telegram.mjs",
+    "telegram:webhook": "node scripts/set-telegram-webhook.mjs",
     "verify:ci-empleados": "node scripts/verify-ci-empleados.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

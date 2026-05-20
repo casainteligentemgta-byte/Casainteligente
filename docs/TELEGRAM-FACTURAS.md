@@ -1,4 +1,12 @@
-# Facturas por Telegram
+# Facturas por Telegram y WhatsApp
+
+## Aplicar migraciones (local)
+
+```bash
+npm run db:apply-lulo-telegram
+```
+
+Incluye: `146`, `149`, `151`, `152` (requiere `DATABASE_URL` en `.env.local`).
 
 ## Variables de entorno
 
@@ -26,9 +34,22 @@ https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://casainteligente.compa
 3. Revisar en **Contabilidad → Compras → Telegram** (`/contabilidad/compras/canal`).
 4. **Abrir en recepción** completa el formulario de `/almacen/procurement`.
 
+## Registrar webhook Telegram (tras deploy)
+
+```bash
+npm run telegram:webhook
+```
+
+## WhatsApp (Meta Cloud API)
+
+1. Variables: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`
+2. Webhook en Meta: `https://tu-dominio.com/api/webhooks/whatsapp`
+3. Verify token = mismo valor que `WHATSAPP_VERIFY_TOKEN`
+4. Opcional: `WHATSAPP_ALLOWED_PHONES=58412...,58424...`
+
 ## Migración Supabase
 
-Ejecutar `152_facturas_canal_telegram.sql` en SQL Editor.
+Automática con `npm run db:apply-lulo-telegram` o manual: `151` + `152` en SQL Editor.
 
 ## Lulo
 
