@@ -1,5 +1,5 @@
 import { filtrarFilasLulo } from '@/lib/proyectos/luloTablaFiltros';
-import { getCapituloKey } from '@/lib/proyectos/luloVistaAgrupada';
+import { getCapituloKeyPartida } from '@/lib/proyectos/luloCapitulos';
 
 export type FiltrosPartidasObra = {
   busqueda: string;
@@ -44,7 +44,13 @@ export function filtrarPartidasObra<T extends Record<string, unknown>>(
   }
   const cap = f.capitulo?.trim();
   if (cap) {
-    out = out.filter((r) => getCapituloKey(String(r.codigo_partida ?? '')) === cap);
+    out = out.filter(
+      (r) =>
+        getCapituloKeyPartida({
+          codigo_partida: String(r.codigo_partida ?? ''),
+          capitulo_codigo: (r as { capitulo_codigo?: string | null }).capitulo_codigo,
+        }) === cap,
+    );
   }
   const min = parseNum(f.montoMin);
   const max = parseNum(f.montoMax);

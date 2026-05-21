@@ -8,6 +8,7 @@ import {
   pickField,
   pickNumber,
 } from '@/lib/proyectos/luloFieldMapping';
+import { montoPartidaDesdeCantidadPrecio } from '@/lib/utils/numericDbLimits';
 import {
   CANT_PAT,
   COD_PAT,
@@ -187,7 +188,7 @@ function rowToPartida(row: Record<string, unknown>, proyectoId: string): Partida
     'pvp',
   ]);
   const montoCsv = pickNumber(r, ['monto_total', 'monto', 'total', 'importe', 'subtotal', 'valor', 'pt']);
-  const monto = montoCsv > 0 ? montoCsv : Math.round(cantidad * precio * 100) / 100;
+  const monto = montoPartidaDesdeCantidadPrecio(cantidad, precio, montoCsv > 0 ? montoCsv : undefined);
 
   if (!descripcion && !codigo) {
     if (monto <= 0 && cantidad <= 0 && precio <= 0) return null;
@@ -578,7 +579,7 @@ function rowToPartidaCatchAll(
         unidad: 'UND',
         cantidad_presupuestada: 0,
         precio_unitario_estimado: 0,
-        monto_total_estimado: n,
+        monto_total_estimado: montoPartidaDesdeCantidadPrecio(0, 0, n),
         origen: 'lulo_mdb',
       };
     }
@@ -591,7 +592,7 @@ function rowToPartidaCatchAll(
     unidad: 'UND',
     cantidad_presupuestada: 0,
     precio_unitario_estimado: 0,
-    monto_total_estimado: maxNum,
+    monto_total_estimado: montoPartidaDesdeCantidadPrecio(0, 0, maxNum),
     origen: 'lulo_mdb',
   };
 }

@@ -1,6 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { formatMdbReadError } from '@/lib/proyectos/mdbBuffer';
 import { postExtraerLuloCompleto } from '@/lib/proyectos/extraerMdbLuloCompleto';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+} from '@/lib/proyectos/validarProyectoUuid';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -16,8 +20,11 @@ type RouteContext = { params: { proyectoId: string } };
 export async function POST(req: Request, { params }: RouteContext) {
   try {
     const proyectoId = params.proyectoId?.trim();
-    if (!proyectoId) {
-      return NextResponse.json({ error: 'proyectoId requerido en la URL' }, { status: 400 });
+    if (!isValidProyectoUuid(proyectoId)) {
+      return NextResponse.json(
+        { error: mensajeProyectoIdInvalido(proyectoId) },
+        { status: 400 },
+      );
     }
 
     const formData = await req.formData();

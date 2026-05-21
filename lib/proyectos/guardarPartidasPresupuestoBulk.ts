@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PartidaLuloInsert } from '@/lib/proyectos/parsePresupuestoLuloCsv';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
+import { sanitizePartidaNumericFields } from '@/lib/utils/numericDbLimits';
 
 /** Tamaño de lote para bulk insert en Supabase (PostgREST). */
 export const PARTIDAS_PRESUPUESTO_BATCH_SIZE = 200;
@@ -20,28 +22,22 @@ export function prepararPartidasParaProyecto(
   }
 
   return partidas.map((p) => {
-    const cantidad = Number(p.cantidad_presupuestada);
-    const precio = Number(p.precio_unitario_estimado);
-    const cantidadOk = Number.isFinite(cantidad) ? cantidad : 0;
-    const precioOk = Number.isFinite(precio) ? precio : 0;
-    let monto = Number(p.monto_total_estimado);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      monto = Math.round(cantidadOk * precioOk * 100) / 100;
-    }
-
     const codigo = String(p.codigo_partida ?? '').trim();
     const descripcion = String(p.descripcion ?? '').trim();
 
-    return {
+    return sanitizePartidaNumericFields({
       proyecto_id: pid,
       codigo_partida: codigo,
       descripcion: descripcion || codigo || 'Partida importada',
       unidad: String(p.unidad ?? 'UND').trim() || 'UND',
-      cantidad_presupuestada: cantidadOk,
-      precio_unitario_estimado: precioOk,
-      monto_total_estimado: monto,
+      cantidad_presupuestada: Number(p.cantidad_presupuestada),
+      precio_unitario_estimado: Number(p.precio_unitario_estimado),
+      monto_total_estimado: Number(p.monto_total_estimado),
       origen: String(p.origen ?? 'lulo_mdb').trim() || 'lulo_mdb',
-    };
+      capitulo_codigo: p.capitulo_codigo?.trim() || null,
+      capitulo_descripcion: p.capitulo_descripcion?.trim() || null,
+      capitulo_orden: Number.isFinite(Number(p.capitulo_orden)) ? Number(p.capitulo_orden) : 0,
+    });
   });
 }
 
@@ -59,7 +55,7 @@ export async function eliminarPartidasLuloDeProyecto(
     .eq('proyecto_id', pid)
     .in('origen', [...origenes]);
 
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
 }
 
 /**
@@ -90,7 +86,20 @@ export async function bulkInsertCiPresupuestoPartidas(
   for (let i = 0; i < filas.length; i += PARTIDAS_PRESUPUESTO_BATCH_SIZE) {
     const batch = filas.slice(i, i + PARTIDAS_PRESUPUESTO_BATCH_SIZE);
     const { error } = await supabase.from('ci_presupuesto_partidas').insert(batch);
-    if (error) throw error;
+    if (error) {
+      const msg = formatErrorMessage(error);
+      if (/capitulo_/i.test(msg)) {
+        throw new Error(
+          `${msg} — Aplica la migración 158_ci_presupuesto_partidas_capitulo.sql (npm run db:apply-lulo-telegram).`,
+        );
+      }
+      if (/22003|numeric field overflow/i.test(msg)) {
+        throw new Error(
+          `${msg} — Hay montos fuera de rango en el MDB (columna mal mapeada o cantidad×precio enorme). Vuelve a importar tras actualizar; los valores se acotan automáticamente.`,
+        );
+      }
+      throw new Error(msg);
+    }
   }
 
   return { insertadas: filas.length };

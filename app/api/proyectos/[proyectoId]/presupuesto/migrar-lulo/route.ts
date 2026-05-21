@@ -1,4 +1,9 @@
 import { postMigrarLuloMdbNativo } from '@/lib/proyectos/migrarLuloMdbNativo';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+  normalizarProyectoIdCandidato,
+} from '@/lib/proyectos/validarProyectoUuid';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';

@@ -1,7 +1,144 @@
 import { createClient } from '@/lib/supabase/server';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+} from '@/lib/proyectos/validarProyectoUuid';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+
+const APU_PARTIDAS_BATCH = 150;
+
+async function contarApuPorPartidas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  partidaIds: string[],
+): Promise<{ apuLineas: number; insumosEnApu: number }> {
+  if (partidaIds.length === 0) return { apuLineas: 0, insumosEnApu: 0 };
+
+  const insumoIds = new Set<string>();
+  let apuLineas = 0;
+
+  for (let i = 0; i < partidaIds.length; i += APU_PARTIDAS_BATCH) {
+    const batch = partidaIds.slice(i, i + APU_PARTIDAS_BATCH);
+    const { data, error } = await supabase
+      .from('ci_presupuesto_partida_apu')
+      .select('insumo_id')
+      .in('partida_id', batch);
+
+    if (error) {
+      if (
+        error.message.includes('does not exist') ||
+        error.message.includes('ci_presupuesto_partida_apu')
+      ) {
+        return { apuLineas: 0, insumosEnApu: 0 };
+      }
+      console.warn('[GET lulo] apu batch:', error.message);
+      continue;
+    }
+    for (const row of data ?? []) {
+      apuLineas += 1;
+      if (row.insumo_id) insumoIds.add(row.insumo_id);
+    }
+  }
+
+  return { apuLineas, insumosEnApu: insumoIds.size };
+}
+
+async function cargarProyectoLulo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  proyectoId: string,
+) {
+  const extendido = await supabase
+    .from('ci_proyectos')
+    .select('id, nombre, codigo_lulo, porcentaje_admin, porcentaje_utilidad, porcentaje_fcm')
+    .eq('id', proyectoId)
+    .maybeSingle();
+
+  if (!extendido.error) return extendido.data;
+
+  const msg = extendido.error.message ?? '';
+  if (msg.includes('codigo_lulo') || msg.includes('porcentaje_') || extendido.error.code === '42703') {
+    const basico = await supabase
+      .from('ci_proyectos')
+      .select('id, nombre')
+      .eq('id', proyectoId)
+      .maybeSingle();
+    if (basico.error) throw new Error(formatErrorMessage(basico.error));
+    return basico.data;
+  }
+
+  throw new Error(formatErrorMessage(extendido.error));
+}
+
+async function cargarPartidasLulo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  proyectoId: string,
+) {
+  const conOrigen = await supabase
+    .from('ci_presupuesto_partidas')
+    .select('*')
+    .eq('proyecto_id', proyectoId)
+    .in('origen', ['lulo_csv', 'lulo_mdb'])
+    .order('capitulo_orden', { ascending: true })
+    .order('codigo_partida');
+
+  if (!conOrigen.error) return conOrigen.data ?? [];
+
+  const msg = conOrigen.error.message ?? '';
+  if (msg.includes('capitulo_orden')) {
+    const sinOrden = await supabase
+      .from('ci_presupuesto_partidas')
+      .select('*')
+      .eq('proyecto_id', proyectoId)
+      .in('origen', ['lulo_csv', 'lulo_mdb'])
+      .order('codigo_partida');
+    if (!sinOrden.error) return sinOrden.data ?? [];
+    throw new Error(formatErrorMessage(sinOrden.error));
+  }
+
+  if (msg.includes('origen')) {
+    const todas = await supabase
+      .from('ci_presupuesto_partidas')
+      .select('*')
+      .eq('proyecto_id', proyectoId)
+      .order('codigo_partida');
+    if (!todas.error) return todas.data ?? [];
+    throw new Error(formatErrorMessage(todas.error));
+  }
+
+  throw new Error(formatErrorMessage(conOrigen.error));
+}
+
+async function cargarGastosLulo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  proyectoId: string,
+) {
+  const conOrigen = await supabase
+    .from('gastos_obra')
+    .select('*')
+    .eq('proyecto_id', proyectoId)
+    .in('origen', ['lulo_csv', 'lulo_mdb'])
+    .order('fecha', { ascending: false });
+
+  if (!conOrigen.error) return conOrigen.data ?? [];
+
+  const msg = conOrigen.error.message ?? '';
+  if (msg.includes('proyecto_id') || msg.includes('origen')) {
+    const todas = await supabase
+      .from('gastos_obra')
+      .select('*')
+      .order('fecha', { ascending: false });
+    if (!todas.error) {
+      return (todas.data ?? []).filter(
+        (g) => (g as { proyecto_id?: string }).proyecto_id === proyectoId,
+      );
+    }
+    throw new Error(formatErrorMessage(todas.error));
+  }
+
+  throw new Error(formatErrorMessage(conOrigen.error));
+}
 
 export async function GET(
   _req: Request,
@@ -9,82 +146,57 @@ export async function GET(
 ) {
   try {
     const proyectoId = params.proyectoId?.trim();
-    if (!proyectoId) {
-      return NextResponse.json({ error: 'proyectoId requerido' }, { status: 400 });
+    if (!isValidProyectoUuid(proyectoId)) {
+      return NextResponse.json(
+        { error: mensajeProyectoIdInvalido(proyectoId) },
+        { status: 400 },
+      );
     }
 
     const supabase = await createClient();
 
-    const [partidasRes, gastosRes, snapshotsRes, proyectoRes] = await Promise.all([
-      supabase
-        .from('ci_presupuesto_partidas')
-        .select('*')
-        .eq('proyecto_id', proyectoId)
-        .in('origen', ['lulo_csv', 'lulo_mdb'])
-        .order('codigo_partida'),
-      supabase
-        .from('gastos_obra')
-        .select('*')
-        .eq('proyecto_id', proyectoId)
-        .in('origen', ['lulo_csv', 'lulo_mdb'])
-        .order('fecha', { ascending: false }),
+    const [partidas, gastos, snapshotsRes, proyecto] = await Promise.all([
+      cargarPartidasLulo(supabase, proyectoId),
+      cargarGastosLulo(supabase, proyectoId),
       supabase
         .from('ci_lulo_import_snapshots')
         .select('id, nombre_archivo, formato, resumen, created_at')
         .eq('proyecto_id', proyectoId)
         .order('created_at', { ascending: false })
         .limit(20),
-      supabase
-        .from('ci_proyectos')
-        .select(
-          'id, nombre, codigo_lulo, porcentaje_admin, porcentaje_utilidad, porcentaje_fcm',
-        )
-        .eq('id', proyectoId)
-        .maybeSingle(),
+      cargarProyectoLulo(supabase, proyectoId),
     ]);
 
-    if (partidasRes.error) throw partidasRes.error;
-    if (gastosRes.error) throw gastosRes.error;
     if (snapshotsRes.error) {
       console.warn('[GET lulo] snapshots:', snapshotsRes.error.message);
     }
 
-    const partidaIds = (partidasRes.data ?? []).map((p) => p.id).filter(Boolean);
-    let apuLineas = 0;
-    let insumosEnApu = 0;
-    if (partidaIds.length > 0) {
-      const { data: apuRows, error: apuErr } = await supabase
-        .from('ci_presupuesto_partida_apu')
-        .select('insumo_id')
-        .in('partida_id', partidaIds);
-      if (apuErr && !apuErr.message.includes('does not exist')) {
-        console.warn('[GET lulo] apu:', apuErr.message);
-      } else if (apuRows) {
-        apuLineas = apuRows.length;
-        insumosEnApu = new Set(apuRows.map((r) => r.insumo_id).filter(Boolean)).size;
-      }
-    }
+    const partidaIds = partidas.map((p) => p.id).filter(Boolean);
+    const { apuLineas, insumosEnApu } = await contarApuPorPartidas(supabase, partidaIds);
 
-    const { count: insumosMaestroTotal, error: insErr } = await supabase
+    let insumosMaestroTotal = 0;
+    const { count, error: insErr } = await supabase
       .from('ci_lulo_insumos_maestro')
       .select('*', { count: 'exact', head: true });
-    if (insErr && !insErr.message.includes('does not exist')) {
+    if (!insErr) insumosMaestroTotal = count ?? 0;
+    else if (!insErr.message?.includes('does not exist')) {
       console.warn('[GET lulo] insumos maestro:', insErr.message);
     }
 
     return NextResponse.json({
-      proyecto: proyectoRes.data,
-      partidas: partidasRes.data ?? [],
-      gastos: gastosRes.data ?? [],
+      proyecto,
+      partidas,
+      gastos,
       snapshots: snapshotsRes.data ?? [],
       resumenNativo: {
         apuLineas,
         insumosEnApu,
-        insumosMaestroTotal: insumosMaestroTotal ?? 0,
+        insumosMaestroTotal,
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error al cargar datos Lulo';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = formatErrorMessage(err) || 'Error al cargar datos Lulo';
+    console.error('[GET lulo]', err);
+    return NextResponse.json({ error: message, hint: message }, { status: 500 });
   }
 }

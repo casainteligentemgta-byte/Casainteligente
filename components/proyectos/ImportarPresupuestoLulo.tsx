@@ -1,10 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Upload, FileSpreadsheet, Database, Table2, Search, Settings } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+  resolveProyectoId,
+} from '@/lib/proyectos/validarProyectoUuid';
+import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import { LuloMapeoColumnasElite } from '@/components/proyectos/LuloMapeoColumnasElite';
 import { LuloSeleccionTablaElite } from '@/components/proyectos/LuloSeleccionTablaElite';
@@ -52,7 +58,7 @@ type ImportResponse = {
   detectedColumns?: string[];
   suggestedTable?: string | null;
   hint?: string;
-  error?: string;
+  error?: unknown;
   message?: string;
   partidas?: number;
   insumos?: number;
@@ -88,6 +94,11 @@ type TableSelectionPending = {
 
 export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, className = '' }: ImportarProps) {
   const router = useRouter();
+  const params = useParams();
+  const pid = useMemo(
+    () => resolveProyectoId(proyectoId, (params?.id ?? params?.proyectoId) as string | string[]),
+    [proyectoId, params],
+  );
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [reemplazar, setReemplazar] = useState(false);
@@ -104,11 +115,12 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
   const [extrayendo, setExtrayendo] = useState(false);
   const [cuadroLuloActivo, setCuadroLuloActivo] = useState(false);
 
-  const controlObraHref = `/proyectos/modulo/${encodeURIComponent(proyectoId.trim())}/control-obra`;
+  const controlObraHref = isValidProyectoUuid(pid)
+    ? `/proyectos/modulo/${encodeURIComponent(pid)}/control-obra`
+    : '/proyectos/modulo';
 
   useEffect(() => {
-    const pid = proyectoId.trim();
-    if (!pid) return;
+    if (!isValidProyectoUuid(pid)) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -131,7 +143,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     return () => {
       cancelled = true;
     };
-  }, [proyectoId]);
+  }, [pid]);
 
   const esMdb = file?.name.toLowerCase().endsWith('.mdb') || file?.name.toLowerCase().endsWith('.accdb');
   const procesando = uploading || inspeccionando || extrayendo;
@@ -152,7 +164,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
         body: formData,
       });
       const data = await parseFetchJson<ImportResponse>(res);
-      if (!res.ok) throw new Error(data.error || 'No se pudo inspeccionar el MDB');
+      if (!res.ok) throw new Error(formatApiErrorBody(data, 'No se pudo inspeccionar el MDB'));
       const lineas: string[] = [];
       if (data.diagnosticoResumen) lineas.push(data.diagnosticoResumen);
       for (const t of data.tables ?? []) {
@@ -163,8 +175,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       setInspeccion(lineas.join('\n') || 'MDB leído; no hay tablas con datos.');
       toast.success('Vista previa del MDB lista');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error desconocido';
-      toast.error(message);
+      toast.error(formatErrorMessage(err));
     } finally {
       setInspeccionando(false);
     }
@@ -175,8 +186,8 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       toast.error('Selecciona un archivo primero');
       return;
     }
-    if (!proyectoId.trim()) {
-      toast.error('Proyecto no válido');
+    if (!isValidProyectoUuid(pid)) {
+      toast.error(mensajeProyectoIdInvalido(pid));
       return;
     }
 
@@ -189,11 +200,11 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
     try {
       const res = await fetch(
-        `/api/proyectos/${encodeURIComponent(proyectoId.trim())}/presupuesto/extraer-mdb`,
+        `/api/proyectos/${encodeURIComponent(pid)}/presupuesto/extraer-mdb`,
         { method: 'POST', body: formData },
       );
       const data = await parseFetchJson<ImportResponse>(res);
-      if (!res.ok) throw new Error(data.error || data.hint || 'Error al extraer');
+      if (!res.ok) throw new Error(formatApiErrorBody(data, 'Error al extraer'));
 
       const tablas = data.catalogoTablas?.length ?? data.resumen?.tablas ?? 0;
       const filas = data.filasTotales ?? data.resumen?.filasTotales ?? 0;
@@ -204,7 +215,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       onSuccess?.();
       router.refresh();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error al extraer');
+      toast.error(formatErrorMessage(err));
     } finally {
       setExtrayendo(false);
     }
@@ -218,8 +229,8 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       toast.error('Selecciona un archivo primero');
       return;
     }
-    if (!proyectoId.trim()) {
-      toast.error('Proyecto no válido');
+    if (!isValidProyectoUuid(pid)) {
+      toast.error(mensajeProyectoIdInvalido(pid));
       return;
     }
 
@@ -238,7 +249,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
     try {
       const res = await fetch(
-        `/api/proyectos/${encodeURIComponent(proyectoId.trim())}/presupuesto/importar-lulo`,
+        `/api/proyectos/${encodeURIComponent(pid)}/presupuesto/importar-lulo`,
         {
           method: 'POST',
           body: formData,
@@ -296,7 +307,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             description: 'Abre Presupuesto · Lulo para ver el cuadro extraído.',
           });
         }
-        throw new Error(data.error || data.hint || 'Error en la carga');
+        throw new Error(formatApiErrorBody(data, 'Error en la carga'));
       }
 
       setMappingPending(null);
@@ -328,7 +339,8 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       onSuccess?.();
       router.refresh();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error desconocido';
+      const message = formatErrorMessage(err);
+      setErrorDetalle(message);
       toast.error(`Error de importación: ${message}`);
     } finally {
       setUploading(false);
@@ -403,6 +415,15 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
         <h4 className="text-sm font-semibold">Importar desde Lulo Software</h4>
       </div>
 
+      {!isValidProyectoUuid(pid) ? (
+        <p className="text-xs text-red-400 mb-3 leading-relaxed rounded-lg border border-red-500/25 bg-red-500/5 p-3">
+          {mensajeProyectoIdInvalido(pid)}{' '}
+          <Link href="/proyectos/modulo" className="text-amber-400 underline hover:text-amber-300">
+            Ir a proyectos
+          </Link>
+        </p>
+      ) : null}
+
       <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
         Sube el archivo <strong className="text-zinc-300">.mdb / .accdb</strong> de Lulo (Access) o un{' '}
         <strong className="text-zinc-300">.csv</strong> exportado.{' '}
@@ -451,7 +472,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             <button
               type="button"
               onClick={handleInspeccionar}
-              disabled={inspeccionando || !file}
+              disabled={inspeccionando || !file || !isValidProyectoUuid(pid)}
               className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {inspeccionando ? (
@@ -466,7 +487,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             <button
               type="button"
               onClick={() => void runExtraerCompleto()}
-              disabled={extrayendo || !file}
+              disabled={extrayendo || !file || !isValidProyectoUuid(pid)}
               className="w-full rounded-lg border border-violet-500/35 bg-violet-500/10 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {extrayendo ? (

@@ -1,4 +1,8 @@
 import { postImportarLuloPresupuesto } from '@/lib/proyectos/importarLuloPresupuesto';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+} from '@/lib/proyectos/validarProyectoUuid';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -14,8 +18,11 @@ type RouteContext = { params: { proyectoId: string } };
  */
 export async function POST(req: Request, { params }: RouteContext) {
   const proyectoId = params.proyectoId?.trim();
-  if (!proyectoId) {
-    return NextResponse.json({ error: 'proyectoId requerido en la URL' }, { status: 400 });
+  if (!isValidProyectoUuid(proyectoId)) {
+    return NextResponse.json(
+      { error: mensajeProyectoIdInvalido(proyectoId) },
+      { status: 400 },
+    );
   }
   return postImportarLuloPresupuesto(req, proyectoId);
 }

@@ -22,6 +22,7 @@ export const LULO_INSUMO_COLS = {
 export const LULO_PARTIDA_COLS = {
   codigoObra: ['cod_obr', 'codigo_obra', 'obra', 'id_obra'],
   codigo: ['cod_par', 'codigo', 'codigo_partida', 'cod_partida', 'partida'],
+  codigoCapitulo: ['cod_cap', 'codigo_capitulo', 'capitulo', 'cod_capitulo', 'cap'],
   descripcion: ['des_par', 'descripcion', 'concepto', 'detalle'],
   unidad: ['uni_par', 'unidad', 'und'],
   cantidad: ['can_par', 'cantidad', 'cant'],

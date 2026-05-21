@@ -34,6 +34,8 @@ const MIGRATIONS = [
   '151_ci_lulo_import_snapshots.sql',
   '152_facturas_canal_telegram.sql',
   '157_ci_lulo_insumos_apu.sql',
+  '158_ci_presupuesto_partidas_capitulo.sql',
+  '159_ci_presupuesto_gastos_numeric_widen.sql',
 ];
 
 async function tableExists(sql, name) {
@@ -153,10 +155,29 @@ async function main() {
       '151_ci_lulo_import_snapshots.sql': () => tableExists(sql, 'ci_lulo_import_snapshots'),
       '152_facturas_canal_telegram.sql': () => tableExists(sql, 'ci_facturas_canal_pendientes'),
       '157_ci_lulo_insumos_apu.sql': () => tableExists(sql, 'ci_lulo_insumos_maestro'),
+      '158_ci_presupuesto_partidas_capitulo.sql': async () => {
+        if (!(await tableExists(sql, 'ci_presupuesto_partidas'))) return false;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public' and table_name = 'ci_presupuesto_partidas' and column_name = 'capitulo_codigo'
+        `;
+        return cols.length > 0;
+      },
+      '159_ci_presupuesto_gastos_numeric_widen.sql': async () => {
+        const cols = await sql`
+          select numeric_precision, numeric_scale
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'ci_presupuesto_partidas'
+            and column_name = 'monto_total_estimado'
+        `;
+        return cols.length > 0 && Number(cols[0].numeric_precision) >= 18;
+      },
     };
 
     for (const file of MIGRATIONS) {
-      const exists = await checks[file]();
+      const checkFn = checks[file];
+      const exists = checkFn ? await checkFn() : false;
       if (exists) {
         console.log(`⏭️  ${file} — ya aplicada`);
         continue;
@@ -175,6 +196,10 @@ async function main() {
         const msg = e instanceof Error ? e.message : String(e);
         if (/already exists|duplicate/i.test(msg)) {
           console.log(`⚠️  ${file} — parcial (${msg.slice(0, 80)})`);
+        } else if (/cannot alter type of a column used by a view|rule/i.test(msg)) {
+          console.log(
+            `⚠️  ${file} — omitida (vista dependiente). Los montos se acotan al importar en la app.`,
+          );
         } else {
           throw e;
         }

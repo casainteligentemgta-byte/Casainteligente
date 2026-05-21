@@ -15,11 +15,18 @@ import {
   partidasDesdeVolcadoMinimo,
   parsePresupuestoLuloMdb,
 } from '@/lib/proyectos/parsePresupuestoLuloMdb';
+import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
 import { parseLuloMdbEstructurado } from '@/lib/proyectos/parseLuloMdbEstructurado';
 import { persistirLuloEstructurado } from '@/lib/proyectos/persistirLuloEstructurado';
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 import type { GastoObraLuloInsert } from '@/types/lulo-import';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+} from '@/lib/proyectos/validarProyectoUuid';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
+import { toPgNumeric15_2 } from '@/lib/utils/numericDbLimits';
 import { NextResponse } from 'next/server';
 
 const GASTOS_BATCH_SIZE = 200;
@@ -38,12 +45,13 @@ async function insertGastosBatches(
   const rows = gastos.map((g) => ({
     ...g,
     proyecto_id: g.proyecto_id?.trim() ? g.proyecto_id : pid,
+    costo: toPgNumeric15_2(Number(g.costo)),
   }));
 
   for (let i = 0; i < rows.length; i += GASTOS_BATCH_SIZE) {
     const batch = rows.slice(i, i + GASTOS_BATCH_SIZE);
     const { error } = await supabase.from('gastos_obra').insert(batch);
-    if (error) throw error;
+    if (error) throw new Error(formatErrorMessage(error));
   }
 }
 
@@ -60,8 +68,11 @@ export async function postImportarLuloPresupuesto(
     const supabase = await createClient();
     const pid = proyectoId.trim();
 
-    if (!pid) {
-      return NextResponse.json({ error: 'proyectoId requerido en la URL' }, { status: 400 });
+    if (!isValidProyectoUuid(pid)) {
+      return NextResponse.json(
+        { error: mensajeProyectoIdInvalido(pid), hint: mensajeProyectoIdInvalido(pid) },
+        { status: 400 },
+      );
     }
 
     const formData = formDataIn ?? (await req.formData());
@@ -274,6 +285,18 @@ export async function postImportarLuloPresupuesto(
       meta = { ...meta, ...parsed.meta };
     }
 
+    if (formato === 'mdb' && partidasRaw.length > 0) {
+      const dumpCap =
+        (extraccionVolcado?.payload as LuloMdbFullDump | undefined) ??
+        (payload && typeof payload === 'object' && 'tables' in payload
+          ? (payload as LuloMdbFullDump)
+          : null);
+      if (dumpCap) {
+        partidasRaw = enriquecerPartidasConCapitulos(partidasRaw, dumpCap);
+        meta = { ...meta, partidasOrdenadasPorCapitulo: true };
+      }
+    }
+
     if (partidasRaw.length === 0 && gastosInsert.length === 0) {
       let snapshotIdVolcado: string | null = null;
       const extraccion =
@@ -385,12 +408,11 @@ export async function postImportarLuloPresupuesto(
       filasTotales: extraccion.filasTotales,
     });
   } catch (err: unknown) {
-    const raw = err instanceof Error ? err.message : 'Error al importar el presupuesto.';
+    const raw = formatErrorMessage(err) || 'Error al importar el presupuesto.';
     const friendly = formatMdbReadError(err);
-    if (friendly !== raw) {
-      return NextResponse.json({ error: friendly }, { status: 400 });
-    }
+    const message = friendly !== raw && !friendly.includes('[object Object]') ? friendly : raw;
     console.error('[postImportarLuloPresupuesto]', err);
-    return NextResponse.json({ error: raw }, { status: 500 });
+    const status = friendly !== raw ? 400 : 500;
+    return NextResponse.json({ error: message, hint: message }, { status });
   }
 }

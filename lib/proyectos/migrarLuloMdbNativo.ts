@@ -9,6 +9,11 @@ import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import { formatMdbReadError, toMdbNodeBuffer } from '@/lib/proyectos/mdbBuffer';
 import { parseLuloMdbEstructurado } from '@/lib/proyectos/parseLuloMdbEstructurado';
 import { persistirLuloEstructurado } from '@/lib/proyectos/persistirLuloEstructurado';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+  normalizarProyectoIdCandidato,
+} from '@/lib/proyectos/validarProyectoUuid';
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 

@@ -1,9 +1,11 @@
 import {
   normalizeLuloRow,
+  parseLuloNumber,
   pickFecha,
   pickField,
   pickNumber,
 } from '@/lib/proyectos/luloFieldMapping';
+import { montoPartidaDesdeCantidadPrecio } from '@/lib/utils/numericDbLimits';
 import type { GastoObraLuloInsert } from '@/types/lulo-import';
 import { extractFullLuloCsv, type LuloCsvFullDump } from '@/lib/proyectos/extractLuloFull';
 
@@ -16,6 +18,9 @@ export type PartidaLuloInsert = {
   precio_unitario_estimado: number;
   monto_total_estimado: number;
   origen: string;
+  capitulo_codigo?: string | null;
+  capitulo_descripcion?: string | null;
+  capitulo_orden?: number | null;
 };
 
 function pickFieldCsv(row: Record<string, string>, keys: string[]): string {
@@ -29,9 +34,7 @@ function pickFieldCsv(row: Record<string, string>, keys: string[]): string {
 }
 
 function pickNumberCsv(row: Record<string, string>, keys: string[]): number {
-  const raw = pickFieldCsv(row, keys).replace(/\s/g, '').replace(',', '.');
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : 0;
+  return parseLuloNumber(pickFieldCsv(row, keys));
 }
 
 function rowToPartidaCsv(row: Record<string, string>, proyectoId: string): PartidaLuloInsert | null {
@@ -48,7 +51,7 @@ function rowToPartidaCsv(row: Record<string, string>, proyectoId: string): Parti
     'precio',
   ]);
   const montoCsv = pickNumberCsv(row, ['monto_total', 'Monto', 'monto_total_estimado', 'total', 'importe']);
-  const monto = montoCsv > 0 ? montoCsv : Math.round(cantidad * precio * 100) / 100;
+  const monto = montoPartidaDesdeCantidadPrecio(cantidad, precio, montoCsv > 0 ? montoCsv : undefined);
 
   return {
     proyecto_id: proyectoId,

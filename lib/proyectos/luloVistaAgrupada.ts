@@ -1,5 +1,7 @@
 /** Agrupación y orden Lulo (capítulos, partidas, disciplinas/rubros). */
 
+import { getCapituloKeyPartida } from '@/lib/proyectos/luloCapitulos';
+
 export type VistaAgrupacionLulo = 'capitulos' | 'partidas' | 'disciplinas';
 
 export type GrupoAgrupado<T> = {
@@ -51,7 +53,16 @@ export function esEncabezadoCapitulo(row: {
   return shallow && (cant === 0 && pu === 0) && (monto > 0 || cod.length > 0);
 }
 
-function etiquetaCapitulo(capitulo: string, items: { codigo_partida: string; descripcion: string }[]): string {
+function etiquetaCapitulo(
+  capitulo: string,
+  items: {
+    codigo_partida: string;
+    descripcion: string;
+    capitulo_descripcion?: string | null;
+  }[],
+): string {
+  const descCap = items.find((p) => p.capitulo_descripcion?.trim())?.capitulo_descripcion?.trim();
+  if (descCap) return `Capítulo ${capitulo} — ${descCap}`;
   const header = items.find(
     (p) =>
       esEncabezadoCapitulo(p as Parameters<typeof esEncabezadoCapitulo>[0]) ||
@@ -62,6 +73,18 @@ function etiquetaCapitulo(capitulo: string, items: { codigo_partida: string; des
     return `Capítulo ${capitulo} — ${header.descripcion.trim()}`;
   }
   return `Capítulo ${capitulo}`;
+}
+
+function ordenCapitulosConMeta<T extends { capitulo_orden?: number | null }>(
+  ka: string,
+  kb: string,
+  ga: T[],
+  gb: T[],
+): number {
+  const oa = Math.min(...ga.map((p) => Number(p.capitulo_orden ?? 9999)));
+  const ob = Math.min(...gb.map((p) => Number(p.capitulo_orden ?? 9999)));
+  if (oa !== ob) return oa - ob;
+  return compareCodigoNatural(ka, kb);
 }
 
 function etiquetaRubro(rubro: string, items: { codigo_partida: string; descripcion: string }[]): string {
@@ -78,17 +101,20 @@ function ordenarPartidasPorCodigo<T extends { codigo_partida: string }>(items: T
 
 function agruparPorClave<T extends { codigo_partida: string; monto_total_estimado?: number }>(
   items: T[],
-  claveFn: (codigo: string) => string,
+  claveFn: (item: T) => string,
   etiquetaFn: (clave: string, grupo: T[]) => string,
+  ordenClaves?: (a: string, b: string, ga: T[], gb: T[]) => number,
 ): GrupoAgrupado<T>[] {
   const map = new Map<string, T[]>();
   for (const item of items) {
-    const k = claveFn(item.codigo_partida);
+    const k = claveFn(item);
     if (!map.has(k)) map.set(k, []);
     map.get(k)!.push(item);
   }
   return Array.from(map.entries())
-    .sort(([a], [b]) => compareCodigoNatural(a, b))
+    .sort(([ka, ga], [kb, gb]) =>
+      ordenClaves ? ordenClaves(ka, kb, ga, gb) : compareCodigoNatural(ka, kb),
+    )
     .map(([clave, grupo]) => {
       const sorted = ordenarPartidasPorCodigo(grupo);
       const subtotal = sorted.reduce(
@@ -105,15 +131,27 @@ function agruparPorClave<T extends { codigo_partida: string; monto_total_estimad
 }
 
 export function agruparPartidasPorCapitulo<
-  T extends { codigo_partida: string; descripcion: string; monto_total_estimado?: number },
+  T extends {
+    codigo_partida: string;
+    descripcion: string;
+    monto_total_estimado?: number;
+    capitulo_codigo?: string | null;
+    capitulo_descripcion?: string | null;
+    capitulo_orden?: number | null;
+  },
 >(items: T[]): GrupoAgrupado<T>[] {
-  return agruparPorClave(items, getCapituloKey, etiquetaCapitulo);
+  return agruparPorClave(
+    items,
+    (p) => getCapituloKeyPartida(p),
+    etiquetaCapitulo,
+    ordenCapitulosConMeta,
+  );
 }
 
 export function agruparPartidasPorRubro<
   T extends { codigo_partida: string; descripcion: string; monto_total_estimado?: number },
 >(items: T[]): GrupoAgrupado<T>[] {
-  return agruparPorClave(items, getRubroDisciplinaKey, etiquetaRubro);
+  return agruparPorClave(items, (p) => getRubroDisciplinaKey(p.codigo_partida), etiquetaRubro);
 }
 
 export function ordenarPartidasPlanas<T extends { codigo_partida: string }>(items: T[]): T[] {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import {
   ArrowLeft,
   Database,
@@ -12,10 +13,15 @@ import {
   Settings,
   Trash2,
   X,
+  Layers,
 } from 'lucide-react';
+import ApuPartidaDetalleModal from '@/components/proyectos/ApuPartidaDetalleModal';
 import { toast } from 'sonner';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
+import LuloVolcadoPorCapitulos from '@/components/proyectos/LuloVolcadoPorCapitulos';
 import LuloTablaFiltrable, { type LuloColumnaDef } from '@/components/proyectos/LuloTablaFiltrable';
+import { getCapituloKeyPartida, ordenarPartidasPorCapitulos } from '@/lib/proyectos/luloCapitulos';
+import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import {
   filtrarGastosObra,
   filtrarPartidasObra,
@@ -26,14 +32,15 @@ import {
   agruparGastosPorDisciplina,
   agruparPartidasPorCapitulo,
   agruparPartidasPorRubro,
-  getCapituloKey,
   ordenarGastosPlanos,
-  ordenarPartidasPlanas,
   type VistaAgrupacionLulo,
 } from '@/lib/proyectos/luloVistaAgrupada';
+import { isValidProyectoUuid, resolveProyectoId } from '@/lib/proyectos/validarProyectoUuid';
+import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 
 const COLUMNAS_PARTIDAS: LuloColumnaDef[] = [
+  { key: 'capitulo_codigo', label: 'Cap.', mono: true, align: 'center' },
   { key: 'codigo_partida', label: 'Código', mono: true },
   { key: 'descripcion', label: 'Descripción', maxWidth: 280 },
   { key: 'unidad', label: 'Und', align: 'center' },
@@ -94,6 +101,9 @@ type Partida = {
   precio_unitario_estimado: number;
   monto_total_estimado: number;
   origen: string;
+  capitulo_codigo?: string | null;
+  capitulo_descripcion?: string | null;
+  capitulo_orden?: number | null;
 };
 
 type Gasto = {
@@ -273,6 +283,14 @@ function FiltrosGastosPanel({
 }
 
 export default function ControlObraClient({ proyectoId, proyectoNombre }: Props) {
+  const params = useParams();
+  const pid = useMemo(() => {
+    if (proyectoId && isValidProyectoUuid(proyectoId)) {
+      return resolveProyectoId(proyectoId, undefined);
+    }
+    return resolveProyectoId(proyectoId, params?.id as string | string[]);
+  }, [proyectoId, params]);
+
   const [loading, setLoading] = useState(true);
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [gastos, setGastos] = useState<Gasto[]>([]);
@@ -303,11 +321,13 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
     porcentaje_utilidad?: number | null;
     porcentaje_fcm?: number | null;
   } | null>(null);
+  const [apuPartidaId, setApuPartidaId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/proyectos/${proyectoId}/lulo`);
+      if (!isValidProyectoUuid(pid)) return;
+      const res = await fetch(`/api/proyectos/${encodeURIComponent(pid)}/lulo`);
       const data = await parseFetchJson<{
         error?: string;
         partidas?: Partida[];
@@ -325,7 +345,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
           porcentaje_fcm?: number | null;
         };
       }>(res);
-      if (!res.ok) throw new Error(data.error || 'Error al cargar');
+      if (!res.ok) throw new Error(formatApiErrorBody(data, 'Error al cargar datos Lulo'));
       setPartidas(data.partidas ?? []);
       setGastos(data.gastos ?? []);
       setResumenNativo({
@@ -355,11 +375,11 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
         }
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error de carga');
+      toast.error(formatErrorMessage(e));
     } finally {
       setLoading(false);
     }
-  }, [proyectoId]);
+  }, [pid]);
 
   useEffect(() => {
     void load();
@@ -485,9 +505,21 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const keysGastos = useMemo(() => COLUMNAS_GASTOS.map((c) => c.key), []);
 
   const capitulosDisponibles = useMemo(() => {
-    const set = new Set(partidas.map((p) => getCapituloKey(p.codigo_partida)));
+    const set = new Set(partidas.map((p) => getCapituloKeyPartida(p)));
     return Array.from(set).filter((c) => c !== '—').sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [partidas]);
+
+  const esTablaPartidasMdb = useMemo(() => {
+    const n = tablaMdbActiva?.name?.trim().toUpperCase() ?? '';
+    return n === 'PARTIDAS' || n === 'PARTIDA';
+  }, [tablaMdbActiva]);
+
+  const mdbDumpCompleto = useMemo((): LuloMdbFullDump | null => {
+    if (snapshotDetail?.payload?.formato !== 'mdb') return null;
+    const p = snapshotDetail.payload;
+    if (!p?.tables) return null;
+    return p as LuloMdbFullDump;
+  }, [snapshotDetail]);
 
   const partidasFiltradas = useMemo(() => {
     const base = partidas.map((p) => ({ ...p } as Record<string, unknown>));
@@ -510,7 +542,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
 
   const filasPartidasPlanas = useMemo(() => {
     if (tab !== 'partidas' || vistaAgrupacion !== 'partidas') return [];
-    return ordenarPartidasPlanas(partidasFiltradas);
+    return ordenarPartidasPorCapitulos(partidasFiltradas);
   }, [tab, vistaAgrupacion, partidasFiltradas]);
 
   const gruposGastos = useMemo(() => {
@@ -574,6 +606,14 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
             <td className="px-3 py-2 text-right">{p.precio_unitario_estimado}</td>
             <td className="px-3 py-2 text-right font-semibold">{Number(p.monto_total_estimado).toLocaleString()}</td>
             <td className="px-3 py-2 whitespace-nowrap">
+              <button
+                type="button"
+                title="Ver composición APU"
+                onClick={() => setApuPartidaId(id)}
+                className="text-violet-400 hover:text-violet-300 mr-2"
+              >
+                <Layers className="h-3.5 w-3.5" />
+              </button>
               <button type="button" onClick={() => { setEditingPartida(id); setEditPartidaForm({}); }} className="text-zinc-500 hover:text-white mr-2">
                 <Pencil className="h-3.5 w-3.5" />
               </button>
@@ -647,7 +687,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
     <div className="space-y-6 text-white max-w-[1400px] mx-auto">
       <div className="flex flex-wrap items-start gap-4">
         <Link
-          href={`/proyectos/modulo/${proyectoId}?tab=finanzas`}
+          href={`/proyectos/modulo/${pid}?tab=finanzas`}
           className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 hover:bg-white/5"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -671,7 +711,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
       </div>
 
       <div className="flex flex-wrap items-start gap-4">
-        <ImportarPresupuestoLulo proyectoId={proyectoId} onSuccess={() => void load()} />
+        <ImportarPresupuestoLulo proyectoId={pid} onSuccess={() => void load()} />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 flex-1 min-w-[240px]">
           <div className="rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2">
             <p className="text-[10px] uppercase text-zinc-500">Partidas</p>
@@ -902,13 +942,21 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
                   </select>
                 </label>
               </div>
-              <LuloTablaFiltrable
-                titulo={`Volcado: ${tablaMdbActiva.name}`}
-                columnas={columnasMdb}
-                filas={tablaMdbActiva.rows}
-                vacio="Esta tabla no tiene filas en el volcado."
-                maxFilasVisibles={2000}
-              />
+              {esTablaPartidasMdb && mdbDumpCompleto ? (
+                <LuloVolcadoPorCapitulos
+                  dump={mdbDumpCompleto}
+                  tablaPartidas={tablaMdbActiva}
+                  columnas={columnasMdb}
+                />
+              ) : (
+                <LuloTablaFiltrable
+                  titulo={`Volcado: ${tablaMdbActiva.name}`}
+                  columnas={columnasMdb}
+                  filas={tablaMdbActiva.rows}
+                  vacio="Esta tabla no tiene filas en el volcado."
+                  maxFilasVisibles={2000}
+                />
+              )}
             </>
           ) : csvRows.length > 0 ? (
             <LuloTablaFiltrable
@@ -927,6 +975,8 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
           )}
         </div>
       ) : null}
+
+      <ApuPartidaDetalleModal partidaId={apuPartidaId} onClose={() => setApuPartidaId(null)} />
     </div>
   );
 }

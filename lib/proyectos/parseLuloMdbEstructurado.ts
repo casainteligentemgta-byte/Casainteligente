@@ -2,6 +2,7 @@ import type { PartidaLuloInsert } from '@/lib/proyectos/parsePresupuestoLuloCsv'
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import { normalizeLuloRow, pickField, pickNumber } from '@/lib/proyectos/luloFieldMapping';
 import { normalizeColumnKey } from '@/lib/proyectos/luloColumnInfer';
+import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
 import {
   findLuloTable,
   luloMdbHasEstructuraNativa,
@@ -129,7 +130,7 @@ function parsePartidasTable(
       cell(row, cDes) || pickField(row, [...LULO_PARTIDA_COLS.descripcion]) || codigo;
     const cantidad = num(row, cCan, LULO_PARTIDA_COLS.cantidad);
     const precio = num(row, cPre, LULO_PARTIDA_COLS.precio);
-    const monto = Math.round(cantidad * precio * 100) / 100;
+    const montoExplicito = precio > 0 && cantidad <= 0 ? precio : undefined;
 
     out.push({
       proyecto_id: proyectoId,
@@ -138,7 +139,7 @@ function parsePartidasTable(
       unidad: (cell(row, cUni) || pickField(row, [...LULO_PARTIDA_COLS.unidad]) || 'UND').trim(),
       cantidad_presupuestada: cantidad,
       precio_unitario_estimado: precio,
-      monto_total_estimado: monto > 0 ? monto : precio,
+      monto_total_estimado: montoExplicito ?? 0,
       origen: 'lulo_mdb',
     });
   }
@@ -246,11 +247,12 @@ export function parseLuloMdbEstructurado(
 
   const insumos = tInsumos ? parseInsumosTable(tInsumos) : [];
   const apu = tComposicion ? parseComposicionTable(tComposicion) : [];
+  const partidasOrdenadas = enriquecerPartidasConCapitulos(partidas, dump, tPartidas);
 
   return {
     detected: true,
     insumos,
-    partidas,
+    partidas: partidasOrdenadas,
     apu,
     obra,
     tablasUsadas: {

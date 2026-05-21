@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { montoPartidaDesdeCantidadPrecio, toPgNumeric15_2, toPgNumeric15_4 } from '@/lib/utils/numericDbLimits';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: 'Sin campos para actualizar' }, { status: 400 });
     }
+
+    if (update.cantidad_presupuestada !== undefined) {
+      update.cantidad_presupuestada = toPgNumeric15_4(Number(update.cantidad_presupuestada));
+    }
+    if (update.precio_unitario_estimado !== undefined) {
+      update.precio_unitario_estimado = toPgNumeric15_4(Number(update.precio_unitario_estimado));
+    }
+    if (update.monto_total_estimado !== undefined) {
+      const cantidad = toPgNumeric15_4(Number(update.cantidad_presupuestada ?? 0));
+      const precio = toPgNumeric15_4(Number(update.precio_unitario_estimado ?? 0));
+      const montoRaw = Number(update.monto_total_estimado);
+      update.monto_total_estimado =
+        update.cantidad_presupuestada !== undefined || update.precio_unitario_estimado !== undefined
+          ? montoPartidaDesdeCantidadPrecio(cantidad, precio, montoRaw)
+          : toPgNumeric15_2(montoRaw);
+    }
+
     update.updated_at = new Date().toISOString();
 
     const supabase = await createClient();

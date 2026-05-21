@@ -1,4 +1,5 @@
 import { normalizeColumnKey, pickFieldFuzzy } from '@/lib/proyectos/luloColumnInfer';
+import { clampNumeric15_4 } from '@/lib/utils/numericDbLimits';
 
 /** Normaliza filas CSV/MDB a mapa clave→texto en minúsculas (claves sin acentos). */
 export function normalizeLuloRow(row: Record<string, unknown>): Record<string, string> {
@@ -53,7 +54,9 @@ export function parseLuloNumber(raw: string): number {
     t = t.replace(/,/g, '.');
   }
   const n = Number(t);
-  return Number.isFinite(n) ? n : 0;
+  if (!Number.isFinite(n)) return 0;
+  if (Math.abs(n) >= 1e13) return 0;
+  return clampNumeric15_4(n);
 }
 
 export function pickNumber(row: Record<string, string>, keys: string[]): number {

@@ -4,6 +4,12 @@ import {
   eliminarPartidasLuloDeProyecto,
 } from '@/lib/proyectos/guardarPartidasPresupuestoBulk';
 import type { LuloEstructuradoParse } from '@/lib/proyectos/parseLuloMdbEstructurado';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
+import {
+  clampNumeric15_6,
+  clampNumeric8_4,
+  toPgNumeric15_4,
+} from '@/lib/utils/numericDbLimits';
 
 const BATCH = 200;
 
@@ -25,7 +31,7 @@ async function upsertInsumosMaestro(
     codigo: i.codigo,
     descripcion: i.descripcion,
     unidad: i.unidad || 'UND',
-    precio_base: i.precio_base,
+    precio_base: toPgNumeric15_4(i.precio_base),
     tipo: i.tipo,
     origen: 'lulo_mdb',
     updated_at: new Date().toISOString(),
@@ -37,7 +43,7 @@ async function upsertInsumosMaestro(
       .from('ci_lulo_insumos_maestro')
       .upsert(batch, { onConflict: 'codigo' })
       .select('id, codigo');
-    if (error) throw error;
+    if (error) throw new Error(formatErrorMessage(error));
     for (const row of data ?? []) {
       if (row.codigo && row.id) {
         codigoToId.set(String(row.codigo).trim().toUpperCase(), row.id);
@@ -74,13 +80,13 @@ async function actualizarProyectoDesdeObra(
     updated_at: new Date().toISOString(),
   };
   if (obra.porcentaje_admin != null && obra.porcentaje_admin > 0) {
-    patch.porcentaje_admin = obra.porcentaje_admin;
+    patch.porcentaje_admin = clampNumeric8_4(obra.porcentaje_admin);
   }
   if (obra.porcentaje_utilidad != null && obra.porcentaje_utilidad > 0) {
-    patch.porcentaje_utilidad = obra.porcentaje_utilidad;
+    patch.porcentaje_utilidad = clampNumeric8_4(obra.porcentaje_utilidad);
   }
   if (obra.porcentaje_fcm != null && obra.porcentaje_fcm >= 0) {
-    patch.porcentaje_fcm = obra.porcentaje_fcm;
+    patch.porcentaje_fcm = clampNumeric8_4(obra.porcentaje_fcm);
   }
 
   const { error } = await supabase.from('ci_proyectos').update(patch).eq('id', proyectoId);
@@ -88,7 +94,7 @@ async function actualizarProyectoDesdeObra(
     if (error.message.includes('codigo_lulo') || error.code === '42703') {
       return false;
     }
-    throw error;
+    throw new Error(formatErrorMessage(error));
   }
   return true;
 }
@@ -108,7 +114,7 @@ async function mapPartidaIds(
       .select('id, codigo_partida')
       .eq('proyecto_id', proyectoId)
       .in('codigo_partida', batch);
-    if (error) throw error;
+    if (error) throw new Error(formatErrorMessage(error));
     for (const row of data ?? []) {
       if (row.codigo_partida && row.id) {
         map.set(String(row.codigo_partida).trim().toUpperCase(), row.id);
@@ -139,8 +145,8 @@ async function insertApu(
     rows.push({
       partida_id: partidaId,
       insumo_id: insumoId,
-      cantidad_rendimiento: line.cantidad_rendimiento,
-      desperdicio_porcentaje: line.desperdicio_porcentaje,
+      cantidad_rendimiento: clampNumeric15_6(line.cantidad_rendimiento),
+      desperdicio_porcentaje: clampNumeric8_4(line.desperdicio_porcentaje),
       origen: 'lulo_mdb',
     });
   }
@@ -151,7 +157,7 @@ async function insertApu(
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
     const { error } = await supabase.from('ci_presupuesto_partida_apu').insert(batch);
-    if (error) throw error;
+    if (error) throw new Error(formatErrorMessage(error));
     insertados += batch.length;
   }
   return insertados;
