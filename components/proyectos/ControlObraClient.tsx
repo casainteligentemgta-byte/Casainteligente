@@ -312,6 +312,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const [filtrosPartidas, setFiltrosPartidas] = useState<FiltrosPartidasObra>(FILTROS_PARTIDAS_INICIAL);
   const [filtrosGastos, setFiltrosGastos] = useState<FiltrosGastosObra>(FILTROS_GASTOS_INICIAL);
   const [vistaAgrupacion, setVistaAgrupacion] = useState<VistaAgrupacionLulo>('capitulos');
+  const [reporteVariant, setReporteVariant] = useState<'app' | 'report'>('report');
   const [resumenNativo, setResumenNativo] = useState({
     apuLineas: 0,
     insumosEnApu: 0,
@@ -574,7 +575,13 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const totalGastosFiltrados = gastosFiltrados.reduce((s, g) => s + Number(g.costo ?? 0), 0);
 
   const obraPresupuesto = useMemo(
-    () => buildObraDataPresupuesto(partidasFiltradas, proyectoMeta, proyectoNombre, pid),
+    () =>
+      buildObraDataPresupuesto(
+        ordenarPartidasPorCapitulos(partidasFiltradas),
+        proyectoMeta,
+        proyectoNombre,
+        pid,
+      ),
     [partidasFiltradas, proyectoMeta, proyectoNombre, pid],
   );
 
@@ -880,16 +887,47 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
 
       {!loading && tab === 'presupuesto' ? (
         <div className="space-y-3">
-          <p className="text-[11px] text-zinc-500">
-            Vista tipo reporte de ingeniería (Lulo). Respeta los filtros del cuadro de partidas (
-            {partidasFiltradas.length} de {partidas.length} filas).
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-zinc-500">
+              Resumen por capítulo (formato Lulo): totales, % y rango de partidas (
+              {partidasFiltradas.length} de {partidas.length}).
+            </p>
+            <div className="flex gap-1 rounded-lg border border-white/10 p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setReporteVariant('report')}
+                className={`rounded-md px-2.5 py-1 ${
+                  reporteVariant === 'report'
+                    ? 'bg-white/10 text-white'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Impresión Lulo
+              </button>
+              <button
+                type="button"
+                onClick={() => setReporteVariant('app')}
+                className={`rounded-md px-2.5 py-1 ${
+                  reporteVariant === 'app'
+                    ? 'bg-white/10 text-white'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Tema app
+              </button>
+            </div>
+          </div>
           {partidasFiltradas.length === 0 ? (
             <p className="text-sm text-zinc-500 rounded-xl border border-dashed border-white/10 py-12 text-center">
               Sin partidas para el reporte. Importa un MDB/CSV o ajusta los filtros.
             </p>
           ) : (
-            <PresupuestoPorCapitulos obra={obraPresupuesto} variant="app" moneda="USD" />
+            <PresupuestoPorCapitulos
+              obra={obraPresupuesto}
+              variant={reporteVariant}
+              moneda="USD"
+              titulo="PRESUPUESTO POR CAPITULOS"
+            />
           )}
         </div>
       ) : null}

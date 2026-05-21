@@ -7,8 +7,10 @@ export type PartidaPresupuestoFuente = {
   unidad: string;
   cantidad_presupuestada: number;
   precio_unitario_estimado: number;
+  monto_total_estimado?: number | null;
   capitulo_codigo?: string | null;
   capitulo_descripcion?: string | null;
+  capitulo_orden?: number | null;
 };
 
 export type ProyectoPresupuestoMeta = {
@@ -34,6 +36,10 @@ export function partidasToPresupuestoReporte(partidas: PartidaPresupuestoFuente[
     unidad: String(p.unidad ?? 'UND').trim() || 'UND',
     cantidad: Number(p.cantidad_presupuestada ?? 0),
     precio_unitario: Number(p.precio_unitario_estimado ?? 0),
+    monto_total_estimado: Number(p.monto_total_estimado ?? 0) || null,
+    capitulo_codigo: p.capitulo_codigo ?? null,
+    capitulo_descripcion: p.capitulo_descripcion ?? null,
+    capitulo_orden: p.capitulo_orden ?? null,
     capitulo: etiquetaCapituloPartida(p),
   }));
 }
