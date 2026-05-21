@@ -39,8 +39,8 @@ export async function GET(
 
     if (partidasRes.error) throw partidasRes.error;
     if (gastosRes.error) throw gastosRes.error;
-    if (snapshotsRes.error && !snapshotsRes.error.message.includes('ci_lulo_import_snapshots')) {
-      throw snapshotsRes.error;
+    if (snapshotsRes.error) {
+      console.warn('[GET lulo] snapshots:', snapshotsRes.error.message);
     }
 
     return NextResponse.json({

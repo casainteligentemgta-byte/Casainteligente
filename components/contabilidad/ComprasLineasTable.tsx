@@ -2,11 +2,21 @@
 
 import type { CSSProperties } from 'react';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
+import { formatearBs, formatearUsd, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 
 type Props = {
   filas: FilaFacturaCanal[];
   onScrollToCompra?: (compraId: string) => void;
 };
+
+function subtotalUsdFila(row: FilaFacturaCanal, subtotalBs: number): number | null {
+  const directo = vesAUsdConTasa(subtotalBs, row.tasaBcv);
+  if (directo != null) return directo;
+  if (row.montoUsd != null && row.montoBs > 0) {
+    return Math.round(((subtotalBs / row.montoBs) * row.montoUsd) * 100) / 100;
+  }
+  return row.esLinea ? null : row.montoUsd;
+}
 
 export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
   if (filas.length === 0) {
@@ -48,8 +58,8 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
             <th style={th}>Proyecto</th>
             <th style={th}>Artículo</th>
             <th style={{ ...th, textAlign: 'right' }}>Cant.</th>
-            <th style={{ ...th, textAlign: 'right' }}>P.U. Bs</th>
-            <th style={{ ...th, textAlign: 'right' }}>Subtotal Bs</th>
+            <th style={{ ...th, textAlign: 'right' }}>P.U. (Bs)</th>
+            <th style={{ ...th, textAlign: 'right' }}>Subtotal (Bs)</th>
             <th style={{ ...th, textAlign: 'right' }}>USD</th>
             <th style={th} />
           </tr>
@@ -59,12 +69,7 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
             const subtotalBs = row.esLinea
               ? row.cantidad * row.precioUnitario
               : row.montoBs;
-            const usd =
-              row.montoUsd != null && row.montoUsd > 0 && !row.esLinea
-                ? row.montoUsd
-                : row.montoBs > 0 && row.montoUsd != null && row.montoUsd > 0
-                  ? (subtotalBs / row.montoBs) * row.montoUsd
-                  : null;
+            const usd = subtotalUsdFila(row, subtotalBs);
 
             return (
               <tr
@@ -82,14 +87,14 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
                   {row.esLinea ? row.articulo : <span style={{ opacity: 0.4 }}>(cabecera)</span>}
                 </td>
                 <td style={{ ...td, textAlign: 'right' }}>{row.esLinea ? row.cantidad : '—'}</td>
-                <td style={{ ...td, textAlign: 'right' }}>
-                  {row.esLinea ? row.precioUnitario.toLocaleString('es-VE') : '—'}
+                <td style={{ ...td, textAlign: 'right', color: '#FFD60A', fontWeight: 700 }}>
+                  {row.esLinea ? formatearBs(row.precioUnitario) : '—'}
                 </td>
                 <td style={{ ...td, textAlign: 'right', fontWeight: 800 }}>
-                  {subtotalBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                  {formatearBs(subtotalBs)}
                 </td>
                 <td style={{ ...td, textAlign: 'right', color: '#FF3B30', fontWeight: 700 }}>
-                  {usd != null ? `$${usd.toFixed(2)}` : '—'}
+                  {usd != null ? formatearUsd(usd) : '—'}
                 </td>
                 <td style={td}>
                   {onScrollToCompra ? (

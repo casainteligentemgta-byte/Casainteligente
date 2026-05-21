@@ -33,6 +33,12 @@ export type LuloMdbParseResult = {
   };
 };
 
+export type LuloCatalogoTablaResumen = {
+  name: string;
+  rowCount: number;
+  columns: string[];
+};
+
 export type LuloSnapshotResumen = {
   partidas: number;
   gastos: number;
@@ -40,6 +46,10 @@ export type LuloSnapshotResumen = {
   tablas?: number;
   filasTotales?: number;
   formato: 'mdb' | 'csv';
+  /** Catálogo de tablas del MDB (modo extracción completa). */
+  catalogoTablas?: LuloCatalogoTablaResumen[];
+  creationDate?: string | null;
+  modo?: 'importacion' | 'extraccion_completa';
 };
 
 export type LuloMdbParseMetaBase = {

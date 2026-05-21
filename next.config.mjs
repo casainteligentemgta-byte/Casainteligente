@@ -7,7 +7,6 @@ const nextConfig = {
     serverComponentsExternalPackages: [
       '@react-pdf/renderer',
       'canvas',
-      'sonner',
       'mdb-reader',
       'browserify-aes',
       'create-hash',

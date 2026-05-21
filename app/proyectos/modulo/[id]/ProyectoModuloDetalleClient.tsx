@@ -655,10 +655,10 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           <div className="flex flex-wrap items-start gap-4">
             <ImportarPresupuestoLulo proyectoId={id} />
             <Link
-              href={`/proyectos/modulo/${id}/lulo`}
-              className="rounded-xl border border-sky-500/30 bg-sky-950/30 px-4 py-3 text-xs font-semibold text-sky-100 hover:bg-sky-900/40"
+              href={`/proyectos/modulo/${id}/control-obra`}
+              className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-xs font-semibold text-amber-100 hover:bg-amber-900/40"
             >
-              Gestionar datos Lulo importados →
+              Control de obra (Lulo) →
             </Link>
           </div>
           <ControlPlanosObra proyectoId={id} />

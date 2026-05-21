@@ -22,6 +22,8 @@ type Props = {
   /** Render personalizado por fila (p. ej. botones editar) */
   renderFila?: (row: Record<string, unknown>, index: number) => React.ReactNode;
   className?: string;
+  /** Barra de búsqueda por columna (desactivar en tablas agrupadas secundarias). */
+  mostrarFiltros?: boolean;
 };
 
 export default function LuloTablaFiltrable({
@@ -32,6 +34,7 @@ export default function LuloTablaFiltrable({
   maxFilasVisibles = 1000,
   renderFila,
   className = '',
+  mostrarFiltros = true,
 }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const [columnaFiltro, setColumnaFiltro] = useState('');
@@ -50,6 +53,7 @@ export default function LuloTablaFiltrable({
     <div className={`space-y-3 ${className}`.trim()}>
       {titulo ? <h3 className="text-sm font-semibold text-zinc-300">{titulo}</h3> : null}
 
+      {mostrarFiltros ? (
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
@@ -93,6 +97,7 @@ export default function LuloTablaFiltrable({
           </button>
         ) : null}
       </div>
+      ) : null}
 
       <div className="overflow-x-auto rounded-xl border border-white/10 max-h-[min(70vh,640px)] overflow-y-auto">
         <table className="w-full text-xs border-collapse">

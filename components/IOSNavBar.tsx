@@ -117,12 +117,11 @@ function navItemActive(pathname: string, href: string): boolean {
 }
 
 export default function IOSNavBar() {
-    const pathname = usePathname();
-    const path =
-        (typeof pathname === 'string' && pathname.length > 0 ? pathname : null) ??
-        (typeof window !== 'undefined' ? window.location.pathname : '');
+    const pathname = usePathname() ?? '';
     /** Postulación pública: no mostrar «Inicio» (primer ítem del dock). */
-    const items = path.startsWith('/registro') ? navItems.filter((i) => i.href !== '/') : navItems;
+    const items = pathname.startsWith('/registro')
+        ? navItems.filter((i) => i.href !== '/')
+        : navItems;
 
     return (
         <nav
@@ -141,7 +140,7 @@ export default function IOSNavBar() {
             <div className="overflow-x-auto scrollbar-hide">
                 <div className="flex min-w-max items-center gap-0.5 px-1 pb-1.5 pt-2">
                 {items.map((item) => {
-                    const isActive = navItemActive(path || pathname || '', item.href);
+                    const isActive = navItemActive(pathname, item.href);
                     const activeColor =
                         item.label === 'Conta'
                             ? '#5856D6'

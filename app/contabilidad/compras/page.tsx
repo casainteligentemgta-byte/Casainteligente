@@ -35,9 +35,20 @@ import {
     mergeProyectosCatalogo,
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
-import { FileText, Filter, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { Filter, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react';
+import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
-import { montoUsdCompra } from '@/lib/contabilidad/comprasMontos';
+import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
+import {
+    formatearBs,
+    formatearTasaBcv,
+    formatearUsd,
+    montoUsdCompra,
+    montoVesCompra,
+    tasaBcvCompra,
+    vesAUsdConTasa,
+} from '@/lib/contabilidad/comprasMontos';
+import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
 
 type CompraRow = {
     id: string;
@@ -53,6 +64,7 @@ type CompraRow = {
     origen: string;
     estado: string;
     document_file_name: string | null;
+    document_storage_path?: string | null;
     created_at: string;
     ci_proyectos?: { nombre: string | null } | { nombre: string | null }[] | null;
     contabilidad_compra_lineas?:
@@ -155,8 +167,9 @@ export default function ComprasPage() {
     const [error, setError] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
+    const [hydrated, setHydrated] = useState(false);
     const [periodo, setPeriodo] = useState<PeriodoCompras>('todas');
-    const [fechaRef, setFechaRef] = useState(todayIso);
+    const [fechaRef, setFechaRef] = useState('');
     const [fechaDesde, setFechaDesde] = useState('');
     const [fechaHasta, setFechaHasta] = useState('');
     const [proyectoFiltro, setProyectoFiltro] = useState<string>('');
@@ -173,10 +186,23 @@ export default function ComprasPage() {
     const [busqueda, setBusqueda] = useState('');
     const [busquedaAplicada, setBusquedaAplicada] = useState('');
 
-    const rangoActivo = useMemo(
-        () => rangoFechasPeriodo(periodo, fechaRef, { desde: fechaDesde, hasta: fechaHasta }),
-        [periodo, fechaRef, fechaDesde, fechaHasta]
+    const fechaRefActiva = fechaRef || (hydrated ? todayIso() : '');
+    const { tasa: tasaBcvHoy, fuente: tasaBcvFuente, loading: cargandoTasaHoy } = useTasaBcvHoy(
+        fechaRefActiva || undefined,
     );
+
+    const rangoActivo = useMemo(
+        () =>
+            fechaRefActiva
+                ? rangoFechasPeriodo(periodo, fechaRefActiva, { desde: fechaDesde, hasta: fechaHasta })
+                : null,
+        [periodo, fechaRefActiva, fechaDesde, fechaHasta],
+    );
+
+    useEffect(() => {
+        setHydrated(true);
+        setFechaRef(todayIso());
+    }, []);
 
     useEffect(() => {
         const id = window.setTimeout(() => setBusquedaAplicada(busqueda.trim()), 350);
@@ -290,7 +316,7 @@ export default function ComprasPage() {
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,created_at,ci_proyectos(nombre),${lineasSelect}`
+                        `id,purchase_invoice_id,proyecto_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -483,7 +509,41 @@ export default function ComprasPage() {
         }
     };
 
-    const totalEgresos = compras.reduce((acc, c) => acc + montoUsdCompra(c), 0);
+    const totalFiltrado = useMemo(() => {
+        let totalUsd = 0;
+        let totalBs = 0;
+        const tasas = new Set<number>();
+        const fechas = new Set<string>();
+        let comprasSinTasaEnFactura = 0;
+
+        for (const c of compras) {
+            const bs = montoVesCompra(c);
+            totalBs += bs;
+            const tasaFactura = tasaBcvCompra(c);
+            if (tasaFactura) {
+                tasas.add(tasaFactura);
+            } else {
+                comprasSinTasaEnFactura += 1;
+            }
+            const usd =
+                vesAUsdConTasa(bs, tasaFactura ?? tasaBcvHoy) ?? montoUsdCompra(c);
+            totalUsd += usd;
+
+            const f = String(c.fecha ?? '').slice(0, 10);
+            if (f) fechas.add(f);
+        }
+
+        const tasasArr = [...tasas];
+        return {
+            totalUsd: Math.round(totalUsd * 100) / 100,
+            totalBs: Math.round(totalBs * 100) / 100,
+            fechasDistintas: fechas.size,
+            tasasDistintas: tasas.size,
+            tasaUnica: tasasArr.length === 1 ? tasasArr[0] : null,
+            comprasSinTasaEnFactura,
+            tasaVariable: fechas.size > 1 || tasas.size > 1,
+        };
+    }, [compras, tasaBcvHoy]);
 
     const filtrosLineas = useMemo(
         () => ({
@@ -522,7 +582,7 @@ export default function ComprasPage() {
             supplier_rif: c.supplier_rif,
             total_amount: c.total_amount,
             total_amount_usd: c.total_amount_usd,
-            tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
+            tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd ?? tasaBcvHoy,
             origen: c.origen,
             estado: c.estado,
             proyectoNombre: proyectoNombre(c, proyectosMap),
@@ -544,7 +604,7 @@ export default function ComprasPage() {
             }),
         }));
         return filtrarLineasComprasConfirmadas(payload, filtrosLineas);
-    }, [compras, filtrosLineas, proyectosMap]);
+    }, [compras, filtrosLineas, proyectosMap, tasaBcvHoy]);
 
     const totalLineasBs = useMemo(
         () =>
@@ -555,9 +615,29 @@ export default function ComprasPage() {
         [lineasFiltradas],
     );
 
+    const totalUsdLineasVista = useMemo(
+        () =>
+            Math.round(
+                lineasFiltradas.reduce((acc, row) => {
+                    const bs = row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
+                    const usd = vesAUsdConTasa(bs, row.tasaBcv);
+                    if (usd != null) return acc + usd;
+                    if (row.montoUsd != null && row.montoBs > 0) {
+                        return acc + (bs / row.montoBs) * row.montoUsd;
+                    }
+                    return acc;
+                }, 0) * 100,
+            ) / 100,
+        [lineasFiltradas],
+    );
+
     const showList = !loading && compras.length > 0;
     const showLineas = !loading && lineasFiltradas.length > 0;
-    const periodoLabel = etiquetaPeriodo(periodo, fechaRef, rangoActivo);
+    const periodoLabel = fechaRefActiva ? etiquetaPeriodo(periodo, fechaRefActiva, rangoActivo) : '';
+
+    function tasaDisplayCompra(c: CompraRow): number | null {
+        return tasaBcvCompra(c) ?? tasaBcvHoy;
+    }
 
     const scrollToCompra = (compraId: string) => {
         setVistaListado('facturas');
@@ -642,6 +722,37 @@ export default function ComprasPage() {
             </div>
 
             <div style={{ padding: '20px' }}>
+                <div
+                    style={{
+                        ...glass,
+                        padding: '14px 18px',
+                        marginBottom: '16px',
+                        border: '1px solid rgba(88,86,214,0.35)',
+                    }}
+                >
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', fontWeight: 800, marginBottom: '6px' }}>
+                        TASA BCV DEL DÍA · REFERENCIA EN DÓLARES
+                    </p>
+                    {cargandoTasaHoy ? (
+                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>Consultando tasa…</p>
+                    ) : tasaBcvHoy ? (
+                        <p style={{ color: 'white', fontSize: '14px', fontWeight: 800 }}>
+                            {tasaBcvHoy.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Bs / USD
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginLeft: '8px' }}>
+                                ({tasaBcvFuente ?? 'bcv'})
+                            </span>
+                        </p>
+                    ) : (
+                        <p style={{ color: '#FF6B6B', fontSize: '12px', fontWeight: 700 }}>
+                            Sin tasa BCV. Pulse BCV en recepción de mercancía o configure ci_config_nomina.
+                        </p>
+                    )}
+                    <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '8px', lineHeight: 1.45 }}>
+                        Totales y botones en <strong style={{ color: '#FF3B30' }}>USD</strong> (tasa de la factura o del día).
+                        Precio unitario de cada artículo en <strong style={{ color: '#FFD60A' }}>bolívares</strong>.
+                    </p>
+                </div>
+
                 <div style={{ ...glass, padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                         <Filter size={16} style={{ color: '#5856D6' }} />
@@ -681,8 +792,9 @@ export default function ComprasPage() {
                             </label>
                             <input
                                 type="date"
-                                value={fechaRef}
+                                value={fechaRefActiva}
                                 onChange={(e) => setFechaRef(e.target.value)}
+                                suppressHydrationWarning
                                 style={{ ...inputStyle, marginTop: '6px' }}
                             />
                         </div>
@@ -934,7 +1046,102 @@ export default function ComprasPage() {
                     <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontWeight: 700 }}>
                         TOTAL FILTRADO ({compras.length} compra{compras.length === 1 ? '' : 's'})
                     </p>
-                    <p style={{ color: '#FF3B30', fontSize: '28px', fontWeight: 800 }}>${totalEgresos.toFixed(2)}</p>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '16px',
+                            marginTop: '14px',
+                        }}
+                    >
+                        <div>
+                            <p
+                                style={{
+                                    color: 'rgba(255,255,255,0.4)',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    letterSpacing: '0.06em',
+                                    marginBottom: '6px',
+                                }}
+                            >
+                                TOTAL USD
+                            </p>
+                            <p style={{ color: '#FF3B30', fontSize: '26px', fontWeight: 800, margin: 0 }}>
+                                {formatearUsd(totalFiltrado.totalUsd)}
+                            </p>
+                            <p
+                                style={{
+                                    color: 'rgba(255,255,255,0.35)',
+                                    fontSize: '10px',
+                                    marginTop: '6px',
+                                    lineHeight: 1.4,
+                                }}
+                            >
+                                Suma del equivalente en dólares de cada factura (tasa BCV de su fecha).
+                            </p>
+                        </div>
+                        <div>
+                            <p
+                                style={{
+                                    color: 'rgba(255,255,255,0.4)',
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    letterSpacing: '0.06em',
+                                    marginBottom: '6px',
+                                }}
+                            >
+                                TOTAL BOLÍVARES
+                            </p>
+                            <p style={{ color: '#FFD60A', fontSize: '26px', fontWeight: 800, margin: 0 }}>
+                                {formatearBs(totalFiltrado.totalBs)}
+                            </p>
+                            <p
+                                style={{
+                                    color: 'rgba(255,255,255,0.35)',
+                                    fontSize: '10px',
+                                    marginTop: '6px',
+                                    lineHeight: 1.4,
+                                }}
+                            >
+                                Suma directa de los montos en Bs de cada factura (sin unificar tasa).
+                            </p>
+                        </div>
+                    </div>
+                    {totalFiltrado.tasaVariable ? (
+                        <p
+                            style={{
+                                marginTop: '14px',
+                                padding: '10px 12px',
+                                borderRadius: '10px',
+                                background: 'rgba(255,214,10,0.08)',
+                                border: '1px solid rgba(255,214,10,0.25)',
+                                color: '#FFD60A',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                lineHeight: 1.45,
+                            }}
+                        >
+                            Tasa BCV variable: el filtro incluye{' '}
+                            {totalFiltrado.fechasDistintas > 1
+                                ? `${totalFiltrado.fechasDistintas} fechas distintas`
+                                : 'facturas con tasas distintas'}
+                            {totalFiltrado.tasasDistintas > 1
+                                ? ` y ${totalFiltrado.tasasDistintas} tasas BCV diferentes`
+                                : ''}
+                            . No se aplica una sola tasa del día al total; cada compra conserva la
+                            tasa de su factura.
+                        </p>
+                    ) : totalFiltrado.tasaUnica != null ? (
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '10px' }}>
+                            Tasa BCV común en el filtro: {formatearTasaBcv(totalFiltrado.tasaUnica)}
+                        </p>
+                    ) : null}
+                    {totalFiltrado.comprasSinTasaEnFactura > 0 ? (
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', marginTop: '8px' }}>
+                            {totalFiltrado.comprasSinTasaEnFactura} compra(s) sin tasa en factura: USD
+                            calculado con BCV del día de referencia del filtro.
+                        </p>
+                    ) : null}
                     <Link
                         href="/almacen/procurement"
                         style={{
@@ -989,6 +1196,15 @@ export default function ComprasPage() {
                             style={periodBtn(vistaListado === 'lineas')}
                         >
                             Por línea / artículo
+                            {lineasFiltradas.length > 0 ? (
+                                <EtiquetaBimonetariaCompra
+                                    usd={totalUsdLineasVista}
+                                    bs={totalLineasBs}
+                                    tasa={totalFiltrado.tasaVariable ? null : totalFiltrado.tasaUnica}
+                                    layout="stack"
+                                    style={{ display: 'block', fontSize: 9, marginTop: 4, textTransform: 'none' }}
+                                />
+                            ) : null}
                         </button>
                         <button
                             type="button"
@@ -996,8 +1212,42 @@ export default function ComprasPage() {
                             style={periodBtn(vistaListado === 'facturas')}
                         >
                             Por factura
+                            {compras.length > 0 ? (
+                                <EtiquetaBimonetariaCompra
+                                    usd={totalFiltrado.totalUsd}
+                                    bs={totalFiltrado.totalBs}
+                                    tasa={totalFiltrado.tasaVariable ? null : totalFiltrado.tasaUnica}
+                                    layout="stack"
+                                    style={{ display: 'block', fontSize: 9, marginTop: 4, textTransform: 'none' }}
+                                />
+                            ) : null}
                         </button>
                     </div>
+                ) : null}
+
+                {!loading && vistaListado === 'lineas' && lineasFiltradas.length > 0 ? (
+                    <p
+                        style={{
+                            color: 'rgba(255,255,255,0.45)',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            marginBottom: '12px',
+                        }}
+                    >
+                        Líneas filtradas:{' '}
+                        <EtiquetaBimonetariaCompra
+                            usd={totalUsdLineasVista}
+                            bs={totalLineasBs}
+                            tasa={totalFiltrado.tasaVariable ? null : totalFiltrado.tasaUnica}
+                            layout="inline"
+                            style={{ display: 'inline-flex', fontSize: 12 }}
+                        />
+                        {totalFiltrado.tasaVariable ? (
+                            <span style={{ display: 'block', fontSize: 10, marginTop: 4, color: '#FFD60A' }}>
+                                Tasa variable por fecha de cada factura
+                            </span>
+                        ) : null}
+                    </p>
                 ) : null}
 
                 {!loading && vistaListado === 'lineas' && compras.length > 0 ? (
@@ -1060,6 +1310,13 @@ export default function ComprasPage() {
                                         </p>
                                         <CompraProductosToggle
                                             compraId={c.id}
+                                            tasaBcv={tasaDisplayCompra(c)}
+                                            tasaEsDelDia={!tasaBcvCompra(c) && !!tasaBcvHoy}
+                                            montoBsFactura={montoVesCompra(c)}
+                                            montoUsdFactura={
+                                                vesAUsdConTasa(montoVesCompra(c), tasaDisplayCompra(c)) ??
+                                                montoUsdCompra(c)
+                                            }
                                             lineCountHint={lineCount(c)}
                                             lineasIniciales={lineasDetalle(c).map((l) => ({
                                                 descripcion: l.descripcion,
@@ -1071,39 +1328,52 @@ export default function ComprasPage() {
                                                     l.cantidad > 0 ? l.subtotal / l.cantidad : null,
                                             }))}
                                         />
-                                        {c.document_file_name ? (
+                                        {c.document_storage_path ||
+                                        c.purchase_invoice_id ||
+                                        c.origen === 'RECEPCION_MERCANCIA' ? (
+                                            <CompraFacturaImagen
+                                                compraId={c.id}
+                                                tieneDocumento={
+                                                    Boolean(
+                                                        c.document_storage_path ||
+                                                            c.purchase_invoice_id,
+                                                    )
+                                                }
+                                                esRecepcion={c.origen === 'RECEPCION_MERCANCIA'}
+                                            />
+                                        ) : c.document_file_name ? (
                                             <p
                                                 style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    color: '#a5a3ff',
-                                                    fontSize: '11px',
                                                     marginTop: '8px',
-                                                    fontWeight: 700,
+                                                    fontSize: '11px',
+                                                    color: 'rgba(255,255,255,0.4)',
+                                                    lineHeight: 1.4,
                                                 }}
                                             >
-                                                <FileText size={14} /> {c.document_file_name}
+                                                Archivo «{c.document_file_name}» registrado sin imagen en
+                                                Storage. Adjúntala en{' '}
+                                                <Link
+                                                    href="/almacen/procurement"
+                                                    style={{ color: '#5856D6', fontWeight: 700 }}
+                                                >
+                                                    recepción de mercancía
+                                                </Link>
+                                                .
                                             </p>
                                         ) : null}
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        <p style={{ color: '#FF3B30', fontSize: '20px', fontWeight: 800 }}>
-                                            ${montoUsdCompra(c).toFixed(2)}
-                                        </p>
-                                        {c.tasa_bcv_ves_por_usd && Number(c.tasa_bcv_ves_por_usd) > 0 ? (
-                                            <p
-                                                style={{
-                                                    color: 'rgba(255,255,255,0.4)',
-                                                    fontSize: '10px',
-                                                    fontWeight: 700,
-                                                    marginTop: '4px',
-                                                }}
-                                            >
-                                                Bs. {Number(c.total_amount).toLocaleString('es-VE', { minimumFractionDigits: 2 })}{' '}
-                                                · tasa {Number(c.tasa_bcv_ves_por_usd).toLocaleString('es-VE', { maximumFractionDigits: 2 })}
-                                            </p>
-                                        ) : null}
+                                        <EtiquetaBimonetariaCompra
+                                            usd={
+                                                vesAUsdConTasa(montoVesCompra(c), tasaDisplayCompra(c)) ??
+                                                montoUsdCompra(c)
+                                            }
+                                            bs={montoVesCompra(c)}
+                                            tasa={tasaDisplayCompra(c)}
+                                            tasaEsDelDia={!tasaBcvCompra(c) && !!tasaBcvHoy}
+                                            layout="stack"
+                                            style={{ alignItems: 'flex-end', fontSize: 18 }}
+                                        />
                                         <button
                                             type="button"
                                             onClick={() => void handleDelete(c)}

@@ -4,6 +4,10 @@ import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
+import {
+  resolverDocumentoCompra,
+  sincronizarDocumentoEnCompra,
+} from '@/lib/contabilidad/syncDocumentoCompraRecepcion';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id: string;
@@ -36,13 +40,22 @@ export async function registerCompraDesdeRecepcion(
   supabase: SupabaseClient,
   input: RegistrarCompraContabilidadInput
 ): Promise<{ compraId: string }> {
+  const doc = await resolverDocumentoCompra(supabase, {
+    purchaseInvoiceId: input.purchase_invoice_id,
+    documentStoragePath: input.document_storage_path,
+    documentFileName: input.document_file_name,
+  });
+
   const { data: existente } = await supabase
     .from('contabilidad_compras')
-    .select('id')
+    .select('id, document_storage_path')
     .eq('purchase_invoice_id', input.purchase_invoice_id)
     .maybeSingle();
 
   if (existente?.id) {
+    if (doc.storagePath && !existente.document_storage_path?.trim()) {
+      await sincronizarDocumentoEnCompra(supabase, existente.id, doc);
+    }
     return { compraId: existente.id };
   }
 
@@ -75,8 +88,8 @@ export async function registerCompraDesdeRecepcion(
       ...bimonetario,
       origen: 'RECEPCION_MERCANCIA',
       estado: 'REGISTRADA',
-      document_storage_path: input.document_storage_path ?? null,
-      document_file_name: input.document_file_name ?? null,
+      document_storage_path: doc.storagePath,
+      document_file_name: doc.fileName,
     })
     .select('id')
     .single();

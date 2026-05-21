@@ -8,6 +8,8 @@ import {
     type LineaCompraContabilidadInput,
 } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { calcularGastoBimonetario } from '@/lib/finanzas/currency-converter';
+import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
+import { formatearBs, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import {
     payloadCompraBimonetario,
@@ -932,12 +934,31 @@ export default function ProcurementClient() {
                                                     total_amount: sumaLineas(),
                                                 });
                                             }}
-                                            className="text-[10px] font-bold text-sky-400 hover:text-sky-300 underline underline-offset-2"
+                                            className="text-[10px] font-bold text-sky-400 hover:text-sky-300 underline underline-offset-2 text-left"
                                         >
                                             Usar suma de líneas
-                                            {items.length > 0
-                                                ? ` (Bs. ${sumaLineas().toLocaleString('es-VE', { minimumFractionDigits: 2 })})`
-                                                : ''}
+                                            {items.length > 0 ? (
+                                                <EtiquetaBimonetariaCompra
+                                                    usd={
+                                                        tasaBcv && tasaBcv > 0
+                                                            ? calcularGastoBimonetario(
+                                                                  sumaLineas(),
+                                                                  'VES',
+                                                                  tasaBcv,
+                                                              ).montoUsd
+                                                            : null
+                                                    }
+                                                    bs={sumaLineas()}
+                                                    tasa={tasaBcv}
+                                                    layout="stack"
+                                                    style={{
+                                                        display: 'block',
+                                                        marginTop: 4,
+                                                        fontSize: 10,
+                                                        alignItems: 'flex-start',
+                                                    }}
+                                                />
+                                            ) : null}
                                         </button>
                                         {diferenciaTotalLineas() > 0.02 && items.length > 0 ? (
                                             <span className="text-[10px] font-bold text-amber-400">
@@ -1113,13 +1134,25 @@ export default function ProcurementClient() {
                                                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 font-bold text-sm outline-none focus:bg-white focus:text-black transition-all"
                                                 />
                                             </div>
-                                            <div className="w-32 space-y-2">
+                                            <div className="w-36 space-y-2">
                                                 <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">
                                                     Subtotal
                                                 </label>
-                                                <div className="p-3 bg-zinc-900/50 rounded-xl font-black text-sm text-zinc-400">
-                                                    Bs.{' '}
-                                                    {(item.quantity * item.unit_price).toFixed(2)}
+                                                <div className="p-3 bg-zinc-900/50 rounded-xl font-black text-sm">
+                                                    <EtiquetaBimonetariaCompra
+                                                        usd={
+                                                            tasaBcv && tasaBcv > 0
+                                                                ? vesAUsdConTasa(
+                                                                      item.quantity * item.unit_price,
+                                                                      tasaBcv,
+                                                                  )
+                                                                : null
+                                                        }
+                                                        bs={item.quantity * item.unit_price}
+                                                        tasa={tasaBcv}
+                                                        layout="stack"
+                                                        style={{ fontSize: 11, alignItems: 'flex-start' }}
+                                                    />
                                                 </div>
                                             </div>
                                             <button
@@ -1138,26 +1171,25 @@ export default function ProcurementClient() {
                             {items.length > 0 || invoice.total_amount > 0 ? (
                                 <div className="mt-8 p-6 bg-zinc-900/50 rounded-3xl border border-zinc-800 space-y-2">
                                     <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">
-                                        Resumen (bolívares)
+                                        Resumen bimonetario
                                     </p>
+                                    {totalUsdPreview() != null || totalVes() > 0 ? (
+                                        <EtiquetaBimonetariaCompra
+                                            usd={totalUsdPreview()}
+                                            bs={totalVes()}
+                                            tasa={tasaBcv}
+                                            layout="stack"
+                                            style={{ fontSize: 22, alignItems: 'flex-start' }}
+                                        />
+                                    ) : (
+                                        <p className="text-amber-400 text-sm font-bold">
+                                            Indique la tasa BCV para ver el equivalente en dólares.
+                                        </p>
+                                    )}
                                     <p className="text-xs text-zinc-500">
-                                        Suma líneas: Bs.{' '}
-                                        {sumaLineas().toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                                        Suma líneas: {formatearBs(sumaLineas())}
                                         {totalManual ? ' · total manual en encabezado' : ''}
                                     </p>
-                                    <h4 className="text-2xl font-black text-zinc-200">
-                                        Total a guardar: Bs.{' '}
-                                        {totalVes().toLocaleString('es-VE', { minimumFractionDigits: 2 })}
-                                    </h4>
-                                    {totalUsdPreview() != null ? (
-                                        <p className="text-emerald-400 font-black text-xl">
-                                            ≈ ${totalUsdPreview()!.toLocaleString('en-US', { minimumFractionDigits: 2 })}{' '}
-                                            USD
-                                            {tasaBcv
-                                                ? ` (tasa ${tasaBcv.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Bs/USD)`
-                                                : ''}
-                                        </p>
-                                    ) : null}
                                 </div>
                             ) : null}
                         </ProcPanel>
@@ -1181,7 +1213,20 @@ export default function ProcurementClient() {
                                 ) : (
                                     <Save size={20} />
                                 )}
-                                {isSaving ? 'GUARDANDO…' : 'FINALIZAR CAPTURA'}
+                                {isSaving ? (
+                                    'GUARDANDO…'
+                                ) : (
+                                    <span className="flex flex-col items-center gap-1">
+                                        <span>FINALIZAR</span>
+                                        <EtiquetaBimonetariaCompra
+                                            usd={totalUsdPreview()}
+                                            bs={totalVes()}
+                                            tasa={tasaBcv}
+                                            layout="inline"
+                                            style={{ fontSize: 11, fontWeight: 800 }}
+                                        />
+                                    </span>
+                                )}
                             </button>
                             <p className="text-center text-[10px] text-zinc-600 font-bold mt-2 uppercase tracking-widest">
                                 Requiere encabezado completo y al menos un artículo

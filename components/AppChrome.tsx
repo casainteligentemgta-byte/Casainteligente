@@ -1,22 +1,18 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import IOSNavBar from '@/components/IOSNavBar';
 import { usePathname } from 'next/navigation';
-import { useLayoutEffect, useState } from 'react';
-import { Toaster } from 'sonner';
+import { useEffect, useState } from 'react';
 
-/** Resuelve la ruta aunque `usePathname()` vaya un tick vacío en el cliente (evita mostrar el dock en /registro/*). */
+/** Sonner rompe el SSR en dev si se renderiza en servidor (componente interno undefined). */
+const Toaster = dynamic(() => import('sonner').then((m) => ({ default: m.Toaster })), { ssr: false });
+
+/** Solo pathname del router (sin `window`) para que SSR y cliente coincidan en hidratación. */
 function useResolvedPathname(): string {
   const pathname = usePathname();
-  const [pathFromWindow, setPathFromWindow] = useState(() =>
-    typeof window !== 'undefined' ? window.location.pathname : '',
-  );
-  useLayoutEffect(() => {
-    setPathFromWindow(window.location.pathname);
-  }, [pathname]);
-  const fromHook = typeof pathname === 'string' ? pathname : '';
-  return fromHook.length > 0 ? fromHook : pathFromWindow;
+  return typeof pathname === 'string' ? pathname : '';
 }
 
 /**
@@ -24,6 +20,9 @@ function useResolvedPathname(): string {
  */
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const path = useResolvedPathname();
+  const [navMounted, setNavMounted] = useState(false);
+  useEffect(() => setNavMounted(true), []);
+
   const isNexus = path.startsWith('/nexus');
   /** Vista previa del presupuesto: pantalla completa sin dock ni distracciones (y sin caché de miniaturas en otros módulos). */
   const isPresupuestoPreview = path === '/ventas/preview';
@@ -40,7 +39,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
       <ReactQueryProvider>
         <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-28 sm:pb-24'}>{children}</div>
       </ReactQueryProvider>
-      {!chromeMinimal ? <IOSNavBar /> : null}
+      {!chromeMinimal && navMounted ? <IOSNavBar /> : null}
       <Toaster
         theme="dark"
         position="top-center"

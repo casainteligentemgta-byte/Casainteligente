@@ -4,6 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Upload, FileSpreadsheet, Database, Table2, Search, Settings } from 'lucide-react';
+import { toast } from 'sonner';
+import { parseFetchJson } from '@/lib/utils/parseFetchJson';
+import { LuloMapeoColumnasElite } from '@/components/proyectos/LuloMapeoColumnasElite';
+import { LuloSeleccionTablaElite } from '@/components/proyectos/LuloSeleccionTablaElite';
+import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 
 function EngranajeProcesando({ texto, grande = false }: { texto: string; grande?: boolean }) {
   return (
@@ -21,11 +26,6 @@ function EngranajeProcesando({ texto, grande = false }: { texto: string; grande?
     </div>
   );
 }
-import { toast } from 'sonner';
-import { parseFetchJson } from '@/lib/utils/parseFetchJson';
-import { LuloMapeoColumnasElite } from '@/components/proyectos/LuloMapeoColumnasElite';
-import { LuloSeleccionTablaElite } from '@/components/proyectos/LuloSeleccionTablaElite';
-import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 
 type ImportarProps = {
   proyectoId: string;
@@ -41,8 +41,11 @@ type TablaInspeccion = {
   gastoScore?: number;
 };
 
+type CatalogoTabla = { name: string; rowCount: number; columns: string[] };
+
 type ImportResponse = {
   success?: boolean;
+  extraccionCompleta?: boolean;
   requireMapping?: boolean;
   requireTableSelection?: boolean;
   availableTables?: string[];
@@ -54,6 +57,10 @@ type ImportResponse = {
   partidas?: number;
   gastos?: number;
   presupuestoTotalUsd?: number;
+  snapshotId?: string | null;
+  catalogoTablas?: CatalogoTabla[];
+  filasTotales?: number;
+  tablasConDatos?: number;
   meta?: {
     partidasTable?: string | null;
     gastosTable?: string | null;
@@ -91,9 +98,10 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     null,
   );
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [extrayendo, setExtrayendo] = useState(false);
 
   const esMdb = file?.name.toLowerCase().endsWith('.mdb') || file?.name.toLowerCase().endsWith('.accdb');
-  const procesando = uploading || inspeccionando;
+  const procesando = uploading || inspeccionando || extrayendo;
 
   const handleInspeccionar = async () => {
     if (!file || !esMdb) {
@@ -129,6 +137,45 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     }
   };
 
+  const runExtraerCompleto = async () => {
+    if (!file) {
+      toast.error('Selecciona un archivo primero');
+      return;
+    }
+    if (!proyectoId.trim()) {
+      toast.error('Proyecto no válido');
+      return;
+    }
+
+    setExtrayendo(true);
+    setUltimoResumen(null);
+    setErrorDetalle(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    if (reemplazar) formData.append('reemplazar', '1');
+
+    try {
+      const res = await fetch(
+        `/api/proyectos/${encodeURIComponent(proyectoId.trim())}/presupuesto/extraer-mdb`,
+        { method: 'POST', body: formData },
+      );
+      const data = await parseFetchJson<ImportResponse>(res);
+      if (!res.ok) throw new Error(data.error || data.hint || 'Error al extraer');
+
+      const tablas = data.catalogoTablas?.length ?? data.resumen?.tablas ?? 0;
+      const filas = data.filasTotales ?? data.resumen?.filasTotales ?? 0;
+      const resumen = `${tablas} tablas · ${filas} filas · volcado en Supabase`;
+      setUltimoResumen(resumen);
+      toast.success(data.message || 'MDB extraído por completo.');
+      onSuccess?.();
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error al extraer');
+    } finally {
+      setExtrayendo(false);
+    }
+  };
+
   const runImport = async (
     customMapping?: LuloCustomPartidaMapping,
     tableOverride?: string,
@@ -147,7 +194,6 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     setErrorDetalle(null);
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('proyectoId', proyectoId.trim());
     if (reemplazar) formData.append('reemplazar', '1');
     if (!importarGastos) formData.append('importarGastos', '0');
     const tabla = tableOverride ?? selectedTable ?? customMapping?.tableName;
@@ -157,10 +203,13 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     }
 
     try {
-      const res = await fetch('/api/proyectos/presupuesto/importar-lulo', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch(
+        `/api/proyectos/${encodeURIComponent(proyectoId.trim())}/presupuesto/importar-lulo`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      );
 
       const data = await parseFetchJson<ImportResponse>(res);
 
@@ -203,6 +252,15 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             .map((t) => `${t.name} (${t.rowCount} filas, score ${t.partidaScore})`)
             .join(' · ');
         if (detalle) setErrorDetalle(detalle);
+        if (data.snapshotId && data.catalogoTablas?.length) {
+          const filas = data.catalogoTablas.reduce((s, t) => s + t.rowCount, 0);
+          setUltimoResumen(
+            `Volcado guardado: ${data.catalogoTablas.length} tablas, ${filas} filas (sin partidas importadas)`,
+          );
+          toast.message('Datos del MDB guardados', {
+            description: 'Revisa Control de obra → pestaña tablas del volcado Lulo.',
+          });
+        }
         throw new Error(data.error || data.hint || 'Error en la carga');
       }
 
@@ -307,15 +365,10 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
       <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
         Sube el archivo <strong className="text-zinc-300">.mdb / .accdb</strong> de Lulo (Access) o un{' '}
-        <strong className="text-zinc-300">.csv</strong> exportado. Se importan{' '}
-        <span className="text-emerald-400">partidas de presupuesto</span>
-        {importarGastos ? (
-          <>
-            {' '}
-            y <span className="text-sky-400">gastos de obra</span>
-          </>
-        ) : null}{' '}
-        vinculados a este proyecto.
+        <strong className="text-zinc-300">.csv</strong> exportado.{' '}
+        <span className="text-violet-400">Extraer todo</span> guarda <strong className="text-zinc-300">todas las tablas</strong>{' '}
+        en Supabase. <span className="text-emerald-400">Importar</span> además carga partidas
+        {importarGastos ? <> y <span className="text-sky-400">gastos</span></> : null} a tablas de negocio.
       </p>
 
       <div className="space-y-3">
@@ -340,9 +393,11 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
               texto={
                 inspeccionando
                   ? 'Leyendo tablas del Access…'
-                  : esMdb
-                    ? 'Analizando e importando el MDB…'
-                    : 'Procesando el presupuesto CSV…'
+                  : extrayendo
+                    ? 'Extrayendo todas las tablas a Supabase…'
+                    : esMdb
+                      ? 'Analizando e importando el MDB…'
+                      : 'Procesando el presupuesto CSV…'
               }
             />
           </div>
@@ -365,6 +420,21 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
                 <>
                   <Search className="h-3.5 w-3.5" />
                   Inspeccionar MDB (sin importar)
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void runExtraerCompleto()}
+              disabled={extrayendo || !file}
+              className="w-full rounded-lg border border-violet-500/35 bg-violet-500/10 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {extrayendo ? (
+                <EngranajeProcesando texto="Extrayendo todas las tablas…" />
+              ) : (
+                <>
+                  <Database className="h-3.5 w-3.5" />
+                  Extraer todo el MDB (volcado completo)
                 </>
               )}
             </button>
@@ -426,11 +496,11 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
         ) : null}
 
         <Link
-          href={`/proyectos/modulo/${proyectoId}/lulo`}
+          href={`/proyectos/modulo/${proyectoId}/control-obra`}
           className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-300 hover:bg-white/10"
         >
           <Table2 className="h-3.5 w-3.5" />
-          Ver y editar tablas importadas
+          Abrir control de obra
         </Link>
       </div>
     </div>

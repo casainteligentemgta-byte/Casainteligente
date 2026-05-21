@@ -1,5 +1,5 @@
 import { parseMontoFiltro } from '@/lib/contabilidad/comprasQueryFiltros';
-import { montoUsdCompra } from '@/lib/contabilidad/comprasMontos';
+import { montoUsdCompra, tasaBcvCompra, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 
 export type ExtractedInvoiceItem = {
   description?: string;
@@ -28,6 +28,8 @@ export type FilaFacturaCanal = {
   rif: string;
   montoBs: number;
   montoUsd: number | null;
+  /** Tasa BCV de la factura (bolívares por 1 USD). */
+  tasaBcv: number | null;
   articulo: string;
   codigo: string;
   cantidad: number;
@@ -91,6 +93,7 @@ export function aplanarFacturasCanal(
       rif: ex.supplier_rif ?? '',
       montoBs: Number(ex.total_amount) || 0,
       montoUsd: null as number | null,
+      tasaBcv: null as number | null,
     };
 
     const items = Array.isArray(ex.items) ? ex.items : [];
@@ -149,9 +152,13 @@ export function filtrarFilasFacturaCanal(
       ? row.cantidad * row.precioUnitario
       : row.montoBs;
     if (!enRango(montoLineaBs, minBs, maxBs)) return false;
-    const usd = row.montoUsd ?? (row.montoBs > 0 ? row.montoBs : montoLineaBs);
+    const usdLinea =
+      vesAUsdConTasa(montoLineaBs, row.tasaBcv) ??
+      (row.montoUsd != null && row.montoBs > 0
+        ? (montoLineaBs / row.montoBs) * row.montoUsd
+        : row.montoUsd);
     if (minUsd !== null || maxUsd !== null) {
-      if (!enRango(usd, minUsd, maxUsd)) return false;
+      if (usdLinea == null || !enRango(usdLinea, minUsd, maxUsd)) return false;
     }
     return true;
   });
@@ -199,6 +206,7 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       rif: c.supplier_rif ?? '',
       montoBs: Number(c.total_amount) || 0,
       montoUsd,
+      tasaBcv: tasaBcvCompra(c),
     };
 
     if (!c.lineas.length) {

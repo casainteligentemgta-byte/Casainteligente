@@ -76,6 +76,7 @@ function InventoryListThumb({
     catalogUrlFromName?: string | null;
 }) {
     const [failed, setFailed] = useState(false);
+    const [mounted, setMounted] = useState(false);
     const resolved =
         (imageUrl?.trim() ||
             catalogUrlFromProduct?.trim() ||
@@ -84,12 +85,18 @@ function InventoryListThumb({
         '';
 
     useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
         setFailed(false);
     }, [resolved]);
 
+    const showImage = mounted && Boolean(resolved) && !failed;
+
     return (
         <div className="w-12 h-12 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center shrink-0">
-            {resolved && !failed ? (
+            {showImage ? (
                 <img
                     src={resolved}
                     alt=""
@@ -128,7 +135,9 @@ export default function InventoryMasterPage() {
     const [filterEntidadId, setFilterEntidadId] = useState('');
     const [filterProyectoId, setFilterProyectoId] = useState('');
     const [filterPartidaId, setFilterPartidaId] = useState('');
+    const [filterDepositId, setFilterDepositId] = useState('');
     const [sinClasificacionObra, setSinClasificacionObra] = useState(false);
+    const [sinAlmacenAsignado, setSinAlmacenAsignado] = useState(false);
 
     const supabase = createClient();
 
@@ -157,6 +166,22 @@ export default function InventoryMasterPage() {
         () => filtrarProyectosPorEntidad(proyectos, filterEntidadId || null),
         [proyectos, filterEntidadId],
     );
+
+    const depositsLista = useMemo(() => {
+        return Array.from(depositsById.values()).sort((a, b) =>
+            a.name.localeCompare(b.name, 'es'),
+        );
+    }, [depositsById]);
+
+    const hayFiltrosActivos =
+        Boolean(searchTerm.trim()) ||
+        activeCategory !== 'Todos' ||
+        Boolean(filterEntidadId) ||
+        Boolean(filterProyectoId) ||
+        Boolean(filterPartidaId) ||
+        Boolean(filterDepositId) ||
+        sinClasificacionObra ||
+        sinAlmacenAsignado;
 
     useEffect(() => {
         fetchInventory();
@@ -274,23 +299,75 @@ export default function InventoryMasterPage() {
         }
     };
 
-    const filteredItems = items.filter((item) => {
-        const term = searchTerm.trim().toLowerCase();
-        const textMatch =
-            !term ||
-            item.name.toLowerCase().includes(term) ||
-            (item.sap_code?.toLowerCase().includes(term) ?? false) ||
-            (item.entidad?.nombre?.toLowerCase().includes(term) ?? false) ||
-            (item.proyecto?.nombre?.toLowerCase().includes(term) ?? false) ||
-            (item.partida?.codigo_partida?.toLowerCase().includes(term) ?? false) ||
-            (item.partida?.descripcion?.toLowerCase().includes(term) ?? false);
-        if (!textMatch) return false;
-        if (filterEntidadId && item.entidad_id !== filterEntidadId) return false;
-        if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
-        if (filterPartidaId && item.presupuesto_partida_id !== filterPartidaId) return false;
-        if (sinClasificacionObra && (item.proyecto_id || item.entidad_id)) return false;
-        return true;
-    });
+    const filteredItems = useMemo(() => {
+        return items.filter((item) => {
+            const term = searchTerm.trim().toLowerCase();
+            const dep = item.deposit_id ? depositsById.get(item.deposit_id) : undefined;
+            const depLabel = dep
+                ? `${dep.name} ${dep.locality ?? ''}`.toLowerCase()
+                : '';
+
+            const textMatch =
+                !term ||
+                item.name.toLowerCase().includes(term) ||
+                (item.sap_code?.toLowerCase().includes(term) ?? false) ||
+                (item.entidad?.nombre?.toLowerCase().includes(term) ?? false) ||
+                (item.proyecto?.nombre?.toLowerCase().includes(term) ?? false) ||
+                (item.partida?.codigo_partida?.toLowerCase().includes(term) ?? false) ||
+                (item.partida?.descripcion?.toLowerCase().includes(term) ?? false) ||
+                depLabel.includes(term) ||
+                (item.location?.toLowerCase().includes(term) ?? false);
+
+            if (!textMatch) return false;
+            if (filterEntidadId && item.entidad_id !== filterEntidadId) return false;
+            if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
+            if (filterPartidaId && item.presupuesto_partida_id !== filterPartidaId) return false;
+            if (sinClasificacionObra && (item.proyecto_id || item.entidad_id)) return false;
+            if (filterDepositId && item.deposit_id !== filterDepositId) return false;
+            if (sinAlmacenAsignado && item.deposit_id) return false;
+            return true;
+        });
+    }, [
+        items,
+        searchTerm,
+        filterEntidadId,
+        filterProyectoId,
+        filterPartidaId,
+        filterDepositId,
+        sinClasificacionObra,
+        sinAlmacenAsignado,
+        depositsById,
+    ]);
+
+    const statsFiltrados = useMemo(() => {
+        const base = hayFiltrosActivos ? filteredItems : items;
+        const totalVal = base.reduce(
+            (acc, item) =>
+                acc + Number(item.stock_available) * Number(item.average_weighted_cost),
+            0,
+        );
+        const lowStock = base.filter(
+            (item) => Number(item.stock_available) <= Number(item.reorder_point),
+        ).length;
+        const quarantine = base.reduce((acc, item) => acc + Number(item.stock_quarantine), 0);
+        return {
+            totalValue: totalVal,
+            lowStockCount: lowStock,
+            totalItems: base.length,
+            quarantineCount: quarantine,
+        };
+    }, [filteredItems, items, hayFiltrosActivos]);
+
+    const limpiarFiltros = () => {
+        setSearchTerm('');
+        setActiveCategory('Todos');
+        setFilterEntidadId('');
+        setFilterProyectoId('');
+        setFilterPartidaId('');
+        setFilterDepositId('');
+        setSinClasificacionObra(false);
+        setSinAlmacenAsignado(false);
+    };
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD' }).format(val);
@@ -299,7 +376,7 @@ export default function InventoryMasterPage() {
     const shareInventory = () => {
         const text = `📦 *REPORTE DE INVENTARIO - ${new Date().toLocaleDateString()}*\n\n` +
             filteredItems.map(item => `- ${item.name}: ${item.stock_available} ${item.unit}`).join('\n') +
-            `\n\n*Valor Total:* ${formatCurrency(stats.totalValue)}`;
+            `\n\n*Valor Total:* ${formatCurrency(statsFiltrados.totalValue)}`;
 
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
     };
@@ -384,7 +461,7 @@ export default function InventoryMasterPage() {
                         <span className="text-[10px] font-black bg-blue-500 text-white px-2 py-1 rounded-lg">ACTIVO</span>
                     </div>
                     <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mb-1">Valor Total</p>
-                    <h2 className="text-3xl font-black tracking-tight">{formatCurrency(stats.totalValue)}</h2>
+                    <h2 className="text-3xl font-black tracking-tight">{formatCurrency(statsFiltrados.totalValue)}</h2>
                 </GlassCard>
 
                 <GlassCard className="p-6">
@@ -392,12 +469,12 @@ export default function InventoryMasterPage() {
                         <div className="p-3 bg-red-500/10 rounded-2xl border border-red-500/20">
                             <AlertTriangle className="text-red-500" size={24} />
                         </div>
-                        {stats.lowStockCount > 0 && (
+                        {statsFiltrados.lowStockCount > 0 && (
                             <span className="text-[10px] font-black bg-red-500 text-white px-2 py-1 rounded-lg">CRÍTICO</span>
                         )}
                     </div>
                     <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mb-1">Stock Bajo</p>
-                    <h2 className="text-3xl font-black tracking-tight text-red-500">{stats.lowStockCount} <span className="text-sm text-zinc-600 font-bold uppercase tracking-widest">Items</span></h2>
+                    <h2 className="text-3xl font-black tracking-tight text-red-500">{statsFiltrados.lowStockCount} <span className="text-sm text-zinc-600 font-bold uppercase tracking-widest">Items</span></h2>
                 </GlassCard>
 
                 <GlassCard className="p-6">
@@ -407,7 +484,7 @@ export default function InventoryMasterPage() {
                         </div>
                     </div>
                     <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mb-1">En Cuarentena</p>
-                    <h2 className="text-3xl font-black tracking-tight text-amber-500">{stats.quarantineCount} <span className="text-sm text-zinc-600 font-bold uppercase tracking-widest">Unidades</span></h2>
+                    <h2 className="text-3xl font-black tracking-tight text-amber-500">{statsFiltrados.quarantineCount} <span className="text-sm text-zinc-600 font-bold uppercase tracking-widest">Unidades</span></h2>
                 </GlassCard>
 
                 <GlassCard className="p-6">
@@ -417,7 +494,10 @@ export default function InventoryMasterPage() {
                         </div>
                     </div>
                     <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mb-1">Total SKU</p>
-                    <h2 className="text-3xl font-black tracking-tight">{stats.totalItems}</h2>
+                    <h2 className="text-3xl font-black tracking-tight">{statsFiltrados.totalItems}</h2>
+                    {hayFiltrosActivos && statsFiltrados.totalItems !== stats.totalItems ? (
+                        <p className="text-[10px] text-zinc-600 font-bold mt-1">de {stats.totalItems} en catálogo</p>
+                    ) : null}
                 </GlassCard>
             </div>
 
@@ -449,69 +529,123 @@ export default function InventoryMasterPage() {
                     ))}
                 </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl border border-violet-500/20 bg-violet-950/20">
-                    <Filter className="h-4 w-4 text-violet-400 shrink-0" />
-                    <select
-                        value={filterEntidadId}
-                        onChange={(e) => {
-                            setFilterEntidadId(e.target.value);
-                            setFilterProyectoId('');
-                            setFilterPartidaId('');
-                        }}
-                        className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-xs font-bold text-white min-w-[140px]"
-                    >
-                        <option value="">Todas las entidades</option>
-                        {entidades.map((en) => (
-                            <option key={en.id} value={en.id}>{en.nombre}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={filterProyectoId}
-                        onChange={(e) => {
-                            setFilterProyectoId(e.target.value);
-                            setFilterPartidaId('');
-                        }}
-                        className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-xs font-bold text-white min-w-[160px]"
-                    >
-                        <option value="">Todos los proyectos</option>
-                        {proyectosFiltro.map((p) => (
-                            <option key={p.id} value={p.id}>{p.nombre}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={filterPartidaId}
-                        onChange={(e) => setFilterPartidaId(e.target.value)}
-                        disabled={!filterProyectoId}
-                        className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-xs font-bold text-white min-w-[180px] disabled:opacity-50"
-                    >
-                        <option value="">Todas las partidas Lulo</option>
-                        {partidasFiltro.map((pt) => (
-                            <option key={pt.id} value={pt.id}>{labelPartida(pt)}</option>
-                        ))}
-                    </select>
-                    <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase cursor-pointer ml-1">
-                        <input
-                            type="checkbox"
-                            checked={sinClasificacionObra}
-                            onChange={(e) => setSinClasificacionObra(e.target.checked)}
-                            className="rounded border-zinc-700"
-                        />
-                        Sin asignar a obra
-                    </label>
-                    {(filterEntidadId || filterProyectoId || filterPartidaId || sinClasificacionObra) ? (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setFilterEntidadId('');
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <Filter className="h-4 w-4 text-sky-400 shrink-0" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                                Filtrar visualización
+                            </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-zinc-500">
+                            Mostrando {filteredItems.length} de {items.length} ítems
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="block">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 mb-1.5 block">
+                                Proyecto / obra
+                            </span>
+                            <select
+                                value={filterProyectoId}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    setFilterProyectoId(id);
+                                    setFilterPartidaId('');
+                                    if (id) {
+                                        const pr = proyectos.find((p) => p.id === id);
+                                        if (pr?.entidad_id) setFilterEntidadId(pr.entidad_id);
+                                    }
+                                }}
+                                className="w-full rounded-xl border border-sky-500/30 bg-black/50 px-3 py-3 text-sm font-bold text-white"
+                            >
+                                <option value="">Todos los proyectos</option>
+                                {proyectosFiltro.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="block">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1.5 block">
+                                Almacén / depósito
+                            </span>
+                            <select
+                                value={filterDepositId}
+                                onChange={(e) => {
+                                    setFilterDepositId(e.target.value);
+                                    if (e.target.value) setSinAlmacenAsignado(false);
+                                }}
+                                disabled={sinAlmacenAsignado}
+                                className="w-full rounded-xl border border-emerald-500/30 bg-black/50 px-3 py-3 text-sm font-bold text-white disabled:opacity-50"
+                            >
+                                <option value="">Todos los almacenes</option>
+                                {depositsLista.map((d) => (
+                                    <option key={d.id} value={d.id}>
+                                        {d.locality ? `${d.name} (${d.locality})` : d.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-800/80">
+                        <select
+                            value={filterEntidadId}
+                            onChange={(e) => {
+                                setFilterEntidadId(e.target.value);
                                 setFilterProyectoId('');
                                 setFilterPartidaId('');
-                                setSinClasificacionObra(false);
                             }}
-                            className="text-[10px] font-bold text-violet-400 hover:text-violet-300"
+                            className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-xs font-bold text-white min-w-[130px]"
                         >
-                            Limpiar
-                        </button>
-                    ) : null}
+                            <option value="">Entidad</option>
+                            {entidades.map((en) => (
+                                <option key={en.id} value={en.id}>{en.nombre}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={filterPartidaId}
+                            onChange={(e) => setFilterPartidaId(e.target.value)}
+                            disabled={!filterProyectoId}
+                            className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-xs font-bold text-white min-w-[160px] disabled:opacity-50"
+                        >
+                            <option value="">Partida Lulo</option>
+                            {partidasFiltro.map((pt) => (
+                                <option key={pt.id} value={pt.id}>{labelPartida(pt)}</option>
+                            ))}
+                        </select>
+                        <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={sinClasificacionObra}
+                                onChange={(e) => setSinClasificacionObra(e.target.checked)}
+                                className="rounded border-zinc-700"
+                            />
+                            Sin obra
+                        </label>
+                        <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={sinAlmacenAsignado}
+                                onChange={(e) => {
+                                    setSinAlmacenAsignado(e.target.checked);
+                                    if (e.target.checked) setFilterDepositId('');
+                                }}
+                                className="rounded border-zinc-700"
+                            />
+                            Sin almacén
+                        </label>
+                        {hayFiltrosActivos ? (
+                            <button
+                                type="button"
+                                onClick={limpiarFiltros}
+                                className="text-[10px] font-bold text-sky-400 hover:text-sky-300 ml-auto"
+                            >
+                                Limpiar filtros
+                            </button>
+                        ) : null}
+                    </div>
                 </div>
             </div>
 

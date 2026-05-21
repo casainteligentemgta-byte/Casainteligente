@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Loader2, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
+import { formatearBs, formatearUsd, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 
 export type LineaProductoCompra = {
   descripcion: string;
@@ -17,6 +19,12 @@ type Props = {
   compraId: string;
   lineasIniciales?: LineaProductoCompra[];
   lineCountHint?: number;
+  /** Tasa BCV de la factura (Bs por 1 USD) para mostrar equivalentes en dólares. */
+  tasaBcv?: number | null;
+  /** Totales de encabezado cuando aún no hay líneas cargadas. */
+  montoBsFactura?: number;
+  montoUsdFactura?: number | null;
+  tasaEsDelDia?: boolean;
 };
 
 function mapLinea(raw: Record<string, unknown>): LineaProductoCompra {
@@ -42,13 +50,44 @@ export function lineasFromNested(
   return [];
 }
 
-export default function CompraProductosToggle({ compraId, lineasIniciales, lineCountHint = 0 }: Props) {
+export default function CompraProductosToggle({
+  compraId,
+  lineasIniciales,
+  lineCountHint = 0,
+  tasaBcv,
+  montoBsFactura = 0,
+  montoUsdFactura = null,
+  tasaEsDelDia = false,
+}: Props) {
   const [abierto, setAbierto] = useState(false);
   const [lineas, setLineas] = useState<LineaProductoCompra[]>(lineasIniciales ?? []);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const totalLineas = lineas.length || lineCountHint;
+
+  const montosBoton = useMemo(() => {
+    const src = lineas.length > 0 ? lineas : (lineasIniciales ?? []);
+    let sumBs = 0;
+    let sumUsd = 0;
+    let tieneUsd = false;
+    for (const l of src) {
+      const sub = Number(l.subtotal) || 0;
+      sumBs += sub;
+      const usd = vesAUsdConTasa(sub, tasaBcv);
+      if (usd != null) {
+        sumUsd += usd;
+        tieneUsd = true;
+      }
+    }
+    if (src.length > 0) {
+      return {
+        usd: tieneUsd ? Math.round(sumUsd * 100) / 100 : null,
+        bs: sumBs,
+      };
+    }
+    return { usd: montoUsdFactura, bs: montoBsFactura };
+  }, [lineas, lineasIniciales, tasaBcv, montoBsFactura, montoUsdFactura]);
 
   const cargarLineas = useCallback(async () => {
     if (lineas.length > 0) return;
@@ -100,6 +139,7 @@ export default function CompraProductosToggle({ compraId, lineasIniciales, lineC
           cursor: 'pointer',
           letterSpacing: '0.04em',
           textTransform: 'uppercase',
+          flexWrap: 'wrap',
         }}
       >
         <Package size={15} strokeWidth={2.2} />
@@ -116,6 +156,16 @@ export default function CompraProductosToggle({ compraId, lineasIniciales, lineC
         >
           {totalLineas || '—'}
         </span>
+        {(montosBoton.usd != null || montosBoton.bs > 0) && (
+          <EtiquetaBimonetariaCompra
+            usd={montosBoton.usd}
+            bs={montosBoton.bs}
+            tasa={tasaBcv}
+            tasaEsDelDia={tasaEsDelDia}
+            layout="inline"
+            style={{ fontSize: 10, textTransform: 'none', letterSpacing: 0 }}
+          />
+        )}
         {abierto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
 
@@ -168,7 +218,7 @@ export default function CompraProductosToggle({ compraId, lineasIniciales, lineC
                         textAlign: 'right',
                       }}
                     >
-                      P. unit.
+                      P. unit. (Bs)
                     </th>
                     <th
                       style={{
@@ -183,37 +233,57 @@ export default function CompraProductosToggle({ compraId, lineasIniciales, lineC
                   </tr>
                 </thead>
                 <tbody>
-                  {lineas.map((l, i) => (
-                    <tr
-                      key={`${l.descripcion}-${i}`}
-                      style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
-                    >
-                      <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.88)' }}>
-                        <span style={{ fontWeight: 700 }}>{l.descripcion || '—'}</span>
-                        {l.item_code ? (
-                          <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>
-                            Ref: {l.item_code}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td style={{ padding: '10px 8px', color: 'rgba(255,255,255,0.65)' }}>
-                        {l.cantidad} {l.unidad || 'UND'}
-                      </td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: 'rgba(255,255,255,0.55)' }}>
-                        ${(l.precio_unitario ?? 0).toFixed(2)}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 12px',
-                          textAlign: 'right',
-                          fontWeight: 800,
-                          color: '#FFD60A',
-                        }}
+                  {lineas.map((l, i) => {
+                    const precioBs = l.precio_unitario ?? 0;
+                    const subtotalBs = Number(l.subtotal) || 0;
+                    const subtotalUsd = vesAUsdConTasa(subtotalBs, tasaBcv);
+
+                    return (
+                      <tr
+                        key={`${l.descripcion}-${i}`}
+                        style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
                       >
-                        ${l.subtotal.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                        <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.88)' }}>
+                          <span style={{ fontWeight: 700 }}>{l.descripcion || '—'}</span>
+                          {l.item_code ? (
+                            <span
+                              style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}
+                            >
+                              Ref: {l.item_code}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td style={{ padding: '10px 8px', color: 'rgba(255,255,255,0.65)' }}>
+                          {l.cantidad} {l.unidad || 'UND'}
+                        </td>
+                        <td
+                          style={{
+                            padding: '10px 8px',
+                            textAlign: 'right',
+                            color: '#FFD60A',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {formatearBs(precioBs)}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                          <span style={{ display: 'block', fontWeight: 800, color: '#FF3B30' }}>
+                            {subtotalUsd != null ? formatearUsd(subtotalUsd) : '—'}
+                          </span>
+                          <span
+                            style={{
+                              display: 'block',
+                              fontSize: '10px',
+                              color: 'rgba(255,255,255,0.45)',
+                              marginTop: '2px',
+                            }}
+                          >
+                            {formatearBs(subtotalBs)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
