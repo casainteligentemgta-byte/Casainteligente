@@ -114,7 +114,7 @@ export function LuloMapeoColumnasElite({
               Mapeo de columnas del presupuesto
             </CardTitle>
             <CardDescription className="text-xs text-zinc-500 mt-1 leading-relaxed">
-              El archivo no usa las columnas estándar Lulo (CodPar, DesPar, UniPar, CanPar, PrePar).
+              Opcional: el MDB no usa CodPar/DesPar; puedes emparejar columnas o cancelar y dejar que la importación automática infiera los datos.
               Asocia cada campo obligatorio con una columna detectada en el MDB.
             </CardDescription>
           </div>

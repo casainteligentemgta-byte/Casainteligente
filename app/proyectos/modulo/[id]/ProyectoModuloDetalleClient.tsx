@@ -652,15 +652,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     if (tabUrl === 'finanzas' || tabUrl === 'rrhh') {
       return (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-start gap-4">
-            <ImportarPresupuestoLulo proyectoId={id} />
-            <Link
-              href={`/proyectos/modulo/${id}/control-obra`}
-              className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-xs font-semibold text-amber-100 hover:bg-amber-900/40"
-            >
-              Control de obra (Lulo) →
-            </Link>
-          </div>
+          <ImportarPresupuestoLulo proyectoId={id} onSuccess={() => void load()} />
           <ControlPlanosObra proyectoId={id} />
           <DashboardUtilidadReal proyectoId={id} className="" />
         </div>

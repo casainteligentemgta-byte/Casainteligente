@@ -11,28 +11,6 @@ export type GastoObraLuloInsert = {
   origen: string;
 };
 
-export type LuloMdbParseResult = {
-  partidas: PartidaLuloInsert[];
-  gastos: GastoObraLuloInsert[];
-  meta: {
-    tableNames: string[];
-    partidasTable: string | null;
-    gastosTable: string | null;
-    presupuestoTotalUsd: number;
-    filasOmitidas: number;
-    tablasPartidas?: string[];
-    tablasGastos?: string[];
-    diagnosticoResumen?: string;
-    tablasDiagnostico?: Array<{
-      name: string;
-      rowCount: number;
-      columns: string[];
-      partidaScore: number;
-      gastoScore: number;
-    }>;
-  };
-};
-
 export type LuloCatalogoTablaResumen = {
   name: string;
   rowCount: number;
@@ -68,6 +46,15 @@ export type LuloMdbParseMetaBase = {
     partidaScore: number;
     gastoScore: number;
   }>;
+  modoImportacion?: string;
+  columnasDetectadas?: string[];
+  mapeoInferido?: Record<string, string>;
+};
+
+export type LuloMdbParseResult = {
+  partidas: PartidaLuloInsert[];
+  gastos: GastoObraLuloInsert[];
+  meta: LuloMdbParseMetaBase;
 };
 
 /** Parser completó partidas/gastos. */

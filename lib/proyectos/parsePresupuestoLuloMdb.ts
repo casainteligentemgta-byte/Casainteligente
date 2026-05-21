@@ -33,7 +33,7 @@ import type {
 import {
   columnsContainPartidaMapping,
   detectedColumnsFromFirstRecord,
-  resolvePartidaMapping,
+  resolvePartidaMappingForColumns,
   type LuloCustomPartidaMapping,
   type LuloPartidaFieldMapping,
 } from '@/lib/proyectos/luloStandardColumns';
@@ -79,7 +79,16 @@ const RESUMEN_ROW_PAT =
   /^(total|subtotal|suma|resumen|gran\s*total|importe\s*total|presupuesto\s*total|total\s*general|total\s*obra)/i;
 
 /** Nombres canónicos de tabla de partidas en exportaciones Lulo (case-insensitive). */
-const CANONICAL_PARTIDA_TABLE_NAMES = ['partidas', 'presupuesto'] as const;
+const CANONICAL_PARTIDA_TABLE_NAMES = [
+  'partidas',
+  'presupuesto',
+  'partida',
+  'presupuesto_obra',
+  'detalle_presupuesto',
+  'detallepresupuesto',
+] as const;
+
+const MIN_AUTO_PARTIDA_TABLE_SCORE = 1;
 
 export { cleanNum } from '@/lib/proyectos/luloCleanNumber';
 
@@ -112,6 +121,16 @@ export function resolvePartidaTableName(
     if (hit) return hit;
   }
   return null;
+}
+
+/** Si no hay tabla «Partidas», elige la de mayor score heurístico con filas. */
+export function pickBestPartidaTableFromDiagnostico(
+  tablas: TablaDiagnostico[],
+): string | null {
+  const candidates = tablas
+    .filter((t) => t.rowCount > 0 && t.partidaScore >= MIN_AUTO_PARTIDA_TABLE_SCORE)
+    .sort((a, b) => b.partidaScore - a.partidaScore || b.rowCount - a.rowCount);
+  return candidates[0]?.name ?? null;
 }
 
 export function scoreTableColumns(columnNames: string[], hintGroups: string[][]): number {
@@ -290,7 +309,6 @@ function inferPartidaFromUnknownLayout(
 
   if (RESUMEN_ROW_PAT.test(desc) || RESUMEN_ROW_PAT.test(cod)) return null;
   if (!desc && !cod && total <= 0) return null;
-  if (total <= 0 && desc.length < 5 && !cod) return null;
 
   return {
     proyecto_id: proyectoId,
@@ -426,13 +444,19 @@ function rowToPartidaWithMapping(
   row: Record<string, unknown>,
   mapping: LuloPartidaFieldMapping,
   proyectoId: string,
+  colNames: string[] = [],
 ): PartidaLuloInsert | null {
   const r = normalizeLuloRow(row);
   const descripcion = valueFromMappedColumn(r, mapping.descripcion);
   const codigo = valueFromMappedColumn(r, mapping.codigo);
   const cantidad = numberFromMappedColumn(r, mapping.cantidad);
   const precio = numberFromMappedColumn(r, mapping.precio);
-  const monto = Math.round(cantidad * precio * 100) / 100;
+  const montoCol = colNames.length ? findColumnByPattern(colNames, MONTO_PAT) : null;
+  const montoCsv = montoCol ? numberFromCol(r, montoCol) : 0;
+  const monto =
+    montoCsv > 0
+      ? montoCsv
+      : Math.round(cantidad * precio * 100) / 100;
 
   if (!descripcion && !codigo) {
     if (monto <= 0 && cantidad <= 0 && precio <= 0) return null;
@@ -490,6 +514,87 @@ function tryGastoFromRow(
   return rowToGasto(row, proyectoId) ?? rowToGastoRelaxed(row, colNames, proyectoId);
 }
 
+/** Importa cualquier fila con al menos un dato (modo «incluir todo»). */
+function rowToPartidaCatchAll(
+  row: Record<string, unknown>,
+  tableName: string,
+  rowIndex: number,
+  proyectoId: string,
+): PartidaLuloInsert | null {
+  const relaxed =
+    tryPartidaFromRow(row, [], proyectoId) ??
+    inferPartidaFromUnknownLayout(row, proyectoId);
+  if (relaxed) {
+    if (!relaxed.codigo_partida) {
+      relaxed.codigo_partida = `${tableName}-${rowIndex}`;
+    }
+    if (!relaxed.descripcion || relaxed.descripcion === 'Partida') {
+      relaxed.descripcion = `${tableName} · fila ${rowIndex}`;
+    }
+    return relaxed;
+  }
+
+  const r = normalizeLuloRow(row);
+  const entries = Object.entries(r).filter(([, v]) => v !== '');
+  if (entries.length === 0) return null;
+
+  const texts: string[] = [];
+  let maxNum = 0;
+  for (const [k, v] of entries) {
+    if (/^(id|pk|fk|guid|uuid|orden|indice|index|tipo|flag|activo)$/i.test(normalizeColumnKey(k))) {
+      continue;
+    }
+    const n = parseLuloNumber(v);
+    if (n > maxNum) maxNum = n;
+    if (v.length >= 2 && !/^-?[\d.,\s]+$/.test(v.replace(/\s/g, ''))) {
+      texts.push(v);
+    }
+  }
+  const desc = texts.sort((a, b) => b.length - a.length)[0] ?? '';
+  if (!desc && maxNum <= 0) return null;
+  if (RESUMEN_ROW_PAT.test(desc)) return null;
+
+  return {
+    proyecto_id: proyectoId,
+    codigo_partida: `${tableName}-${rowIndex}`,
+    descripcion: desc || `${tableName} · fila ${rowIndex}`,
+    unidad: 'UND',
+    cantidad_presupuestada: 0,
+    precio_unitario_estimado: 0,
+    monto_total_estimado: maxNum,
+    origen: 'lulo_mdb',
+  };
+}
+
+function importAllTablesAsPartidas(
+  cachedTables: TableCache[],
+  partidas: PartidaLuloInsert[],
+  partidaKeys: Set<string>,
+  tablasPartidas: string[],
+  proyectoId: string,
+  filasOmitidasRef: { n: number },
+) {
+  for (const table of cachedTables) {
+    if (table.rows.length === 0) continue;
+    let added = 0;
+    let idx = 0;
+    for (const row of table.rows) {
+      idx += 1;
+      const before = partidas.length;
+      pushPartida(
+        partidas,
+        partidaKeys,
+        rowToPartidaCatchAll(row, table.name, idx, proyectoId),
+        filasOmitidasRef,
+      );
+      if (partidas.length > before) added += 1;
+    }
+    if (added > 0 && !tablasPartidas.includes(table.name)) {
+      tablasPartidas.push(table.name);
+    }
+  }
+}
+
 function sweepTablesForPartidas(
   cachedTables: TableCache[],
   partidas: PartidaLuloInsert[],
@@ -497,7 +602,7 @@ function sweepTablesForPartidas(
   tablasPartidas: string[],
   proyectoId: string,
   filasOmitidasRef: { n: number },
-  minRows = 1,
+  minRows = 0,
 ) {
   const byRows = [...cachedTables].sort((a, b) => b.rows.length - a.rows.length);
   for (const { name, cols, rows } of byRows) {
@@ -548,6 +653,12 @@ export type {
   LuloCustomPartidaMapping,
   LuloPartidaFieldMapping,
   defaultMapping,
+} from '@/lib/proyectos/luloStandardColumns';
+
+export {
+  resolvePartidaMapping,
+  resolvePartidaMappingForColumns,
+  inferPartidaMappingFromColumns,
 } from '@/lib/proyectos/luloStandardColumns';
 
 export type LuloMdbParseOptions = {
@@ -661,9 +772,48 @@ function parsePartidasWithMapping(
     pushPartida(
       partidas,
       partidaKeys,
-      rowToPartidaWithMapping(row, mapping, proyectoId),
+      rowToPartidaWithMapping(row, mapping, proyectoId, table.cols),
       filasOmitidasRef,
     );
+  }
+}
+
+function parsePartidasRelaxedOnTable(
+  table: TableCache,
+  proyectoId: string,
+  partidas: PartidaLuloInsert[],
+  partidaKeys: Set<string>,
+  tablasPartidas: string[],
+  filasOmitidasRef: { n: number },
+) {
+  const before = partidas.length;
+  for (const row of table.rows) {
+    pushPartida(
+      partidas,
+      partidaKeys,
+      tryPartidaFromRow(row, table.cols, proyectoId),
+      filasOmitidasRef,
+    );
+  }
+  if (partidas.length > before && !tablasPartidas.includes(table.name)) {
+    tablasPartidas.push(table.name);
+  }
+}
+
+function cacheAllUserTables(
+  reader: ReturnType<typeof createMdbReader>,
+  tableNames: string[],
+  cachedTables: TableCache[],
+  skipName?: string,
+) {
+  const have = new Set(cachedTables.map((t) => t.name));
+  for (const name of tableNames) {
+    if (name === skipName || have.has(name)) continue;
+    const loaded = loadTableIntoCache(reader, name);
+    if (loaded) {
+      cachedTables.push(loaded);
+      have.add(name);
+    }
   }
 }
 
@@ -672,15 +822,16 @@ export function analyzePartidaTableColumns(
   table: TableCache,
   customMapping?: LuloCustomPartidaMapping,
 ) {
-  const detectedColumns = detectedColumnsFromFirstRecord(table.cols, table.rows[0]);
-  const resolvedMapping = resolvePartidaMapping(customMapping);
+  const fromRow = detectedColumnsFromFirstRecord(table.cols, table.rows[0]);
+  const detectedColumns = Array.from(new Set([...table.cols, ...fromRow]));
+  const resolvedMapping = resolvePartidaMappingForColumns(detectedColumns, customMapping);
   const mappingReady = columnsContainPartidaMapping(detectedColumns, resolvedMapping);
   return { detectedColumns, resolvedMapping, mappingReady };
 }
 
 /**
  * Lee MDB/ACCDB: analiza columnas del primer registro, aplica defaultMapping/customMapping
- * y mapea a ci_presupuesto_partidas. Si faltan columnas y no hay customMapping → requireMapping.
+ * y mapea a ci_presupuesto_partidas. Sin CodPar/DesPar infiere columnas y recorre todas las tablas.
  */
 export function parsePresupuestoLuloMdb(
   buffer: Buffer | ArrayBuffer | Uint8Array,
@@ -700,10 +851,19 @@ export function parsePresupuestoLuloMdb(
     tableNames,
   );
 
-  const partidaTableName = resolvePartidaTableName(tableNames, {
+  let partidaTableName = resolvePartidaTableName(tableNames, {
     tableName,
     customMapping,
   });
+  if (!partidaTableName) {
+    partidaTableName = pickBestPartidaTableFromDiagnostico(tablasDiagnostico);
+  }
+  if (!partidaTableName) {
+    const conDatos = tablasDiagnostico.filter((t) => t.rowCount > 0);
+    if (conDatos.length > 0) {
+      partidaTableName = conDatos.sort((a, b) => b.rowCount - a.rowCount)[0].name;
+    }
+  }
 
   if (!partidaTableName) {
     return buildNeedsTableSelectionOutcome({
@@ -736,21 +896,10 @@ export function parsePresupuestoLuloMdb(
   }
   cachedTables.push(partidaTable);
 
-  const { detectedColumns, resolvedMapping, mappingReady } = analyzePartidaTableColumns(
+  const { detectedColumns, resolvedMapping } = analyzePartidaTableColumns(
     partidaTable,
     customMapping,
   );
-
-  if (!mappingReady) {
-    return buildNeedsMappingOutcome({
-      detectedColumns,
-      suggestedTable: partidaTable.name,
-      fullDump,
-      tableNames,
-      tablasDiagnostico,
-      diagnosticoResumen,
-    });
-  }
 
   tablasPartidas.push(partidaTable.name);
   parsePartidasWithMapping(
@@ -762,11 +911,51 @@ export function parsePresupuestoLuloMdb(
     filasOmitidasRef,
   );
 
+  if (partidas.length === 0) {
+    parsePartidasRelaxedOnTable(
+      partidaTable,
+      proyectoId,
+      partidas,
+      partidaKeys,
+      tablasPartidas,
+      filasOmitidasRef,
+    );
+  }
+
+  cacheAllUserTables(reader, tableNames, cachedTables, partidaTableName);
+
+  if (partidas.length === 0) {
+    sweepTablesForPartidas(
+      cachedTables,
+      partidas,
+      partidaKeys,
+      tablasPartidas,
+      proyectoId,
+      filasOmitidasRef,
+      0,
+    );
+  }
+
+  if (partidas.length === 0) {
+    importAllTablesAsPartidas(
+      cachedTables,
+      partidas,
+      partidaKeys,
+      tablasPartidas,
+      proyectoId,
+      filasOmitidasRef,
+    );
+  }
+
+  const cachedByName = new Map(cachedTables.map((t) => [t.name, t]));
   for (const name of tableNames) {
     if (name === partidaTableName) continue;
-    const loaded = loadTableIntoCache(reader, name);
+    const loaded = cachedByName.get(name) ?? loadTableIntoCache(reader, name);
     if (!loaded) continue;
-    cachedTables.push(loaded);
+    if (!cachedByName.has(name)) {
+      cachedTables.push(loaded);
+      cachedByName.set(name, loaded);
+    }
     const { cols, rows } = loaded;
     const partidaScore = scoreTableColumns(cols, PARTIDA_COLUMN_HINTS);
     const gastoScore = scoreTableColumns(cols, GASTO_COLUMN_HINTS);
@@ -793,16 +982,17 @@ export function parsePresupuestoLuloMdb(
   }
 
   if (partidas.length === 0 && gastos.length === 0) {
-    return buildNeedsMappingOutcome({
-      detectedColumns:
-        detectedColumns.length > 0
-          ? detectedColumns
-          : tablasDiagnostico[0]?.columns ?? [],
-      suggestedTable: partidaTable.name,
+    const filasTabla = partidaTable.rows.length;
+    const diagExtra =
+      filasTabla > 0
+        ? ` La tabla «${partidaTable.name}» tiene ${filasTabla} filas pero no se pudo extraer ningún registro.`
+        : ' El MDB no tiene tablas con filas legibles.';
+    return buildNeedsTableSelectionOutcome({
+      availableTables: tableNames,
       fullDump,
       tableNames,
       tablasDiagnostico,
-      diagnosticoResumen,
+      diagnosticoResumen: `${diagnosticoResumen}${diagExtra}`,
     });
   }
 
@@ -825,6 +1015,9 @@ export function parsePresupuestoLuloMdb(
       tablasGastos,
       diagnosticoResumen,
       tablasDiagnostico: tablasDiagnostico.slice(0, 12),
+      modoImportacion: 'auto_todas_tablas',
+      columnasDetectadas: detectedColumns.slice(0, 24),
+      mapeoInferido: resolvedMapping,
     },
   };
 }

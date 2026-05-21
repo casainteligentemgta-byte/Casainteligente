@@ -180,7 +180,7 @@ export async function postImportarLuloPresupuesto(
               meta: parsed.meta,
               snapshotId: snapshotIdParcial,
               hint:
-                'El MDB no incluye CodPar, DesPar, UniPar, CanPar y PrePar. Empareja columnas (customMapping) e importa de nuevo. El volcado completo del MDB ya está guardado.',
+                'No se pudieron inferir partidas automáticamente. Elige otra tabla o usa «Extraer todo el MDB» (Control de obra → Datos Lulo). El volcado completo ya puede estar guardado.',
             },
             { status: 422 },
           );
@@ -225,11 +225,11 @@ export async function postImportarLuloPresupuesto(
         typeof meta.diagnosticoResumen === 'string' ? meta.diagnosticoResumen : '';
       const base =
         formato === 'mdb'
-          ? 'No se encontraron partidas ni gastos válidos para importar, pero el volcado completo del MDB se guardó.'
+          ? 'No se encontraron partidas ni gastos válidos en el MDB.'
           : 'No se encontraron partidas ni gastos válidos en el CSV.';
       const inspeccion =
         formato === 'mdb'
-          ? ' Revisa las tablas en Control de obra → Datos Lulo, o usa «Extraer todo el MDB».'
+          ? ' Revisa que el archivo sea de Lulo/Access, elige la tabla correcta o empareja columnas (CodPar, DesPar, UniPar, CanPar, PrePar). El volcado completo puede estar en Control de obra → Datos Lulo.'
           : '';
       return NextResponse.json(
         {

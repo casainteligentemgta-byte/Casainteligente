@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Upload, FileSpreadsheet, Database, Table2, Search, Settings } from 'lucide-react';
@@ -100,6 +100,36 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
   );
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [extrayendo, setExtrayendo] = useState(false);
+  const [cuadroLuloActivo, setCuadroLuloActivo] = useState(false);
+
+  const controlObraHref = `/proyectos/modulo/${encodeURIComponent(proyectoId.trim())}/control-obra`;
+
+  useEffect(() => {
+    const pid = proyectoId.trim();
+    if (!pid) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/proyectos/${encodeURIComponent(pid)}/lulo`);
+        const data = (await res.json()) as {
+          snapshots?: unknown[];
+          partidas?: unknown[];
+          gastos?: unknown[];
+        };
+        if (cancelled || !res.ok) return;
+        const tiene =
+          (data.snapshots?.length ?? 0) > 0 ||
+          (data.partidas?.length ?? 0) > 0 ||
+          (data.gastos?.length ?? 0) > 0;
+        if (tiene) setCuadroLuloActivo(true);
+      } catch {
+        /* sin datos aún */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [proyectoId]);
 
   const esMdb = file?.name.toLowerCase().endsWith('.mdb') || file?.name.toLowerCase().endsWith('.accdb');
   const procesando = uploading || inspeccionando || extrayendo;
@@ -167,6 +197,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       const filas = data.filasTotales ?? data.resumen?.filasTotales ?? 0;
       const resumen = `${tablas} tablas · ${filas} filas · volcado en Supabase`;
       setUltimoResumen(resumen);
+      setCuadroLuloActivo(true);
       toast.success(data.message || 'MDB extraído por completo.');
       onSuccess?.();
       router.refresh();
@@ -258,8 +289,9 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           setUltimoResumen(
             `Volcado guardado: ${data.catalogoTablas.length} tablas, ${filas} filas (sin partidas importadas)`,
           );
+          setCuadroLuloActivo(true);
           toast.message('Datos del MDB guardados', {
-            description: 'Revisa Control de obra → pestaña tablas del volcado Lulo.',
+            description: 'Abre Presupuesto · Lulo para ver el cuadro extraído.',
           });
         }
         throw new Error(data.error || data.hint || 'Error en la carga');
@@ -284,7 +316,10 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
       const resumen = lineas.join(' · ');
       setUltimoResumen(resumen);
-      toast.success(data.message || 'Importación completada.');
+      setCuadroLuloActivo(true);
+      toast.success(data.message || 'Importación completada.', {
+        description: 'Pulsa Presupuesto · Lulo para ver el cuadro y los datos extraídos.',
+      });
       setFile(null);
       onSuccess?.();
       router.refresh();
@@ -496,13 +531,23 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           </p>
         ) : null}
 
-        <Link
-          href={`/proyectos/modulo/${proyectoId}/control-obra`}
-          className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-300 hover:bg-white/10"
-        >
-          <Table2 className="h-3.5 w-3.5" />
-          Abrir control de obra
-        </Link>
+        {cuadroLuloActivo ? (
+          <Link
+            href={controlObraHref}
+            className="flex items-center justify-center gap-2 w-full rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-950/80 to-amber-900/40 py-3 text-sm font-semibold text-amber-100 shadow-lg shadow-amber-900/20 hover:from-amber-900/90 hover:border-amber-300/60 transition-colors"
+          >
+            <Table2 className="h-4 w-4 shrink-0" aria-hidden />
+            Presupuesto · Lulo — ver cuadro y datos extraídos
+          </Link>
+        ) : (
+          <Link
+            href={controlObraHref}
+            className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 hover:bg-white/10"
+          >
+            <Table2 className="h-3.5 w-3.5" aria-hidden />
+            Control de obra (sin datos Lulo aún)
+          </Link>
+        )}
       </div>
     </div>
   );

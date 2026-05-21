@@ -37,19 +37,7 @@ export function resolvePartidaMapping(
   if (!customMapping) {
     return { ...defaultMapping };
   }
-
-  const legacy = customMapping as LuloPartidaColumnMapping;
-  return {
-    codigo: customMapping.codigo ?? defaultMapping.codigo,
-    descripcion: customMapping.descripcion ?? defaultMapping.descripcion,
-    unidad: customMapping.unidad ?? defaultMapping.unidad,
-    cantidad: customMapping.cantidad ?? defaultMapping.cantidad,
-    precio:
-      customMapping.precio ??
-      legacy.precio_unitario ??
-      defaultMapping.precio,
-    tableName: customMapping.tableName,
-  };
+  return mappingFromCustom(customMapping);
 }
 
 /**
@@ -112,4 +100,110 @@ export function isPartidaColumnMappingValid(
   detectedColumns: string[],
 ): boolean {
   return columnsContainPartidaMapping(detectedColumns, mapping);
+}
+
+function guessColumn(columns: string[], patterns: RegExp[]): string {
+  for (const col of columns) {
+    const n = normalizeColumnKey(col);
+    if (patterns.some((p) => p.test(n))) return col;
+  }
+  return '';
+}
+
+/**
+ * Infiere mapeo desde nombres de columna (sin exigir CodPar/DesPar de Lulo).
+ */
+export function inferPartidaMappingFromColumns(columns: string[]): LuloPartidaFieldMapping {
+  const codigo =
+    guessColumn(columns, [
+      /^codpar$/,
+      /^cod_par$/,
+      /^cod$/,
+      /codigo/,
+      /^part$/,
+      /partida/,
+      /rubro/,
+      /capitulo/,
+      /item/,
+      /numero/,
+      /^num$/,
+      /wbs/,
+      /clave/,
+    ]) || columns[0] || '';
+  const descripcion =
+    guessColumn(columns, [
+      /^despar$/,
+      /^des_par$/,
+      /descrip/,
+      /concepto/,
+      /detalle/,
+      /nombre/,
+      /actividad/,
+      /obra/,
+      /titulo/,
+      /glosa/,
+      /texto/,
+    ]) ||
+    columns.find((c) => c !== codigo) ||
+    columns[1] ||
+    '';
+  const unidad = guessColumn(columns, [/^unipar$/, /^uni_par$/, /unidad/, /^und$/, /medida/]);
+  const cantidad = guessColumn(columns, [
+    /^canpar$/,
+    /^can_par$/,
+    /cantidad/,
+    /^cant$/,
+    /qty/,
+    /volumen/,
+    /metraje/,
+  ]);
+  const precio = guessColumn(columns, [
+    /^prepar$/,
+    /^pre_par$/,
+    /precio/,
+    /unitario/,
+    /^pu$/,
+    /costo_unit/,
+    /parcial/,
+  ]);
+
+  return {
+    codigo,
+    descripcion,
+    unidad,
+    cantidad,
+    precio,
+  };
+}
+
+function mappingFromCustom(
+  customMapping: LuloCustomPartidaMapping | LuloPartidaColumnMapping,
+): LuloPartidaFieldMapping {
+  const legacy = customMapping as LuloPartidaColumnMapping;
+  return {
+    codigo: customMapping.codigo ?? defaultMapping.codigo,
+    descripcion: customMapping.descripcion ?? defaultMapping.descripcion,
+    unidad: customMapping.unidad ?? defaultMapping.unidad,
+    cantidad: customMapping.cantidad ?? defaultMapping.cantidad,
+    precio:
+      customMapping.precio ??
+      legacy.precio_unitario ??
+      defaultMapping.precio,
+    tableName: customMapping.tableName,
+  };
+}
+
+/** Mapeo efectivo: custom → estándar Lulo → inferido por columnas. */
+export function resolvePartidaMappingForColumns(
+  columns: string[],
+  customMapping?: LuloCustomPartidaMapping | LuloPartidaColumnMapping | null,
+): LuloPartidaFieldMapping {
+  if (hasCustomMappingInput(customMapping)) {
+    return mappingFromCustom(customMapping!);
+  }
+  const std = { ...defaultMapping };
+  if (columnsContainPartidaMapping(columns, std)) {
+    return std;
+  }
+  return inferPartidaMappingFromColumns(columns);
 }
