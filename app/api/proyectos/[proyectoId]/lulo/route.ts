@@ -51,17 +51,19 @@ async function cargarProyectoLulo(
 ) {
   const extendido = await supabase
     .from('ci_proyectos')
-    .select('id, nombre, codigo_lulo, porcentaje_admin, porcentaje_utilidad, porcentaje_fcm')
+    .select(
+      'id, nombre, codigo_lulo, porcentaje_admin, porcentaje_utilidad, porcentaje_fcm, ubicacion_texto, obra_ubicacion, obra_cliente',
+    )
     .eq('id', proyectoId)
     .maybeSingle();
 
   if (!extendido.error) return extendido.data;
 
   const msg = extendido.error.message ?? '';
-  if (msg.includes('codigo_lulo') || msg.includes('porcentaje_') || extendido.error.code === '42703') {
+  if (msg.includes('codigo_lulo') || msg.includes('porcentaje_') || msg.includes('obra_') || msg.includes('ubicacion_') || extendido.error.code === '42703') {
     const basico = await supabase
       .from('ci_proyectos')
-      .select('id, nombre')
+      .select('id, nombre, ubicacion_texto')
       .eq('id', proyectoId)
       .maybeSingle();
     if (basico.error) throw new Error(formatErrorMessage(basico.error));

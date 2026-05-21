@@ -16,8 +16,10 @@ import {
   Layers,
 } from 'lucide-react';
 import ApuPartidaDetalleModal from '@/components/proyectos/ApuPartidaDetalleModal';
+import PresupuestoPorCapitulos from '@/components/proyectos/PresupuestoPorCapitulos';
 import { toast } from 'sonner';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
+import { buildObraDataPresupuesto } from '@/lib/proyectos/mapObraDataPresupuesto';
 import LuloVolcadoPorCapitulos from '@/components/proyectos/LuloVolcadoPorCapitulos';
 import LuloTablaFiltrable, { type LuloColumnaDef } from '@/components/proyectos/LuloTablaFiltrable';
 import { getCapituloKeyPartida, ordenarPartidasPorCapitulos } from '@/lib/proyectos/luloCapitulos';
@@ -295,7 +297,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
-  const [tab, setTab] = useState<'partidas' | 'gastos' | 'tablas'>('partidas');
+  const [tab, setTab] = useState<'partidas' | 'presupuesto' | 'gastos' | 'tablas'>('partidas');
   const [snapshotDetail, setSnapshotDetail] = useState<{
     id: string;
     payload: LuloPayload;
@@ -315,7 +317,11 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
     insumosEnApu: 0,
     insumosMaestroTotal: 0,
   });
-  const [proyectoLulo, setProyectoLulo] = useState<{
+  const [proyectoMeta, setProyectoMeta] = useState<{
+    nombre?: string | null;
+    ubicacion_texto?: string | null;
+    obra_ubicacion?: string | null;
+    obra_cliente?: string | null;
     codigo_lulo?: string | null;
     porcentaje_admin?: number | null;
     porcentaje_utilidad?: number | null;
@@ -339,6 +345,10 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
           insumosMaestroTotal?: number;
         };
         proyecto?: {
+          nombre?: string | null;
+          ubicacion_texto?: string | null;
+          obra_ubicacion?: string | null;
+          obra_cliente?: string | null;
           codigo_lulo?: string | null;
           porcentaje_admin?: number | null;
           porcentaje_utilidad?: number | null;
@@ -353,7 +363,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
         insumosEnApu: data.resumenNativo?.insumosEnApu ?? 0,
         insumosMaestroTotal: data.resumenNativo?.insumosMaestroTotal ?? 0,
       });
-      setProyectoLulo(data.proyecto ?? null);
+      setProyectoMeta(data.proyecto ?? null);
       const snaps = data.snapshots ?? [];
       setSnapshots(snaps);
       if (snaps[0]?.id) {
@@ -385,7 +395,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
     void load();
   }, [load]);
 
-  const setTabActivo = (t: 'partidas' | 'gastos' | 'tablas') => {
+  const setTabActivo = (t: 'partidas' | 'presupuesto' | 'gastos' | 'tablas') => {
     setTab(t);
     if (t === 'gastos' && vistaAgrupacion === 'capitulos') {
       setVistaAgrupacion('disciplinas');
@@ -563,6 +573,11 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   );
   const totalGastosFiltrados = gastosFiltrados.reduce((s, g) => s + Number(g.costo ?? 0), 0);
 
+  const obraPresupuesto = useMemo(
+    () => buildObraDataPresupuesto(partidasFiltradas, proyectoMeta, proyectoNombre, pid),
+    [partidasFiltradas, proyectoMeta, proyectoNombre, pid],
+  );
+
   const renderFilaPartida = (row: Record<string, unknown>) => {
     const p = row as unknown as Partida;
     const id = String(p.id);
@@ -700,8 +715,8 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
           </div>
           <p className="text-sm text-zinc-500 mt-1">
             {proyectoNombre ?? 'Proyecto'} · datos extraídos de Lulo Software
-            {proyectoLulo?.codigo_lulo ? (
-              <span className="text-amber-400/90"> · Obra Lulo {proyectoLulo.codigo_lulo}</span>
+            {proyectoMeta?.codigo_lulo ? (
+              <span className="text-amber-400/90"> · Obra Lulo {proyectoMeta.codigo_lulo}</span>
             ) : null}
           </p>
         </div>
@@ -781,7 +796,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
       ) : null}
 
       <div className="flex gap-2 border-b border-white/10 pb-2">
-        {(['partidas', 'gastos', 'tablas'] as const).map((t) => (
+        {(['partidas', 'presupuesto', 'gastos', 'tablas'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -792,7 +807,8 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
                 : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
-            {t === 'partidas' ? `Presupuesto (${partidas.length})` : null}
+            {t === 'partidas' ? `Cuadro (${partidas.length})` : null}
+            {t === 'presupuesto' ? `Reporte Lulo` : null}
             {t === 'gastos' ? `Gastos (${gastos.length})` : null}
             {t === 'tablas' ? `Volcado Lulo (${mdbTables.length || csvRows.length ? 'con datos' : '—'})` : null}
           </button>
@@ -858,6 +874,22 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
             </div>
           ) : (
             <p className="text-sm text-zinc-500">Sin partidas que coincidan con los filtros.</p>
+          )}
+        </div>
+      ) : null}
+
+      {!loading && tab === 'presupuesto' ? (
+        <div className="space-y-3">
+          <p className="text-[11px] text-zinc-500">
+            Vista tipo reporte de ingeniería (Lulo). Respeta los filtros del cuadro de partidas (
+            {partidasFiltradas.length} de {partidas.length} filas).
+          </p>
+          {partidasFiltradas.length === 0 ? (
+            <p className="text-sm text-zinc-500 rounded-xl border border-dashed border-white/10 py-12 text-center">
+              Sin partidas para el reporte. Importa un MDB/CSV o ajusta los filtros.
+            </p>
+          ) : (
+            <PresupuestoPorCapitulos obra={obraPresupuesto} variant="app" moneda="USD" />
           )}
         </div>
       ) : null}
