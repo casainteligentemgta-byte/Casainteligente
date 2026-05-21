@@ -199,7 +199,7 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       pendienteId: c.id,
       canal: c.origen || 'compra',
       estado: c.estado || 'REGISTRADA',
-      chat_label: c.proyectoNombre ?? null,
+      chat_label: null,
       fecha: (c.fecha ?? '').slice(0, 10),
       factura: c.invoice_number ?? '',
       proveedor: c.supplier_name ?? '',

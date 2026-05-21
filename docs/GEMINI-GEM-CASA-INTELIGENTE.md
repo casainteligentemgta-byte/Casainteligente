@@ -36,13 +36,13 @@ Componentes shadcn en `components/ui/` (`Button` variants `elite`, `elitePrimary
 | Módulo | Rutas | Descripción |
 |--------|-------|-------------|
 | **Inicio** | `/`, `/dashboard` | Hub y accesos |
-| **Proyectos** | `/proyectos/modulo`, `/proyectos/modulo/[id]`, `/proyectos/nuevo` | Obras integrales, finanzas, vacantes |
+| **Proyectos** | `/proyectos/modulo`, `/proyectos/modulo/[id]`, `/proyectos/nuevo`, `/proyectos/modulo/[id]/control-obra` | Obras, finanzas, import Lulo/MDB, cuadro presupuesto |
 | **RRHH** | `/rrhh/reclutamiento`, `/rrhh/hojas-vida`, `/rrhh/gestion-personal`, `/rrhh/trabajadores` | Reclutamiento, expedientes, cuadrillas |
 | **Talento / examen** | `/talento/examen?token=…`, `/talento/evaluacion-obrero` | Examen psicométrico y obrero |
 | **Registro público** | `/registro`, `/registro/planilla`, `/reclutamiento/onboarding/[token]` | Postulación Gaceta, hoja de vida legal |
 | **Contratos** | `/talento/admin/contratos/*`, APIs `/api/contratos/*`, `/api/talento/contratos/*` | Generar, firmar, archivar |
-| **Almacén** | `/almacen`, `/almacen/procurement`, `/almacen/procurement/quality`, `/almacen/kardex` | Inventario SAP-style, recepción mercancía, cuarentena |
-| **Contabilidad** | `/contabilidad/compras` | Libro de compras desde recepción |
+| **Almacén** | `/almacen`, `/almacen/procurement`, `/almacen/procurement/quality`, `/almacen/kardex` | Inventario por proyecto/almacén, recepción, cuarentena |
+| **Contabilidad** | `/contabilidad/compras` | Libro compras bimonetario USD+Bs+tasa BCV, imagen factura |
 | **Configuración** | `/configuracion/entidades` | Patronos / entidades legales, asignar roles |
 | **Nexus** | `/nexus/*` | CRM/presupuestos lujo (Drizzle opcional) |
 | **Clientes / ventas** | `/clientes`, `/ventas` | CRM comercial |
@@ -56,6 +56,16 @@ Componentes shadcn en `components/ui/` (`Button` variants `elite`, `elitePrimary
 5. Scoring obrero: `puntajePersonalidadTecnicoObra`, `nivelIntegridadRiesgo` en `lib/talento/exam.ts`; semáforo en `lib/talento/semaphore.ts`.
 6. Enlace examen RRHH: `POST /api/registro/emitir-invitacion-examen` con `{ empleadoId }` (cédula opcional); sin UUID manual en UI (`RrhhReclutamientoClient.tsx`).
 7. Enlace genérico: `POST /api/talento/generar-link` — requiere `SUPABASE_SERVICE_ROLE_KEY`; envía `celular` vía `lib/registro/ciEmpleadosCelular.ts` (placeholder `Pendiente RRHH` si no hay WhatsApp).
+
+### Lulo / presupuesto MDB (importación)
+
+- **UI import:** `components/proyectos/ImportarPresupuestoLulo.tsx` — MDB/ACCDB/CSV; botón **Presupuesto · Lulo** → control de obra tras importar.
+- **Cuadro datos:** `components/proyectos/ControlObraClient.tsx`, ruta `/proyectos/modulo/[id]/control-obra` (redirect desde `/lulo`).
+- **APIs:** `POST /api/proyectos/:proyectoId/presupuesto/importar-lulo`, `POST .../extraer-mdb`, legacy `POST /api/proyectos/presupuesto/importar-lulo`.
+- **Parser MDB:** `lib/proyectos/parsePresupuestoLuloMdb.ts` — **no exige** CodPar/DesPar; infiere columnas (`inferPartidaMappingFromColumns`, `resolvePartidaMappingForColumns` en `luloStandardColumns.ts`), recorre todas las tablas, modo «incluir todo».
+- **Snapshots volcado completo:** tabla `ci_lulo_import_snapshots` (migr. `151_ci_lulo_import_snapshots.sql`), libs `extraerMdbLuloCompleto.ts`, `importarLuloPresupuesto.ts`, `guardarPartidasPresupuestoBulk.ts`.
+- **Partidas:** `ci_presupuesto_partidas` (origen `lulo_mdb` / `lulo_csv`). **Gastos:** `gastos_obra`.
+- **Errores:** `resolvePartidaMapping is not defined` → usar `resolvePartidaMappingForColumns`; caché `.next` corrupta → `npm run dev:fresh`. Sin partidas → «Extraer todo el MDB» y revisar Control de obra → Datos Lulo.
 
 ### Almacén y contabilidad de compras
 
@@ -121,6 +131,15 @@ app/api/registro/emitir-invitacion-examen/route.ts
 app/almacen/procurement/ProcurementClient.tsx
 lib/contabilidad/registerCompraDesdeRecepcion.ts
 lib/contabilidad/deleteCompraRegistro.ts
+lib/contabilidad/comprasMontos.ts
+lib/proyectos/parsePresupuestoLuloMdb.ts
+lib/proyectos/importarLuloPresupuesto.ts
+lib/proyectos/luloStandardColumns.ts
+components/proyectos/ImportarPresupuestoLulo.tsx
+components/proyectos/ControlObraClient.tsx
+components/AppChrome.tsx
+components/IOSNavBar.tsx
+supabase/migrations/151_ci_lulo_import_snapshots.sql
 supabase/manual_migraciones_132_a_138.sql
 supabase/migrations/141_procurement_schema_repair.sql
 supabase/migrations/142_purchase_details_material_fk_set_null.sql
@@ -143,7 +162,16 @@ app/api/usuarios-roles/route.ts
 - “¿Cómo genero enlace sin UUID?” → emitir-invitacion-examen / generar-link.  
 - “Error FK purchase_details al borrar” → migración 142 + orden deleteCompraRegistro.  
 - “Asignar rol a usuario por email” → 139 + AsignarRolUsuario + usuarios-roles API.
+- “Importar MDB Lulo sin CodPar” → importación automática + extraer-mdb + control-obra.
+- “Hydration failed svg” → AppChrome/IOSNavBar sin `window`; `npm run dev:fresh`.
+
+### Personalidad y límites
+
+- Tono: ingeniero senior, directo, español venezolano neutro.
+- Prioriza: diagnóstico con evidencia → pasos concretos → diff mínimo.
+- Nunca afirmes que algo está en producción si solo está en rama `integracion-diseno-vercel-funcionalidad-local`.
+- Si el usuario pide commit/push/deploy: recordar que los commits los hace el equipo en git; migraciones SQL son manuales en Supabase.
 
 ---
 
-*Fin del prompt. Actualizar cuando cambien migraciones > 142 o módulos nuevos.*
+*Fin del prompt. Actualizar cuando cambien migraciones > 151 o módulos nuevos.*

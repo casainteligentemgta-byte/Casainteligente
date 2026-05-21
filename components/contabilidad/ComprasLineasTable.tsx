@@ -2,7 +2,12 @@
 
 import type { CSSProperties } from 'react';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
-import { formatearBs, formatearUsd, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
+import {
+  formatearBs,
+  formatearTasaBcv,
+  formatearUsd,
+  vesAUsdConTasa,
+} from '@/lib/contabilidad/comprasMontos';
 
 type Props = {
   filas: FilaFacturaCanal[];
@@ -55,13 +60,13 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
             <th style={th}>Factura</th>
             <th style={th}>Proveedor</th>
             <th style={th}>RIF</th>
-            <th style={th}>Proyecto</th>
             <th style={th}>Artículo</th>
             <th style={{ ...th, textAlign: 'right' }}>Cant.</th>
             <th style={{ ...th, textAlign: 'right' }}>P.U. (Bs)</th>
             <th style={{ ...th, textAlign: 'right' }}>Subtotal (Bs)</th>
             <th style={{ ...th, textAlign: 'right' }}>USD</th>
-            <th style={th} />
+            <th style={{ ...th, textAlign: 'right' }}>Tasa BCV</th>
+            <th style={th}>Ver factura</th>
           </tr>
         </thead>
         <tbody>
@@ -80,9 +85,6 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
                 <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{row.rif}</td>
-                <td style={{ ...td, maxWidth: 120, color: '#5856D6', fontWeight: 700 }}>
-                  {row.chat_label ?? '—'}
-                </td>
                 <td style={{ ...td, maxWidth: 180 }}>
                   {row.esLinea ? row.articulo : <span style={{ opacity: 0.4 }}>(cabecera)</span>}
                 </td>
@@ -95,6 +97,20 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
                 </td>
                 <td style={{ ...td, textAlign: 'right', color: '#FF3B30', fontWeight: 700 }}>
                   {usd != null ? formatearUsd(usd) : '—'}
+                </td>
+                <td
+                  style={{
+                    ...td,
+                    textAlign: 'right',
+                    color: 'rgba(255,255,255,0.55)',
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {row.tasaBcv != null && row.tasaBcv > 0
+                    ? formatearTasaBcv(row.tasaBcv)
+                    : '—'}
                 </td>
                 <td style={td}>
                   {onScrollToCompra ? (

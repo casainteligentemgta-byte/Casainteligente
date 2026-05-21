@@ -4,12 +4,18 @@ import { bulkInsertCiPresupuestoPartidas } from '@/lib/proyectos/guardarPartidas
 import {
   buildResumenSnapshotExtraccion,
   extraccionDesdePayload,
+  extraerMdbLuloCompleto,
   guardarSnapshotLulo,
   postExtraerLuloCompleto,
   type LuloExtraccionCompleta,
 } from '@/lib/proyectos/extraerMdbLuloCompleto';
 import { parsePresupuestoLuloCsvComplete } from '@/lib/proyectos/parsePresupuestoLuloCsv';
-import { parsePresupuestoLuloMdb } from '@/lib/proyectos/parsePresupuestoLuloMdb';
+import {
+  importFromLuloMdbFullDump,
+  partidasDesdeVolcadoMinimo,
+  parsePresupuestoLuloMdb,
+} from '@/lib/proyectos/parsePresupuestoLuloMdb';
+import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 import type { GastoObraLuloInsert } from '@/types/lulo-import';
 import { NextResponse } from 'next/server';
@@ -121,83 +127,76 @@ export async function postImportarLuloPresupuesto(
     let gastosInsert: GastoObraLuloInsert[] = [];
     let payload: Record<string, unknown> = {};
     let meta: Record<string, unknown> = { formato };
+    let extraccionVolcado: LuloExtraccionCompleta | null = null;
 
     if (formato === 'mdb') {
       const buffer = toMdbNodeBuffer(await file.arrayBuffer());
-      const parsed = parsePresupuestoLuloMdb(buffer, pid, {
-        importarGastos,
-        customMapping,
-        selectedTable: tableName,
-      });
+      extraccionVolcado = extraerMdbLuloCompleto(buffer);
+      const dump = extraccionVolcado.payload as LuloMdbFullDump;
+      payload = dump as unknown as Record<string, unknown>;
 
-      if (!parsed.success) {
-        let snapshotIdParcial: string | null = null;
-        if ('fullDump' in parsed && parsed.fullDump) {
-          const extraccion = extraccionDesdePayload(
-            parsed.fullDump as unknown as Record<string, unknown>,
-            'mdb',
-          );
-          if (extraccion) {
-            const snap = await guardarSnapshotLulo(supabase, {
-              proyectoId: pid,
-              nombreArchivo: file.name,
-              extraccion,
-              resumen: buildResumenSnapshotExtraccion(extraccion),
-              reemplazarSnapshots: false,
-            });
-            snapshotIdParcial = snap?.id ?? null;
+      const fb = importFromLuloMdbFullDump(dump, pid, importarGastos);
+      partidasRaw = fb.partidas;
+      gastosInsert = fb.gastos;
+
+      if (partidasRaw.length === 0 && gastosInsert.length === 0) {
+        partidasRaw = partidasDesdeVolcadoMinimo(dump, pid);
+      }
+
+      if (partidasRaw.length === 0 && gastosInsert.length === 0) {
+        const parsed = parsePresupuestoLuloMdb(buffer, pid, {
+          importarGastos,
+          customMapping,
+          selectedTable: tableName,
+        });
+
+        if (parsed.success) {
+          partidasRaw = parsed.partidas ?? [];
+          gastosInsert = parsed.gastos ?? [];
+          if (partidasRaw.length > 0 || gastosInsert.length > 0) {
+            meta = { ...meta, ...parsed.meta, modoImportacion: 'parser_estructurado' };
           }
-        }
-
-        if ('requireTableSelection' in parsed && parsed.requireTableSelection) {
+        } else if (
+          partidasRaw.length === 0 &&
+          gastosInsert.length === 0 &&
+          'requireTableSelection' in parsed &&
+          parsed.requireTableSelection
+        ) {
+          const snap = await guardarSnapshotLulo(supabase, {
+            proyectoId: pid,
+            nombreArchivo: file.name,
+            extraccion: extraccionVolcado,
+            resumen: buildResumenSnapshotExtraccion(extraccionVolcado),
+            reemplazarSnapshots: false,
+          });
           return NextResponse.json(
             {
               success: false,
               requireTableSelection: true,
               availableTables: parsed.availableTables,
               meta: parsed.meta,
-              snapshotId: snapshotIdParcial,
-              catalogoTablas:
-                snapshotIdParcial && 'fullDump' in parsed
-                  ? extraccionDesdePayload(
-                      parsed.fullDump as unknown as Record<string, unknown>,
-                      'mdb',
-                    )?.catalogoTablas
-                  : undefined,
+              snapshotId: snap?.id ?? null,
+              catalogoTablas: extraccionVolcado.catalogoTablas,
               hint:
-                'No se encontró una tabla Partidas o Presupuesto. Elige la tabla que contiene el presupuesto. El volcado completo del MDB ya está guardado en Datos Lulo.',
+                'Elige la tabla del presupuesto. El volcado completo del MDB ya está en Datos Lulo.',
             },
             { status: 422 },
           );
         }
-        if ('requireMapping' in parsed && parsed.requireMapping) {
-          return NextResponse.json(
-            {
-              success: false,
-              requireMapping: true,
-              detectedColumns: parsed.detectedColumns,
-              suggestedTable: parsed.suggestedTable,
-              meta: parsed.meta,
-              snapshotId: snapshotIdParcial,
-              hint:
-                'No se pudieron inferir partidas automáticamente. Elige otra tabla o usa «Extraer todo el MDB» (Control de obra → Datos Lulo). El volcado completo ya puede estar guardado.',
-            },
-            { status: 422 },
-          );
-        }
-        return NextResponse.json(
-          {
-            error: 'No se pudo interpretar el archivo MDB.',
-            snapshotId: snapshotIdParcial,
-          },
-          { status: 422 },
-        );
       }
 
-      partidasRaw = parsed.partidas;
-      gastosInsert = parsed.gastos;
-      payload = parsed.fullDump as unknown as Record<string, unknown>;
-      meta = { ...meta, ...parsed.meta };
+      meta = {
+        ...meta,
+        formato: 'mdb',
+        filasTotales: extraccionVolcado.filasTotales,
+        tablasPartidas: fb.tablasPartidas,
+        tablasGastos: fb.tablasGastos,
+        catalogoTablas: extraccionVolcado.catalogoTablas,
+        diagnosticoResumen: `MDB: ${extraccionVolcado.catalogoTablas.length} tablas, ${extraccionVolcado.filasTotales} filas.`,
+        modoImportacion:
+          (meta.modoImportacion as string | undefined) ??
+          (partidasRaw.length > 0 ? 'volcado_completo' : undefined),
+      };
     } else {
       const text = await file.text();
       const parsed = parsePresupuestoLuloCsvComplete(text, pid, importarGastos);
@@ -209,7 +208,8 @@ export async function postImportarLuloPresupuesto(
 
     if (partidasRaw.length === 0 && gastosInsert.length === 0) {
       let snapshotIdVolcado: string | null = null;
-      const extraccion = extraccionDesdePayload(payload, formato);
+      const extraccion =
+        extraccionVolcado ?? extraccionDesdePayload(payload, formato);
       if (extraccion) {
         const snap = await guardarSnapshotLulo(supabase, {
           proyectoId: pid,
@@ -227,9 +227,12 @@ export async function postImportarLuloPresupuesto(
         formato === 'mdb'
           ? 'No se encontraron partidas ni gastos válidos en el MDB.'
           : 'No se encontraron partidas ni gastos válidos en el CSV.';
+      const filasVolcado = extraccion?.filasTotales ?? 0;
       const inspeccion =
         formato === 'mdb'
-          ? ' Revisa que el archivo sea de Lulo/Access, elige la tabla correcta o empareja columnas (CodPar, DesPar, UniPar, CanPar, PrePar). El volcado completo puede estar en Control de obra → Datos Lulo.'
+          ? filasVolcado > 0
+            ? ` Se guardaron ${filasVolcado} filas en Datos Lulo. Abre Presupuesto · Lulo → Control de obra para ver tablas; si hace falta, usa «Extraer todo el MDB» y revisa columnas.`
+            : ' Revisa que el archivo sea de Lulo/Access o que no esté protegido con contraseña.'
           : '';
       return NextResponse.json(
         {
@@ -238,6 +241,7 @@ export async function postImportarLuloPresupuesto(
           snapshotId: snapshotIdVolcado,
           catalogoTablas: extraccion?.catalogoTablas,
           extraccionCompleta: Boolean(snapshotIdVolcado),
+          filasTotales: filasVolcado,
         },
         { status: 400 },
       );

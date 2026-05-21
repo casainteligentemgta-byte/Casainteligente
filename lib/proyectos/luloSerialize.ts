@@ -22,3 +22,19 @@ export function serializeLuloRow(row: Record<string, unknown>): Record<string, u
   }
   return out;
 }
+
+/** Fila Access como objeto o array alineado con nombres de columna. */
+export function normalizeMdbTableRow(row: unknown, columnNames: string[]): Record<string, unknown> {
+  if (row == null) return {};
+  if (Array.isArray(row)) {
+    const out: Record<string, unknown> = {};
+    columnNames.forEach((col, i) => {
+      out[col] = row[i] ?? '';
+    });
+    return serializeLuloRow(out);
+  }
+  if (typeof row === 'object') {
+    return serializeLuloRow(row as Record<string, unknown>);
+  }
+  return {};
+}

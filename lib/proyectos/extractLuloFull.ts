@@ -1,4 +1,4 @@
-import { serializeLuloRow } from '@/lib/proyectos/luloSerialize';
+import { normalizeMdbTableRow } from '@/lib/proyectos/luloSerialize';
 import { assertMdbFileBuffer, toMdbNodeBuffer } from '@/lib/proyectos/mdbBuffer';
 import { createMdbReader } from '@/lib/proyectos/loadMdbReader';
 
@@ -34,12 +34,12 @@ export function extractFullLuloMdb(buffer: Buffer | ArrayBuffer | Uint8Array): L
     try {
       const table = reader.getTable(name);
       const columns = table.getColumnNames();
-      const raw = table.getData() as Record<string, unknown>[];
+      const raw = table.getData() as unknown[];
       tables.push({
         name,
         columns,
         rowCount: raw.length,
-        rows: raw.map(serializeLuloRow),
+        rows: raw.map((row) => normalizeMdbTableRow(row, columns)),
       });
     } catch {
       tables.push({ name, columns: [], rowCount: 0, rows: [] });

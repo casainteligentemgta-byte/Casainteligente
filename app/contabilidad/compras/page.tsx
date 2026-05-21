@@ -141,24 +141,6 @@ function lineCount(row: CompraRow): number {
     return 0;
 }
 
-function nombreDesdeJoin(row: CompraRow): string | null {
-    const p = row.ci_proyectos;
-    if (Array.isArray(p) && p[0]?.nombre) return String(p[0].nombre).trim();
-    if (p && typeof p === 'object' && 'nombre' in p && p.nombre) {
-        return String(p.nombre).trim();
-    }
-    return null;
-}
-
-function proyectoNombre(row: CompraRow, nombresPorId: Map<string, string>): string {
-    const desdeJoin = nombreDesdeJoin(row);
-    if (desdeJoin) return desdeJoin;
-    if (row.proyecto_id) {
-        return nombresPorId.get(row.proyecto_id) ?? 'Proyecto sin nombre';
-    }
-    return 'Sin proyecto';
-}
-
 export default function ComprasPage() {
     const [compras, setCompras] = useState<CompraRow[]>([]);
     const [proyectos, setProyectos] = useState<ProyectoOpcion[]>([]);
@@ -585,7 +567,6 @@ export default function ComprasPage() {
             tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd ?? tasaBcvHoy,
             origen: c.origen,
             estado: c.estado,
-            proyectoNombre: proyectoNombre(c, proyectosMap),
             lineas: lineasDetalle(c).map((l) => {
                 const cantidad = Number(l.cantidad) || 0;
                 const precio =
@@ -604,7 +585,7 @@ export default function ComprasPage() {
             }),
         }));
         return filtrarLineasComprasConfirmadas(payload, filtrosLineas);
-    }, [compras, filtrosLineas, proyectosMap, tasaBcvHoy]);
+    }, [compras, filtrosLineas, tasaBcvHoy]);
 
     const totalLineasBs = useMemo(
         () =>
@@ -1291,22 +1272,23 @@ export default function ComprasPage() {
                                         </p>
                                         <p
                                             style={{
-                                                color: '#5856D6',
+                                                color: 'rgba(255,255,255,0.35)',
                                                 fontSize: '11px',
-                                                fontWeight: 800,
                                                 marginTop: '8px',
                                             }}
                                         >
-                                            PROYECTO: {proyectoNombre(c, proyectosMap)}
-                                        </p>
-                                        <p
-                                            style={{
-                                                color: 'rgba(255,255,255,0.35)',
-                                                fontSize: '11px',
-                                                marginTop: '6px',
-                                            }}
-                                        >
-                                            {c.fecha} · {lineCount(c)} producto(s)
+                                            {c.fecha}
+                                            {(() => {
+                                                const tasa = tasaDisplayCompra(c);
+                                                return tasa != null
+                                                    ? ` · Tasa ${formatearTasaBcv(tasa)}${
+                                                          !tasaBcvCompra(c) && tasaBcvHoy
+                                                              ? ' (BCV día)'
+                                                              : ''
+                                                      }`
+                                                    : '';
+                                            })()}{' '}
+                                            · {lineCount(c)} producto(s)
                                         </p>
                                         <CompraProductosToggle
                                             compraId={c.id}

@@ -22,6 +22,7 @@ import {
   UND_PAT,
 } from '@/lib/proyectos/luloColumnInfer';
 import { extractFullLuloMdb, type LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
+import { normalizeMdbTableRow, serializeLuloRow } from '@/lib/proyectos/luloSerialize';
 import { cleanNum } from '@/lib/proyectos/luloCleanNumber';
 import type {
   GastoObraLuloInsert,
@@ -342,9 +343,14 @@ function rowToGasto(row: Record<string, unknown>, proyectoId: string): GastoObra
   };
 }
 
-function extractTableRows(reader: ReturnType<typeof createMdbReader>, tableName: string): Record<string, unknown>[] {
+function extractTableRows(
+  reader: ReturnType<typeof createMdbReader>,
+  tableName: string,
+): Record<string, unknown>[] {
   const table = reader.getTable(tableName);
-  return table.getData() as Record<string, unknown>[];
+  const cols = table.getColumnNames();
+  const raw = table.getData() as unknown[];
+  return raw.map((row) => normalizeMdbTableRow(row, cols));
 }
 
 function buildMdbDiagnostico(
@@ -550,9 +556,33 @@ function rowToPartidaCatchAll(
       texts.push(v);
     }
   }
+  if (texts.length === 0 && entries.length >= 1) {
+    for (const [, v] of entries) {
+      const n = parseLuloNumber(v);
+      if (n > maxNum) maxNum = n;
+    }
+  }
+
   const desc = texts.sort((a, b) => b.length - a.length)[0] ?? '';
-  if (!desc && maxNum <= 0) return null;
-  if (RESUMEN_ROW_PAT.test(desc)) return null;
+  if (!desc && maxNum <= 0 && entries.length === 0) return null;
+  if (desc && RESUMEN_ROW_PAT.test(desc)) return null;
+
+  if (!desc && maxNum <= 0 && entries.length === 1) {
+    const [, onlyVal] = entries[0];
+    const n = parseLuloNumber(onlyVal);
+    if (n > 0 || onlyVal.length >= 2) {
+      return {
+        proyecto_id: proyectoId,
+        codigo_partida: `${tableName}-${rowIndex}`,
+        descripcion: onlyVal.length >= 2 ? onlyVal : `${tableName} · fila ${rowIndex}`,
+        unidad: 'UND',
+        cantidad_presupuestada: 0,
+        precio_unitario_estimado: 0,
+        monto_total_estimado: n,
+        origen: 'lulo_mdb',
+      };
+    }
+  }
 
   return {
     proyecto_id: proyectoId,
@@ -698,12 +728,122 @@ function loadTableIntoCache(
   try {
     const table = reader.getTable(name);
     const cols = table.getColumnNames();
-    if (table.rowCount === 0) return null;
     const rows = extractTableRows(reader, name);
+    if (rows.length === 0) return null;
     return { name, cols, rows };
   } catch {
     return null;
   }
+}
+
+/** Importa partidas/gastos desde el volcado completo (mismo criterio que «Extraer todo el MDB»). */
+export function importFromLuloMdbFullDump(
+  dump: LuloMdbFullDump,
+  proyectoId: string,
+  importarGastos = true,
+): {
+  partidas: PartidaLuloInsert[];
+  gastos: GastoObraLuloInsert[];
+  tablasPartidas: string[];
+  tablasGastos: string[];
+} {
+  const partidas: PartidaLuloInsert[] = [];
+  const gastos: GastoObraLuloInsert[] = [];
+  const partidaKeys = new Set<string>();
+  const gastoKeys = new Set<string>();
+  const tablasPartidas: string[] = [];
+  const tablasGastos: string[] = [];
+  const filasOmitidasRef = { n: 0 };
+
+  const cachedTables: TableCache[] = dump.tables
+    .filter((t) => t.rows.length > 0)
+    .map((t) => {
+      const cols =
+        t.columns.length > 0
+          ? t.columns
+          : Object.keys(normalizeMdbTableRow(t.rows[0], t.columns));
+      return {
+        name: t.name,
+        cols,
+        rows: t.rows.map((row) => normalizeMdbTableRow(row, cols)),
+      };
+    });
+
+  importAllTablesAsPartidas(
+    cachedTables,
+    partidas,
+    partidaKeys,
+    tablasPartidas,
+    proyectoId,
+    filasOmitidasRef,
+  );
+
+  if (importarGastos) {
+    sweepTablesForGastos(cachedTables, gastos, gastoKeys, tablasGastos, proyectoId, filasOmitidasRef);
+  }
+
+  return { partidas, gastos, tablasPartidas, tablasGastos };
+}
+
+/**
+ * Último recurso: una partida por cada fila del volcado (sin exigir columnas Lulo).
+ */
+export function partidasDesdeVolcadoMinimo(
+  dump: LuloMdbFullDump,
+  proyectoId: string,
+): PartidaLuloInsert[] {
+  const partidas: PartidaLuloInsert[] = [];
+  const keys = new Set<string>();
+
+  for (const table of dump.tables) {
+    if (table.name.startsWith('MSys')) continue;
+    const cols =
+      table.columns.length > 0
+        ? table.columns
+        : table.rows[0]
+          ? Object.keys(normalizeMdbTableRow(table.rows[0], table.columns))
+          : [];
+
+    table.rows.forEach((raw, idx) => {
+      const row = normalizeMdbTableRow(raw, cols);
+      const cod = `${table.name}-${idx + 1}`;
+      let desc = '';
+      let monto = 0;
+      const textos: string[] = [];
+
+      for (const [k, v] of Object.entries(row)) {
+        const val = String(v ?? '').trim();
+        if (!val || /^msys/i.test(k)) continue;
+        const n = parseLuloNumber(val);
+        if (n > monto) monto = n;
+        if (val.length >= 2 && !/^-?[\d.,\s]+$/.test(val.replace(/\s/g, ''))) {
+          textos.push(val);
+        }
+        if (/descrip|concept|detalle|nombre|texto|glosa|obra/i.test(k) && val.length > desc.length) {
+          desc = val;
+        }
+      }
+      if (!desc) desc = textos.sort((a, b) => b.length - a.length)[0] ?? '';
+      desc = desc || `${table.name} · fila ${idx + 1}`;
+
+      const dedupe = `${cod}|${desc}|${monto}`;
+      if (keys.has(dedupe)) return;
+      keys.add(dedupe);
+
+      partidas.push({
+        proyecto_id: proyectoId,
+        codigo_partida: cod,
+        descripcion: desc.slice(0, 800),
+        unidad: 'UND',
+        cantidad_presupuestada: 0,
+        precio_unitario_estimado: 0,
+        monto_total_estimado: monto,
+        origen: 'lulo_mdb',
+      });
+    });
+  }
+
+  return partidas;
 }
 
 function buildNeedsTableSelectionOutcome(input: {
@@ -982,10 +1122,18 @@ export function parsePresupuestoLuloMdb(
   }
 
   if (partidas.length === 0 && gastos.length === 0) {
-    const filasTabla = partidaTable.rows.length;
+    const fb = importFromLuloMdbFullDump(fullDump, proyectoId, importarGastos);
+    partidas.push(...fb.partidas);
+    gastos.push(...fb.gastos);
+    tablasPartidas.push(...fb.tablasPartidas.filter((t) => !tablasPartidas.includes(t)));
+    tablasGastos.push(...fb.tablasGastos.filter((t) => !tablasGastos.includes(t)));
+  }
+
+  if (partidas.length === 0 && gastos.length === 0) {
+    const filasTotalesDump = fullDump.tables.reduce((s, t) => s + t.rows.length, 0);
     const diagExtra =
-      filasTabla > 0
-        ? ` La tabla «${partidaTable.name}» tiene ${filasTabla} filas pero no se pudo extraer ningún registro.`
+      filasTotalesDump > 0
+        ? ` El MDB tiene ${filasTotalesDump} filas en ${fullDump.tables.length} tablas pero ninguna se pudo mapear a partidas. Usa Control de obra → Datos Lulo para ver el volcado.`
         : ' El MDB no tiene tablas con filas legibles.';
     return buildNeedsTableSelectionOutcome({
       availableTables: tableNames,
