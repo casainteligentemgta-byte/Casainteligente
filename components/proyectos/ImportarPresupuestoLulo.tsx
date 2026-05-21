@@ -61,6 +61,7 @@ type ImportResponse = {
   catalogoTablas?: CatalogoTabla[];
   filasTotales?: number;
   tablasConDatos?: number;
+  resumen?: { tablas?: number; filasTotales?: number };
   meta?: {
     partidasTable?: string | null;
     gastosTable?: string | null;

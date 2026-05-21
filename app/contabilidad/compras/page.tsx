@@ -533,7 +533,7 @@ export default function ComprasPage() {
             if (f) fechas.add(f);
         }
 
-        const tasasArr = [...tasas];
+        const tasasArr = Array.from(tasas);
         return {
             totalUsd: Math.round(totalUsd * 100) / 100,
             totalBs: Math.round(totalBs * 100) / 100,
