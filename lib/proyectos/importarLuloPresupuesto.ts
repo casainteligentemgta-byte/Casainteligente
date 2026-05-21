@@ -15,6 +15,8 @@ import {
   partidasDesdeVolcadoMinimo,
   parsePresupuestoLuloMdb,
 } from '@/lib/proyectos/parsePresupuestoLuloMdb';
+import { parseLuloMdbEstructurado } from '@/lib/proyectos/parseLuloMdbEstructurado';
+import { persistirLuloEstructurado } from '@/lib/proyectos/persistirLuloEstructurado';
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 import type { GastoObraLuloInsert } from '@/types/lulo-import';
@@ -134,6 +136,72 @@ export async function postImportarLuloPresupuesto(
       extraccionVolcado = extraerMdbLuloCompleto(buffer);
       const dump = extraccionVolcado.payload as LuloMdbFullDump;
       payload = dump as unknown as Record<string, unknown>;
+
+      const importarEstructurado =
+        formData.get('importarEstructurado') !== 'false' &&
+        formData.get('importarEstructurado') !== '0';
+
+      if (importarEstructurado) {
+        const structured = parseLuloMdbEstructurado(dump, pid);
+        if (structured && structured.partidas.length > 0) {
+          if (reemplazar && importarGastos) {
+            const { error: delGastos } = await supabase
+              .from('gastos_obra')
+              .delete()
+              .eq('proyecto_id', pid)
+              .in('origen', ['lulo_mdb', 'lulo_csv']);
+            if (delGastos && !delGastos.message.includes('proyecto_id')) throw delGastos;
+          }
+
+          const persisted = await persistirLuloEstructurado(supabase, pid, structured, {
+            reemplazar,
+          });
+
+          const presupuestoTotal = structured.partidas.reduce(
+            (s, p) => s + p.monto_total_estimado,
+            0,
+          );
+
+          const resumen = buildResumenSnapshotExtraccion(extraccionVolcado, {
+            partidas: persisted.partidasInsertadas,
+            gastos: 0,
+            presupuestoTotalUsd: presupuestoTotal,
+          });
+
+          const snap = await guardarSnapshotLulo(supabase, {
+            proyectoId: pid,
+            nombreArchivo: file.name,
+            extraccion: extraccionVolcado,
+            resumen,
+            reemplazarSnapshots: reemplazar,
+          });
+
+          const tablas = structured.tablasUsadas;
+          return NextResponse.json({
+            success: true,
+            message: `Importación Lulo nativa: ${persisted.partidasInsertadas} partidas, ${persisted.insumosUpserted} insumos, ${persisted.apuInsertados} líneas APU.`,
+            proyectoId: pid,
+            partidas: persisted.partidasInsertadas,
+            insumos: persisted.insumosUpserted,
+            apu: persisted.apuInsertados,
+            gastos: 0,
+            presupuestoTotalUsd: presupuestoTotal,
+            snapshotId: snap?.id ?? null,
+            reemplazar,
+            meta: {
+              formato: 'mdb',
+              modoImportacion: 'lulo_nativo',
+              tablasLulo: tablas,
+              filasTotales: extraccionVolcado.filasTotales,
+              catalogoTablas: extraccionVolcado.catalogoTablas,
+              proyectoActualizado: persisted.proyectoActualizado,
+            },
+            resumen,
+            catalogoTablas: extraccionVolcado.catalogoTablas,
+            filasTotales: extraccionVolcado.filasTotales,
+          });
+        }
+      }
 
       const fb = importFromLuloMdbFullDump(dump, pid, importarGastos);
       partidasRaw = fb.partidas;

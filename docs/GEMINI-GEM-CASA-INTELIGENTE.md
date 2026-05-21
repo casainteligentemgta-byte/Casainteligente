@@ -65,6 +65,7 @@ Componentes shadcn en `components/ui/` (`Button` variants `elite`, `elitePrimary
 - **Parser MDB:** `lib/proyectos/parsePresupuestoLuloMdb.ts` — **no exige** CodPar/DesPar; infiere columnas (`inferPartidaMappingFromColumns`, `resolvePartidaMappingForColumns` en `luloStandardColumns.ts`), recorre todas las tablas, modo «incluir todo».
 - **Snapshots volcado completo:** tabla `ci_lulo_import_snapshots` (migr. `151_ci_lulo_import_snapshots.sql`), libs `extraerMdbLuloCompleto.ts`, `importarLuloPresupuesto.ts`, `guardarPartidasPresupuestoBulk.ts`.
 - **Partidas:** `ci_presupuesto_partidas` (origen `lulo_mdb` / `lulo_csv`). **Gastos:** `gastos_obra`.
+- **Lulo nativo (MDB):** tablas `INSUMOS`, `PARTIDAS`, `COMPOSICION`, `OBRAS` → `ci_lulo_insumos_maestro`, `ci_presupuesto_partida_apu`, metadatos en `ci_proyectos` (`codigo_lulo`, % admin/utilidad/FCM). Migración `157_ci_lulo_insumos_apu.sql`.
 - **Errores:** `resolvePartidaMapping is not defined` → usar `resolvePartidaMappingForColumns`; caché `.next` corrupta → `npm run dev:fresh`. Sin partidas → «Extraer todo el MDB» y revisar Control de obra → Datos Lulo.
 
 ### Almacén y contabilidad de compras

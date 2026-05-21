@@ -55,6 +55,8 @@ type ImportResponse = {
   error?: string;
   message?: string;
   partidas?: number;
+  insumos?: number;
+  apu?: number;
   gastos?: number;
   presupuestoTotalUsd?: number;
   snapshotId?: string | null;
@@ -302,6 +304,8 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
       const lineas: string[] = [];
       if (data.partidas != null) lineas.push(`${data.partidas} partidas`);
+      if (data.insumos != null && data.insumos > 0) lineas.push(`${data.insumos} insumos`);
+      if (data.apu != null && data.apu > 0) lineas.push(`${data.apu} APU`);
       if (data.gastos != null && data.gastos > 0) lineas.push(`${data.gastos} gastos`);
       if (data.presupuestoTotalUsd != null) {
         lineas.push(

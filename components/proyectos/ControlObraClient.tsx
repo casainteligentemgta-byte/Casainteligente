@@ -292,6 +292,17 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const [filtrosPartidas, setFiltrosPartidas] = useState<FiltrosPartidasObra>(FILTROS_PARTIDAS_INICIAL);
   const [filtrosGastos, setFiltrosGastos] = useState<FiltrosGastosObra>(FILTROS_GASTOS_INICIAL);
   const [vistaAgrupacion, setVistaAgrupacion] = useState<VistaAgrupacionLulo>('capitulos');
+  const [resumenNativo, setResumenNativo] = useState({
+    apuLineas: 0,
+    insumosEnApu: 0,
+    insumosMaestroTotal: 0,
+  });
+  const [proyectoLulo, setProyectoLulo] = useState<{
+    codigo_lulo?: string | null;
+    porcentaje_admin?: number | null;
+    porcentaje_utilidad?: number | null;
+    porcentaje_fcm?: number | null;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -302,10 +313,27 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
         partidas?: Partida[];
         gastos?: Gasto[];
         snapshots?: SnapshotMeta[];
+        resumenNativo?: {
+          apuLineas?: number;
+          insumosEnApu?: number;
+          insumosMaestroTotal?: number;
+        };
+        proyecto?: {
+          codigo_lulo?: string | null;
+          porcentaje_admin?: number | null;
+          porcentaje_utilidad?: number | null;
+          porcentaje_fcm?: number | null;
+        };
       }>(res);
       if (!res.ok) throw new Error(data.error || 'Error al cargar');
       setPartidas(data.partidas ?? []);
       setGastos(data.gastos ?? []);
+      setResumenNativo({
+        apuLineas: data.resumenNativo?.apuLineas ?? 0,
+        insumosEnApu: data.resumenNativo?.insumosEnApu ?? 0,
+        insumosMaestroTotal: data.resumenNativo?.insumosMaestroTotal ?? 0,
+      });
+      setProyectoLulo(data.proyecto ?? null);
       const snaps = data.snapshots ?? [];
       setSnapshots(snaps);
       if (snaps[0]?.id) {
@@ -632,6 +660,9 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
           </div>
           <p className="text-sm text-zinc-500 mt-1">
             {proyectoNombre ?? 'Proyecto'} · datos extraídos de Lulo Software
+            {proyectoLulo?.codigo_lulo ? (
+              <span className="text-amber-400/90"> · Obra Lulo {proyectoLulo.codigo_lulo}</span>
+            ) : null}
           </p>
         </div>
         <span className="rounded-full border border-amber-500/30 bg-amber-950/30 px-3 py-1 text-[11px] font-semibold text-amber-200">
@@ -641,7 +672,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
 
       <div className="flex flex-wrap items-start gap-4">
         <ImportarPresupuestoLulo proyectoId={proyectoId} onSuccess={() => void load()} />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1 min-w-[240px]">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 flex-1 min-w-[240px]">
           <div className="rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2">
             <p className="text-[10px] uppercase text-zinc-500">Partidas</p>
             <p className="text-lg font-bold text-emerald-400">{partidas.length}</p>
@@ -650,12 +681,25 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
             <p className="text-[10px] uppercase text-zinc-500">Gastos</p>
             <p className="text-lg font-bold text-sky-400">{gastos.length}</p>
           </div>
+          <div className="rounded-xl border border-violet-500/20 bg-violet-950/20 px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-500">Líneas APU</p>
+            <p className="text-lg font-bold text-violet-300">{resumenNativo.apuLineas}</p>
+          </div>
+          <div className="rounded-xl border border-violet-500/20 bg-violet-950/20 px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-500">Insumos (obra)</p>
+            <p className="text-lg font-bold text-violet-300">{resumenNativo.insumosEnApu}</p>
+          </div>
           <div className="rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2 col-span-2">
             <p className="text-[10px] uppercase text-zinc-500">Totales presupuesto / gastos</p>
             <p className="text-xs text-zinc-300 mt-0.5">
               {totalPartidas.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} ·{' '}
               {totalGastos.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
             </p>
+            {resumenNativo.insumosMaestroTotal > 0 ? (
+              <p className="text-[10px] text-zinc-500 mt-1">
+                Catálogo global: {resumenNativo.insumosMaestroTotal} insumos
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

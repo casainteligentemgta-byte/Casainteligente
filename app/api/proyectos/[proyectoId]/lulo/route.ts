@@ -34,7 +34,13 @@ export async function GET(
         .eq('proyecto_id', proyectoId)
         .order('created_at', { ascending: false })
         .limit(20),
-      supabase.from('ci_proyectos').select('id, nombre').eq('id', proyectoId).maybeSingle(),
+      supabase
+        .from('ci_proyectos')
+        .select(
+          'id, nombre, codigo_lulo, porcentaje_admin, porcentaje_utilidad, porcentaje_fcm',
+        )
+        .eq('id', proyectoId)
+        .maybeSingle(),
     ]);
 
     if (partidasRes.error) throw partidasRes.error;
@@ -43,11 +49,39 @@ export async function GET(
       console.warn('[GET lulo] snapshots:', snapshotsRes.error.message);
     }
 
+    const partidaIds = (partidasRes.data ?? []).map((p) => p.id).filter(Boolean);
+    let apuLineas = 0;
+    let insumosEnApu = 0;
+    if (partidaIds.length > 0) {
+      const { data: apuRows, error: apuErr } = await supabase
+        .from('ci_presupuesto_partida_apu')
+        .select('insumo_id')
+        .in('partida_id', partidaIds);
+      if (apuErr && !apuErr.message.includes('does not exist')) {
+        console.warn('[GET lulo] apu:', apuErr.message);
+      } else if (apuRows) {
+        apuLineas = apuRows.length;
+        insumosEnApu = new Set(apuRows.map((r) => r.insumo_id).filter(Boolean)).size;
+      }
+    }
+
+    const { count: insumosMaestroTotal, error: insErr } = await supabase
+      .from('ci_lulo_insumos_maestro')
+      .select('*', { count: 'exact', head: true });
+    if (insErr && !insErr.message.includes('does not exist')) {
+      console.warn('[GET lulo] insumos maestro:', insErr.message);
+    }
+
     return NextResponse.json({
       proyecto: proyectoRes.data,
       partidas: partidasRes.data ?? [],
       gastos: gastosRes.data ?? [],
       snapshots: snapshotsRes.data ?? [],
+      resumenNativo: {
+        apuLineas,
+        insumosEnApu,
+        insumosMaestroTotal: insumosMaestroTotal ?? 0,
+      },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al cargar datos Lulo';
