@@ -1,6 +1,3 @@
-/**
- * Alias histórico del webhook de facturas → delega en /api/telegram (multi-contexto).
- */
 import {
   handleTelegramWebhookGet,
   handleTelegramWebhookPost,

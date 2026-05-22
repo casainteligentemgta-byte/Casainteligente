@@ -1,3 +1,4 @@
+import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_MODEL } from '@/lib/recruitment/constants';
 import type { ResultadoLiquidacionConstruccion } from '@/lib/construccion/liquidacion/types';
 
@@ -18,17 +19,12 @@ Firma representante patronal: ______________________   RIF: ________________
 Nota: Sin GEMINI_API_KEY se usa este modelo genérico. Revise un abogado laboral antes de firmar.`;
 }
 
-/**
- * Redacta un borrador de finiquito con Gemini (texto plano, español).
- * Con `requiereGemini: true` falla si no hay API key (flujo de seguridad antes de confirmar).
- */
 export async function redactarDocumentoFiniquitoConGemini(
   resultado: ResultadoLiquidacionConstruccion,
   nombreEmpleado?: string,
   opciones?: { requiereGemini?: boolean },
 ): Promise<{ texto: string; generadoConGemini: boolean }> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) {
+  if (!getGeminiApiKey()) {
     if (opciones?.requiereGemini) {
       throw new Error('GEMINI_API_KEY no configurada: no se puede redactar el finiquito con IA.');
     }
@@ -55,31 +51,25 @@ Requisitos:
 4) Aviso de que los montos definitivos sujetan a liquidación oficial y revisión legal.
 5) Sin markdown; solo texto plano.`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.25, maxOutputTokens: 2048 },
-    }),
-  });
-
-  if (!res.ok) {
-    console.error('[geminiFiniquito]', res.status, await res.text());
-    return { texto: textoFiniquitoFallback(resultado, nombreEmpleado), generadoConGemini: false };
-  }
-
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const texto = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
-  if (!texto) {
+  try {
+    const texto = await geminiGenerateText({
+      model: GEMINI_MODEL,
+      prompt,
+      temperature: 0.25,
+      maxOutputTokens: 2048,
+    });
+    if (!texto) {
+      if (opciones?.requiereGemini) {
+        throw new Error('Gemini devolvió un documento vacío.');
+      }
+      return { texto: textoFiniquitoFallback(resultado, nombreEmpleado), generadoConGemini: false };
+    }
+    return { texto, generadoConGemini: true };
+  } catch (err) {
+    console.error('[geminiFiniquito]', err);
     if (opciones?.requiereGemini) {
-      throw new Error('Gemini devolvió un documento vacío.');
+      throw err instanceof Error ? err : new Error(String(err));
     }
     return { texto: textoFiniquitoFallback(resultado, nombreEmpleado), generadoConGemini: false };
   }
-  return { texto, generadoConGemini: true };
 }

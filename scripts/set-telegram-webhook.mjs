@@ -44,7 +44,7 @@ async function main() {
     process.exit(1);
   }
 
-  const webhookUrl = `${base}/api/webhooks/telegram`;
+  const webhookUrl = `${base}/api/telegram`;
   const api = `https://api.telegram.org/bot${token}/setWebhook`;
 
   const res = await fetch(api, {

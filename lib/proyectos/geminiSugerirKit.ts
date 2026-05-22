@@ -1,3 +1,4 @@
+import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_MODEL } from '@/lib/recruitment/constants';
 
 export type EquipoResumen = {
@@ -15,7 +16,6 @@ export async function sugerirHerramientasEInsumosProyecto(payload: {
   };
   inventarioActual: EquipoResumen[];
 }): Promise<{ texto: string; desdeGemini: boolean }> {
-  const key = process.env.GEMINI_API_KEY?.trim();
   const block = [
     'Eres planificador de logística de campo para obras e instalaciones en Venezuela.',
     'Analiza el proyecto y su inventario actual.',
@@ -30,7 +30,7 @@ export async function sugerirHerramientasEInsumosProyecto(payload: {
     JSON.stringify(payload, null, 2),
   ].join('\n');
 
-  if (!key) {
+  if (!getGeminiApiKey()) {
     return {
       desdeGemini: false,
       texto:
@@ -38,41 +38,19 @@ export async function sugerirHerramientasEInsumosProyecto(payload: {
     };
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-  const body = {
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: block }],
-      },
-    ],
-    generationConfig: {
+  try {
+    const text = await geminiGenerateText({
+      model: GEMINI_MODEL,
+      prompt: block,
       temperature: 0.35,
       maxOutputTokens: 1000,
-    },
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error('[geminiSugerirKit]', res.status, err);
+    });
+    return { desdeGemini: true, texto: text };
+  } catch (err) {
+    console.error('[geminiSugerirKit]', err);
     return {
       desdeGemini: false,
       texto: 'No se pudo generar sugerencias en este momento. Intenta nuevamente.',
     };
   }
-
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
-  if (!text) {
-    return { desdeGemini: false, texto: 'La IA no devolvió contenido utilizable.' };
-  }
-  return { desdeGemini: true, texto: text };
 }

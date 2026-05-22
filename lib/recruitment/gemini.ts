@@ -1,3 +1,4 @@
+import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_MODEL } from '@/lib/recruitment/constants';
 import type { RecruitmentAnalysisJson } from '@/types/recruitment';
 
@@ -35,7 +36,6 @@ function parseAnalysis(text: string, turnIndex: number): RecruitmentAnalysisJson
   }
 }
 
-/** Respuestas rotativas cuando no hay Gemini o la salida no es JSON (evita repetir la misma frase). */
 const FALLBACK_ASSISTANT_REPLIES = [
   'Gracias. ¿Puedes concretar un ejemplo reciente de tu responsabilidad operativa?',
   'Entendido. Si tuvieras que priorizar dos tareas urgentes el mismo día, ¿cómo lo harías?',
@@ -85,44 +85,28 @@ export async function analyzeRecruitmentTurn(input: {
   turnIndex: number;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
 }): Promise<RecruitmentAnalysisJson> {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) {
+  if (!getGeminiApiKey()) {
     return fallbackAnalysis(input.turnIndex, 'no_key');
   }
 
   const trimmed = historyForApi(input.history);
-  const parts = trimmed.map((m) => ({
-    role: m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.content }],
+  const history = trimmed.map((m) => ({
+    role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model',
+    text: m.content,
   }));
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-
-  const body = {
-    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-    contents: parts,
-    generationConfig: {
+  try {
+    const text = await geminiGenerateText({
+      model: GEMINI_MODEL,
+      systemInstruction: SYSTEM_INSTRUCTION,
+      history,
       temperature: 0.55,
       maxOutputTokens: 2048,
       responseMimeType: 'application/json',
-    },
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error('[recruitment/gemini]', res.status, err);
+    });
+    return parseAnalysis(text, input.turnIndex);
+  } catch (err) {
+    console.error('[recruitment/gemini]', err);
     return fallbackAnalysis(input.turnIndex, 'api_error');
   }
-
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  return parseAnalysis(text, input.turnIndex);
 }

@@ -313,6 +313,9 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const [filtrosGastos, setFiltrosGastos] = useState<FiltrosGastosObra>(FILTROS_GASTOS_INICIAL);
   const [vistaAgrupacion, setVistaAgrupacion] = useState<VistaAgrupacionLulo>('capitulos');
   const [reporteVariant, setReporteVariant] = useState<'app' | 'report'>('report');
+  const [analisisGemini, setAnalisisGemini] = useState<string | null>(null);
+  const [analisisGeminiMeta, setAnalisisGeminiMeta] = useState<string | null>(null);
+  const [analisisGeminiLoading, setAnalisisGeminiLoading] = useState(false);
   const [resumenNativo, setResumenNativo] = useState({
     apuLineas: 0,
     insumosEnApu: 0,
@@ -584,6 +587,29 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
       ),
     [partidasFiltradas, proyectoMeta, proyectoNombre, pid],
   );
+
+  async function consultarAnalisisGemini() {
+    setAnalisisGeminiLoading(true);
+    setAnalisisGemini(null);
+    setAnalisisGeminiMeta(null);
+    try {
+      const res = await fetch(`/api/proyectos/${pid}/lulo/analisis-gemini`, { method: 'POST' });
+      const data = await parseFetchJson<{
+        texto?: string;
+        desdeGemini?: boolean;
+        error?: string;
+      }>(res);
+      if (!res.ok) throw new Error(data.error);
+      setAnalisisGemini(data.texto ?? '');
+      setAnalisisGeminiMeta(
+        data.desdeGemini ? 'Análisis con Gemini (@google/genai).' : 'Modo local (sin API o fallback).',
+      );
+    } catch (e) {
+      setAnalisisGemini(formatErrorMessage(e));
+    } finally {
+      setAnalisisGeminiLoading(false);
+    }
+  }
 
   const renderFilaPartida = (row: Record<string, unknown>) => {
     const p = row as unknown as Partida;
@@ -892,6 +918,15 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
               Resumen por capítulo (formato Lulo): totales, % y rango de partidas (
               {partidasFiltradas.length} de {partidas.length}).
             </p>
+            <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void consultarAnalisisGemini()}
+              disabled={analisisGeminiLoading || partidasFiltradas.length === 0}
+              className="rounded-lg border border-amber-500/40 bg-amber-950/40 px-3 py-1.5 text-[11px] font-semibold text-amber-100 hover:bg-amber-900/50 disabled:opacity-50"
+            >
+              {analisisGeminiLoading ? 'Analizando…' : 'Interpretar con Gemini'}
+            </button>
             <div className="flex gap-1 rounded-lg border border-white/10 p-0.5 text-[11px]">
               <button
                 type="button"
@@ -916,7 +951,16 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
                 Tema app
               </button>
             </div>
+            </div>
           </div>
+          {analisisGemini ? (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-sm text-amber-50/90 whitespace-pre-wrap">
+              {analisisGeminiMeta ? (
+                <p className="text-[10px] text-amber-200/60 mb-2">{analisisGeminiMeta}</p>
+              ) : null}
+              {analisisGemini}
+            </div>
+          ) : null}
           {partidasFiltradas.length === 0 ? (
             <p className="text-sm text-zinc-500 rounded-xl border border-dashed border-white/10 py-12 text-center">
               Sin partidas para el reporte. Importa un MDB/CSV o ajusta los filtros.

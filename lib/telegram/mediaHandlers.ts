@@ -1,0 +1,249 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
+import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
+import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
+import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
+import { processTelegramInvoicePhoto } from '@/lib/telegram/processInvoiceFromTelegram';
+import type { TelegramEstado } from '@/lib/telegram/estados';
+import { setTelegramContexto } from '@/lib/telegram/estados';
+import {
+  downloadTelegramFile,
+  mimeFromTelegramPath,
+  sendTelegramMessage,
+} from '@/lib/telegram/botApi';
+
+const PROYECTO_MEDIA_BUCKET = 'ci-proyectos-media';
+
+function baseUrlApp(): string {
+  return (
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    'https://casainteligente.company'
+  )
+    .trim()
+    .replace(/\/$/, '');
+}
+
+export async function manejarFacturaTelegram(params: {
+  supabase: SupabaseClient;
+  chatId: string;
+  chatLabel: string;
+  fileId: string;
+}): Promise<void> {
+  const { data: pending, error: insErr } = await params.supabase
+    .from('ci_facturas_canal_pendientes')
+    .insert({
+      canal: 'telegram',
+      chat_id: params.chatId,
+      chat_label: params.chatLabel,
+      estado: 'pendiente',
+    })
+    .select('id')
+    .single();
+
+  if (insErr || !pending) {
+    await sendTelegramMessage(params.chatId, '❌ Error al registrar la factura.');
+    throw new Error(insErr?.message ?? 'insert factura');
+  }
+
+  await setTelegramContexto(params.supabase, params.chatId, {
+    contexto: 'factura',
+    pending_factura_id: pending.id,
+  });
+
+  await sendTelegramMessage(params.chatId, '⏳ Procesando factura con Gemini…');
+  await processTelegramInvoicePhoto({
+    pendingId: pending.id,
+    chatId: params.chatId,
+    fileId: params.fileId,
+  });
+}
+
+export async function manejarFotoObraTelegram(params: {
+  supabase: SupabaseClient;
+  chatId: string;
+  estado: TelegramEstado;
+  fileId: string;
+  caption?: string;
+}): Promise<void> {
+  const proyectoId = params.estado.proyecto_id;
+  if (!proyectoId) {
+    await sendTelegramMessage(
+      params.chatId,
+      '⚠️ Primero vincula un proyecto: <code>/obra &lt;uuid&gt;</code>',
+    );
+    return;
+  }
+
+  const { buffer, filePath } = await downloadTelegramFile(params.fileId);
+  const mimeType = mimeFromTelegramPath(filePath);
+  const ext = filePath.split('.').pop() ?? 'jpg';
+  const storagePath = `telegram/${proyectoId}/${Date.now()}.${ext}`;
+
+  const { error: upErr } = await params.supabase.storage
+    .from(PROYECTO_MEDIA_BUCKET)
+    .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
+
+  if (upErr) {
+    await sendTelegramMessage(params.chatId, `❌ Storage obra: ${upErr.message}`);
+    return;
+  }
+
+  const fotos = Array.isArray(params.estado.metadata.fotos_obra)
+    ? [...(params.estado.metadata.fotos_obra as string[])]
+    : [];
+  fotos.push(storagePath);
+
+  await setTelegramContexto(params.supabase, params.chatId, {
+    metadata: {
+      fotos_obra: fotos,
+      ultima_foto: storagePath,
+      ultima_caption: params.caption ?? null,
+    },
+  });
+
+  const link = `${baseUrlApp()}/proyectos/modulo/${proyectoId}`;
+  await sendTelegramMessage(
+    params.chatId,
+    `✅ Foto guardada en <b>ci-proyectos-media</b>\n` +
+      (params.caption ? `📝 ${params.caption}\n` : '') +
+      `🔗 <a href="${link}">Abrir módulo proyecto</a>`,
+    { parse_mode: 'HTML' },
+  );
+}
+
+type GastoExtraido = {
+  proveedor?: string;
+  descripcion?: string;
+  costo?: number;
+  fecha?: string;
+};
+
+async function extraerGastoConGemini(
+  buffer: Buffer,
+  mimeType: string,
+  fileName: string,
+): Promise<GastoExtraido | null> {
+  if (!getGeminiApiKey()) return null;
+
+  try {
+    if (mimeType.startsWith('image/') || mimeType === 'application/pdf') {
+      const { data } = await extractPurchaseInvoiceFromFile({
+        buffer,
+        mimeType,
+        fileName,
+      });
+      return {
+        proveedor: data.supplier_name ?? undefined,
+        descripcion: `Gasto Telegram — ${data.invoice_number ?? 'sin nº'}`,
+        costo: data.total_amount != null ? Number(data.total_amount) : undefined,
+        fecha: data.date ?? undefined,
+      };
+    }
+  } catch {
+    /* fallback texto */
+  }
+
+  const base64 = buffer.toString('base64');
+  const raw = await geminiGenerateText({
+    model: GEMINI_PROCUREMENT_DEFAULT_MODEL,
+    prompt: 'Extrae proveedor, descripcion breve, costo numérico y fecha YYYY-MM-DD del comprobante.',
+    systemInstruction: 'OCR de comprobantes de gasto de obra en Venezuela. JSON: {"proveedor","descripcion","costo","fecha"}',
+    temperature: 0,
+    maxOutputTokens: 512,
+    responseMimeType: 'application/json',
+  });
+
+  try {
+    return JSON.parse(raw) as GastoExtraido;
+  } catch {
+    return null;
+  }
+}
+
+export async function manejarGastoObraTelegram(params: {
+  supabase: SupabaseClient;
+  chatId: string;
+  estado: TelegramEstado;
+  fileId: string;
+  caption?: string;
+}): Promise<void> {
+  const proyectoId = params.estado.proyecto_id;
+  if (!proyectoId) {
+    await sendTelegramMessage(
+      params.chatId,
+      '⚠️ Usa <code>/obra &lt;uuid&gt;</code> antes de registrar gastos.',
+    );
+    return;
+  }
+
+  await sendTelegramMessage(params.chatId, '⏳ Analizando comprobante con Gemini…');
+
+  const { buffer, filePath } = await downloadTelegramFile(params.fileId);
+  const mimeType = mimeFromTelegramPath(filePath);
+  const ext = filePath.split('.').pop() ?? 'jpg';
+  const storagePath = `telegram-gastos/${proyectoId}/${Date.now()}.${ext}`;
+
+  const { error: upErr } = await params.supabase.storage
+    .from(PROCUREMENT_DOCUMENTS_BUCKET)
+    .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
+
+  if (upErr) {
+    await sendTelegramMessage(params.chatId, `❌ Storage gasto: ${upErr.message}`);
+    return;
+  }
+
+  const extraido =
+    (await extraerGastoConGemini(
+      buffer,
+      mimeType,
+      `telegram-gasto-${Date.now()}.${ext}`,
+    )) ?? {};
+
+  const costo = Number(extraido.costo ?? 0);
+  const fecha =
+    extraido.fecha && /^\d{4}-\d{2}-\d{2}$/.test(extraido.fecha)
+      ? extraido.fecha
+      : new Date().toISOString().slice(0, 10);
+
+  const { data: gasto, error: insErr } = await params.supabase
+    .from('gastos_obra')
+    .insert({
+      proyecto_id: proyectoId,
+      origen: 'telegram',
+      fecha,
+      tipo: 'egreso',
+      disciplina: 'general',
+      proveedor: String(extraido.proveedor ?? params.caption ?? 'Telegram').slice(0, 200),
+      descripcion: String(
+        extraido.descripcion ?? params.caption ?? 'Comprobante vía Telegram',
+      ).slice(0, 500),
+      costo: Number.isFinite(costo) ? costo : 0,
+    })
+    .select('id')
+    .single();
+
+  if (insErr || !gasto) {
+    await sendTelegramMessage(params.chatId, `❌ No se guardó el gasto: ${insErr?.message}`);
+    return;
+  }
+
+  await setTelegramContexto(params.supabase, params.chatId, {
+    metadata: {
+      ultimo_gasto_id: gasto.id,
+      ultimo_comprobante_path: storagePath,
+    },
+  });
+
+  const link = `${baseUrlApp()}/proyectos/modulo/${proyectoId}/control-obra`;
+  await sendTelegramMessage(
+    params.chatId,
+    `✅ <b>Gasto registrado</b>\n` +
+      `🏢 ${extraido.proveedor ?? '—'}\n` +
+      `💰 ${Number.isFinite(costo) ? costo.toLocaleString('es-VE') : '0'} Bs\n` +
+      `📅 ${fecha}\n` +
+      `📁 Comprobante en procurement-documents\n` +
+      `<a href="${link}">Ver control de obra</a>`,
+    { parse_mode: 'HTML' },
+  );
+}

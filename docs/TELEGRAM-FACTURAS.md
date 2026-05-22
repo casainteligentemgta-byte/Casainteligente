@@ -6,7 +6,7 @@
 npm run db:apply-lulo-telegram
 ```
 
-Incluye: `146`, `149`, `151`, `152` (requiere `DATABASE_URL` en `.env.local`).
+Incluye: `146`, `149`, `151`, `152`, `160` (requiere `DATABASE_URL` en `.env.local`).
 
 ## Variables de entorno
 
@@ -24,12 +24,25 @@ Si `TELEGRAM_ALLOWED_CHAT_IDS` está vacío, se aceptan todos los chats (solo pa
 En BotFather o con curl:
 
 ```text
-https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://casainteligente.company/api/webhooks/telegram
+https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://casainteligente.company/api/telegram
 ```
 
-## Uso
+## Uso (multi-contexto)
 
-1. El usuario envía foto o PDF de factura al bot.
+Webhook: `POST /api/telegram` (alias: `/api/webhooks/telegram`).
+
+Comandos en el bot:
+
+- `/menu` — menú principal
+- `/factura` — foto/PDF de compra → `procurement-documents` + Gemini OCR
+- `/obra <uuid>` — fotos de evidencia → bucket `ci-proyectos-media`
+- `/gasto` — comprobante de gasto → `gastos_obra` + Gemini (requiere `/obra` antes)
+- `/estado` — contexto activo en `ci_telegram_estados`
+- `/cancelar` — volver al menú
+
+Texto libre: Gemini 2.5 Flash puede interpretar la intención y cambiar el contexto.
+
+1. El usuario envía foto o PDF de factura al bot (modo `/factura`).
 2. El sistema extrae datos con Gemini y guarda en `ci_facturas_canal_pendientes`.
 3. Revisar en **Contabilidad → Compras → Telegram** (`/contabilidad/compras/canal`).
 4. **Abrir en recepción** completa el formulario de `/almacen/procurement`.

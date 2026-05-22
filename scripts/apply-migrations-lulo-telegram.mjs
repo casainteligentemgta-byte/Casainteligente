@@ -36,6 +36,7 @@ const MIGRATIONS = [
   '157_ci_lulo_insumos_apu.sql',
   '158_ci_presupuesto_partidas_capitulo.sql',
   '159_ci_presupuesto_gastos_numeric_widen.sql',
+  '160_ci_telegram_estados.sql',
 ];
 
 async function tableExists(sql, name) {
@@ -173,6 +174,7 @@ async function main() {
         `;
         return cols.length > 0 && Number(cols[0].numeric_precision) >= 18;
       },
+      '160_ci_telegram_estados.sql': () => tableExists(sql, 'ci_telegram_estados'),
     };
 
     for (const file of MIGRATIONS) {

@@ -2,7 +2,7 @@ import {
   GEMINI_PROCUREMENT_DEFAULT_MODEL,
   procurementModelCandidates,
 } from '@/lib/almacen/geminiProcurementModels';
-import { outboundFetch } from '@/lib/network/outboundFetch';
+import { geminiGenerateWithDocument } from '@/lib/gemini/client';
 
 export type ExtractedInvoiceItem = {
   description: string;
@@ -535,12 +535,11 @@ export async function extractPurchaseInvoiceFromFile(file: {
     console.info('[extractPurchaseInvoiceGemini] Sin ítems en 1.er pase; reintento solo detalle…');
     try {
       const itemsText = await callGeminiExtract(
-        key,
         modelUsed || models[0],
         file.mimeType,
         base64,
         ITEMS_ONLY_PROMPT,
-        ITEMS_ONLY_SCHEMA
+        ITEMS_ONLY_SCHEMA,
       );
       const itemsPass = parseExtractedPurchaseInvoice(itemsText);
       if (itemsPass.items.length > 0) {
@@ -565,89 +564,32 @@ export async function extractPurchaseInvoiceFromFile(file: {
   return { data: extracted, fromGemini: true, modelUsed };
 }
 
-function geminiErrorMessage(status: number, raw: string, model: string): string {
-  let apiMsg = '';
-  try {
-    const j = JSON.parse(raw) as { error?: { message?: string } };
-    apiMsg = j.error?.message ?? '';
-  } catch {
-    apiMsg = raw.slice(0, 200);
-  }
-
-  if (status === 429 || apiMsg.includes('quota') || apiMsg.includes('Quota')) {
-    return `Cuota de Gemini agotada para el modelo ${model}. Espere unos minutos o configure GEMINI_PROCUREMENT_MODEL=gemini-2.5-flash en .env.local.`;
-  }
-  if (status === 503) {
-    return `El modelo ${model} está saturado. Intente de nuevo en unos segundos.`;
-  }
-  if (status === 401 || status === 403) {
-    return 'Clave GEMINI_API_KEY inválida o sin permisos. Revise .env.local.';
-  }
-  if (status === 404) {
-    return `Modelo ${model} no disponible. Defina GEMINI_PROCUREMENT_MODEL=gemini-2.5-flash.`;
-  }
-  return apiMsg || 'No se pudo analizar el documento con la IA.';
-}
-
 async function callGeminiExtract(
-  key: string,
   model: string,
   mimeType: string,
   base64: string,
   prompt: string = EXTRACTION_PROMPT,
-  schema: object = RESPONSE_SCHEMA
+  schema: object = RESPONSE_SCHEMA,
 ): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-
-  const body = {
-    systemInstruction: {
-      parts: [
-        {
-          text: 'Eres un OCR experto en facturas fiscales venezolanas. Extraes cada fila de la tabla de detalle sin omitir productos.',
-        },
-      ],
-    },
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          { text: prompt },
-          { inline_data: { mime_type: mimeType, data: base64 } },
-        ],
-      },
-    ],
-    generationConfig: {
+  try {
+    return await geminiGenerateWithDocument({
+      model,
+      prompt,
+      mimeType,
+      base64,
+      systemInstruction:
+        'Eres un OCR experto en facturas fiscales venezolanas. Extraes cada fila de la tabla de detalle sin omitir productos.',
       temperature: 0,
       maxOutputTokens: 16384,
-      responseMimeType: 'application/json',
       responseSchema: schema,
-    },
-  };
-
-  const res = await outboundFetch(
-    url,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    'API de Google Gemini'
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error('[extractPurchaseInvoiceGemini]', model, res.status, err.slice(0, 400));
-    const message = geminiErrorMessage(res.status, err, model);
-    const retryable = res.status === 429 || res.status === 503 || res.status === 404;
-    throw Object.assign(new Error(message), { retryable, status: res.status });
+    });
+  } catch (err) {
+    const retryable = (err as { retryable?: boolean }).retryable === true;
+    const status = (err as { status?: number }).status;
+    console.error('[extractPurchaseInvoiceGemini]', model, status, err);
+    throw Object.assign(err instanceof Error ? err : new Error(String(err)), {
+      retryable,
+      status,
+    });
   }
-
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
-  if (!text) {
-    throw Object.assign(new Error('La IA no devolvió datos del documento.'), { retryable: true });
-  }
-  return text;
 }
