@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getTelegramBotToken,
   isChatAllowed,
@@ -17,7 +18,11 @@ import {
   manejarFotoObraTelegram,
   manejarGastoObraTelegram,
 } from '@/lib/telegram/mediaHandlers';
+import { manejarVozBitacoraTelegram } from '@/lib/telegram/bitacoraVoice';
+import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
+
+const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 
 export type TelegramUpdate = {
   message?: {
@@ -25,6 +30,11 @@ export type TelegramUpdate = {
     text?: string;
     chat: { id: number; type: string; username?: string; first_name?: string };
     photo?: Array<{ file_id: string; file_size?: number }>;
+    voice?: {
+      file_id: string;
+      duration?: number;
+      mime_type?: string;
+    };
     document?: {
       file_id: string;
       mime_type?: string;
@@ -62,7 +72,7 @@ async function mensajeEstado(chatId: string, contexto: TelegramContexto, proyect
 }
 
 async function aplicarComando(
-  supabase: ReturnType<typeof telegramSupabaseAdmin>,
+  supabase: SupabaseClient,
   chatId: string,
   cmd: ReturnType<typeof procesarComandoTelegram>,
 ): Promise<void> {
@@ -85,28 +95,77 @@ async function aplicarComando(
   }
 }
 
-export function handleTelegramWebhookGet() {
-  return NextResponse.json({
-    ok: true,
-    bot: Boolean(getTelegramBotToken()),
-    hint: 'Webhook multi-contexto Casa Inteligente (factura, obra, gasto)',
-    path: '/api/telegram',
-  });
+async function avisoErrorTelegram(chatId: string, err: unknown): Promise<void> {
+  const detalle =
+    err instanceof Error ? err.message.slice(0, 300) : 'Error interno del servidor';
+  try {
+    await sendTelegramMessage(
+      chatId,
+      `❌ <b>Error del bot</b>\n<code>${detalle.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>`,
+      { parse_mode: 'HTML' },
+    );
+  } catch {
+    /* sin token o red */
+  }
 }
 
-export async function handleTelegramWebhookPost(req: Request) {
+/** /facturas y /factura: responde siempre por Telegram aunque falle Supabase. */
+async function manejarComandoFacturasDirecto(chatId: string): Promise<{
+  ok: boolean;
+  warn?: string;
+}> {
+  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), {
+    parse_mode: 'HTML',
+  });
+
+  const admin = telegramSupabaseAdmin();
+  if (!admin.ok) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ El servidor no tiene <b>SUPABASE_SERVICE_ROLE_KEY</b> (Vercel → Variables de entorno). ' +
+        'La factura por foto puede fallar hasta configurarlo.',
+      { parse_mode: 'HTML' },
+    );
+    return { ok: true, warn: 'supabase_config' };
+  }
+
+  try {
+    await setTelegramContexto(admin.client, chatId, { contexto: 'factura' });
+  } catch (err) {
+    console.error('[telegram /facturas estado]', err);
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ Recibí el comando pero no pude guardar el estado en BD. ' +
+        'Ejecuta <code>npm run db:apply-lulo-telegram</code> o revisa Supabase.',
+      { parse_mode: 'HTML' },
+    );
+    return { ok: true, warn: 'estado_db' };
+  }
+
+  return { ok: true };
+}
+
+export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramUpdate) {
+  let chatIdParaError: string | null = null;
+
   try {
     if (!getTelegramBotToken()) {
-      return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN no configurado' }, { status: 503 });
+      console.error('[telegram] TELEGRAM_BOT_TOKEN no configurado en el servidor');
+      return NextResponse.json({ ok: true, error: 'TELEGRAM_BOT_TOKEN' });
     }
 
-    const update = (await req.json()) as TelegramUpdate;
+    const update =
+      reqOrUpdate instanceof Request
+        ? ((await reqOrUpdate.json()) as TelegramUpdate)
+        : reqOrUpdate;
     const msg = update.message;
     if (!msg) {
       return NextResponse.json({ ok: true, skipped: 'no_message' });
     }
 
     const chatId = String(msg.chat.id);
+    chatIdParaError = chatId;
+
     if (!isChatAllowed(chatId)) {
       await sendTelegramMessage(
         chatId,
@@ -115,14 +174,35 @@ export async function handleTelegramWebhookPost(req: Request) {
       return NextResponse.json({ ok: true, denied: true });
     }
 
-    const supabase = telegramSupabaseAdmin();
     const label = chatLabel(msg);
     const texto = msg.text?.trim() ?? '';
+
+    if (texto && CMD_FACTURAS.test(texto)) {
+      const r = await manejarComandoFacturasDirecto(chatId);
+      return NextResponse.json({ ok: true, command: 'facturas', warn: r.warn });
+    }
+
+    const admin = telegramSupabaseAdmin();
+    if (!admin.ok) {
+      await sendTelegramMessage(
+        chatId,
+        '⚠️ Servidor sin credenciales Supabase (service role). Contacte al administrador.',
+        { parse_mode: 'HTML' },
+      );
+      return NextResponse.json({ ok: true, error: 'supabase_admin' });
+    }
+
+    const supabase = admin.client;
 
     if (texto) {
       const cmd = procesarComandoTelegram(texto);
       if (cmd.handled) {
-        await aplicarComando(supabase, chatId, cmd);
+        try {
+          await aplicarComando(supabase, chatId, cmd);
+        } catch (err) {
+          console.error('[telegram comando]', err);
+          await avisoErrorTelegram(chatId, err);
+        }
         return NextResponse.json({ ok: true, command: true });
       }
 
@@ -141,13 +221,36 @@ export async function handleTelegramWebhookPost(req: Request) {
       }
     }
 
+    if (msg.voice?.file_id) {
+      const estado = await getTelegramEstado(supabase, chatId);
+      if (estado.contexto === 'esperando_audio_bitacora') {
+        await manejarVozBitacoraTelegram({
+          supabase,
+          chatId,
+          estado,
+          fileId: msg.voice.file_id,
+          durationSec: msg.voice.duration,
+        });
+        return NextResponse.json({ ok: true, bitacora_voz: true });
+      }
+      await sendTelegramMessage(
+        chatId,
+        '🎙️ Para registrar una bitácora por voz, primero usa <code>/bitacora</code> ' +
+          '(con proyecto vinculado vía <code>/obra &lt;uuid&gt;</code>).',
+        { parse_mode: 'HTML' },
+      );
+      return NextResponse.json({ ok: true, hint: 'voice_wrong_context' });
+    }
+
     const fileId = resolveFileId(msg);
     if (!fileId) {
       const estado = await getTelegramEstado(supabase, chatId);
       await sendTelegramMessage(
         chatId,
         `📌 Estás en: <b>${etiquetaContexto(estado.contexto)}</b>\n` +
-          'Envía foto/PDF o usa /ayuda.',
+          (estado.contexto === 'esperando_audio_bitacora'
+            ? 'Envía una <b>nota de voz</b> con el reporte de campo.'
+            : 'Envía foto/PDF, nota de voz (/bitacora) o usa /ayuda.'),
         { parse_mode: 'HTML' },
       );
       return NextResponse.json({ ok: true, hint: 'no_media' });
@@ -194,9 +297,12 @@ export async function handleTelegramWebhookPost(req: Request) {
     return NextResponse.json({ ok: true, contexto: estado.contexto });
   } catch (err: unknown) {
     console.error('[telegram webhook]', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Error webhook' },
-      { status: 500 },
-    );
+    if (chatIdParaError) {
+      await avisoErrorTelegram(chatIdParaError, err);
+    }
+    return NextResponse.json({
+      ok: true,
+      error: err instanceof Error ? err.message : 'Error webhook',
+    });
   }
 }

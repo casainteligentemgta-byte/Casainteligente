@@ -8,9 +8,11 @@ import type { TelegramEstado } from '@/lib/telegram/estados';
 import { setTelegramContexto } from '@/lib/telegram/estados';
 import {
   downloadTelegramFile,
+  enviarMensajeTelegram,
   mimeFromTelegramPath,
   sendTelegramMessage,
 } from '@/lib/telegram/botApi';
+import { subirArchivoStorageTelegram } from '@/lib/telegram/storageUpload';
 
 const PROYECTO_MEDIA_BUCKET = 'ci-proyectos-media';
 
@@ -51,7 +53,6 @@ export async function manejarFacturaTelegram(params: {
     pending_factura_id: pending.id,
   });
 
-  await sendTelegramMessage(params.chatId, '⏳ Procesando factura con Gemini…');
   await processTelegramInvoicePhoto({
     pendingId: pending.id,
     chatId: params.chatId,
@@ -80,14 +81,14 @@ export async function manejarFotoObraTelegram(params: {
   const ext = filePath.split('.').pop() ?? 'jpg';
   const storagePath = `telegram/${proyectoId}/${Date.now()}.${ext}`;
 
-  const { error: upErr } = await params.supabase.storage
-    .from(PROYECTO_MEDIA_BUCKET)
-    .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
-
-  if (upErr) {
-    await sendTelegramMessage(params.chatId, `❌ Storage obra: ${upErr.message}`);
-    return;
-  }
+  await subirArchivoStorageTelegram({
+    supabase: params.supabase,
+    chatId: params.chatId,
+    bucketName: PROYECTO_MEDIA_BUCKET,
+    fileName: storagePath,
+    buffer,
+    contentType: mimeType,
+  });
 
   const fotos = Array.isArray(params.estado.metadata.fotos_obra)
     ? [...(params.estado.metadata.fotos_obra as string[])]
@@ -177,21 +178,21 @@ export async function manejarGastoObraTelegram(params: {
     return;
   }
 
-  await sendTelegramMessage(params.chatId, '⏳ Analizando comprobante con Gemini…');
-
   const { buffer, filePath } = await downloadTelegramFile(params.fileId);
   const mimeType = mimeFromTelegramPath(filePath);
   const ext = filePath.split('.').pop() ?? 'jpg';
   const storagePath = `telegram-gastos/${proyectoId}/${Date.now()}.${ext}`;
 
-  const { error: upErr } = await params.supabase.storage
-    .from(PROCUREMENT_DOCUMENTS_BUCKET)
-    .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
+  await subirArchivoStorageTelegram({
+    supabase: params.supabase,
+    chatId: params.chatId,
+    bucketName: PROCUREMENT_DOCUMENTS_BUCKET,
+    fileName: storagePath,
+    buffer,
+    contentType: mimeType,
+  });
 
-  if (upErr) {
-    await sendTelegramMessage(params.chatId, `❌ Storage gasto: ${upErr.message}`);
-    return;
-  }
+  await enviarMensajeTelegram(params.chatId, '⏳ Analizando comprobante con Gemini…');
 
   const extraido =
     (await extraerGastoConGemini(

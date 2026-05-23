@@ -10,8 +10,8 @@ import {
 } from '@/lib/contabilidad/syncDocumentoCompraRecepcion';
 
 export type LineaCompraContabilidadInput = {
-  purchase_detail_id: string;
-  material_id: string;
+  purchase_detail_id?: string | null;
+  material_id?: string | null;
   descripcion: string;
   item_code?: string | null;
   unidad: string;
@@ -34,6 +34,8 @@ export type RegistrarCompraContabilidadInput = {
   document_storage_path?: string | null;
   document_file_name?: string | null;
   lineas: LineaCompraContabilidadInput[];
+  /** Por defecto RECEPCION_MERCANCIA; use TELEGRAM al confirmar desde el bot. */
+  origen?: string;
 };
 
 export async function registerCompraDesdeRecepcion(
@@ -86,7 +88,7 @@ export async function registerCompraDesdeRecepcion(
       supplier_name: input.supplier_name,
       fecha: input.fecha,
       ...bimonetario,
-      origen: 'RECEPCION_MERCANCIA',
+      origen: (input.origen ?? 'RECEPCION_MERCANCIA').trim() || 'RECEPCION_MERCANCIA',
       estado: 'REGISTRADA',
       document_storage_path: doc.storagePath,
       document_file_name: doc.fileName,
@@ -102,8 +104,8 @@ export async function registerCompraDesdeRecepcion(
 
   const lineRows = input.lineas.map((l) => ({
     compra_id: compra.id,
-    purchase_detail_id: l.purchase_detail_id,
-    material_id: l.material_id,
+    purchase_detail_id: l.purchase_detail_id?.trim() || null,
+    material_id: l.material_id?.trim() || null,
     descripcion: l.descripcion,
     item_code: l.item_code?.trim() || null,
     unidad: l.unidad || 'UND',

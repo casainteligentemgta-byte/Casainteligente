@@ -1,6 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
+import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
+
+/** Evita que Next.js cachee respuestas vacías de PostgREST (p. ej. facturas canal). */
+function adminFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return supabaseFetch(input, { ...init, cache: 'no-store' });
+}
 
 /** Cliente Supabase con service role (solo rutas servidor; nunca en el bundle del cliente). */
 export function supabaseAdminForRoute():
@@ -38,6 +44,7 @@ export function supabaseAdminForRoute():
     ok: true,
     client: createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: adminFetch },
     }),
   };
 }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProcurementDocument } from '@/lib/almacen/procurementDocumentStorage';
+import { prepareInvoiceDocument } from '@/lib/almacen/cropInvoiceImage';
 import {
     registerCompraDesdeRecepcion,
     type LineaCompraContabilidadInput,
@@ -123,6 +124,8 @@ export default function ProcurementClient() {
     const [aiSuccess, setAiSuccess] = useState<string | null>(null);
     const [sourceDocument, setSourceDocument] = useState<File | null>(null);
     const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null);
+    const [preparingDocument, setPreparingDocument] = useState(false);
+    const [documentRecortado, setDocumentRecortado] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [proyectoId, setProyectoId] = useState('');
@@ -256,18 +259,34 @@ export default function ProcurementClient() {
         }
     }, [proyectoId]);
 
-    const attachSourceDocument = (file: File | null) => {
+    const applySourceDocumentPreview = (file: File | null, recortado = false) => {
         if (documentPreviewRef.current) {
             URL.revokeObjectURL(documentPreviewRef.current);
             documentPreviewRef.current = null;
         }
         setSourceDocument(file);
+        setDocumentRecortado(recortado);
         if (file && file.type.startsWith('image/')) {
             const url = URL.createObjectURL(file);
             documentPreviewRef.current = url;
             setDocumentPreviewUrl(url);
         } else {
             setDocumentPreviewUrl(null);
+        }
+    };
+
+    const attachSourceDocument = async (raw: File | null): Promise<File | null> => {
+        if (!raw) {
+            applySourceDocumentPreview(null);
+            return null;
+        }
+        setPreparingDocument(true);
+        try {
+            const prepared = await prepareInvoiceDocument(raw);
+            applySourceDocumentPreview(prepared, prepared !== raw);
+            return prepared;
+        } finally {
+            setPreparingDocument(false);
         }
     };
 
@@ -515,6 +534,8 @@ export default function ProcurementClient() {
                 });
             }
 
+            const fromTelegram = searchParams.get('fromTelegram');
+
             await registerCompraDesdeRecepcion(supabase, {
                 purchase_invoice_id: invData.id,
                 proyecto_id: proyectoId,
@@ -529,9 +550,8 @@ export default function ProcurementClient() {
                 document_storage_path: documentStoragePath,
                 document_file_name: documentFileName,
                 lineas: lineasContabilidad,
+                origen: fromTelegram ? 'TELEGRAM' : 'RECEPCION_MERCANCIA',
             });
-
-            const fromTelegram = searchParams.get('fromTelegram');
             if (fromTelegram) {
                 try {
                     await fetch(`/api/facturas-canal/pendientes/${fromTelegram}`, {
@@ -557,8 +577,9 @@ export default function ProcurementClient() {
         }
     };
 
-    const processInvoiceWithAI = async (file: File) => {
-        attachSourceDocument(file);
+    const processInvoiceWithAI = async (raw: File) => {
+        const file = await attachSourceDocument(raw);
+        if (!file) return;
 
         setIsUploading(true);
         setAiError(null);
@@ -714,7 +735,7 @@ export default function ProcurementClient() {
                     <ProcPanel className="p-12 text-center border-dashed border-2 border-zinc-700 bg-zinc-900/20">
                         <div className="flex flex-col items-center">
                             <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mb-6">
-                                {isUploading ? (
+                                {isUploading || preparingDocument ? (
                                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
                                 ) : (
                                     <Upload className="text-blue-500" size={36} />
@@ -722,13 +743,14 @@ export default function ProcurementClient() {
                             </div>
                             <h2 className="text-2xl font-black mb-2">Sube tu Factura</h2>
                             <p className="text-zinc-500 font-bold mb-8 max-w-sm">
-                                Tome una foto con la cámara o elija un PDF desde su dispositivo.
+                                Tome una foto con la cámara, elija una imagen de la fototeca del celular
+                                o cargue un PDF/archivo. Las fotos se recortan automáticamente (solo la factura).
                                 La IA leerá proveedor, artículos, cantidades y precios.
                             </p>
                             <ProcurementDocumentAttach
                                 variant="primary"
-                                loading={isUploading}
-                                onSelect={processInvoiceWithAI}
+                                loading={isUploading || preparingDocument}
+                                onSelect={(f) => void processInvoiceWithAI(f)}
                             />
                             {aiError ? (
                                 <div className="mt-6 flex items-start gap-2 text-red-400 text-sm font-bold max-w-md text-left">
@@ -749,15 +771,21 @@ export default function ProcurementClient() {
                                 Archivo de factura o presupuesto
                             </h3>
                             <p className="text-zinc-600 text-xs font-bold mb-4">
-                                Tome una foto con la cámara o adjunte PDF/imagen. Se guardará al
-                                finalizar la captura.
+                                Tome una foto, elija de la fototeca del celular o adjunte PDF/imagen desde
+                                archivos. Al guardar, se recorta automáticamente dejando solo la factura.
                             </p>
                             <ProcurementDocumentAttach
                                 variant="secondary"
-                                onSelect={attachSourceDocument}
+                                loading={preparingDocument}
+                                onSelect={(f) => void attachSourceDocument(f)}
                             />
                             {sourceDocument ? (
                                 <div className="mt-4 p-4 bg-black/40 rounded-xl border border-zinc-800">
+                                    {documentRecortado ? (
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-400/90 mb-2">
+                                            Recorte automático: solo la factura (sin fondo)
+                                        </p>
+                                    ) : null}
                                     <p className="text-sm font-bold text-zinc-300 truncate">
                                         {sourceDocument.name}
                                     </p>

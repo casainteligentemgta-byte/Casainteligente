@@ -45,14 +45,48 @@ export async function sendTelegramMessage(
   text: string,
   extra?: { parse_mode?: 'HTML' | 'Markdown'; reply_markup?: unknown },
 ): Promise<void> {
-  await telegramApi('sendMessage', {
+  await sendTelegramMessageWithId(chatId, text, extra);
+}
+
+/** Envía mensaje y devuelve message_id (para editar progreso después). */
+export async function sendTelegramMessageWithId(
+  chatId: string | number,
+  text: string,
+  extra?: { parse_mode?: 'HTML' | 'Markdown'; reply_markup?: unknown },
+): Promise<number> {
+  const result = await telegramApi<{ message_id: number }>('sendMessage', {
     chat_id: chatId,
     text,
     parse_mode: extra?.parse_mode ?? 'HTML',
     disable_web_page_preview: false,
     ...extra,
   });
+  return result.message_id;
 }
+
+export async function editTelegramMessage(
+  chatId: string | number,
+  messageId: number,
+  text: string,
+  extra?: { parse_mode?: 'HTML' | 'Markdown' },
+): Promise<void> {
+  try {
+    await telegramApi('editMessageText', {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: extra?.parse_mode ?? 'HTML',
+      disable_web_page_preview: false,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/message is not modified/i.test(msg)) return;
+    throw err;
+  }
+}
+
+/** Alias en español (mismo comportamiento que sendTelegramMessage). */
+export const enviarMensajeTelegram = sendTelegramMessage;
 
 export type TelegramFile = {
   file_id: string;
@@ -81,5 +115,9 @@ export function mimeFromTelegramPath(filePath: string): string {
   if (ext === 'png') return 'image/png';
   if (ext === 'webp') return 'image/webp';
   if (ext === 'gif') return 'image/gif';
+  if (ext === 'ogg' || ext === 'oga') return 'audio/ogg';
+  if (ext === 'mp3') return 'audio/mpeg';
+  if (ext === 'm4a') return 'audio/mp4';
+  if (ext === 'wav') return 'audio/wav';
   return 'image/jpeg';
 }

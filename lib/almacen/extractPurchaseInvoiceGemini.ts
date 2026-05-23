@@ -494,8 +494,7 @@ export async function extractPurchaseInvoiceFromFile(file: {
     throw new Error('El archivo supera el límite de 12 MB.');
   }
 
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) {
+  if (!process.env.GEMINI_API_KEY?.trim()) {
     throw new Error(
       'GEMINI_API_KEY no está configurada. Añádala en .env.local para usar el modo IA.'
     );
@@ -509,7 +508,7 @@ export async function extractPurchaseInvoiceFromFile(file: {
 
   for (const model of models) {
     try {
-      text = await callGeminiExtract(key, model, file.mimeType, base64);
+      text = await callGeminiExtract(model, file.mimeType, base64);
       modelUsed = model;
       console.info('[extractPurchaseInvoiceGemini] OK con modelo', model);
       break;

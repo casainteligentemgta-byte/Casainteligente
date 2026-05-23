@@ -44,7 +44,10 @@ async function main() {
     process.exit(1);
   }
 
-  const webhookUrl = `${base}/api/telegram`;
+  // En producción desplegada hoy existe /api/webhooks/telegram; /api/telegram puede dar 404 hasta el próximo deploy.
+  const webhookPath =
+    process.env.TELEGRAM_WEBHOOK_PATH?.trim() || '/api/webhooks/telegram';
+  const webhookUrl = `${base}${webhookPath.startsWith('/') ? webhookPath : `/${webhookPath}`}`;
   const api = `https://api.telegram.org/bot${token}/setWebhook`;
 
   const res = await fetch(api, {
@@ -65,8 +68,36 @@ async function main() {
     process.exit(1);
   }
 
+  const cmds = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      commands: [
+        { command: 'facturas', description: 'Listo para recibir factura (foto/PDF)' },
+        { command: 'factura', description: 'Igual que /facturas' },
+        { command: 'stock', description: 'Consultar inventario por material' },
+        { command: 'obra', description: 'Vincular proyecto y subir fotos' },
+        { command: 'bitacora', description: 'Bitácora por nota de voz' },
+        { command: 'ayuda', description: 'Ver comandos' },
+        { command: 'estado', description: 'Modo activo' },
+        { command: 'cancelar', description: 'Volver al menú' },
+      ],
+    }),
+  });
+  console.log('setMyCommands:', JSON.stringify(await cmds.json(), null, 2));
+
   const info = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
-  console.log('\nEstado:', JSON.stringify(await info.json(), null, 2));
+  const infoJson = await info.json();
+  console.log('\nEstado:', JSON.stringify(infoJson, null, 2));
+
+  const lastErr = infoJson.result?.last_error_message;
+  if (lastErr) {
+    console.warn(
+      '\n⚠️ Telegram reporta error en el webhook:',
+      lastErr,
+      '\n   En Vercel configure TELEGRAM_BOT_TOKEN y SUPABASE_SERVICE_ROLE_KEY y vuelva a desplegar.',
+    );
+  }
 }
 
 main().catch((e) => {

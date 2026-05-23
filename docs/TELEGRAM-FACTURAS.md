@@ -21,11 +21,36 @@ Si `TELEGRAM_ALLOWED_CHAT_IDS` está vacío, se aceptan todos los chats (solo pa
 
 ## Configurar webhook
 
-En BotFather o con curl:
+En producción use **`/api/webhooks/telegram`** (el path `/api/telegram` puede dar 404 hasta el próximo deploy):
 
-```text
-https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://casainteligente.company/api/telegram
+```bash
+npm run telegram:webhook
 ```
+
+Por defecto registra: `https://casainteligente.company/api/webhooks/telegram`
+
+Requiere en **Vercel → Environment Variables**: `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+### Desarrollo local (mensajes atascados)
+
+```bash
+npm run telegram:replay-local
+```
+
+Reprocesa la cola de Telegram contra `http://127.0.0.1:3000/api/telegram`.
+
+### Reprocesar facturas en error (tras fix Gemini)
+
+```bash
+# Con npm run dev activo:
+curl -X POST http://127.0.0.1:3000/api/facturas-canal/reprocess
+```
+
+## Si la web no muestra facturas (lista vacía)
+
+1. **RLS:** la pantalla `/contabilidad/compras/canal` debe leer `ci_facturas_canal_pendientes`. Si solo existen políticas `anon` y entras con sesión Supabase Auth, la lista sale vacía. Aplica migración **`161_ci_facturas_canal_rls_authenticated.sql`** (incluida en `npm run db:apply-lulo-telegram`) o usa el código actualizado que consulta con **service role** en `/api/facturas-canal/pendientes`.
+2. En el bot, envía **`/factura`** antes de la foto (si no, el contexto queda en menú y no procesa la imagen).
+3. Vista **Por factura** (no solo «Por línea»): las facturas en `pendiente` / `procesando` aún no tienen líneas hasta que Gemini termine (`extraido`).
 
 ## Uso (multi-contexto)
 

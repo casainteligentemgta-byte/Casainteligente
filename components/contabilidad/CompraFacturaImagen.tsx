@@ -8,24 +8,34 @@ type Props = {
   /** Si false, muestra aviso de recepción sin foto guardada. */
   tieneDocumento?: boolean;
   esRecepcion?: boolean;
+  /** Ruta API alternativa (p. ej. factura pendiente Telegram). */
+  documentApiPath?: string;
+  /** Solo carga y muestra cuando es true (p. ej. tras pulsar el título). */
+  expanded?: boolean;
 };
 
 export default function CompraFacturaImagen({
   compraId,
   tieneDocumento = true,
   esRecepcion = false,
+  documentApiPath,
+  expanded = true,
 }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const endpoint =
+    documentApiPath?.trim() ||
+    `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`;
 
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
     setUrl(null);
     try {
-      const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`);
+      const res = await fetch(endpoint);
       const data = (await res.json()) as {
         url?: string;
         mimeType?: string | null;
@@ -47,15 +57,17 @@ export default function CompraFacturaImagen({
     } finally {
       setLoading(false);
     }
-  }, [compraId]);
+  }, [endpoint]);
 
   useEffect(() => {
-    if (!tieneDocumento || !compraId.trim()) {
-      setLoading(false);
+    if (!expanded || !tieneDocumento || !compraId.trim()) {
+      if (!expanded) setLoading(false);
       return;
     }
     void cargar();
-  }, [cargar, compraId, tieneDocumento]);
+  }, [cargar, compraId, tieneDocumento, expanded]);
+
+  if (!expanded) return null;
 
   if (!tieneDocumento) {
     if (!esRecepcion) return null;
@@ -63,27 +75,25 @@ export default function CompraFacturaImagen({
       <div
         style={{
           marginTop: '10px',
-          padding: '10px 12px',
-          borderRadius: '12px',
-          border: '1px solid rgba(255,255,255,0.1)',
-          background: 'rgba(0,0,0,0.25)',
-          fontSize: '11px',
-          color: 'rgba(255,255,255,0.45)',
-          lineHeight: 1.4,
-        }}
-      >
-        <strong style={{ color: '#a5a3ff' }}>FACTURA IMAGEN</strong>
-        <p style={{ margin: '6px 0 0' }}>
-          Recepción de mercancía sin foto en Storage. Al finalizar la captura debe adjuntarse la
-          imagen (Tomar foto / PDF) antes de pulsar FINALIZAR.
-        </p>
-      </div>
+            padding: '10px 12px',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(0,0,0,0.25)',
+            fontSize: '11px',
+            color: 'rgba(255,255,255,0.45)',
+            lineHeight: 1.4,
+          }}
+        >
+          <strong style={{ color: '#a5a3ff' }}>FACTURA IMAGEN</strong>
+          <p style={{ margin: '6px 0 0' }}>
+            Recepción de mercancía sin foto en Storage. Al finalizar la captura adjunte la imagen
+            (cámara, fototeca del celular o archivos/PDF) antes de pulsar FINALIZAR.
+          </p>
+        </div>
     );
   }
 
-  const esImagen =
-    mimeType?.startsWith('image/') ||
-    (!mimeType && url != null);
+  const esImagen = mimeType?.startsWith('image/') || (!mimeType && url != null);
 
   return (
     <div

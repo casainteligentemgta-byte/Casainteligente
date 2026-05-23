@@ -65,7 +65,10 @@ async function deleteContabilidadCompraRow(
  * Elimina la compra contable y la recepción asociada (factura, cuarentena, materiales en cuarentena).
  * No permite borrar si algún ítem ya fue aprobado e ingresó a stock disponible.
  */
-async function deleteCompraPorId(supabase: SupabaseClient, compraId: string): Promise<void> {
+async function deleteCompraPorId(
+  supabase: SupabaseClient,
+  compraId: string,
+): Promise<{ materialYaEnStock: boolean }> {
   const { data: compra, error: compraErr } = await supabase
     .from('contabilidad_compras')
     .select('id, purchase_invoice_id, invoice_number')
@@ -79,7 +82,7 @@ async function deleteCompraPorId(supabase: SupabaseClient, compraId: string): Pr
   const invoiceId = compra.purchase_invoice_id;
   if (!invoiceId) {
     await deleteContabilidadCompraRow(supabase, compraId);
-    return;
+    return { materialYaEnStock: false };
   }
 
   const { data: inspections, error: inspErr } = await supabase
@@ -90,11 +93,7 @@ async function deleteCompraPorId(supabase: SupabaseClient, compraId: string): Pr
   if (inspErr) throw inspErr;
 
   const aprobados = (inspections ?? []).filter((i) => i.status === 'APROBADO');
-  if (aprobados.length > 0) {
-    throw new Error(
-      'No se puede borrar: hay material que ya fue aprobado e ingresó al stock. Revierta en cuarentena si fue un error.',
-    );
-  }
+  const materialYaEnStock = aprobados.length > 0;
 
   const { data: invoice, error: invErr } = await supabase
     .from('purchase_invoices')
@@ -104,7 +103,7 @@ async function deleteCompraPorId(supabase: SupabaseClient, compraId: string): Pr
 
   if (invErr || !invoice) {
     await deleteContabilidadCompraRow(supabase, compraId);
-    return;
+    return { materialYaEnStock };
   }
 
   const materialIds = Array.from(
@@ -125,7 +124,7 @@ async function deleteCompraPorId(supabase: SupabaseClient, compraId: string): Pr
     .eq('invoice_id', invoiceId);
   if (delDetailsErr) throw delDetailsErr;
 
-  if (materialIds.length > 0) {
+  if (!materialYaEnStock && materialIds.length > 0) {
     const { error: delMatErr } = await supabase
       .from('global_inventory')
       .delete()
@@ -151,6 +150,8 @@ async function deleteCompraPorId(supabase: SupabaseClient, compraId: string): Pr
       console.warn('[deleteCompra] no se pudo borrar archivo en storage:', storageErr.message);
     }
   }
+
+  return { materialYaEnStock };
 }
 
 /** Busca todas las compras con el mismo número de factura (duplicados en contabilidad). */
@@ -182,14 +183,17 @@ async function listarComprasMismaFactura(
 export type DeleteCompraResult = {
   deletedIds: string[];
   duplicateCount: number;
+  /** Alguna compra tenía material ya aprobado en inventario (no se borró el ítem de stock). */
+  materialPermaneceEnStock?: boolean;
 };
 
 /**
- * Elimina la compra indicada y cualquier duplicado con el mismo número de factura.
+ * Elimina la compra indicada. Por defecto solo esa fila; opcionalmente duplicados mismo nº factura.
  */
 export async function deleteCompraRegistro(
   supabase: SupabaseClient,
   compraId: string,
+  options?: { incluirDuplicadosMismaFactura?: boolean },
 ): Promise<DeleteCompraResult> {
   const { data: seed, error: seedErr } = await supabase
     .from('contabilidad_compras')
@@ -200,27 +204,28 @@ export async function deleteCompraRegistro(
   if (seedErr) throw seedErr;
   if (!seed) throw new Error('Compra no encontrada.');
 
-  const duplicados = await listarComprasMismaFactura(
-    supabase,
-    seed.invoice_number,
-    seed.supplier_rif,
-  );
+  let uniqueIds = [compraId];
 
-  const ids =
-    duplicados.length > 0
-      ? duplicados.map((d) => d.id)
-      : [compraId];
-
-  const uniqueIds = Array.from(new Set(ids));
+  if (options?.incluirDuplicadosMismaFactura) {
+    const duplicados = await listarComprasMismaFactura(
+      supabase,
+      seed.invoice_number,
+      seed.supplier_rif,
+    );
+    uniqueIds = Array.from(new Set(duplicados.map((d) => d.id)));
+  }
   const deletedIds: string[] = [];
+  let materialPermaneceEnStock = false;
 
   for (const id of uniqueIds) {
-    await deleteCompraPorId(supabase, id);
+    const r = await deleteCompraPorId(supabase, id);
+    if (r.materialYaEnStock) materialPermaneceEnStock = true;
     deletedIds.push(id);
   }
 
   return {
     deletedIds,
     duplicateCount: uniqueIds.length,
+    materialPermaneceEnStock: materialPermaneceEnStock || undefined,
   };
 }

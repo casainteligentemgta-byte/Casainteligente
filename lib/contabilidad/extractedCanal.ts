@@ -1,0 +1,132 @@
+export type ExtractedCanalItem = {
+  description?: string;
+  item_code?: string;
+  unit?: string;
+  quantity?: number;
+  unit_price?: number;
+};
+
+export type ExtractedCanalHeader = {
+  invoice_number?: string;
+  supplier_name?: string;
+  supplier_rif?: string;
+  date?: string;
+  total_amount?: number | null;
+  items?: ExtractedCanalItem[];
+  modelUsed?: string;
+  fromGemini?: boolean;
+};
+
+export type LineaFacturaCanalForm = {
+  description: string;
+  item_code: string;
+  quantity: string;
+  unit_price: string;
+};
+
+export type FacturaCanalForm = {
+  invoice_number: string;
+  supplier_name: string;
+  supplier_rif: string;
+  date: string;
+  total_amount: string;
+  items: LineaFacturaCanalForm[];
+};
+
+export function formDesdeExtracted(ex: ExtractedCanalHeader | null): FacturaCanalForm {
+  const items = (ex?.items ?? []).map((it) => ({
+    description: String(it.description ?? '').trim(),
+    item_code: String(it.item_code ?? '').trim(),
+    quantity: String(it.quantity ?? 1),
+    unit_price: String(it.unit_price ?? 0),
+  }));
+  return {
+    invoice_number: String(ex?.invoice_number ?? '').trim(),
+    supplier_name: String(ex?.supplier_name ?? '').trim(),
+    supplier_rif: String(ex?.supplier_rif ?? '').trim(),
+    date: (ex?.date ?? '').slice(0, 10),
+    total_amount:
+      ex?.total_amount != null && Number.isFinite(Number(ex.total_amount))
+        ? String(ex.total_amount)
+        : '',
+    items: items.length ? items : [lineaVacia()],
+  };
+}
+
+export function lineaVacia(): LineaFacturaCanalForm {
+  return { description: '', item_code: '', quantity: '1', unit_price: '0' };
+}
+
+export function extractedDesdeForm(
+  form: FacturaCanalForm,
+  prev: ExtractedCanalHeader | null,
+): ExtractedCanalHeader {
+  const items = form.items
+    .filter((l) => l.description.trim())
+    .map((l) => ({
+      description: l.description.trim(),
+      item_code: l.item_code.trim() || undefined,
+      unit: 'UND',
+      quantity: Math.max(0, Number(l.quantity) || 0),
+      unit_price: Math.max(0, Number(l.unit_price) || 0),
+    }));
+
+  const sumLineas = items.reduce((s, it) => s + (it.quantity ?? 0) * (it.unit_price ?? 0), 0);
+  const totalManual = parseMonto(form.total_amount);
+  const total_amount = totalManual != null ? totalManual : sumLineas;
+
+  return {
+    ...prev,
+    invoice_number: form.invoice_number.trim() || undefined,
+    supplier_name: form.supplier_name.trim() || undefined,
+    supplier_rif: form.supplier_rif.trim() || undefined,
+    date: form.date.trim().slice(0, 10) || undefined,
+    total_amount,
+    items,
+  };
+}
+
+function parseMonto(s: string): number | null {
+  const n = Number(String(s).replace(',', '.').trim());
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Arma `extracted` editable desde una fila unificada de compras (Telegram). */
+export function extractedDesdeCompraLista(c: {
+  invoice_number: string;
+  supplier_name: string;
+  supplier_rif: string;
+  fecha: string;
+  total_amount: number;
+  contabilidad_compra_lineas?: Array<{
+    descripcion: string;
+    item_code: string | null;
+    cantidad: number;
+    precio_unitario?: number;
+    subtotal: number;
+  }>;
+}): ExtractedCanalHeader {
+  const lineas = c.contabilidad_compra_lineas ?? [];
+  return {
+    invoice_number: c.invoice_number,
+    supplier_name: c.supplier_name,
+    supplier_rif: c.supplier_rif,
+    date: (c.fecha ?? '').slice(0, 10),
+    total_amount: c.total_amount,
+    items: lineas.map((l) => {
+      const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : 0;
+      const precio =
+        l.precio_unitario != null && l.precio_unitario >= 0
+          ? l.precio_unitario
+          : cantidad > 0
+            ? Number(l.subtotal) / cantidad
+            : 0;
+      return {
+        description: l.descripcion,
+        item_code: l.item_code ?? undefined,
+        quantity: cantidad,
+        unit_price: precio,
+      };
+    }),
+  };
+}

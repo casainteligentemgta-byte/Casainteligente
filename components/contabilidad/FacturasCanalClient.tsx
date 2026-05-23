@@ -11,8 +11,19 @@ import {
   ExternalLink,
   RefreshCw,
   Filter,
+  Pencil,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
+import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
+import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import {
+  actualizarPendienteCanal,
+  eliminarPendienteCanal,
+  listarPendientesCanal,
+  type PendienteCanal,
+} from '@/lib/contabilidad/facturaCanalApi';
 import {
   aplanarFacturasCanal,
   filtrarFilasFacturaCanal,
@@ -21,29 +32,42 @@ import {
   type FiltrosFacturaCanal,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 
-type Pendiente = {
-  id: string;
-  canal: string;
-  chat_id: string;
-  chat_label: string | null;
-  estado: string;
-  document_file_name: string | null;
-  extracted: {
-    invoice_number?: string;
-    supplier_name?: string;
-    supplier_rif?: string;
-    date?: string;
-    total_amount?: number | null;
-    items?: Array<{
-      description?: string;
-      item_code?: string;
-      quantity?: number;
-      unit_price?: number;
-    }>;
-  } | null;
-  mensaje_error: string | null;
-  created_at: string;
+type Pendiente = PendienteCanal;
+
+type EstadoCanalTelegram = {
+  totalPendientes: number;
+  supabaseOk: boolean;
+  telegramToken: boolean;
+  webhookUrl: string | null;
+  webhookEsperado: string;
+  webhookOk: boolean;
+  webhookPending: number;
+  webhookError: string | null;
 };
+
+const TITULO_PANEL = 'Cargas de facturas (Telegram)';
+
+async function copiarAlPortapapeles(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
@@ -54,7 +78,7 @@ export default function FacturasCanalClient() {
   const highlightId = searchParams.get('pendiente');
   const [loading, setLoading] = useState(true);
   const [pendientes, setPendientes] = useState<Pendiente[]>([]);
-  const [vista, setVista] = useState<'facturas' | 'lineas'>('lineas');
+  const [vista, setVista] = useState<'facturas' | 'lineas'>('facturas');
 
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
@@ -67,6 +91,9 @@ export default function FacturasCanalClient() {
   const [montoMaxBs, setMontoMaxBs] = useState('');
   const [montoMinUsd, setMontoMinUsd] = useState('');
   const [montoMaxUsd, setMontoMaxUsd] = useState('');
+  const [editando, setEditando] = useState<Pendiente | null>(null);
+  const [estadoCanal, setEstadoCanal] = useState<EstadoCanalTelegram | null>(null);
+  const [linkCopiadoId, setLinkCopiadoId] = useState<string | null>(null);
 
   const filtros: FiltrosFacturaCanal = useMemo(
     () => ({
@@ -104,11 +131,6 @@ export default function FacturasCanalClient() {
   );
   const idsVisibles = useMemo(() => pendienteIdsDesdeFilas(filasFiltradas), [filasFiltradas]);
 
-  const pendientesFiltrados = useMemo(
-    () => pendientes.filter((p) => idsVisibles.has(p.id)),
-    [pendientes, idsVisibles],
-  );
-
   const hayFiltrosActivos = useMemo(
     () =>
       Boolean(
@@ -139,13 +161,29 @@ export default function FacturasCanalClient() {
     ],
   );
 
+  const pendientesFiltrados = useMemo(() => {
+    if (vista === 'facturas' && !hayFiltrosActivos) {
+      return pendientes;
+    }
+    if (filasFiltradas.length === 0 && !hayFiltrosActivos) {
+      return pendientes;
+    }
+    return pendientes.filter((p) => idsVisibles.has(p.id));
+  }, [pendientes, idsVisibles, vista, hayFiltrosActivos, filasFiltradas.length]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/facturas-canal/pendientes');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setPendientes(data.pendientes ?? []);
+      const [lista, estadoRes] = await Promise.all([
+        listarPendientesCanal('panel_canal'),
+        fetch('/api/facturas-canal/estado', { cache: 'no-store' }),
+      ]);
+      setPendientes(lista);
+      if (estadoRes.ok) {
+        setEstadoCanal((await estadoRes.json()) as EstadoCanalTelegram);
+      } else {
+        setEstadoCanal(null);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al cargar');
     } finally {
@@ -156,6 +194,14 @@ export default function FacturasCanalClient() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!highlightId || loading) return;
+    const p = pendientes.find((x) => x.id === highlightId);
+    if (p && ['extraido', 'error'].includes(p.estado)) {
+      router.replace(`/contabilidad/compras/telegram/${highlightId}`);
+    }
+  }, [highlightId, loading, pendientes, router]);
 
   const limpiarFiltros = () => {
     setFechaDesde('');
@@ -171,42 +217,82 @@ export default function FacturasCanalClient() {
     setMontoMaxUsd('');
   };
 
-  const abrirEnRecepcion = (p: Pendiente) => {
-    if (p.estado !== 'extraido' || !p.extracted) {
-      toast.error('La factura aún no está lista o falló la extracción');
+  const irRegistrarCompra = (p: Pendiente) => {
+    if (!['extraido', 'error'].includes(p.estado)) {
+      toast.error('La factura aún no está lista');
       return;
     }
-    sessionStorage.setItem(
-      'telegram_pending_invoice',
-      JSON.stringify({ pendingId: p.id, extracted: p.extracted }),
-    );
-    router.push(`/almacen/procurement?fromTelegram=${p.id}`);
+    router.push(`/contabilidad/compras/telegram/${p.id}`);
   };
 
-  const rechazar = async (id: string) => {
-    if (!window.confirm('¿Rechazar esta factura pendiente?')) return;
-    const res = await fetch(`/api/facturas-canal/pendientes/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ estado: 'rechazado' }),
-    });
-    if (!res.ok) {
-      toast.error('No se pudo rechazar');
+  const copiarLinkRegistro = async (pendienteId: string) => {
+    const base =
+      typeof window !== 'undefined' ? window.location.origin : undefined;
+    const url = linkConfirmarCompraTelegram(pendienteId, base);
+    const ok = await copiarAlPortapapeles(url);
+    if (!ok) {
+      toast.error('No se pudo copiar el enlace');
       return;
     }
-    setPendientes((prev) => prev.filter((p) => p.id !== id));
-    toast.success('Rechazada');
+    setLinkCopiadoId(pendienteId);
+    toast.success('Enlace copiado');
+    window.setTimeout(() => {
+      setLinkCopiadoId((prev) => (prev === pendienteId ? null : prev));
+    }, 2000);
   };
 
-  const borrar = async (id: string) => {
-    if (!window.confirm('¿Eliminar registro?')) return;
-    const res = await fetch(`/api/facturas-canal/pendientes/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      toast.error('No se pudo borrar');
-      return;
+  const rechazar = async (facturaId: string) => {
+    if (!window.confirm('¿Rechazar esta factura? No se registrará en compras.')) return;
+    try {
+      await actualizarPendienteCanal(facturaId, { estado: 'rechazado' });
+      setPendientes((prev) => prev.filter((x) => x.id !== facturaId));
+      toast.success('Rechazada');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo rechazar');
     }
-    setPendientes((prev) => prev.filter((p) => p.id !== id));
   };
+
+  const borrar = async (facturaId: string, estado?: string) => {
+    const vinculadaContabilidad =
+      estado === 'confirmado' || estado === 'rechazado';
+    const aviso = vinculadaContabilidad
+      ? '¿Eliminar esta factura del canal y quitarla del listado de compras?\n\nSi el material ya ingresó al inventario, permanecerá en stock (solo se borra el registro de la factura).'
+      : '¿Eliminar esta factura del canal? Se perderá la imagen y los datos extraídos.';
+    if (!window.confirm(aviso)) return;
+    try {
+      const r = await eliminarPendienteCanal(facturaId, {
+        eliminarComprasVinculadas: vinculadaContabilidad,
+      });
+      setPendientes((prev) => prev.filter((x) => x.id !== facturaId));
+      if (r.materialPermaneceEnStock) {
+        toast.success(
+          'Eliminada del listado. El material sigue en inventario porque ya estaba aprobado.',
+          { duration: 6000 },
+        );
+      } else {
+        toast.success('Eliminada');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo borrar');
+    }
+  };
+
+  const guardarEdicion = async (extracted: ExtractedCanalHeader) => {
+    if (!editando) return;
+    const patch: { extracted: ExtractedCanalHeader; estado?: string; mensaje_error?: null } = {
+      extracted,
+      mensaje_error: null,
+    };
+    if (editando.estado === 'error') {
+      patch.estado = 'extraido';
+    }
+    const actualizado = await actualizarPendienteCanal(editando.id, patch);
+    setPendientes((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
+    toast.success('Factura actualizada');
+  };
+
+  const puedeEditar = (p: Pendiente) =>
+    Boolean(p.extracted) && !['procesando', 'pendiente'].includes(p.estado);
 
   return (
     <div className="min-h-screen bg-[#050508] text-white px-4 py-8 md:px-8 max-w-6xl mx-auto">
@@ -220,13 +306,13 @@ export default function FacturasCanalClient() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
+          <h1 className="text-xl font-bold flex items-center gap-2" suppressHydrationWarning>
             <MessageCircle className="h-6 w-6 text-sky-400" />
-            Facturas extraídas (Telegram / WhatsApp)
+            {TITULO_PANEL}
           </h1>
           <p className="mt-2 text-sm text-zinc-400 max-w-xl">
-            Datos leídos por IA desde la foto. Filtra por fecha, montos, proveedor, RIF, artículo y cantidad antes de
-            confirmar en recepción.
+            Facturas enviadas al bot. Corrija los datos extraídos por IA y registre la compra en contabilidad (sin inventario ni
+            recepción de mercancía).
           </p>
         </div>
         <button
@@ -408,13 +494,91 @@ export default function FacturasCanalClient() {
           highlightId={highlightId}
           onAbrir={(id) => {
             const p = pendientes.find((x) => x.id === id);
-            if (p) abrirEnRecepcion(p);
+            if (p) irRegistrarCompra(p);
           }}
+          onCopiarLink={(id) => void copiarLinkRegistro(id)}
+          linkCopiadoId={linkCopiadoId}
         />
       ) : pendientesFiltrados.length === 0 ? (
-        <p className="text-sm text-zinc-500 rounded-xl border border-white/10 p-8 text-center">
-          No hay facturas que coincidan con los filtros.
-        </p>
+        <div className="rounded-xl border border-white/10 p-8 text-center space-y-4">
+          <p className="text-sm text-zinc-400">
+            {pendientes.length === 0
+              ? 'No hay facturas en cola todavía.'
+              : 'No hay facturas que coincidan con los filtros.'}
+          </p>
+          {pendientes.length === 0 ? (
+            <>
+              <ol className="text-left text-sm text-zinc-500 space-y-2 max-w-md mx-auto list-decimal pl-5">
+                <li>Abre el bot de Telegram de Casa Inteligente.</li>
+                <li>
+                  Envía <span className="font-mono text-sky-300/90">/factura</span> o{' '}
+                  <span className="font-mono text-sky-300/90">/facturas</span>.
+                </li>
+                <li>Adjunta la foto o PDF de la factura (cámara, fototeca o archivo).</li>
+                <li>Vuelve aquí y pulsa Actualizar; la factura aparecerá en unos segundos.</li>
+              </ol>
+              {estadoCanal ? (
+                <div className="flex flex-wrap justify-center gap-2 pt-2 text-[11px] font-semibold">
+                  <span
+                    className={`rounded-full px-2.5 py-1 ${
+                      estadoCanal.telegramToken
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-red-500/15 text-red-300'
+                    }`}
+                  >
+                    Bot {estadoCanal.telegramToken ? 'OK' : 'sin token'}
+                  </span>
+                  <span
+                    className={`rounded-full px-2.5 py-1 ${
+                      estadoCanal.webhookOk
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-amber-500/15 text-amber-200'
+                    }`}
+                  >
+                    Webhook {estadoCanal.webhookOk ? 'OK' : 'revisar'}
+                  </span>
+                  <span
+                    className={`rounded-full px-2.5 py-1 ${
+                      estadoCanal.supabaseOk
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-red-500/15 text-red-300'
+                    }`}
+                  >
+                    Supabase {estadoCanal.supabaseOk ? 'OK' : 'sin service role'}
+                  </span>
+                </div>
+              ) : null}
+              {estadoCanal && !estadoCanal.telegramToken ? (
+                <p className="text-xs text-red-300/90 max-w-lg mx-auto leading-relaxed">
+                  Falta <span className="font-mono">TELEGRAM_BOT_TOKEN</span> en el servidor (Vercel →
+                  Environment Variables → Production). Sin token, Telegram recibe 503 o el webhook falla.
+                  Tras añadirlo, redeploy y ejecute{' '}
+                  <span className="font-mono">npm run telegram:webhook</span>.
+                </p>
+              ) : null}
+              {estadoCanal && !estadoCanal.webhookOk ? (
+                <p className="text-xs text-amber-200/90 max-w-lg mx-auto leading-relaxed">
+                  Webhook esperado:{' '}
+                  <span className="font-mono break-all">{estadoCanal.webhookEsperado}</span>
+                  {estadoCanal.webhookUrl ? (
+                    <>
+                      <br />
+                      Actual: <span className="font-mono break-all">{estadoCanal.webhookUrl}</span>
+                    </>
+                  ) : null}
+                  . Ejecute <span className="font-mono">npm run telegram:webhook</span> y configure{' '}
+                  <span className="font-mono">TELEGRAM_BOT_TOKEN</span> y{' '}
+                  <span className="font-mono">SUPABASE_SERVICE_ROLE_KEY</span> en Vercel.
+                </p>
+              ) : null}
+              {estadoCanal?.webhookError ? (
+                <p className="text-xs text-red-300/90 max-w-lg mx-auto">
+                  Telegram reporta: {estadoCanal.webhookError}
+                </p>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       ) : (
         <ul className="space-y-3">
           {pendientesFiltrados.map((p) => (
@@ -433,19 +597,36 @@ export default function FacturasCanalClient() {
                     {p.extracted?.supplier_name ?? 'Proveedor'}
                   </p>
                   <p className="text-xs text-zinc-500 mt-1">
+                    <span className="text-violet-300/90 uppercase">{p.estado}</span>
+                    {' · '}
                     {p.extracted?.date ?? '—'} · RIF {p.extracted?.supplier_rif ?? '—'} ·{' '}
                     {p.extracted?.total_amount != null ? `${p.extracted.total_amount} Bs` : '—'} · {p.canal}
                   </p>
+                  {p.estado === 'error' && p.mensaje_error ? (
+                    <p className="text-xs text-red-400/90 mt-1">{p.mensaje_error}</p>
+                  ) : null}
+                  {p.estado === 'pendiente' || p.estado === 'procesando' ? (
+                    <p className="text-xs text-amber-400/90 mt-1">Procesando con IA… actualiza en unos segundos.</p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {p.estado === 'extraido' ? (
+                  <button
+                    type="button"
+                    onClick={() => void copiarLinkRegistro(p.id)}
+                    className="rounded-lg border border-white/10 text-xs px-3 py-2 text-zinc-300 hover:bg-white/5 flex items-center gap-1"
+                    title="Copiar enlace directo para registrar la compra"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {linkCopiadoId === p.id ? 'Copiado' : 'Copiar enlace'}
+                  </button>
+                  {p.estado === 'extraido' || p.estado === 'error' ? (
                     <button
                       type="button"
-                      onClick={() => abrirEnRecepcion(p)}
+                      onClick={() => irRegistrarCompra(p)}
                       className="rounded-lg bg-[#34C759] text-black text-xs font-semibold px-3 py-2 flex items-center gap-1"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Confirmar
+                      Registrar compra
                     </button>
                   ) : null}
                   <button
@@ -457,7 +638,7 @@ export default function FacturasCanalClient() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void borrar(p.id)}
+                    onClick={() => void borrar(p.id, p.estado)}
                     className="text-red-400 hover:text-red-300 p-2"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -468,6 +649,13 @@ export default function FacturasCanalClient() {
           ))}
         </ul>
       )}
+
+      <EditarFacturaCanalModal
+        open={editando != null}
+        extracted={editando?.extracted ?? null}
+        onClose={() => setEditando(null)}
+        onGuardar={guardarEdicion}
+      />
     </div>
   );
 }
@@ -476,10 +664,14 @@ function TablaLineas({
   filas,
   highlightId,
   onAbrir,
+  onCopiarLink,
+  linkCopiadoId,
 }: {
   filas: FilaFacturaCanal[];
   highlightId: string | null;
   onAbrir: (pendienteId: string) => void;
+  onCopiarLink: (pendienteId: string) => void;
+  linkCopiadoId: string | null;
 }) {
   if (filas.length === 0) {
     return (
@@ -529,13 +721,21 @@ function TablaLineas({
                   {row.esLinea ? row.precioUnitario.toLocaleString() : '—'}
                 </td>
                 <td className="px-3 py-2 text-right font-semibold">{subtotal.toLocaleString()}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => onAbrir(row.pendienteId)}
-                    className="text-sky-400 hover:text-sky-300 text-[11px] font-semibold"
+                    className="text-sky-400 hover:text-sky-300 text-[11px] font-semibold mr-2"
                   >
                     Abrir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCopiarLink(row.pendienteId)}
+                    className="text-zinc-400 hover:text-zinc-200 text-[11px] font-semibold"
+                    title="Copiar enlace de registro"
+                  >
+                    {linkCopiadoId === row.pendienteId ? 'Copiado' : 'Enlace'}
                   </button>
                 </td>
               </tr>

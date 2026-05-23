@@ -8,7 +8,7 @@ export type TelegramIntent = {
   reply?: string;
 };
 
-const SCHEMA_HINT = `Responde SOLO JSON: {"contexto":"menu"|"factura"|"obra"|"gasto_obra"|null,"proyecto_id":"uuid o null","reply":"mensaje corto en español o null"}`;
+const SCHEMA_HINT = `Responde SOLO JSON: {"contexto":"menu"|"factura"|"obra"|"gasto_obra"|"esperando_audio_bitacora"|null,"proyecto_id":"uuid o null","reply":"mensaje corto en español o null"}`;
 
 export async function interpretarTextoTelegramGemini(
   texto: string,
@@ -23,10 +23,11 @@ export async function interpretarTextoTelegramGemini(
         'Asistente del bot Telegram de Casa Inteligente (construcción, compras, obra). Interpreta mensajes en español y decide si el usuario quiere cambiar de modo.',
       prompt: [
         `Contexto actual del chat: ${contextoActual}.`,
-        'Comandos válidos: /menu, /factura, /obra <uuid>, /gasto, /cancelar, /estado, /ayuda.',
-        'Si el usuario pide subir factura, compra o proveedor → contexto factura.',
+        'Comandos válidos: /menu, /facturas, /factura, /obra <uuid>, /gasto, /bitacora, /cancelar, /estado, /ayuda.',
+        'Si el usuario pide subir factura, facturas, compra o proveedor → contexto factura.',
         'Si pide foto de obra, avance o proyecto → contexto obra (proyecto_id si menciona UUID).',
         'Si pide gasto, egreso o comprobante de obra → contexto gasto_obra.',
+        'Si pide bitácora, reporte de voz o nota de voz de obra → contexto esperando_audio_bitacora.',
         'Si saluda o pide menú → contexto menu.',
         SCHEMA_HINT,
         '',

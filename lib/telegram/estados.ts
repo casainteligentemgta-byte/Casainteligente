@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type TelegramContexto = 'menu' | 'factura' | 'obra' | 'gasto_obra';
+export type TelegramContexto =
+  | 'menu'
+  | 'factura'
+  | 'obra'
+  | 'gasto_obra'
+  | 'esperando_audio_bitacora';
 
 export type TelegramEstado = {
   chat_id: string;
@@ -99,6 +104,8 @@ export function etiquetaContexto(ctx: TelegramContexto): string {
       return 'Fotos / evidencia de obra';
     case 'gasto_obra':
       return 'Gasto de obra (comprobante)';
+    case 'esperando_audio_bitacora':
+      return 'Bitácora de obra (nota de voz)';
     default:
       return 'Menú principal';
   }

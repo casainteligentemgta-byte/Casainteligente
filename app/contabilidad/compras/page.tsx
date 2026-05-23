@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import {
-    deleteCompraRegistro,
-    formatDeleteCompraError,
-} from '@/lib/contabilidad/deleteCompraRegistro';
+import { formatDeleteCompraError } from '@/lib/contabilidad/deleteCompraRegistro';
 import {
     etiquetaPeriodo,
     rangoFechasPeriodo,
@@ -35,7 +33,8 @@ import {
     mergeProyectosCatalogo,
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
-import { Filter, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { Filter, Loader2, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react';
+import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
 import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
@@ -49,28 +48,24 @@ import {
     vesAUsdConTasa,
 } from '@/lib/contabilidad/comprasMontos';
 import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
+import { useTasasBcvPorFechas } from '@/lib/contabilidad/useTasasBcvPorFechas';
+import { tasaBcvPorFechaCompra } from '@/lib/contabilidad/tasaBcvPorFechaCompra';
+import { cargarCanalParaCompras } from '@/lib/contabilidad/cargarCanalParaCompras';
+import {
+    extractedDesdeCompraLista,
+    type ExtractedCanalHeader,
+} from '@/lib/contabilidad/extractedCanal';
+import { actualizarPendienteCanal, eliminarPendienteCanal } from '@/lib/contabilidad/facturaCanalApi';
+import {
+    compraCoincideFuente,
+    etiquetaOrigenCompra,
+    type CanalPendienteParaLista,
+    unificarComprasConCanal,
+    type CompraListaUnificada,
+    type FiltroFuenteCompra,
+} from '@/lib/contabilidad/mapCanalPendienteCompra';
 
-type CompraRow = {
-    id: string;
-    purchase_invoice_id: string | null;
-    proyecto_id: string | null;
-    invoice_number: string;
-    supplier_rif: string;
-    supplier_name: string;
-    fecha: string;
-    total_amount: number;
-    total_amount_usd?: number | null;
-    tasa_bcv_ves_por_usd?: number | null;
-    origen: string;
-    estado: string;
-    document_file_name: string | null;
-    document_storage_path?: string | null;
-    created_at: string;
-    ci_proyectos?: { nombre: string | null } | { nombre: string | null }[] | null;
-    contabilidad_compra_lineas?:
-        | { count: number }[]
-        | { descripcion: string; item_code: string | null; subtotal: number; cantidad: number }[];
-};
+type CompraRow = CompraListaUnificada;
 
 type LineaDetalle = {
     descripcion: string;
@@ -141,13 +136,30 @@ function lineCount(row: CompraRow): number {
     return 0;
 }
 
+function compraPuedeVerImagen(c: CompraRow): boolean {
+    return Boolean(
+        c.document_storage_path ||
+            c.purchase_invoice_id ||
+            c.origen === 'RECEPCION_MERCANCIA' ||
+            c.origen === 'TELEGRAM' ||
+            c.pendiente_canal_id,
+    );
+}
+
 export default function ComprasPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const [compras, setCompras] = useState<CompraRow[]>([]);
     const [proyectos, setProyectos] = useState<ProyectoOpcion[]>([]);
     const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [avisoCanal, setAvisoCanal] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [editandoCanal, setEditandoCanal] = useState<{
+        pendienteId: string;
+        extracted: ExtractedCanalHeader;
+    } | null>(null);
 
     const [hydrated, setHydrated] = useState(false);
     const [periodo, setPeriodo] = useState<PeriodoCompras>('todas');
@@ -165,12 +177,28 @@ export default function ComprasPage() {
     const [montoMinUsd, setMontoMinUsd] = useState('');
     const [montoMaxUsd, setMontoMaxUsd] = useState('');
     const [vistaListado, setVistaListado] = useState<'facturas' | 'lineas'>('lineas');
+    const [imagenFacturaAbierta, setImagenFacturaAbierta] = useState<string | null>(null);
     const [busqueda, setBusqueda] = useState('');
     const [busquedaAplicada, setBusquedaAplicada] = useState('');
+    const [fuenteFiltro, setFuenteFiltro] = useState<FiltroFuenteCompra>('todos');
+    const proyectosIdsRef = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        const f = searchParams.get('fuente');
+        if (f === 'telegram' || f === 'app') setFuenteFiltro(f);
+    }, [searchParams]);
 
     const fechaRefActiva = fechaRef || (hydrated ? todayIso() : '');
     const { tasa: tasaBcvHoy, fuente: tasaBcvFuente, loading: cargandoTasaHoy } = useTasaBcvHoy(
         fechaRefActiva || undefined,
+    );
+
+    const { getTasa: tasaBcvDelDiaFactura, loading: cargandoTasasFacturas } =
+        useTasasBcvPorFechas(compras);
+
+    const tasaParaCompra = useCallback(
+        (c: CompraRow) => tasaBcvPorFechaCompra(c, tasaBcvDelDiaFactura),
+        [tasaBcvDelDiaFactura],
     );
 
     const rangoActivo = useMemo(
@@ -208,7 +236,8 @@ export default function ComprasPage() {
     }, []);
 
     useEffect(() => {
-        void loadProveedores();
+        const t = window.setTimeout(() => void loadProveedores(), 1500);
+        return () => window.clearTimeout(t);
     }, [loadProveedores]);
 
     const loadProyectosCatalogo = useCallback(async () => {
@@ -228,6 +257,7 @@ export default function ComprasPage() {
     const proyectosMap = useMemo(() => {
         const m = new Map<string, string>();
         for (const p of proyectos) m.set(p.id, p.nombre);
+        proyectosIdsRef.current = new Set(proyectos.map((p) => p.id));
         return m;
     }, [proyectos]);
 
@@ -249,16 +279,8 @@ export default function ComprasPage() {
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
+        setAvisoCanal(null);
         try {
-            const supabase = createClient();
-
-            const idsArticuloBusqueda = busquedaAplicada
-                ? await compraIdsPorArticulo(supabase, busquedaAplicada)
-                : [];
-            const orBusqueda = busquedaAplicada
-                ? orFiltroBusquedaCompras(busquedaAplicada, idsArticuloBusqueda)
-                : null;
-
             const artTerm = articuloFiltro.trim();
             let minCant = parseMontoFiltro(cantidadMin);
             let maxCant = parseMontoFiltro(cantidadMax);
@@ -266,12 +288,33 @@ export default function ComprasPage() {
                 [minCant, maxCant] = [maxCant, minCant];
             }
 
+            const [{ pendientes: canalPendientes, error: errorCanal }, supabase] = await Promise.all([
+                cargarCanalParaCompras(),
+                Promise.resolve(createClient()),
+            ]);
+            if (errorCanal) setAvisoCanal(errorCanal);
+
+            const omitirRangoPorTelegram = fuenteFiltro === 'telegram';
+
+            const [idsArticuloBusqueda, idsArt, idsCant] = await Promise.all([
+                busquedaAplicada
+                    ? compraIdsPorArticulo(supabase, busquedaAplicada)
+                    : Promise.resolve([] as string[]),
+                artTerm ? compraIdsPorArticulo(supabase, artTerm) : Promise.resolve([] as string[]),
+                minCant !== null || maxCant !== null
+                    ? compraIdsPorCantidad(supabase, minCant, maxCant)
+                    : Promise.resolve([] as string[]),
+            ]);
+
+            const orBusqueda = busquedaAplicada
+                ? orFiltroBusquedaCompras(busquedaAplicada, idsArticuloBusqueda)
+                : null;
+
             let idsPorLinea: string[] | null = null;
             if (artTerm) {
-                idsPorLinea = await compraIdsPorArticulo(supabase, artTerm);
+                idsPorLinea = idsArt;
             }
             if (minCant !== null || maxCant !== null) {
-                const idsCant = await compraIdsPorCantidad(supabase, minCant, maxCant);
                 idsPorLinea =
                     idsPorLinea === null
                         ? idsCant
@@ -330,32 +373,11 @@ export default function ComprasPage() {
                 return q;
             };
 
-            const pageSize = 500;
-            const maxFilas = 5000;
+            const limiteCompras = periodo === 'todas' ? 800 : 500;
             let filas: CompraRow[] = [];
 
-            if (periodo === 'todas') {
-                for (let from = 0; from < maxFilas; from += pageSize) {
-                    const { data, error: pageErr } = await buildComprasQuery().range(from, from + pageSize - 1);
-                    if (pageErr) {
-                        if (
-                            pageErr.message.includes('contabilidad_compras') ||
-                            pageErr.message.includes('does not exist') ||
-                            pageErr.message.includes('proyecto_id')
-                        ) {
-                            throw new Error(
-                                'Tabla de compras incompleta. Ejecute la migración 138_compras_proyecto_y_borrado.sql en Supabase.'
-                            );
-                        }
-                        throw pageErr;
-                    }
-                    const chunk = (data ?? []) as CompraRow[];
-                    if (!chunk.length) break;
-                    filas = filas.concat(chunk);
-                    if (chunk.length < pageSize) break;
-                }
-            } else {
-                const { data, error: qErr } = await buildComprasQuery().limit(pageSize);
+            {
+                const { data, error: qErr } = await buildComprasQuery().limit(limiteCompras);
                 if (qErr) {
                     if (
                         qErr.message.includes('contabilidad_compras') ||
@@ -371,7 +393,7 @@ export default function ComprasPage() {
                 filas = (data ?? []) as CompraRow[];
             }
 
-            const idsConocidos = new Set(proyectos.map((p) => p.id));
+            const idsConocidos = proyectosIdsRef.current;
             const faltantes: string[] = [];
             const vistos = new Set<string>();
             for (const f of filas) {
@@ -406,7 +428,13 @@ export default function ComprasPage() {
                 montoMaxUsd,
             };
 
+            filas = unificarComprasConCanal(
+                filas.map((c) => ({ ...c, fuente_lista: c.fuente_lista ?? 'app' })),
+                canalPendientes,
+            );
+
             filas = filas.filter((c) => {
+                if (!compraCoincideFuente(c, fuenteFiltro)) return false;
                 if (!compraCumpleFiltroRif(c, rifFiltro)) return false;
                 if (!compraCumpleFiltrosMontos(c, filtrosAvanzados)) return false;
                 const lineas = lineasDetalle(c).map((l) => ({
@@ -439,7 +467,7 @@ export default function ComprasPage() {
         montoMinUsd,
         montoMaxUsd,
         busquedaAplicada,
-        proyectos,
+        fuenteFiltro,
     ]);
 
     useEffect(() => {
@@ -453,7 +481,74 @@ export default function ComprasPage() {
         }
     }, [periodo, rangoActivo, fechaDesde]);
 
+    const idCanalTelegram = (c: CompraRow): string | null => {
+        if (c.pendiente_canal_id) return c.pendiente_canal_id;
+        if (c.id.startsWith('canal-')) return c.id.slice('canal-'.length);
+        return null;
+    };
+
+    const abrirEditarTelegram = async (c: CompraRow) => {
+        const canalId = idCanalTelegram(c);
+        if (!canalId) return;
+        try {
+            const res = await fetch(`/api/facturas-canal/pendientes/${canalId}`, {
+                cache: 'no-store',
+            });
+            const data = (await res.json()) as { extracted?: ExtractedCanalHeader | null; error?: string };
+            if (res.ok && data.extracted) {
+                setEditandoCanal({ pendienteId: canalId, extracted: data.extracted });
+                return;
+            }
+        } catch {
+            /* usar datos de la fila */
+        }
+        setEditandoCanal({
+            pendienteId: canalId,
+            extracted: extractedDesdeCompraLista({
+                ...c,
+                contabilidad_compra_lineas: lineasDetalle(c).map((l) => ({
+                    descripcion: l.descripcion,
+                    item_code: l.item_code,
+                    cantidad: l.cantidad,
+                    precio_unitario: l.precio_unitario,
+                    subtotal: l.subtotal,
+                })),
+            }),
+        });
+    };
+
+    const guardarEdicionTelegram = async (extracted: ExtractedCanalHeader) => {
+        if (!editandoCanal) return;
+        await actualizarPendienteCanal(editandoCanal.pendienteId, {
+            extracted,
+            mensaje_error: null,
+        });
+        setEditandoCanal(null);
+        await load();
+    };
+
     const handleDelete = async (c: CompraRow) => {
+        const canalId = idCanalTelegram(c);
+        const esSoloColaCanal = c.id.startsWith('canal-');
+
+        if (canalId && esSoloColaCanal) {
+            const ok = window.confirm(
+                '¿Eliminar esta factura pendiente de Telegram? Se perderán los datos extraídos.',
+            );
+            if (!ok) return;
+            setDeletingId(c.id);
+            setError(null);
+            try {
+                await eliminarPendienteCanal(canalId);
+                setCompras((prev) => prev.filter((row) => row.id !== c.id));
+            } catch (e) {
+                setError(e instanceof Error ? e.message : 'No se pudo eliminar');
+            } finally {
+                setDeletingId(null);
+            }
+            return;
+        }
+
         const duplicadasMismaFactura = compras.filter(
             (row) =>
                 row.id !== c.id &&
@@ -463,26 +558,47 @@ export default function ComprasPage() {
                     String(row.supplier_rif ?? '').trim().toUpperCase() ===
                         String(c.supplier_rif ?? '').trim().toUpperCase()),
         );
-        const avisoDuplicado =
-            duplicadasMismaFactura.length > 0
-                ? `\n\nHay ${duplicadasMismaFactura.length + 1} registro(s) con factura #${c.invoice_number}. Se eliminarán todos.`
-                : '';
+        const hayDuplicados = duplicadasMismaFactura.length > 0;
+        const avisoDuplicado = hayDuplicados
+            ? `\n\nExiste otro registro con factura #${c.invoice_number} (fechas: ${duplicadasMismaFactura.map((d) => d.fecha).join(', ')}).`
+            : '';
 
         const ok = window.confirm(
-            `¿Eliminar la compra de ${c.supplier_name} (factura #${c.invoice_number})?${avisoDuplicado}\n\nSe quitará de contabilidad, cuarentena y materiales pendientes.`
+            `¿Eliminar la compra de ${c.supplier_name}?\nFactura #${c.invoice_number} · ${c.fecha}${avisoDuplicado}\n\nSe quitará de contabilidad y recepción de mercancía.`,
         );
         if (!ok) return;
+
+        let incluirDuplicados = false;
+        if (hayDuplicados) {
+            incluirDuplicados = window.confirm(
+                `¿Eliminar TODOS los registros con factura #${c.invoice_number} del mismo proveedor (${duplicadasMismaFactura.length + 1} en total)?\n\nCancelar = solo esta fila (${c.fecha}).`,
+            );
+        }
 
         setDeletingId(c.id);
         setError(null);
         try {
-            const supabase = createClient();
-            const result = await deleteCompraRegistro(supabase, c.id);
-            const removed = new Set(result.deletedIds);
+            const q = new URLSearchParams({
+                duplicados: incluirDuplicados ? '1' : '0',
+            });
+            if (canalId) q.set('canalId', canalId);
+            const res = await fetch(`/api/contabilidad/compras/${c.id}?${q}`, {
+                method: 'DELETE',
+            });
+            const data = (await res.json()) as {
+                deletedIds?: string[];
+                materialPermaneceEnStock?: boolean;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(data.error || 'No se pudo eliminar');
+            const removed = new Set(data.deletedIds ?? [c.id]);
             setCompras((prev) => prev.filter((row) => !removed.has(row.id)));
-            if (result.duplicateCount > 1) {
-                void load();
+            if (data.materialPermaneceEnStock) {
+                setError(
+                    'Compra eliminada del listado. El material permanece en inventario porque ya estaba aprobado en recepción.',
+                );
             }
+            void load();
         } catch (e) {
             setError(formatDeleteCompraError(e));
             void load();
@@ -501,14 +617,13 @@ export default function ComprasPage() {
         for (const c of compras) {
             const bs = montoVesCompra(c);
             totalBs += bs;
-            const tasaFactura = tasaBcvCompra(c);
+            const tasaFactura = tasaParaCompra(c);
             if (tasaFactura) {
                 tasas.add(tasaFactura);
             } else {
                 comprasSinTasaEnFactura += 1;
             }
-            const usd =
-                vesAUsdConTasa(bs, tasaFactura ?? tasaBcvHoy) ?? montoUsdCompra(c);
+            const usd = vesAUsdConTasa(bs, tasaFactura) ?? montoUsdCompra(c);
             totalUsd += usd;
 
             const f = String(c.fecha ?? '').slice(0, 10);
@@ -525,12 +640,12 @@ export default function ComprasPage() {
             comprasSinTasaEnFactura,
             tasaVariable: fechas.size > 1 || tasas.size > 1,
         };
-    }, [compras, tasaBcvHoy]);
+    }, [compras, tasaParaCompra]);
 
     const filtrosLineas = useMemo(
         () => ({
-            fechaDesde: rangoActivo?.desde ?? '',
-            fechaHasta: rangoActivo?.hasta ?? '',
+            fechaDesde: fuenteFiltro === 'telegram' ? '' : (rangoActivo?.desde ?? ''),
+            fechaHasta: fuenteFiltro === 'telegram' ? '' : (rangoActivo?.hasta ?? ''),
             proveedor: proveedorFiltro,
             rif: rifFiltro,
             articulo: articuloFiltro,
@@ -543,6 +658,7 @@ export default function ComprasPage() {
         }),
         [
             rangoActivo,
+            fuenteFiltro,
             proveedorFiltro,
             rifFiltro,
             articuloFiltro,
@@ -564,7 +680,7 @@ export default function ComprasPage() {
             supplier_rif: c.supplier_rif,
             total_amount: c.total_amount,
             total_amount_usd: c.total_amount_usd,
-            tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd ?? tasaBcvHoy,
+            tasa_bcv_ves_por_usd: tasaParaCompra(c),
             origen: c.origen,
             estado: c.estado,
             lineas: lineasDetalle(c).map((l) => {
@@ -585,7 +701,7 @@ export default function ComprasPage() {
             }),
         }));
         return filtrarLineasComprasConfirmadas(payload, filtrosLineas);
-    }, [compras, filtrosLineas, tasaBcvHoy]);
+    }, [compras, filtrosLineas, tasaParaCompra]);
 
     const totalLineasBs = useMemo(
         () =>
@@ -601,7 +717,7 @@ export default function ComprasPage() {
             Math.round(
                 lineasFiltradas.reduce((acc, row) => {
                     const bs = row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
-                    const usd = vesAUsdConTasa(bs, row.tasaBcv);
+                    const usd = vesAUsdConTasa(bs, row.tasaBcv) ?? row.montoUsd;
                     if (usd != null) return acc + usd;
                     if (row.montoUsd != null && row.montoBs > 0) {
                         return acc + (bs / row.montoBs) * row.montoUsd;
@@ -614,20 +730,57 @@ export default function ComprasPage() {
 
     const showList = !loading && compras.length > 0;
     const showLineas = !loading && lineasFiltradas.length > 0;
+
+    const compraPorId = useMemo(() => new Map(compras.map((c) => [c.id, c])), [compras]);
+
+    const accionesCompra = useCallback(
+        (compraId: string) => {
+            const c = compraPorId.get(compraId);
+            if (!c) return null;
+            const canalId = idCanalTelegram(c);
+            return {
+                puedeModificar: Boolean(canalId),
+                etiquetaEliminar: 'Borrar',
+            };
+        },
+        [compraPorId],
+    );
+
+    const onModificarCompra = useCallback(
+        (compraId: string) => {
+            const c = compraPorId.get(compraId);
+            if (c) void abrirEditarTelegram(c);
+        },
+        [compraPorId],
+    );
+
+    const onEliminarCompra = useCallback(
+        (compraId: string) => {
+            const c = compraPorId.get(compraId);
+            if (c) void handleDelete(c);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- handleDelete estable en uso
+        [compraPorId],
+    );
     const periodoLabel = fechaRefActiva ? etiquetaPeriodo(periodo, fechaRefActiva, rangoActivo) : '';
 
     function tasaDisplayCompra(c: CompraRow): number | null {
-        return tasaBcvCompra(c) ?? tasaBcvHoy;
+        return tasaParaCompra(c);
     }
 
     const scrollToCompra = (compraId: string) => {
         setVistaListado('facturas');
+        setImagenFacturaAbierta(compraId);
         requestAnimationFrame(() => {
             document.getElementById(`compra-card-${compraId}`)?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'center',
             });
         });
+    };
+
+    const toggleImagenFactura = (compraId: string) => {
+        setImagenFacturaAbierta((prev) => (prev === compraId ? null : compraId));
     };
 
     return (
@@ -668,18 +821,43 @@ export default function ComprasPage() {
                 <Link
                     href="/contabilidad/compras/canal"
                     style={{
-                        fontSize: '11px',
-                        fontWeight: 600,
+                        fontSize: '10px',
+                        fontWeight: 700,
                         color: '#7dd3fc',
                         textDecoration: 'none',
+                        padding: '6px 8px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(56,189,248,0.25)',
+                    }}
+                >
+                    Cola
+                </Link>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setFuenteFiltro((f) => (f === 'telegram' ? 'todos' : 'telegram'));
+                        router.replace(
+                            fuenteFiltro === 'telegram'
+                                ? '/contabilidad/compras'
+                                : '/contabilidad/compras?fuente=telegram',
+                        );
+                    }}
+                    style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: fuenteFiltro === 'telegram' ? '#fff' : '#7dd3fc',
                         padding: '6px 10px',
                         borderRadius: '8px',
                         border: '1px solid rgba(56,189,248,0.35)',
-                        background: 'rgba(14,116,144,0.2)',
+                        background:
+                            fuenteFiltro === 'telegram'
+                                ? 'rgba(14,116,144,0.55)'
+                                : 'rgba(14,116,144,0.2)',
+                        cursor: 'pointer',
                     }}
                 >
                     Telegram
-                </Link>
+                </button>
                 <button
                     type="button"
                     onClick={() => void load()}
@@ -738,6 +916,35 @@ export default function ComprasPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                         <Filter size={16} style={{ color: '#5856D6' }} />
                         <p style={{ color: 'white', fontSize: '13px', fontWeight: 800 }}>FILTROS</p>
+                    </div>
+
+                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
+                        ORIGEN
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                        {(
+                            [
+                                ['todos', 'Todas'],
+                                ['app', 'App / recepción'],
+                                ['telegram', 'Telegram'],
+                            ] as const
+                        ).map(([key, label]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => {
+                                    setFuenteFiltro(key);
+                                    router.replace(
+                                        key === 'todos'
+                                            ? '/contabilidad/compras'
+                                            : `/contabilidad/compras?fuente=${key}`,
+                                    );
+                                }}
+                                style={periodBtn(fuenteFiltro === key)}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
 
                     <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
@@ -1160,6 +1367,23 @@ export default function ComprasPage() {
                     </div>
                 ) : null}
 
+                {avisoCanal ? (
+                    <div
+                        style={{
+                            marginTop: '12px',
+                            padding: '14px',
+                            borderRadius: '12px',
+                            background: 'rgba(255,214,10,0.12)',
+                            color: '#FFD60A',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            lineHeight: 1.45,
+                        }}
+                    >
+                        Facturas Telegram: {avisoCanal}
+                    </div>
+                ) : null}
+
                 {!loading && compras.length === 0 && !error ? (
                     <div style={{ textAlign: 'center', marginTop: '48px', color: 'rgba(255,255,255,0.35)' }}>
                         <p style={{ fontSize: '18px', fontWeight: 700 }}>Sin compras con estos filtros</p>
@@ -1236,12 +1460,30 @@ export default function ComprasPage() {
                         <ComprasLineasTable
                             filas={lineasFiltradas}
                             onScrollToCompra={scrollToCompra}
+                            accionesPorCompra={accionesCompra}
+                            onModificar={onModificarCompra}
+                            onEliminar={onEliminarCompra}
+                            deletingId={deletingId}
                         />
                     ) : (
                         <div style={{ textAlign: 'center', marginTop: '24px', color: 'rgba(255,255,255,0.35)' }}>
                             <p style={{ fontSize: '15px', fontWeight: 700 }}>Sin líneas con estos filtros</p>
                         </div>
                     )
+                ) : null}
+
+                {showList && vistaListado === 'facturas' ? (
+                    <p
+                        style={{
+                            color: 'rgba(255,255,255,0.4)',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            marginBottom: '12px',
+                            lineHeight: 1.45,
+                        }}
+                    >
+                        Pulsa el nombre del proveedor para ver u ocultar la imagen de la factura.
+                    </p>
                 ) : null}
 
                 {showList && vistaListado === 'facturas' ? (
@@ -1257,19 +1499,139 @@ export default function ComprasPage() {
                                     }}
                                 >
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                        <p
-                                            style={{
-                                                color: 'white',
-                                                fontSize: '17px',
-                                                fontWeight: 800,
-                                                marginBottom: '4px',
-                                            }}
-                                        >
-                                            {c.supplier_name}
-                                        </p>
+                                        {(() => {
+                                            const puedeImagen = compraPuedeVerImagen(c);
+                                            const imagenAbierta = imagenFacturaAbierta === c.id;
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (puedeImagen) toggleImagenFactura(c.id);
+                                                    }}
+                                                    disabled={!puedeImagen}
+                                                    style={{
+                                                        display: 'block',
+                                                        width: '100%',
+                                                        textAlign: 'left',
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        padding: 0,
+                                                        marginBottom: '4px',
+                                                        cursor: puedeImagen ? 'pointer' : 'default',
+                                                    }}
+                                                    aria-expanded={puedeImagen ? imagenAbierta : undefined}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            color: 'white',
+                                                            fontSize: '17px',
+                                                            fontWeight: 800,
+                                                            textDecoration: puedeImagen
+                                                                ? imagenAbierta
+                                                                    ? 'underline'
+                                                                    : 'underline dotted'
+                                                                : 'none',
+                                                            textDecorationColor: '#a5a3ff',
+                                                        }}
+                                                    >
+                                                        {c.supplier_name}
+                                                    </span>
+                                                    {puedeImagen ? (
+                                                        <span
+                                                            style={{
+                                                                marginLeft: '8px',
+                                                                fontSize: '10px',
+                                                                fontWeight: 700,
+                                                                color: imagenAbierta
+                                                                    ? '#a5a3ff'
+                                                                    : 'rgba(255,255,255,0.35)',
+                                                            }}
+                                                        >
+                                                            {imagenAbierta ? '▲ ocultar imagen' : '▼ ver imagen'}
+                                                        </span>
+                                                    ) : null}
+                                                </button>
+                                            );
+                                        })()}
                                         <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px' }}>
                                             Factura #{c.invoice_number} · {c.supplier_rif}
+                                            <span
+                                                style={{
+                                                    marginLeft: '8px',
+                                                    fontSize: '10px',
+                                                    fontWeight: 800,
+                                                    color:
+                                                        c.fuente_lista === 'telegram'
+                                                            ? '#7dd3fc'
+                                                            : '#a78bfa',
+                                                }}
+                                            >
+                                                {etiquetaOrigenCompra(c)}
+                                            </span>
                                         </p>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                flexWrap: 'wrap',
+                                                gap: '8px',
+                                                marginTop: '10px',
+                                            }}
+                                        >
+                                            {c.pendiente_canal_id ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void abrirEditarTelegram(c)}
+                                                    disabled={deletingId !== null}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '10px',
+                                                        border: '1px solid rgba(56,189,248,0.4)',
+                                                        background: 'rgba(14,116,144,0.25)',
+                                                        color: '#7dd3fc',
+                                                        fontSize: '11px',
+                                                        fontWeight: 800,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    <Pencil size={14} />
+                                                    Modificar
+                                                </button>
+                                            ) : null}
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleDelete(c)}
+                                                disabled={deletingId !== null}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    padding: '8px 12px',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid rgba(255,59,48,0.35)',
+                                                    background: 'rgba(255,59,48,0.12)',
+                                                    color: '#FF6B6B',
+                                                    fontSize: '11px',
+                                                    fontWeight: 800,
+                                                    cursor: deletingId ? 'not-allowed' : 'pointer',
+                                                    opacity: deletingId === c.id ? 0.6 : 1,
+                                                }}
+                                            >
+                                                {deletingId === c.id ? (
+                                                    <Loader2 size={14} className="animate-spin" />
+                                                ) : (
+                                                    <Trash2 size={14} />
+                                                )}
+                                                Borrar
+                                            </button>
+                                        </div>
+                                        {c.mensaje_error_canal ? (
+                                            <p style={{ color: '#FF6B6B', fontSize: '11px', marginTop: '6px' }}>
+                                                {c.mensaje_error_canal}
+                                            </p>
+                                        ) : null}
                                         <p
                                             style={{
                                                 color: 'rgba(255,255,255,0.35)',
@@ -1282,46 +1644,86 @@ export default function ComprasPage() {
                                                 const tasa = tasaDisplayCompra(c);
                                                 return tasa != null
                                                     ? ` · Tasa ${formatearTasaBcv(tasa)}${
-                                                          !tasaBcvCompra(c) && tasaBcvHoy
-                                                              ? ' (BCV día)'
+                                                          !tasaBcvCompra(c) && tasaParaCompra(c)
+                                                              ? ' (BCV fecha factura)'
                                                               : ''
                                                       }`
                                                     : '';
                                             })()}{' '}
                                             · {lineCount(c)} producto(s)
                                         </p>
-                                        <CompraProductosToggle
-                                            compraId={c.id}
-                                            tasaBcv={tasaDisplayCompra(c)}
-                                            tasaEsDelDia={!tasaBcvCompra(c) && !!tasaBcvHoy}
-                                            montoBsFactura={montoVesCompra(c)}
-                                            montoUsdFactura={
-                                                vesAUsdConTasa(montoVesCompra(c), tasaDisplayCompra(c)) ??
-                                                montoUsdCompra(c)
-                                            }
-                                            lineCountHint={lineCount(c)}
-                                            lineasIniciales={lineasDetalle(c).map((l) => ({
-                                                descripcion: l.descripcion,
-                                                item_code: l.item_code,
-                                                subtotal: l.subtotal,
-                                                cantidad: l.cantidad,
-                                                unidad: null,
-                                                precio_unitario:
-                                                    l.cantidad > 0 ? l.subtotal / l.cantidad : null,
-                                            }))}
-                                        />
-                                        {c.document_storage_path ||
-                                        c.purchase_invoice_id ||
-                                        c.origen === 'RECEPCION_MERCANCIA' ? (
+                                        {!c.pendiente_canal_id ? (
+                                            <CompraProductosToggle
+                                                compraId={c.id}
+                                                tasaBcv={tasaDisplayCompra(c)}
+                                                tasaEsDelDia={!tasaBcvCompra(c) && !!tasaParaCompra(c)}
+                                                montoBsFactura={montoVesCompra(c)}
+                                                montoUsdFactura={
+                                                    vesAUsdConTasa(montoVesCompra(c), tasaDisplayCompra(c)) ??
+                                                    montoUsdCompra(c)
+                                                }
+                                                lineCountHint={lineCount(c)}
+                                                lineasIniciales={lineasDetalle(c).map((l) => ({
+                                                    descripcion: l.descripcion,
+                                                    item_code: l.item_code,
+                                                    subtotal: l.subtotal,
+                                                    cantidad: l.cantidad,
+                                                    unidad: null,
+                                                    precio_unitario:
+                                                        l.cantidad > 0 ? l.subtotal / l.cantidad : null,
+                                                }))}
+                                            />
+                                        ) : lineCount(c) > 0 ? (
+                                            <p
+                                                style={{
+                                                    marginTop: '8px',
+                                                    fontSize: '11px',
+                                                    color: 'rgba(255,255,255,0.45)',
+                                                }}
+                                            >
+                                                {lineCount(c)} línea(s) extraída(s) por IA
+                                            </p>
+                                        ) : null}
+                                        {c.pendiente_canal_id &&
+                                        c.canal_estado === 'extraido' &&
+                                        c.estado === 'PENDIENTE_CONFIRMACION' ? (
+                                            <Link
+                                                href={`/contabilidad/compras/telegram/${c.pendiente_canal_id}`}
+                                                style={{
+                                                    display: 'inline-block',
+                                                    marginTop: '10px',
+                                                    padding: '10px 14px',
+                                                    borderRadius: '10px',
+                                                    background: '#34C759',
+                                                    color: '#000',
+                                                    fontSize: '12px',
+                                                    fontWeight: 800,
+                                                    textDecoration: 'none',
+                                                }}
+                                            >
+                                                Confirmar en recepción
+                                            </Link>
+                                        ) : null}
+                                        {compraPuedeVerImagen(c) ? (
                                             <CompraFacturaImagen
                                                 compraId={c.id}
+                                                documentApiPath={
+                                                    c.pendiente_canal_id
+                                                        ? `/api/facturas-canal/pendientes/${c.pendiente_canal_id}/document`
+                                                        : undefined
+                                                }
+                                                expanded={imagenFacturaAbierta === c.id}
                                                 tieneDocumento={
                                                     Boolean(
                                                         c.document_storage_path ||
-                                                            c.purchase_invoice_id,
+                                                            c.purchase_invoice_id ||
+                                                            c.pendiente_canal_id,
                                                     )
                                                 }
-                                                esRecepcion={c.origen === 'RECEPCION_MERCANCIA'}
+                                                esRecepcion={
+                                                    c.origen === 'RECEPCION_MERCANCIA' ||
+                                                    c.origen === 'TELEGRAM'
+                                                }
                                             />
                                         ) : c.document_file_name ? (
                                             <p
@@ -1352,37 +1754,10 @@ export default function ComprasPage() {
                                             }
                                             bs={montoVesCompra(c)}
                                             tasa={tasaDisplayCompra(c)}
-                                            tasaEsDelDia={!tasaBcvCompra(c) && !!tasaBcvHoy}
+                                            tasaEsDelDia={!tasaBcvCompra(c) && !!tasaParaCompra(c)}
                                             layout="stack"
                                             style={{ alignItems: 'flex-end', fontSize: 18 }}
                                         />
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleDelete(c)}
-                                            disabled={deletingId !== null}
-                                            style={{
-                                                marginTop: '10px',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                padding: '8px 12px',
-                                                borderRadius: '10px',
-                                                border: '1px solid rgba(255,59,48,0.35)',
-                                                background: 'rgba(255,59,48,0.12)',
-                                                color: '#FF6B6B',
-                                                fontSize: '11px',
-                                                fontWeight: 800,
-                                                cursor: deletingId ? 'not-allowed' : 'pointer',
-                                                opacity: deletingId === c.id ? 0.6 : 1,
-                                            }}
-                                        >
-                                            {deletingId === c.id ? (
-                                                <Loader2 size={14} className="animate-spin" />
-                                            ) : (
-                                                <Trash2 size={14} />
-                                            )}
-                                            BORRAR
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1390,6 +1765,13 @@ export default function ComprasPage() {
                     </div>
                 ) : null}
             </div>
+
+            <EditarFacturaCanalModal
+                open={editandoCanal != null}
+                extracted={editandoCanal?.extracted ?? null}
+                onClose={() => setEditandoCanal(null)}
+                onGuardar={guardarEdicionTelegram}
+            />
         </div>
     );
 }

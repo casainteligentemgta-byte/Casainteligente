@@ -1,28 +1,32 @@
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 
-const FacturasCanalClient = dynamic(
-  () => import('@/components/contabilidad/FacturasCanalClient'),
+const ConfirmarCompraTelegramClient = dynamic(
+  () => import('@/components/contabilidad/ConfirmarCompraTelegramClient'),
   {
     ssr: false,
     loading: () => (
       <div className="min-h-screen bg-[#050508] text-zinc-500 flex items-center justify-center text-sm">
-        Cargando facturas Telegram…
+        Cargando…
       </div>
     ),
   },
 );
 
-export default function FacturasCanalPage() {
+type Props = {
+  params: { id: string };
+};
+
+export default function ConfirmarCompraTelegramPage({ params }: Props) {
   return (
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#050508] text-zinc-500 flex items-center justify-center text-sm">
-          Cargando facturas Telegram…
+          Cargando…
         </div>
       }
     >
-      <FacturasCanalClient />
+      <ConfirmarCompraTelegramClient pendingId={params.id} />
     </Suspense>
   );
 }

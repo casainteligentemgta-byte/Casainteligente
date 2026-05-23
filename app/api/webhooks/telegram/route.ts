@@ -1,10 +1,11 @@
 /**
- * Alias histórico del webhook de facturas → delega en /api/telegram (multi-contexto).
+ * Webhook de Telegram en producción (registrado con npm run telegram:webhook).
+ * Siempre responde HTTP 200 para que Telegram no marque el webhook como caído.
  */
 import {
   handleTelegramWebhookGet,
-  handleTelegramWebhookPost,
-} from '@/lib/telegram/webhook';
+  handleTelegramWebhookRoutePost,
+} from '@/lib/telegram/webhookRoute';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,5 +16,5 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  return handleTelegramWebhookPost(req);
+  return handleTelegramWebhookRoutePost(req);
 }
