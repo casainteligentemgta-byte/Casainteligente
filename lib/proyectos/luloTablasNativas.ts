@@ -27,6 +27,20 @@ export const LULO_PARTIDA_COLS = {
   unidad: ['uni_par', 'unidad', 'und'],
   cantidad: ['can_par', 'cantidad', 'cant'],
   precio: ['pre_par', 'precio', 'precio_unitario', 'pu'],
+  monto: [
+    'mon_par',
+    'monto_par',
+    'tot_par',
+    'imp_par',
+    'monto',
+    'monto_total',
+    'total',
+    'importe',
+    'parcial',
+    'pt',
+    'costo_total',
+    'valor',
+  ],
 } as const;
 
 export const LULO_COMPOSICION_COLS = {

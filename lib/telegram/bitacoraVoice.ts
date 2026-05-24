@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { geminiGenerateWithDocument, getGeminiApiKey } from '@/lib/gemini/client';
+import { enviarPickerProyectosTelegram } from '@/lib/telegram/proyectoPicker';
 import {
   downloadTelegramFile,
   mimeFromTelegramPath,
@@ -117,11 +118,10 @@ export async function manejarVozBitacoraTelegram(params: {
 }): Promise<void> {
   const proyectoId = params.estado.proyecto_id;
   if (!proyectoId) {
-    await sendTelegramMessage(
-      params.chatId,
-      '⚠️ Vincula un proyecto con <code>/obra &lt;uuid&gt;</code> antes de <code>/bitacora</code>.',
-      { parse_mode: 'HTML' },
-    );
+    await sendTelegramMessage(params.chatId, '⚠️ Elige la obra para la bitácora:', {
+      parse_mode: 'HTML',
+    });
+    await enviarPickerProyectosTelegram(params.supabase, params.chatId, 'esperando_audio_bitacora');
     return;
   }
 

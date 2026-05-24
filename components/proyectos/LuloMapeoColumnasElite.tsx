@@ -46,7 +46,16 @@ const FIELD_DEFS: {
   { key: 'descripcion', label: 'Descripción', luloDefault: defaultMapping.descripcion },
   { key: 'unidad', label: 'Unidad', luloDefault: defaultMapping.unidad },
   { key: 'cantidad', label: 'Cantidad', luloDefault: defaultMapping.cantidad },
-  { key: 'precio', label: 'Precio', luloDefault: defaultMapping.precio },
+  { key: 'precio', label: 'P. unitario', luloDefault: defaultMapping.precio },
+  { key: 'monto', label: 'Monto', luloDefault: defaultMapping.monto },
+];
+
+const REQUIRED_FIELD_KEYS: FieldKey[] = [
+  'codigo',
+  'descripcion',
+  'unidad',
+  'cantidad',
+  'precio',
 ];
 
 const EMPTY = '__none__';
@@ -72,6 +81,9 @@ function buildInitialMapping(columns: string[]): Record<FieldKey, string> {
       guessColumn(columns, [/^canpar$/, /^can_par$/, /cantidad/, /^cant$/]) || '',
     precio:
       guessColumn(columns, [/^prepar$/, /^pre_par$/, /precio/, /unitario/, /^pu$/]) || '',
+    monto:
+      guessColumn(columns, [/^monpar$/, /^mon_par$/, /^totpar$/, /monto/, /importe/, /parcial/]) ||
+      '',
   };
 }
 
@@ -95,7 +107,7 @@ export function LuloMapeoColumnasElite({
     setValues((prev) => ({ ...prev, [key]: v === EMPTY ? '' : v }));
   };
 
-  const canConfirm = FIELD_DEFS.every(({ key }) => values[key]?.trim() !== '');
+  const canConfirm = REQUIRED_FIELD_KEYS.every((key) => values[key]?.trim() !== '');
 
   const usedColumns = new Set(
     FIELD_DEFS.map(({ key }) => values[key]).filter((v) => v && v !== EMPTY),
@@ -214,6 +226,7 @@ export function LuloMapeoColumnasElite({
               unidad: values.unidad,
               cantidad: values.cantidad,
               precio: values.precio,
+              ...(values.monto?.trim() ? { monto: values.monto } : {}),
             })
           }
         >

@@ -20,6 +20,17 @@ import {
 } from '@/lib/telegram/mediaHandlers';
 import { manejarVozBitacoraTelegram } from '@/lib/telegram/bitacoraVoice';
 import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
+import {
+  enviarPickerAsignarObraTelegram,
+  manejarCallbackAsignarObraTelegram,
+  type TipoArchivoTelegram,
+} from '@/lib/telegram/asignarObraArchivo';
+import {
+  enviarPickerProyectosTelegram,
+  hintElegirProyecto,
+  manejarCallbackProyectoTelegram,
+  nombreProyectoTelegram,
+} from '@/lib/telegram/proyectoPicker';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
@@ -42,28 +53,56 @@ export type TelegramUpdate = {
     };
     caption?: string;
   };
+  callback_query?: {
+    id: string;
+    data?: string;
+    from: { id: number; username?: string; first_name?: string };
+    message?: {
+      message_id: number;
+      chat: { id: number; type: string };
+    };
+  };
 };
 
 function chatLabel(msg: NonNullable<TelegramUpdate['message']>): string {
   return msg.chat.username ?? msg.chat.first_name ?? `chat_${msg.chat.id}`;
 }
 
-function resolveFileId(msg: NonNullable<TelegramUpdate['message']>): string | null {
+type ArchivoTelegramEntrada = {
+  fileId: string;
+  tipo: TipoArchivoTelegram;
+};
+
+function resolveArchivoTelegram(
+  msg: NonNullable<TelegramUpdate['message']>,
+): ArchivoTelegramEntrada | null {
   if (msg.photo?.length) {
-    return msg.photo[msg.photo.length - 1].file_id;
+    return {
+      fileId: msg.photo[msg.photo.length - 1].file_id,
+      tipo: 'photo',
+    };
   }
-  const doc = msg.document;
-  if (
-    doc &&
-    (doc.mime_type?.startsWith('image/') || doc.mime_type === 'application/pdf')
-  ) {
-    return doc.file_id;
+  if (msg.video?.file_id) {
+    return { fileId: msg.video.file_id, tipo: 'video' };
+  }
+  if (msg.document?.file_id) {
+    return { fileId: msg.document.file_id, tipo: 'document' };
   }
   return null;
 }
 
-async function mensajeEstado(chatId: string, contexto: TelegramContexto, proyectoId: string | null) {
-  const proy = proyectoId ? `\nProyecto: <code>${proyectoId}</code>` : '';
+async function mensajeEstado(
+  supabase: SupabaseClient,
+  chatId: string,
+  contexto: TelegramContexto,
+  proyectoId: string | null,
+) {
+  const nombre = await nombreProyectoTelegram(supabase, proyectoId);
+  const proy = nombre
+    ? `\nObra: <b>${nombre}</b>`
+    : proyectoId
+      ? `\nProyecto: <code>${proyectoId}</code>`
+      : '';
   await sendTelegramMessage(
     chatId,
     `📌 Contexto: <b>${etiquetaContexto(contexto)}</b>${proy}`,
@@ -78,7 +117,7 @@ async function aplicarComando(
 ): Promise<void> {
   if (cmd.mensaje === '__ESTADO__') {
     const est = await getTelegramEstado(supabase, chatId);
-    await mensajeEstado(chatId, est.contexto, est.proyecto_id);
+    await mensajeEstado(supabase, chatId, est.contexto, est.proyecto_id);
     return;
   }
 
@@ -92,6 +131,24 @@ async function aplicarComando(
 
   if (cmd.mensaje) {
     await sendTelegramMessage(chatId, cmd.mensaje, { parse_mode: 'HTML' });
+  }
+
+  if (cmd.mostrarPickerProyecto) {
+    const est = await getTelegramEstado(supabase, chatId);
+    const needsPicker =
+      cmd.mostrarPickerProyecto === 'obra' || !est.proyecto_id;
+    if (needsPicker) {
+      await enviarPickerProyectosTelegram(supabase, chatId, cmd.mostrarPickerProyecto);
+    } else if (cmd.mostrarPickerProyecto !== 'obra') {
+      const nombre = await nombreProyectoTelegram(supabase, est.proyecto_id);
+      if (nombre) {
+        await sendTelegramMessage(
+          chatId,
+          `📌 Obra activa: <b>${nombre}</b>. Continúa con el comprobante o la nota de voz.`,
+          { parse_mode: 'HTML' },
+        );
+      }
+    }
   }
 }
 
@@ -143,6 +200,48 @@ async function manejarComandoFacturasDirecto(chatId: string): Promise<{
   }
 
   return { ok: true };
+}
+
+export async function handleTelegramCallbackQuery(
+  update: TelegramUpdate,
+): Promise<NextResponse> {
+  const cq = update.callback_query;
+  if (!cq?.data || !cq.message?.chat?.id) {
+    return NextResponse.json({ ok: true, skipped: 'no_callback' });
+  }
+
+  const chatId = String(cq.message.chat.id);
+  if (!isChatAllowed(chatId)) {
+    return NextResponse.json({ ok: true, denied: true });
+  }
+
+  const admin = telegramSupabaseAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ ok: true, error: 'supabase_admin' });
+  }
+
+  try {
+    const handledAsignar = await manejarCallbackAsignarObraTelegram(admin.client, {
+      chatId,
+      callbackId: cq.id,
+      data: cq.data,
+      messageId: cq.message?.message_id,
+    });
+    if (handledAsignar) {
+      return NextResponse.json({ ok: true, callback: 'asignar_obra' });
+    }
+
+    const handled = await manejarCallbackProyectoTelegram(admin.client, {
+      chatId,
+      callbackId: cq.id,
+      data: cq.data,
+    });
+    return NextResponse.json({ ok: true, callback: handled ? 'proyecto' : 'unknown' });
+  } catch (err) {
+    console.error('[telegram callback]', err);
+    await avisoErrorTelegram(chatId, err);
+    return NextResponse.json({ ok: true, error: 'callback_failed' });
+  }
 }
 
 export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramUpdate) {
@@ -235,22 +334,22 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       }
       await sendTelegramMessage(
         chatId,
-        '🎙️ Para registrar una bitácora por voz, primero usa <code>/bitacora</code> ' +
-          '(con proyecto vinculado vía <code>/obra &lt;uuid&gt;</code>).',
+        '🎙️ Para registrar una bitácora por voz, usa <code>/bitacora</code> ' +
+          `y elige la obra en la lista. ${hintElegirProyecto()}`,
         { parse_mode: 'HTML' },
       );
       return NextResponse.json({ ok: true, hint: 'voice_wrong_context' });
     }
 
-    const fileId = resolveFileId(msg);
-    if (!fileId) {
+    const archivo = resolveArchivoTelegram(msg);
+    if (!archivo) {
       const estado = await getTelegramEstado(supabase, chatId);
       await sendTelegramMessage(
         chatId,
         `📌 Estás en: <b>${etiquetaContexto(estado.contexto)}</b>\n` +
           (estado.contexto === 'esperando_audio_bitacora'
             ? 'Envía una <b>nota de voz</b> con el reporte de campo.'
-            : 'Envía foto/PDF, nota de voz (/bitacora) o usa /ayuda.'),
+            : 'Envía foto/video/documento, nota de voz (/bitacora) o usa /ayuda.'),
         { parse_mode: 'HTML' },
       );
       return NextResponse.json({ ok: true, hint: 'no_media' });
@@ -265,33 +364,58 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           supabase,
           chatId,
           chatLabel: label,
-          fileId,
+          fileId: archivo.fileId,
         });
         break;
       case 'obra':
-        await manejarFotoObraTelegram({
-          supabase,
-          chatId,
-          estado,
-          fileId,
-          caption,
-        });
+        if (estado.proyecto_id) {
+          await manejarFotoObraTelegram({
+            supabase,
+            chatId,
+            estado,
+            fileId: archivo.fileId,
+            caption,
+          });
+        } else {
+          await enviarPickerAsignarObraTelegram({
+            supabase,
+            chatId,
+            fileId: archivo.fileId,
+            tipo: archivo.tipo,
+            caption,
+            destino: 'obra',
+          });
+        }
         break;
       case 'gasto_obra':
-        await manejarGastoObraTelegram({
-          supabase,
-          chatId,
-          estado,
-          fileId,
-          caption,
-        });
+        if (estado.proyecto_id) {
+          await manejarGastoObraTelegram({
+            supabase,
+            chatId,
+            estado,
+            fileId: archivo.fileId,
+            caption,
+          });
+        } else {
+          await enviarPickerAsignarObraTelegram({
+            supabase,
+            chatId,
+            fileId: archivo.fileId,
+            tipo: archivo.tipo,
+            caption,
+            destino: 'gasto_obra',
+          });
+        }
         break;
       default:
-        await sendTelegramMessage(
+        await enviarPickerAsignarObraTelegram({
+          supabase,
           chatId,
-          'Elige un modo antes de enviar archivos:\n/factura · /obra &lt;uuid&gt; · /gasto',
-          { parse_mode: 'HTML' },
-        );
+          fileId: archivo.fileId,
+          tipo: archivo.tipo,
+          caption,
+          destino: 'obra',
+        });
     }
 
     return NextResponse.json({ ok: true, contexto: estado.contexto });

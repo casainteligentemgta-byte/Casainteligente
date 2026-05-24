@@ -8,6 +8,11 @@ import type {
 } from '@/types/apu-lulo';
 import { useMemo, useState } from 'react';
 import {
+  calcularCostoTotalInsumoApu,
+  clasificarInsumoApu,
+  type CategoriaInsumoApu,
+} from '@/lib/proyectos/apuCalculos';
+import {
   ArrowDownWideNarrow,
   BarChart3,
   Filter,
@@ -42,7 +47,8 @@ export type ApuAnalisisPanelProps = {
 /* Clasificación y fórmulas de ingeniería de costos                            */
 /* -------------------------------------------------------------------------- */
 
-export type CategoriaInsumoApu = 'equipo' | 'mano_obra' | 'material';
+export type { CategoriaInsumoApu } from '@/lib/proyectos/apuCalculos';
+export { clasificarInsumoApu, calcularCostoTotalInsumoApu } from '@/lib/proyectos/apuCalculos';
 
 export type OrdenApuCriterio = 'impacto' | 'rendimiento';
 
@@ -109,42 +115,6 @@ const CATEGORIA_META: Record<
 };
 
 const ORDEN_CATEGORIAS: CategoriaInsumoApu[] = ['equipo', 'mano_obra', 'material'];
-
-/** Normaliza tipo Lulo (M/E/P) a categoría analítica. */
-export function clasificarInsumoApu(tipo: string | null | undefined): CategoriaInsumoApu {
-  const t = String(tipo ?? '')
-    .trim()
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  if (/^E|EQ|MAQ|EQUIPO/.test(t)) return 'equipo';
-  if (/^P|MO|MANO|OBR|LAB|PER|HH/.test(t)) return 'mano_obra';
-  if (/^M|MAT|INS|MATERIAL/.test(t)) return 'material';
-  if (/EQUIPO|MAQUINARIA/.test(t)) return 'equipo';
-  if (/MANO|PERSONAL|SALARIO|JORNAL/.test(t)) return 'mano_obra';
-  return 'material';
-}
-
-/**
- * Costo total del insumo en la partida (reglas estrictas ERP/Lulo).
- * - Materiales: Rendimiento × Precio Base × (1 + Desperdicio/100)
- * - Equipos y MO: Rendimiento × Precio Base
- */
-export function calcularCostoTotalInsumoApu(
-  categoria: CategoriaInsumoApu,
-  rendimiento: number,
-  precioBase: number,
-  desperdicioPct: number,
-): number {
-  const r = Number.isFinite(rendimiento) ? rendimiento : 0;
-  const p = Number.isFinite(precioBase) ? precioBase : 0;
-  const base = r * p;
-  if (categoria === 'material') {
-    const d = Number.isFinite(desperdicioPct) ? desperdicioPct : 0;
-    return base * (1 + d / 100);
-  }
-  return base;
-}
 
 export function calcularLineasApu(
   lineas: LineaApuInsumoLulo[],

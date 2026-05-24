@@ -16,8 +16,12 @@ import {
   parsePresupuestoLuloMdb,
 } from '@/lib/proyectos/parsePresupuestoLuloMdb';
 import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
+import { importarPresupuestoConstruccionDesdeMdb } from '@/lib/proyectos/importarPresupuestoConstruccion';
 import { parseLuloMdbEstructurado } from '@/lib/proyectos/parseLuloMdbEstructurado';
-import { persistirLuloEstructurado } from '@/lib/proyectos/persistirLuloEstructurado';
+import {
+  extensionArchivoPresupuestoLulo,
+  validarLuloEstructurado,
+} from '@/lib/proyectos/validarLuloEstructurado';
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
 import type { GastoObraLuloInsert } from '@/types/lulo-import';
@@ -30,11 +34,6 @@ import { toPgNumeric15_2 } from '@/lib/utils/numericDbLimits';
 import { NextResponse } from 'next/server';
 
 const GASTOS_BATCH_SIZE = 200;
-
-function isMdbFile(file: File): boolean {
-  const name = file.name.toLowerCase();
-  return name.endsWith('.mdb') || name.endsWith('.accdb');
-}
 
 async function insertGastosBatches(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -111,6 +110,17 @@ export async function postImportarLuloPresupuesto(
       return NextResponse.json({ error: 'Archivo faltante' }, { status: 400 });
     }
 
+    const ext = extensionArchivoPresupuestoLulo(file.name);
+    if (!ext) {
+      return NextResponse.json(
+        {
+          error: 'Formato de archivo no soportado.',
+          hint: 'Use .mdb, .accdb (LuloWin) o .csv exportado desde Lulo.',
+        },
+        { status: 400 },
+      );
+    }
+
     const soloExtraer =
       formData.get('soloExtraer') === 'true' || formData.get('soloExtraer') === '1';
 
@@ -135,7 +145,7 @@ export async function postImportarLuloPresupuesto(
       });
     }
 
-    const formato = isMdbFile(file) ? 'mdb' : 'csv';
+    const formato = ext;
     let partidasRaw: import('@/lib/proyectos/parsePresupuestoLuloCsv').PartidaLuloInsert[] = [];
     let gastosInsert: GastoObraLuloInsert[] = [];
     let payload: Record<string, unknown> = {};
@@ -155,6 +165,20 @@ export async function postImportarLuloPresupuesto(
       if (importarEstructurado) {
         const structured = parseLuloMdbEstructurado(dump, pid);
         if (structured && structured.partidas.length > 0) {
+          const validacion = validarLuloEstructurado(structured);
+          if (!validacion.ok) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: validacion.errors.join(' '),
+                errors: validacion.errors,
+                hint: validacion.hint,
+                meta: { formato: 'mdb', modoImportacion: 'lulo_nativo_rechazado' },
+              },
+              { status: 422 },
+            );
+          }
+
           if (reemplazar && importarGastos) {
             const { error: delGastos } = await supabase
               .from('gastos_obra')
@@ -164,19 +188,14 @@ export async function postImportarLuloPresupuesto(
             if (delGastos && !delGastos.message.includes('proyecto_id')) throw delGastos;
           }
 
-          const persisted = await persistirLuloEstructurado(supabase, pid, structured, {
+          const persisted = await importarPresupuestoConstruccionDesdeMdb(supabase, pid, dump, {
             reemplazar,
           });
-
-          const presupuestoTotal = structured.partidas.reduce(
-            (s, p) => s + p.monto_total_estimado,
-            0,
-          );
 
           const resumen = buildResumenSnapshotExtraccion(extraccionVolcado, {
             partidas: persisted.partidasInsertadas,
             gastos: 0,
-            presupuestoTotalUsd: presupuestoTotal,
+            presupuestoTotalUsd: persisted.presupuestoTotal,
           });
 
           const snap = await guardarSnapshotLulo(supabase, {
@@ -187,16 +206,17 @@ export async function postImportarLuloPresupuesto(
             reemplazarSnapshots: reemplazar,
           });
 
-          const tablas = structured.tablasUsadas;
+          const tablas = persisted.tablasUsadas;
           return NextResponse.json({
             success: true,
-            message: `Importación Lulo nativa: ${persisted.partidasInsertadas} partidas, ${persisted.insumosUpserted} insumos, ${persisted.apuInsertados} líneas APU.`,
+            message: `Importación Lulo nativa: ${persisted.partidasInsertadas} partidas, ${persisted.insumosUpserted} insumos, ${persisted.apuInsertados} líneas APU, ${persisted.techosMaterialActualizados} techos de material.`,
             proyectoId: pid,
             partidas: persisted.partidasInsertadas,
             insumos: persisted.insumosUpserted,
             apu: persisted.apuInsertados,
+            techosMaterialActualizados: persisted.techosMaterialActualizados,
             gastos: 0,
-            presupuestoTotalUsd: presupuestoTotal,
+            presupuestoTotalUsd: persisted.presupuestoTotal,
             snapshotId: snap?.id ?? null,
             reemplazar,
             meta: {

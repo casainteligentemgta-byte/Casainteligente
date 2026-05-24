@@ -39,6 +39,9 @@ const MIGRATIONS = [
   '160_ci_telegram_estados.sql',
   '161_ci_facturas_canal_rls_authenticated.sql',
   '162_ci_bitacora_obras_telegram.sql',
+  '163_ci_presupuesto_techo_teorico_material.sql',
+  '164_presupuesto_obra_cascada.sql',
+  '165_partidas_evidencias_fotos_videos.sql',
 ];
 
 async function tableExists(sql, name) {
@@ -178,6 +181,27 @@ async function main() {
       },
       '160_ci_telegram_estados.sql': () => tableExists(sql, 'ci_telegram_estados'),
       '162_ci_bitacora_obras_telegram.sql': () => tableExists(sql, 'ci_bitacora_obras'),
+      '163_ci_presupuesto_techo_teorico_material.sql': async () => {
+        if (!(await tableExists(sql, 'ci_presupuesto_partidas'))) return false;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'ci_presupuesto_partidas'
+            and column_name = 'techo_teorico_material'
+        `;
+        return cols.length > 0;
+      },
+      '164_presupuesto_obra_cascada.sql': () => tableExists(sql, 'apu_items'),
+      '165_partidas_evidencias_fotos_videos.sql': async () => {
+        if (!(await tableExists(sql, 'ci_presupuesto_partidas'))) return false;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'ci_presupuesto_partidas'
+            and column_name = 'evidencias_fotos'
+        `;
+        return cols.length > 0;
+      },
     };
 
     for (const file of MIGRATIONS) {

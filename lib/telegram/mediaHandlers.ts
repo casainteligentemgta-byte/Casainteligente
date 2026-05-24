@@ -13,6 +13,7 @@ import {
   sendTelegramMessage,
 } from '@/lib/telegram/botApi';
 import { subirArchivoStorageTelegram } from '@/lib/telegram/storageUpload';
+import { enviarPickerProyectosTelegram } from '@/lib/telegram/proyectoPicker';
 
 const PROYECTO_MEDIA_BUCKET = 'ci-proyectos-media';
 
@@ -71,8 +72,10 @@ export async function manejarFotoObraTelegram(params: {
   if (!proyectoId) {
     await sendTelegramMessage(
       params.chatId,
-      '⚠️ Primero vincula un proyecto: <code>/obra &lt;uuid&gt;</code>',
+      '⚠️ Elige la obra en la lista:',
+      { parse_mode: 'HTML' },
     );
+    await enviarPickerProyectosTelegram(params.supabase, params.chatId, 'obra');
     return;
   }
 
@@ -171,10 +174,10 @@ export async function manejarGastoObraTelegram(params: {
 }): Promise<void> {
   const proyectoId = params.estado.proyecto_id;
   if (!proyectoId) {
-    await sendTelegramMessage(
-      params.chatId,
-      '⚠️ Usa <code>/obra &lt;uuid&gt;</code> antes de registrar gastos.',
-    );
+    await sendTelegramMessage(params.chatId, '⚠️ Elige la obra para el gasto:', {
+      parse_mode: 'HTML',
+    });
+    await enviarPickerProyectosTelegram(params.supabase, params.chatId, 'gasto_obra');
     return;
   }
 

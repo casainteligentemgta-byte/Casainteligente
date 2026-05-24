@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -395,29 +396,41 @@ export default function InventarioEquiposProyecto({ proyectoId, equipos, onRefre
         {renderListaSimple(equiposGen, 'equipo')}
       </section>
 
-      <section className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 p-5 shadow-lg backdrop-blur-xl">
-        <h2 className="text-sm font-bold uppercase text-emerald-400/90">Maquinarias propias</h2>
-        <p className="mt-1 text-xs text-zinc-500">Maquinaria de la empresa asignada a esta obra.</p>
-        <FormEquipoGenerico
-          categoria="maquinaria_propia"
-          titulo="Maquinaria propia"
-          descripcion="Registra equipo propio con fecha de asignación al proyecto."
-          saving={savingCat === 'maquinaria_propia'}
-          onSubmit={(f) => insertar('maquinaria_propia', f)}
-        />
+      <SeccionTituloHover
+        titulo="Maquinarias propias"
+        tituloClassName="text-emerald-400/90"
+        className="border border-emerald-500/25 bg-emerald-950/15 p-5 shadow-lg backdrop-blur-xl"
+        hint="Pasa el cursor sobre el título para registrar maquinaria propia"
+        descripcion="Maquinaria de la empresa asignada a esta obra."
+        panelOculto={
+          <FormEquipoGenerico
+            categoria="maquinaria_propia"
+            titulo="Maquinaria propia"
+            descripcion="Registra equipo propio con fecha de asignación al proyecto."
+            saving={savingCat === 'maquinaria_propia'}
+            onSubmit={(f) => insertar('maquinaria_propia', f)}
+          />
+        }
+      >
         {renderListaSimple(maqPropias, 'maquinaria_propia')}
-      </section>
+      </SeccionTituloHover>
 
-      <section className="rounded-2xl border border-amber-500/25 bg-amber-950/15 p-5 shadow-lg backdrop-blur-xl">
-        <h2 className="text-sm font-bold uppercase text-amber-300/90">Maquinarias alquiladas</h2>
-        <p className="mt-1 text-xs text-zinc-500">Listado de arriendos: fechas, arrendatario, RIF y costo.</p>
-        <FormEquipoGenerico
-          categoria="maquinaria_alquilada"
-          titulo="Maquinaria alquilada"
-          descripcion="Cada fila es un arriendo o máquina rentada para la obra."
-          saving={savingCat === 'maquinaria_alquilada'}
-          onSubmit={(f) => insertar('maquinaria_alquilada', f)}
-        />
+      <SeccionTituloHover
+        titulo="Maquinarias alquiladas"
+        tituloClassName="text-amber-300/90"
+        className="border border-amber-500/25 bg-amber-950/15 p-5 shadow-lg backdrop-blur-xl"
+        hint="Pasa el cursor sobre el título para registrar un arriendo"
+        descripcion="Listado de arriendos: fechas, arrendatario, RIF y costo."
+        panelOculto={
+          <FormEquipoGenerico
+            categoria="maquinaria_alquilada"
+            titulo="Maquinaria alquilada"
+            descripcion="Cada fila es un arriendo o máquina rentada para la obra."
+            saving={savingCat === 'maquinaria_alquilada'}
+            onSubmit={(f) => insertar('maquinaria_alquilada', f)}
+          />
+        }
+      >
         {maqAlquiladas.length === 0 ? (
           <p className="mt-3 text-xs text-zinc-600">Sin maquinarias alquiladas registradas.</p>
         ) : (
@@ -481,7 +494,7 @@ export default function InventarioEquiposProyecto({ proyectoId, equipos, onRefre
             </table>
           </div>
         )}
-      </section>
+      </SeccionTituloHover>
     </div>
   );
 }

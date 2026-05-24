@@ -458,12 +458,21 @@ function rowToPartidaWithMapping(
   const codigo = valueFromMappedColumn(r, mapping.codigo);
   const cantidad = numberFromMappedColumn(r, mapping.cantidad);
   const precio = numberFromMappedColumn(r, mapping.precio);
-  const montoCol = colNames.length ? findColumnByPattern(colNames, MONTO_PAT) : null;
-  const montoCsv = montoCol ? numberFromCol(r, montoCol) : 0;
-  const monto =
-    montoCsv > 0
-      ? montoCsv
-      : Math.round(cantidad * precio * 100) / 100;
+  const montoCol = mapping.monto
+    ? mapping.monto
+    : colNames.length
+      ? findColumnByPattern(colNames, MONTO_PAT)
+      : null;
+  const montoCsv = montoCol
+    ? mapping.monto
+      ? numberFromMappedColumn(r, mapping.monto)
+      : numberFromCol(r, montoCol)
+    : 0;
+  const monto = montoPartidaDesdeCantidadPrecio(
+    cantidad,
+    precio,
+    montoCsv > 0 ? montoCsv : undefined,
+  );
 
   if (!descripcion && !codigo) {
     if (monto <= 0 && cantidad <= 0 && precio <= 0) return null;
@@ -807,6 +816,16 @@ export function partidasDesdeVolcadoMinimo(
 
     table.rows.forEach((raw, idx) => {
       const row = normalizeMdbTableRow(raw, cols);
+      const desdeFila = tryPartidaFromRow(row, cols, proyectoId);
+      if (desdeFila && (desdeFila.codigo_partida || desdeFila.descripcion)) {
+        const dedupe = `${desdeFila.codigo_partida}|${desdeFila.descripcion}|${desdeFila.monto_total_estimado}`;
+        if (!keys.has(dedupe)) {
+          keys.add(dedupe);
+          partidas.push(desdeFila);
+        }
+        return;
+      }
+
       const cod = `${table.name}-${idx + 1}`;
       let desc = '';
       let monto = 0;

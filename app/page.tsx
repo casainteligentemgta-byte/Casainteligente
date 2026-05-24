@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCardMotion } from '@/components/nexus/GlassCard';
+import AeropuertoRelojPizarra from '@/components/home/AeropuertoRelojPizarra';
 import { motion } from 'framer-motion';
 
 export default function DashboardPage() {
@@ -38,7 +39,7 @@ export default function DashboardPage() {
                             {dayLabel}
                         </p>
                         <h1 className="text-4xl font-bold tracking-tight text-white">
-                            Dashboard
+                            CASA INTELIGENTE
                         </h1>
                     </div>
                     <div className="flex items-center gap-3">
@@ -54,6 +55,8 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </motion.div>
+
+            <AeropuertoRelojPizarra />
 
             {/* ── Stats Grid ── */}
             <div className="px-6 grid grid-cols-2 gap-4">

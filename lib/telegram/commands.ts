@@ -1,5 +1,6 @@
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import type { TelegramContexto } from '@/lib/telegram/estados';
+import type { ProyectoPickerModo } from '@/lib/telegram/proyectoPicker';
 import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
 
 export type ComandoTelegramResult = {
@@ -10,6 +11,8 @@ export type ComandoTelegramResult = {
   resetProyecto?: boolean;
   /** Palabra clave tras /stock (consulta inventario). */
   stockKeyword?: string;
+  /** Muestra lista desplegable (inline keyboard) de proyectos. */
+  mostrarPickerProyecto?: ProyectoPickerModo;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -30,10 +33,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         'Elige un modo:\n' +
         '• /facturas — recibir factura de compra (IA + app)\n' +
         '• /factura — igual que /facturas\n' +
-        '• /obra &lt;uuid&gt; — fotos de evidencia en el proyecto\n' +
-        '• /gasto — comprobante de gasto de obra (requiere /obra antes)\n' +
+        '• /obra — elegir obra y subir fotos de evidencia\n' +
+        '• /proyecto — cambiar obra activa (lista)\n' +
+        '• /gasto — comprobante de gasto de obra\n' +
         '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
-        '• /bitacora — reporte de obra por nota de voz (requiere /obra)\n' +
+        '• /bitacora — reporte de obra por nota de voz\n' +
         '• /estado — ver modo activo\n' +
         '• /cancelar — volver al menú',
     };
@@ -45,7 +49,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       mensaje:
         '<b>Comandos</b>\n' +
         '/factura — modo facturas de compra\n' +
-        '/obra &lt;uuid-proyecto&gt; — vincular obra y subir fotos\n' +
+        '/obra — elegir obra (lista) y subir fotos\n' +
+        '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +
         '/stock cemento — buscar stock por nombre (parcial)\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
@@ -81,23 +86,23 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     };
   }
 
-  if (cmd === '/obra') {
+  if (cmd === '/obra' || cmd === '/proyecto') {
     const uuid = parts[1]?.trim();
-    if (!uuid) {
+    if (uuid) {
+      if (!isValidProyectoUuid(uuid)) {
+        return { handled: true, mensaje: '❌ UUID de proyecto inválido.' };
+      }
       return {
         handled: true,
-        mensaje:
-          '⚠️ Indica el UUID del proyecto:\n<code>/obra 171694ed-0ecb-4ec5-82f5-82b980cb261f</code>',
+        contexto: 'obra',
+        proyectoId: uuid,
+        mensaje: `🏗 Obra vinculada (<code>${uuid.slice(0, 8)}…</code>).\nEnvía fotos o usa /gasto /bitacora.`,
       };
-    }
-    if (!isValidProyectoUuid(uuid)) {
-      return { handled: true, mensaje: '❌ UUID de proyecto inválido.' };
     }
     return {
       handled: true,
-      contexto: 'obra',
-      proyectoId: uuid,
-      mensaje: `🏗 Modo <b>obra</b> — proyecto <code>${uuid.slice(0, 8)}…</code>\nEnvía fotos (avance, planos, evidencia).`,
+      mostrarPickerProyecto: 'obra',
+      mensaje: '🏗 <b>Selecciona tu obra</b> en la lista de abajo:',
     };
   }
 
@@ -105,9 +110,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return {
       handled: true,
       contexto: 'gasto_obra',
+      mostrarPickerProyecto: 'gasto_obra',
       mensaje:
-        '💸 Modo <b>gasto de obra</b>. Primero usa /obra &lt;uuid&gt; si no hay proyecto.\n' +
-        'Envía foto del comprobante; Gemini extraerá monto y proveedor.',
+        '💸 Modo <b>gasto de obra</b>.\n' +
+        'Elige la obra abajo (si aún no hay una activa) y envía foto del comprobante.',
     };
   }
 
@@ -115,11 +121,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return {
       handled: true,
       contexto: 'esperando_audio_bitacora',
+      mostrarPickerProyecto: 'esperando_audio_bitacora',
       mensaje:
         '📋 <b>Bitácora de obra</b>\n\n' +
-        'Graba y envía una <b>nota de voz</b> con avances, novedades y personal en frente.\n' +
-        'Debes tener proyecto activo (<code>/obra &lt;uuid&gt;</code>).\n\n' +
-        'Gemini transcribirá y guardará el reporte en el sistema.',
+        'Elige la obra abajo y envía una <b>nota de voz</b> con avances y novedades.\n' +
+        'Gemini transcribirá y guardará el reporte.',
     };
   }
 

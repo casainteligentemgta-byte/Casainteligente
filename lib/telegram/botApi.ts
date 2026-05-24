@@ -68,7 +68,7 @@ export async function editTelegramMessage(
   chatId: string | number,
   messageId: number,
   text: string,
-  extra?: { parse_mode?: 'HTML' | 'Markdown' },
+  extra?: { parse_mode?: 'HTML' | 'Markdown'; reply_markup?: unknown },
 ): Promise<void> {
   try {
     await telegramApi('editMessageText', {
@@ -77,12 +77,25 @@ export async function editTelegramMessage(
       text,
       parse_mode: extra?.parse_mode ?? 'HTML',
       disable_web_page_preview: false,
+      ...extra,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/message is not modified/i.test(msg)) return;
     throw err;
   }
+}
+
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string,
+  showAlert = false,
+): Promise<void> {
+  await telegramApi('answerCallbackQuery', {
+    callback_query_id: callbackQueryId,
+    ...(text ? { text: text.slice(0, 200) } : {}),
+    show_alert: showAlert,
+  });
 }
 
 /** Alias en español (mismo comportamiento que sendTelegramMessage). */

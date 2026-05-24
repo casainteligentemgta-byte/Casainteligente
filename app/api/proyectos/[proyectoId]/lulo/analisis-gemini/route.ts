@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { analizarPresupuestoPorCapitulosGemini } from '@/lib/proyectos/geminiAnalisisPresupuestoObra';
 import { buildObraDataPresupuesto } from '@/lib/proyectos/mapObraDataPresupuesto';
 import { ordenarPartidasPorCapitulos } from '@/lib/proyectos/luloCapitulos';
-import { agruparPartidasPorCapitulo } from '@/components/proyectos/PresupuestoPorCapitulos';
+import { agruparPartidasPorCapitulo } from '@/lib/proyectos/presupuestoObraCalculos';
 import {
   isValidProyectoUuid,
   mensajeProyectoIdInvalido,

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import ControlObraClient from '@/components/proyectos/ControlObraClient';
 import {
   isValidProyectoUuid,
@@ -26,7 +27,15 @@ export default function ControlObraPage({ params }: { params: { id: string } }) 
 
   return (
     <main className="min-h-screen bg-[#0A0A0F] px-4 py-8 md:px-8">
-      <ControlObraClient proyectoId={proyectoId} />
+      <Suspense
+        fallback={
+          <p className="text-sm text-zinc-500 py-8" role="status">
+            Cargando control de obra…
+          </p>
+        }
+      >
+        <ControlObraClient proyectoId={proyectoId} />
+      </Suspense>
     </main>
   );
 }

@@ -33,7 +33,7 @@ import {
     mergeProyectosCatalogo,
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
-import { Filter, Loader2, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { Filter, FileText, Loader2, Pencil, Printer, RefreshCw, Search, Share2, Trash2 } from 'lucide-react';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
@@ -64,6 +64,18 @@ import {
     type CompraListaUnificada,
     type FiltroFuenteCompra,
 } from '@/lib/contabilidad/mapCanalPendienteCompra';
+import {
+    buildComprasCuadroShareUrl,
+    copiarTextoCuadro,
+    parseComprasCuadroShareParams,
+} from '@/lib/contabilidad/comprasCuadroShare';
+import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
+import {
+    lineasComprasATsv,
+    ordenarLineasCompras,
+    type ColumnaOrdenCompras,
+    type DireccionOrden,
+} from '@/lib/contabilidad/ordenarLineasCompras';
 
 type CompraRow = CompraListaUnificada;
 
@@ -181,12 +193,39 @@ export default function ComprasPage() {
     const [busqueda, setBusqueda] = useState('');
     const [busquedaAplicada, setBusquedaAplicada] = useState('');
     const [fuenteFiltro, setFuenteFiltro] = useState<FiltroFuenteCompra>('todos');
+    const [compartidoOk, setCompartidoOk] = useState(false);
+    const [sortColumn, setSortColumn] = useState<ColumnaOrdenCompras | null>(null);
+    const [sortDir, setSortDir] = useState<DireccionOrden>('asc');
     const proyectosIdsRef = useRef<Set<string>>(new Set());
+    const shareParamsAplicados = useRef(false);
 
     useEffect(() => {
-        const f = searchParams.get('fuente');
-        if (f === 'telegram' || f === 'app') setFuenteFiltro(f);
-    }, [searchParams]);
+        if (!hydrated || shareParamsAplicados.current) return;
+        shareParamsAplicados.current = true;
+        const parsed = parseComprasCuadroShareParams(searchParams);
+        if (parsed.fuenteFiltro) setFuenteFiltro(parsed.fuenteFiltro);
+        if (parsed.periodo) setPeriodo(parsed.periodo);
+        if (parsed.fechaRef) setFechaRef(parsed.fechaRef);
+        if (parsed.fechaDesde) setFechaDesde(parsed.fechaDesde);
+        if (parsed.fechaHasta) setFechaHasta(parsed.fechaHasta);
+        if (parsed.proyectoFiltro) setProyectoFiltro(parsed.proyectoFiltro);
+        if (parsed.proveedorFiltro) setProveedorFiltro(parsed.proveedorFiltro);
+        if (parsed.rifFiltro) setRifFiltro(parsed.rifFiltro);
+        if (parsed.articuloFiltro) setArticuloFiltro(parsed.articuloFiltro);
+        if (parsed.cantidadMin) setCantidadMin(parsed.cantidadMin);
+        if (parsed.cantidadMax) setCantidadMax(parsed.cantidadMax);
+        if (parsed.montoMinBs) setMontoMinBs(parsed.montoMinBs);
+        if (parsed.montoMaxBs) setMontoMaxBs(parsed.montoMaxBs);
+        if (parsed.montoMinUsd) setMontoMinUsd(parsed.montoMinUsd);
+        if (parsed.montoMaxUsd) setMontoMaxUsd(parsed.montoMaxUsd);
+        if (parsed.vistaListado) setVistaListado(parsed.vistaListado);
+        if (parsed.busqueda) {
+            setBusqueda(parsed.busqueda);
+            setBusquedaAplicada(parsed.busqueda);
+        }
+        if (parsed.sortColumn) setSortColumn(parsed.sortColumn);
+        if (parsed.sortDir) setSortDir(parsed.sortDir);
+    }, [hydrated, searchParams]);
 
     const fechaRefActiva = fechaRef || (hydrated ? todayIso() : '');
     const { tasa: tasaBcvHoy, fuente: tasaBcvFuente, loading: cargandoTasaHoy } = useTasaBcvHoy(
@@ -703,19 +742,38 @@ export default function ComprasPage() {
         return filtrarLineasComprasConfirmadas(payload, filtrosLineas);
     }, [compras, filtrosLineas, tasaParaCompra]);
 
+    const lineasOrdenadas = useMemo(
+        () => ordenarLineasCompras(lineasFiltradas, sortColumn, sortDir),
+        [lineasFiltradas, sortColumn, sortDir],
+    );
+
+    const ordenPlanoTabla = Boolean(sortColumn && sortColumn !== 'factura');
+
+    const onSortColumna = useCallback(
+        (col: ColumnaOrdenCompras) => {
+            if (sortColumn === col) {
+                setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+            } else {
+                setSortColumn(col);
+                setSortDir('asc');
+            }
+        },
+        [sortColumn],
+    );
+
     const totalLineasBs = useMemo(
         () =>
-            lineasFiltradas.reduce((acc, row) => {
+            lineasOrdenadas.reduce((acc, row) => {
                 const bs = row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
                 return acc + bs;
             }, 0),
-        [lineasFiltradas],
+        [lineasOrdenadas],
     );
 
     const totalUsdLineasVista = useMemo(
         () =>
             Math.round(
-                lineasFiltradas.reduce((acc, row) => {
+                lineasOrdenadas.reduce((acc, row) => {
                     const bs = row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
                     const usd = vesAUsdConTasa(bs, row.tasaBcv) ?? row.montoUsd;
                     if (usd != null) return acc + usd;
@@ -725,11 +783,11 @@ export default function ComprasPage() {
                     return acc;
                 }, 0) * 100,
             ) / 100,
-        [lineasFiltradas],
+        [lineasOrdenadas],
     );
 
     const showList = !loading && compras.length > 0;
-    const showLineas = !loading && lineasFiltradas.length > 0;
+    const showLineas = !loading && lineasOrdenadas.length > 0;
 
     const compraPorId = useMemo(() => new Map(compras.map((c) => [c.id, c])), [compras]);
 
@@ -779,6 +837,110 @@ export default function ComprasPage() {
         });
     };
 
+    const estadoCompartir = useMemo(
+        () => ({
+            fuenteFiltro,
+            periodo,
+            fechaRef: fechaRefActiva,
+            fechaDesde,
+            fechaHasta,
+            proyectoFiltro,
+            proveedorFiltro,
+            rifFiltro,
+            busqueda: busquedaAplicada,
+            articuloFiltro,
+            cantidadMin,
+            cantidadMax,
+            montoMinBs,
+            montoMaxBs,
+            montoMinUsd,
+            montoMaxUsd,
+            vistaListado,
+            sortColumn,
+            sortDir,
+        }),
+        [
+            fuenteFiltro,
+            periodo,
+            fechaRefActiva,
+            fechaDesde,
+            fechaHasta,
+            proyectoFiltro,
+            proveedorFiltro,
+            rifFiltro,
+            busquedaAplicada,
+            articuloFiltro,
+            cantidadMin,
+            cantidadMax,
+            montoMinBs,
+            montoMaxBs,
+            montoMinUsd,
+            montoMaxUsd,
+            vistaListado,
+            sortColumn,
+            sortDir,
+        ],
+    );
+
+    const subtituloCuadro = useMemo(() => {
+        const partes = [
+            periodoLabel,
+            proyectoFiltro ? proyectoFiltroEtiqueta : null,
+            fuenteFiltro !== 'todos' ? `Fuente: ${fuenteFiltro}` : null,
+            `${lineasOrdenadas.length} línea(s) · ${compras.length} factura(s)`,
+        ].filter(Boolean);
+        return partes.join(' · ');
+    }, [
+        periodoLabel,
+        proyectoFiltro,
+        proyectoFiltroEtiqueta,
+        fuenteFiltro,
+        lineasOrdenadas.length,
+        compras.length,
+    ]);
+
+    const imprimirCuadro = () => {
+        if (lineasOrdenadas.length === 0 && compras.length === 0) return;
+        window.print();
+    };
+
+    const verPdfCuadro = () => {
+        if (lineasOrdenadas.length === 0) return;
+        try {
+            abrirComprasCuadroVentana({
+                subtitulo: subtituloCuadro,
+                filas: lineasOrdenadas,
+                totalUsd: totalUsdLineasVista,
+                totalBs: totalLineasBs,
+                sortColumn,
+                sortDir,
+            });
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'No se pudo abrir la vista PDF');
+        }
+    };
+
+    const compartirCuadro = async () => {
+        if (typeof window === 'undefined' || (compras.length === 0 && lineasOrdenadas.length === 0)) return;
+        const url = buildComprasCuadroShareUrl(window.location.origin, estadoCompartir);
+        const resumen = `${lineasOrdenadas.length} línea(s) · ${compras.length} factura(s) · USD ${formatearUsd(totalFiltrado.totalUsd)} · Bs ${formatearBs(totalFiltrado.totalBs)}`;
+        const titulo = 'Cuadro de compras — Casa Inteligente';
+        if (typeof navigator.share === 'function') {
+            try {
+                await navigator.share({ title: titulo, text: resumen, url });
+                return;
+            } catch (e) {
+                if (e instanceof Error && e.name === 'AbortError') return;
+            }
+        }
+        const tsv = lineasOrdenadas.length > 0 ? `\n\n${lineasComprasATsv(lineasOrdenadas)}` : '';
+        const ok = await copiarTextoCuadro(`${titulo}\n${resumen}\n${url}${tsv}`);
+        if (ok) {
+            setCompartidoOk(true);
+            window.setTimeout(() => setCompartidoOk(false), 2000);
+        }
+    };
+
     const toggleImagenFactura = (compraId: string) => {
         setImagenFacturaAbierta((prev) => (prev === compraId ? null : compraId));
     };
@@ -786,6 +948,7 @@ export default function ComprasPage() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
             <div
+                className="compras-no-imprimir"
                 style={{
                     position: 'sticky',
                     top: 0,
@@ -882,6 +1045,7 @@ export default function ComprasPage() {
 
             <div style={{ padding: '20px' }}>
                 <div
+                    className="compras-no-imprimir"
                     style={{
                         ...glass,
                         padding: '14px 18px',
@@ -912,7 +1076,7 @@ export default function ComprasPage() {
                     </p>
                 </div>
 
-                <div style={{ ...glass, padding: '20px', marginBottom: '16px' }}>
+                <div className="compras-no-imprimir" style={{ ...glass, padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                         <Filter size={16} style={{ color: '#5856D6' }} />
                         <p style={{ color: 'white', fontSize: '13px', fontWeight: 800 }}>FILTROS</p>
@@ -1230,10 +1394,100 @@ export default function ComprasPage() {
                     ) : null}
                 </div>
 
-                <div style={{ ...glass, padding: '20px', marginBottom: '20px' }}>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontWeight: 700 }}>
-                        TOTAL FILTRADO ({compras.length} compra{compras.length === 1 ? '' : 's'})
-                    </p>
+                <div className="compras-cuadro-imprimible" style={{ ...glass, padding: '20px', marginBottom: '20px' }}>
+                    <div className="compras-solo-imprimir" style={{ marginBottom: '16px' }}>
+                        <h1 style={{ fontSize: '18px', fontWeight: 800, margin: '0 0 6px' }}>
+                            Cuadro de compras cargadas
+                        </h1>
+                        <p style={{ fontSize: '11px', margin: 0, opacity: 0.75 }}>
+                            Casa Inteligente · {new Date().toLocaleDateString('es-VE')}
+                            {periodoLabel ? ` · ${periodoLabel}` : ''}
+                            {proyectoFiltro ? ` · ${proyectoFiltroEtiqueta}` : ''}
+                            {fuenteFiltro !== 'todos' ? ` · ${fuenteFiltro}` : ''}
+                        </p>
+                    </div>
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '12px',
+                        }}
+                    >
+                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontWeight: 700, margin: 0 }}>
+                            TOTAL FILTRADO ({compras.length} compra{compras.length === 1 ? '' : 's'})
+                        </p>
+                        {compras.length > 0 ? (
+                            <div
+                                className="compras-no-imprimir"
+                                style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => void compartirCuadro()}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(88,86,214,0.45)',
+                                        background: 'rgba(88,86,214,0.2)',
+                                        color: 'white',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    <Share2 size={14} />
+                                    {compartidoOk ? 'Copiado' : 'Compartir lista'}
+                                </button>
+                                {lineasOrdenadas.length > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={verPdfCuadro}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '8px 12px',
+                                            borderRadius: '10px',
+                                            border: '1px solid rgba(167,139,250,0.45)',
+                                            background: 'rgba(139,92,246,0.2)',
+                                            color: 'white',
+                                            fontSize: '11px',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <FileText size={14} />
+                                        Ver PDF
+                                    </button>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={imprimirCuadro}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.15)',
+                                        background: 'rgba(255,255,255,0.08)',
+                                        color: 'white',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    <Printer size={14} />
+                                    Imprimir
+                                </button>
+                            </div>
+                        ) : null}
+                    </div>
                     <div
                         style={{
                             display: 'grid',
@@ -1331,6 +1585,7 @@ export default function ComprasPage() {
                         </p>
                     ) : null}
                     <Link
+                        className="compras-no-imprimir"
                         href="/almacen/procurement"
                         style={{
                             display: 'inline-block',
@@ -1343,10 +1598,9 @@ export default function ComprasPage() {
                     >
                         Ir a recepción de mercancía →
                     </Link>
-                </div>
 
                 {loading ? (
-                    <div style={{ textAlign: 'center', marginTop: '60px', color: 'rgba(255,255,255,0.4)' }}>
+                    <div className="compras-no-imprimir" style={{ textAlign: 'center', marginTop: '60px', color: 'rgba(255,255,255,0.4)' }}>
                         <Loader2 className="animate-spin mx-auto mb-3" size={32} />
                         <p>Cargando compras…</p>
                     </div>
@@ -1354,6 +1608,7 @@ export default function ComprasPage() {
 
                 {error ? (
                     <div
+                        className="compras-no-imprimir"
                         style={{
                             ...glass,
                             padding: '20px',
@@ -1369,6 +1624,7 @@ export default function ComprasPage() {
 
                 {avisoCanal ? (
                     <div
+                        className="compras-no-imprimir"
                         style={{
                             marginTop: '12px',
                             padding: '14px',
@@ -1385,7 +1641,7 @@ export default function ComprasPage() {
                 ) : null}
 
                 {!loading && compras.length === 0 && !error ? (
-                    <div style={{ textAlign: 'center', marginTop: '48px', color: 'rgba(255,255,255,0.35)' }}>
+                    <div className="compras-no-imprimir" style={{ textAlign: 'center', marginTop: '48px', color: 'rgba(255,255,255,0.35)' }}>
                         <p style={{ fontSize: '18px', fontWeight: 700 }}>Sin compras con estos filtros</p>
                         <p style={{ fontSize: '13px', marginTop: '8px' }}>
                             Ajuste fecha, proveedor, RIF, montos Bs/USD, artículo o cantidad.
@@ -1394,14 +1650,14 @@ export default function ComprasPage() {
                 ) : null}
 
                 {!loading && compras.length > 0 ? (
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                    <div className="compras-no-imprimir" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                         <button
                             type="button"
                             onClick={() => setVistaListado('lineas')}
                             style={periodBtn(vistaListado === 'lineas')}
                         >
                             Por línea / artículo
-                            {lineasFiltradas.length > 0 ? (
+                            {lineasOrdenadas.length > 0 ? (
                                 <EtiquetaBimonetariaCompra
                                     usd={totalUsdLineasVista}
                                     bs={totalLineasBs}
@@ -1430,7 +1686,8 @@ export default function ComprasPage() {
                     </div>
                 ) : null}
 
-                {!loading && vistaListado === 'lineas' && lineasFiltradas.length > 0 ? (
+                <div className="compras-cuadro-pantalla">
+                {!loading && vistaListado === 'lineas' && lineasOrdenadas.length > 0 ? (
                     <p
                         style={{
                             color: 'rgba(255,255,255,0.45)',
@@ -1458,12 +1715,16 @@ export default function ComprasPage() {
                 {!loading && vistaListado === 'lineas' && compras.length > 0 ? (
                     showLineas ? (
                         <ComprasLineasTable
-                            filas={lineasFiltradas}
+                            filas={lineasOrdenadas}
                             onScrollToCompra={scrollToCompra}
                             accionesPorCompra={accionesCompra}
                             onModificar={onModificarCompra}
                             onEliminar={onEliminarCompra}
                             deletingId={deletingId}
+                            sortColumn={sortColumn}
+                            sortDir={sortDir}
+                            onSort={onSortColumna}
+                            ordenPlano={ordenPlanoTabla}
                         />
                     ) : (
                         <div style={{ textAlign: 'center', marginTop: '24px', color: 'rgba(255,255,255,0.35)' }}>
@@ -1764,6 +2025,24 @@ export default function ComprasPage() {
                         ))}
                     </div>
                 ) : null}
+                </div>
+
+                {!loading && lineasOrdenadas.length > 0 ? (
+                    <div className="compras-cuadro-print-tabla" style={{ marginTop: '20px' }}>
+                        <p
+                            style={{
+                                color: 'rgba(255,255,255,0.5)',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                marginBottom: '12px',
+                            }}
+                        >
+                            Detalle por línea / artículo
+                        </p>
+                        <ComprasLineasTable filas={lineasOrdenadas} />
+                    </div>
+                ) : null}
+                </div>
             </div>
 
             <EditarFacturaCanalModal

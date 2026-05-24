@@ -333,10 +333,15 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       setUltimoResumen(resumen);
       setCuadroLuloActivo(true);
       toast.success(data.message || 'Importación completada.', {
-        description: 'Pulsa Presupuesto · Lulo para ver el cuadro y los datos extraídos.',
+        description: 'Abriendo reporte Lulo…',
       });
       setFile(null);
       onSuccess?.();
+      if ((data.partidas ?? 0) > 0) {
+        router.push(`${controlObraHref}?tab=presupuesto`);
+      } else {
+        router.push(controlObraHref);
+      }
       router.refresh();
     } catch (err: unknown) {
       const message = formatErrorMessage(err);
@@ -558,11 +563,11 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
         {cuadroLuloActivo ? (
           <Link
-            href={controlObraHref}
+            href={`${controlObraHref}?tab=presupuesto`}
             className="flex items-center justify-center gap-2 w-full rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-950/80 to-amber-900/40 py-3 text-sm font-semibold text-amber-100 shadow-lg shadow-amber-900/20 hover:from-amber-900/90 hover:border-amber-300/60 transition-colors"
           >
             <Table2 className="h-4 w-4 shrink-0" aria-hidden />
-            Presupuesto · Lulo — ver cuadro y datos extraídos
+            Reporte Lulo — presupuesto por capítulos y detalle
           </Link>
         ) : (
           <Link

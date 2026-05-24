@@ -7,6 +7,9 @@ export type { BimonetarioResult, MonedaOrigen } from '@/lib/finanzas/currency-co
 const BCV_HISTORY_URL = 'https://bcv.today/api/v1/history';
 const BCV_RATE_URL = 'https://bcv.today/api/v1/rate.json';
 
+const tasaCache = new Map<string, { result: TasaBcvResult; at: number }>();
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
 export type TasaBcvResult = {
   fecha: string;
   tasa_bcv_ves_por_usd: number;
@@ -28,9 +31,18 @@ function tasaDesdePayload(data: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function guardarTasaEnCache(iso: string, result: TasaBcvResult): TasaBcvResult {
+  tasaCache.set(iso, { result, at: Date.now() });
+  return result;
+}
+
 /** Bolívares por 1 USD (tasa oficial BCV) para una fecha YYYY-MM-DD. */
 export async function obtenerTasaBcvVesPorUsd(fecha: string): Promise<TasaBcvResult> {
   const iso = normalizarFechaIso(fecha);
+  const cached = tasaCache.get(iso);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    return cached.result;
+  }
   const hoy = new Date().toISOString().slice(0, 10);
 
   try {
@@ -39,7 +51,9 @@ export async function obtenerTasaBcvVesPorUsd(fecha: string): Promise<TasaBcvRes
     if (res.ok) {
       const data = (await res.json()) as unknown;
       const tasa = tasaDesdePayload(data);
-      if (tasa) return { fecha: iso, tasa_bcv_ves_por_usd: tasa, fuente: 'bcv.today' };
+      if (tasa) {
+        return guardarTasaEnCache(iso, { fecha: iso, tasa_bcv_ves_por_usd: tasa, fuente: 'bcv.today' });
+      }
     }
   } catch {
     /* historial no disponible para esa fecha */
@@ -51,7 +65,13 @@ export async function obtenerTasaBcvVesPorUsd(fecha: string): Promise<TasaBcvRes
       if (res.ok) {
         const data = (await res.json()) as unknown;
         const tasa = tasaDesdePayload(data);
-        if (tasa) return { fecha: iso, tasa_bcv_ves_por_usd: tasa, fuente: 'bcv.today_actual' };
+        if (tasa) {
+          return guardarTasaEnCache(iso, {
+            fecha: iso,
+            tasa_bcv_ves_por_usd: tasa,
+            fuente: 'bcv.today_actual',
+          });
+        }
       }
     } catch {
       /* sigue a fallback */
@@ -59,9 +79,11 @@ export async function obtenerTasaBcvVesPorUsd(fecha: string): Promise<TasaBcvRes
   }
 
   const env = tasaBcvVesPorUsdFromEnv();
-  if (env) return { fecha: iso, tasa_bcv_ves_por_usd: env, fuente: 'env' };
+  if (env) {
+    return guardarTasaEnCache(iso, { fecha: iso, tasa_bcv_ves_por_usd: env, fuente: 'env' });
+  }
 
-  return { fecha: iso, tasa_bcv_ves_por_usd: 36.5, fuente: 'fallback' };
+  return guardarTasaEnCache(iso, { fecha: iso, tasa_bcv_ves_por_usd: 36.5, fuente: 'fallback' });
 }
 
 /** Obtiene tasa BCV vía API interna (navegador) o consulta directa (servidor). */

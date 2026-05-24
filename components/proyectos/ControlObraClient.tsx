@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Database,
@@ -14,11 +14,15 @@ import {
   Trash2,
   X,
   Layers,
+  Printer,
+  FileText,
 } from 'lucide-react';
 import ApuPartidaDetalleModal from '@/components/proyectos/ApuPartidaDetalleModal';
 import PresupuestoPorCapitulos from '@/components/proyectos/PresupuestoPorCapitulos';
+import ResumenPresupuestoCapitulos from '@/components/proyectos/ResumenPresupuestoCapitulos';
 import { toast } from 'sonner';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
+import { buildResumenPresupuestoCapitulos } from '@/lib/proyectos/buildResumenPresupuestoCapitulos';
 import { buildObraDataPresupuesto } from '@/lib/proyectos/mapObraDataPresupuesto';
 import LuloVolcadoPorCapitulos from '@/components/proyectos/LuloVolcadoPorCapitulos';
 import LuloTablaFiltrable, { type LuloColumnaDef } from '@/components/proyectos/LuloTablaFiltrable';
@@ -145,6 +149,17 @@ type Props = {
   proyectoId: string;
   proyectoNombre?: string;
 };
+
+type TabObraId = 'partidas' | 'presupuesto' | 'gastos' | 'tablas';
+
+function tabDesdeQuery(raw: string | null): TabObraId | null {
+  if (!raw) return null;
+  if (raw === 'presupuesto' || raw === 'reporte') return 'presupuesto';
+  if (raw === 'partidas' || raw === 'cuadro') return 'partidas';
+  if (raw === 'gastos') return 'gastos';
+  if (raw === 'tablas' || raw === 'volcado') return 'tablas';
+  return null;
+}
 
 function inputCls(w = 'w-full') {
   return `${w} rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:border-amber-500/40 focus:outline-none`;
@@ -286,6 +301,7 @@ function FiltrosGastosPanel({
 
 export default function ControlObraClient({ proyectoId, proyectoNombre }: Props) {
   const params = useParams();
+  const searchParams = useSearchParams();
   const pid = useMemo(() => {
     if (proyectoId && isValidProyectoUuid(proyectoId)) {
       return resolveProyectoId(proyectoId, undefined);
@@ -312,7 +328,8 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const [filtrosPartidas, setFiltrosPartidas] = useState<FiltrosPartidasObra>(FILTROS_PARTIDAS_INICIAL);
   const [filtrosGastos, setFiltrosGastos] = useState<FiltrosGastosObra>(FILTROS_GASTOS_INICIAL);
   const [vistaAgrupacion, setVistaAgrupacion] = useState<VistaAgrupacionLulo>('capitulos');
-  const [reporteVariant, setReporteVariant] = useState<'app' | 'report'>('report');
+  const [reporteVariant, setReporteVariant] = useState<'app' | 'report' | 'representante'>('report');
+  const [mostrarDetalleReporte, setMostrarDetalleReporte] = useState(false);
   const [analisisGemini, setAnalisisGemini] = useState<string | null>(null);
   const [analisisGeminiMeta, setAnalisisGeminiMeta] = useState<string | null>(null);
   const [analisisGeminiLoading, setAnalisisGeminiLoading] = useState(false);
@@ -399,7 +416,12 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
     void load();
   }, [load]);
 
-  const setTabActivo = (t: 'partidas' | 'presupuesto' | 'gastos' | 'tablas') => {
+  useEffect(() => {
+    const t = tabDesdeQuery(searchParams.get('tab'));
+    if (t) setTab(t);
+  }, [searchParams]);
+
+  const setTabActivo = (t: TabObraId) => {
     setTab(t);
     if (t === 'gastos' && vistaAgrupacion === 'capitulos') {
       setVistaAgrupacion('disciplinas');
@@ -580,13 +602,21 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
   const obraPresupuesto = useMemo(
     () =>
       buildObraDataPresupuesto(
-        ordenarPartidasPorCapitulos(partidasFiltradas),
+        ordenarPartidasPorCapitulos(partidas),
         proyectoMeta,
         proyectoNombre,
         pid,
       ),
-    [partidasFiltradas, proyectoMeta, proyectoNombre, pid],
+    [partidas, proyectoMeta, proyectoNombre, pid],
   );
+
+  const resumenRepresentante = useMemo(
+    () => buildResumenPresupuestoCapitulos(obraPresupuesto),
+    [obraPresupuesto],
+  );
+
+  const hayVolcadoSinPartidas =
+    !loading && partidas.length === 0 && (snapshots.length > 0 || snapshotDetail != null);
 
   async function consultarAnalisisGemini() {
     setAnalisisGeminiLoading(true);
@@ -792,6 +822,20 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
         </div>
       </div>
 
+      {hayVolcadoSinPartidas ? (
+        <div className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-4 text-sm text-amber-100/90">
+          <p className="font-semibold flex items-center gap-2">
+            <FileText className="h-4 w-4 shrink-0" />
+            Hay volcado Lulo guardado, pero el cuadro de partidas está vacío
+          </p>
+          <ol className="mt-2 list-decimal list-inside space-y-1 text-xs text-amber-200/80">
+            <li>Reimporta el MDB marcando la tabla <strong>PARTIDAS</strong> (o el mapeo de columnas sugerido).</li>
+            <li>Revisa la pestaña <button type="button" className="underline hover:text-white" onClick={() => setTabActivo('tablas')}>Volcado Lulo</button> para ver tablas crudas del archivo.</li>
+            <li>Abre <button type="button" className="underline hover:text-white" onClick={() => setTabActivo('presupuesto')}>Reporte Lulo</button> cuando ya existan partidas importadas.</li>
+          </ol>
+        </div>
+      ) : null}
+
       {snapshots.length > 0 ? (
         <div className="rounded-xl border border-white/10 bg-zinc-900/60 p-4">
           <p className="text-xs font-semibold text-zinc-500 uppercase mb-2">Importaciones guardadas</p>
@@ -915,14 +959,35 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] text-zinc-500">
-              Resumen por capítulo (formato Lulo): totales, % y rango de partidas (
-              {partidasFiltradas.length} de {partidas.length}).
+              Reporte completo · {partidas.length} partidas
+              {partidasFiltradas.length !== partidas.length
+                ? ` (en Cuadro ves ${partidasFiltradas.length} por filtros activos)`
+                : ''}
             </p>
             <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-zinc-200 hover:bg-white/5"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Imprimir
+            </button>
+            <button
+              type="button"
+              onClick={() => setMostrarDetalleReporte((v) => !v)}
+              className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold ${
+                mostrarDetalleReporte
+                  ? 'border-amber-500/40 bg-amber-950/40 text-amber-100'
+                  : 'border-white/10 text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {mostrarDetalleReporte ? 'Ocultar detalle' : 'Ver detalle partidas'}
+            </button>
+            <button
+              type="button"
               onClick={() => void consultarAnalisisGemini()}
-              disabled={analisisGeminiLoading || partidasFiltradas.length === 0}
+              disabled={analisisGeminiLoading || partidas.length === 0}
               className="rounded-lg border border-amber-500/40 bg-amber-950/40 px-3 py-1.5 text-[11px] font-semibold text-amber-100 hover:bg-amber-900/50 disabled:opacity-50"
             >
               {analisisGeminiLoading ? 'Analizando…' : 'Interpretar con Gemini'}
@@ -950,6 +1015,17 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
               >
                 Tema app
               </button>
+              <button
+                type="button"
+                onClick={() => setReporteVariant('representante')}
+                className={`rounded-md px-2.5 py-1 ${
+                  reporteVariant === 'representante'
+                    ? 'bg-emerald-500/20 text-emerald-200'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Representante
+              </button>
             </div>
             </div>
           </div>
@@ -961,16 +1037,23 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
               {analisisGemini}
             </div>
           ) : null}
-          {partidasFiltradas.length === 0 ? (
+          {partidas.length === 0 ? (
             <p className="text-sm text-zinc-500 rounded-xl border border-dashed border-white/10 py-12 text-center">
-              Sin partidas para el reporte. Importa un MDB/CSV o ajusta los filtros.
+              Sin partidas para el reporte. Importa un MDB/CSV arriba o revisa el volcado en la pestaña Volcado Lulo.
             </p>
+          ) : reporteVariant === 'representante' ? (
+            <ResumenPresupuestoCapitulos
+              {...resumenRepresentante}
+              className="print:shadow-none"
+            />
           ) : (
             <PresupuestoPorCapitulos
               obra={obraPresupuesto}
               variant={reporteVariant}
               moneda="USD"
               titulo="PRESUPUESTO POR CAPITULOS"
+              mostrarDetalle={mostrarDetalleReporte}
+              className="print:shadow-none print:border-0"
             />
           )}
         </div>

@@ -3,6 +3,7 @@ import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import { normalizeLuloRow, pickField, pickNumber } from '@/lib/proyectos/luloFieldMapping';
 import { normalizeColumnKey } from '@/lib/proyectos/luloColumnInfer';
 import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
+import { montoPartidaDesdeCantidadPrecio } from '@/lib/utils/numericDbLimits';
 import {
   findLuloTable,
   luloMdbHasEstructuraNativa,
@@ -107,6 +108,7 @@ function parsePartidasTable(
   const cUni = resolveLuloColumn(cols, LULO_PARTIDA_COLS.unidad);
   const cCan = resolveLuloColumn(cols, LULO_PARTIDA_COLS.cantidad);
   const cPre = resolveLuloColumn(cols, LULO_PARTIDA_COLS.precio);
+  const cMon = resolveLuloColumn(cols, LULO_PARTIDA_COLS.monto);
 
   const out: PartidaLuloInsert[] = [];
   const seen = new Set<string>();
@@ -130,7 +132,12 @@ function parsePartidasTable(
       cell(row, cDes) || pickField(row, [...LULO_PARTIDA_COLS.descripcion]) || codigo;
     const cantidad = num(row, cCan, LULO_PARTIDA_COLS.cantidad);
     const precio = num(row, cPre, LULO_PARTIDA_COLS.precio);
-    const montoExplicito = precio > 0 && cantidad <= 0 ? precio : undefined;
+    const montoCsv = num(row, cMon, LULO_PARTIDA_COLS.monto);
+    const monto = montoPartidaDesdeCantidadPrecio(
+      cantidad,
+      precio,
+      montoCsv > 0 ? montoCsv : undefined,
+    );
 
     out.push({
       proyecto_id: proyectoId,
@@ -139,7 +146,7 @@ function parsePartidasTable(
       unidad: (cell(row, cUni) || pickField(row, [...LULO_PARTIDA_COLS.unidad]) || 'UND').trim(),
       cantidad_presupuestada: cantidad,
       precio_unitario_estimado: precio,
-      monto_total_estimado: montoExplicito ?? 0,
+      monto_total_estimado: monto,
       origen: 'lulo_mdb',
     });
   }

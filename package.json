@@ -18,6 +18,7 @@
     "verify:service-role": "node scripts/verify-service-role.mjs",
     "verify:db": "node scripts/verify-db.mjs",
     "db:apply-lulo-telegram": "node scripts/apply-migrations-lulo-telegram.mjs",
+    "mdb:list-tables": "node scripts/list-mdb-tables.mjs",
     "telegram:webhook": "node scripts/set-telegram-webhook.mjs",
     "telegram:check": "node scripts/check-telegram-webhook.mjs",
     "telegram:local": "node scripts/replay-telegram-local.mjs",

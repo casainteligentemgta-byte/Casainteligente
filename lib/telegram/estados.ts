@@ -16,7 +16,13 @@ export type TelegramEstado = {
   updated_at?: string;
 };
 
-const CONTEXTOS: TelegramContexto[] = ['menu', 'factura', 'obra', 'gasto_obra'];
+const CONTEXTOS: TelegramContexto[] = [
+  'menu',
+  'factura',
+  'obra',
+  'gasto_obra',
+  'esperando_audio_bitacora',
+];
 
 export function isTelegramContexto(v: string): v is TelegramContexto {
   return (CONTEXTOS as string[]).includes(v);

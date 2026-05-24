@@ -1,7 +1,7 @@
 import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_MODEL } from '@/lib/recruitment/constants';
 import { fmtMontoLulo } from '@/lib/proyectos/presupuestoCapitulosFormat';
-import type { CapituloPresupuestoGrupo } from '@/components/proyectos/PresupuestoPorCapitulos';
+import type { CapituloPresupuestoGrupo } from '@/lib/proyectos/presupuestoObraCalculos';
 
 export async function analizarPresupuestoPorCapitulosGemini(input: {
   nombreObra: string;

@@ -3,7 +3,9 @@ import {
   bulkInsertCiPresupuestoPartidas,
   eliminarPartidasLuloDeProyecto,
 } from '@/lib/proyectos/guardarPartidasPresupuestoBulk';
+import { actualizarTechosTeoricosMaterialProyecto } from '@/lib/proyectos/actualizarTechosTeoricosMaterial';
 import type { LuloEstructuradoParse } from '@/lib/proyectos/parseLuloMdbEstructurado';
+import { validarLuloEstructurado } from '@/lib/proyectos/validarLuloEstructurado';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import {
   clampNumeric15_6,
@@ -18,6 +20,7 @@ export type PersistirLuloEstructuradoResult = {
   partidasInsertadas: number;
   apuInsertados: number;
   proyectoActualizado: boolean;
+  techosMaterialActualizados: number;
 };
 
 async function upsertInsumosMaestro(
@@ -175,6 +178,11 @@ export async function persistirLuloEstructurado(
   const pid = proyectoId.trim();
   const reemplazar = options?.reemplazar ?? false;
 
+  const validacion = validarLuloEstructurado(parsed);
+  if (!validacion.ok) {
+    throw new Error([...validacion.errors, validacion.hint].filter(Boolean).join(' '));
+  }
+
   const insumoIds = await upsertInsumosMaestro(supabase, parsed.insumos);
   const proyectoActualizado = await actualizarProyectoDesdeObra(supabase, pid, parsed.obra);
 
@@ -205,10 +213,18 @@ export async function persistirLuloEstructurado(
 
   const apuInsertados = await insertApu(supabase, parsed.apu, partidaIds, insumoIds);
 
+  const partidaIdsList = Array.from(partidaIds.values());
+  const { partidasActualizadas } = await actualizarTechosTeoricosMaterialProyecto(
+    supabase,
+    pid,
+    partidaIdsList.length > 0 ? partidaIdsList : undefined,
+  );
+
   return {
     insumosUpserted: parsed.insumos.length,
     partidasInsertadas: insertadas,
     apuInsertados,
     proyectoActualizado,
+    techosMaterialActualizados: partidasActualizadas,
   };
 }

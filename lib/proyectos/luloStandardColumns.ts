@@ -7,6 +7,7 @@ export const defaultMapping = {
   unidad: 'UniPar',
   cantidad: 'CanPar',
   precio: 'PrePar',
+  monto: 'MonPar',
 } as const;
 
 export type LuloPartidaFieldMapping = {
@@ -15,6 +16,7 @@ export type LuloPartidaFieldMapping = {
   unidad: string;
   cantidad: string;
   precio: string;
+  monto?: string;
   tableName?: string;
 };
 
@@ -164,7 +166,20 @@ export function inferPartidaMappingFromColumns(columns: string[]): LuloPartidaFi
     /unitario/,
     /^pu$/,
     /costo_unit/,
+  ]);
+  const monto = guessColumn(columns, [
+    /^monpar$/,
+    /^mon_par$/,
+    /^totpar$/,
+    /^tot_par$/,
+    /^imppar$/,
+    /monto/,
+    /^total$/,
+    /importe/,
     /parcial/,
+    /^pt$/,
+    /costo_total/,
+    /valor/,
   ]);
 
   return {
@@ -173,6 +188,7 @@ export function inferPartidaMappingFromColumns(columns: string[]): LuloPartidaFi
     unidad,
     cantidad,
     precio,
+    monto: monto || undefined,
   };
 }
 
@@ -189,6 +205,7 @@ function mappingFromCustom(
       customMapping.precio ??
       legacy.precio_unitario ??
       defaultMapping.precio,
+    monto: customMapping.monto ?? legacy.monto_total ?? defaultMapping.monto,
     tableName: customMapping.tableName,
   };
 }

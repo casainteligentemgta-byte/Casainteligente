@@ -11,6 +11,7 @@ import {
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import {
   handleTelegramWebhookPost,
+  handleTelegramCallbackQuery,
   type TelegramUpdate,
 } from '@/lib/telegram/webhook';
 
@@ -55,6 +56,23 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
   }
 
   const msg = update.message;
+  const callback = update.callback_query;
+
+  if (callback) {
+    const chatId = callback.message?.chat?.id
+      ? String(callback.message.chat.id)
+      : String(callback.from.id);
+    if (!isChatAllowed(chatId)) {
+      try {
+        await sendTelegramMessage(chatId, '⛔ Chat no autorizado. Contacte al administrador.');
+      } catch (err) {
+        console.error('[telegram webhook] callback chat no autorizado', err);
+      }
+      return respuestaWebhook({ ok: true, denied: true });
+    }
+    return handleTelegramCallbackQuery(update);
+  }
+
   if (!msg) {
     return respuestaWebhook({ ok: true, skipped: 'no_message' });
   }

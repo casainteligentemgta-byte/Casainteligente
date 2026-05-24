@@ -1,4 +1,4 @@
-import type { ObraData, Partida as PartidaPresupuesto } from '@/components/proyectos/PresupuestoPorCapitulos';
+import type { ObraData, Partida as PartidaPresupuesto } from '@/lib/proyectos/presupuestoObraCalculos';
 
 export type PartidaPresupuestoFuente = {
   id: string;

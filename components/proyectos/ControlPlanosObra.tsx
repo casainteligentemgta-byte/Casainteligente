@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
+import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 
 type EstatusPlano = 'revision' | 'aprobado_construccion' | 'obsoleto';
 
@@ -199,15 +200,9 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
     }
   };
 
-  return (
-    <div
-      className={`bg-[#0A0A0F] border border-white/10 rounded-xl p-5 text-white w-full ${className}`.trim()}
-    >
-      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-        <div>
-          <h4 className="text-sm font-semibold tracking-wide">Planos y especificaciones técnicas</h4>
-          <p className="text-xs text-zinc-400">Control de versiones de ingeniería y arquitectura.</p>
-        </div>
+  const panelSubir = (
+    <>
+      <div className="flex justify-end mb-3">
         <button
           type="button"
           onClick={() => {
@@ -220,9 +215,8 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
           {uploadOpen ? 'Cancelar' : 'Subir nueva revisión'}
         </button>
       </div>
-
       {uploadOpen ? (
-        <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-zinc-300">Nueva revisión</p>
             <button
@@ -296,7 +290,20 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
           </button>
         </div>
       ) : null}
+    </>
+  );
 
+  return (
+    <div
+      className={`bg-[#0A0A0F] border border-white/10 rounded-xl p-5 text-white w-full ${className}`.trim()}
+    >
+      <SeccionTituloHover
+        titulo="Planos y especificaciones técnicas"
+        tituloClassName="text-sky-300/90"
+        hint="Pasa el cursor sobre el título para subir una revisión"
+        descripcion="Control de versiones de ingeniería y arquitectura."
+        panelOculto={panelSubir}
+      >
       {loading ? (
         <p className="text-xs text-zinc-500 flex items-center gap-2">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -381,6 +388,7 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
           ))}
         </div>
       )}
+      </SeccionTituloHover>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import { Calculator, RefreshCw, Trash2, FileJson } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -221,6 +222,8 @@ export default function AdminConfigNominaPage() {
             </Button>
           </div>
         </header>
+
+        <CuadroNominaContratados titulo="Contratados activos" />
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl backdrop-blur-xl">
           <div className="flex items-start gap-3">

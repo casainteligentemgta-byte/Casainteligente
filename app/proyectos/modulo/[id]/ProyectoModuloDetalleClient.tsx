@@ -20,8 +20,10 @@ import {
 import ModalNuevaVacante from './components/ModalNuevaVacante';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
+import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
+import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 
 const LOAD_TIMEOUT_MS = 45_000;
@@ -652,8 +654,20 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     if (tabUrl === 'finanzas' || tabUrl === 'rrhh') {
       return (
         <div className="space-y-6">
+          <Link
+            href={`/proyectos/modulo/${encodeURIComponent(id)}/control-obra?tab=presupuesto`}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-950/50 to-zinc-900/80 px-4 py-3 hover:border-amber-400/50 transition-colors"
+          >
+            <span className="text-sm font-semibold text-amber-100">
+              Ver presupuesto Lulo · reporte por capítulos y detalle de partidas
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400/90 shrink-0">
+              Control de obra →
+            </span>
+          </Link>
           <ImportarPresupuestoLulo proyectoId={id} onSuccess={() => void load()} />
           <ControlPlanosObra proyectoId={id} />
+          <CuadroNominaContratados proyectoModuloId={id} titulo="Contratados — nómina del proyecto" />
           <DashboardUtilidadReal proyectoId={id} className="" />
         </div>
       );
@@ -729,14 +743,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             ← Proyectos
           </Link>
           <div className="flex flex-wrap items-center gap-2">
-            {!tabCabeceraMinimaSinAcciones && !modoEdicion ? (
-              <Link
-                href={`/proyectos/modulo/${id}?editar=1`}
-                className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
-              >
-                Modificar proyecto
-              </Link>
-            ) : null}
             {modoEdicion && proyecto && !tabCabeceraMinimaSinAcciones && !fichaModuloSinPestaña ? (
               <>
                 <button
@@ -1089,35 +1095,41 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
 
               <ControlPlanosObra proyectoId={id} className="mb-6" />
 
-              <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-                <h2 className="text-sm font-bold uppercase text-zinc-500">Fotos / planos</h2>
-                <form onSubmit={(e) => void addArchivo(e)} className="mt-3 grid gap-2">
-                  <select
-                    value={arTipo}
-                    onChange={(e) => setArTipo(e.target.value)}
-                    style={{ colorScheme: 'dark' }}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-sky-500/40"
-                  >
-                    <option value="foto_proyecto">Foto de proyecto</option>
-                    <option value="plano">Plano</option>
-                    <option value="documento">Documento</option>
-                    <option value="otro">Otro</option>
-                  </select>
-                  <input
-                    value={arTitulo}
-                    onChange={(e) => setArTitulo(e.target.value)}
-                    placeholder="Titulo"
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none"
-                  />
-                  <input
-                    type="file"
-                    onChange={(e) => setArFile(e.target.files?.[0] ?? null)}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-300 file:mr-2 file:rounded-lg file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-white"
-                  />
-                  <button disabled={savingArchivo || !arFile} className="w-fit rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                    {savingArchivo ? 'Subiendo...' : 'Subir archivo'}
-                  </button>
-                </form>
+              <SeccionTituloHover
+                className="border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl"
+                titulo="Fotos / planos"
+                hint="Pasa el cursor sobre el título para subir foto o archivo"
+                descripcion="Fotos de obra, planos sueltos y documentos del proyecto."
+                panelOculto={
+                  <form onSubmit={(e) => void addArchivo(e)} className="grid gap-2">
+                    <select
+                      value={arTipo}
+                      onChange={(e) => setArTipo(e.target.value)}
+                      style={{ colorScheme: 'dark' }}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-sky-500/40"
+                    >
+                      <option value="foto_proyecto">Foto de proyecto</option>
+                      <option value="plano">Plano</option>
+                      <option value="documento">Documento</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                    <input
+                      value={arTitulo}
+                      onChange={(e) => setArTitulo(e.target.value)}
+                      placeholder="Titulo"
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none"
+                    />
+                    <input
+                      type="file"
+                      onChange={(e) => setArFile(e.target.files?.[0] ?? null)}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-300 file:mr-2 file:rounded-lg file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-white"
+                    />
+                    <button disabled={savingArchivo || !arFile} className="w-fit rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                      {savingArchivo ? 'Subiendo...' : 'Subir archivo'}
+                    </button>
+                  </form>
+                }
+              >
                 <ul className="mt-4 space-y-2 text-sm">
                   {archivos.map((a) => (
                     <li key={a.id} className="rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 py-2">
@@ -1163,46 +1175,53 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     </li>
                   ))}
                 </ul>
-              </section>
+              </SeccionTituloHover>
             </div>
 
-            <section className="mt-6 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-              <h2 className="text-sm font-bold uppercase text-zinc-500">Historial de visitas tecnicas</h2>
-              <form onSubmit={(e) => void addVisita(e)} className="mt-3 grid gap-2">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <input
-                    value={vTecnico}
-                    onChange={(e) => setVTecnico(e.target.value)}
-                    placeholder="Tecnico *"
+            <SeccionTituloHover
+              className="mt-6 border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl"
+              titulo="Historial de visitas técnicas"
+              tituloClassName="text-emerald-400/90"
+              hint="Pasa el cursor sobre el título para registrar una inspección"
+              descripcion="Visitas técnicas con informe y foto previa a la inspección."
+              panelOculto={
+                <form onSubmit={(e) => void addVisita(e)} className="grid gap-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={vTecnico}
+                      onChange={(e) => setVTecnico(e.target.value)}
+                      placeholder="Tecnico *"
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none"
+                    />
+                    <input
+                      type="datetime-local"
+                      value={vFechaHora}
+                      onChange={(e) => setVFechaHora(e.target.value)}
+                      style={{ colorScheme: 'dark' }}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <textarea
+                    value={vInforme}
+                    onChange={(e) => setVInforme(e.target.value)}
+                    rows={3}
+                    placeholder="Informe breve de inspeccion *"
                     className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none"
                   />
-                  <input
-                    type="datetime-local"
-                    value={vFechaHora}
-                    onChange={(e) => setVFechaHora(e.target.value)}
-                    style={{ colorScheme: 'dark' }}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-                <textarea
-                  value={vInforme}
-                  onChange={(e) => setVInforme(e.target.value)}
-                  rows={3}
-                  placeholder="Informe breve de inspeccion *"
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none"
-                />
-                <div>
-                  <label className="text-xs font-semibold uppercase text-zinc-500">Foto antes de inspeccionar</label>
-                  <input
-                    type="file"
-                    onChange={(e) => setVFotoAntes(e.target.files?.[0] ?? null)}
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-300 file:mr-2 file:rounded-lg file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-white"
-                  />
-                </div>
-                <button disabled={savingVisita} className="w-fit rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                  {savingVisita ? 'Guardando...' : 'Registrar visita'}
-                </button>
-              </form>
+                  <div>
+                    <label className="text-xs font-semibold uppercase text-zinc-500">Foto antes de inspeccionar</label>
+                    <input
+                      type="file"
+                      onChange={(e) => setVFotoAntes(e.target.files?.[0] ?? null)}
+                      className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-300 file:mr-2 file:rounded-lg file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-white"
+                    />
+                  </div>
+                  <button disabled={savingVisita} className="w-fit rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                    {savingVisita ? 'Guardando...' : 'Registrar visita'}
+                  </button>
+                </form>
+              }
+            >
               <ul className="mt-4 space-y-3">
                 {visitas.map((v) => (
                   <li key={v.id} className="rounded-xl border border-white/[0.06] bg-white/[0.04] p-3">
@@ -1265,7 +1284,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   </li>
                 ))}
               </ul>
-            </section>
+            </SeccionTituloHover>
               </>
               ) : null}
               {!modoEdicion && panelRrhhModulo ? (

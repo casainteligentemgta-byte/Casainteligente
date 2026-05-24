@@ -1,7 +1,10 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
+import { Loader2, Pencil, Trash2 } from 'lucide-react';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
+import type { ColumnaOrdenCompras, DireccionOrden } from '@/lib/contabilidad/ordenarLineasCompras';
 import {
   formatearBs,
   formatearTasaBcv,
@@ -9,9 +12,23 @@ import {
   vesAUsdConTasa,
 } from '@/lib/contabilidad/comprasMontos';
 
+export type AccionesCompraLinea = {
+  puedeModificar: boolean;
+  etiquetaEliminar: string;
+};
+
 type Props = {
   filas: FilaFacturaCanal[];
   onScrollToCompra?: (compraId: string) => void;
+  accionesPorCompra?: (compraId: string) => AccionesCompraLinea | null;
+  onModificar?: (compraId: string) => void;
+  onEliminar?: (compraId: string) => void;
+  deletingId?: string | null;
+  sortColumn?: ColumnaOrdenCompras | null;
+  sortDir?: DireccionOrden;
+  onSort?: (column: ColumnaOrdenCompras) => void;
+  /** Sin rowSpan cuando el orden no agrupa por factura. */
+  ordenPlano?: boolean;
 };
 
 function subtotalUsdFila(row: FilaFacturaCanal, subtotalBs: number): number | null {
@@ -23,7 +40,78 @@ function subtotalUsdFila(row: FilaFacturaCanal, subtotalBs: number): number | nu
   return row.esLinea ? null : row.montoUsd;
 }
 
-export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
+function esFilaAcciones(filas: FilaFacturaCanal[], row: FilaFacturaCanal, index: number): boolean {
+  if (!row.esLinea) return true;
+  const first = filas.findIndex((f) => f.pendienteId === row.pendienteId);
+  return first === index;
+}
+
+export default function ComprasLineasTable({
+  filas,
+  onScrollToCompra,
+  accionesPorCompra,
+  onModificar,
+  onEliminar,
+  deletingId = null,
+  sortColumn = null,
+  sortDir = 'asc',
+  onSort,
+  ordenPlano = false,
+}: Props) {
+  const muestraAcciones = Boolean(onEliminar || onModificar);
+
+  const filasPorFactura = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of filas) {
+      m.set(f.pendienteId, (m.get(f.pendienteId) ?? 0) + 1);
+    }
+    return m;
+  }, [filas]);
+
+  function SortTh({
+    col,
+    label,
+    align = 'left',
+  }: {
+    col: ColumnaOrdenCompras;
+    label: string;
+    align?: 'left' | 'right';
+  }) {
+    const active = sortColumn === col;
+    const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+    if (!onSort) {
+      return (
+        <th style={{ ...th, textAlign: align }}>
+          {label}
+        </th>
+      );
+    }
+    return (
+      <th style={{ ...th, textAlign: align }}>
+        <button
+          type="button"
+          onClick={() => onSort(col)}
+          title={`Ordenar por ${label}`}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: active ? '#a5b4fc' : 'inherit',
+            font: 'inherit',
+            fontWeight: 800,
+            cursor: 'pointer',
+            padding: 0,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {label}
+          {arrow}
+        </button>
+      </th>
+    );
+  }
+
   if (filas.length === 0) {
     return (
       <div
@@ -56,17 +144,18 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
       <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}>
-            <th style={th}>Fecha</th>
-            <th style={th}>Factura</th>
-            <th style={th}>Proveedor</th>
-            <th style={th}>RIF</th>
-            <th style={th}>Artículo</th>
-            <th style={{ ...th, textAlign: 'right' }}>Cant.</th>
-            <th style={{ ...th, textAlign: 'right' }}>P.U. (Bs)</th>
-            <th style={{ ...th, textAlign: 'right' }}>Subtotal (Bs)</th>
-            <th style={{ ...th, textAlign: 'right' }}>USD</th>
-            <th style={{ ...th, textAlign: 'right' }}>Tasa BCV</th>
-            <th style={th}>Ver factura</th>
+            <SortTh col="fecha" label="Fecha" />
+            <SortTh col="factura" label="Factura" />
+            <SortTh col="proveedor" label="Proveedor" />
+            <SortTh col="rif" label="RIF" />
+            <SortTh col="articulo" label="Artículo" />
+            <SortTh col="cantidad" label="Cant." align="right" />
+            <SortTh col="precioUnitario" label="P.U. (Bs)" align="right" />
+            <SortTh col="subtotalBs" label="Subtotal (Bs)" align="right" />
+            <SortTh col="usd" label="USD" align="right" />
+            <SortTh col="tasaBcv" label="Tasa BCV" align="right" />
+            <th style={th}>Ver imagen</th>
+            {muestraAcciones ? <th style={th}>Acciones</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -75,6 +164,16 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
               ? row.cantidad * row.precioUnitario
               : row.montoBs;
             const usd = subtotalUsdFila(row, subtotalBs);
+            const mostrarAcciones = muestraAcciones && esFilaAcciones(filas, row, i);
+            const acc =
+              mostrarAcciones && accionesPorCompra
+                ? accionesPorCompra(row.pendienteId)
+                : null;
+            const rowSpan = ordenPlano
+              ? 1
+              : mostrarAcciones
+                ? (filasPorFactura.get(row.pendienteId) ?? 1)
+                : 1;
 
             return (
               <tr
@@ -126,10 +225,54 @@ export default function ComprasLineasTable({ filas, onScrollToCompra }: Props) {
                         cursor: 'pointer',
                       }}
                     >
-                      Ver factura
+                      Ver imagen
                     </button>
                   ) : null}
                 </td>
+                {muestraAcciones ? (
+                  mostrarAcciones ? (
+                    <td style={{ ...td, verticalAlign: 'top' }} rowSpan={rowSpan}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          minWidth: '108px',
+                        }}
+                      >
+                        {acc?.puedeModificar && onModificar ? (
+                          <button
+                            type="button"
+                            onClick={() => onModificar(row.pendienteId)}
+                            disabled={deletingId !== null}
+                            style={btnModificar}
+                          >
+                            <Pencil size={12} />
+                            Modificar
+                          </button>
+                        ) : null}
+                        {onEliminar ? (
+                          <button
+                            type="button"
+                            onClick={() => onEliminar(row.pendienteId)}
+                            disabled={deletingId !== null}
+                            style={{
+                              ...btnEliminar,
+                              opacity: deletingId === row.pendienteId ? 0.6 : 1,
+                            }}
+                          >
+                            {deletingId === row.pendienteId ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={12} />
+                            )}
+                            {acc?.etiquetaEliminar ?? 'Eliminar'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  ) : null
+                ) : null}
               </tr>
             );
           })}
@@ -153,4 +296,34 @@ const td: CSSProperties = {
   padding: '10px 12px',
   color: 'white',
   verticalAlign: 'top',
+};
+
+const btnModificar: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '6px 10px',
+  borderRadius: '8px',
+  border: '1px solid rgba(56,189,248,0.45)',
+  background: 'rgba(14,116,144,0.35)',
+  color: '#7dd3fc',
+  fontSize: '10px',
+  fontWeight: 800,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const btnEliminar: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '6px 10px',
+  borderRadius: '8px',
+  border: '1px solid rgba(255,59,48,0.4)',
+  background: 'rgba(255,59,48,0.15)',
+  color: '#FF6B6B',
+  fontSize: '10px',
+  fontWeight: 800,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
 };

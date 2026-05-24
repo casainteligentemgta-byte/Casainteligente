@@ -1,51 +1,29 @@
 'use client';
 
 import { useMemo } from 'react';
-import { getCapituloKeyPartida } from '@/lib/proyectos/luloCapitulos';
+import {
+  agruparPartidasPorCapitulo,
+  parcialPartida,
+  type CapituloPresupuestoGrupo,
+  type ObraData,
+  type Partida,
+} from '@/lib/proyectos/presupuestoObraCalculos';
 import {
   fmtMontoLulo,
   fmtPorcentajeLulo,
   montoUsdEnLetrasMayus,
-  nombreCapituloLulo,
-  rangoPartidasLulo,
 } from '@/lib/proyectos/presupuestoCapitulosFormat';
-import { compareCodigoNatural } from '@/lib/proyectos/luloVistaAgrupada';
+
+export type {
+  CapituloPresupuestoGrupo,
+  ObraData,
+  Partida,
+} from '@/lib/proyectos/presupuestoObraCalculos';
+export { agruparPartidasPorCapitulo, parcialPartida } from '@/lib/proyectos/presupuestoObraCalculos';
 
 /* -------------------------------------------------------------------------- */
-/* Tipos                                                                       */
+/* Tipos (props del componente)                                              */
 /* -------------------------------------------------------------------------- */
-
-export interface Partida {
-  id: string;
-  codigo_covenin: string;
-  descripcion: string;
-  unidad: string;
-  cantidad: number;
-  precio_unitario: number;
-  capitulo: string;
-  capitulo_codigo?: string | null;
-  capitulo_descripcion?: string | null;
-  capitulo_orden?: number | null;
-  monto_total_estimado?: number | null;
-}
-
-export interface ObraData {
-  nombre_obra: string;
-  ubicacion: string;
-  propietario: string;
-  contrato_nro: string;
-  fecha: string;
-  partidas: Partida[];
-}
-
-export type CapituloPresupuestoGrupo = {
-  capitulo: string;
-  titulo: string;
-  rango: string;
-  partidas: Partida[];
-  subtotal: number;
-  porcentaje: number;
-};
 
 export type PresupuestoPorCapitulosProps = {
   obra: ObraData;
@@ -54,86 +32,9 @@ export type PresupuestoPorCapitulosProps = {
   titulo?: string;
   className?: string;
   pagina?: number;
+  /** Tablas de partidas por capítulo (estilo listado Lulo debajo del resumen). */
+  mostrarDetalle?: boolean;
 };
-
-/* -------------------------------------------------------------------------- */
-/* Cálculos                                                                    */
-/* -------------------------------------------------------------------------- */
-
-export function parcialPartida(p: Partida): number {
-  const monto = Number(p.monto_total_estimado ?? 0);
-  if (Number.isFinite(monto) && monto > 0) return Math.round(monto * 100) / 100;
-  const c = Number.isFinite(p.cantidad) ? p.cantidad : 0;
-  const pu = Number.isFinite(p.precio_unitario) ? p.precio_unitario : 0;
-  return Math.round(c * pu * 100) / 100;
-}
-
-export function agruparPartidasPorCapitulo(partidas: Partida[]): CapituloPresupuestoGrupo[] {
-  const map = new Map<string, Partida[]>();
-  const ordenMeta = new Map<string, number>();
-  const descMeta = new Map<string, string>();
-
-  for (const p of partidas) {
-    const key = getCapituloKeyPartida({
-      codigo_partida: p.codigo_covenin,
-      capitulo_codigo: p.capitulo_codigo,
-    });
-    if (!map.has(key)) {
-      map.set(key, []);
-      ordenMeta.set(key, Number(p.capitulo_orden ?? 9999));
-    } else {
-      ordenMeta.set(key, Math.min(ordenMeta.get(key)!, Number(p.capitulo_orden ?? 9999)));
-    }
-    const desc = String(p.capitulo_descripcion ?? '').trim();
-    if (desc && !descMeta.has(key)) descMeta.set(key, desc);
-    map.get(key)!.push(p);
-  }
-
-  const keys = Array.from(map.keys()).sort((ka, kb) => {
-    const oa = ordenMeta.get(ka) ?? 9999;
-    const ob = ordenMeta.get(kb) ?? 9999;
-    if (oa !== ob) return oa - ob;
-    return compareCodigoNatural(ka, kb);
-  });
-
-  const indiceGlobal = new Map<string, number>();
-  let n = 0;
-  for (const key of keys) {
-    const filas = [...(map.get(key) ?? [])].sort((a, b) =>
-      compareCodigoNatural(a.codigo_covenin, b.codigo_covenin),
-    );
-    for (const p of filas) {
-      n += 1;
-      indiceGlobal.set(p.id, n);
-    }
-  }
-
-  const grupos = keys.map((key) => {
-    const filas = [...(map.get(key) ?? [])].sort((a, b) =>
-      compareCodigoNatural(a.codigo_covenin, b.codigo_covenin),
-    );
-    const indices = filas.map((p) => indiceGlobal.get(p.id) ?? 0).filter((i) => i > 0);
-    const desde = indices.length ? Math.min(...indices) : 0;
-    const hasta = indices.length ? Math.max(...indices) : 0;
-    const desc = descMeta.get(key) ?? '';
-    const titulo = nombreCapituloLulo(desc, key);
-    const subtotal = filas.reduce((s, row) => s + parcialPartida(row), 0);
-    return {
-      capitulo: titulo,
-      titulo,
-      rango: rangoPartidasLulo(desde, hasta),
-      partidas: filas,
-      subtotal,
-      porcentaje: 0,
-    };
-  });
-
-  const total = grupos.reduce((s, g) => s + g.subtotal, 0);
-  return grupos.map((g) => ({
-    ...g,
-    porcentaje: total > 0 ? (g.subtotal / total) * 100 : 0,
-  }));
-}
 
 /* -------------------------------------------------------------------------- */
 /* Estilos                                                                     */
@@ -173,6 +74,7 @@ export default function PresupuestoPorCapitulos({
   titulo = 'PRESUPUESTO POR CAPITULOS',
   className = '',
   pagina = 1,
+  mostrarDetalle = false,
 }: PresupuestoPorCapitulosProps) {
   const t = STYLES[variant];
   const simbolo = moneda === 'VES' || moneda === 'Bs' ? 'Bs' : 'US$';
@@ -281,6 +183,61 @@ export default function PresupuestoPorCapitulos({
               </div>
             </div>
             <p className={`text-center ${t.letras}`}>{totalLetras}</p>
+          </div>
+        ) : null}
+
+        {mostrarDetalle && grupos.length > 0 ? (
+          <div className="mt-10 space-y-8 print:space-y-6">
+            <h2 className={`text-xs font-bold uppercase tracking-wider border-b pb-2 ${t.border} ${t.label}`}>
+              Detalle de partidas por capítulo
+            </h2>
+            {grupos.map((grupo) => (
+              <section key={`det-${grupo.titulo}-${grupo.rango}`} className="break-inside-avoid">
+                <div className={`mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b pb-1 ${t.border}`}>
+                  <h3 className={`text-[11px] font-bold uppercase ${t.label}`}>
+                    {grupo.titulo} {grupo.rango}
+                  </h3>
+                  <span className={`text-[11px] font-semibold tabular-nums ${t.label}`}>
+                    Subtotal {simbolo} {fmtMontoLulo(grupo.subtotal)}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse text-[10px]">
+                    <thead>
+                      <tr>
+                        <th className={`${t.headCell} text-left w-[14%]`}>Código</th>
+                        <th className={`${t.headCell} text-left`}>Descripción</th>
+                        <th className={`${t.headCell} text-center w-[8%]`}>Und</th>
+                        <th className={`${t.headCell} text-right w-[12%]`}>Cantidad</th>
+                        <th className={`${t.headCell} text-right w-[14%]`}>P.U.</th>
+                        <th className={`${t.headCell} text-right w-[14%]`}>Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grupo.partidas.map((p) => {
+                        const monto = parcialPartida(p);
+                        return (
+                          <tr key={p.id} className="align-top">
+                            <td className={`${t.bodyCell} font-mono ${t.label}`}>{p.codigo_covenin}</td>
+                            <td className={`${t.bodyCell} ${t.label} leading-snug`}>{p.descripcion}</td>
+                            <td className={`${t.bodyCell} text-center ${t.meta}`}>{p.unidad}</td>
+                            <td className={`${t.bodyCell} text-right tabular-nums ${t.meta}`}>
+                              {fmtMontoLulo(p.cantidad, 4)}
+                            </td>
+                            <td className={`${t.bodyCell} text-right tabular-nums ${t.meta}`}>
+                              {fmtMontoLulo(p.precio_unitario)}
+                            </td>
+                            <td className={`${t.bodyCell} text-right tabular-nums font-medium ${t.label}`}>
+                              {fmtMontoLulo(monto)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
           </div>
         ) : null}
       </div>
