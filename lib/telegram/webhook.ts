@@ -51,6 +51,11 @@ export type TelegramUpdate = {
       mime_type?: string;
       file_name?: string;
     };
+    video?: {
+      file_id: string;
+      mime_type?: string;
+      file_name?: string;
+    };
     caption?: string;
   };
   callback_query?: {

@@ -12,15 +12,23 @@ type PartidaRow = {
   cantidad_presupuestada: number | null;
 };
 
-type ApuJoinRow = {
+type ApuJoinRowRaw = {
   partida_id: string;
   cantidad_rendimiento: number | null;
   desperdicio_porcentaje: number | null;
-  ci_lulo_insumos_maestro: {
-    precio_base: number | null;
-    tipo: string | null;
-  } | null;
+  ci_lulo_insumos_maestro:
+    | { precio_base: number | null; tipo: string | null }
+    | { precio_base: number | null; tipo: string | null }[]
+    | null;
 };
+
+function insumoDesdeJoin(
+  raw: ApuJoinRowRaw['ci_lulo_insumos_maestro'],
+): { precio_base: number | null; tipo: string | null } | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw[0] ?? null;
+  return raw;
+}
 
 /**
  * Recalcula y persiste `techo_teorico_material` para todas las partidas de un proyecto.
@@ -60,8 +68,8 @@ export async function actualizarTechosTeoricosMaterialProyecto(
       .in('partida_id', batchIds);
     if (aErr) throw new Error(formatErrorMessage(aErr));
 
-    for (const row of (apuRows ?? []) as ApuJoinRow[]) {
-      const insumo = row.ci_lulo_insumos_maestro;
+    for (const row of (apuRows ?? []) as ApuJoinRowRaw[]) {
+      const insumo = insumoDesdeJoin(row.ci_lulo_insumos_maestro);
       if (!insumo) continue;
       const linea: LineaApuCalculoInput = {
         cantidad_rendimiento: Number(row.cantidad_rendimiento) || 0,
