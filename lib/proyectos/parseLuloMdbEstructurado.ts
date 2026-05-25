@@ -2,6 +2,7 @@ import type { PartidaLuloInsert } from '@/lib/proyectos/parsePresupuestoLuloCsv'
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import { normalizeLuloRow, pickField, pickNumber } from '@/lib/proyectos/luloFieldMapping';
 import { normalizeColumnKey } from '@/lib/proyectos/luloColumnInfer';
+import { enriquecerMontosPartidasDesdeApu } from '@/lib/proyectos/lulo/enriquecerMontosPartidasApu';
 import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
 import { montoPartidaDesdeCantidadPrecio } from '@/lib/utils/numericDbLimits';
 import {
@@ -255,11 +256,12 @@ export function parseLuloMdbEstructurado(
   const insumos = tInsumos ? parseInsumosTable(tInsumos) : [];
   const apu = tComposicion ? parseComposicionTable(tComposicion) : [];
   const partidasOrdenadas = enriquecerPartidasConCapitulos(partidas, dump, tPartidas);
+  const partidasConMontos = enriquecerMontosPartidasDesdeApu(partidasOrdenadas, { insumos, apu });
 
   return {
     detected: true,
     insumos,
-    partidas: partidasOrdenadas,
+    partidas: partidasConMontos,
     apu,
     obra,
     tablasUsadas: {

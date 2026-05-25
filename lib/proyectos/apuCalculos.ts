@@ -47,6 +47,22 @@ export function calcularCostoTotalInsumoApu(
   return base;
 }
 
+/** Costo unitario directo del APU (equipo + MO + materiales). */
+export function calcularCostoUnitarioDirectoApu(lineas: LineaApuCalculoInput[]): number {
+  return lineas.reduce((sum, linea) => {
+    const categoria = clasificarInsumoApu(linea.insumo.tipo);
+    return (
+      sum +
+      calcularCostoTotalInsumoApu(
+        categoria,
+        linea.cantidad_rendimiento,
+        linea.insumo.precio_base,
+        linea.desperdicio_porcentaje,
+      )
+    );
+  }, 0);
+}
+
 /** Costo unitario de materiales del APU (suma de líneas tipo material). */
 export function calcularCostoUnitarioMaterialesApu(lineas: LineaApuCalculoInput[]): number {
   return lineas.reduce((sum, linea) => {

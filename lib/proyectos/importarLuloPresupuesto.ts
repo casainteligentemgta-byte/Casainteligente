@@ -19,6 +19,10 @@ import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
 import { importarPresupuestoConstruccionDesdeMdb } from '@/lib/proyectos/importarPresupuestoConstruccion';
 import { parseLuloMdbEstructurado } from '@/lib/proyectos/parseLuloMdbEstructurado';
 import {
+  enriquecerMontosPartidasDesdeApu,
+  partidasNecesitanMontosApu,
+} from '@/lib/proyectos/lulo/enriquecerMontosPartidasApu';
+import {
   extensionArchivoPresupuestoLulo,
   validarLuloEstructurado,
 } from '@/lib/proyectos/validarLuloEstructurado';
@@ -314,6 +318,14 @@ export async function postImportarLuloPresupuesto(
       if (dumpCap) {
         partidasRaw = enriquecerPartidasConCapitulos(partidasRaw, dumpCap);
         meta = { ...meta, partidasOrdenadasPorCapitulo: true };
+
+        if (partidasNecesitanMontosApu(partidasRaw)) {
+          const structuredApu = parseLuloMdbEstructurado(dumpCap, pid);
+          if (structuredApu) {
+            partidasRaw = enriquecerMontosPartidasDesdeApu(partidasRaw, structuredApu);
+            meta = { ...meta, montosDesdeApu: true };
+          }
+        }
       }
     }
 

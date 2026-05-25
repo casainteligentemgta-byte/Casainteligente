@@ -162,6 +162,7 @@ export function inferPartidaMappingFromColumns(columns: string[]): LuloPartidaFi
   const precio = guessColumn(columns, [
     /^prepar$/,
     /^pre_par$/,
+    /^cospar$/,
     /precio/,
     /unitario/,
     /^pu$/,
@@ -173,6 +174,7 @@ export function inferPartidaMappingFromColumns(columns: string[]): LuloPartidaFi
     /^totpar$/,
     /^tot_par$/,
     /^imppar$/,
+    /^valpar$/,
     /monto/,
     /^total$/,
     /importe/,

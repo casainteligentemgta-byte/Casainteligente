@@ -1,4 +1,6 @@
 /** Normaliza nombre de columna Access/Lulo para comparar. */
+import { parseLuloNumber } from '@/lib/proyectos/luloCleanNumber';
+
 export function normalizeColumnKey(k: string): string {
   return k
     .trim()
@@ -56,9 +58,7 @@ export function fieldFromCol(row: Record<string, string>, col: string | null): s
 
 export function numberFromCol(row: Record<string, string>, col: string | null): number {
   if (!col) return 0;
-  const raw = (row[normalizeColumnKey(col)] ?? '').replace(/\s/g, '').replace(/,/g, '.');
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : 0;
+  return parseLuloNumber(row[normalizeColumnKey(col)] ?? '');
 }
 
 export type TablaDiagnostico = {

@@ -176,8 +176,18 @@ function rowToPartida(row: Record<string, unknown>, proyectoId: string): Partida
     'subpartida',
     'numero',
   ]);
-  const cantidad = pickNumber(r, ['cantidad', 'cant', 'cantidad_presupuestada', 'qty', 'volumen']);
+  const cantidad = pickNumber(r, [
+    'canpar',
+    'can_par',
+    'cantidad',
+    'cant',
+    'cantidad_presupuestada',
+    'qty',
+    'volumen',
+  ]);
   const precio = pickNumber(r, [
+    'prepar',
+    'pre_par',
     'precio_unitario',
     'precio',
     'unitario',
@@ -187,7 +197,18 @@ function rowToPartida(row: Record<string, unknown>, proyectoId: string): Partida
     'preciou',
     'pvp',
   ]);
-  const montoCsv = pickNumber(r, ['monto_total', 'monto', 'total', 'importe', 'subtotal', 'valor', 'pt']);
+  const montoCsv = pickNumber(r, [
+    'monpar',
+    'mon_par',
+    'totpar',
+    'monto_total',
+    'monto',
+    'total',
+    'importe',
+    'subtotal',
+    'valor',
+    'pt',
+  ]);
   const monto = montoPartidaDesdeCantidadPrecio(cantidad, precio, montoCsv > 0 ? montoCsv : undefined);
 
   if (!descripcion && !codigo) {
@@ -444,7 +465,7 @@ function valueFromMappedColumn(r: Record<string, string>, col: string | undefine
 }
 
 function numberFromMappedColumn(r: Record<string, string>, col: string | undefined): number {
-  return cleanNum(valueFromMappedColumn(r, col));
+  return parseLuloNumber(valueFromMappedColumn(r, col));
 }
 
 function rowToPartidaWithMapping(
