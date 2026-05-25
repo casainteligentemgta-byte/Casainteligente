@@ -3,6 +3,10 @@ import {
   isValidProyectoUuid,
   mensajeProyectoIdInvalido,
 } from '@/lib/proyectos/validarProyectoUuid';
+import { enriquecerPartidasMontosDesdeApuDb } from '@/lib/proyectos/lulo/enriquecerPartidasDesdeApuDb';
+import { enriquecerPartidasMontosDesdeVolcado } from '@/lib/proyectos/lulo/enriquecerMontosDesdeVolcado';
+import { persistirMontosPartidasLulo } from '@/lib/proyectos/lulo/persistirMontosPartidasLulo';
+import { payloadComoMdbDump } from '@/lib/proyectos/lulo/luloProyectoTypes';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
@@ -157,7 +161,7 @@ export async function GET(
 
     const supabase = await createClient();
 
-    const [partidas, gastos, snapshotsRes, proyecto] = await Promise.all([
+    const [partidas, gastos, snapshotsRes, ultimoSnapshotRes, proyecto] = await Promise.all([
       cargarPartidasLulo(supabase, proyectoId),
       cargarGastosLulo(supabase, proyectoId),
       supabase
@@ -166,6 +170,13 @@ export async function GET(
         .eq('proyecto_id', proyectoId)
         .order('created_at', { ascending: false })
         .limit(20),
+      supabase
+        .from('ci_lulo_import_snapshots')
+        .select('payload')
+        .eq('proyecto_id', proyectoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
       cargarProyectoLulo(supabase, proyectoId),
     ]);
 
@@ -173,7 +184,43 @@ export async function GET(
       console.warn('[GET lulo] snapshots:', snapshotsRes.error.message);
     }
 
-    const partidaIds = partidas.map((p) => p.id).filter(Boolean);
+    const pMeta = proyecto as {
+      porcentaje_admin?: number | null;
+      porcentaje_utilidad?: number | null;
+      porcentaje_fcm?: number | null;
+    } | null;
+    const margenes = pMeta
+      ? {
+          porcentaje_admin: pMeta.porcentaje_admin,
+          porcentaje_utilidad: pMeta.porcentaje_utilidad,
+          porcentaje_fcm: pMeta.porcentaje_fcm,
+        }
+      : undefined;
+
+    const dumpVolcado = payloadComoMdbDump(ultimoSnapshotRes.data?.payload);
+
+    let partidasTrabajo = partidas;
+    let montosDesdeVolcado = 0;
+    let mapaMontosVolcado = 0;
+
+    if (dumpVolcado) {
+      const vol = enriquecerPartidasMontosDesdeVolcado(partidasTrabajo, dumpVolcado);
+      partidasTrabajo = vol.partidas;
+      montosDesdeVolcado = vol.actualizadas;
+      mapaMontosVolcado = vol.mapaSize;
+      if (vol.actualizadas > 0) {
+        await persistirMontosPartidasLulo(supabase, partidas, vol.partidas);
+      }
+    }
+
+    const { partidas: partidasConMontos, actualizadas } = await enriquecerPartidasMontosDesdeApuDb(
+      supabase,
+      partidasTrabajo,
+      margenes,
+      { persistir: true },
+    );
+
+    const partidaIds = partidasConMontos.map((p) => p.id).filter(Boolean);
     const { apuLineas, insumosEnApu } = await contarApuPorPartidas(supabase, partidaIds);
 
     let insumosMaestroTotal = 0;
@@ -187,13 +234,17 @@ export async function GET(
 
     return NextResponse.json({
       proyecto,
-      partidas,
+      partidas: partidasConMontos,
       gastos,
       snapshots: snapshotsRes.data ?? [],
       resumenNativo: {
         apuLineas,
         insumosEnApu,
         insumosMaestroTotal,
+        montosRecalculadosDesdeApu: actualizadas,
+        montosDesdeVolcadoMdb: montosDesdeVolcado,
+        mapaMontosVolcado,
+        tieneSnapshotMdb: Boolean(dumpVolcado),
       },
     });
   } catch (err: unknown) {

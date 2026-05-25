@@ -3,8 +3,9 @@ import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import { normalizeLuloRow, pickField, pickNumber } from '@/lib/proyectos/luloFieldMapping';
 import { normalizeColumnKey } from '@/lib/proyectos/luloColumnInfer';
 import { enriquecerMontosPartidasDesdeApu } from '@/lib/proyectos/lulo/enriquecerMontosPartidasApu';
+import { extraerMontosPartidaFila } from '@/lib/proyectos/lulo/extraerMontosPartidaFila';
+import { leerValorNumericoFila } from '@/lib/proyectos/lulo/leerValorNumericoFila';
 import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
-import { montoPartidaDesdeCantidadPrecio } from '@/lib/utils/numericDbLimits';
 import {
   findLuloTable,
   luloMdbHasEstructuraNativa,
@@ -131,13 +132,12 @@ function parsePartidasTable(
 
     const descripcion =
       cell(row, cDes) || pickField(row, [...LULO_PARTIDA_COLS.descripcion]) || codigo;
-    const cantidad = num(row, cCan, LULO_PARTIDA_COLS.cantidad);
-    const precio = num(row, cPre, LULO_PARTIDA_COLS.precio);
-    const montoCsv = num(row, cMon, LULO_PARTIDA_COLS.monto);
-    const monto = montoPartidaDesdeCantidadPrecio(
+    const cantidad = leerValorNumericoFila(raw, row, cCan, LULO_PARTIDA_COLS.cantidad);
+    const { precio, monto } = extraerMontosPartidaFila(
+      row,
       cantidad,
-      precio,
-      montoCsv > 0 ? montoCsv : undefined,
+      { precio: cPre, monto: cMon },
+      raw,
     );
 
     out.push({
@@ -256,7 +256,11 @@ export function parseLuloMdbEstructurado(
   const insumos = tInsumos ? parseInsumosTable(tInsumos) : [];
   const apu = tComposicion ? parseComposicionTable(tComposicion) : [];
   const partidasOrdenadas = enriquecerPartidasConCapitulos(partidas, dump, tPartidas);
-  const partidasConMontos = enriquecerMontosPartidasDesdeApu(partidasOrdenadas, { insumos, apu });
+  const partidasConMontos = enriquecerMontosPartidasDesdeApu(partidasOrdenadas, {
+    insumos,
+    apu,
+    obra,
+  });
 
   return {
     detected: true,

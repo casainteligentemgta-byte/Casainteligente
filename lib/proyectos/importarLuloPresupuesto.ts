@@ -22,6 +22,9 @@ import {
   enriquecerMontosPartidasDesdeApu,
   partidasNecesitanMontosApu,
 } from '@/lib/proyectos/lulo/enriquecerMontosPartidasApu';
+import { enriquecerPartidasMontosDesdeApuDb } from '@/lib/proyectos/lulo/enriquecerPartidasDesdeApuDb';
+import { enriquecerPartidasMontosDesdeVolcado } from '@/lib/proyectos/lulo/enriquecerMontosDesdeVolcado';
+import { persistirMontosPartidasLulo } from '@/lib/proyectos/lulo/persistirMontosPartidasLulo';
 import {
   extensionArchivoPresupuestoLulo,
   validarLuloEstructurado,
@@ -196,6 +199,27 @@ export async function postImportarLuloPresupuesto(
             reemplazar,
           });
 
+          const { data: partidasDbNativo } = await supabase
+            .from('ci_presupuesto_partidas')
+            .select(
+              'id, codigo_partida, cantidad_presupuestada, precio_unitario_estimado, monto_total_estimado',
+            )
+            .eq('proyecto_id', pid)
+            .in('origen', ['lulo_mdb', 'lulo_csv']);
+          if (partidasDbNativo?.length) {
+            const { partidas: conVolcado } = enriquecerPartidasMontosDesdeVolcado(
+              partidasDbNativo,
+              dump,
+            );
+            await persistirMontosPartidasLulo(supabase, partidasDbNativo, conVolcado);
+            await enriquecerPartidasMontosDesdeApuDb(
+              supabase,
+              conVolcado,
+              structured?.obra ?? undefined,
+              { persistir: true },
+            );
+          }
+
           const resumen = buildResumenSnapshotExtraccion(extraccionVolcado, {
             partidas: persisted.partidasInsertadas,
             gastos: 0,
@@ -320,6 +344,11 @@ export async function postImportarLuloPresupuesto(
         meta = { ...meta, partidasOrdenadasPorCapitulo: true };
 
         if (partidasNecesitanMontosApu(partidasRaw)) {
+          const volPre = enriquecerPartidasMontosDesdeVolcado(partidasRaw, dumpCap);
+          partidasRaw = volPre.partidas;
+          if (volPre.actualizadas > 0) {
+            meta = { ...meta, montosDesdeVolcadoMdb: volPre.actualizadas };
+          }
           const structuredApu = parseLuloMdbEstructurado(dumpCap, pid);
           if (structuredApu) {
             partidasRaw = enriquecerMontosPartidasDesdeApu(partidasRaw, structuredApu);
@@ -387,6 +416,38 @@ export async function postImportarLuloPresupuesto(
         reemplazar,
       });
       partidasGuardadas = insertadas;
+
+      const { data: partidasDb } = await supabase
+        .from('ci_presupuesto_partidas')
+        .select(
+          'id, codigo_partida, cantidad_presupuestada, precio_unitario_estimado, monto_total_estimado',
+        )
+        .eq('proyecto_id', pid)
+        .in('origen', ['lulo_mdb', 'lulo_csv']);
+      if (partidasDb?.length) {
+        const dumpPost =
+          (extraccionVolcado?.payload as LuloMdbFullDump | undefined) ??
+          (payload && typeof payload === 'object' && 'tables' in payload
+            ? (payload as LuloMdbFullDump)
+            : null);
+        const { partidas: conVolcado } = enriquecerPartidasMontosDesdeVolcado(
+          partidasDb,
+          dumpPost,
+        );
+        await persistirMontosPartidasLulo(supabase, partidasDb, conVolcado);
+
+        const proyectoRow = await supabase
+          .from('ci_proyectos')
+          .select('porcentaje_admin, porcentaje_utilidad, porcentaje_fcm')
+          .eq('id', pid)
+          .maybeSingle();
+        await enriquecerPartidasMontosDesdeApuDb(
+          supabase,
+          conVolcado,
+          proyectoRow.data ?? undefined,
+          { persistir: true },
+        );
+      }
     }
 
     if (gastosInsert.length > 0) {

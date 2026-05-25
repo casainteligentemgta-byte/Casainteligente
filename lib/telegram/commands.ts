@@ -13,6 +13,8 @@ export type ComandoTelegramResult = {
   stockKeyword?: string;
   /** Muestra lista desplegable (inline keyboard) de proyectos. */
   mostrarPickerProyecto?: ProyectoPickerModo;
+  /** Inicia flujo /agua (picker de obras activas). */
+  comandoAgua?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -38,6 +40,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /gasto — comprobante de gasto de obra\n' +
         '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
+        '• /agua — registro de tanque y prueba de agua (2 fotos)\n' +
         '• /estado — ver modo activo\n' +
         '• /cancelar — volver al menú',
     };
@@ -54,6 +57,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/gasto — registrar comprobante de gasto\n' +
         '/stock cemento — buscar stock por nombre (parcial)\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
+        '/agua — elegir obra y subir foto tanque + prueba de agua\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +
         '/estado — contexto actual',
@@ -115,6 +119,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '💸 Modo <b>gasto de obra</b>.\n' +
         'Elige la obra abajo (si aún no hay una activa) y envía foto del comprobante.',
     };
+  }
+
+  if (cmd === '/agua') {
+    return { handled: true, comandoAgua: true };
   }
 
   if (cmd === '/bitacora') {

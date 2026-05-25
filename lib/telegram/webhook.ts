@@ -32,15 +32,23 @@ import {
   nombreProyectoTelegram,
 } from '@/lib/telegram/proyectoPicker';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
+import {
+  eliminarBotEstadoAgua,
+  manejarCallbackAguaTelegram,
+  manejarComandoAguaTelegram,
+  manejarFotoRegistroAguaTelegram,
+} from '@/lib/telegram/aguaRegistro';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
+const CMD_AGUA = /^\/agua(@\S+)?\s*$/i;
 
 export type TelegramUpdate = {
   message?: {
     message_id: number;
     text?: string;
+    from?: { id: number; username?: string; first_name?: string };
     chat: { id: number; type: string; username?: string; first_name?: string };
-    photo?: Array<{ file_id: string; file_size?: number }>;
+    photo?: Array<{ file_id: string; file_size?: number; width?: number; height?: number }>;
     voice?: {
       file_id: string;
       duration?: number;
@@ -119,11 +127,21 @@ async function aplicarComando(
   supabase: SupabaseClient,
   chatId: string,
   cmd: ReturnType<typeof procesarComandoTelegram>,
+  userId?: string,
 ): Promise<void> {
   if (cmd.mensaje === '__ESTADO__') {
     const est = await getTelegramEstado(supabase, chatId);
     await mensajeEstado(supabase, chatId, est.contexto, est.proyecto_id);
     return;
+  }
+
+  if (cmd.comandoAgua) {
+    await manejarComandoAguaTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.resetProyecto && userId) {
+    await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);
   }
 
   if (cmd.contexto || cmd.resetProyecto) {
@@ -226,6 +244,18 @@ export async function handleTelegramCallbackQuery(
   }
 
   try {
+    const userId = String(cq.from.id);
+
+    const handledAgua = await manejarCallbackAguaTelegram(admin.client, {
+      chatId,
+      userId,
+      callbackId: cq.id,
+      data: cq.data,
+    });
+    if (handledAgua) {
+      return NextResponse.json({ ok: true, callback: 'agua' });
+    }
+
     const handledAsignar = await manejarCallbackAsignarObraTelegram(admin.client, {
       chatId,
       callbackId: cq.id,
@@ -286,6 +316,8 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       return NextResponse.json({ ok: true, command: 'facturas', warn: r.warn });
     }
 
+    const userId = String(msg.from?.id ?? msg.chat.id);
+
     const admin = telegramSupabaseAdmin();
     if (!admin.ok) {
       await sendTelegramMessage(
@@ -298,11 +330,21 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     const supabase = admin.client;
 
+    if (texto && CMD_AGUA.test(texto)) {
+      try {
+        await manejarComandoAguaTelegram(supabase, chatId);
+      } catch (err) {
+        console.error('[telegram /agua]', err);
+        await avisoErrorTelegram(chatId, err);
+      }
+      return NextResponse.json({ ok: true, command: 'agua' });
+    }
+
     if (texto) {
       const cmd = procesarComandoTelegram(texto);
       if (cmd.handled) {
         try {
-          await aplicarComando(supabase, chatId, cmd);
+          await aplicarComando(supabase, chatId, cmd, userId);
         } catch (err) {
           console.error('[telegram comando]', err);
           await avisoErrorTelegram(chatId, err);
@@ -344,6 +386,18 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         { parse_mode: 'HTML' },
       );
       return NextResponse.json({ ok: true, hint: 'voice_wrong_context' });
+    }
+
+    if (msg.photo?.length) {
+      const fotoAgua = await manejarFotoRegistroAguaTelegram({
+        supabase,
+        chatId,
+        userId,
+        photo: msg.photo,
+      });
+      if (fotoAgua.handled) {
+        return NextResponse.json({ ok: true, agua: fotoAgua.motivo ?? true });
+      }
     }
 
     const archivo = resolveArchivoTelegram(msg);

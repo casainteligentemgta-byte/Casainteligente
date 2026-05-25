@@ -15,7 +15,7 @@ export const LULO_INSUMO_COLS = {
   codigo: ['cod_ins', 'codins', 'codigo', 'cod_insumo', 'codigo_insumo', 'cod'],
   descripcion: ['des_ins', 'desins', 'descripcion', 'nombre', 'desc_insumo'],
   unidad: ['uni_ins', 'uniins', 'unidad', 'und', 'um'],
-  precio: ['pre_ins', 'preins', 'precio', 'precio_base', 'costo', 'pvp'],
+  precio: ['pre_ins', 'preins', 'precio', 'precio_base', 'costo', 'pvp', 'pre_uni', 'unitario', 'cosins'],
   tipo: ['tip_ins', 'tipins', 'tipo', 'clase', 'categoria'],
 } as const;
 
@@ -26,7 +26,22 @@ export const LULO_PARTIDA_COLS = {
   descripcion: ['des_par', 'despar', 'descripcion', 'concepto', 'detalle'],
   unidad: ['uni_par', 'unipar', 'unidad', 'und'],
   cantidad: ['can_par', 'canpar', 'cantidad', 'cant'],
-  precio: ['pre_par', 'prepar', 'precio', 'precio_unitario', 'pu', 'costo_unitario', 'cospar'],
+  precio: [
+    'pre_par',
+    'prepar',
+    'precio',
+    'precio_unitario',
+    'pu',
+    'costo_unitario',
+    'cospar',
+    'cos_par',
+    'pventa',
+    'precio_venta',
+    'preuni',
+    'pre_uni',
+    'pvp',
+    'unitario',
+  ],
   monto: [
     'mon_par',
     'monpar',
@@ -35,6 +50,8 @@ export const LULO_PARTIDA_COLS = {
     'totpar',
     'imp_par',
     'imppar',
+    'imptot',
+    'imp_tot',
     'monto',
     'monto_total',
     'total',
@@ -44,6 +61,10 @@ export const LULO_PARTIDA_COLS = {
     'costo_total',
     'valor',
     'valpar',
+    'val_par',
+    'cosgen',
+    'cos_gen',
+    'subtotal',
   ],
 } as const;
 

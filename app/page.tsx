@@ -65,31 +65,38 @@ function StatTile({
     </GlassCardMotion>
   );
 
-  const inner = href ? <Link href={href}>{card}</Link> : card;
-
-  if (!actionHref) return <div className="relative h-full min-h-0">{inner}</div>;
-
   return (
     <div className="relative h-full min-h-0">
-      {inner}
-      <Link
-        href={actionHref}
-        className="absolute top-2 right-2 z-10 w-7 h-7 landscape:w-6 landscape:h-6 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all"
-        style={{ background: actionColor }}
-      >
-        <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-          <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-        </svg>
-      </Link>
+      {href ? <Link href={href}>{card}</Link> : card}
+      {actionHref ? (
+        <Link
+          href={actionHref}
+          className="absolute top-2 right-2 z-10 w-7 h-7 landscape:w-6 landscape:h-6 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all"
+          style={{ background: actionColor }}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </Link>
+      ) : null}
     </div>
   );
+}
+
+function formatDayLabel(now: Date): string {
+  const dayName = now.toLocaleDateString('es-VE', { weekday: 'long' });
+  const dateStr = now.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
+  return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)}, ${dateStr}`;
 }
 
 export default function DashboardPage() {
   const [productCount, setProductCount] = useState<number | null>(null);
   const [clientCount, setClientCount] = useState<number | null>(null);
+  /** Solo en cliente: evita mismatch Node vs navegador en toLocaleDateString. */
+  const [dayLabel, setDayLabel] = useState('');
 
   useEffect(() => {
+    setDayLabel(formatDayLabel(new Date()));
     const supabase = createClient();
     supabase
       .from('products')
@@ -101,21 +108,19 @@ export default function DashboardPage() {
       .then(({ count }) => setClientCount(count ?? 0));
   }, []);
 
-  const now = new Date();
-  const dayName = now.toLocaleDateString('es-VE', { weekday: 'long' });
-  const dateStr = now.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
-  const dayLabel = `${dayName.charAt(0).toUpperCase() + dayName.slice(1)}, ${dateStr}`;
-
   return (
     <article className="home-inicio flex flex-col overflow-hidden px-4 pt-4 pb-2 sm:pt-5 landscape:pt-3 landscape:px-5 landscape:pb-2">
       <motion.header
-        initial={{ opacity: 0, y: -12 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         className="shrink-0 flex items-center justify-between gap-3 mb-3 landscape:mb-2"
       >
         <div className="min-w-0">
-          <p className="text-[10px] landscape:text-[9px] font-bold uppercase tracking-widest text-[var(--nexus-text-dim)] truncate">
-            {dayLabel}
+          <p
+            suppressHydrationWarning
+            className="text-[10px] landscape:text-[9px] font-bold uppercase tracking-widest text-[var(--nexus-text-dim)] truncate min-h-[1em]"
+          >
+            {dayLabel || '\u00A0'}
           </p>
           <h1 className="text-2xl sm:text-3xl landscape:text-xl font-bold tracking-tight text-white truncate">
             CASA INTELIGENTE

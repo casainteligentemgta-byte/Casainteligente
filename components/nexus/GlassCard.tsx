@@ -30,7 +30,7 @@ export function GlassCardMotion(props: GlassCardProps & { delay?: number }) {
   const { delay = 0, ...rest } = props;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay, ease: [0.22, 1, 0.36, 1] }}
     >

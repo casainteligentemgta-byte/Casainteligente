@@ -32,7 +32,7 @@ export function handleTelegramWebhookGet() {
     bot: Boolean(token),
     supabaseServiceRole: serviceRole,
     hint: token
-      ? 'Webhook Casa Inteligente (factura, obra, gasto, /stock inventario)'
+      ? 'Webhook Casa Inteligente (factura, obra, gasto, /agua, /stock inventario)'
       : 'Configure TELEGRAM_BOT_TOKEN en Vercel (Production) y redeploy.',
     path: '/api/webhooks/telegram',
   });

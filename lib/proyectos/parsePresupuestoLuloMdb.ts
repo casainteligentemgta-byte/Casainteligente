@@ -8,6 +8,7 @@ import {
   pickField,
   pickNumber,
 } from '@/lib/proyectos/luloFieldMapping';
+import { extraerMontosPartidaFila } from '@/lib/proyectos/lulo/extraerMontosPartidaFila';
 import { montoPartidaDesdeCantidadPrecio } from '@/lib/utils/numericDbLimits';
 import {
   CANT_PAT,
@@ -478,22 +479,15 @@ function rowToPartidaWithMapping(
   const descripcion = valueFromMappedColumn(r, mapping.descripcion);
   const codigo = valueFromMappedColumn(r, mapping.codigo);
   const cantidad = numberFromMappedColumn(r, mapping.cantidad);
-  const precio = numberFromMappedColumn(r, mapping.precio);
   const montoCol = mapping.monto
     ? mapping.monto
     : colNames.length
       ? findColumnByPattern(colNames, MONTO_PAT)
       : null;
-  const montoCsv = montoCol
-    ? mapping.monto
-      ? numberFromMappedColumn(r, mapping.monto)
-      : numberFromCol(r, montoCol)
-    : 0;
-  const monto = montoPartidaDesdeCantidadPrecio(
-    cantidad,
-    precio,
-    montoCsv > 0 ? montoCsv : undefined,
-  );
+  const { precio, monto } = extraerMontosPartidaFila(r, cantidad, {
+    precio: mapping.precio,
+    monto: mapping.monto ?? montoCol,
+  });
 
   if (!descripcion && !codigo) {
     if (monto <= 0 && cantidad <= 0 && precio <= 0) return null;

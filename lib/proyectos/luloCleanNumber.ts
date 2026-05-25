@@ -8,6 +8,22 @@ export function cleanNum(val: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Lee número desde celda Access (number, string, Buffer OLE, etc.). */
+export function parseLuloValueUnknown(val: unknown): number {
+  if (val == null || val === '') return 0;
+  if (typeof val === 'number' && Number.isFinite(val)) {
+    if (Math.abs(val) >= 1e13) return 0;
+    return clampNumeric15_4(val);
+  }
+  if (typeof val === 'boolean') return val ? 1 : 0;
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(val)) {
+    const s = val.toString('utf8').replace(/\0/g, '').trim();
+    if (!s) return 0;
+    return parseLuloNumber(s);
+  }
+  return parseLuloNumber(String(val));
+}
+
 /** Números Access/Lulo: 1.234,56 · 1234.56 · 1234,56 · $ 1.234,56 */
 export function parseLuloNumber(raw: string): number {
   let t = raw.trim().replace(/\s/g, '');
