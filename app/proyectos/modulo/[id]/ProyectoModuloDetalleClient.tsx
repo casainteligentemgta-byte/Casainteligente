@@ -655,14 +655,14 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       return (
         <div className="space-y-6">
           <Link
-            href={`/proyectos/modulo/${encodeURIComponent(id)}/control-obra?tab=presupuesto`}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-950/50 to-zinc-900/80 px-4 py-3 hover:border-amber-400/50 transition-colors"
+            href={`/proyectos/modulo/${encodeURIComponent(id)}/lulo?tab=presupuesto`}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/35 bg-gradient-to-r from-sky-950/50 to-zinc-900/80 px-4 py-3 hover:border-sky-400/50 transition-colors"
           >
-            <span className="text-sm font-semibold text-amber-100">
-              Ver presupuesto Lulo · reporte por capítulos y detalle de partidas
+            <span className="text-sm font-semibold text-sky-100">
+              Módulo Lulo · importar MDB, presupuesto y explorar tablas Access
             </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400/90 shrink-0">
-              Control de obra →
+            <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400/90 shrink-0">
+              Abrir Lulo →
             </span>
           </Link>
           <ImportarPresupuestoLulo proyectoId={id} onSuccess={() => void load()} />

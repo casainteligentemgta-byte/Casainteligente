@@ -2,18 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-/** Un dígito con bisagra central, pila de chapas y animación de volteo. */
 function DigitoSplitFlap({
   value,
-  compact = false,
+  size = 'clock',
 }: {
   value: string;
-  compact?: boolean;
+  size?: 'clock' | 'clock-sm' | 'compact' | 'compact-sm';
 }) {
   const [display, setDisplay] = useState(value);
   const [prev, setPrev] = useState(value);
@@ -34,10 +34,17 @@ function DigitoSplitFlap({
     };
   }, [value, display]);
 
-  const size = compact ? 'split-flap--compact' : 'split-flap--clock';
+  const sizeClass =
+    size === 'clock-sm'
+      ? 'split-flap--clock-sm'
+      : size === 'compact-sm'
+        ? 'split-flap--compact-sm'
+        : size === 'compact'
+          ? 'split-flap--compact'
+          : 'split-flap--clock';
 
   return (
-    <div className={`split-flap ${size}`} aria-hidden>
+    <div className={cn('split-flap', sizeClass)} aria-hidden>
       <div className="split-flap__stack" />
       <div className="split-flap__body">
         <div className="split-flap__upper">
@@ -60,47 +67,66 @@ function DigitoSplitFlap({
   );
 }
 
-function ColonSplitFlap({ compact = false }: { compact?: boolean }) {
+function ColonSplitFlap({ size = 'clock' }: { size?: 'clock' | 'clock-sm' | 'compact-sm' }) {
+  const cls =
+    size === 'clock-sm'
+      ? 'split-flap-colon split-flap-colon--clock-sm'
+      : size === 'compact-sm'
+        ? 'split-flap-colon split-flap-colon--compact-sm'
+        : 'split-flap-colon';
+  return (
+    <div className={cls} aria-hidden>
+      <span className="split-flap-colon__dot" />
+      <span className="split-flap-colon__dot" />
+    </div>
+  );
+}
+
+function RelojSplitFlap({ hh, mm, dense }: { hh: string; mm: string; dense?: boolean }) {
+  const digitSize = dense ? 'clock-sm' : 'clock';
+  const colonSize = dense ? 'clock-sm' : 'clock';
   return (
     <div
-      className={`split-flap-colon ${compact ? 'split-flap-colon--compact' : ''}`}
-      aria-hidden
+      className="flex items-center justify-center gap-1.5 sm:gap-2 landscape:gap-1"
+      role="timer"
+      aria-live="polite"
     >
-      <span className="split-flap-colon__dot" />
-      <span className="split-flap-colon__dot" />
+      <DigitoSplitFlap value={hh[0]} size={digitSize} />
+      <DigitoSplitFlap value={hh[1]} size={digitSize} />
+      <ColonSplitFlap size={colonSize} />
+      <DigitoSplitFlap value={mm[0]} size={digitSize} />
+      <DigitoSplitFlap value={mm[1]} size={digitSize} />
     </div>
   );
 }
 
-function RelojSplitFlap({ hh, mm }: { hh: string; mm: string }) {
-  return (
-    <div className="flex items-center justify-center gap-2 sm:gap-3" role="timer" aria-live="polite">
-      <DigitoSplitFlap value={hh[0]} />
-      <DigitoSplitFlap value={hh[1]} />
-      <ColonSplitFlap />
-      <DigitoSplitFlap value={mm[0]} />
-      <DigitoSplitFlap value={mm[1]} />
-    </div>
-  );
-}
-
-function CalendarioSplitFlap({ texto }: { texto: string }) {
+function CalendarioSplitFlap({ texto, dense }: { texto: string; dense?: boolean }) {
   const chars = texto.split('');
+  const digitSize = dense ? 'compact-sm' : 'compact';
   return (
-    <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 mt-5">
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-center gap-0.5 sm:gap-1',
+        dense ? 'mt-2 landscape:mt-1.5' : 'mt-5',
+      )}
+    >
       {chars.map((c, i) =>
         c === ' ' ? (
-          <span key={`sp-${i}`} className="w-1.5 sm:w-2" />
+          <span key={`sp-${i}`} className="w-1 sm:w-1.5" />
         ) : (
-          <DigitoSplitFlap key={`cal-${i}-${c}`} value={c} compact />
+          <DigitoSplitFlap key={`cal-${i}-${c}`} value={c} size={digitSize} />
         ),
       )}
     </div>
   );
 }
 
-export default function AeropuertoRelojPizarra() {
-  /** null en SSR y primer paint del cliente → mismo HTML y sin error de hidratación */
+type Props = {
+  className?: string;
+  dense?: boolean;
+};
+
+export default function AeropuertoRelojPizarra({ className, dense = false }: Props) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -136,16 +162,24 @@ export default function AeropuertoRelojPizarra() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: 0.05 }}
-      className="px-6 mb-6"
+      className={cn('min-h-0 flex flex-col justify-center', dense ? 'px-0 mb-0' : 'px-6 mb-6', className)}
     >
       <div
-        className="split-flap-board w-full rounded-2xl px-4 py-5 sm:px-8 sm:py-7"
+        className={cn(
+          'split-flap-board w-full rounded-xl sm:rounded-2xl',
+          dense ? 'split-flap-board--dense' : 'px-4 py-5 sm:px-8 sm:py-7',
+        )}
         aria-label={partes.listo ? `Reloj ${horaLegible}. ${partes.fecha}` : 'Reloj'}
       >
-        <RelojSplitFlap hh={partes.h} mm={partes.m} />
-        <CalendarioSplitFlap texto={partes.fecha} />
-        {partes.listo && (
+        <RelojSplitFlap hh={partes.h} mm={partes.m} dense={dense} />
+        <CalendarioSplitFlap texto={partes.fecha} dense={dense} />
+        {partes.listo && !dense && (
           <p className="mt-4 text-center text-[10px] font-semibold tracking-[0.2em] text-white/25 uppercase tabular-nums">
+            {partes.s}s
+          </p>
+        )}
+        {partes.listo && dense && (
+          <p className="mt-1.5 text-center text-[9px] font-semibold tracking-[0.15em] text-white/20 uppercase tabular-nums landscape:mt-1">
             {partes.s}s
           </p>
         )}

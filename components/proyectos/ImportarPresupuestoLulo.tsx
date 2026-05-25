@@ -115,8 +115,8 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
   const [extrayendo, setExtrayendo] = useState(false);
   const [cuadroLuloActivo, setCuadroLuloActivo] = useState(false);
 
-  const controlObraHref = isValidProyectoUuid(pid)
-    ? `/proyectos/modulo/${encodeURIComponent(pid)}/control-obra`
+  const moduloLuloHref = isValidProyectoUuid(pid)
+    ? `/proyectos/modulo/${encodeURIComponent(pid)}/lulo`
     : '/proyectos/modulo';
 
   useEffect(() => {
@@ -338,9 +338,9 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       setFile(null);
       onSuccess?.();
       if ((data.partidas ?? 0) > 0) {
-        router.push(`${controlObraHref}?tab=presupuesto`);
+        router.push(`${moduloLuloHref}?tab=presupuesto`);
       } else {
-        router.push(controlObraHref);
+        router.push(moduloLuloHref);
       }
       router.refresh();
     } catch (err: unknown) {
@@ -563,7 +563,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
 
         {cuadroLuloActivo ? (
           <Link
-            href={`${controlObraHref}?tab=presupuesto`}
+            href={`${moduloLuloHref}?tab=presupuesto`}
             className="flex items-center justify-center gap-2 w-full rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-950/80 to-amber-900/40 py-3 text-sm font-semibold text-amber-100 shadow-lg shadow-amber-900/20 hover:from-amber-900/90 hover:border-amber-300/60 transition-colors"
           >
             <Table2 className="h-4 w-4 shrink-0" aria-hidden />
@@ -571,7 +571,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           </Link>
         ) : (
           <Link
-            href={controlObraHref}
+            href={moduloLuloHref}
             className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 hover:bg-white/10"
           >
             <Table2 className="h-3.5 w-3.5" aria-hidden />
