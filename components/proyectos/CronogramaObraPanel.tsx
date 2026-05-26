@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
 import CronogramaGantt from '@/components/proyectos/CronogramaGantt';
 import CronogramaTareaSlideOver from '@/components/proyectos/CronogramaTareaSlideOver';
-import type { CronogramaTarea } from '@/types/cronograma';
+import type { CronogramaCapitulo, CronogramaTarea } from '@/types/cronograma';
 import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 
@@ -20,6 +20,7 @@ export default function CronogramaObraPanel({
   vistaPreviaDesdePartidas = true,
 }: Props) {
   const [tareas, setTareas] = useState<CronogramaTarea[]>([]);
+  const [capitulos, setCapitulos] = useState<CronogramaCapitulo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -38,16 +39,19 @@ export default function CronogramaObraPanel({
       const data = await parseFetchJson<{
         error?: string;
         tareas?: CronogramaTarea[];
+        capitulos?: CronogramaCapitulo[];
         aviso?: string;
         origen?: string;
       }>(res);
       if (!res.ok) throw new Error(formatApiErrorBody(data, 'Error al cargar cronograma'));
       setTareas(data.tareas ?? []);
+      setCapitulos(data.capitulos ?? []);
       setAviso(data.aviso ?? null);
       setOrigen(data.origen ?? null);
     } catch (e) {
       setError(formatErrorMessage(e));
       setTareas([]);
+      setCapitulos([]);
     } finally {
       setLoading(false);
     }
@@ -61,8 +65,8 @@ export default function CronogramaObraPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-zinc-500 max-w-xl">
-          Diagrama de Gantt semanal/mensual. Barras grises/azul: planificado; verde/rojo/ámbar: avance
-          según fecha y porcentaje. Clic en una actividad para ver partida, APU y evidencias Telegram.
+          Actividades agrupadas por capítulo del presupuesto. Pulse un capítulo para desplegar sus
+          partidas en cascada. Clic en una partida para ver detalle, APU y evidencias Telegram.
         </p>
         <button
           type="button"
@@ -99,6 +103,7 @@ export default function CronogramaObraPanel({
 
       <CronogramaGantt
         tareas={tareas}
+        capitulos={capitulos}
         loading={loading}
         onTareaClick={setTareaActiva}
       />

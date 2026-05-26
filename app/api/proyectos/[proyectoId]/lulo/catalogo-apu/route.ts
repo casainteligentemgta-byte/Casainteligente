@@ -13,6 +13,12 @@ import type {
   LuloWebErpPartida,
   LuloWebErpPayload,
 } from '@/types/lulo-web-erp';
+import {
+  cargarRendimientoCatalogoPorCodigo,
+  completarApuPartidasObra,
+  fetchApuItemsCascada,
+  normalizarCodigoLulo,
+} from '@/lib/proyectos/luloCatalogoApuHelpers';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
@@ -257,26 +263,19 @@ async function cargarDesdeCascadaObra(
   if (!partidas.length) return null;
 
   const partidaIds = partidas.map((p) => p.id as string);
-  const apuRows: Array<{
-    partida_id: string;
-    tipo: string;
-    codigo_insumo: string;
-    descripcion: string;
-    unidad: string;
-    rendimiento: number;
-    costo_unitario: number;
-  }> = [];
-  for (const batch of chunk(partidaIds, IN_BATCH)) {
-    const { data, error: aErr } = await supabase
-      .from('apu_items')
-      .select(
-        'partida_id, tipo, codigo_insumo, descripcion, unidad, rendimiento, costo_unitario',
-      )
-      .in('partida_id', batch);
-    if (aErr?.code === '42P01') return null;
-    if (aErr) throw new Error(formatErrorMessage(aErr));
-    if (data?.length) apuRows.push(...data);
+  let apuRows: Awaited<ReturnType<typeof fetchApuItemsCascada>> = [];
+  try {
+    apuRows = await fetchApuItemsCascada(supabase, partidaIds);
+  } catch (aErr: unknown) {
+    const code = (aErr as { code?: string })?.code;
+    if (code === '42P01') return null;
+    throw new Error(formatErrorMessage(aErr));
   }
+
+  const rendMap = await cargarRendimientoCatalogoPorCodigo(
+    supabase,
+    partidas.map((p) => String(p.codigo)),
+  );
 
   const capitulos: LuloWebErpCapitulo[] = caps.map((c, i) => {
     const cod = String(c.codigo ?? '').trim();
@@ -296,66 +295,50 @@ async function cargarDesdeCascadaObra(
     const capKey = capIdToKey.get(String(p.capitulo_id)) ?? String(p.capitulo_id);
     if (!partidasByCapitulo[capKey]) partidasByCapitulo[capKey] = [];
 
+    const codigo = String(p.codigo).trim();
     const partida: LuloWebErpPartida = {
       id: String(p.id),
-      codigo: String(p.codigo).trim(),
+      codigo,
       descripcion: String(p.descripcion),
       unidad: String(p.unidad || 'UND'),
       cantidad: Number(p.cantidad_presupuestada ?? 0),
-      rendimiento: 1,
+      rendimiento:
+        rendMap.get(codigo.toUpperCase()) ??
+        rendMap.get(normalizarCodigoLulo(codigo)) ??
+        1,
     };
     partidasByCapitulo[capKey].push(partida);
     apuByPartidaId[partida.id] = apuVacio();
   }
 
-  for (const row of apuRows ?? []) {
+  for (const row of apuRows) {
     const pid = String(row.partida_id);
     const apu = apuByPartidaId[pid];
     if (!apu) continue;
 
-    const tipo = String(row.tipo ?? 'material');
-    const insumo: InsumoRow = {
-      codigo: String(row.codigo_insumo ?? ''),
-      descripcion: String(row.descripcion ?? row.codigo_insumo ?? ''),
-      unidad: String(row.unidad ?? 'UND'),
-      precio_base: Number(row.costo_unitario ?? 0),
-      tipo:
-        tipo === 'mano_obra'
-          ? 'ManoDeObra'
-          : tipo === 'equipo'
-            ? 'Equipo'
-            : 'Material',
-    };
-
-    if (tipo === 'mano_obra') {
-      apu.manoObra.push({
-        codigo: insumo.codigo,
-        descripcion: insumo.descripcion,
-        cantidad: Number(row.rendimiento ?? 0),
-        salario: Number(row.costo_unitario ?? 0),
-        bono: 0,
-      });
-      continue;
-    }
-    if (tipo === 'equipo') {
-      apu.equipos.push({
-        codigo: insumo.codigo,
-        descripcion: insumo.descripcion,
-        cantidad: Number(row.rendimiento ?? 0),
-        tarifa: Number(row.costo_unitario ?? 0),
-        esPorcentajeManoObra: esHerramientaMenor(insumo.descripcion),
-      });
-      continue;
-    }
-
-    apu.materiales.push({
-      codigo: insumo.codigo,
-      descripcion: insumo.descripcion,
-      unidad: insumo.unidad,
-      cantidad: Number(row.rendimiento ?? 0),
-      precio: Number(row.costo_unitario ?? 0),
-    });
+    pushLineaApu(
+      apu,
+      {
+        codigo: String(row.codigo_insumo ?? ''),
+        descripcion: String(row.descripcion ?? row.codigo_insumo ?? ''),
+        unidad: String(row.unidad ?? 'UND'),
+        precio_base: Number(row.costo_unitario ?? 0),
+        tipo: String(row.tipo ?? 'material'),
+      },
+      Number(row.rendimiento ?? 0),
+      0,
+    );
   }
+
+  const partidasFlat = Object.values(partidasByCapitulo).flat();
+  await completarApuPartidasObra(
+    supabase,
+    proyectoId,
+    partidasFlat,
+    apuByPartidaId,
+    pushLineaApu,
+    esHerramientaMenor,
+  );
 
   return {
     fuente: 'cascada',
@@ -419,7 +402,10 @@ async function cargarDesdeCiPresupuesto(
       descripcion: String(p.descripcion),
       unidad: String(p.unidad || 'UND'),
       cantidad: Number(p.cantidad_presupuestada ?? 0),
-      rendimiento: rendMap.get(codigo.toUpperCase()) ?? 1,
+      rendimiento:
+        rendMap.get(codigo.toUpperCase()) ??
+        rendMap.get(normalizarCodigoLulo(codigo)) ??
+        1,
     };
     partidasByCapitulo[capId].push(partida);
     apuByPartidaId[partida.id] = apuVacio();
@@ -448,6 +434,16 @@ async function cargarDesdeCiPresupuesto(
       Number(row.desperdicio_porcentaje ?? 0),
     );
   }
+
+  const partidasCi = Object.values(partidasByCapitulo).flat();
+  await completarApuPartidasObra(
+    supabase,
+    proyectoId,
+    partidasCi,
+    apuByPartidaId,
+    pushLineaApu,
+    esHerramientaMenor,
+  );
 
   return {
     fuente: 'ci_presupuesto',

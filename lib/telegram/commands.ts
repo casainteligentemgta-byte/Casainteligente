@@ -16,6 +16,8 @@ export type ComandoTelegramResult = {
   mostrarPickerProyecto?: ProyectoPickerModo;
   /** Inicia flujo /agua (picker de obras activas). */
   comandoAgua?: boolean;
+  comandoEntrada?: boolean;
+  comandoSalida?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -41,6 +43,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
+        '• /entrada — foto + detalle de material que ingresa\n' +
+        '• /salida — foto + detalle de material que egresa\n' +
         '• /estado — ver modo activo\n' +
         '• /cancelar — volver al menú',
     };
@@ -58,6 +62,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/stock cemento — buscar stock por nombre (parcial)\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
+        '/entrada — material que ingresa a la obra (foto + texto)\n' +
+        '/salida — material que egresa de la obra (foto + texto)\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +
         '/estado — contexto actual',
@@ -70,7 +76,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       contexto: 'menu',
       proyectoId: null,
       resetProyecto: true,
-      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /agua o /gasto.',
+      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /entrada, /salida o /agua.',
     };
   }
 
@@ -123,6 +129,14 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
 
   if (esComandoAgua(t)) {
     return { handled: true, comandoAgua: true };
+  }
+
+  if (cmd === '/entrada') {
+    return { handled: true, comandoEntrada: true };
+  }
+
+  if (cmd === '/salida') {
+    return { handled: true, comandoSalida: true };
   }
 
   if (cmd === '/bitacora') {

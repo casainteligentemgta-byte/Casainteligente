@@ -3,7 +3,11 @@ import {
   isValidProyectoUuid,
   mensajeProyectoIdInvalido,
 } from '@/lib/proyectos/validarProyectoUuid';
-import type { CronogramaTarea } from '@/types/cronograma';
+import {
+  aplanarPartidasCapitulos,
+  buildCapitulosParaCronograma,
+} from '@/lib/proyectos/cronogramaCapitulos';
+import type { CronogramaCapitulo, CronogramaTarea } from '@/types/cronograma';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
@@ -54,58 +58,13 @@ function mapTarea(row: TareaRow): CronogramaTarea {
   };
 }
 
-/** Genera borrador de cronograma desde partidas Lulo (2 semanas por partida escalonadas). */
-async function borradorDesdePartidas(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  proyectoId: string,
-): Promise<CronogramaTarea[]> {
-  const { data, error } = await supabase
-    .from('ci_presupuesto_partidas')
-    .select(
-      'id, codigo_partida, descripcion, unidad, cantidad_presupuestada, evidencias_fotos, evidencias_videos',
-    )
-    .eq('proyecto_id', proyectoId)
-    .order('capitulo_orden', { ascending: true })
-    .order('codigo_partida')
-    .limit(40);
-
-  if (error || !data?.length) return [];
-
-  const base = new Date();
-  base.setHours(12, 0, 0, 0);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-  return data.map((row, i) => {
-    const inicio = new Date(base);
-    inicio.setDate(inicio.getDate() + i * 7);
-    const fin = new Date(inicio);
-    fin.setDate(fin.getDate() + 13);
-    const r = row as {
-      id: string;
-      codigo_partida: string;
-      descripcion: string;
-      unidad: string;
-      cantidad_presupuestada: number;
-      evidencias_fotos?: string[];
-      evidencias_videos?: string[];
-    };
-    return {
-      id: `borrador-${r.id}`,
-      proyecto_id: proyectoId,
-      partida_id: r.id,
-      codigo_partida: r.codigo_partida,
-      nombre_tarea: r.descripcion?.trim() || r.codigo_partida,
-      fecha_inicio_planificada: iso(inicio),
-      fecha_fin_planificada: iso(fin),
-      porcentaje_avance: 0,
-      orden: i,
-      descripcion_partida: r.descripcion,
-      unidad_partida: r.unidad,
-      cantidad_presupuestada: Number(r.cantidad_presupuestada),
-      evidencias_fotos: r.evidencias_fotos ?? [],
-      evidencias_videos: r.evidencias_videos ?? [],
-    };
-  });
+async function respuestaConCapitulos(
+  capitulos: CronogramaCapitulo[],
+  origen: string,
+  aviso?: string,
+) {
+  const tareas = aplanarPartidasCapitulos(capitulos);
+  return NextResponse.json({ tareas, capitulos, origen, aviso });
 }
 
 /** Evita embed PostgREST (PGRST200) si el schema cache no tiene la FK registrada. */
@@ -184,32 +143,42 @@ export async function GET(
 
     if (error) {
       if (error.message.includes('does not exist') || error.code === '42P01') {
-        const borrador = incluirBorrador
-          ? await borradorDesdePartidas(supabase, proyectoId)
-          : [];
-        return NextResponse.json({
-          tareas: borrador,
-          origen: 'borrador_partidas',
-          aviso: 'Tabla cronograma_tareas no existe. Ejecuta migración 168.',
-        });
+        if (!incluirBorrador) {
+          return respuestaConCapitulos([], 'borrador_partidas', 'Tabla cronograma_tareas no existe. Ejecuta migración 168.');
+        }
+        const capitulos = await buildCapitulosParaCronograma(supabase, proyectoId, []);
+        return respuestaConCapitulos(
+          capitulos,
+          'borrador_partidas',
+          capitulos.length
+            ? 'Vista previa por capítulos del presupuesto. Ejecuta migración 168 para guardar tareas.'
+            : 'Tabla cronograma_tareas no existe. Importa presupuesto Lulo.',
+        );
       }
       throw error;
     }
 
     const filas = (data ?? []) as TareaDbRow[];
     const enriquecidas = await enriquecerTareasConPartidas(supabase, filas);
-    let tareas = enriquecidas.map((row) => mapTarea(row));
+    const tareasGuardadas = enriquecidas.map((row) => mapTarea(row));
+    const capitulos = await buildCapitulosParaCronograma(
+      supabase,
+      proyectoId,
+      tareasGuardadas,
+    );
 
-    if (tareas.length === 0 && incluirBorrador) {
-      tareas = await borradorDesdePartidas(supabase, proyectoId);
-      return NextResponse.json({
-        tareas,
-        origen: 'borrador_partidas',
-        aviso: 'Vista previa desde partidas del presupuesto. Guarde tareas en cronograma_tareas.',
-      });
+    if (tareasGuardadas.length === 0 && incluirBorrador) {
+      const borradorCaps = await buildCapitulosParaCronograma(supabase, proyectoId, []);
+      return respuestaConCapitulos(
+        borradorCaps,
+        'borrador_partidas',
+        borradorCaps.length
+          ? 'Vista previa por capítulos. Pulse un capítulo para ver sus partidas. Guarde en cronograma_tareas para persistir.'
+          : 'Sin partidas en el presupuesto. Importa Lulo primero.',
+      );
     }
 
-    return NextResponse.json({ tareas, origen: 'cronograma_tareas' });
+    return respuestaConCapitulos(capitulos, 'cronograma_tareas');
   } catch (err: unknown) {
     console.error('[GET cronograma]', err);
     return NextResponse.json(

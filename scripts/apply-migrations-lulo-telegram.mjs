@@ -50,6 +50,7 @@ const MIGRATIONS = [
   '171_cronograma_tareas_repair.sql',
   '172_lulo_catalogo_maestro.sql',
   '173_ci_proyecto_presupuestos_lulo.sql',
+  '174_ci_obra_entradas_salidas_telegram.sql',
 ];
 
 async function tableExists(sql, name) {
@@ -234,6 +235,8 @@ async function main() {
       },
       '173_ci_proyecto_presupuestos_lulo.sql': () =>
         tableExists(sql, 'ci_proyecto_presupuestos_lulo'),
+      '174_ci_obra_entradas_salidas_telegram.sql': () =>
+        tableExists(sql, 'ci_obra_movimientos_material'),
     };
 
     for (const file of MIGRATIONS) {

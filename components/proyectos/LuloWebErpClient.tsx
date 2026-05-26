@@ -10,9 +10,13 @@ import {
   Layers,
   Loader2,
   Package,
+  PanelLeft,
+  PanelLeftClose,
+  Save,
   Wrench,
 } from 'lucide-react';
 import { calcularApuLuloWin, apuVacio } from '@/lib/proyectos/calcularApuLuloWin';
+import { apuPartidaVacio } from '@/lib/proyectos/luloCatalogoApuHelpers';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import type { LuloWebErpApuPartida, LuloWebErpPayload } from '@/types/lulo-web-erp';
@@ -46,6 +50,11 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
   const [data, setData] = useState<LuloWebErpPayload | null>(null);
   const [capituloActivo, setCapituloActivo] = useState<string>('');
   const [partidaSeleccionada, setPartidaSeleccionada] = useState<string>('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [apuOverrides, setApuOverrides] = useState<Record<string, LuloWebErpApuPartida>>({});
+  const [rendOverrides, setRendOverrides] = useState<Record<string, number>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +66,8 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
       const json = await parseFetchJson<LuloWebErpPayload & { error?: string }>(res);
       if (!res.ok) throw new Error(json.error ?? 'No se pudo cargar el presupuesto');
       setData(json);
+      setApuOverrides(json.apuByPartidaId ?? {});
+      setRendOverrides({});
       const firstCap = json.capitulos[0]?.id ?? '';
       setCapituloActivo(firstCap);
       const partidas = json.partidasByCapitulo[firstCap] ?? [];
@@ -90,11 +101,80 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
   );
 
   const apuBase = useMemo(
-    () => (partidaInfo ? data?.apuByPartidaId[partidaInfo.id] ?? apuVacio() : apuVacio()),
-    [data, partidaInfo],
+    () =>
+      partidaInfo
+        ? (apuOverrides[partidaInfo.id] ??
+          data?.apuByPartidaId[partidaInfo.id] ??
+          apuVacio())
+        : apuVacio(),
+    [apuOverrides, data, partidaInfo],
   );
 
-  const rendimiento = partidaInfo?.rendimiento ?? 1;
+  const rendimiento =
+    partidaInfo && partidaInfo.id in rendOverrides
+      ? rendOverrides[partidaInfo.id]
+      : (partidaInfo?.rendimiento ?? 1);
+
+  const patchApu = useCallback(
+    (partidaId: string, updater: (prev: LuloWebErpApuPartida) => LuloWebErpApuPartida) => {
+      setApuOverrides((prev) => {
+        const base = prev[partidaId] ?? data?.apuByPartidaId[partidaId] ?? apuVacio();
+        return { ...prev, [partidaId]: updater({ ...base, materiales: [...base.materiales], equipos: [...base.equipos], manoObra: [...base.manoObra] }) };
+      });
+      setSaveMsg(null);
+    },
+    [data],
+  );
+
+  const guardarApu = useCallback(async () => {
+    if (!partidaInfo || data?.fuente !== 'cascada') return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const apu = apuOverrides[partidaInfo.id] ?? apuBase;
+      const lineas = [
+        ...apu.materiales.map((m) => ({
+          codigo: m.codigo,
+          tipo: 'material' as const,
+          cantidad: m.cantidad,
+          precio: m.precio,
+        })),
+        ...apu.equipos
+          .filter((e) => !e.esPorcentajeManoObra)
+          .map((e) => ({
+            codigo: e.codigo,
+            tipo: 'equipo' as const,
+            cantidad: e.cantidad,
+            precio: e.tarifa,
+          })),
+        ...apu.manoObra.map((mo) => ({
+          codigo: mo.codigo,
+          tipo: 'mano_obra' as const,
+          cantidad: mo.cantidad,
+          precio: mo.salario,
+        })),
+      ];
+      const res = await fetch(
+        `/api/proyectos/${encodeURIComponent(proyectoId)}/lulo/apu-items`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            partidaId: partidaInfo.id,
+            rendimiento,
+            lineas,
+          }),
+        },
+      );
+      const json = await parseFetchJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo guardar');
+      setSaveMsg('Cambios guardados en la obra');
+    } catch (e) {
+      setSaveMsg(formatErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [apuBase, apuOverrides, data?.fuente, partidaInfo, proyectoId, rendimiento]);
 
   const calc = useMemo(
     () => calcularApuLuloWin(apuBase, rendimiento, config),
@@ -152,7 +232,8 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
   }
 
   return (
-    <div className="flex h-[min(85vh,900px)] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 font-sans text-slate-800 shadow-lg">
+    <div className="flex h-[min(85vh,900px)] overflow-hidden rounded-xl border border-slate-200 bg-white font-sans text-slate-800 shadow-lg">
+      {sidebarOpen ? (
       <aside className="flex w-72 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-300 md:w-80">
         <div className="flex items-center space-x-3 border-b border-slate-800 bg-slate-950 p-4">
           <Layers className="h-6 w-6 text-blue-400" />
@@ -209,20 +290,59 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
           ))}
         </nav>
       </aside>
+      ) : null}
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
-          <div className="flex items-center space-x-2 text-xs text-slate-500">
-            <span>Presupuesto</span>
-            <span>/</span>
-            <span className="font-medium text-slate-800">Análisis de Precios</span>
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+        <header className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm md:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((v) => !v)}
+              className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+              title={sidebarOpen ? 'Ocultar capítulos' : 'Mostrar capítulos'}
+            >
+              {sidebarOpen ? (
+                <PanelLeftClose className="h-4 w-4" />
+              ) : (
+                <PanelLeft className="h-4 w-4" />
+              )}
+            </button>
+            <div className="flex items-center space-x-2 text-xs text-slate-500">
+              <span>Presupuesto</span>
+              <span>/</span>
+              <span className="font-medium text-slate-800">Análisis de Precios</span>
+            </div>
           </div>
-          <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-            USD ($)
-          </span>
+          <div className="flex items-center gap-2">
+            {data.fuente === 'cascada' && partidaInfo ? (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void guardarApu()}
+                className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                Guardar APU
+              </button>
+            ) : null}
+            <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-600">
+              USD ($)
+            </span>
+          </div>
         </header>
+        {saveMsg ? (
+          <p
+            className={`border-b px-4 py-1.5 text-xs ${saveMsg.includes('guardados') ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'}`}
+          >
+            {saveMsg}
+          </p>
+        ) : null}
 
-        <div className="flex-1 space-y-6 overflow-y-auto p-4 md:p-6">
+        <div className="flex-1 space-y-6 overflow-y-auto bg-white p-4 md:p-6">
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
               <div className="flex items-center space-x-2">
@@ -282,9 +402,20 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
                   <div className="flex gap-4 rounded-lg border border-slate-700/50 bg-slate-900/60 p-3 text-xs backdrop-blur-sm">
                     <div>
                       <span className="block text-[10px] uppercase text-slate-400">Rendimiento</span>
-                      <span className="font-mono font-bold text-yellow-400">
-                        {rendimiento} {partidaInfo.unidad}/día
-                      </span>
+                      <input
+                        type="number"
+                        min={0.0001}
+                        step="any"
+                        value={rendimiento}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          if (!partidaInfo || !Number.isFinite(v) || v <= 0) return;
+                          setRendOverrides((prev) => ({ ...prev, [partidaInfo.id]: v }));
+                          setSaveMsg(null);
+                        }}
+                        className="mt-0.5 w-24 rounded border border-slate-600 bg-slate-800 px-2 py-1 font-mono text-sm font-bold text-yellow-400"
+                      />
+                      <span className="ml-1 text-[10px] text-slate-400">{partidaInfo.unidad}/día</span>
                     </div>
                     <div className="w-px bg-slate-700" />
                     <div>
@@ -296,19 +427,89 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
                 <p className="text-xs leading-relaxed text-slate-200">{partidaInfo.descripcion}</p>
               </div>
 
-              <div className="space-y-6 p-5">
-                <ApuMaterialesTable items={apu.materiales} total={calc.totalMateriales} />
+              <div className="space-y-6 bg-white p-5">
+                {apuPartidaVacio(apuBase) ? (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                    Sin composición APU para <strong>{partidaInfo.codigo}</strong>. Ejecuta{' '}
+                    <code className="rounded bg-amber-100 px-1">npm run import:lulo-csv</code> con
+                    catálogo maestro o revisa que existan líneas en ObraPainMate / ObraPainMano /
+                    ObraPainEqui.
+                  </p>
+                ) : null}
+                <ApuMaterialesTable
+                  items={apu.materiales}
+                  total={calc.totalMateriales}
+                  editable
+                  onChangeCantidad={(idx, cantidad) => {
+                    if (!partidaInfo) return;
+                    patchApu(partidaInfo.id, (prev) => {
+                      const materiales = [...prev.materiales];
+                      materiales[idx] = { ...materiales[idx], cantidad };
+                      return { ...prev, materiales };
+                    });
+                  }}
+                  onChangePrecio={(idx, precio) => {
+                    if (!partidaInfo) return;
+                    patchApu(partidaInfo.id, (prev) => {
+                      const materiales = [...prev.materiales];
+                      materiales[idx] = { ...materiales[idx], precio };
+                      return { ...prev, materiales };
+                    });
+                  }}
+                />
                 <ApuEquiposTable
                   items={apu.equipos}
                   rendimiento={rendimiento}
                   herramientaMenorDiaria={calc.herramientaMenorDiaria}
                   costoUnitarioEquipos={calc.costoUnitarioEquipos}
+                  editable
+                  onChangeCantidad={(idx, cantidad) => {
+                    if (!partidaInfo) return;
+                    patchApu(partidaInfo.id, (prev) => {
+                      const equipos = [...prev.equipos];
+                      equipos[idx] = { ...equipos[idx], cantidad };
+                      return { ...prev, equipos };
+                    });
+                  }}
+                  onChangeTarifa={(idx, tarifa) => {
+                    if (!partidaInfo) return;
+                    patchApu(partidaInfo.id, (prev) => {
+                      const equipos = [...prev.equipos];
+                      equipos[idx] = { ...equipos[idx], tarifa };
+                      return { ...prev, equipos };
+                    });
+                  }}
                 />
                 <ApuManoObraTable
                   items={apu.manoObra}
                   config={config}
                   calc={calc}
                   costoUnitarioManoObra={calc.costoUnitarioManoObra}
+                  editable
+                  onChangeCantidad={(idx, cantidad) => {
+                    if (!partidaInfo) return;
+                    patchApu(partidaInfo.id, (prev) => {
+                      const manoObra = [...prev.manoObra];
+                      manoObra[idx] = { ...manoObra[idx], cantidad };
+                      return { ...prev, manoObra };
+                    });
+                  }}
+                  onChangeSalario={(idx, salario) => {
+                    if (!partidaInfo) return;
+                    patchApu(partidaInfo.id, (prev) => {
+                      const manoObra = [...prev.manoObra];
+                      manoObra[idx] = { ...manoObra[idx], salario };
+                      return { ...prev, manoObra };
+                    });
+                  }}
+                  onChangeBono={(idx, bono) => {
+                    if (!partidaInfo) return;
+                    patchApu(partidaInfo.id, (prev) => {
+                      const manoObra = [...prev.manoObra];
+                      manoObra[idx] = { ...manoObra[idx], bono };
+                      return { ...prev, manoObra };
+                    });
+                  }}
                 />
 
                 <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
@@ -349,12 +550,41 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
   );
 }
 
+function NumInput({
+  value,
+  onChange,
+  className = '',
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  className?: string;
+}) {
+  return (
+    <input
+      type="number"
+      step="any"
+      value={value}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        if (Number.isFinite(v)) onChange(v);
+      }}
+      className={`w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-right font-mono text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 ${className}`}
+    />
+  );
+}
+
 function ApuMaterialesTable({
   items,
   total,
+  editable = false,
+  onChangeCantidad,
+  onChangePrecio,
 }: {
   items: LuloWebErpApuPartida['materiales'];
   total: number;
+  editable?: boolean;
+  onChangeCantidad?: (index: number, cantidad: number) => void;
+  onChangePrecio?: (index: number, precio: number) => void;
 }) {
   return (
     <div>
@@ -374,13 +604,25 @@ function ApuMaterialesTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 text-slate-600">
-          {items.map((m) => (
-            <tr key={m.codigo} className="hover:bg-slate-50/50">
+          {items.map((m, i) => (
+            <tr key={`${m.codigo}-${i}`} className="hover:bg-slate-50/50">
               <td className="p-2.5 font-mono text-slate-400">{m.codigo}</td>
               <td className="p-2.5 font-medium text-slate-800">{m.descripcion}</td>
               <td className="p-2.5 text-center">{m.unidad}</td>
-              <td className="p-2.5 text-right font-mono">{m.cantidad}</td>
-              <td className="p-2.5 text-right font-mono">{m.precio.toFixed(2)}</td>
+              <td className="p-2.5 text-right">
+                {editable && onChangeCantidad ? (
+                  <NumInput value={m.cantidad} onChange={(v) => onChangeCantidad(i, v)} />
+                ) : (
+                  <span className="font-mono">{m.cantidad}</span>
+                )}
+              </td>
+              <td className="p-2.5 text-right">
+                {editable && onChangePrecio ? (
+                  <NumInput value={m.precio} onChange={(v) => onChangePrecio(i, v)} />
+                ) : (
+                  <span className="font-mono">{m.precio.toFixed(2)}</span>
+                )}
+              </td>
               <td className="p-2.5 text-right font-mono font-medium text-slate-900">
                 {(m.cantidad * m.precio).toFixed(2)}
               </td>
@@ -403,11 +645,17 @@ function ApuEquiposTable({
   rendimiento,
   herramientaMenorDiaria,
   costoUnitarioEquipos,
+  editable = false,
+  onChangeCantidad,
+  onChangeTarifa,
 }: {
   items: LuloWebErpApuPartida['equipos'];
   rendimiento: number;
   herramientaMenorDiaria: number;
   costoUnitarioEquipos: number;
+  editable?: boolean;
+  onChangeCantidad?: (index: number, cantidad: number) => void;
+  onChangeTarifa?: (index: number, tarifa: number) => void;
 }) {
   return (
     <div>
@@ -427,13 +675,13 @@ function ApuEquiposTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 text-slate-600">
-          {items.map((e) => {
+          {items.map((e, i) => {
             const costoDiario = e.esPorcentajeManoObra
               ? herramientaMenorDiaria
               : e.cantidad * e.tarifa;
             const costoUnit = costoDiario / rendimiento;
             return (
-              <tr key={e.codigo} className="hover:bg-slate-50/50">
+              <tr key={`${e.codigo}-${i}`} className="hover:bg-slate-50/50">
                 <td className="p-2.5 font-mono text-slate-400">{e.codigo}</td>
                 <td className="p-2.5 font-medium text-slate-800">
                   {e.descripcion}
@@ -443,9 +691,21 @@ function ApuEquiposTable({
                     </span>
                   ) : null}
                 </td>
-                <td className="p-2.5 text-center font-mono">{e.cantidad}</td>
-                <td className="p-2.5 text-right font-mono">
-                  {e.esPorcentajeManoObra ? '—' : e.tarifa.toFixed(2)}
+                <td className="p-2.5 text-center">
+                  {editable && onChangeCantidad && !e.esPorcentajeManoObra ? (
+                    <NumInput value={e.cantidad} onChange={(v) => onChangeCantidad(i, v)} />
+                  ) : (
+                    <span className="font-mono">{e.cantidad}</span>
+                  )}
+                </td>
+                <td className="p-2.5 text-right">
+                  {e.esPorcentajeManoObra ? (
+                    '—'
+                  ) : editable && onChangeTarifa ? (
+                    <NumInput value={e.tarifa} onChange={(v) => onChangeTarifa(i, v)} />
+                  ) : (
+                    <span className="font-mono">{e.tarifa.toFixed(2)}</span>
+                  )}
                 </td>
                 <td className="p-2.5 text-right font-mono">{costoDiario.toFixed(2)}</td>
                 <td className="p-2.5 text-right font-mono text-slate-900">
@@ -473,11 +733,19 @@ function ApuManoObraTable({
   config,
   calc,
   costoUnitarioManoObra,
+  editable = false,
+  onChangeCantidad,
+  onChangeSalario,
+  onChangeBono,
 }: {
   items: LuloWebErpApuPartida['manoObra'];
   config: LuloWebErpPayload['config'];
   calc: ReturnType<typeof calcularApuLuloWin>;
   costoUnitarioManoObra: number;
+  editable?: boolean;
+  onChangeCantidad?: (index: number, cantidad: number) => void;
+  onChangeSalario?: (index: number, salario: number) => void;
+  onChangeBono?: (index: number, bono: number) => void;
 }) {
   return (
     <div>
@@ -497,15 +765,33 @@ function ApuManoObraTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 text-slate-600">
-          {items.map((mo) => {
+          {items.map((mo, i) => {
             const diario = mo.cantidad * mo.salario + mo.cantidad * mo.bono;
             return (
-              <tr key={mo.codigo} className="hover:bg-slate-50/50">
+              <tr key={`${mo.codigo}-${i}`} className="hover:bg-slate-50/50">
                 <td className="p-2.5 font-mono text-slate-400">{mo.codigo}</td>
                 <td className="p-2.5 font-medium text-slate-800">{mo.descripcion}</td>
-                <td className="p-2.5 text-center font-mono">{mo.cantidad}</td>
-                <td className="p-2.5 text-right font-mono">{mo.salario.toFixed(2)}</td>
-                <td className="p-2.5 text-right font-mono">{mo.bono.toFixed(2)}</td>
+                <td className="p-2.5 text-center">
+                  {editable && onChangeCantidad ? (
+                    <NumInput value={mo.cantidad} onChange={(v) => onChangeCantidad(i, v)} />
+                  ) : (
+                    <span className="font-mono">{mo.cantidad}</span>
+                  )}
+                </td>
+                <td className="p-2.5 text-right">
+                  {editable && onChangeSalario ? (
+                    <NumInput value={mo.salario} onChange={(v) => onChangeSalario(i, v)} />
+                  ) : (
+                    <span className="font-mono">{mo.salario.toFixed(2)}</span>
+                  )}
+                </td>
+                <td className="p-2.5 text-right">
+                  {editable && onChangeBono ? (
+                    <NumInput value={mo.bono} onChange={(v) => onChangeBono(i, v)} />
+                  ) : (
+                    <span className="font-mono">{mo.bono.toFixed(2)}</span>
+                  )}
+                </td>
                 <td className="p-2.5 text-right font-mono text-slate-900">{diario.toFixed(2)}</td>
               </tr>
             );

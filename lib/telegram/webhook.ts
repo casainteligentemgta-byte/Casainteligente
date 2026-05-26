@@ -39,6 +39,12 @@ import {
   manejarFotoRegistroAguaTelegram,
   manejarTextoLitrosAguaTelegram,
 } from '@/lib/telegram/aguaRegistro';
+import {
+  manejarComandoEntradaTelegram,
+  manejarComandoSalidaTelegram,
+  manejarFotoEntradaSalidaTelegram,
+  manejarTextoObservacionEntradaSalida,
+} from '@/lib/telegram/entradaSalidaRegistro';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
@@ -141,6 +147,16 @@ async function aplicarComando(
     return;
   }
 
+  if (cmd.comandoEntrada) {
+    await manejarComandoEntradaTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoSalida) {
+    await manejarComandoSalidaTelegram(supabase, chatId);
+    return;
+  }
+
   if (cmd.resetProyecto && userId) {
     await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);
   }
@@ -148,7 +164,9 @@ async function aplicarComando(
   if (cmd.contexto || cmd.resetProyecto) {
     await setTelegramContexto(supabase, chatId, {
       ...(cmd.contexto ? { contexto: cmd.contexto } : {}),
-      ...(cmd.resetProyecto ? { proyecto_id: null, pending_factura_id: null } : {}),
+      ...(cmd.resetProyecto
+        ? { proyecto_id: null, pending_factura_id: null, metadata: {} }
+        : {}),
       ...(cmd.proyectoId !== undefined ? { proyecto_id: cmd.proyectoId } : {}),
     });
   }
@@ -342,6 +360,18 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (texto && !texto.startsWith('/')) {
+      const obsEntradaSalida = await manejarTextoObservacionEntradaSalida({
+        supabase,
+        chatId,
+        texto,
+      });
+      if (obsEntradaSalida.handled) {
+        return NextResponse.json({
+          ok: true,
+          entrada_salida: obsEntradaSalida.motivo ?? true,
+        });
+      }
+
       const litrosAgua = await manejarTextoLitrosAguaTelegram({
         supabase,
         chatId,
@@ -368,7 +398,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       if (texto.startsWith('/')) {
         await sendTelegramMessage(
           chatId,
-          '❌ Comando no reconocido.\n<code>/agua</code> — obra → camión → prueba.\n<code>/ayuda</code>',
+          '❌ Comando no reconocido.\n<code>/entrada</code> · <code>/salida</code> · <code>/agua</code>\n<code>/ayuda</code>',
           { parse_mode: 'HTML' },
         );
         return NextResponse.json({ ok: true, unknown_command: true });
@@ -411,6 +441,21 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (msg.photo?.length) {
+      const fotoEntradaSalida = await manejarFotoEntradaSalidaTelegram({
+        supabase,
+        chatId,
+        userId,
+        username: msg.from?.username ?? null,
+        photo: msg.photo,
+        caption: msg.caption,
+      });
+      if (fotoEntradaSalida.handled) {
+        return NextResponse.json({
+          ok: true,
+          entrada_salida: fotoEntradaSalida.motivo ?? true,
+        });
+      }
+
       const fotoAgua = await manejarFotoRegistroAguaTelegram({
         supabase,
         chatId,

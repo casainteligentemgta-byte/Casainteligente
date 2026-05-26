@@ -5,6 +5,7 @@ import {
 } from '@/lib/telegram/botApi';
 import type { TelegramContexto } from '@/lib/telegram/estados';
 import { etiquetaContexto, setTelegramContexto } from '@/lib/telegram/estados';
+import { prepararEntradaSalidaTrasObra } from '@/lib/telegram/entradaSalidaRegistro';
 import {
   loadCatalogoProyectosApp,
   type ProyectoCatalogo,
@@ -14,7 +15,7 @@ import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 /** Contextos en los que el usuario puede elegir proyecto desde Telegram. */
 export type ProyectoPickerModo = Extract<
   TelegramContexto,
-  'obra' | 'gasto_obra' | 'esperando_audio_bitacora'
+  'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra'
 >;
 
 const PAGE_SIZE = 8;
@@ -23,12 +24,16 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   obra: 'o',
   gasto_obra: 'g',
   esperando_audio_bitacora: 'b',
+  entrada_obra: 'n',
+  salida_obra: 'l',
 };
 
 const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   o: 'obra',
   g: 'gasto_obra',
   b: 'esperando_audio_bitacora',
+  n: 'entrada_obra',
+  l: 'salida_obra',
 };
 
 function truncarNombre(nombre: string, max = 28): string {
@@ -73,6 +78,10 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '💸 <b>Elige la obra</b> para el gasto:';
     case 'esperando_audio_bitacora':
       return '📋 <b>Elige la obra</b> para la bitácora:';
+    case 'entrada_obra':
+      return '📥 <b>Elige la obra</b> (entrada de material):';
+    case 'salida_obra':
+      return '📤 <b>Elige la obra</b> (salida de material):';
   }
 }
 
@@ -94,6 +103,9 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
         `✅ Obra: <b>${nombre}</b>\n\n` +
         'Envía una <b>nota de voz</b> con el reporte de bitácora de campo.'
       );
+    case 'entrada_obra':
+    case 'salida_obra':
+      return '';
   }
 }
 
@@ -200,15 +212,28 @@ export async function manejarCallbackProyectoTelegram(
     return true;
   }
 
+  if (parsed.modo === 'entrada_obra' || parsed.modo === 'salida_obra') {
+    const tipo = parsed.modo === 'entrada_obra' ? 'entrada' : 'salida';
+    await prepararEntradaSalidaTrasObra(
+      supabase,
+      params.chatId,
+      parsed.proyectoId,
+      tipo,
+    );
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    return true;
+  }
+
   await setTelegramContexto(supabase, params.chatId, {
     contexto: parsed.modo,
     proyecto_id: parsed.proyectoId,
   });
 
   await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-  await sendTelegramMessage(params.chatId, mensajeTrasSeleccion(parsed.modo, hit.nombre), {
-    parse_mode: 'HTML',
-  });
+  const msg = mensajeTrasSeleccion(parsed.modo, hit.nombre);
+  if (msg) {
+    await sendTelegramMessage(params.chatId, msg, { parse_mode: 'HTML' });
+  }
   return true;
 }
 

@@ -5,7 +5,9 @@ export type TelegramContexto =
   | 'factura'
   | 'obra'
   | 'gasto_obra'
-  | 'esperando_audio_bitacora';
+  | 'esperando_audio_bitacora'
+  | 'entrada_obra'
+  | 'salida_obra';
 
 export type TelegramEstado = {
   chat_id: string;
@@ -22,6 +24,8 @@ const CONTEXTOS: TelegramContexto[] = [
   'obra',
   'gasto_obra',
   'esperando_audio_bitacora',
+  'entrada_obra',
+  'salida_obra',
 ];
 
 export function isTelegramContexto(v: string): v is TelegramContexto {
@@ -112,6 +116,10 @@ export function etiquetaContexto(ctx: TelegramContexto): string {
       return 'Gasto de obra (comprobante)';
     case 'esperando_audio_bitacora':
       return 'Bitácora de obra (nota de voz)';
+    case 'entrada_obra':
+      return 'Entrada de material a obra';
+    case 'salida_obra':
+      return 'Salida de material de obra';
     default:
       return 'Menú principal';
   }
