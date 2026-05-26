@@ -58,16 +58,25 @@ export async function persistirLuloMdbCascada(
   supabase: SupabaseClient,
   proyectoId: string,
   model: LuloMdbCascadaModel,
-  options?: { reemplazar?: boolean },
+  options?: { reemplazar?: boolean; presupuestoLuloId?: string },
 ): Promise<PersistirLuloMdbCascadaResult> {
   const pid = proyectoId.trim();
   const reemplazar = options?.reemplazar ?? false;
+  const presupuestoLuloId = options?.presupuestoLuloId?.trim();
 
   await ensureProyectoObra(supabase, pid);
 
   if (reemplazar) {
-    const { error: delErr } = await supabase.from('capitulos').delete().eq('proyecto_id', pid);
-    if (delErr) throw new Error(formatErrorMessage(delErr));
+    if (presupuestoLuloId) {
+      const { error: delErr } = await supabase
+        .from('capitulos')
+        .delete()
+        .eq('presupuesto_lulo_id', presupuestoLuloId);
+      if (delErr) throw new Error(formatErrorMessage(delErr));
+    } else {
+      const { error: delErr } = await supabase.from('capitulos').delete().eq('proyecto_id', pid);
+      if (delErr) throw new Error(formatErrorMessage(delErr));
+    }
   }
 
   let capitulosInsertados = 0;
@@ -75,13 +84,16 @@ export async function persistirLuloMdbCascada(
   let apuItemsInsertados = 0;
 
   for (const cap of model.capitulos) {
+    const capInsert: Record<string, unknown> = {
+      proyecto_id: pid,
+      codigo: cap.codigo.trim(),
+      nombre: cap.nombre.trim().slice(0, 500),
+    };
+    if (presupuestoLuloId) capInsert.presupuesto_lulo_id = presupuestoLuloId;
+
     const { data: capRow, error: capErr } = await supabase
       .from('capitulos')
-      .insert({
-        proyecto_id: pid,
-        codigo: cap.codigo.trim(),
-        nombre: cap.nombre.trim().slice(0, 500),
-      })
+      .insert(capInsert)
       .select('id')
       .single();
     if (capErr) throw new Error(formatErrorMessage(capErr));

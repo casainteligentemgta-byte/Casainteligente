@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarRange, Droplets, FileText, Layers } from 'lucide-react';
+import { Calculator, CalendarRange, Droplets, FileText, Layers } from 'lucide-react';
 
 type Tab = {
   id: string;
@@ -15,6 +15,7 @@ function tabs(proyectoId: string): Tab[] {
   const base = `/proyectos/modulo/${encodeURIComponent(proyectoId)}/control-obra`;
   return [
     { id: 'presupuesto', href: base, label: 'Presupuesto Lulo', icon: Layers },
+    { id: 'apu', href: `${base}/apu`, label: 'Análisis APU', icon: Calculator },
     { id: 'agua', href: `${base}/agua`, label: 'Registro de agua', icon: Droplets },
     { id: 'informes', href: `${base}/informes`, label: 'Informes ingeniero', icon: FileText },
     { id: 'cronograma', href: `${base}/cronograma`, label: 'Cronograma', icon: CalendarRange },
@@ -27,6 +28,7 @@ function tabActivo(pathname: string, tab: Tab): boolean {
       pathname.endsWith('/control-obra') ||
       (pathname.includes('/control-obra') &&
         !pathname.includes('/agua') &&
+        !pathname.includes('/apu') &&
         !pathname.includes('/informes') &&
         !pathname.includes('/cronograma'))
     );

@@ -48,6 +48,8 @@ const MIGRATIONS = [
   '169_cronograma_tareas_fk_partidas.sql',
   '170_registro_agua_litros_ppm.sql',
   '171_cronograma_tareas_repair.sql',
+  '172_lulo_catalogo_maestro.sql',
+  '173_ci_proyecto_presupuestos_lulo.sql',
 ];
 
 async function tableExists(sql, name) {
@@ -230,6 +232,8 @@ async function main() {
         `;
         return cols.length > 0;
       },
+      '173_ci_proyecto_presupuestos_lulo.sql': () =>
+        tableExists(sql, 'ci_proyecto_presupuestos_lulo'),
     };
 
     for (const file of MIGRATIONS) {

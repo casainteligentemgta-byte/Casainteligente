@@ -9,6 +9,10 @@ import {
   persistirLuloMdbCascada,
   type PersistirLuloMdbCascadaResult,
 } from '@/lib/proyectos/persistirLuloMdbCascada';
+import {
+  cargarPresupuestoLuloDesdeMdb,
+  type CargarPresupuestoLuloResult,
+} from '@/lib/proyectos/presupuestosLulo';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
 export type ImportarLuloMdbDirectoResult = PersistirLuloMdbCascadaResult & {
@@ -20,6 +24,10 @@ export type ImportarLuloMdbDirectoResult = PersistirLuloMdbCascadaResult & {
 export type ImportarLuloMdbDirectoOptions = {
   reemplazar?: boolean;
   nombreArchivo?: string;
+  presupuestoLuloId?: string;
+  reemplazarPresupuestosPrevios?: boolean;
+  codigoObr?: string;
+  nombrePresupuesto?: string;
 };
 
 /**
@@ -30,7 +38,15 @@ export async function importarLuloMdbDirecto(
   proyectoId: string,
   fileBuffer: Buffer | ArrayBuffer | Uint8Array,
   options?: ImportarLuloMdbDirectoOptions,
-): Promise<ImportarLuloMdbDirectoResult> {
+): Promise<ImportarLuloMdbDirectoResult | CargarPresupuestoLuloResult> {
+  if (options?.reemplazarPresupuestosPrevios) {
+    return cargarPresupuestoLuloDesdeMdb(supabase, proyectoId, fileBuffer, {
+      codigoObr: options.codigoObr,
+      nombrePresupuesto: options.nombrePresupuesto,
+      nombreArchivo: options.nombreArchivo,
+    });
+  }
+
   const buffer = toMdbNodeBuffer(fileBuffer);
   let dump;
   try {
@@ -53,7 +69,10 @@ export async function importarLuloMdbDirecto(
       supabase,
       proyectoId,
       validacion.model,
-      { reemplazar: options?.reemplazar ?? false },
+      {
+        reemplazar: options?.reemplazar ?? false,
+        presupuestoLuloId: options?.presupuestoLuloId,
+      },
     );
 
     return {

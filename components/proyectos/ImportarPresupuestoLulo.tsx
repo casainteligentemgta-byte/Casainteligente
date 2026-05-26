@@ -237,6 +237,52 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     setUploading(true);
     setUltimoResumen(null);
     setErrorDetalle(null);
+
+    const esMdbFile =
+      file.name.toLowerCase().endsWith('.mdb') || file.name.toLowerCase().endsWith('.accdb');
+    if (esMdbFile && reemplazar) {
+      try {
+        const formCascada = new FormData();
+        formCascada.append('file', file);
+        const resCascada = await fetch(
+          `/api/proyectos/${encodeURIComponent(pid)}/presupuestos-lulo/cargar`,
+          { method: 'POST', body: formCascada },
+        );
+        const dataCascada = await parseFetchJson<ImportResponse & { apu?: number }>(resCascada);
+        if (resCascada.ok && dataCascada.success) {
+          const lineas: string[] = [];
+          if (dataCascada.capitulos != null) lineas.push(`${dataCascada.capitulos} capítulos`);
+          if (dataCascada.partidas != null) lineas.push(`${dataCascada.partidas} partidas`);
+          if (dataCascada.apu != null) lineas.push(`${dataCascada.apu} APU`);
+          setUltimoResumen(lineas.join(' · ') || dataCascada.message || 'Importación cascada');
+          toast.success(dataCascada.message ?? 'Presupuesto Lulo reemplazado.');
+          setFile(null);
+          onSuccess?.();
+          router.refresh();
+          setUploading(false);
+          return;
+        }
+        if (resCascada.status !== 422) {
+          throw new Error(
+            formatApiErrorBody(dataCascada, 'No se pudo importar el MDB en modo cascada'),
+          );
+        }
+        toast.message('MDB sin tablas Lulo estándar', {
+          description: 'Se intentará importación genérica…',
+        });
+      } catch (err) {
+        if (!(err instanceof Error) || !err.message.includes('tablas Lulo')) {
+          const msg = formatErrorMessage(err);
+          if (!/INSUMOS|PARTIDAS|422/i.test(msg)) {
+            setErrorDetalle(msg);
+            toast.error(msg);
+            setUploading(false);
+            return;
+          }
+        }
+      }
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     if (reemplazar) formData.append('reemplazar', '1');
@@ -524,6 +570,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             type="checkbox"
             checked={reemplazar}
             onChange={(e) => setReemplazar(e.target.checked)}
+            title="En MDB: borra el presupuesto Lulo anterior e importa capítulos/partidas/APU"
             className="rounded border-white/20 bg-white/5"
           />
           Reemplazar importaciones Lulo anteriores de este proyecto
