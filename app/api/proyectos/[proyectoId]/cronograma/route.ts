@@ -113,9 +113,9 @@ async function enriquecerTareasConPartidas(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filas: TareaDbRow[],
 ): Promise<TareaRow[]> {
-  const ids = [
-    ...new Set(filas.map((f) => f.partida_id).filter((id): id is string => Boolean(id))),
-  ];
+  const ids = Array.from(
+    new Set(filas.map((f) => f.partida_id).filter((id): id is string => Boolean(id))),
+  );
   const porId = new Map<string, PartidaCronograma>();
 
   if (ids.length > 0) {
