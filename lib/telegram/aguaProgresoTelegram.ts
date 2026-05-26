@@ -59,29 +59,27 @@ export async function crearMedidorCargaAgua(
 }
 
 const ETAPAS_FOTO_CAMION: EtapaMedidor[] = [
-  { pct: 8, texto: 'Recibiendo foto del camión de agua…', pausaMs: 350 },
-  { pct: 28, texto: 'Verificando que se visualice la placa…', pausaMs: 450 },
-  { pct: 52, texto: 'Procesando imagen…', pausaMs: 400 },
-  { pct: 78, texto: 'Guardando en el sistema…', pausaMs: 380 },
-  { pct: 100, texto: '¡Foto del camión cargada al 100%!', pausaMs: 280 },
+  { pct: 15, texto: 'Recibiendo…', pausaMs: 300 },
+  { pct: 40, texto: 'Placa…', pausaMs: 350 },
+  { pct: 70, texto: 'Guardando…', pausaMs: 320 },
+  { pct: 100, texto: 'Listo', pausaMs: 220 },
 ];
 
 const ETAPAS_INICIO_PRUEBA: EtapaMedidor[] = [
-  { pct: 10, texto: 'Recibiendo foto de la prueba de agua…', pausaMs: 350 },
-  { pct: 30, texto: 'Verificando imagen…', pausaMs: 400 },
-  { pct: 45, texto: 'Preparando registro en el ERP…', pausaMs: 300 },
+  { pct: 20, texto: 'Recibiendo…', pausaMs: 300 },
+  { pct: 45, texto: 'Verificando…', pausaMs: 320 },
 ];
 
 /** Medidor al recibir la foto del camión (paso 1). */
 export async function medidorCargaFotoCamionAgua(chatId: string): Promise<MedidorCargaAgua> {
-  const medidor = await crearMedidorCargaAgua(chatId, 'Foto del camión');
+  const medidor = await crearMedidorCargaAgua(chatId, 'Camión');
   await medidor.animarEtapas(ETAPAS_FOTO_CAMION);
   return medidor;
 }
 
 /** Medidor al recibir la foto de prueba (paso 2, antes de IA y storage). */
 export async function medidorCargaFotoPruebaAgua(chatId: string): Promise<MedidorCargaAgua> {
-  const medidor = await crearMedidorCargaAgua(chatId, 'Prueba de agua');
+  const medidor = await crearMedidorCargaAgua(chatId, 'Prueba');
   await medidor.animarEtapas(ETAPAS_INICIO_PRUEBA);
   return medidor;
 }

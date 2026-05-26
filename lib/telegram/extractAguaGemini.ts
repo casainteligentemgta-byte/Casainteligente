@@ -244,12 +244,10 @@ export function mensajeResumenExtraccionAgua(
       : extraccion.medicion.detalle_medicion?.slice(0, 80) || 'no detectada';
 
   return (
-    '¡Éxito! Registro de agua guardado en el ERP.\n\n' +
-    `📅 <b>Fecha y hora:</b> ${fecha} (VE)\n` +
-    `🚛 <b>Placa:</b> ${placa}\n` +
-    `💧 <b>Medición:</b> ${med}` +
-    (extraccion.medicion.tipo_medicion
-      ? `\n📋 <i>Tipo:</i> ${extraccion.medicion.tipo_medicion}`
-      : '')
+    '✅ <b>Agua guardada</b>\n' +
+    `📅 ${fecha}\n` +
+    `🚛 ${placa}\n` +
+    `💧 ${med}` +
+    (extraccion.medicion.tipo_medicion ? `\n📋 ${extraccion.medicion.tipo_medicion}` : '')
   );
 }

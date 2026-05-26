@@ -40,7 +40,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /gasto — comprobante de gasto de obra\n' +
         '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
-        '• /agua — elige obra, foto camión (placa) y prueba de agua\n' +
+        '• /agua — obra → camión → prueba\n' +
         '• /estado — ver modo activo\n' +
         '• /cancelar — volver al menú',
     };
@@ -57,7 +57,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/gasto — registrar comprobante de gasto\n' +
         '/stock cemento — buscar stock por nombre (parcial)\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
-        '/agua — obra → foto camión (medidor %) → prueba de agua (medidor %)\n' +
+        '/agua — obra, camión (placa), prueba\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +
         '/estado — contexto actual',

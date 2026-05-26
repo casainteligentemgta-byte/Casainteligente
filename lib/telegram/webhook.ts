@@ -355,10 +355,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       if (texto.startsWith('/')) {
         await sendTelegramMessage(
           chatId,
-          '❌ <b>Comando no reconocido.</b>\n\n' +
-            'Para registro de agua en obra:\n' +
-            '<code>/agua</code> → elige la obra → foto del <b>camión</b> (con placa) → foto de <b>prueba de agua</b>.\n\n' +
-            'Ver todos: <code>/ayuda</code>',
+          '❌ Comando no reconocido.\n<code>/agua</code> — obra → camión → prueba.\n<code>/ayuda</code>',
           { parse_mode: 'HTML' },
         );
         return NextResponse.json({ ok: true, unknown_command: true });

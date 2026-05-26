@@ -1,36 +1,23 @@
-/** Textos del flujo /agua en Telegram (mantener tono instructivo de campo). */
+/** Textos del flujo /agua en Telegram (cortos, tono de campo). */
 
-export const MSJ_AGUA_PICKER_OBRA =
-  '💧 <b>Registro de agua</b>\n\n' +
-  '<b>Selecciona la obra</b> en el listado de proyectos de abajo 👇';
+export const MSJ_AGUA_PICKER_OBRA = '💧 <b>Agua</b> — selecciona la obra 👇';
 
 export function mensajeObraSeleccionadaAgua(nombreObra: string): string {
   const obra = nombreObra.trim() || 'Obra';
-  return (
-    `🏗 Obra: <b>${obra}</b>\n\n` +
-    'Paso 1 de 2 — Envía la foto del <b>camión de agua</b>.\n' +
-    'Verifica que se <b>visualice la placa</b> del vehículo.'
-  );
+  return `🏗 <b>${obra}</b>\n1/2 Foto del <b>camión</b> (con <b>placa</b>).`;
 }
 
-/** Tras cargar el camión al 100% (medidor). */
 export const MSJ_AGUA_RECORDATORIO_PRUEBA =
-  '✅ Foto del camión cargada correctamente.\n\n' +
-  '👋 <b>¡Ey! No se te olvide</b> cargar la foto de la <b>prueba de agua</b>.\n\n' +
-  'Paso 2 de 2 — Envía la foto de la prueba (medición, ticket, hidrante o comprobante en obra).';
+  '✅ Camión listo.\n👋 <b>¡Ey!</b> Sube la <b>prueba de agua</b>.';
 
 export function textoProgresoCargaAgua(
   pct: number,
   etapa: string,
-  titulo = 'Subiendo foto',
+  titulo = 'Carga',
 ): string {
   const p = Math.max(0, Math.min(100, Math.round(pct)));
-  const total = 10;
+  const total = 8;
   const filled = Math.max(0, Math.min(total, Math.round((p / 100) * total)));
   const barra = `${'█'.repeat(filled)}${'░'.repeat(total - filled)}`;
-  return (
-    `⏳ <b>${titulo} — ${p}%</b>\n` +
-    `<code>${barra}</code>\n` +
-    `<i>${etapa}</i>`
-  );
+  return `⏳ <b>${titulo} ${p}%</b>\n<code>${barra}</code>\n<i>${etapa}</i>`;
 }

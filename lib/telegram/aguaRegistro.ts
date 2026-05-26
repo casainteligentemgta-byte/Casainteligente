@@ -377,7 +377,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
     const progreso = await medidorCargaFotoPruebaAgua(params.chatId);
 
     try {
-      await progreso.reportar(55, 'Descargando fotos desde Telegram…');
+      await progreso.reportar(55, 'Descargando…');
       const [tanqueDl, pruebaDl] = await Promise.all([
         downloadTelegramFile(fileIdTanque),
         downloadTelegramFile(fileId),
@@ -392,7 +392,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
       let extraccion: ExtraccionRegistroAgua | null = null;
       if (getGeminiApiKey()) {
         try {
-          await progreso.reportar(68, 'Analizando placa y medición de agua (IA)…');
+          await progreso.reportar(68, 'IA placa y medición…');
           extraccion = await extraerDatosRegistroAguaGemini({
             bufferTanque: tanqueDl.buffer,
             mimeTanque,
@@ -404,7 +404,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
         }
       }
 
-      await progreso.reportar(82, 'Subiendo imágenes al ERP…');
+      await progreso.reportar(82, 'Subiendo…');
       const [fotoTanqueUrl, fotoPruebaUrl] = await Promise.all([
         subirBufferAguaStorage(
           params.supabase,
@@ -423,7 +423,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
           extPrueba,
         ),
       ]);
-      await progreso.reportar(94, 'Guardando registro en base de datos…');
+      await progreso.reportar(94, 'Guardando…');
 
       const { error: insErr } = await params.supabase.from('registro_agua_obrero').insert({
         proyecto_id: estado.proyecto_id,
@@ -448,11 +448,11 @@ export async function manejarFotoRegistroAguaTelegram(params: {
 
       const textoExito = extraccion
         ? mensajeResumenExtraccionAgua(registradoEn, extraccion)
-        : '¡Éxito! Registro de agua guardado en el ERP.\n\n' +
-          `📅 <b>Fecha y hora:</b> ${registradoEn.slice(0, 16).replace('T', ' ')}\n` +
+        : '✅ <b>Agua guardada</b>\n' +
+          `📅 ${registradoEn.slice(0, 16).replace('T', ' ')}\n` +
           (getGeminiApiKey()
-            ? '⚠️ No se pudo leer placa o medición en las fotos.'
-            : 'ℹ️ Configure <b>GEMINI_API_KEY</b> para extraer placa y medición automáticamente.');
+            ? '⚠️ Placa o medición no leídas.'
+            : 'ℹ️ Falta <b>GEMINI_API_KEY</b> para IA.');
 
       await progreso.finalizar(textoExito);
       return { handled: true, motivo: 'registro_completo' };
