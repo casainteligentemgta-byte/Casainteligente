@@ -6,6 +6,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  TELEGRAM_ALLOWED_UPDATES,
+  TELEGRAM_BOT_COMMANDS,
+} from './telegram-bot-commands.shared.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -55,7 +59,7 @@ async function main() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       url: webhookUrl,
-      allowed_updates: ['message'],
+      allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
       drop_pending_updates: true,
     }),
   });
@@ -72,16 +76,7 @@ async function main() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      commands: [
-        { command: 'facturas', description: 'Listo para recibir factura (foto/PDF)' },
-        { command: 'factura', description: 'Igual que /facturas' },
-        { command: 'stock', description: 'Consultar inventario por material' },
-        { command: 'obra', description: 'Vincular proyecto y subir fotos' },
-        { command: 'bitacora', description: 'Bitácora por nota de voz' },
-        { command: 'ayuda', description: 'Ver comandos' },
-        { command: 'estado', description: 'Modo activo' },
-        { command: 'cancelar', description: 'Volver al menú' },
-      ],
+      commands: TELEGRAM_BOT_COMMANDS,
     }),
   });
   console.log('setMyCommands:', JSON.stringify(await cmds.json(), null, 2));

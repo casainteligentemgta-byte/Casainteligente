@@ -560,6 +560,25 @@ export default function ModuloProyectosPage() {
                           </button>
                         </Link>
                       ) : null}
+                      {r.origen === 'modulo' ? (
+                        <Link href={`/proyectos/modulo/${r.id}/control-obra`}>
+                          <button
+                            type="button"
+                            style={{
+                              background: 'rgba(245, 158, 11, 0.2)',
+                              color: '#fde68a',
+                              border: '1px solid rgba(251, 191, 36, 0.55)',
+                              borderRadius: '10px',
+                              padding: '8px 14px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Control de obra
+                          </button>
+                        </Link>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => void borrarProyecto(r)}

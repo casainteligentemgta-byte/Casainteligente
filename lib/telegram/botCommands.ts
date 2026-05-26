@@ -1,0 +1,17 @@
+/** Comandos publicados en el menú de Telegram (setMyCommands). */
+export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
+  { command: 'facturas', description: 'Recibir factura de compra (foto/PDF)' },
+  { command: 'factura', description: 'Igual que /facturas' },
+  { command: 'agua', description: 'Registro tanque y prueba de agua (2 fotos)' },
+  { command: 'obra', description: 'Elegir obra y subir fotos de evidencia' },
+  { command: 'gasto', description: 'Comprobante de gasto de obra' },
+  { command: 'bitacora', description: 'Bitácora por nota de voz' },
+  { command: 'stock', description: 'Consultar inventario por material' },
+  { command: 'proyecto', description: 'Cambiar obra activa' },
+  { command: 'menu', description: 'Menú principal' },
+  { command: 'ayuda', description: 'Ver todos los comandos' },
+  { command: 'estado', description: 'Ver modo activo' },
+  { command: 'cancelar', description: 'Cancelar y volver al menú' },
+];
+
+export const TELEGRAM_ALLOWED_UPDATES = ['message', 'callback_query'] as const;

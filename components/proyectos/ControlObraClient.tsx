@@ -4,11 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
   Database,
   FileSpreadsheet,
-  Construction,
-  CalendarRange,
   Pencil,
   Save,
   Settings,
@@ -764,38 +761,16 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
 
   return (
     <div className="space-y-6 text-white max-w-[1400px] mx-auto">
-      <div className="flex flex-wrap items-start gap-4">
-        <Link
-          href={`/proyectos/modulo/${pid}?tab=finanzas`}
-          className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 hover:bg-white/5"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Volver al módulo
-        </Link>
-        <div className="flex-1 min-w-[200px]">
-          <div className="flex items-center gap-2">
-            <Construction className="h-6 w-6 text-amber-400" />
-            <h1 className="text-xl font-bold tracking-tight">CONTROL DE OBRA</h1>
-          </div>
-          <p className="text-sm text-zinc-500 mt-1">
-            {proyectoNombre ?? 'Proyecto'} · datos extraídos de Lulo Software
-            {proyectoMeta?.codigo_lulo ? (
-              <span className="text-amber-400/90"> · Obra Lulo {proyectoMeta.codigo_lulo}</span>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/proyectos/modulo/${pid}/cronograma`}
-            className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/35 bg-sky-950/40 px-3 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-900/50"
-          >
-            <CalendarRange className="h-3.5 w-3.5" />
-            Cronograma Gantt
-          </Link>
-          <span className="rounded-full border border-amber-500/30 bg-amber-950/30 px-3 py-1 text-[11px] font-semibold text-amber-200">
-            Lulo MDB / CSV
-          </span>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-zinc-500">
+          {proyectoNombre ?? 'Proyecto'} · datos extraídos de Lulo Software
+          {proyectoMeta?.codigo_lulo ? (
+            <span className="text-amber-400/90"> · Obra Lulo {proyectoMeta.codigo_lulo}</span>
+          ) : null}
+        </p>
+        <span className="rounded-full border border-amber-500/30 bg-amber-950/30 px-3 py-1 text-[11px] font-semibold text-amber-200">
+          Lulo MDB / CSV
+        </span>
       </div>
 
       <div className="flex flex-wrap items-start gap-4">

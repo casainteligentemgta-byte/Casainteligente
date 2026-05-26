@@ -16,6 +16,15 @@ import {
   mensajeResumenExtraccionAgua,
   type ExtraccionRegistroAgua,
 } from '@/lib/telegram/extractAguaGemini';
+import {
+  crearNotificadorProgresoRegistroAgua,
+  notificarCargaFotoCamionAgua,
+} from '@/lib/telegram/aguaProgresoTelegram';
+import {
+  MSJ_AGUA_FOTO_CAMION,
+  MSJ_AGUA_FOTO_PRUEBA,
+  MSJ_AGUA_PICKER_OBRA,
+} from '@/lib/telegram/mensajesAgua';
 
 const BUCKET_AGUA = 'ci-proyectos-media';
 const PAGE_SIZE = 8;
@@ -176,11 +185,10 @@ export async function enviarPickerObrasAguaTelegram(
   }
 
   const keyboard = buildKeyboardAgua(proyectos, page);
-  await sendTelegramMessage(
-    chatId,
-    '💧 <b>Registro de agua</b>\n\nSelecciona la obra activa en la lista:',
-    { parse_mode: 'HTML', reply_markup: keyboard },
-  );
+  await sendTelegramMessage(chatId, MSJ_AGUA_PICKER_OBRA, {
+    parse_mode: 'HTML',
+    reply_markup: keyboard,
+  });
 }
 
 export async function getBotEstadoAgua(
@@ -317,11 +325,7 @@ export async function manejarCallbackAguaTelegram(
   });
 
   await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-  await sendTelegramMessage(
-    params.chatId,
-    'Obra seleccionada. Por favor, envía la foto del <b>TANQUE DE AGUA</b>.',
-    { parse_mode: 'HTML' },
-  );
+  await sendTelegramMessage(params.chatId, MSJ_AGUA_FOTO_CAMION, { parse_mode: 'HTML' });
   return true;
 }
 
@@ -343,17 +347,14 @@ export async function manejarFotoRegistroAguaTelegram(params: {
   if (!estado) return { handled: false };
 
   if (estado.estado === 'ESPERANDO_FOTO_TANQUE') {
+    await notificarCargaFotoCamionAgua(params.chatId);
     await upsertBotEstadoAgua(params.supabase, {
       ...estado,
       chat_id: params.chatId,
       estado: 'ESPERANDO_FOTO_PRUEBA',
       metadata: { foto_tanque_file_id: fileId },
     });
-    await sendTelegramMessage(
-      params.chatId,
-      'Foto del tanque guardada. Ahora, por favor envía la foto de la <b>PRUEBA DE AGUA</b>.',
-      { parse_mode: 'HTML' },
-    );
+    await sendTelegramMessage(params.chatId, MSJ_AGUA_FOTO_PRUEBA, { parse_mode: 'HTML' });
     return { handled: true, motivo: 'tanque_ok' };
   }
 
@@ -369,7 +370,10 @@ export async function manejarFotoRegistroAguaTelegram(params: {
       return { handled: true, motivo: 'tanque_file_id_missing' };
     }
 
+    const progreso = await crearNotificadorProgresoRegistroAgua(params.chatId);
+
     try {
+      await progreso.reportar(5, 'Descargando fotos desde Telegram…');
       const [tanqueDl, pruebaDl] = await Promise.all([
         downloadTelegramFile(fileIdTanque),
         downloadTelegramFile(fileId),
@@ -384,6 +388,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
       let extraccion: ExtraccionRegistroAgua | null = null;
       if (getGeminiApiKey()) {
         try {
+          await progreso.reportar(35, 'Analizando placa y medición de agua (IA)…');
           extraccion = await extraerDatosRegistroAguaGemini({
             bufferTanque: tanqueDl.buffer,
             mimeTanque,
@@ -395,6 +400,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
         }
       }
 
+      await progreso.reportar(65, 'Subiendo imágenes al ERP…');
       const [fotoTanqueUrl, fotoPruebaUrl] = await Promise.all([
         subirBufferAguaStorage(
           params.supabase,
@@ -413,6 +419,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
           extPrueba,
         ),
       ]);
+      await progreso.reportar(90, 'Guardando registro en base de datos…');
 
       const { error: insErr } = await params.supabase.from('registro_agua_obrero').insert({
         proyecto_id: estado.proyecto_id,
@@ -443,15 +450,13 @@ export async function manejarFotoRegistroAguaTelegram(params: {
             ? '⚠️ No se pudo leer placa o medición en las fotos.'
             : 'ℹ️ Configure <b>GEMINI_API_KEY</b> para extraer placa y medición automáticamente.');
 
-      await sendTelegramMessage(params.chatId, textoExito, { parse_mode: 'HTML' });
+      await progreso.finalizar(textoExito);
       return { handled: true, motivo: 'registro_completo' };
     } catch (err) {
       const detalle = err instanceof Error ? err.message.slice(0, 200) : 'Error al guardar';
-      await sendTelegramMessage(
-        params.chatId,
-        `❌ No se pudo completar el registro: <code>${detalle.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>\n` +
+      await progreso.error(
+        `No se pudo completar el registro: <code>${detalle.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>\n` +
           'Intenta enviar de nuevo la foto de prueba o reinicia con <code>/agua</code>.',
-        { parse_mode: 'HTML' },
       );
       return { handled: true, motivo: 'error_guardado' };
     }

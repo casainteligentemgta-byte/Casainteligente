@@ -70,7 +70,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       contexto: 'menu',
       proyectoId: null,
       resetProyecto: true,
-      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra o /gasto.',
+      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /agua o /gasto.',
     };
   }
 
