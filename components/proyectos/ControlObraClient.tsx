@@ -8,6 +8,7 @@ import {
   Database,
   FileSpreadsheet,
   Construction,
+  CalendarRange,
   Pencil,
   Save,
   Settings,
@@ -783,9 +784,18 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
             ) : null}
           </p>
         </div>
-        <span className="rounded-full border border-amber-500/30 bg-amber-950/30 px-3 py-1 text-[11px] font-semibold text-amber-200">
-          Lulo MDB / CSV
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/proyectos/modulo/${pid}/cronograma`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/35 bg-sky-950/40 px-3 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-900/50"
+          >
+            <CalendarRange className="h-3.5 w-3.5" />
+            Cronograma Gantt
+          </Link>
+          <span className="rounded-full border border-amber-500/30 bg-amber-950/30 px-3 py-1 text-[11px] font-semibold text-amber-200">
+            Lulo MDB / CSV
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-start gap-4">

@@ -44,6 +44,7 @@ const MIGRATIONS = [
   '165_partidas_evidencias_fotos_videos.sql',
   '166_bot_estados_registro_agua.sql',
   '167_registro_agua_extraccion_ia.sql',
+  '168_cronograma_tareas.sql',
 ];
 
 async function tableExists(sql, name) {
