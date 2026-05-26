@@ -9,6 +9,14 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+type PartidaCronograma = {
+  descripcion: string;
+  unidad: string;
+  cantidad_presupuestada: number;
+  evidencias_fotos: string[] | null;
+  evidencias_videos: string[] | null;
+};
+
 type TareaRow = {
   id: string;
   proyecto_id: string;
@@ -20,14 +28,10 @@ type TareaRow = {
   porcentaje_avance: number;
   orden: number;
   notas: string | null;
-  partida?: {
-    descripcion: string;
-    unidad: string;
-    cantidad_presupuestada: number;
-    evidencias_fotos: string[] | null;
-    evidencias_videos: string[] | null;
-  } | null;
+  partida?: PartidaCronograma | null;
 };
+
+type TareaDbRow = Omit<TareaRow, 'partida'>;
 
 function mapTarea(row: TareaRow): CronogramaTarea {
   const p = row.partida;
@@ -104,6 +108,43 @@ async function borradorDesdePartidas(
   });
 }
 
+/** Evita embed PostgREST (PGRST200) si el schema cache no tiene la FK registrada. */
+async function enriquecerTareasConPartidas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  filas: TareaDbRow[],
+): Promise<TareaRow[]> {
+  const ids = [
+    ...new Set(filas.map((f) => f.partida_id).filter((id): id is string => Boolean(id))),
+  ];
+  const porId = new Map<string, PartidaCronograma>();
+
+  if (ids.length > 0) {
+    const { data: partidas, error } = await supabase
+      .from('ci_presupuesto_partidas')
+      .select(
+        'id, descripcion, unidad, cantidad_presupuestada, evidencias_fotos, evidencias_videos',
+      )
+      .in('id', ids);
+
+    if (!error && partidas) {
+      for (const p of partidas as (PartidaCronograma & { id: string })[]) {
+        porId.set(p.id, {
+          descripcion: p.descripcion,
+          unidad: p.unidad,
+          cantidad_presupuestada: p.cantidad_presupuestada,
+          evidencias_fotos: p.evidencias_fotos ?? [],
+          evidencias_videos: p.evidencias_videos ?? [],
+        });
+      }
+    }
+  }
+
+  return filas.map((f) => ({
+    ...f,
+    partida: f.partida_id ? (porId.get(f.partida_id) ?? null) : null,
+  }));
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: { proyectoId: string } },
@@ -134,14 +175,7 @@ export async function GET(
         fecha_fin_planificada,
         porcentaje_avance,
         orden,
-        notas,
-        partida:ci_presupuesto_partidas (
-          descripcion,
-          unidad,
-          cantidad_presupuestada,
-          evidencias_fotos,
-          evidencias_videos
-        )
+        notas
       `,
       )
       .eq('proyecto_id', proyectoId)
@@ -162,7 +196,9 @@ export async function GET(
       throw error;
     }
 
-    let tareas = (data ?? []).map((row) => mapTarea(row as unknown as TareaRow));
+    const filas = (data ?? []) as TareaDbRow[];
+    const enriquecidas = await enriquecerTareasConPartidas(supabase, filas);
+    let tareas = enriquecidas.map((row) => mapTarea(row));
 
     if (tareas.length === 0 && incluirBorrador) {
       tareas = await borradorDesdePartidas(supabase, proyectoId);
