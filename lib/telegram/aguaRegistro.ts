@@ -17,13 +17,13 @@ import {
   type ExtraccionRegistroAgua,
 } from '@/lib/telegram/extractAguaGemini';
 import {
-  crearNotificadorProgresoRegistroAgua,
-  notificarCargaFotoCamionAgua,
+  medidorCargaFotoCamionAgua,
+  medidorCargaFotoPruebaAgua,
 } from '@/lib/telegram/aguaProgresoTelegram';
 import {
-  MSJ_AGUA_FOTO_CAMION,
-  MSJ_AGUA_FOTO_PRUEBA,
   MSJ_AGUA_PICKER_OBRA,
+  MSJ_AGUA_RECORDATORIO_PRUEBA,
+  mensajeObraSeleccionadaAgua,
 } from '@/lib/telegram/mensajesAgua';
 
 const BUCKET_AGUA = 'ci-proyectos-media';
@@ -325,7 +325,9 @@ export async function manejarCallbackAguaTelegram(
   });
 
   await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-  await sendTelegramMessage(params.chatId, MSJ_AGUA_FOTO_CAMION, { parse_mode: 'HTML' });
+  await sendTelegramMessage(params.chatId, mensajeObraSeleccionadaAgua(hit.nombre), {
+    parse_mode: 'HTML',
+  });
   return true;
 }
 
@@ -347,14 +349,16 @@ export async function manejarFotoRegistroAguaTelegram(params: {
   if (!estado) return { handled: false };
 
   if (estado.estado === 'ESPERANDO_FOTO_TANQUE') {
-    await notificarCargaFotoCamionAgua(params.chatId);
+    await medidorCargaFotoCamionAgua(params.chatId);
     await upsertBotEstadoAgua(params.supabase, {
       ...estado,
       chat_id: params.chatId,
       estado: 'ESPERANDO_FOTO_PRUEBA',
       metadata: { foto_tanque_file_id: fileId },
     });
-    await sendTelegramMessage(params.chatId, MSJ_AGUA_FOTO_PRUEBA, { parse_mode: 'HTML' });
+    await sendTelegramMessage(params.chatId, MSJ_AGUA_RECORDATORIO_PRUEBA, {
+      parse_mode: 'HTML',
+    });
     return { handled: true, motivo: 'tanque_ok' };
   }
 
@@ -370,10 +374,10 @@ export async function manejarFotoRegistroAguaTelegram(params: {
       return { handled: true, motivo: 'tanque_file_id_missing' };
     }
 
-    const progreso = await crearNotificadorProgresoRegistroAgua(params.chatId);
+    const progreso = await medidorCargaFotoPruebaAgua(params.chatId);
 
     try {
-      await progreso.reportar(5, 'Descargando fotos desde Telegram…');
+      await progreso.reportar(55, 'Descargando fotos desde Telegram…');
       const [tanqueDl, pruebaDl] = await Promise.all([
         downloadTelegramFile(fileIdTanque),
         downloadTelegramFile(fileId),
@@ -388,7 +392,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
       let extraccion: ExtraccionRegistroAgua | null = null;
       if (getGeminiApiKey()) {
         try {
-          await progreso.reportar(35, 'Analizando placa y medición de agua (IA)…');
+          await progreso.reportar(68, 'Analizando placa y medición de agua (IA)…');
           extraccion = await extraerDatosRegistroAguaGemini({
             bufferTanque: tanqueDl.buffer,
             mimeTanque,
@@ -400,7 +404,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
         }
       }
 
-      await progreso.reportar(65, 'Subiendo imágenes al ERP…');
+      await progreso.reportar(82, 'Subiendo imágenes al ERP…');
       const [fotoTanqueUrl, fotoPruebaUrl] = await Promise.all([
         subirBufferAguaStorage(
           params.supabase,
@@ -419,7 +423,7 @@ export async function manejarFotoRegistroAguaTelegram(params: {
           extPrueba,
         ),
       ]);
-      await progreso.reportar(90, 'Guardando registro en base de datos…');
+      await progreso.reportar(94, 'Guardando registro en base de datos…');
 
       const { error: insErr } = await params.supabase.from('registro_agua_obrero').insert({
         proyecto_id: estado.proyecto_id,
