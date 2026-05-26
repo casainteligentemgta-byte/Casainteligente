@@ -287,7 +287,7 @@ function detectCodigoObraUnico(dump: LuloMdbFullDump): string | undefined {
       if (c) codes.add(c.toUpperCase());
     }
   }
-  if (codes.size === 1) return [...codes][0];
+  if (codes.size === 1) return Array.from(codes)[0];
   return undefined;
 }
 
