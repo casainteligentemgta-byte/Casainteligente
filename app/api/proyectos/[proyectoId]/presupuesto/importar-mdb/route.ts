@@ -82,6 +82,11 @@ export async function POST(req: Request, { params }: RouteContext) {
       nombreArchivo: file.name,
     });
 
+    const tablasUsadas =
+      'tablasUsadas' in result ? result.tablasUsadas : undefined;
+    const nombreArchivo =
+      'nombreArchivo' in result ? result.nombreArchivo : file.name;
+
     return NextResponse.json({
       success: true,
       message: `Importación Lulo MDB: ${result.capitulos} capítulos, ${result.partidas} partidas, ${result.apuItems} ítems APU.`,
@@ -89,9 +94,10 @@ export async function POST(req: Request, { params }: RouteContext) {
       capitulos: result.capitulos,
       partidas: result.partidas,
       apuItems: result.apuItems,
-      reemplazar: result.reemplazar,
-      tablasLulo: result.tablasUsadas,
-      nombreArchivo: result.nombreArchivo,
+      reemplazar,
+      tablasLulo: tablasUsadas,
+      nombreArchivo,
+      codigo_obr: 'codigo_obr' in result ? result.codigo_obr : undefined,
     });
   } catch (err: unknown) {
     const raw = formatErrorMessage(err) || 'Error al importar el presupuesto MDB.';

@@ -60,6 +60,7 @@ type ImportResponse = {
   hint?: string;
   error?: unknown;
   message?: string;
+  capitulos?: number;
   partidas?: number;
   insumos?: number;
   apu?: number;
@@ -248,7 +249,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           `/api/proyectos/${encodeURIComponent(pid)}/presupuestos-lulo/cargar`,
           { method: 'POST', body: formCascada },
         );
-        const dataCascada = await parseFetchJson<ImportResponse & { apu?: number }>(resCascada);
+        const dataCascada = await parseFetchJson<ImportResponse>(resCascada);
         if (resCascada.ok && dataCascada.success) {
           const lineas: string[] = [];
           if (dataCascada.capitulos != null) lineas.push(`${dataCascada.capitulos} capítulos`);
