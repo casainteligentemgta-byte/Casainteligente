@@ -47,6 +47,7 @@ const MIGRATIONS = [
   '168_cronograma_tareas.sql',
   '169_cronograma_tareas_fk_partidas.sql',
   '170_registro_agua_litros_ppm.sql',
+  '171_cronograma_tareas_repair.sql',
 ];
 
 async function tableExists(sql, name) {
@@ -204,6 +205,28 @@ async function main() {
           where table_schema = 'public'
             and table_name = 'ci_presupuesto_partidas'
             and column_name = 'evidencias_fotos'
+        `;
+        return cols.length > 0;
+      },
+      '168_cronograma_tareas.sql': () => tableExists(sql, 'cronograma_tareas'),
+      '169_cronograma_tareas_fk_partidas.sql': () => tableExists(sql, 'cronograma_tareas'),
+      '170_registro_agua_litros_ppm.sql': async () => {
+        if (!(await tableExists(sql, 'registro_agua_obrero'))) return false;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'registro_agua_obrero'
+            and column_name = 'litros_entregados'
+        `;
+        return cols.length > 0;
+      },
+      '171_cronograma_tareas_repair.sql': async () => {
+        if (!(await tableExists(sql, 'cronograma_tareas'))) return true;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'cronograma_tareas'
+            and column_name = 'orden'
         `;
         return cols.length > 0;
       },

@@ -18,8 +18,17 @@ create table if not exists public.cronograma_tareas (
     check (fecha_fin_planificada >= fecha_inicio_planificada)
 );
 
-create index if not exists idx_cronograma_tareas_proyecto
-  on public.cronograma_tareas (proyecto_id, orden, fecha_inicio_planificada);
+-- Índice con orden: si la tabla existía sin esa columna, ver migración 171.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'cronograma_tareas' and column_name = 'orden'
+  ) then
+    create index if not exists idx_cronograma_tareas_proyecto
+      on public.cronograma_tareas (proyecto_id, orden, fecha_inicio_planificada);
+  end if;
+end $$;
 
 create index if not exists idx_cronograma_tareas_partida
   on public.cronograma_tareas (partida_id)
