@@ -24,10 +24,15 @@ function fmtFecha(iso: string): string {
   }
 }
 
-function fmtMedicion(r: RegistroAguaRow): string {
-  if (r.medicion_agua == null) return '—';
-  const u = r.unidad_medicion?.trim();
-  return u ? `${r.medicion_agua} ${u}` : String(r.medicion_agua);
+function fmtLitros(r: RegistroAguaRow): string {
+  if (r.litros_entregados == null) return '—';
+  return `${Number(r.litros_entregados).toLocaleString('es-VE')} L`;
+}
+
+function fmtPpm(r: RegistroAguaRow): string {
+  const ppm = r.ppm_minerales ?? (r.unidad_medicion?.toLowerCase().includes('ppm') ? r.medicion_agua : null);
+  if (ppm == null) return '—';
+  return `${ppm} ppm`;
 }
 
 export default function RegistroAguaObraPanel({ proyectoId }: Props) {
@@ -80,7 +85,7 @@ export default function RegistroAguaObraPanel({ proyectoId }: Props) {
 
       <p className="text-sm text-zinc-500">
         Entradas capturadas desde Telegram con comando <code className="text-sky-300">/agua</code>
-        (foto del tanque o camión y foto de prueba de medición).
+        (camión con placa, prueba PPM con medidor azul y litros ingresados por el obrero).
       </p>
 
       {error ? (
@@ -108,8 +113,8 @@ export default function RegistroAguaObraPanel({ proyectoId }: Props) {
               <tr className="border-b border-white/10 bg-zinc-900/80 text-[11px] uppercase tracking-wide text-zinc-500">
                 <th className="px-3 py-2 font-semibold">Fecha</th>
                 <th className="px-3 py-2 font-semibold">Placa</th>
-                <th className="px-3 py-2 font-semibold">Medición</th>
-                <th className="px-3 py-2 font-semibold">Detalle</th>
+                <th className="px-3 py-2 font-semibold">Litros</th>
+                <th className="px-3 py-2 font-semibold">PPM</th>
                 <th className="px-3 py-2 font-semibold">Registró</th>
                 <th className="px-3 py-2 font-semibold">Fotos</th>
               </tr>
@@ -126,10 +131,8 @@ export default function RegistroAguaObraPanel({ proyectoId }: Props) {
                   <td className="px-3 py-2 font-medium text-amber-200">
                     {r.placa_vehiculo?.trim() || '—'}
                   </td>
-                  <td className="px-3 py-2 text-sky-200">{fmtMedicion(r)}</td>
-                  <td className="px-3 py-2 text-zinc-400 max-w-[200px] truncate">
-                    {r.detalle_medicion?.trim() || '—'}
-                  </td>
+                  <td className="px-3 py-2 text-emerald-200 font-medium">{fmtLitros(r)}</td>
+                  <td className="px-3 py-2 text-sky-200">{fmtPpm(r)}</td>
                   <td className="px-3 py-2 text-zinc-400">{r.creado_por}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-2">

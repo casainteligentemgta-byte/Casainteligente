@@ -79,7 +79,7 @@ export async function medidorCargaFotoCamionAgua(chatId: string): Promise<Medido
 
 /** Medidor al recibir la foto de prueba (paso 2, antes de IA y storage). */
 export async function medidorCargaFotoPruebaAgua(chatId: string): Promise<MedidorCargaAgua> {
-  const medidor = await crearMedidorCargaAgua(chatId, 'Prueba');
+  const medidor = await crearMedidorCargaAgua(chatId, 'PPM');
   await medidor.animarEtapas(ETAPAS_INICIO_PRUEBA);
   return medidor;
 }

@@ -37,6 +37,7 @@ import {
   manejarCallbackAguaTelegram,
   manejarComandoAguaTelegram,
   manejarFotoRegistroAguaTelegram,
+  manejarTextoLitrosAguaTelegram,
 } from '@/lib/telegram/aguaRegistro';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 
@@ -338,6 +339,18 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         await avisoErrorTelegram(chatId, err);
       }
       return NextResponse.json({ ok: true, command: 'agua' });
+    }
+
+    if (texto && !texto.startsWith('/')) {
+      const litrosAgua = await manejarTextoLitrosAguaTelegram({
+        supabase,
+        chatId,
+        userId,
+        texto,
+      });
+      if (litrosAgua.handled) {
+        return NextResponse.json({ ok: true, agua_litros: litrosAgua.motivo ?? true });
+      }
     }
 
     if (texto) {

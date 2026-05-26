@@ -21,6 +21,8 @@ export type RegistroAguaRow = {
   medicion_agua: number | null;
   unidad_medicion: string | null;
   detalle_medicion: string | null;
+  litros_entregados: number | null;
+  ppm_minerales: number | null;
   extraccion_ia: Record<string, unknown>;
 };
 
@@ -41,7 +43,7 @@ export async function GET(
     const { data, error } = await supabase
       .from('registro_agua_obrero')
       .select(
-        'id, proyecto_id, foto_tanque_url, foto_prueba_url, creado_por, chat_id, created_at, registrado_en, placa_vehiculo, medicion_agua, unidad_medicion, detalle_medicion, extraccion_ia',
+        'id, proyecto_id, foto_tanque_url, foto_prueba_url, creado_por, chat_id, created_at, registrado_en, placa_vehiculo, medicion_agua, unidad_medicion, detalle_medicion, litros_entregados, ppm_minerales, extraccion_ia',
       )
       .eq('proyecto_id', proyectoId)
       .order('registrado_en', { ascending: false })

@@ -81,14 +81,14 @@ TAREA: Lee la PLACA del vehículo (matrícula venezolana). Formatos comunes: ABC
 - No inventes caracteres; solo lo que se ve con claridad razonable.
 - confianza entre 0 y 1.`;
 
-const PROMPT_MEDICION = `Analiza esta foto de PRUEBA DE AGUA en obra (medidor, ticket de entrega, nivel de tanque, manómetro, pantalla digital, etc.).
+const PROMPT_MEDICION = `Analiza esta foto de PRUEBA DE MINERALES en obra (medidor TDS/PPM portátil, usualmente dispositivo o lapicero AZUL con pantalla numérica).
 
-TAREA: Extrae la MEDICIÓN de agua más relevante:
-- medicion_agua: número (litros entregados, m³, porcentaje de nivel, presión, etc.)
-- unidad_medicion: L, m3, %, psi, bar, gal u otra
-- tipo_medicion: medidor | nivel_tanque | ticket_entrega | manometro | otro
-- detalle_medicion: texto o lectura tal como aparece
-- Si no hay dato numérico claro, medicion_agua = null y explica en detalle_medicion.
+TAREA: Lee el valor de PPM o TDS en pantalla:
+- medicion_agua: número PPM/TDS (ej. 120, 350). null si no se lee
+- unidad_medicion: "ppm" o "tds" (usa ppm si no está claro)
+- tipo_medicion: medidor_minerales
+- detalle_medicion: lectura tal como aparece en pantalla
+- NO confundas con litros entregados; aquí solo PPM/TDS del medidor azul.
 - confianza entre 0 y 1.`;
 
 function normalizarPlaca(raw: string | undefined): string | null {
@@ -230,24 +230,36 @@ export function formatearFechaHoraRegistroAgua(iso: string): string {
   }
 }
 
+export function ppmDesdeExtraccionPrueba(medicion: ExtraccionMedicionPrueba): number | null {
+  if (medicion.medicion_agua == null || !Number.isFinite(medicion.medicion_agua)) return null;
+  const u = (medicion.unidad_medicion ?? '').toLowerCase();
+  if (u.includes('ppm') || u.includes('tds') || medicion.tipo_medicion === 'medidor_minerales') {
+    return medicion.medicion_agua;
+  }
+  if (medicion.medicion_agua > 0 && medicion.medicion_agua < 50_000) return medicion.medicion_agua;
+  return null;
+}
+
 export function mensajeResumenExtraccionAgua(
   registradoEn: string,
   extraccion: ExtraccionRegistroAgua,
+  litrosEntregados: number,
 ): string {
   const fecha = formatearFechaHoraRegistroAgua(registradoEn);
   const placa =
     extraccion.placa.placa_vehiculo ??
     (extraccion.placa.visible ? 'no legible' : 'no detectada');
-  const med =
-    extraccion.medicion.medicion_agua != null
-      ? `${extraccion.medicion.medicion_agua}${extraccion.medicion.unidad_medicion ? ` ${extraccion.medicion.unidad_medicion}` : ''}`
-      : extraccion.medicion.detalle_medicion?.slice(0, 80) || 'no detectada';
+  const ppm = ppmDesdeExtraccionPrueba(extraccion.medicion);
+  const ppmTxt =
+    ppm != null
+      ? `${ppm} ppm`
+      : extraccion.medicion.detalle_medicion?.slice(0, 60) || 'no leído';
 
   return (
     '✅ <b>Agua guardada</b>\n' +
     `📅 ${fecha}\n` +
     `🚛 ${placa}\n` +
-    `💧 ${med}` +
-    (extraccion.medicion.tipo_medicion ? `\n📋 ${extraccion.medicion.tipo_medicion}` : '')
+    `🛢 <b>${litrosEntregados.toLocaleString('es-VE')} L</b>\n` +
+    `🔬 ${ppmTxt}`
   );
 }
