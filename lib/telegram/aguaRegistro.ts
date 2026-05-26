@@ -10,6 +10,12 @@ import {
   loadCatalogoProyectosApp,
   type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
+import { getGeminiApiKey } from '@/lib/gemini/client';
+import {
+  extraerDatosRegistroAguaGemini,
+  mensajeResumenExtraccionAgua,
+  type ExtraccionRegistroAgua,
+} from '@/lib/telegram/extractAguaGemini';
 
 const BUCKET_AGUA = 'ci-proyectos-media';
 const PAGE_SIZE = 8;
@@ -237,15 +243,14 @@ export async function eliminarBotEstadoAgua(
   if (error) throw new Error(error.message);
 }
 
-async function subirFotoAguaStorage(
+async function subirBufferAguaStorage(
   supabase: SupabaseClient,
   proyectoId: string,
   etiqueta: 'tanque' | 'prueba',
-  fileId: string,
+  buffer: Buffer,
+  mimeType: string,
+  ext: string,
 ): Promise<string> {
-  const { buffer, filePath } = await downloadTelegramFile(fileId);
-  const mimeType = mimeFromTelegramPath(filePath);
-  const ext = filePath.split('.').pop() ?? 'jpg';
   const storagePath = `telegram/agua/${proyectoId}/${Date.now()}-${etiqueta}.${ext}`;
 
   const { error: storageError } = await supabase.storage
@@ -258,6 +263,15 @@ async function subirFotoAguaStorage(
 
   const { data: urlData } = supabase.storage.from(BUCKET_AGUA).getPublicUrl(storagePath);
   return urlData.publicUrl;
+}
+
+function buildExtraccionIaJson(extraccion: ExtraccionRegistroAgua | null): Record<string, unknown> {
+  if (!extraccion) return { ia_disponible: Boolean(getGeminiApiKey()) };
+  return {
+    ia_disponible: true,
+    placa: extraccion.placa,
+    medicion: extraccion.medicion,
+  };
 }
 
 /** Comando /agua: lista de obras activas. */
@@ -356,9 +370,48 @@ export async function manejarFotoRegistroAguaTelegram(params: {
     }
 
     try {
+      const [tanqueDl, pruebaDl] = await Promise.all([
+        downloadTelegramFile(fileIdTanque),
+        downloadTelegramFile(fileId),
+      ]);
+      const mimeTanque = mimeFromTelegramPath(tanqueDl.filePath);
+      const mimePrueba = mimeFromTelegramPath(pruebaDl.filePath);
+      const extTanque = tanqueDl.filePath.split('.').pop() ?? 'jpg';
+      const extPrueba = pruebaDl.filePath.split('.').pop() ?? 'jpg';
+
+      const registradoEn = new Date().toISOString();
+
+      let extraccion: ExtraccionRegistroAgua | null = null;
+      if (getGeminiApiKey()) {
+        try {
+          extraccion = await extraerDatosRegistroAguaGemini({
+            bufferTanque: tanqueDl.buffer,
+            mimeTanque,
+            bufferPrueba: pruebaDl.buffer,
+            mimePrueba,
+          });
+        } catch (err) {
+          console.warn('[telegram /agua extraccion]', err);
+        }
+      }
+
       const [fotoTanqueUrl, fotoPruebaUrl] = await Promise.all([
-        subirFotoAguaStorage(params.supabase, estado.proyecto_id, 'tanque', fileIdTanque),
-        subirFotoAguaStorage(params.supabase, estado.proyecto_id, 'prueba', fileId),
+        subirBufferAguaStorage(
+          params.supabase,
+          estado.proyecto_id,
+          'tanque',
+          tanqueDl.buffer,
+          mimeTanque,
+          extTanque,
+        ),
+        subirBufferAguaStorage(
+          params.supabase,
+          estado.proyecto_id,
+          'prueba',
+          pruebaDl.buffer,
+          mimePrueba,
+          extPrueba,
+        ),
       ]);
 
       const { error: insErr } = await params.supabase.from('registro_agua_obrero').insert({
@@ -367,6 +420,12 @@ export async function manejarFotoRegistroAguaTelegram(params: {
         foto_prueba_url: fotoPruebaUrl,
         creado_por: params.userId,
         chat_id: params.chatId,
+        registrado_en: registradoEn,
+        placa_vehiculo: extraccion?.placa.placa_vehiculo ?? null,
+        medicion_agua: extraccion?.medicion.medicion_agua ?? null,
+        unidad_medicion: extraccion?.medicion.unidad_medicion ?? null,
+        detalle_medicion: extraccion?.medicion.detalle_medicion ?? null,
+        extraccion_ia: buildExtraccionIaJson(extraccion),
       });
 
       if (insErr) {
@@ -376,11 +435,15 @@ export async function manejarFotoRegistroAguaTelegram(params: {
 
       await eliminarBotEstadoAgua(params.supabase, params.userId);
 
-      await sendTelegramMessage(
-        params.chatId,
-        '¡Éxito! El registro de agua y sus componentes visuales han sido guardados en el ERP.',
-        { parse_mode: 'HTML' },
-      );
+      const textoExito = extraccion
+        ? mensajeResumenExtraccionAgua(registradoEn, extraccion)
+        : '¡Éxito! Registro de agua guardado en el ERP.\n\n' +
+          `📅 <b>Fecha y hora:</b> ${registradoEn.slice(0, 16).replace('T', ' ')}\n` +
+          (getGeminiApiKey()
+            ? '⚠️ No se pudo leer placa o medición en las fotos.'
+            : 'ℹ️ Configure <b>GEMINI_API_KEY</b> para extraer placa y medición automáticamente.');
+
+      await sendTelegramMessage(params.chatId, textoExito, { parse_mode: 'HTML' });
       return { handled: true, motivo: 'registro_completo' };
     } catch (err) {
       const detalle = err instanceof Error ? err.message.slice(0, 200) : 'Error al guardar';
