@@ -2,7 +2,7 @@
 export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'facturas', description: 'Recibir factura de compra (foto/PDF)' },
   { command: 'factura', description: 'Igual que /facturas' },
-  { command: 'agua', description: 'Registro tanque y prueba de agua (2 fotos)' },
+  { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
   { command: 'obra', description: 'Elegir obra y subir fotos de evidencia' },
   { command: 'gasto', description: 'Comprobante de gasto de obra' },
   { command: 'bitacora', description: 'Bitácora por nota de voz' },

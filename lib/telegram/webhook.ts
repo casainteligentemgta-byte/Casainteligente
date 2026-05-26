@@ -38,9 +38,9 @@ import {
   manejarComandoAguaTelegram,
   manejarFotoRegistroAguaTelegram,
 } from '@/lib/telegram/aguaRegistro';
+import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
-const CMD_AGUA = /^\/agua(@\S+)?\s*$/i;
 
 export type TelegramUpdate = {
   message?: {
@@ -330,7 +330,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     const supabase = admin.client;
 
-    if (texto && CMD_AGUA.test(texto)) {
+    if (texto && esComandoAgua(texto)) {
       try {
         await manejarComandoAguaTelegram(supabase, chatId);
       } catch (err) {
@@ -350,6 +350,18 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           await avisoErrorTelegram(chatId, err);
         }
         return NextResponse.json({ ok: true, command: true });
+      }
+
+      if (texto.startsWith('/')) {
+        await sendTelegramMessage(
+          chatId,
+          '❌ <b>Comando no reconocido.</b>\n\n' +
+            'Para registro de agua en obra:\n' +
+            '<code>/agua</code> → elige la obra → foto del <b>camión</b> (con placa) → foto de <b>prueba de agua</b>.\n\n' +
+            'Ver todos: <code>/ayuda</code>',
+          { parse_mode: 'HTML' },
+        );
+        return NextResponse.json({ ok: true, unknown_command: true });
       }
 
       const estado = await getTelegramEstado(supabase, chatId);

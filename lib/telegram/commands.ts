@@ -2,6 +2,7 @@ import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import type { TelegramContexto } from '@/lib/telegram/estados';
 import type { ProyectoPickerModo } from '@/lib/telegram/proyectoPicker';
 import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
+import { esComandoAgua, primerTokenComando } from '@/lib/telegram/parseComandoTelegram';
 
 export type ComandoTelegramResult = {
   handled: boolean;
@@ -21,8 +22,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
   const t = texto.trim();
   const lower = t.toLowerCase();
   const parts = t.split(/\s+/);
-  const cmdRaw = parts[0]?.toLowerCase() ?? '';
-  const cmd = cmdRaw.split('@')[0];
+  const cmd = primerTokenComando(t);
 
   if (cmd === '/start' || cmd === '/menu' || cmd === '/inicio') {
     return {
@@ -121,7 +121,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     };
   }
 
-  if (cmd === '/agua') {
+  if (esComandoAgua(t)) {
     return { handled: true, comandoAgua: true };
   }
 

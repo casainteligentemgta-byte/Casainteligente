@@ -9,6 +9,8 @@ import {
   manejarComandoStockTelegram,
 } from '@/lib/telegram/stockCommand';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
+import { manejarComandoAguaTelegram } from '@/lib/telegram/aguaRegistro';
+import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 import {
   handleTelegramWebhookPost,
   handleTelegramCallbackQuery,
@@ -91,6 +93,33 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
   }
 
   const text = msg.text?.trim() ?? '';
+
+  if (esComandoAgua(text)) {
+    const admin = telegramSupabaseAdmin();
+    if (!admin.ok) {
+      try {
+        await sendTelegramMessage(
+          chatId,
+          '⚠️ Servidor sin <b>SUPABASE_SERVICE_ROLE_KEY</b>. Contacte al administrador.',
+          { parse_mode: 'HTML' },
+        );
+      } catch (err) {
+        console.error('[telegram webhook] /agua sin supabase admin', err);
+      }
+      return respuestaWebhook({ ok: true, error: 'supabase_admin' });
+    }
+    try {
+      await manejarComandoAguaTelegram(admin.client, chatId);
+    } catch (err) {
+      console.error('[telegram webhook] /agua', err);
+      return respuestaWebhook({
+        ok: true,
+        error: err instanceof Error ? err.message : 'agua_command_failed',
+      });
+    }
+    return respuestaWebhook({ ok: true, command: 'agua' });
+  }
+
   if (text.toLowerCase().startsWith('/stock')) {
     const argumento = extraerArgumentoStock(text);
     const admin = telegramSupabaseAdmin();
