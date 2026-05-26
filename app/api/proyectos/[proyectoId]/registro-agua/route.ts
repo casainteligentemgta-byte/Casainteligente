@@ -37,7 +37,7 @@ export async function GET(
   }
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase
       .from('registro_agua_obrero')
       .select(
