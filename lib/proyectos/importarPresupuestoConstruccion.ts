@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
+import { prepareLuloMdbDumpForParse } from '@/lib/proyectos/loadLuloCsvFolder';
 import { parseLuloMdbEstructurado } from '@/lib/proyectos/parseLuloMdbEstructurado';
 import {
   persistirLuloEstructurado,
@@ -25,10 +26,11 @@ export async function importarPresupuestoConstruccionDesdeMdb(
   dump: LuloMdbFullDump,
   options?: { reemplazar?: boolean },
 ): Promise<ImportarPresupuestoConstruccionResult> {
-  const structured = parseLuloMdbEstructurado(dump, proyectoId);
+  const prepared = prepareLuloMdbDumpForParse(dump);
+  const structured = parseLuloMdbEstructurado(prepared, proyectoId);
   if (!structured || structured.partidas.length === 0) {
     throw new Error(
-      'El MDB no tiene estructura Lulo nativa (INSUMOS/PARTIDAS/COMPOSICION). Use el modo de mapeo manual o inspeccione el archivo.',
+      'El MDB no tiene estructura reconocible (PARTIDAS/INSUMOS o tablas Obra* con partidas y APU). Use mapeo manual o inspeccione el archivo en Datos Lulo.',
     );
   }
 

@@ -55,7 +55,20 @@ export async function importarLuloMdbDirecto(
     throw new Error(formatMdbReadError(err));
   }
 
-  const validacion = parseAndValidateLuloMdbCascada(dump, proyectoId.trim());
+  let codigoObraFiltro = options?.codigoObr?.trim();
+  if (!codigoObraFiltro) {
+    const { data: proy } = await supabase
+      .from('ci_proyectos')
+      .select('codigo_lulo')
+      .eq('id', proyectoId.trim())
+      .maybeSingle();
+    const cod = proy?.codigo_lulo;
+    if (typeof cod === 'string' && cod.trim()) codigoObraFiltro = cod.trim();
+  }
+
+  const validacion = parseAndValidateLuloMdbCascada(dump, proyectoId.trim(), {
+    codigoObra: codigoObraFiltro,
+  });
   if (!validacion.ok) {
     const msg = [...validacion.errors, validacion.hint].filter(Boolean).join(' ');
     const err = new Error(msg) as Error & { statusCode?: number; tablasDetectadas?: string[] };

@@ -8,6 +8,10 @@ import {
 } from '@/lib/proyectos/parseLuloMdbEstructurado';
 import type { PartidaLuloInsert } from '@/lib/proyectos/parsePresupuestoLuloCsv';
 import { getCapituloKey } from '@/lib/proyectos/luloVistaAgrupada';
+import {
+  luloMdbHasEstructuraObra,
+  prepareLuloMdbDumpForParse,
+} from '@/lib/proyectos/loadLuloCsvFolder';
 
 export type ApuItemCascadaInsert = {
   tipo: 'material' | 'mano_obra' | 'equipo';
@@ -184,26 +188,35 @@ export type ValidacionLuloMdbCascadaResult =
 export function parseAndValidateLuloMdbCascada(
   dump: LuloMdbFullDump,
   proyectoId: string,
+  opts?: { codigoObra?: string },
 ): ValidacionLuloMdbCascadaResult {
-  const structured = parseLuloMdbEstructurado(dump, proyectoId);
+  const working = prepareLuloMdbDumpForParse(dump, { codigoObra: opts?.codigoObra });
+  const structured = parseLuloMdbEstructurado(working, proyectoId, {
+    codigoObra: opts?.codigoObra,
+  });
+
   if (!structured || structured.partidas.length === 0) {
     const tablasDetectadas = dump.tables
       .filter((t) => t.rows.length > 0 && !t.name.startsWith('MSys'))
       .map((t) => t.name);
+    const tieneObra = luloMdbHasEstructuraObra(dump);
     return {
       ok: false,
       errors: [
         'No se encontró una tabla de partidas/presupuesto reconocible en el MDB.',
-        'Se esperan tablas tipo PARTIDAS, INSUMOS y COMPOSICION (LuloWin estándar).',
+        tieneObra
+          ? 'Hay tablas Obra* pero faltan partidas (ObraApun / ObraPart / ObraCapiPart) o APU (ObraApin* / ObraPain*).'
+          : 'Se esperan tablas PARTIDAS+INSUMOS+COMPOSICION (LuloWin estándar) u ObraApun/ObraCapiPart con ObraMate y ObraApin*.',
       ],
       hint:
         'Exporte el presupuesto desde LuloWin como .mdb sin contraseña. Tablas detectadas: ' +
-        (tablasDetectadas.slice(0, 12).join(', ') || 'ninguna'),
+        (tablasDetectadas.slice(0, 12).join(', ') || 'ninguna') +
+        (tablasDetectadas.length > 12 ? ` (+${tablasDetectadas.length - 12} más)` : ''),
       tablasDetectadas,
     };
   }
 
-  const model = buildLuloMdbCascadaModel(dump, structured);
+  const model = buildLuloMdbCascadaModel(working, structured);
   if (model.capitulos.length === 0) {
     return {
       ok: false,

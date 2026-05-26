@@ -15,10 +15,31 @@ const INSUMO_SOURCES: {
   { table: 'ObraEqui', codCol: 'CodEqu', preCol: 'CosEqu', tipo: 'equipo', defaultUni: 'HORA' },
 ];
 
-const COMPOSICION_SOURCES = ['ObraApinMate', 'ObraApinMano', 'ObraApinEqui'] as const;
+const COMPOSICION_SOURCES = [
+  'ObraApinMate',
+  'ObraApinMano',
+  'ObraApinEqui',
+  'ObraPainMate',
+  'ObraPainMano',
+  'ObraPainEqui',
+] as const;
+
+const COMPOSICION_TIPO: Partial<Record<(typeof COMPOSICION_SOURCES)[number], string>> = {
+  ObraApinMate: 'material',
+  ObraPainMate: 'material',
+  ObraApinMano: 'mano_obra',
+  ObraPainMano: 'mano_obra',
+  ObraApinEqui: 'equipo',
+  ObraPainEqui: 'equipo',
+};
+
+function strCell(v: unknown): string {
+  return String(v ?? '').trim();
+}
 
 function tableByName(dump: LuloMdbFullDump, name: string): LuloMdbTableDump | undefined {
-  return dump.tables.find((t) => t.name === name);
+  const want = name.trim().toLowerCase();
+  return dump.tables.find((t) => t.name.trim().toLowerCase() === want);
 }
 
 function readMigracionCsv(filePath: string, tableName: string): LuloMdbTableDump {
@@ -119,6 +140,157 @@ function mergeComposicion(dump: LuloMdbFullDump): LuloMdbTableDump | null {
   };
 }
 
+/** Insumos mínimos desde líneas APU cuando no hay ObraMate/Mano/Equi. */
+function mergeInsumosDesdeApin(dump: LuloMdbFullDump): LuloMdbTableDump | null {
+  const rows: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  const bestPrecio = new Map<string, number>();
+
+  for (const name of COMPOSICION_SOURCES) {
+    const t = tableByName(dump, name);
+    if (!t) continue;
+    const tipo = COMPOSICION_TIPO[name] ?? 'material';
+    for (const raw of t.rows) {
+      const cod = strCell(raw.CodIns);
+      if (!cod) continue;
+      const key = cod.toUpperCase();
+      const cos = Number(raw.CosIns ?? 0) || 0;
+      if (!bestPrecio.has(key) || cos > (bestPrecio.get(key) ?? 0)) {
+        bestPrecio.set(key, cos);
+      }
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        CodIns: cod,
+        DesIns: cod,
+        UniIns: 'UND',
+        PreIns: cos,
+        TipIns: tipo,
+      });
+    }
+  }
+
+  if (rows.length === 0) return null;
+  return {
+    name: 'INSUMOS',
+    columns: ['CodIns', 'DesIns', 'UniIns', 'PreIns', 'TipIns'],
+    rowCount: rows.length,
+    rows,
+  };
+}
+
+function partidasDesdeObraCapiPart(
+  dump: LuloMdbFullDump,
+  codigoObra?: string,
+): LuloMdbTableDump | null {
+  const capiPart = tableByName(dump, 'ObraCapiPart');
+  if (!capiPart?.rows.length) return null;
+
+  const filtro = codigoObra?.trim().toUpperCase();
+  const descripciones = new Map<string, string>();
+  const obraPart = tableByName(dump, 'ObraPart');
+  if (obraPart) {
+    for (const raw of obraPart.rows) {
+      const cod = strCell(raw.CodPar);
+      if (!cod) continue;
+      descripciones.set(cod.toUpperCase(), strCell(raw.Descri) || cod);
+    }
+  }
+
+  const rows: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of capiPart.rows) {
+    if (filtro && strCell(raw.CodObr).toUpperCase() !== filtro) continue;
+    const codPar = strCell(raw.CodPar);
+    if (!codPar) continue;
+    const key = codPar.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      CodObr: raw.CodObr,
+      CodPar: codPar,
+      DesPar: descripciones.get(key) || codPar,
+      UniPar: 'UND',
+      CanPar: Number(raw.CanPar ?? 0) || 0,
+      CodCap: raw.CodCap,
+    });
+  }
+
+  if (rows.length === 0) return null;
+  return {
+    name: 'PARTIDAS',
+    columns: ['CodObr', 'CodPar', 'DesPar', 'UniPar', 'CanPar', 'CodCap'],
+    rowCount: rows.length,
+    rows,
+  };
+}
+
+/** Partidas mínimas a partir de códigos en ObraApin* / ObraPain* (sin ObraApun ni ObraCapiPart). */
+function partidasDesdeObraApin(
+  dump: LuloMdbFullDump,
+  codigoObra?: string,
+): LuloMdbTableDump | null {
+  const filtro = codigoObra?.trim().toUpperCase();
+  const capiPart = tableByName(dump, 'ObraCapiPart');
+  const capPorPar = new Map<string, string>();
+  if (capiPart) {
+    for (const raw of capiPart.rows) {
+      if (filtro && strCell(raw.CodObr).toUpperCase() !== filtro) continue;
+      const codPar = strCell(raw.CodPar);
+      if (!codPar) continue;
+      capPorPar.set(codPar.toUpperCase(), strCell(raw.CodCap));
+    }
+  }
+
+  const rows: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+
+  for (const name of COMPOSICION_SOURCES) {
+    const t = tableByName(dump, name);
+    if (!t) continue;
+    for (const raw of t.rows) {
+      if (filtro && strCell(raw.CodObr).toUpperCase() !== filtro) continue;
+      const codPar = strCell(raw.CodPar);
+      if (!codPar) continue;
+      const key = codPar.toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        CodObr: raw.CodObr ?? codigoObra ?? '',
+        CodPar: codPar,
+        DesPar: codPar,
+        UniPar: 'UND',
+        CanPar: 1,
+        CodCap: capPorPar.get(key) ?? '',
+      });
+    }
+  }
+
+  if (rows.length === 0) return null;
+  return {
+    name: 'PARTIDAS',
+    columns: ['CodObr', 'CodPar', 'DesPar', 'UniPar', 'CanPar', 'CodCap'],
+    rowCount: rows.length,
+    rows,
+  };
+}
+
+function detectCodigoObraUnico(dump: LuloMdbFullDump): string | undefined {
+  const codes = new Set<string>();
+  const fuentes = ['ObraApun', 'ObraCapi', 'ObraCapiPart', ...COMPOSICION_SOURCES] as const;
+  for (const nombre of fuentes) {
+    const t = tableByName(dump, nombre);
+    if (!t) continue;
+    for (const raw of t.rows) {
+      const c = strCell(raw.CodObr);
+      if (c) codes.add(c.toUpperCase());
+    }
+  }
+  if (codes.size === 1) return [...codes][0];
+  return undefined;
+}
+
 function obraDesdeApun(dump: LuloMdbFullDump, codigoObra?: string): LuloMdbTableDump | null {
   const apun = tableByName(dump, 'ObraApun');
   if (!apun?.rows.length) return null;
@@ -151,15 +323,61 @@ function obraDesdeApun(dump: LuloMdbFullDump, codigoObra?: string): LuloMdbTable
   };
 }
 
+function obraDesdeObraCapi(dump: LuloMdbFullDump, codigoObra?: string): LuloMdbTableDump | null {
+  const capi = tableByName(dump, 'ObraCapi');
+  if (!capi?.rows.length) return null;
+
+  const filtro = codigoObra?.trim().toUpperCase();
+  let row = capi.rows[0] as Record<string, unknown>;
+  if (filtro) {
+    const hit = capi.rows.find(
+      (r) => strCell((r as Record<string, unknown>).CodObr).toUpperCase() === filtro,
+    );
+    if (hit) row = hit as Record<string, unknown>;
+  }
+
+  const codObr = strCell(row.CodObr);
+  if (!codObr) return null;
+
+  return {
+    name: 'OBRAS',
+    columns: ['CodObr', 'NomObr', 'PerAdm', 'PerUti', 'PerFcm'],
+    rowCount: 1,
+    rows: [
+      {
+        CodObr: codObr,
+        NomObr: strCell(row.DesCap) || codObr,
+        PerAdm: 0,
+        PerUti: 0,
+        PerFcm: 0,
+      },
+    ],
+  };
+}
+
+/** MDB/CSV con tablas Obra* (presupuesto de obra LuloWin), sin PARTIDAS/INSUMOS canónicas. */
+export function luloMdbHasEstructuraObra(dump: LuloMdbFullDump): boolean {
+  const hasPartidas = ['ObraApun', 'ObraPart', 'ObraCapiPart'].some((n) => {
+    const t = tableByName(dump, n);
+    return (t?.rows.length ?? 0) > 0;
+  });
+  const hasApu = COMPOSICION_SOURCES.some((n) => (tableByName(dump, n)?.rows.length ?? 0) > 0);
+  const hasInsumos = INSUMO_SOURCES.some((s) => (tableByName(dump, s.table)?.rows.length ?? 0) > 0);
+  const hasCapi = (tableByName(dump, 'ObraCapi')?.rows.length ?? 0) > 0;
+  return (hasPartidas && (hasApu || hasInsumos)) || (hasApu && hasCapi) || hasApu;
+}
+
 /**
  * Añade tablas canónicas (PARTIDAS, INSUMOS, COMPOSICION, CAPITULOS, OBRAS)
- * para que el parser LuloWin reconozca el volcado CSV igual que un .mdb.
+ * para que el parser LuloWin reconozca volcados Obra* (.mdb o CSV).
  */
-export function normalizeLuloWinCsvDump(
+export function normalizeObraMdbDump(
   dump: LuloMdbFullDump,
   opts?: { codigoObra?: string },
 ): LuloMdbFullDump {
   const extra: LuloMdbTableDump[] = [];
+  const codigoObra =
+    opts?.codigoObra?.trim() || detectCodigoObraUnico(dump) || undefined;
 
   const obraApun = tableByName(dump, 'ObraApun');
   const obraPart = tableByName(dump, 'ObraPart');
@@ -167,9 +385,17 @@ export function normalizeLuloWinCsvDump(
     extra.push({ ...obraApun, name: 'PARTIDAS' });
   } else if (obraPart?.rows.length) {
     extra.push({ ...obraPart, name: 'PARTIDAS' });
+  } else {
+    const desdeCapiPart = partidasDesdeObraCapiPart(dump, codigoObra);
+    if (desdeCapiPart) {
+      extra.push(desdeCapiPart);
+    } else {
+      const desdeApin = partidasDesdeObraApin(dump, codigoObra);
+      if (desdeApin) extra.push(desdeApin);
+    }
   }
 
-  const insumos = mergeInsumos(dump);
+  const insumos = mergeInsumos(dump) ?? mergeInsumosDesdeApin(dump);
   if (insumos) extra.push(insumos);
 
   const composicion = mergeComposicion(dump);
@@ -180,11 +406,31 @@ export function normalizeLuloWinCsvDump(
     extra.push({ ...obraCapi, name: 'CAPITULOS' });
   }
 
-  const obras = obraDesdeApun(dump, opts?.codigoObra);
+  const obras =
+    obraDesdeApun(dump, codigoObra) ?? obraDesdeObraCapi(dump, codigoObra);
   if (obras) extra.push(obras);
 
   return { ...dump, tables: [...dump.tables, ...extra] };
 }
+
+/**
+ * Convierte MDB Obra* al formato PARTIDAS/INSUMOS/COMPOSICION antes de parsear.
+ * Idempotente: si ya hay tablas nativas con filas, devuelve el dump sin cambios.
+ */
+export function prepareLuloMdbDumpForParse(
+  dump: LuloMdbFullDump,
+  opts?: { codigoObra?: string },
+): LuloMdbFullDump {
+  const partidasNativas = dump.tables.find(
+    (t) => t.name.trim().toUpperCase() === 'PARTIDAS' && t.rows.length > 0,
+  );
+  if (partidasNativas) return dump;
+  if (!luloMdbHasEstructuraObra(dump)) return dump;
+  return normalizeObraMdbDump(dump, opts);
+}
+
+/** @deprecated Use normalizeObraMdbDump */
+export const normalizeLuloWinCsvDump = normalizeObraMdbDump;
 
 /** Carga CSV y deja el dump listo para `parseLuloMdbEstructurado` / cascada. */
 export function loadAndNormalizeLuloCsvFolder(
@@ -192,5 +438,5 @@ export function loadAndNormalizeLuloCsvFolder(
   opts?: { codigoObra?: string },
 ): LuloMdbFullDump {
   const raw = loadLuloCsvFolder(csvDir);
-  return normalizeLuloWinCsvDump(raw, opts);
+  return normalizeObraMdbDump(raw, opts);
 }

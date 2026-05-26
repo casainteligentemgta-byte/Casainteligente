@@ -6,6 +6,7 @@ import { enriquecerMontosPartidasDesdeApu } from '@/lib/proyectos/lulo/enriquece
 import { extraerMontosPartidaFila } from '@/lib/proyectos/lulo/extraerMontosPartidaFila';
 import { leerValorNumericoFila } from '@/lib/proyectos/lulo/leerValorNumericoFila';
 import { enriquecerPartidasConCapitulos } from '@/lib/proyectos/luloCapitulos';
+import { prepareLuloMdbDumpForParse } from '@/lib/proyectos/loadLuloCsvFolder';
 import {
   findLuloTable,
   luloMdbHasEstructuraNativa,
@@ -238,24 +239,28 @@ export function parseLuloMdbEstructurado(
   proyectoId: string,
   opts?: { codigoObra?: string },
 ): LuloEstructuradoParse | null {
-  if (!luloMdbHasEstructuraNativa(dump)) return null;
+  const prepared = prepareLuloMdbDumpForParse(dump, opts);
+  if (!luloMdbHasEstructuraNativa(prepared)) return null;
 
-  const tPartidas = findLuloTable(dump, 'partidas');
+  const tPartidas = findLuloTable(prepared, 'partidas');
   if (!tPartidas) return null;
 
-  const tInsumos = findLuloTable(dump, 'insumos');
-  const tComposicion = findLuloTable(dump, 'composicion');
-  const tObras = findLuloTable(dump, 'obras');
+  const tInsumos = findLuloTable(prepared, 'insumos');
+  const tComposicion = findLuloTable(prepared, 'composicion');
+  const tObras = findLuloTable(prepared, 'obras');
 
   const obra = tObras ? parseObrasTable(tObras, opts?.codigoObra) : null;
   const codigoObra = opts?.codigoObra ?? obra?.codigo_lulo;
 
-  const partidas = parsePartidasTable(tPartidas, proyectoId, codigoObra);
+  let partidas = parsePartidasTable(tPartidas, proyectoId, codigoObra);
+  if (partidas.length === 0 && codigoObra) {
+    partidas = parsePartidasTable(tPartidas, proyectoId, undefined);
+  }
   if (partidas.length === 0) return null;
 
   const insumos = tInsumos ? parseInsumosTable(tInsumos) : [];
   const apu = tComposicion ? parseComposicionTable(tComposicion) : [];
-  const partidasOrdenadas = enriquecerPartidasConCapitulos(partidas, dump, tPartidas);
+  const partidasOrdenadas = enriquecerPartidasConCapitulos(partidas, prepared, tPartidas);
   const partidasConMontos = enriquecerMontosPartidasDesdeApu(partidasOrdenadas, {
     insumos,
     apu,

@@ -198,7 +198,20 @@ export async function cargarPresupuestoLuloDesdeMdb(
     throw new Error(formatMdbReadError(err));
   }
 
-  const validacion = parseAndValidateLuloMdbCascada(dump, pid);
+  let codigoObraFiltro = options?.codigoObr?.trim();
+  if (!codigoObraFiltro) {
+    const { data: proy } = await supabase
+      .from('ci_proyectos')
+      .select('codigo_lulo')
+      .eq('id', pid)
+      .maybeSingle();
+    const cod = proy?.codigo_lulo;
+    if (typeof cod === 'string' && cod.trim()) codigoObraFiltro = cod.trim();
+  }
+
+  const validacion = parseAndValidateLuloMdbCascada(dump, pid, {
+    codigoObra: codigoObraFiltro,
+  });
   if (!validacion.ok) {
     const msg = [...validacion.errors, validacion.hint].filter(Boolean).join(' ');
     const err = new Error(msg) as Error & { statusCode?: number; tablasDetectadas?: string[] };
