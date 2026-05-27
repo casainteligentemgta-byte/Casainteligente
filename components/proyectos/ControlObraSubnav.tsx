@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calculator, CalendarRange, Droplets, FileText, Layers } from 'lucide-react';
+import { Calculator, CalendarRange, Droplets, FileText, HardHat, Layers } from 'lucide-react';
 
 type Tab = {
   id: string;
@@ -19,6 +19,7 @@ function tabs(proyectoId: string): Tab[] {
     { id: 'agua', href: `${base}/agua`, label: 'Registro de agua', icon: Droplets },
     { id: 'informes', href: `${base}/informes`, label: 'Informes ingeniero', icon: FileText },
     { id: 'cronograma', href: `${base}/cronograma`, label: 'Cronograma', icon: CalendarRange },
+    { id: 'equipo', href: `${base}/equipo`, label: 'Equipo y alertas', icon: HardHat },
   ];
 }
 
@@ -30,7 +31,8 @@ function tabActivo(pathname: string, tab: Tab): boolean {
         !pathname.includes('/agua') &&
         !pathname.includes('/apu') &&
         !pathname.includes('/informes') &&
-        !pathname.includes('/cronograma'))
+        !pathname.includes('/cronograma') &&
+        !pathname.includes('/equipo'))
     );
   }
   return pathname.includes(`/control-obra/${tab.id}`);

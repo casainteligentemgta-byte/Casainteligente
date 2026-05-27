@@ -51,6 +51,11 @@ const MIGRATIONS = [
   '172_lulo_catalogo_maestro.sql',
   '173_ci_proyecto_presupuestos_lulo.sql',
   '174_ci_obra_entradas_salidas_telegram.sql',
+  '175_partidas_precio_unitario.sql',
+  '176_partidas_monto_total.sql',
+  '177_gestion_campo_cronograma_alertas.sql',
+  '178_gestion_campo_177_repair.sql',
+  '179_ingeniero_residente_rrhh.sql',
 ];
 
 async function tableExists(sql, name) {
@@ -237,6 +242,33 @@ async function main() {
         tableExists(sql, 'ci_proyecto_presupuestos_lulo'),
       '174_ci_obra_entradas_salidas_telegram.sql': () =>
         tableExists(sql, 'ci_obra_movimientos_material'),
+      '175_partidas_precio_unitario.sql': async () => {
+        if (!(await tableExists(sql, 'partidas'))) return false;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public' and table_name = 'partidas' and column_name = 'precio_unitario'
+        `;
+        return cols.length > 0;
+      },
+      '176_partidas_monto_total.sql': async () => {
+        if (!(await tableExists(sql, 'partidas'))) return false;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public' and table_name = 'partidas' and column_name = 'monto_total'
+        `;
+        return cols.length > 0;
+      },
+      '177_gestion_campo_cronograma_alertas.sql': () =>
+        tableExists(sql, 'avance_diario_campo'),
+      '178_gestion_campo_177_repair.sql': () => tableExists(sql, 'avance_diario_campo'),
+      '179_ingeniero_residente_rrhh.sql': async () => {
+        if (!(await tableExists(sql, 'ci_proyectos'))) return false;
+        const cols = await sql`
+          select column_name from information_schema.columns
+          where table_schema = 'public' and table_name = 'ci_proyectos' and column_name = 'ingeniero_residente_id'
+        `;
+        return cols.length > 0;
+      },
     };
 
     for (const file of MIGRATIONS) {

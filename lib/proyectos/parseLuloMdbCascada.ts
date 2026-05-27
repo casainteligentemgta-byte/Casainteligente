@@ -34,6 +34,7 @@ export type PartidaCascadaInsert = {
   cantidad_presupuestada: number;
   precio_unitario: number;
   monto_total: number;
+  rendimiento: number;
   apu: ApuItemCascadaInsert[];
 };
 
@@ -111,6 +112,7 @@ function partidaToCascadaInsert(p: PartidaLuloInsert): PartidaCascadaInsert {
     cantidad_presupuestada: cantidad,
     precio_unitario: precio,
     monto_total: round2(monto),
+    rendimiento: 1,
     apu: [],
   };
 }

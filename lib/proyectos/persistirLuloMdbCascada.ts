@@ -84,10 +84,12 @@ export async function persistirLuloMdbCascada(
   let apuItemsInsertados = 0;
 
   for (const cap of model.capitulos) {
+    const numCap = parseInt(cap.codigo.replace(/\D/g, ''), 10);
     const capInsert: Record<string, unknown> = {
       proyecto_id: pid,
       codigo: cap.codigo.trim(),
       nombre: cap.nombre.trim().slice(0, 500),
+      ...(Number.isFinite(numCap) && numCap > 0 ? { num_cap: numCap } : {}),
     };
     if (presupuestoLuloId) capInsert.presupuesto_lulo_id = presupuestoLuloId;
 
@@ -103,19 +105,23 @@ export async function persistirLuloMdbCascada(
     const partidaRows: Array<{
       capitulo_id: string;
       codigo: string;
+      codigo_lulo: string;
       descripcion: string;
       unidad: string;
       cantidad_presupuestada: number;
       precio_unitario: number;
       monto_total: number;
+      rendimiento: number;
     }> = cap.partidas.map((p) => ({
       capitulo_id: capituloId,
       codigo: p.codigo,
+      codigo_lulo: p.codigo,
       descripcion: p.descripcion.slice(0, 800),
       unidad: p.unidad || 'UND',
       cantidad_presupuestada: p.cantidad_presupuestada,
       precio_unitario: Number(p.precio_unitario ?? 0),
       monto_total: Number(p.monto_total ?? 0),
+      rendimiento: Number(p.rendimiento ?? 1) || 1,
     }));
 
     for (let i = 0; i < partidaRows.length; i += BATCH) {
@@ -124,9 +130,15 @@ export async function persistirLuloMdbCascada(
         .from('partidas')
         .insert(batch)
         .select('id, codigo');
-      if (pErr && /precio_unitario|monto_total|column/i.test(pErr.message ?? '')) {
+      if (pErr && /precio_unitario|monto_total|rendimiento|codigo_lulo|column/i.test(pErr.message ?? '')) {
         const sinMontos = batch.map(
-          ({ precio_unitario: _pu, monto_total: _mt, ...rest }) => rest,
+          ({
+            precio_unitario: _pu,
+            monto_total: _mt,
+            rendimiento: _r,
+            codigo_lulo: _cl,
+            ...rest
+          }) => rest,
         );
         const retry = await supabase.from('partidas').insert(sinMontos).select('id, codigo');
         insertedPartidas = retry.data;

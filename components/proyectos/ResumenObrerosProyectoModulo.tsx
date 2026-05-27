@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ClipboardList, FileText, Trash2, UserCheck, UserMinus, Users, UserX } from 'lucide-react';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import ContratosExpressModuloPanel from '@/components/proyectos/ContratosExpressModuloPanel';
+import IngenieroResidenteObraCard from '@/components/proyectos/IngenieroResidenteObraCard';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { hrefGestionPersonalSolicitados } from '@/lib/rrhh/hrefSolicitudPersonal';
@@ -861,6 +862,10 @@ export default function ResumenObrerosProyectoModulo({
   }, [listaModal]);
 
   return (
+    <>
+      {!proyectosModuloIds?.length ? (
+        <IngenieroResidenteObraCard proyectoId={proyectoModuloId} className="mb-4" />
+      ) : null}
     <section
       className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-b from-fuchsia-950/40 to-zinc-950/80 p-5 shadow-[0_0_32px_rgba(192,38,211,0.08)] backdrop-blur-xl"
       aria-labelledby={tituloId}
@@ -1148,5 +1153,6 @@ export default function ResumenObrerosProyectoModulo({
         </DialogContent>
       </Dialog>
     </section>
+    </>
   );
 }

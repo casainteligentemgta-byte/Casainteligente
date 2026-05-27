@@ -46,6 +46,12 @@ import {
   manejarTextoObservacionEntradaSalida,
 } from '@/lib/telegram/entradaSalidaRegistro';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
+import {
+  esCallbackAvanceCampo,
+  manejarCallbackAvanceCampo,
+  manejarTextoAvanceCampo,
+} from '@/lib/telegram/avanceCampo';
+import { manejarStartVinculoTelegram } from '@/lib/telegram/telegramVinculo';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 
@@ -265,6 +271,18 @@ export async function handleTelegramCallbackQuery(
   try {
     const userId = String(cq.from.id);
 
+    if (esCallbackAvanceCampo(cq.data)) {
+      const handledAvance = await manejarCallbackAvanceCampo(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        telegramUserId: userId,
+      });
+      if (handledAvance) {
+        return NextResponse.json({ ok: true, callback: 'avance_campo' });
+      }
+    }
+
     const handledAgua = await manejarCallbackAguaTelegram(admin.client, {
       chatId,
       userId,
@@ -348,6 +366,32 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     const supabase = admin.client;
+
+    if (texto?.toLowerCase().startsWith('/start')) {
+      const vinculado = await manejarStartVinculoTelegram(
+        supabase,
+        chatId,
+        texto,
+        msg.from?.username,
+      );
+      if (vinculado) {
+        return NextResponse.json({ ok: true, vinculo: true });
+      }
+    }
+
+    const estadoPrevio = await getTelegramEstado(supabase, chatId);
+    if (texto && !texto.startsWith('/')) {
+      const avanceTexto = await manejarTextoAvanceCampo(
+        supabase,
+        chatId,
+        texto,
+        estadoPrevio,
+        userId,
+      );
+      if (avanceTexto) {
+        return NextResponse.json({ ok: true, avance_campo: true });
+      }
+    }
 
     if (texto && esComandoAgua(texto)) {
       try {
