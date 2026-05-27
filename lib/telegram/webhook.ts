@@ -55,6 +55,10 @@ import {
   manejarComandoAvanceCampo,
   manejarStartVinculoTelegram,
 } from '@/lib/telegram/telegramVinculo';
+import {
+  esCallbackUbicacion,
+  manejarCallbackUbicacionTelegram,
+} from '@/lib/telegram/ubicacionPicker';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
@@ -274,6 +278,17 @@ export async function handleTelegramCallbackQuery(
 
   try {
     const userId = String(cq.from.id);
+
+    if (esCallbackUbicacion(cq.data)) {
+      const handledUb = await manejarCallbackUbicacionTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledUb) {
+        return NextResponse.json({ ok: true, callback: 'ubicacion_compra' });
+      }
+    }
 
     if (esCallbackAvanceCampo(cq.data)) {
       const handledAvance = await manejarCallbackAvanceCampo(admin.client, {

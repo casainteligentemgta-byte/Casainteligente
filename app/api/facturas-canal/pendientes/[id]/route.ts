@@ -48,6 +48,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const body = (await req.json()) as {
       estado?: string;
       proyecto_id?: string;
+      ubicacion_destino_id?: string;
       purchase_invoice_id?: string;
       extracted?: Record<string, unknown>;
       mensaje_error?: string | null;
@@ -58,6 +59,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (body.estado) update.estado = body.estado;
     if (body.proyecto_id !== undefined) update.proyecto_id = body.proyecto_id;
+    if (body.ubicacion_destino_id !== undefined) {
+      update.ubicacion_destino_id = body.ubicacion_destino_id;
+    }
     if (body.purchase_invoice_id !== undefined) update.purchase_invoice_id = body.purchase_invoice_id;
     if (body.extracted !== undefined) update.extracted = body.extracted;
     if (body.mensaje_error !== undefined) update.mensaje_error = body.mensaje_error;

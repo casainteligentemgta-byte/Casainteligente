@@ -39,6 +39,21 @@ function mapRow(row: UbicacionDbRow): UbicacionInventario {
 }
 
 /** Propaga obra_id del padre a subsitios hijos (para UI y filtros). */
+export function propagarObraIdFlat(flat: UbicacionInventario[]): void {
+  const byId = new Map(flat.map((u) => [u.id, u]));
+  for (const u of flat) {
+    if (u.obra_id || !u.ubicacion_padre_id) continue;
+    let p = byId.get(u.ubicacion_padre_id);
+    while (p) {
+      if (p.obra_id) {
+        u.obra_id = p.obra_id;
+        break;
+      }
+      p = p.ubicacion_padre_id ? byId.get(p.ubicacion_padre_id) : undefined;
+    }
+  }
+}
+
 export function propagarObraIdEnArbol(nodes: UbicacionInventario[], obraPadre?: string): void {
   for (const n of nodes) {
     const obra = n.obra_id ?? obraPadre;
@@ -70,10 +85,95 @@ export async function listarUbicacionesInventario(
 
 export async function listarArbolUbicacionesInventario(
   supabase: SupabaseClient,
-  opts?: { soloActivas?: boolean; tipo?: TipoUbicacion },
+  opts?: { soloActivas?: boolean; tipo?: TipoUbicacion; proyectoId?: string },
 ): Promise<{ arbol: UbicacionInventario[]; total: number }> {
-  const flat = await listarUbicacionesInventario(supabase, opts);
+  const flat = await listarUbicacionesParaSelector(supabase, opts);
   const arbol = buildArbolUbicaciones(flat);
   propagarObraIdEnArbol(arbol);
   return { arbol, total: flat.length };
+}
+
+const ETIQUETA_TIPO: Record<TipoUbicacion, string> = {
+  almacen_central: 'Almacén central',
+  almacen_movil: 'Almacén móvil',
+  obra: 'Obra',
+  garantias: 'Garantías',
+  cuarentena: 'Cuarentena',
+};
+
+export function etiquetaUbicacionSelector(u: UbicacionInventario, indent = 0): string {
+  const pref = indent > 0 ? `${'  '.repeat(indent)}↳ ` : '';
+  const tipo = ETIQUETA_TIPO[u.tipo] ?? u.tipo;
+  return `${pref}${u.nombre} (${tipo})`;
+}
+
+/** Lista plana para selects: almacenes + obra del proyecto y sus subsitios. */
+export async function listarUbicacionesParaSelector(
+  supabase: SupabaseClient,
+  opts?: { soloActivas?: boolean; tipo?: TipoUbicacion; proyectoId?: string },
+): Promise<UbicacionInventario[]> {
+  const todas = await listarUbicacionesInventario(supabase, {
+    soloActivas: opts?.soloActivas,
+    tipo: opts?.tipo,
+  });
+  if (!opts?.proyectoId) {
+    return todas.filter((u) => u.tipo !== 'obra' || !u.ubicacion_padre_id);
+  }
+
+  propagarObraIdFlat(todas);
+
+  const pid = opts.proyectoId;
+  const almacenes = todas.filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil');
+  const deObra = todas.filter((u) => u.obra_id === pid);
+
+  const byId = new Map<string, UbicacionInventario>();
+  for (const u of [...almacenes, ...deObra]) {
+    byId.set(u.id, u);
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const order: Record<TipoUbicacion, number> = {
+      almacen_central: 0,
+      almacen_movil: 1,
+      obra: 2,
+      cuarentena: 3,
+      garantias: 4,
+    };
+    const ta = order[a.tipo] ?? 9;
+    const tb = order[b.tipo] ?? 9;
+    if (ta !== tb) return ta - tb;
+    return a.nombre.localeCompare(b.nombre, 'es');
+  });
+}
+
+/** Crea ubicación raíz tipo obra si no existe (para ingreso de compras en sitio). */
+export async function asegurarUbicacionObra(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  nombreObra: string,
+): Promise<string> {
+  const { data: existing, error: selErr } = await supabase
+    .from('inv_ubicaciones')
+    .select('id')
+    .eq('ci_proyecto_id', proyectoId)
+    .eq('tipo', 'obra')
+    .is('ubicacion_padre_id', null)
+    .maybeSingle();
+  if (selErr?.code === '42P01') throw new Error('Tabla inv_ubicaciones no existe. Aplique migración 180.');
+  if (selErr) throw new Error(selErr.message);
+  if (existing?.id) return String(existing.id);
+
+  const codigo = `OBRA-${proyectoId.replace(/-/g, '').slice(0, 12)}`;
+  const { data: created, error } = await supabase
+    .from('inv_ubicaciones')
+    .insert({
+      codigo,
+      nombre: nombreObra.trim() || 'Obra',
+      tipo: 'obra',
+      ci_proyecto_id: proyectoId,
+      descripcion: 'Ubicación de obra (auto)',
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  return String(created.id);
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
@@ -26,6 +27,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [pendiente, setPendiente] = useState<PendienteCanal | null>(null);
   const [proyectos, setProyectos] = useState<{ id: string; nombre: string }[]>([]);
   const [proyectoId, setProyectoId] = useState('');
+  const [ubicacionId, setUbicacionId] = useState('');
   const [editando, setEditando] = useState(false);
   const [registrando, setRegistrando] = useState(false);
   const [compraRegistrada, setCompraRegistrada] = useState(false);
@@ -72,7 +74,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     if (pendiente?.proyecto_id && !proyectoId) {
       setProyectoId(pendiente.proyecto_id);
     }
-  }, [pendiente?.proyecto_id, proyectoId]);
+    if (pendiente?.ubicacion_destino_id && !ubicacionId) {
+      setUbicacionId(pendiente.ubicacion_destino_id);
+    }
+  }, [pendiente?.proyecto_id, pendiente?.ubicacion_destino_id, proyectoId, ubicacionId]);
 
   const extracted = pendiente?.extracted ?? null;
   const puedeRegistrar = useMemo(
@@ -95,6 +100,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       toast.error('Seleccione el proyecto');
       return;
     }
+    if (!ubicacionId.trim()) {
+      toast.error('Seleccione el almacén de ingreso');
+      return;
+    }
     if (!extracted) {
       toast.error('No hay datos de la factura');
       return;
@@ -103,6 +112,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     try {
       const r = await confirmarCompraCanal(pendingId, {
         proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionId,
         extracted,
       });
       setCompraRegistrada(true);
@@ -127,7 +137,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         </Link>
         <div>
           <h1 className="text-base font-bold">Registrar compra (Telegram)</h1>
-          <p className="text-xs text-zinc-500">Solo contabilidad — sin inventario ni calidad</p>
+          <p className="text-xs text-zinc-500">Obra y almacén de ingreso (desde Telegram o aquí)</p>
         </div>
       </header>
 
@@ -243,7 +253,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               <select
                 id="proyecto-telegram"
                 value={proyectoId}
-                onChange={(e) => setProyectoId(e.target.value)}
+                onChange={(e) => {
+                  setProyectoId(e.target.value);
+                  setUbicacionId('');
+                }}
                 className={selectClass}
               >
                 <option value="">Seleccione proyecto…</option>
@@ -255,9 +268,23 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </select>
             </section>
 
+            <section className="space-y-2">
+              <label htmlFor="ubicacion-telegram" className="text-xs font-bold text-zinc-500">
+                ALMACÉN DE INGRESO
+              </label>
+              <UbicacionInventarioSelect
+                id="ubicacion-telegram"
+                proyectoId={proyectoId}
+                value={ubicacionId}
+                onChange={setUbicacionId}
+              />
+            </section>
+
             <button
               type="button"
-              disabled={!puedeRegistrar || !proyectoId.trim() || registrando}
+              disabled={
+                !puedeRegistrar || !proyectoId.trim() || !ubicacionId.trim() || registrando
+              }
               onClick={() => void registrar()}
               className="w-full rounded-xl bg-[#34C759] disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-bold py-3 flex items-center justify-center gap-2"
             >
@@ -272,7 +299,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             </button>
 
             <p className="text-[11px] text-zinc-500 text-center leading-relaxed">
-              No se crea recepción de mercancía, inventario ni inspección de calidad.
+              El almacén queda asociado a la compra. Para recepción con líneas e inspección de
+              calidad use Almacén → Recepción de mercancía.
             </p>
           </>
         )}

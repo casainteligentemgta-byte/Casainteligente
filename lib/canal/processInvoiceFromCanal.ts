@@ -179,6 +179,10 @@ export async function processInvoiceFromCanal(params: {
 
   if (prog) {
     await prog.ok(detalleOk);
+    if (params.canal === 'telegram') {
+      const { enviarPickerProyectosTelegram } = await import('@/lib/telegram/proyectoPicker');
+      await enviarPickerProyectosTelegram(supabase, params.chatId, 'factura_compra');
+    }
   } else {
     await params.sendReply(html ?? plain, Boolean(html));
   }

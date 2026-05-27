@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
-import { listarArbolUbicacionesInventario } from '@/lib/almacen/ubicacionesInventario';
+import {
+  etiquetaUbicacionSelector,
+  listarArbolUbicacionesInventario,
+  listarUbicacionesParaSelector,
+} from '@/lib/almacen/ubicacionesInventario';
 import type { TipoUbicacion } from '@/types/inventario-obra';
 
 export const dynamic = 'force-dynamic';
@@ -29,6 +33,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const soloActivas = url.searchParams.get('activo') !== 'false';
   const tipo = parseTipo(url.searchParams.get('tipo'));
+  const proyectoId = url.searchParams.get('proyecto_id')?.trim() || undefined;
+  const flat = url.searchParams.get('flat') === '1';
 
   if (url.searchParams.get('tipo') && !tipo) {
     return NextResponse.json(
@@ -40,9 +46,31 @@ export async function GET(req: Request) {
   const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
 
   try {
+    if (flat) {
+      const ubicaciones = await listarUbicacionesParaSelector(supabase, {
+        soloActivas,
+        tipo,
+        proyectoId,
+      });
+      return NextResponse.json({
+        ok: true,
+        ubicaciones: ubicaciones.map((u, i, arr) => ({
+          ...u,
+          etiqueta: etiquetaUbicacionSelector(u, indentNivel(u, arr)),
+        })),
+        total: ubicaciones.length,
+        migracionPendiente: ubicaciones.length === 0 && !proyectoId,
+        hint:
+          ubicaciones.length === 0
+            ? 'Si no aplicó las migraciones 180/181, ejecute npm run db:apply o el SQL en Supabase.'
+            : undefined,
+      });
+    }
+
     const { arbol, total } = await listarArbolUbicacionesInventario(supabase, {
       soloActivas,
       tipo,
+      proyectoId,
     });
 
     return NextResponse.json({
@@ -60,4 +88,18 @@ export async function GET(req: Request) {
     console.error('[GET /api/almacen/ubicaciones]', err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+}
+
+function indentNivel(
+  u: { ubicacion_padre_id?: string | null; id: string },
+  flat: Array<{ id: string; ubicacion_padre_id?: string | null }>,
+): number {
+  let n = 0;
+  let pid = u.ubicacion_padre_id;
+  const byId = new Map(flat.map((x) => [x.id, x]));
+  while (pid && n < 5) {
+    n += 1;
+    pid = byId.get(pid)?.ubicacion_padre_id;
+  }
+  return n;
 }

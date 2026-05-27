@@ -26,6 +26,7 @@ type PendienteRow = {
   estado: string;
   extracted: ExtractedCanalHeader | null;
   proyecto_id: string | null;
+  ubicacion_destino_id: string | null;
   document_storage_path: string | null;
   document_file_name: string | null;
   document_mime_type: string | null;
@@ -53,13 +54,14 @@ export async function confirmarCompraDesdeCanal(
   params: {
     pendingId: string;
     proyectoId: string;
+    ubicacionDestinoId: string;
     extractedOverride?: ExtractedCanalHeader;
   },
 ): Promise<{ compraId: string; purchaseInvoiceId: string; yaExistia: boolean }> {
   const { data: pendiente, error: pErr } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select(
-      'id,estado,extracted,proyecto_id,document_storage_path,document_file_name,document_mime_type,purchase_invoice_id',
+      'id,estado,extracted,proyecto_id,ubicacion_destino_id,document_storage_path,document_file_name,document_mime_type,purchase_invoice_id',
     )
     .eq('id', params.pendingId)
     .single();
@@ -102,6 +104,12 @@ export async function confirmarCompraDesdeCanal(
     throw new Error('Seleccione el proyecto al que pertenece la compra.');
   }
 
+  const ubicacionDestinoId =
+    params.ubicacionDestinoId.trim() || row.ubicacion_destino_id?.trim() || '';
+  if (!ubicacionDestinoId) {
+    throw new Error('Seleccione el almacén de ingreso del material.');
+  }
+
   const fecha = (extracted.date ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
   const lineas = lineasDesdeExtracted(extracted);
   if (lineas.length === 0) {
@@ -130,6 +138,7 @@ export async function confirmarCompraDesdeCanal(
       date: fecha,
       status: 'REGISTRADA',
       proyecto_id: proyectoId,
+      ubicacion_destino_id: ubicacionDestinoId,
       ...payloadCompraBimonetario(montos),
       document_storage_path: row.document_storage_path,
       document_file_name: row.document_file_name,
@@ -144,6 +153,14 @@ export async function confirmarCompraDesdeCanal(
 
     if (invErr) throw new Error(`No se pudo crear la factura: ${invErr.message}`);
     purchaseInvoiceId = String((inv as { id: string }).id);
+  } else {
+    await supabase
+      .from('purchase_invoices')
+      .update({
+        proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionDestinoId,
+      })
+      .eq('id', purchaseInvoiceId);
   }
 
   const { compraId } = await registerCompraDesdeRecepcion(supabase, {
@@ -168,6 +185,7 @@ export async function confirmarCompraDesdeCanal(
     .update({
       estado: 'confirmado',
       proyecto_id: proyectoId,
+      ubicacion_destino_id: ubicacionDestinoId,
       purchase_invoice_id: purchaseInvoiceId,
       extracted,
       mensaje_error: null,

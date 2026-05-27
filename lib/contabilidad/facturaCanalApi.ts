@@ -23,6 +23,7 @@ export type PendienteCanal = {
   chat_label: string | null;
   estado: string;
   proyecto_id?: string | null;
+  ubicacion_destino_id?: string | null;
   purchase_invoice_id?: string | null;
   document_file_name: string | null;
   document_storage_path?: string | null;
@@ -74,7 +75,11 @@ export type EliminarPendienteCanalResult = {
 
 export async function confirmarCompraCanal(
   rawId: string,
-  body: { proyecto_id: string; extracted?: ExtractedCanalHeader },
+  body: {
+    proyecto_id: string;
+    ubicacion_destino_id: string;
+    extracted?: ExtractedCanalHeader;
+  },
 ): Promise<{ compraId: string; purchaseInvoiceId: string; yaExistia: boolean }> {
   const id = resolveIdPendienteCanal(rawId);
   const res = await fetch(

@@ -36,6 +36,8 @@ import {
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProcurementDocumentAttach } from '@/components/almacen/ProcurementDocumentAttach';
+import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
+import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
 type PurchaseLine = {
     description: string;
     item_code: string;
@@ -129,6 +131,7 @@ export default function ProcurementClient() {
     const [isSaving, setIsSaving] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [proyectoId, setProyectoId] = useState('');
+    const [ubicacionDestinoId, setUbicacionDestinoId] = useState('');
     const [tasaBcv, setTasaBcv] = useState<number | null>(null);
     const [tasaBcvFuente, setTasaBcvFuente] = useState<string | null>(null);
     const [cargandoTasa, setCargandoTasa] = useState(false);
@@ -219,6 +222,10 @@ export default function ProcurementClient() {
                 if (!res.ok || !data.extracted) {
                     setAiError(data.error ?? 'No se encontró la factura de Telegram');
                     return;
+                }
+                if (data.proyecto_id) setProyectoId(String(data.proyecto_id));
+                if (data.ubicacion_destino_id) {
+                    setUbicacionDestinoId(String(data.ubicacion_destino_id));
                 }
                 applyExtractedPayload(
                     data.extracted as Parameters<typeof applyExtractedPayload>[0],
@@ -371,6 +378,10 @@ export default function ProcurementClient() {
             setSubmitError('Seleccione el proyecto al que pertenece esta compra.');
             return;
         }
+        if (!ubicacionDestinoId) {
+            setSubmitError('Seleccione el almacén donde ingresará el material.');
+            return;
+        }
 
         const validLines = items.filter((it) => it.description.trim());
         if (validLines.length === 0) {
@@ -407,6 +418,7 @@ export default function ProcurementClient() {
                 date: invoice.date,
                 status: 'PENDIENTE',
                 proyecto_id: proyectoId,
+                ubicacion_destino_id: ubicacionDestinoId,
                 ...payloadCompraBimonetario(montos),
             };
 
@@ -453,6 +465,12 @@ export default function ProcurementClient() {
             }
 
             const lineasContabilidad: LineaCompraContabilidadInput[] = [];
+            const lineasInventario: Array<{
+                material_id: string;
+                descripcion: string;
+                cantidad: number;
+                precio_unitario: number;
+            }> = [];
             const defaultDepositId = await fetchDefaultDepositId(supabase);
 
             for (const line of validLines) {
@@ -532,6 +550,29 @@ export default function ProcurementClient() {
                     cantidad: line.quantity,
                     precio_unitario: line.unit_price,
                 });
+
+                lineasInventario.push({
+                    material_id: newMaterial.id,
+                    descripcion: desc,
+                    cantidad: line.quantity,
+                    precio_unitario: line.unit_price,
+                });
+            }
+
+            try {
+                await registrarCompraInventario(supabase, {
+                    ubicacionDestinoId,
+                    numeroFactura: payload.invoice_number,
+                    proveedorRif: payload.supplier_rif,
+                    proveedorNombre: payload.supplier_name,
+                    fechaEmision: payload.date,
+                    total: totalBolivares,
+                    purchaseInvoiceId: invData.id,
+                    documentoStoragePath: documentStoragePath,
+                    lineas: lineasInventario,
+                });
+            } catch (invErr) {
+                console.warn('[procurement] inventario compras_facturas:', invErr);
             }
 
             const fromTelegram = searchParams.get('fromTelegram');
@@ -560,6 +601,8 @@ export default function ProcurementClient() {
                         body: JSON.stringify({
                             estado: 'confirmado',
                             purchase_invoice_id: invData.id,
+                            proyecto_id: proyectoId,
+                            ubicacion_destino_id: ubicacionDestinoId,
                         }),
                     });
                     sessionStorage.removeItem('telegram_pending_invoice');
@@ -823,7 +866,10 @@ export default function ProcurementClient() {
                                 </label>
                                 <select
                                     value={proyectoId}
-                                    onChange={(e) => setProyectoId(e.target.value)}
+                                    onChange={(e) => {
+                                        setProyectoId(e.target.value);
+                                        setUbicacionDestinoId('');
+                                    }}
                                     className="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
                                 >
                                     <option value="">Seleccione proyecto…</option>
@@ -855,6 +901,18 @@ export default function ProcurementClient() {
                                         No hay proyectos en ci_proyectos. Cree uno en Proyectos.
                                     </p>
                                 ) : null}
+                            </div>
+                            <div className="space-y-2 mt-6">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                                    Almacén de ingreso
+                                </label>
+                                <UbicacionInventarioSelect
+                                    proyectoId={proyectoId}
+                                    value={ubicacionDestinoId}
+                                    onChange={setUbicacionDestinoId}
+                                    className="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
+                                    placeholder="Seleccione almacén…"
+                                />
                             </div>
                         </ProcPanel>
 

@@ -13,10 +13,12 @@ import {
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 
 /** Contextos en los que el usuario puede elegir proyecto desde Telegram. */
-export type ProyectoPickerModo = Extract<
-  TelegramContexto,
-  'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra'
->;
+export type ProyectoPickerModo =
+  | Extract<
+      TelegramContexto,
+      'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra'
+    >
+  | 'factura_compra';
 
 const PAGE_SIZE = 8;
 
@@ -26,6 +28,7 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   esperando_audio_bitacora: 'b',
   entrada_obra: 'n',
   salida_obra: 'l',
+  factura_compra: 'f',
 };
 
 const MODO_LARGO: Record<string, ProyectoPickerModo> = {
@@ -34,6 +37,7 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   b: 'esperando_audio_bitacora',
   n: 'entrada_obra',
   l: 'salida_obra',
+  f: 'factura_compra',
 };
 
 function truncarNombre(nombre: string, max = 28): string {
@@ -82,6 +86,8 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '📥 <b>Elige la obra</b> (entrada de material):';
     case 'salida_obra':
       return '📤 <b>Elige la obra</b> (salida de material):';
+    case 'factura_compra':
+      return '🏗 <b>Elige la obra</b> de esta compra:';
   }
 }
 
@@ -105,6 +111,8 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
       );
     case 'entrada_obra':
     case 'salida_obra':
+      return '';
+    case 'factura_compra':
       return '';
   }
 }
@@ -209,6 +217,32 @@ export async function manejarCallbackProyectoTelegram(
   const hit = proyectos.find((p) => p.id === parsed.proyectoId);
   if (!hit) {
     await answerCallbackQuery(params.callbackId, 'Proyecto no encontrado', true);
+    return true;
+  }
+
+  if (parsed.modo === 'factura_compra') {
+    const estado = await import('@/lib/telegram/estados').then((m) =>
+      m.getTelegramEstado(supabase, params.chatId),
+    );
+    const pendingId = estado.pending_factura_id;
+    if (!pendingId) {
+      await answerCallbackQuery(params.callbackId, 'Sin factura pendiente', true);
+      return true;
+    }
+    await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update({
+        proyecto_id: parsed.proyectoId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', pendingId);
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { enviarPickerUbicacionesTelegram } = await import('@/lib/telegram/ubicacionPicker');
+    await enviarPickerUbicacionesTelegram(supabase, params.chatId, {
+      pendingId,
+      proyectoId: parsed.proyectoId,
+      nombreObra: hit.nombre,
+    });
     return true;
   }
 
