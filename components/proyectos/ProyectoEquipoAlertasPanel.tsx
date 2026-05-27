@@ -99,8 +99,8 @@ export default function ProyectoEquipoAlertasPanel({ proyectoId }: Props) {
             </p>
             <h2 className="mt-1 text-xl font-bold text-slate-900">Alertas Telegram</h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-600">
-              El ingeniero residente se configura en <strong>RRHH</strong> del proyecto. Aquí solo
-              vinculas su Telegram para el reporte diario de avance.
+              Registre al ingeniero residente en <strong>RRHH</strong> del proyecto (nombre,
+              apellidos y cédula). Aquí vincula su Telegram para el reporte diario de avance.
             </p>
           </div>
         </div>
@@ -114,16 +114,16 @@ export default function ProyectoEquipoAlertasPanel({ proyectoId }: Props) {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
-          1. Asignar en RRHH
+          1. Datos del ingeniero
         </h3>
         <p className="mt-2 text-sm text-slate-600">
           {ingeniero ? (
             <>
               Ingeniero actual: <strong>{ingeniero.nombre}</strong>
-              {ingeniero.cargo ? ` (${ingeniero.cargo})` : ''}
+              {ingeniero.cedula ? ` · CI ${ingeniero.cedula}` : ''}
             </>
           ) : (
-            <>Aún no hay ingeniero residente designado para esta obra.</>
+            <>Complete nombre, apellidos y cédula en RRHH del proyecto.</>
           )}
         </p>
         <Link
@@ -131,7 +131,7 @@ export default function ProyectoEquipoAlertasPanel({ proyectoId }: Props) {
           className="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-100"
         >
           <ExternalLink className="h-4 w-4" />
-          Ir a RRHH del proyecto
+          Ir a registro del ingeniero (RRHH)
         </Link>
       </section>
 
@@ -143,7 +143,7 @@ export default function ProyectoEquipoAlertasPanel({ proyectoId }: Props) {
 
         {!ingeniero ? (
           <p className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">
-            Primero asigne el ingeniero residente en RRHH (paso 1).
+            Primero registre al ingeniero residente en RRHH (paso 1).
           </p>
         ) : (
           <>

@@ -4,11 +4,21 @@ import { randomBytes } from 'crypto';
 export type IngenieroResidenteRow = {
   id: string;
   nombre: string;
+  nombres: string | null;
+  primerApellido: string | null;
+  segundoApellido: string | null;
   cargo: string | null;
   cedula: string | null;
   celular: string | null;
   telegram_chat_id: number | null;
   telegram_username: string | null;
+};
+
+export type IngenieroResidenteManualInput = {
+  nombres: string;
+  primerApellido: string;
+  segundoApellido?: string;
+  cedula: string;
 };
 
 function mapEmpleado(row: Record<string, unknown>): IngenieroResidenteRow {
@@ -23,6 +33,11 @@ function mapEmpleado(row: Record<string, unknown>): IngenieroResidenteRow {
   return {
     id: String(row.id),
     nombre,
+    nombres: row.nombres != null ? String(row.nombres).trim() || null : null,
+    primerApellido:
+      row.primer_apellido != null ? String(row.primer_apellido).trim() || null : null,
+    segundoApellido:
+      row.segundo_apellido != null ? String(row.segundo_apellido).trim() || null : null,
     cargo: row.cargo_nombre != null ? String(row.cargo_nombre) : null,
     cedula: row.cedula != null ? String(row.cedula) : row.documento != null ? String(row.documento) : null,
     celular: row.celular != null ? String(row.celular) : row.telefono != null ? String(row.telefono) : null,
@@ -90,6 +105,80 @@ export async function listarEmpleadosElegiblesObra(
   }
 
   return Array.from(byId.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+function nombreCompletoDesdeManual(input: IngenieroResidenteManualInput): string {
+  return [input.nombres, input.primerApellido, input.segundoApellido]
+    .map((s) => s?.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function filaEmpleadoIngenieroResidente(
+  proyectoId: string,
+  input: IngenieroResidenteManualInput,
+): Record<string, unknown> {
+  const nombres = input.nombres.trim();
+  const primerApellido = input.primerApellido.trim();
+  const segundoApellido = input.segundoApellido?.trim() || null;
+  const cedula = input.cedula.trim();
+  return {
+    nombre_completo: nombreCompletoDesdeManual(input),
+    nombres,
+    primer_apellido: primerApellido,
+    segundo_apellido: segundoApellido,
+    cedula,
+    documento: cedula,
+    cargo_nombre: 'Ingeniero residente',
+    cargo: 'Ingeniero residente',
+    rol_buscado: 'Ingeniero residente',
+    rol_examen: 'tecnico',
+    proyecto_modulo_id: proyectoId,
+    respuestas_personalidad: {},
+    respuestas_logica: {},
+    estado_proceso: 'pendiente_cv',
+  };
+}
+
+/** Crea o actualiza el empleado del ingeniero residente con datos ingresados a mano. */
+export async function guardarIngenieroResidenteManual(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  input: IngenieroResidenteManualInput | null,
+): Promise<IngenieroResidenteRow | null> {
+  if (!input) {
+    await asignarIngenieroResidenteProyecto(supabase, proyectoId, null);
+    return null;
+  }
+
+  const nombres = input.nombres.trim();
+  const primerApellido = input.primerApellido.trim();
+  const cedula = input.cedula.trim();
+  if (!nombres || !primerApellido || !cedula) {
+    throw new Error('Nombre, primer apellido y cédula son obligatorios.');
+  }
+
+  const actual = await obtenerIngenieroResidenteProyecto(supabase, proyectoId);
+  const fila = filaEmpleadoIngenieroResidente(proyectoId, input);
+
+  if (actual?.id) {
+    const { error } = await supabase
+      .from('ci_empleados')
+      .update(fila)
+      .eq('id', actual.id);
+    if (error) throw new Error(error.message);
+    return obtenerIngenieroResidenteProyecto(supabase, proyectoId);
+  }
+
+  const { data, error } = await supabase
+    .from('ci_empleados')
+    .insert(fila)
+    .select(SELECT_EMPLEADO)
+    .single();
+  if (error) throw new Error(error.message);
+
+  await asignarIngenieroResidenteProyecto(supabase, proyectoId, String(data.id));
+  return mapEmpleado(data as Record<string, unknown>);
 }
 
 export async function asignarIngenieroResidenteProyecto(

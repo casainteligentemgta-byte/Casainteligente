@@ -1,11 +1,21 @@
 export type IngenieroResidente = {
   id: string;
   nombre: string;
+  nombres: string | null;
+  primerApellido: string | null;
+  segundoApellido: string | null;
   cargo: string | null;
   cedula: string | null;
   celular: string | null;
   telegram_chat_id: number | null;
   telegram_username: string | null;
+};
+
+export type IngenieroResidenteManualInput = {
+  nombres: string;
+  primerApellido: string;
+  segundoApellido?: string;
+  cedula: string;
 };
 
 /** @deprecated Usar IngenieroResidente desde RRHH */
@@ -15,10 +25,9 @@ export type EquipoAlertasPayload = {
   proyectoId: string;
   proyectoNombre: string;
   ingenieroAsignado: IngenieroResidente | null;
-  empleadosDisponibles: IngenieroResidente[];
   botUsername: string | null;
-  /** Origen de la asignación: personal de RRHH */
-  fuente: 'rrhh';
+  /** Datos capturados manualmente en el módulo del proyecto */
+  fuente: 'manual';
 };
 
 export type AvanceDiarioCampo = {

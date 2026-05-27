@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { HardHat, Loader2, Save } from 'lucide-react';
+import { HardHat, Loader2, Save, Trash2 } from 'lucide-react';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import type { IngenieroResidente } from '@/types/campo';
 
@@ -10,10 +10,25 @@ type Props = {
   className?: string;
 };
 
+function datosDesdeIngeniero(ing: IngenieroResidente | null) {
+  if (!ing) {
+    return { nombres: '', primerApellido: '', segundoApellido: '', cedula: '' };
+  }
+  const partes = ing.nombre.split(/\s+/).filter(Boolean);
+  return {
+    nombres: ing.nombres ?? partes[0] ?? '',
+    primerApellido: ing.primerApellido ?? partes[1] ?? '',
+    segundoApellido: ing.segundoApellido ?? partes.slice(2).join(' '),
+    cedula: ing.cedula ?? '',
+  };
+}
+
 export default function IngenieroResidenteObraCard({ proyectoId, className = '' }: Props) {
-  const [empleados, setEmpleados] = useState<IngenieroResidente[]>([]);
   const [asignado, setAsignado] = useState<IngenieroResidente | null>(null);
-  const [empleadoId, setEmpleadoId] = useState('');
+  const [nombres, setNombres] = useState('');
+  const [primerApellido, setPrimerApellido] = useState('');
+  const [segundoApellido, setSegundoApellido] = useState('');
+  const [cedula, setCedula] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,13 +44,16 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
       );
       const json = await parseFetchJson<{
         ingenieroAsignado?: IngenieroResidente | null;
-        empleadosDisponibles?: IngenieroResidente[];
         error?: string;
       }>(res);
       if (!res.ok) throw new Error(json.error ?? 'Error al cargar');
-      setAsignado(json.ingenieroAsignado ?? null);
-      setEmpleados(json.empleadosDisponibles ?? []);
-      setEmpleadoId(json.ingenieroAsignado?.id ?? '');
+      const ing = json.ingenieroAsignado ?? null;
+      setAsignado(ing);
+      const d = datosDesdeIngeniero(ing);
+      setNombres(d.nombres);
+      setPrimerApellido(d.primerApellido);
+      setSegundoApellido(d.segundoApellido);
+      setCedula(d.cedula);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -57,7 +75,9 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ empleadoId: empleadoId || null }),
+          body: JSON.stringify({
+            manual: { nombres, primerApellido, segundoApellido, cedula },
+          }),
         },
       );
       const json = await parseFetchJson<{ error?: string; ingenieroAsignado?: IngenieroResidente }>(
@@ -65,13 +85,46 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
       );
       if (!res.ok) throw new Error(json.error ?? 'No se pudo guardar');
       setAsignado(json.ingenieroAsignado ?? null);
-      setOk('Ingeniero residente actualizado.');
+      setOk('Ingeniero residente guardado.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setSaving(false);
     }
   };
+
+  const quitar = async () => {
+    if (!asignado) return;
+    if (!window.confirm('¿Quitar el ingeniero residente de esta obra?')) return;
+    setSaving(true);
+    setError(null);
+    setOk(null);
+    try {
+      const res = await fetch(
+        `/api/proyectos/${encodeURIComponent(proyectoId)}/campo/equipo`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ limpiar: true }),
+        },
+      );
+      const json = await parseFetchJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo quitar');
+      setAsignado(null);
+      setNombres('');
+      setPrimerApellido('');
+      setSegundoApellido('');
+      setCedula('');
+      setOk('Ingeniero residente eliminado.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputClass =
+    'mt-1 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600';
 
   return (
     <section
@@ -85,8 +138,8 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-emerald-100">Ingeniero residente de obra</h3>
           <p className="mt-1 text-xs text-zinc-400">
-            Se elige desde el personal de RRHH asignado a este proyecto. Recibirá el recordatorio
-            diario de avance por Telegram (5:00 PM).
+            Registre nombre, apellidos y cédula. Recibirá el recordatorio diario de avance por
+            Telegram (5:00 PM) tras vincular su cuenta en Equipo y alertas.
           </p>
         </div>
       </div>
@@ -108,47 +161,82 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
             </p>
           ) : null}
 
-          <label className="mt-4 block text-xs font-semibold text-zinc-500">
-            Personal del proyecto (RRHH)
-          </label>
-          <select
-            className="mt-1 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100"
-            value={empleadoId}
-            onChange={(e) => setEmpleadoId(e.target.value)}
-          >
-            <option value="">— Sin ingeniero residente —</option>
-            {empleados.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-                {e.cargo ? ` · ${e.cargo}` : ''}
-                {e.telegram_chat_id ? ' · Telegram ✓' : ''}
-              </option>
-            ))}
-          </select>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="block sm:col-span-2">
+              <span className="text-xs font-semibold text-zinc-500">Nombres *</span>
+              <input
+                type="text"
+                className={inputClass}
+                value={nombres}
+                onChange={(e) => setNombres(e.target.value)}
+                placeholder="Ej. Luis Alberto"
+                autoComplete="given-name"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-zinc-500">Primer apellido *</span>
+              <input
+                type="text"
+                className={inputClass}
+                value={primerApellido}
+                onChange={(e) => setPrimerApellido(e.target.value)}
+                placeholder="Ej. Mata"
+                autoComplete="family-name"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-zinc-500">Segundo apellido</span>
+              <input
+                type="text"
+                className={inputClass}
+                value={segundoApellido}
+                onChange={(e) => setSegundoApellido(e.target.value)}
+                placeholder="Opcional"
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="text-xs font-semibold text-zinc-500">Cédula *</span>
+              <input
+                type="text"
+                className={inputClass}
+                value={cedula}
+                onChange={(e) => setCedula(e.target.value)}
+                placeholder="Ej. V-12.345.678"
+                inputMode="text"
+              />
+            </label>
+          </div>
 
-          {empleados.length === 0 ? (
+          {asignado?.telegram_chat_id ? (
+            <p className="mt-2 text-xs text-emerald-300/90">Telegram vinculado ✓</p>
+          ) : asignado ? (
             <p className="mt-2 text-xs text-amber-200/90">
-              No hay empleados vinculados a esta obra. Asigne personal en{' '}
-              <strong>Gestión laboral</strong> o contrate desde RRHH.
+              Falta vincular Telegram en Control obra → Equipo y alertas.
             </p>
           ) : null}
 
-          {asignado ? (
-            <p className="mt-2 text-xs text-zinc-400">
-              Actual: <span className="font-medium text-zinc-200">{asignado.nombre}</span>
-              {asignado.cargo ? ` (${asignado.cargo})` : ''}
-            </p>
-          ) : null}
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void guardar()}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Guardar ingeniero residente
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void guardar()}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Guardar ingeniero residente
+            </button>
+            {asignado ? (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void quitar()}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-950/40 disabled:opacity-60"
+              >
+                <Trash2 className="h-4 w-4" />
+                Quitar
+              </button>
+            ) : null}
+          </div>
         </>
       )}
     </section>
