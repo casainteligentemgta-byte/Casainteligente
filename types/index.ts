@@ -1,3 +1,30 @@
+export type {
+  UbicacionInventario,
+  TipoUbicacion,
+  InvUbicacion,
+  InvUbicacionTipo,
+  InvUbicacionRow,
+  InventarioStock,
+  SerieProducto,
+  SerieProductoEstado,
+  CompraFactura,
+  CompraFacturaLinea,
+  CompraFacturaInsert,
+  CompraCondicionPago,
+  CompraFacturaEstado,
+  ObraPartidaMaterial,
+  TransferenciaInventario,
+  TransferenciaInventarioLinea,
+  TransferenciaInventarioInsert,
+  TransferenciaEstado,
+  TransferenciaTipoMovimiento,
+  DetalleTransferenciaPartida,
+  ImputacionPartidaInput,
+  AlertaExcesoPartida,
+} from './inventario-obra';
+
+export { mapUbicacionInventario, buildArbolUbicaciones } from './inventario-obra';
+
 export interface Budget {
     id: string
     sale_price: number
