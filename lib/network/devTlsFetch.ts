@@ -1,6 +1,6 @@
 /**
- * TLS relajado en desarrollo (SUPABASE_DEV_INSECURE_TLS) sin aviso de Node
- * al fijar NODE_TLS_REJECT_UNAUTHORIZED.
+ * TLS relajado en desarrollo (SUPABASE_DEV_INSECURE_TLS).
+ * Solo servidor y NODE_ENV !== production.
  */
 
 let tlsRelaxed = false;
@@ -17,26 +17,6 @@ function relaxTlsOnce(): void {
     tlsRelaxed = true;
     return;
   }
-  const originalEmit = process.emit.bind(process);
-  // Parche solo en dev: filtra el warning de NODE_TLS_REJECT_UNAUTHORIZED.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- overloads de process.emit
-  (process as any).emit = function emitFiltered(
-    event: string | symbol,
-    ...args: unknown[]
-  ): boolean {
-    if (
-      event === 'warning' &&
-      args[0] &&
-      typeof args[0] === 'object' &&
-      'message' in args[0] &&
-      String((args[0] as { message?: string }).message).includes(
-        'NODE_TLS_REJECT_UNAUTHORIZED',
-      )
-    ) {
-      return true;
-    }
-    return originalEmit.apply(process, [event, ...args] as never);
-  };
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   tlsRelaxed = true;
 }
