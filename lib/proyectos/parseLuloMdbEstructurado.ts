@@ -260,7 +260,9 @@ export function parseLuloMdbEstructurado(
 
   const insumos = tInsumos ? parseInsumosTable(tInsumos) : [];
   const apu = tComposicion ? parseComposicionTable(tComposicion) : [];
-  const partidasOrdenadas = enriquecerPartidasConCapitulos(partidas, prepared, tPartidas);
+  const partidasOrdenadas = enriquecerPartidasConCapitulos(partidas, prepared, tPartidas, {
+    codigoObra: codigoObra,
+  });
   const partidasConMontos = enriquecerMontosPartidasDesdeApu(partidasOrdenadas, {
     insumos,
     apu,

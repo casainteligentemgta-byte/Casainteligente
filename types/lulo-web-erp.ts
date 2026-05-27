@@ -2,6 +2,8 @@
 
 export type LuloWebErpCapitulo = {
   id: string;
+  /** Código en BD (ObraCapi: 1, 2, 3…). */
+  codigo: string;
   numCap: number;
   nombre: string;
 };
@@ -12,6 +14,10 @@ export type LuloWebErpPartida = {
   descripcion: string;
   unidad: string;
   cantidad: number;
+  /** P.U. presupuesto Lulo (ObraApun.PreUni). */
+  precioUnitario: number;
+  /** Monto total Lulo (ObraApun.STotPar o cantidad × P.U.). */
+  montoTotal: number;
   rendimiento: number;
 };
 
@@ -62,4 +68,6 @@ export type LuloWebErpPayload = {
   capitulos: LuloWebErpCapitulo[];
   partidasByCapitulo: Record<string, LuloWebErpPartida[]>;
   apuByPartidaId: Record<string, LuloWebErpApuPartida>;
+  /** Mensaje cuando hay datos en obra pero no se pudieron enlazar partidas. */
+  aviso?: string;
 };

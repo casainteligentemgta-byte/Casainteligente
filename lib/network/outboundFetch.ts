@@ -2,6 +2,10 @@
  * fetch saliente en servidor (Gemini, etc.) con mensajes claros si falla red/TLS.
  * Misma política TLS dev que supabaseFetch (SUPABASE_DEV_INSECURE_TLS / dev:tls).
  */
+import {
+  devInsecureTlsEnabled,
+  fetchWithOptionalDevTls,
+} from '@/lib/network/devTlsFetch';
 
 function isTlsCertificateError(causeStr: string, base: string): boolean {
   const s = `${base} ${causeStr}`.toLowerCase();
@@ -11,20 +15,6 @@ function isTlsCertificateError(causeStr: string, base: string): boolean {
     s.includes('self signed') ||
     s.includes('certificate') ||
     s.includes('cert_')
-  );
-}
-
-function devInsecureTlsEnabled(): boolean {
-  if (typeof window !== 'undefined') return false;
-  if (process.env.NODE_ENV !== 'development') return false;
-  const v = (process.env.SUPABASE_DEV_INSECURE_TLS ?? '').trim().toLowerCase();
-  return v === '1' || v === 'true' || v === 'yes';
-}
-
-if (devInsecureTlsEnabled() && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  console.warn(
-    '[outboundFetch] SUPABASE_DEV_INSECURE_TLS activo → NODE_TLS_REJECT_UNAUTHORIZED=0 (solo desarrollo).'
   );
 }
 
@@ -60,7 +50,7 @@ export function outboundFetch(
   init?: RequestInit,
   context = 'conexión externa'
 ): Promise<Response> {
-  return fetch(input, init).catch((err: unknown) => {
+  return fetchWithOptionalDevTls(input, init).catch((err: unknown) => {
     throw formatOutboundFetchError(err, context);
   });
 }

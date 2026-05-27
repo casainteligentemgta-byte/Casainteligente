@@ -12,8 +12,7 @@ export function leerValorNumericoFila(
     const want = normalizeColumnKey(colResuelto);
     for (const [k, v] of Object.entries(raw)) {
       if (normalizeColumnKey(k) === want) {
-        const n = parseLuloValueUnknown(v);
-        if (n !== 0) return n;
+        return parseLuloValueUnknown(v);
       }
     }
   }

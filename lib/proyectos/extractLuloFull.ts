@@ -104,3 +104,14 @@ export function extractFullLuloCsv(text: string): LuloCsvFullDump {
   }
   return { formato: 'csv', delimiter, headers, rows };
 }
+
+export {
+  buildEnlacesCapituloPartida,
+  codCapDesdePrefijoPartida,
+  codObrAplicaAFila,
+  normalizarCodObr,
+  numParDesdeFila,
+  type BuildEnlacesCapituloPartidaOpts,
+  type FuenteEnlaceCapitulo,
+  type LuloEnlacesCapituloPartida,
+} from '@/lib/proyectos/luloCapituloEnlaces';

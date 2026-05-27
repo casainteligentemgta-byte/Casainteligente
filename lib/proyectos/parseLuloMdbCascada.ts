@@ -1,12 +1,17 @@
 import { clasificarInsumoApu } from '@/lib/proyectos/apuCalculos';
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
-import { getCapituloKeyPartida, parseCapitulosDesdeDump } from '@/lib/proyectos/luloCapitulos';
+import {
+  getCapituloKeyPartida,
+  mapaCapitulos,
+  parseCapitulosDesdeDump,
+} from '@/lib/proyectos/luloCapitulos';
 import {
   parseLuloMdbEstructurado,
   type LuloEstructuradoParse,
   type LuloInsumoParsed,
 } from '@/lib/proyectos/parseLuloMdbEstructurado';
 import type { PartidaLuloInsert } from '@/lib/proyectos/parsePresupuestoLuloCsv';
+import { montoPartidaDesdeCantidadPrecio } from '@/lib/utils/numericDbLimits';
 import { getCapituloKey } from '@/lib/proyectos/luloVistaAgrupada';
 import {
   luloMdbHasEstructuraObra,
@@ -27,6 +32,8 @@ export type PartidaCascadaInsert = {
   descripcion: string;
   unidad: string;
   cantidad_presupuestada: number;
+  precio_unitario: number;
+  monto_total: number;
   apu: ApuItemCascadaInsert[];
 };
 
@@ -79,7 +86,9 @@ function buildApuItemsForPartida(
       codigo_insumo: line.codigo_insumo.trim(),
       descripcion: (insumo?.descripcion || line.codigo_insumo).trim().slice(0, 500),
       unidad: (insumo?.unidad || 'UND').trim(),
-      rendimiento: round4(line.cantidad_rendimiento),
+      rendimiento: round4(
+        Number(line.cantidad_rendimiento) > 0 ? line.cantidad_rendimiento : 1,
+      ),
       costo_unitario: round2(costoUnitario),
     });
   }
@@ -87,22 +96,69 @@ function buildApuItemsForPartida(
   return items;
 }
 
+function partidaToCascadaInsert(p: PartidaLuloInsert): PartidaCascadaInsert {
+  const cantidad = round2(p.cantidad_presupuestada);
+  const precio = round2(Number(p.precio_unitario_estimado ?? 0));
+  const monto = montoPartidaDesdeCantidadPrecio(
+    cantidad,
+    precio,
+    Number(p.monto_total_estimado ?? 0) > 0 ? Number(p.monto_total_estimado) : undefined,
+  );
+  return {
+    codigo: p.codigo_partida.trim(),
+    descripcion: p.descripcion.trim(),
+    unidad: p.unidad.trim() || 'UND',
+    cantidad_presupuestada: cantidad,
+    precio_unitario: precio,
+    monto_total: round2(monto),
+    apu: [],
+  };
+}
+
 function groupPartidasByCapitulo(
   partidas: PartidaLuloInsert[],
   capitulosMdb: ReturnType<typeof parseCapitulosDesdeDump>,
 ): CapituloCascadaInsert[] {
-  const nombreCap = new Map<string, string>();
-  for (const c of capitulosMdb) {
-    nombreCap.set(c.codigo.trim().toUpperCase(), c.descripcion);
+  if (capitulosMdb.length > 0) {
+    const mapa = mapaCapitulos(capitulosMdb);
+    const buckets = new Map<string, PartidaLuloInsert[]>();
+    for (const c of capitulosMdb) {
+      buckets.set(c.codigo.trim().toUpperCase(), []);
+    }
+    const sinCapKey = '__sin_cap__';
+    buckets.set(sinCapKey, []);
+
+    for (const p of partidas) {
+      const codKey = getCapituloKeyPartida(p).trim().toUpperCase();
+      const hit = mapa.get(codKey);
+      const bucketKey = hit ? hit.codigo.trim().toUpperCase() : sinCapKey;
+      buckets.get(bucketKey)!.push(p);
+    }
+
+    const ordered = [...capitulosMdb].sort((a, b) => a.orden - b.orden);
+    const out: CapituloCascadaInsert[] = ordered.map((c) => ({
+      codigo: c.codigo,
+      nombre: c.descripcion,
+      partidas: (buckets.get(c.codigo.trim().toUpperCase()) ?? []).map(partidaToCascadaInsert),
+    }));
+
+    const sin = buckets.get(sinCapKey);
+    if (sin?.length) {
+      out.push({
+        codigo: '0',
+        nombre: 'Sin capítulo',
+        partidas: sin.map(partidaToCascadaInsert),
+      });
+    }
+    return out;
   }
 
+  const nombreCap = new Map<string, string>();
+  const codigoPorKey = new Map<string, string>();
   const buckets = new Map<string, PartidaLuloInsert[]>();
 
   for (const p of partidas) {
-    const capCod = getCapituloKeyPartida({
-      codigo_partida: p.codigo_partida,
-      capitulo_codigo: p.capitulo_codigo,
-    });
+    const capCod = getCapituloKeyPartida(p);
     const capKey = capCod.trim().toUpperCase();
     const list = buckets.get(capKey) ?? [];
     list.push(p);
@@ -113,20 +169,8 @@ function groupPartidasByCapitulo(
   }
 
   const capitulosOrdenados = Array.from(buckets.keys()).sort((a, b) => {
-    const pa = partidas.find(
-      (p) =>
-        getCapituloKeyPartida({
-          codigo_partida: p.codigo_partida,
-          capitulo_codigo: p.capitulo_codigo,
-        }).toUpperCase() === a,
-    );
-    const pb = partidas.find(
-      (p) =>
-        getCapituloKeyPartida({
-          codigo_partida: p.codigo_partida,
-          capitulo_codigo: p.capitulo_codigo,
-        }).toUpperCase() === b,
-    );
+    const pa = partidas.find((p) => getCapituloKeyPartida(p).toUpperCase() === a);
+    const pb = partidas.find((p) => getCapituloKeyPartida(p).toUpperCase() === b);
     const oa = pa?.capitulo_orden ?? 9999;
     const ob = pb?.capitulo_orden ?? 9999;
     if (oa !== ob) return oa - ob;
@@ -136,21 +180,17 @@ function groupPartidasByCapitulo(
   return capitulosOrdenados.map((capKey) => {
     const partidasCap = buckets.get(capKey) ?? [];
     const codigoCap =
+      codigoPorKey.get(capKey) ||
       getCapituloKeyPartida({
         codigo_partida: partidasCap[0]?.codigo_partida ?? capKey,
         capitulo_codigo: partidasCap[0]?.capitulo_codigo ?? capKey,
-      }) || capKey;
+      }) ||
+      capKey;
 
     return {
       codigo: codigoCap,
       nombre: nombreCap.get(capKey) ?? `Capítulo ${codigoCap}`,
-      partidas: partidasCap.map((p) => ({
-        codigo: p.codigo_partida.trim(),
-        descripcion: p.descripcion.trim(),
-        unidad: p.unidad.trim() || 'UND',
-        cantidad_presupuestada: round2(p.cantidad_presupuestada),
-        apu: [],
-      })),
+      partidas: partidasCap.map(partidaToCascadaInsert),
     };
   });
 }
@@ -165,7 +205,9 @@ export function buildLuloMdbCascadaModel(
   const insumosByCodigo = new Map(
     structured.insumos.map((i) => [i.codigo.trim().toUpperCase(), i]),
   );
-  const capitulosMdb = parseCapitulosDesdeDump(dump);
+  const capitulosMdb = parseCapitulosDesdeDump(dump, {
+    codigoObra: structured.obra?.codigo_lulo,
+  });
   const capitulos = groupPartidasByCapitulo(structured.partidas, capitulosMdb);
 
   for (const cap of capitulos) {

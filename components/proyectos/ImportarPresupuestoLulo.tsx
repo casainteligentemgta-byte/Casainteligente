@@ -37,6 +37,12 @@ type ImportarProps = {
   proyectoId: string;
   onSuccess?: () => void;
   className?: string;
+  /** Sin borde/fondo propio (dentro de PresupuestosLuloPanel). */
+  embedded?: boolean;
+  /** Marcar «reemplazar» por defecto (recomendado en control de obra). */
+  defaultReemplazar?: boolean;
+  /** Campo CodObr opcional al cargar MDB en cascada. */
+  showCodigoObra?: boolean;
 };
 
 type TablaInspeccion = {
@@ -93,7 +99,14 @@ type TableSelectionPending = {
   hint?: string;
 };
 
-export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, className = '' }: ImportarProps) {
+export default function ImportarPresupuestoLulo({
+  proyectoId,
+  onSuccess,
+  className = '',
+  embedded = false,
+  defaultReemplazar = false,
+  showCodigoObra = false,
+}: ImportarProps) {
   const router = useRouter();
   const params = useParams();
   const pid = useMemo(
@@ -102,7 +115,8 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
   );
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [reemplazar, setReemplazar] = useState(false);
+  const [reemplazar, setReemplazar] = useState(defaultReemplazar);
+  const [codigoObra, setCodigoObra] = useState('');
   const [importarGastos, setImportarGastos] = useState(true);
   const [ultimoResumen, setUltimoResumen] = useState<string | null>(null);
   const [inspeccionando, setInspeccionando] = useState(false);
@@ -242,9 +256,18 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     const esMdbFile =
       file.name.toLowerCase().endsWith('.mdb') || file.name.toLowerCase().endsWith('.accdb');
     if (esMdbFile && reemplazar) {
+      if (
+        !window.confirm(
+          'Se reemplazará el presupuesto Lulo anterior del proyecto (capítulos, partidas y APU). ¿Continuar?',
+        )
+      ) {
+        setUploading(false);
+        return;
+      }
       try {
         const formCascada = new FormData();
         formCascada.append('file', file);
+        if (codigoObra.trim()) formCascada.append('codigo_obr', codigoObra.trim());
         const resCascada = await fetch(
           `/api/proyectos/${encodeURIComponent(pid)}/presupuestos-lulo/cargar`,
           { method: 'POST', body: formCascada },
@@ -454,17 +477,21 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
     );
   }
 
+  const shellClass = embedded
+    ? `text-white w-full ${className}`.trim()
+    : `bg-[#0A0A0F] border border-white/10 p-5 rounded-xl text-white max-w-md ${className}`.trim();
+
   return (
-    <div
-      className={`bg-[#0A0A0F] border border-white/10 p-5 rounded-xl text-white max-w-md ${className}`.trim()}
-    >
+    <div className={shellClass}>
       <div className="flex items-center gap-2 mb-3">
         {esMdb ? (
           <Database className="text-sky-400 h-5 w-5 shrink-0" />
         ) : (
           <FileSpreadsheet className="text-[#34C759] h-5 w-5 shrink-0" />
         )}
-        <h4 className="text-sm font-semibold">Importar desde Lulo Software</h4>
+        <h4 className="text-sm font-semibold">
+          {embedded ? 'Cargar archivo LuloWin (.mdb) o exportación' : 'Importar desde Lulo Software'}
+        </h4>
       </div>
 
       {!isValidProyectoUuid(pid) ? (
@@ -477,11 +504,13 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
       ) : null}
 
       <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
-        Sube el archivo <strong className="text-zinc-300">.mdb / .accdb</strong> de Lulo (Access) o un{' '}
-        <strong className="text-zinc-300">.csv</strong> exportado.{' '}
-        <span className="text-violet-400">Extraer todo</span> guarda <strong className="text-zinc-300">todas las tablas</strong>{' '}
-        en Supabase. <span className="text-emerald-400">Importar</span> además carga partidas
-        {importarGastos ? <> y <span className="text-sky-400">gastos</span></> : null} a tablas de negocio.
+        Un solo flujo: elige el archivo y pulsa{' '}
+        <strong className="text-emerald-400">Importar presupuesto</strong>. En MDB con{' '}
+        <strong className="text-zinc-300">reemplazar</strong> se importan capítulos, partidas y APU (vista
+        APU). También puedes{' '}
+        <span className="text-violet-400">extraer todas las tablas</span> o importar{' '}
+        <strong className="text-zinc-300">.csv</strong>
+        {importarGastos ? <> y <span className="text-sky-400">gastos</span></> : null}.
       </p>
 
       <div className="space-y-3">
@@ -516,42 +545,98 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           </div>
         ) : null}
 
+        {showCodigoObra && esMdb ? (
+          <label className="flex flex-col gap-1 text-[10px] uppercase text-zinc-500">
+            CodObr (opcional)
+            <input
+              value={codigoObra}
+              onChange={(e) => setCodigoObra(e.target.value)}
+              placeholder="Auto desde MDB (ej. FLAMBO1E)"
+              className="rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white w-full max-w-xs font-mono"
+            />
+          </label>
+        ) : null}
+
         {esMdb ? (
-          <>
-            <p className="text-[11px] text-sky-400/90">
-              MDB detectado: se analizarán tablas de partidas y gastos automáticamente.
-            </p>
-            <button
-              type="button"
-              onClick={handleInspeccionar}
-              disabled={inspeccionando || !file || !isValidProyectoUuid(pid)}
-              className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {inspeccionando ? (
-                <EngranajeProcesando texto="Inspeccionando…" />
-              ) : (
-                <>
-                  <Search className="h-3.5 w-3.5" />
-                  Inspeccionar MDB (sin importar)
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => void runExtraerCompleto()}
-              disabled={extrayendo || !file || !isValidProyectoUuid(pid)}
-              className="w-full rounded-lg border border-violet-500/35 bg-violet-500/10 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {extrayendo ? (
-                <EngranajeProcesando texto="Extrayendo todas las tablas…" />
-              ) : (
-                <>
-                  <Database className="h-3.5 w-3.5" />
-                  Extraer todo el MDB (volcado completo)
-                </>
-              )}
-            </button>
-          </>
+          <p className="text-[11px] text-sky-400/90">
+            MDB detectado: primero cascada ObraCapi (capítulos → partidas → APU); si no aplica, importación
+            genérica.
+          </p>
+        ) : null}
+
+        {esMdb ? (
+          embedded ? (
+            <details className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+              <summary className="cursor-pointer text-[11px] font-medium text-zinc-400 hover:text-zinc-200">
+                Opciones avanzadas (inspeccionar, volcado completo)
+              </summary>
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleInspeccionar}
+                  disabled={inspeccionando || !file || !isValidProyectoUuid(pid)}
+                  className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {inspeccionando ? (
+                    <EngranajeProcesando texto="Inspeccionando…" />
+                  ) : (
+                    <>
+                      <Search className="h-3.5 w-3.5" />
+                      Inspeccionar MDB (sin importar)
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void runExtraerCompleto()}
+                  disabled={extrayendo || !file || !isValidProyectoUuid(pid)}
+                  className="w-full rounded-lg border border-violet-500/35 bg-violet-500/10 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {extrayendo ? (
+                    <EngranajeProcesando texto="Extrayendo todas las tablas…" />
+                  ) : (
+                    <>
+                      <Database className="h-3.5 w-3.5" />
+                      Extraer todo el MDB (volcado completo)
+                    </>
+                  )}
+                </button>
+              </div>
+            </details>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleInspeccionar}
+                disabled={inspeccionando || !file || !isValidProyectoUuid(pid)}
+                className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {inspeccionando ? (
+                  <EngranajeProcesando texto="Inspeccionando…" />
+                ) : (
+                  <>
+                    <Search className="h-3.5 w-3.5" />
+                    Inspeccionar MDB (sin importar)
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => void runExtraerCompleto()}
+                disabled={extrayendo || !file || !isValidProyectoUuid(pid)}
+                className="w-full rounded-lg border border-violet-500/35 bg-violet-500/10 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {extrayendo ? (
+                  <EngranajeProcesando texto="Extrayendo todas las tablas…" />
+                ) : (
+                  <>
+                    <Database className="h-3.5 w-3.5" />
+                    Extraer todo el MDB (volcado completo)
+                  </>
+                )}
+              </button>
+            </>
+          )
         ) : null}
 
         {inspeccion ? (
@@ -574,7 +659,7 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
             title="En MDB: borra el presupuesto Lulo anterior e importa capítulos/partidas/APU"
             className="rounded border-white/20 bg-white/5"
           />
-          Reemplazar importaciones Lulo anteriores de este proyecto
+          Reemplazar presupuesto Lulo anterior (capítulos, partidas y APU)
         </label>
 
         <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
@@ -591,14 +676,14 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           type="button"
           onClick={handleUpload}
           disabled={uploading || !file}
-          className="w-full bg-[#34C759] hover:bg-[#2eb04f] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-medium py-2 px-4 rounded-lg text-xs transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-[#34C759] hover:bg-[#2eb04f] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-medium py-2.5 px-4 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
         >
           {uploading ? (
-            <EngranajeProcesando texto={esMdb ? 'Importando…' : 'Procesando…'} />
+            <EngranajeProcesando texto={esMdb ? 'Importando presupuesto…' : 'Procesando…'} />
           ) : (
             <>
-              <Upload className="h-3.5 w-3.5" />
-              {esMdb ? 'Analizar e importar MDB' : 'Procesar presupuesto CSV'}
+              <Upload className="h-4 w-4" />
+              {esMdb ? 'Importar presupuesto' : 'Procesar presupuesto CSV'}
             </>
           )}
         </button>
@@ -609,23 +694,25 @@ export default function ImportarPresupuestoLulo({ proyectoId, onSuccess, classNa
           </p>
         ) : null}
 
-        {cuadroLuloActivo ? (
-          <Link
-            href={`${moduloLuloHref}?tab=presupuesto`}
-            className="flex items-center justify-center gap-2 w-full rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-950/80 to-amber-900/40 py-3 text-sm font-semibold text-amber-100 shadow-lg shadow-amber-900/20 hover:from-amber-900/90 hover:border-amber-300/60 transition-colors"
-          >
-            <Table2 className="h-4 w-4 shrink-0" aria-hidden />
-            Reporte Lulo — presupuesto por capítulos y detalle
-          </Link>
-        ) : (
-          <Link
-            href={moduloLuloHref}
-            className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 hover:bg-white/10"
-          >
-            <Table2 className="h-3.5 w-3.5" aria-hidden />
-            Control de obra (sin datos Lulo aún)
-          </Link>
-        )}
+        {!embedded ? (
+          cuadroLuloActivo ? (
+            <Link
+              href={`${moduloLuloHref}?tab=presupuesto`}
+              className="flex items-center justify-center gap-2 w-full rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-950/80 to-amber-900/40 py-3 text-sm font-semibold text-amber-100 shadow-lg shadow-amber-900/20 hover:from-amber-900/90 hover:border-amber-300/60 transition-colors"
+            >
+              <Table2 className="h-4 w-4 shrink-0" aria-hidden />
+              Reporte Lulo — presupuesto por capítulos y detalle
+            </Link>
+          ) : (
+            <Link
+              href={moduloLuloHref}
+              className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 hover:bg-white/10"
+            >
+              <Table2 className="h-3.5 w-3.5" aria-hidden />
+              Control de obra (sin datos Lulo aún)
+            </Link>
+          )
+        ) : null}
       </div>
     </div>
   );

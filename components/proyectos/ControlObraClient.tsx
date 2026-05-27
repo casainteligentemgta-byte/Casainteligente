@@ -19,7 +19,6 @@ import ApuPartidaDetalleModal from '@/components/proyectos/ApuPartidaDetalleModa
 import PresupuestoPorCapitulos from '@/components/proyectos/PresupuestoPorCapitulos';
 import ResumenPresupuestoCapitulos from '@/components/proyectos/ResumenPresupuestoCapitulos';
 import { toast } from 'sonner';
-import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import { buildResumenPresupuestoCapitulos } from '@/lib/proyectos/buildResumenPresupuestoCapitulos';
 import { buildObraDataPresupuesto } from '@/lib/proyectos/mapObraDataPresupuesto';
 import LuloVolcadoPorCapitulos from '@/components/proyectos/LuloVolcadoPorCapitulos';
@@ -773,9 +772,7 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
         </span>
       </div>
 
-      <div className="flex flex-wrap items-start gap-4">
-        <ImportarPresupuestoLulo proyectoId={pid} onSuccess={() => void load()} />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 flex-1 min-w-[240px]">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           <div className="rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2">
             <p className="text-[10px] uppercase text-zinc-500">Partidas</p>
             <p className="text-lg font-bold text-emerald-400">{partidas.length}</p>
@@ -805,7 +802,6 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
             ) : null}
           </div>
         </div>
-      </div>
 
       {hayVolcadoSinPartidas ? (
         <div className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-4 text-sm text-amber-100/90">

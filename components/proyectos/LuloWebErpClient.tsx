@@ -19,11 +19,47 @@ import { calcularApuLuloWin, apuVacio } from '@/lib/proyectos/calcularApuLuloWin
 import { apuPartidaVacio } from '@/lib/proyectos/luloCatalogoApuHelpers';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
-import type { LuloWebErpApuPartida, LuloWebErpPayload } from '@/types/lulo-web-erp';
+import type {
+  LuloWebErpApuPartida,
+  LuloWebErpConfig,
+  LuloWebErpPartida,
+  LuloWebErpPayload,
+} from '@/types/lulo-web-erp';
 
 type Props = {
   proyectoId: string;
 };
+
+function resolvePrecioUnitarioPartida(
+  partida: LuloWebErpPartida,
+  apuByPartidaId: Record<string, LuloWebErpApuPartida> | undefined,
+  config: LuloWebErpConfig,
+): number {
+  if (Number(partida.precioUnitario) > 0) return partida.precioUnitario;
+  const apu = apuByPartidaId?.[partida.id];
+  if (!apu || apuPartidaVacio(apu)) return 0;
+  const ren = partida.rendimiento > 0 ? partida.rendimiento : 1;
+  return calcularApuLuloWin(apu, ren, config).precioUnitarioFinal;
+}
+
+function resolveMontoTotalPartida(
+  partida: LuloWebErpPartida,
+  apuByPartidaId: Record<string, LuloWebErpApuPartida> | undefined,
+  config: LuloWebErpConfig,
+): number {
+  if (Number(partida.montoTotal) > 0) return partida.montoTotal;
+  const pu = resolvePrecioUnitarioPartida(partida, apuByPartidaId, config);
+  const cant = Number(partida.cantidad) || 0;
+  if (cant > 0 && pu > 0) return Math.round(cant * pu * 100) / 100;
+  return 0;
+}
+
+function formatUsdPu(value: number): string {
+  return `$${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
 function equiposConHerramientaMenor(
   apu: LuloWebErpApuPartida,
@@ -65,12 +101,14 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
       );
       const json = await parseFetchJson<LuloWebErpPayload & { error?: string }>(res);
       if (!res.ok) throw new Error(json.error ?? 'No se pudo cargar el presupuesto');
-      setData(json);
+      const caps = [...json.capitulos].sort((a, b) => a.numCap - b.numCap);
+      const payload = { ...json, capitulos: caps };
+      setData(payload);
       setApuOverrides(json.apuByPartidaId ?? {});
       setRendOverrides({});
-      const firstCap = json.capitulos[0]?.id ?? '';
+      const firstCap = caps[0]?.id ?? '';
       setCapituloActivo(firstCap);
-      const partidas = json.partidasByCapitulo[firstCap] ?? [];
+      const partidas = payload.partidasByCapitulo[firstCap] ?? [];
       setPartidaSeleccionada(partidas[0]?.id ?? '');
     } catch (e) {
       setError(formatErrorMessage(e));
@@ -94,6 +132,15 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
     () => data?.partidasByCapitulo[capituloActivo] ?? [],
     [data, capituloActivo],
   );
+
+  const subtotalCapitulo = useMemo(() => {
+    if (!data) return 0;
+    return partidas.reduce(
+      (sum, p) =>
+        sum + resolveMontoTotalPartida(p, data.apuByPartidaId, config),
+      0,
+    );
+  }, [partidas, data, config]);
 
   const partidaInfo = useMemo(
     () => partidas.find((p) => p.id === partidaSeleccionada) ?? partidas[0],
@@ -222,10 +269,11 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
         <p className="font-semibold">Sin datos de presupuesto</p>
+        {data?.aviso ? <p className="mt-2 text-amber-800">{data.aviso}</p> : null}
         <p className="mt-2 text-amber-800">
-          Importa el MDB/CSV con{' '}
-          <code className="rounded bg-amber-100 px-1">npm run import:lulo-csv</code> o usa
-          Importar presupuesto en esta pantalla.
+          Importa el MDB con{' '}
+          <code className="rounded bg-amber-100 px-1">npm run import:lulo-mdb -- --reemplazar</code>{' '}
+          o usa Importar presupuesto en esta pantalla.
         </p>
       </div>
     );
@@ -250,16 +298,15 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
           <div className="truncate rounded border border-slate-700/60 bg-slate-900 p-2.5 text-xs font-medium text-white shadow-sm">
             {proyectoLabel}
           </div>
-          {data.fuente !== 'vacio' ? (
-            <p className="mt-2 text-[10px] text-slate-500">Fuente: {data.fuente}</p>
-          ) : null}
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           <span className="block px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500">
             Capítulos
           </span>
-          {data.capitulos.map((cap) => (
+          {data.capitulos.map((cap) => {
+            const nPartidas = data.partidasByCapitulo[cap.id]?.length ?? 0;
+            return (
             <button
               key={cap.id}
               type="button"
@@ -268,7 +315,7 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
                 const primeras = data.partidasByCapitulo[cap.id] ?? [];
                 if (primeras.length > 0) setPartidaSeleccionada(primeras[0].id);
               }}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-xs font-medium transition-all ${
+              className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-3 text-left text-xs font-medium transition-all ${
                 capituloActivo === cap.id
                   ? 'bg-blue-600 font-semibold text-white shadow-md shadow-blue-900/20'
                   : 'hover:bg-slate-800 hover:text-slate-100'
@@ -278,16 +325,23 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
                 <FolderOpen
                   className={`h-4 w-4 shrink-0 ${capituloActivo === cap.id ? 'text-white' : 'text-slate-400'}`}
                 />
-                <span className="truncate">
+                <span className="line-clamp-2 leading-snug">
                   {cap.numCap > 0 && cap.numCap < 9999 ? `${cap.numCap}. ` : ''}
                   {cap.nombre}
                 </span>
               </div>
-              {capituloActivo === cap.id ? (
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
-              ) : null}
+              <span
+                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                  capituloActivo === cap.id
+                    ? 'bg-blue-500/40 text-white'
+                    : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                {nPartidas}
+              </span>
             </button>
-          ))}
+            );
+          })}
         </nav>
       </aside>
       ) : null}
@@ -334,6 +388,11 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
             </span>
           </div>
         </header>
+        {data.aviso ? (
+          <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+            {data.aviso}
+          </p>
+        ) : null}
         {saveMsg ? (
           <p
             className={`border-b px-4 py-1.5 text-xs ${saveMsg.includes('guardados') ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'}`}
@@ -363,6 +422,8 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
                     <th className="p-3">Descripción</th>
                     <th className="w-20 p-3 text-center">Unidad</th>
                     <th className="w-24 p-3 text-right">Cantidad</th>
+                    <th className="w-28 p-3 text-right">P. unit.</th>
+                    <th className="w-32 p-3 text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -382,9 +443,50 @@ export default function LuloWebErpClient({ proyectoId }: Props) {
                       <td className="p-3 text-right font-mono text-slate-900">
                         {partida.cantidad.toLocaleString()}
                       </td>
+                      <td className="p-3 text-right font-mono font-medium text-slate-900">
+                        {(() => {
+                          const pu = resolvePrecioUnitarioPartida(
+                            partida,
+                            data.apuByPartidaId,
+                            config,
+                          );
+                          if (pu > 0) return formatUsdPu(pu);
+                          return (
+                            <span
+                              className="text-slate-400 font-normal"
+                              title="Sin precio en presupuesto ni costo calculable en APU. Reimporta el MDB con «reemplazar» o aplica en Supabase la migración partidas.precio_unitario."
+                            >
+                              —
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="p-3 text-right font-mono font-semibold text-slate-900">
+                        {(() => {
+                          const total = resolveMontoTotalPartida(
+                            partida,
+                            data.apuByPartidaId,
+                            config,
+                          );
+                          if (total > 0) return formatUsdPu(total);
+                          return <span className="font-normal text-slate-400">—</span>;
+                        })()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
+                {partidas.length > 0 && subtotalCapitulo > 0 ? (
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-slate-800">
+                      <td colSpan={5} className="p-3 text-right text-xs uppercase tracking-wide">
+                        Subtotal capítulo
+                      </td>
+                      <td className="p-3 text-right font-mono">
+                        {formatUsdPu(subtotalCapitulo)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
           </section>
@@ -700,7 +802,12 @@ function ApuEquiposTable({
                 </td>
                 <td className="p-2.5 text-right">
                   {e.esPorcentajeManoObra ? (
-                    '—'
+                    <span
+                      className="font-mono text-slate-600"
+                      title="5% de la mano de obra diaria"
+                    >
+                      {herramientaMenorDiaria.toFixed(2)}
+                    </span>
                   ) : editable && onChangeTarifa ? (
                     <NumInput value={e.tarifa} onChange={(v) => onChangeTarifa(i, v)} />
                   ) : (

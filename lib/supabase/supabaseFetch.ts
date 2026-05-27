@@ -5,6 +5,10 @@
  * Desarrollo local (Windows + antivirus/proxy): `SUPABASE_DEV_INSECURE_TLS=1` en `.env.local`
  * o `npm run dev:tls` — ver docs/ERROR-FETCH-FAILED-SUPABASE.md §2b.
  */
+import {
+  devInsecureTlsEnabled,
+  fetchWithOptionalDevTls,
+} from '@/lib/network/devTlsFetch';
 
 function isTlsCertificateError(causeStr: string, base: string): boolean {
   const s = `${base} ${causeStr}`.toLowerCase();
@@ -14,20 +18,6 @@ function isTlsCertificateError(causeStr: string, base: string): boolean {
     s.includes('self signed') ||
     s.includes('certificate') ||
     s.includes('cert_')
-  );
-}
-
-function devInsecureTlsEnabled(): boolean {
-  if (typeof window !== 'undefined') return false;
-  if (process.env.NODE_ENV !== 'development') return false;
-  const v = (process.env.SUPABASE_DEV_INSECURE_TLS ?? '').trim().toLowerCase();
-  return v === '1' || v === 'true' || v === 'yes';
-}
-
-if (devInsecureTlsEnabled() && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  console.warn(
-    '[supabase] SUPABASE_DEV_INSECURE_TLS activo → NODE_TLS_REJECT_UNAUTHORIZED=0 (solo desarrollo local; no producción).',
   );
 }
 
@@ -61,7 +51,7 @@ function formatFetchError(err: unknown): Error {
 }
 
 export function supabaseFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  return fetch(input, init).catch((err: unknown) => {
+  return fetchWithOptionalDevTls(input, init).catch((err: unknown) => {
     throw formatFetchError(err);
   });
 }

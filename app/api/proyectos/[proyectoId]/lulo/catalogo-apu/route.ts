@@ -14,10 +14,18 @@ import type {
   LuloWebErpPayload,
 } from '@/types/lulo-web-erp';
 import {
+  cargarDescripcionesCatalogoPorCodigo,
   cargarRendimientoCatalogoPorCodigo,
   completarApuPartidasObra,
+  completarPrecioUnitarioPartidas,
+  completarMontoTotalPartidas,
+  cantidadRendimientoApuLinea,
   fetchApuItemsCascada,
+  finalizarCapitulosSidebar,
   normalizarCodigoLulo,
+  numCapDesdeCodigo,
+  resolverCapitulosSidebarObra,
+  resolverDescripcionPartida,
 } from '@/lib/proyectos/luloCatalogoApuHelpers';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
@@ -30,6 +38,13 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+function coalesceNum(v: unknown): number {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
 }
 
 type InsumoRow = {
@@ -138,6 +153,7 @@ async function cargarDesdeCatalogo(
 
   const capitulos: LuloWebErpCapitulo[] = caps.map((c) => ({
     id: String(c.id),
+    codigo: String(c.num_cap ?? ''),
     numCap: Number(c.num_cap),
     nombre: String(c.descripcion),
   }));
@@ -169,6 +185,8 @@ async function cargarDesdeCatalogo(
       descripcion: String(p.descripcion),
       unidad: String(p.unidad || 'UND'),
       cantidad: cantidadObra.get(codigo.toUpperCase()) ?? Number(p.cantidad ?? 0),
+      precioUnitario: 0,
+      montoTotal: 0,
       rendimiento: Number(p.rendimiento ?? 1) || 1,
     };
     partidasByCapitulo[capKey].push(partida);
@@ -220,7 +238,7 @@ async function cargarDesdeCatalogo(
     fuente: 'lulo_catalogo',
     proyecto: { id: proyectoId, nombre: proyectoNombre, codigoLulo },
     config,
-    capitulos,
+    capitulos: finalizarCapitulosSidebar(capitulos, partidasByCapitulo),
     partidasByCapitulo,
     apuByPartidaId,
   };
@@ -242,24 +260,84 @@ async function cargarDesdeCascadaObra(
   if (capErr) throw new Error(formatErrorMessage(capErr));
   if (!caps?.length) return null;
 
-  const capIds = caps.map((c) => c.id as string);
-  const partidas: Array<{
+  type PartidaRow = {
     id: string;
     capitulo_id: string;
     codigo: string;
     descripcion: string;
     unidad: string;
     cantidad_presupuestada: number;
-  }> = [];
-  for (const batch of chunk(capIds, IN_BATCH)) {
-    const { data, error: pErr } = await supabase
+    precio_unitario?: number;
+    monto_total?: number;
+  };
+
+  async function fetchPartidasPorProyecto(
+    selectCols: string,
+  ): Promise<{ rows: PartidaRow[]; error: { message?: string } | null }> {
+    const { data, error } = await supabase
       .from('partidas')
-      .select('id, capitulo_id, codigo, descripcion, unidad, cantidad_presupuestada')
-      .in('capitulo_id', batch)
+      .select(selectCols)
+      .eq('capitulos.proyecto_id', proyectoId)
       .order('codigo');
-    if (pErr) throw new Error(formatErrorMessage(pErr));
-    if (data?.length) partidas.push(...data);
+    return { rows: (data as PartidaRow[] | null) ?? [], error };
   }
+
+  const selectCompleto =
+    'id, capitulo_id, codigo, descripcion, unidad, cantidad_presupuestada, precio_unitario, monto_total, capitulos!inner(proyecto_id)';
+  const selectSinMonto =
+    'id, capitulo_id, codigo, descripcion, unidad, cantidad_presupuestada, precio_unitario, capitulos!inner(proyecto_id)';
+  const selectBasico =
+    'id, capitulo_id, codigo, descripcion, unidad, cantidad_presupuestada, capitulos!inner(proyecto_id)';
+
+  let partidas: PartidaRow[] = [];
+  let joined = await fetchPartidasPorProyecto(selectCompleto);
+  if (joined.error && /monto_total|column/i.test(joined.error.message ?? '')) {
+    joined = await fetchPartidasPorProyecto(selectSinMonto);
+  }
+  if (joined.error && /precio_unitario|column/i.test(joined.error.message ?? '')) {
+    joined = await fetchPartidasPorProyecto(selectBasico);
+  }
+  if (joined.error) {
+    const capIds = caps.map((c) => c.id as string);
+    for (const batch of chunk(capIds, IN_BATCH)) {
+      let data: PartidaRow[] | null = null;
+      let pErr: { message?: string } | null = null;
+      const withMontos = await supabase
+        .from('partidas')
+        .select(
+          'id, capitulo_id, codigo, descripcion, unidad, cantidad_presupuestada, precio_unitario, monto_total',
+        )
+        .in('capitulo_id', batch)
+        .order('codigo');
+      data = (withMontos.data as PartidaRow[] | null) ?? null;
+      pErr = withMontos.error;
+      if (pErr && /monto_total|column/i.test(pErr.message ?? '')) {
+        const soloPu = await supabase
+          .from('partidas')
+          .select(
+            'id, capitulo_id, codigo, descripcion, unidad, cantidad_presupuestada, precio_unitario',
+          )
+          .in('capitulo_id', batch)
+          .order('codigo');
+        data = (soloPu.data as PartidaRow[] | null) ?? null;
+        pErr = soloPu.error;
+      }
+      if (pErr && /precio_unitario|column/i.test(pErr.message ?? '')) {
+        const sinPu = await supabase
+          .from('partidas')
+          .select('id, capitulo_id, codigo, descripcion, unidad, cantidad_presupuestada')
+          .in('capitulo_id', batch)
+          .order('codigo');
+        data = (sinPu.data as PartidaRow[] | null) ?? null;
+        pErr = sinPu.error;
+      }
+      if (pErr) throw new Error(formatErrorMessage(pErr));
+      if (data?.length) partidas.push(...data);
+    }
+  } else {
+    partidas = joined.rows;
+  }
+
   if (!partidas.length) return null;
 
   const partidaIds = partidas.map((p) => p.id as string);
@@ -268,22 +346,26 @@ async function cargarDesdeCascadaObra(
     apuRows = await fetchApuItemsCascada(supabase, partidaIds);
   } catch (aErr: unknown) {
     const code = (aErr as { code?: string })?.code;
-    if (code === '42P01') return null;
-    throw new Error(formatErrorMessage(aErr));
+    if (code === '42P01') {
+      apuRows = [];
+    } else {
+      throw new Error(formatErrorMessage(aErr));
+    }
   }
 
-  const rendMap = await cargarRendimientoCatalogoPorCodigo(
-    supabase,
-    partidas.map((p) => String(p.codigo)),
-  );
+  const codigosPartida = partidas.map((p) => String(p.codigo));
+  const [rendMap, descMap] = await Promise.all([
+    cargarRendimientoCatalogoPorCodigo(supabase, codigosPartida),
+    cargarDescripcionesCatalogoPorCodigo(supabase, codigosPartida),
+  ]);
 
   const capitulos: LuloWebErpCapitulo[] = caps.map((c, i) => {
     const cod = String(c.codigo ?? '').trim();
-    const num = Number.parseInt(cod.replace(/\D/g, ''), 10);
     return {
       id: String(c.id),
-      numCap: Number.isFinite(num) && num > 0 ? num : i + 1,
-      nombre: String(c.nombre ?? cod),
+      codigo: cod || String(i + 1),
+      numCap: numCapDesdeCodigo(cod, i + 1),
+      nombre: String(c.nombre ?? cod).trim() || `Capítulo ${cod}`,
     };
   });
 
@@ -299,9 +381,15 @@ async function cargarDesdeCascadaObra(
     const partida: LuloWebErpPartida = {
       id: String(p.id),
       codigo,
-      descripcion: String(p.descripcion),
+      descripcion: resolverDescripcionPartida(
+        codigo,
+        String(p.descripcion),
+        descMap,
+      ),
       unidad: String(p.unidad || 'UND'),
       cantidad: Number(p.cantidad_presupuestada ?? 0),
+      precioUnitario: coalesceNum(p.precio_unitario),
+      montoTotal: coalesceNum(p.monto_total),
       rendimiento:
         rendMap.get(codigo.toUpperCase()) ??
         rendMap.get(normalizarCodigoLulo(codigo)) ??
@@ -325,7 +413,7 @@ async function cargarDesdeCascadaObra(
         precio_base: Number(row.costo_unitario ?? 0),
         tipo: String(row.tipo ?? 'material'),
       },
-      Number(row.rendimiento ?? 0),
+      cantidadRendimientoApuLinea(row.rendimiento),
       0,
     );
   }
@@ -339,15 +427,34 @@ async function cargarDesdeCascadaObra(
     pushLineaApu,
     esHerramientaMenor,
   );
+  completarPrecioUnitarioPartidas(partidasByCapitulo, apuByPartidaId, config);
+  completarMontoTotalPartidas(partidasByCapitulo);
+
+  const capitulosSidebar = resolverCapitulosSidebarObra(capitulos, partidasByCapitulo);
+
+  if (!capitulosSidebar.length) return null;
 
   return {
     fuente: 'cascada',
     proyecto: { id: proyectoId, nombre: proyectoNombre, codigoLulo },
     config,
-    capitulos,
+    capitulos: capitulosSidebar,
     partidasByCapitulo,
     apuByPartidaId,
   };
+}
+
+async function contarCapitulosObra(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  proyectoId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('capitulos')
+    .select('id', { count: 'exact', head: true })
+    .eq('proyecto_id', proyectoId);
+  if (error?.code === '42P01') return 0;
+  if (error) return 0;
+  return count ?? 0;
 }
 
 async function cargarDesdeCiPresupuesto(
@@ -360,7 +467,7 @@ async function cargarDesdeCiPresupuesto(
   const { data: partidas, error: pErr } = await supabase
     .from('ci_presupuesto_partidas')
     .select(
-      'id, codigo_partida, descripcion, unidad, cantidad_presupuestada, capitulo_codigo, capitulo_descripcion, capitulo_orden',
+      'id, codigo_partida, descripcion, unidad, cantidad_presupuestada, precio_unitario_estimado, monto_total_estimado, capitulo_codigo, capitulo_descripcion, capitulo_orden',
     )
     .eq('proyecto_id', proyectoId)
     .order('capitulo_orden', { ascending: true });
@@ -389,6 +496,7 @@ async function cargarDesdeCiPresupuesto(
     if (!capBuckets.has(capId)) {
       capBuckets.set(capId, {
         id: capId,
+        codigo: capCod,
         numCap: Number(capCod) || 0,
         nombre: String(p.capitulo_descripcion ?? `Capítulo ${capCod}`),
       });
@@ -402,6 +510,8 @@ async function cargarDesdeCiPresupuesto(
       descripcion: String(p.descripcion),
       unidad: String(p.unidad || 'UND'),
       cantidad: Number(p.cantidad_presupuestada ?? 0),
+      precioUnitario: coalesceNum(p.precio_unitario_estimado),
+      montoTotal: coalesceNum(p.monto_total_estimado),
       rendimiento:
         rendMap.get(codigo.toUpperCase()) ??
         rendMap.get(normalizarCodigoLulo(codigo)) ??
@@ -411,7 +521,10 @@ async function cargarDesdeCiPresupuesto(
     apuByPartidaId[partida.id] = apuVacio();
   }
 
-  const capitulos = Array.from(capBuckets.values()).sort((a, b) => a.numCap - b.numCap);
+  const capitulos = finalizarCapitulosSidebar(
+    Array.from(capBuckets.values()),
+    partidasByCapitulo,
+  );
   const ids = partidas.map((p) => p.id as string);
 
   const { data: apuRows, error: aErr } = await supabase
@@ -444,6 +557,8 @@ async function cargarDesdeCiPresupuesto(
     pushLineaApu,
     esHerramientaMenor,
   );
+  completarPrecioUnitarioPartidas(partidasByCapitulo, apuByPartidaId, config);
+  completarMontoTotalPartidas(partidasByCapitulo);
 
   return {
     fuente: 'ci_presupuesto',
@@ -472,8 +587,9 @@ export async function GET(
       );
     }
 
-    const supabase =
-      createSupabaseAdminOnlyClient() ?? (await createClient());
+    const supabaseAdmin = createSupabaseAdminOnlyClient();
+    const supabaseSession = await createClient();
+    const supabase = supabaseAdmin ?? supabaseSession;
 
     const { data: proy } = await supabase
       .from('ci_proyectos')
@@ -485,31 +601,75 @@ export async function GET(
     const codigoLulo = proy?.codigo_lulo ?? null;
     const config = await cargarConfig(supabase, proyectoId);
 
-    const desdeObra =
-      (await cargarDesdeCascadaObra(
-        supabase,
+    const capsObra = await contarCapitulosObra(supabase, proyectoId);
+
+    const desdeObra = await cargarDesdeCascadaObra(
+      supabase,
+      proyectoId,
+      proyectoNombre,
+      codigoLulo,
+      config,
+    );
+
+    if (desdeObra?.capitulos.length) {
+      return NextResponse.json(desdeObra);
+    }
+
+    // Proyecto con capítulos en obra pero cascada vacía: reintento con cliente admin si hace falta
+    if (capsObra > 0 && supabaseAdmin && supabase !== supabaseAdmin) {
+      const retryAdmin = await cargarDesdeCascadaObra(
+        supabaseAdmin,
         proyectoId,
         proyectoNombre,
         codigoLulo,
         config,
-      )) ??
-      (await cargarDesdeCiPresupuesto(
-        supabase,
-        proyectoId,
-        proyectoNombre,
-        codigoLulo,
+      );
+      if (retryAdmin?.capitulos.length) {
+        return NextResponse.json(retryAdmin);
+      }
+    }
+
+    // Obra importada: no usar catálogo global (*ARME01…); pedir reimportar si sigue vacío
+    if (capsObra > 0) {
+      return NextResponse.json({
+        fuente: 'cascada' as const,
+        proyecto: { id: proyectoId, nombre: proyectoNombre, codigoLulo },
         config,
-      )) ??
+        capitulos: [],
+        partidasByCapitulo: {},
+        apuByPartidaId: {},
+        aviso:
+          'Hay capítulos en la obra pero ninguno tiene partidas enlazadas. Ejecuta: npm run import:lulo-mdb -- --proyecto ' +
+          proyectoId +
+          ' --mdb "…FLAMBO1E.MDB" --codigo-obra FLAMBO1E --reemplazar',
+      });
+    }
+
+    const desdeCi = await cargarDesdeCiPresupuesto(
+      supabase,
+      proyectoId,
+      proyectoNombre,
+      codigoLulo,
+      config,
+    );
+
+    const desdeCatalogo =
       (await cargarDesdeCatalogo(
         supabase,
         proyectoId,
         proyectoNombre,
         codigoLulo,
         config,
-      ));
+      )) ?? desdeCi;
 
-    if (desdeObra) {
-      return NextResponse.json(desdeObra);
+    if (desdeCatalogo?.capitulos.length) {
+      return NextResponse.json({
+        ...desdeCatalogo,
+        capitulos: finalizarCapitulosSidebar(
+          desdeCatalogo.capitulos,
+          desdeCatalogo.partidasByCapitulo,
+        ),
+      });
     }
 
     const vacio: LuloWebErpPayload = {

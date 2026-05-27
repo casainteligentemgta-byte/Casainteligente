@@ -1,6 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { extractFullLuloCsv, type LuloMdbFullDump, type LuloMdbTableDump } from '@/lib/proyectos/extractLuloFull';
+import { filasObraCapiPart } from '@/lib/proyectos/luloCapituloEnlaces';
+import { normalizeLuloRow } from '@/lib/proyectos/luloFieldMapping';
+import { leerValorNumericoFila } from '@/lib/proyectos/lulo/leerValorNumericoFila';
+import {
+  LULO_COMPOSICION_COLS,
+  LULO_PARTIDA_COLS,
+  resolveLuloColumn,
+} from '@/lib/proyectos/luloTablasNativas';
 
 const INSUMO_SOURCES: {
   table: string;
@@ -35,6 +43,15 @@ const COMPOSICION_TIPO: Partial<Record<(typeof COMPOSICION_SOURCES)[number], str
 
 function strCell(v: unknown): string {
   return String(v ?? '').trim();
+}
+
+function numCell(
+  raw: Record<string, unknown>,
+  col: string | null,
+  aliases: readonly string[],
+): number {
+  const row = normalizeLuloRow(raw);
+  return leerValorNumericoFila(raw, row, col, aliases);
 }
 
 function tableByName(dump: LuloMdbFullDump, name: string): LuloMdbTableDump | undefined {
@@ -115,6 +132,8 @@ function mergeComposicion(dump: LuloMdbFullDump): LuloMdbTableDump | null {
   for (const name of COMPOSICION_SOURCES) {
     const t = tableByName(dump, name);
     if (!t) continue;
+    const cCan = resolveLuloColumn(t.columns, LULO_COMPOSICION_COLS.cantidad);
+    const cDes = resolveLuloColumn(t.columns, LULO_COMPOSICION_COLS.desperdicio);
     for (const raw of t.rows) {
       const codPar = String(raw.CodPar ?? '').trim();
       const codIns = String(raw.CodIns ?? '').trim();
@@ -122,11 +141,12 @@ function mergeComposicion(dump: LuloMdbFullDump): LuloMdbTableDump | null {
       const key = `${codPar}|${codIns}`.toUpperCase();
       if (seen.has(key)) continue;
       seen.add(key);
+      const rowRaw = raw as Record<string, unknown>;
       rows.push({
         CodPar: codPar,
         CodIns: codIns,
-        CanIns: Number(raw.CanIns ?? 0) || 0,
-        Desper: Number(raw.Desper ?? 0) || 0,
+        CanIns: numCell(rowRaw, cCan, LULO_COMPOSICION_COLS.cantidad),
+        Desper: numCell(rowRaw, cDes, LULO_COMPOSICION_COLS.desperdicio),
       });
     }
   }
@@ -179,6 +199,88 @@ function mergeInsumosDesdeApin(dump: LuloMdbFullDump): LuloMdbTableDump | null {
   };
 }
 
+/** Catálogo global ObraPart: Descri y UniPar por CodPar. */
+function mapaCatalogoObraPart(dump: LuloMdbFullDump): {
+  descripcion: Map<string, string>;
+  unidad: Map<string, string>;
+} {
+  const descripcion = new Map<string, string>();
+  const unidad = new Map<string, string>();
+  const obraPart = tableByName(dump, 'ObraPart');
+  if (!obraPart) return { descripcion, unidad };
+  for (const raw of obraPart.rows) {
+    const cod = strCell(raw.CodPar);
+    if (!cod) continue;
+    const key = cod.toUpperCase();
+    const des = strCell(raw.Descri);
+    if (des) descripcion.set(key, des);
+    const uni = strCell(raw.UniPar);
+    if (uni) unidad.set(key, uni);
+  }
+  return { descripcion, unidad };
+}
+
+/** ObraApun (presupuesto obra) + Descri/UniPar desde ObraPart. */
+function partidasDesdeObraApun(
+  dump: LuloMdbFullDump,
+  codigoObra?: string,
+): LuloMdbTableDump | null {
+  const apun = tableByName(dump, 'ObraApun');
+  if (!apun?.rows.length) return null;
+
+  const filtro = codigoObra?.trim().toUpperCase();
+  const cObr = resolveLuloColumn(apun.columns, LULO_PARTIDA_COLS.codigoObra);
+  const cCan = resolveLuloColumn(apun.columns, LULO_PARTIDA_COLS.cantidad);
+  const cPre = resolveLuloColumn(apun.columns, LULO_PARTIDA_COLS.precio);
+  const cStot = resolveLuloColumn(apun.columns, LULO_PARTIDA_COLS.monto);
+  const { descripcion: descri, unidad: unis } = mapaCatalogoObraPart(dump);
+
+  const rows: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of apun.rows) {
+    const rowRaw = raw as Record<string, unknown>;
+    if (filtro && cObr) {
+      const obr = strCell(rowRaw[cObr] ?? raw.CodObr);
+      if (obr.toUpperCase() !== filtro) continue;
+    }
+    const codPar = strCell(raw.CodPar);
+    if (!codPar) continue;
+    const key = codPar.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const nota = strCell(raw.Nota01);
+    const descripcion = descri.get(key)?.trim() || nota || codPar;
+
+    const canPar = numCell(rowRaw, cCan, LULO_PARTIDA_COLS.cantidad);
+    let preUni = numCell(rowRaw, cPre, LULO_PARTIDA_COLS.precio);
+    const stotPar = numCell(rowRaw, cStot, LULO_PARTIDA_COLS.monto);
+    if (!(preUni > 0) && stotPar > 0 && canPar > 0) {
+      preUni = Math.round((stotPar / canPar) * 10000) / 10000;
+    }
+
+    rows.push({
+      ...rowRaw,
+      CodObr: rowRaw.CodObr ?? codigoObra ?? '',
+      CodPar: codPar,
+      DesPar: descripcion,
+      UniPar: unis.get(key) || 'UND',
+      CanPar: canPar,
+      PreUni: preUni,
+      STotPar: stotPar,
+    });
+  }
+
+  if (rows.length === 0) return null;
+  return {
+    name: 'PARTIDAS',
+    columns: ['CodObr', 'CodPar', 'DesPar', 'UniPar', 'CanPar', 'PreUni', 'STotPar'],
+    rowCount: rows.length,
+    rows,
+  };
+}
+
 function partidasDesdeObraCapiPart(
   dump: LuloMdbFullDump,
   codigoObra?: string,
@@ -186,33 +288,26 @@ function partidasDesdeObraCapiPart(
   const capiPart = tableByName(dump, 'ObraCapiPart');
   if (!capiPart?.rows.length) return null;
 
-  const filtro = codigoObra?.trim().toUpperCase();
-  const descripciones = new Map<string, string>();
-  const obraPart = tableByName(dump, 'ObraPart');
-  if (obraPart) {
-    for (const raw of obraPart.rows) {
-      const cod = strCell(raw.CodPar);
-      if (!cod) continue;
-      descripciones.set(cod.toUpperCase(), strCell(raw.Descri) || cod);
-    }
-  }
+  const cCan = resolveLuloColumn(capiPart.columns, LULO_PARTIDA_COLS.cantidad);
+  const { descripcion: descripciones, unidad: unidades } = mapaCatalogoObraPart(dump);
 
+  const filasCapi = filasObraCapiPart(capiPart, codigoObra);
   const rows: Record<string, unknown>[] = [];
   const seen = new Set<string>();
 
-  for (const raw of capiPart.rows) {
-    if (filtro && strCell(raw.CodObr).toUpperCase() !== filtro) continue;
+  for (const raw of filasCapi) {
     const codPar = strCell(raw.CodPar);
     if (!codPar) continue;
     const key = codPar.toUpperCase();
     if (seen.has(key)) continue;
     seen.add(key);
+    const rowRaw = raw as Record<string, unknown>;
     rows.push({
       CodObr: raw.CodObr,
       CodPar: codPar,
       DesPar: descripciones.get(key) || codPar,
-      UniPar: 'UND',
-      CanPar: Number(raw.CanPar ?? 0) || 0,
+      UniPar: unidades.get(key) || strCell(raw.UniPar) || 'UND',
+      CanPar: numCell(rowRaw, cCan, LULO_PARTIDA_COLS.cantidad),
       CodCap: raw.CodCap,
     });
   }
@@ -234,12 +329,16 @@ function partidasDesdeObraApin(
   const filtro = codigoObra?.trim().toUpperCase();
   const capiPart = tableByName(dump, 'ObraCapiPart');
   const capPorPar = new Map<string, string>();
+  const canParPorCod = new Map<string, number>();
   if (capiPart) {
-    for (const raw of capiPart.rows) {
-      if (filtro && strCell(raw.CodObr).toUpperCase() !== filtro) continue;
+    const cCanCapi = resolveLuloColumn(capiPart.columns, LULO_PARTIDA_COLS.cantidad);
+    for (const raw of filasObraCapiPart(capiPart, codigoObra)) {
       const codPar = strCell(raw.CodPar);
       if (!codPar) continue;
-      capPorPar.set(codPar.toUpperCase(), strCell(raw.CodCap));
+      const key = codPar.toUpperCase();
+      capPorPar.set(key, strCell(raw.CodCap));
+      const can = numCell(raw as Record<string, unknown>, cCanCapi, LULO_PARTIDA_COLS.cantidad);
+      if (can > 0 || !canParPorCod.has(key)) canParPorCod.set(key, can);
     }
   }
 
@@ -261,7 +360,7 @@ function partidasDesdeObraApin(
         CodPar: codPar,
         DesPar: codPar,
         UniPar: 'UND',
-        CanPar: 1,
+        CanPar: canParPorCod.get(key) ?? 0,
         CodCap: capPorPar.get(key) ?? '',
       });
     }
@@ -381,8 +480,9 @@ export function normalizeObraMdbDump(
 
   const obraApun = tableByName(dump, 'ObraApun');
   const obraPart = tableByName(dump, 'ObraPart');
-  if (obraApun?.rows.length) {
-    extra.push({ ...obraApun, name: 'PARTIDAS' });
+  const desdeApun = partidasDesdeObraApun(dump, codigoObra);
+  if (desdeApun) {
+    extra.push(desdeApun);
   } else if (obraPart?.rows.length) {
     extra.push({ ...obraPart, name: 'PARTIDAS' });
   } else {

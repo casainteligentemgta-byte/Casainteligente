@@ -106,20 +106,32 @@ export async function persistirLuloMdbCascada(
       descripcion: string;
       unidad: string;
       cantidad_presupuestada: number;
+      precio_unitario: number;
+      monto_total: number;
     }> = cap.partidas.map((p) => ({
       capitulo_id: capituloId,
       codigo: p.codigo,
       descripcion: p.descripcion.slice(0, 800),
       unidad: p.unidad || 'UND',
       cantidad_presupuestada: p.cantidad_presupuestada,
+      precio_unitario: Number(p.precio_unitario ?? 0),
+      monto_total: Number(p.monto_total ?? 0),
     }));
 
     for (let i = 0; i < partidaRows.length; i += BATCH) {
       const batch = partidaRows.slice(i, i + BATCH);
-      const { data: insertedPartidas, error: pErr } = await supabase
+      let { data: insertedPartidas, error: pErr } = await supabase
         .from('partidas')
         .insert(batch)
         .select('id, codigo');
+      if (pErr && /precio_unitario|monto_total|column/i.test(pErr.message ?? '')) {
+        const sinMontos = batch.map(
+          ({ precio_unitario: _pu, monto_total: _mt, ...rest }) => rest,
+        );
+        const retry = await supabase.from('partidas').insert(sinMontos).select('id, codigo');
+        insertedPartidas = retry.data;
+        pErr = retry.error;
+      }
       if (pErr) throw new Error(formatErrorMessage(pErr));
 
       partidasInsertadas += insertedPartidas?.length ?? 0;

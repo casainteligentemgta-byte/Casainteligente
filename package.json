@@ -21,6 +21,7 @@
     "mdb:list-tables": "node scripts/list-mdb-tables.mjs",
     "mdb:export-csv": "node scripts/export-lulo-mdb-csv.mjs",
     "import:lulo-csv": "npx tsx scripts/import-lulo-csv-supabase.ts",
+    "import:lulo-mdb": "npx tsx scripts/import-lulo-mdb-supabase.ts",
     "setup:pdvsa": "node scripts/setup-proyecto-pdvsa.mjs",
     "setup:pdvsa:import": "node scripts/setup-proyecto-pdvsa.mjs --import",
     "telegram:webhook": "node scripts/set-telegram-webhook.mjs",
