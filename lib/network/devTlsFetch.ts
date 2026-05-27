@@ -18,7 +18,9 @@ function relaxTlsOnce(): void {
     return;
   }
   const originalEmit = process.emit.bind(process);
-  process.emit = function emitFiltered(
+  // Parche solo en dev: filtra el warning de NODE_TLS_REJECT_UNAUTHORIZED.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- overloads de process.emit
+  (process as any).emit = function emitFiltered(
     event: string | symbol,
     ...args: unknown[]
   ): boolean {
@@ -33,7 +35,7 @@ function relaxTlsOnce(): void {
     ) {
       return true;
     }
-    return originalEmit(event, ...args);
+    return originalEmit.apply(process, [event, ...args] as never);
   };
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   tlsRelaxed = true;

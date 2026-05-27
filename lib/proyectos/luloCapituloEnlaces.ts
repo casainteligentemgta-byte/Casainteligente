@@ -146,7 +146,7 @@ function leerObraCapiPart(
 
   const codigos =
     opts?.codigosPartidaObra != null
-      ? new Set([...opts.codigosPartidaObra].map((c) => c.toUpperCase()))
+      ? new Set(Array.from(opts.codigosPartidaObra).map((c) => c.toUpperCase()))
       : codigosPartidaDeObra(dump, opts?.codigoObra);
 
   const filas = filasObraCapiPart(t, opts?.codigoObra, codigos.size > 0 ? codigos : undefined);
@@ -186,7 +186,7 @@ function leerObraPart(
 
   const codigos =
     opts?.codigosPartidaObra != null
-      ? new Set([...opts.codigosPartidaObra].map((c) => c.toUpperCase()))
+      ? new Set(Array.from(opts.codigosPartidaObra).map((c) => c.toUpperCase()))
       : codigosPartidaDeObra(dump, opts?.codigoObra);
 
   const cObr = resolveLuloColumn(t.columns, LULO_PARTIDA_COLS.codigoObra);

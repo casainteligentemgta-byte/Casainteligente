@@ -194,7 +194,7 @@ async function cargarDesdeCatalogo(
   }
 
   if (!capitulos.find((c) => c.id === sinCap) && partidasByCapitulo[sinCap]?.length) {
-    capitulos.push({ id: sinCap, numCap: 9999, nombre: 'Sin capítulo' });
+    capitulos.push({ id: sinCap, codigo: '0', numCap: 9999, nombre: 'Sin capítulo' });
   }
 
   const partidaIds = (partidas ?? []).map((p) => p.id as string);
