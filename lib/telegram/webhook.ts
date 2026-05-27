@@ -51,9 +51,13 @@ import {
   manejarCallbackAvanceCampo,
   manejarTextoAvanceCampo,
 } from '@/lib/telegram/avanceCampo';
-import { manejarStartVinculoTelegram } from '@/lib/telegram/telegramVinculo';
+import {
+  manejarComandoAvanceCampo,
+  manejarStartVinculoTelegram,
+} from '@/lib/telegram/telegramVinculo';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
+const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
 
 export type TelegramUpdate = {
   message?: {
@@ -377,6 +381,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       if (vinculado) {
         return NextResponse.json({ ok: true, vinculo: true });
       }
+    }
+
+    if (texto && CMD_AVANCE.test(texto)) {
+      await manejarComandoAvanceCampo(supabase, chatId);
+      return NextResponse.json({ ok: true, command: 'avance' });
     }
 
     const estadoPrevio = await getTelegramEstado(supabase, chatId);

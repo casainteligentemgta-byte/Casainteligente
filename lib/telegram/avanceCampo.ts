@@ -18,8 +18,8 @@ import {
 
 const PREFIX = 'avc:';
 const CB_REPORTAR = `${PREFIX}reportar`;
-const CB_PARTIDA = `${PREFIX}p:`;
-const CB_PROYECTO = `${PREFIX}pr:`;
+/** Índice en metadata.partidas_ids (Telegram limita callback_data a 64 bytes). */
+const CB_PARTIDA = `${PREFIX}i:`;
 
 export function esCallbackAvanceCampo(data: string): boolean {
   return data.startsWith(PREFIX);
@@ -32,20 +32,36 @@ function truncar(s: string, max: number): string {
 
 function tecladoPartidas(
   partidas: PartidaCampoRow[],
-  proyectoId: string,
 ): { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } {
   const rows: Array<Array<{ text: string; callback_data: string }>> = [];
-  for (const p of partidas.slice(0, 20)) {
+  partidas.slice(0, 20).forEach((p, index) => {
     const cod = p.codigo_lulo ?? p.codigo;
     const label = truncar(`🧱 ${cod} — ${p.descripcion}`, 60);
     rows.push([
       {
         text: label,
-        callback_data: `${CB_PARTIDA}${proyectoId}:${p.id}`,
+        callback_data: `${CB_PARTIDA}${index}`,
       },
     ]);
-  }
+  });
   return { inline_keyboard: rows };
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export function tecladoReportarAvance(proyectoId: string) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: '📊 Reportar Avance de Hoy',
+          callback_data: `${CB_REPORTAR}:${proyectoId}`,
+        },
+      ],
+    ],
+  };
 }
 
 export async function enviarInvitacionAvanceDiario(
@@ -53,24 +69,42 @@ export async function enviarInvitacionAvanceDiario(
   chatId: string | number,
   proyectoId: string,
   proyectoNombre: string,
+  opts?: { intro?: string },
 ): Promise<void> {
-  await sendTelegramMessage(
-    chatId,
-    `🏗️ <b>${proyectoNombre}</b>\n\nEs hora del reporte de avance de hoy. ¿Qué partida ejecutaste?`,
-    {
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: '📊 Reportar Avance de Hoy',
-              callback_data: `${CB_REPORTAR}:${proyectoId}`,
-            },
-          ],
-        ],
+  const intro =
+    opts?.intro ??
+    `🏗️ <b>${escapeHtml(proyectoNombre)}</b>\n\nEs hora del reporte de avance de hoy. Pulsa el botón para elegir la partida.`;
+  await sendTelegramMessage(chatId, intro, {
+    parse_mode: 'HTML',
+    reply_markup: tecladoReportarAvance(proyectoId),
+  });
+}
+
+/** Envía botón de avance para cada obra del ingeniero (tras vincular o /avance). */
+export async function enviarInvitacionesAvanceIngeniero(
+  supabase: SupabaseClient,
+  chatId: string | number,
+  empleadoId: string,
+): Promise<{ enviados: number }> {
+  const { listarProyectosIngenieroResidente } = await import('@/lib/campo/ingenieroResidente');
+  const obras = await listarProyectosIngenieroResidente(supabase, empleadoId);
+  if (!obras.length) return { enviados: 0 };
+
+  for (const obra of obras) {
+    await enviarInvitacionAvanceDiario(
+      supabase,
+      chatId,
+      obra.proyecto_id,
+      obra.proyecto_nombre,
+      {
+        intro:
+          obras.length === 1
+            ? `🏗️ <b>${escapeHtml(obra.proyecto_nombre)}</b>\n\nPulsa el botón para reportar tu avance de hoy.`
+            : `🏗️ <b>${escapeHtml(obra.proyecto_nombre)}</b>\n\nReporte de avance para esta obra:`,
       },
-    },
-  );
+    );
+  }
+  return { enviados: obras.length };
 }
 
 export async function manejarCallbackAvanceCampo(
@@ -99,23 +133,36 @@ export async function manejarCallbackAvanceCampo(
     await setTelegramContexto(supabase, opts.chatId, {
       contexto: 'avance_campo',
       proyecto_id: proyectoId,
-      metadata: { paso: 'elegir_partida' },
+      metadata: {
+        paso: 'elegir_partida',
+        partidas_ids: partidas.map((p) => p.id),
+      },
     });
     await sendTelegramMessage(
       opts.chatId,
       '📋 <b>Selecciona la partida</b> que reportas hoy:',
       {
         parse_mode: 'HTML',
-        reply_markup: tecladoPartidas(partidas, proyectoId),
+        reply_markup: tecladoPartidas(partidas),
       },
     );
     return true;
   }
 
   if (opts.data.startsWith(CB_PARTIDA)) {
-    const rest = opts.data.slice(CB_PARTIDA.length);
-    const [proyectoId, partidaId] = rest.split(':');
-    if (!proyectoId || !partidaId) return true;
+    const idx = Number(opts.data.slice(CB_PARTIDA.length));
+    if (!Number.isInteger(idx) || idx < 0) return true;
+
+    const estado = await getTelegramEstado(supabase, opts.chatId);
+    const proyectoId = estado.proyecto_id ?? '';
+    const ids = Array.isArray(estado.metadata?.partidas_ids)
+      ? (estado.metadata.partidas_ids as string[])
+      : [];
+    const partidaId = ids[idx];
+    if (!proyectoId || !partidaId) {
+      await answerCallbackQuery(opts.callbackId, 'Vuelve a pulsar Reportar Avance', true);
+      return true;
+    }
 
     await answerCallbackQuery(opts.callbackId);
     const partidas = await listarPartidasCampoProyecto(supabase, proyectoId, 200);

@@ -283,6 +283,25 @@ export async function empleadoPorTelegramChatId(
   return mapEmpleado(data as Record<string, unknown>);
 }
 
+/** Obras donde el empleado es ingeniero residente asignado. */
+export async function listarProyectosIngenieroResidente(
+  supabase: SupabaseClient,
+  empleadoId: string,
+): Promise<Array<{ proyecto_id: string; proyecto_nombre: string }>> {
+  const { data, error } = await supabase
+    .from('ci_proyectos')
+    .select('id, nombre, codigo_lulo')
+    .eq('ingeniero_residente_id', empleadoId);
+  if (error?.code === '42P01' || /ingeniero_residente/i.test(error?.message ?? '')) {
+    return [];
+  }
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    proyecto_id: String(row.id),
+    proyecto_nombre: String(row.nombre ?? row.codigo_lulo ?? 'Obra'),
+  }));
+}
+
 export async function proyectosActivosConIngenieroResidente(
   supabase: SupabaseClient,
 ): Promise<

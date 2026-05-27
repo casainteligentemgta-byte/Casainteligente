@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
-import { vincularTelegramEmpleadoConToken } from '@/lib/campo/ingenieroResidente';
+import {
+  empleadoPorTelegramChatId,
+  vincularTelegramEmpleadoConToken,
+} from '@/lib/campo/ingenieroResidente';
+import { enviarInvitacionesAvanceIngeniero } from '@/lib/telegram/avanceCampo';
 
 const START_PREFIX = '/start';
 
@@ -40,9 +44,46 @@ export async function manejarStartVinculoTelegram(
   await sendTelegramMessage(
     chatId,
     `✅ <b>¡Telegram sincronizado!</b>\n\nHola <b>${result.nombre ?? 'ingeniero'}</b>. ` +
-      `Recibirás el recordatorio de avance diario a las 5:00 PM cuando estés asignado a una obra.\n\n` +
-      `Usa el botón <b>Reportar Avance de Hoy</b> cuando llegue el mensaje.`,
+      `Recibirás el recordatorio diario a las 5:00 PM. ` +
+      `También puedes reportar cuando quieras con el botón de abajo o escribiendo <code>/avance</code>.`,
     { parse_mode: 'HTML' },
   );
+
+  const empleado = await empleadoPorTelegramChatId(supabase, chatId);
+  if (empleado?.id) {
+    const { enviados } = await enviarInvitacionesAvanceIngeniero(supabase, chatId, empleado.id);
+    if (!enviados) {
+      await sendTelegramMessage(
+        chatId,
+        'ℹ️ Aún no tienes obra asignada como ingeniero residente. Pide al administrador que registre tus datos en RRHH del proyecto.',
+        { parse_mode: 'HTML' },
+      );
+    }
+  }
+
   return true;
+}
+
+export async function manejarComandoAvanceCampo(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  const empleado = await empleadoPorTelegramChatId(supabase, chatId);
+  if (!empleado) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ Primero vincula tu cuenta con el enlace que te envió el administrador (Equipo y alertas).',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  const { enviados } = await enviarInvitacionesAvanceIngeniero(supabase, chatId, empleado.id);
+  if (!enviados) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ No estás asignado como ingeniero residente en ninguna obra. Registra tus datos en RRHH del proyecto.',
+      { parse_mode: 'HTML' },
+    );
+  }
 }
