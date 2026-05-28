@@ -192,12 +192,20 @@ async function cargarPartidasDesdeApuMaterial(
  */
 export async function cargarOpcionesPartidaDespacho(
   supabase: SupabaseClient,
-  params: { proyectoId: string; materialId: string },
+  params: { proyectoId: string; materialId?: string; soloRelacionadas?: boolean },
 ): Promise<PartidaDespachoFila[]> {
-  const [consumoMap, insumoIds] = await Promise.all([
-    cargarConsumoPorPartidaMaterial(supabase, params),
-    resolverInsumoIdsParaMaterial(supabase, params.materialId),
-  ]);
+  const soloRelacionadas = params.soloRelacionadas ?? true;
+  const materialId = params.materialId?.trim() || '';
+  const consumoMap = materialId
+    ? await cargarConsumoPorPartidaMaterial(supabase, {
+        proyectoId: params.proyectoId,
+        materialId,
+      })
+    : new Map<string, number>();
+
+  const insumoIds = materialId
+    ? await resolverInsumoIdsParaMaterial(supabase, materialId)
+    : [];
 
   const apuMap = await cargarPartidasDesdeApuMaterial(supabase, {
     proyectoId: params.proyectoId,
@@ -210,7 +218,7 @@ export async function cargarOpcionesPartidaDespacho(
       'id, partida_id, ci_presupuesto_partida_id, cantidad_techo, unidad, material_id',
     )
     .eq('ci_proyecto_id', params.proyectoId)
-    .eq('material_id', params.materialId);
+    .eq('material_id', materialId || '__material_inexistente__');
 
   if (tErr?.code === '42P01') {
     /* sin tabla 180 */
@@ -238,14 +246,16 @@ export async function cargarOpcionesPartidaDespacho(
     });
   }
 
-  const keysMaterial = new Set<string>();
-  for (const k of Array.from(techoPorPartida.keys())) keysMaterial.add(k);
-  for (const k of Array.from(apuMap.keys())) keysMaterial.add(k);
-
-  if (keysMaterial.size === 0) return [];
-
   const partidas = await loadPartidasPresupuesto(supabase, params.proyectoId);
   const partidaByKey = new Map(partidas.map((p) => [partidaKey(p), p]));
+  const keysMaterial = new Set<string>();
+  if (soloRelacionadas) {
+    for (const k of Array.from(techoPorPartida.keys())) keysMaterial.add(k);
+    for (const k of Array.from(apuMap.keys())) keysMaterial.add(k);
+    if (keysMaterial.size === 0) return [];
+  } else {
+    for (const p of partidas) keysMaterial.add(partidaKey(p));
+  }
 
   const filas: PartidaDespachoFila[] = [];
 

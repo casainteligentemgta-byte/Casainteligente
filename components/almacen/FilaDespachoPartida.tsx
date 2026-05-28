@@ -18,6 +18,8 @@ export type FilaDespachoPartidaValue = {
 type Props = {
   fila: PartidaDespachoFila;
   productoNombre: string;
+  /** Techo restante (API partidas-despacho); evita depender solo del trigger SQL. */
+  techoDisponible?: number;
   cantidad?: number;
   justificacion?: string;
   onChange?: (value: FilaDespachoPartidaValue) => void;
@@ -41,6 +43,7 @@ function buildValue(
 export function FilaDespachoPartida({
   fila,
   productoNombre,
+  techoDisponible: techoProp,
   cantidad: cantidadProp,
   justificacion: justificacionProp,
   onChange,
@@ -74,10 +77,11 @@ export function FilaDespachoPartida({
     [fila, cantidadProp, justificacionProp, onChange],
   );
 
-  const disponible = Math.max(
-    0,
-    fila.cantidad_presupuestada - fila.cantidad_asignada_real,
-  );
+  const disponible =
+    techoProp ??
+    Math.max(0, fila.cantidad_presupuestada - fila.cantidad_asignada_real);
+
+  const excedeTecho = cantidad > 0 && cantidad > disponible + 0.0001;
 
   return (
     <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm">
@@ -110,39 +114,39 @@ export function FilaDespachoPartida({
               emit(Number.isFinite(n) && n >= 0 ? n : 0, justificacion);
             }}
             className={`w-full rounded-lg border bg-black/40 p-2.5 text-sm text-white outline-none focus:ring-2 ${
-              validacion.permitido || cantidad === 0
+              !excedeTecho || cantidad === 0
                 ? 'border-white/10 focus:ring-sky-500/40'
-                : 'border-amber-500/60 bg-amber-950/30 text-amber-100 focus:ring-amber-500/40'
+                : 'border-amber-500 bg-amber-950/30 text-amber-100 focus:ring-amber-500/40'
             }`}
           />
         </div>
       </div>
 
-      {!validacion.permitido && cantidad > 0 ? (
+      {excedeTecho ? (
         <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/25 p-3">
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
             <div className="w-full min-w-0">
               <p className="text-xs font-medium text-amber-100/95">
-                <strong>Faltante presupuestario:</strong> esta descarga supera el techo en{' '}
-                {validacion.diferencia} {unidad} ({validacion.porcentajeExceso}% de exceso). Se
-                registrará alerta de sobrecosto.
+                <strong>Faltante presupuestario:</strong> supera el techo Lulo disponible ({disponible}{' '}
+                {unidad}). Exceso: {validacion.diferencia} {unidad} ({validacion.porcentajeExceso}%).
               </p>
               <div className="mt-2">
                 <label
-                  htmlFor={`just-${fila.obra_partida_material_id}`}
+                  htmlFor={`justificacion_gasto-${fila.obra_partida_material_id}`}
                   className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-amber-200/90"
                 >
-                  Justificación para autorizar la salida
+                  justificacion_gasto (obligatorio)
                 </label>
                 <textarea
-                  id={`just-${fila.obra_partida_material_id}`}
+                  id={`justificacion_gasto-${fila.obra_partida_material_id}`}
+                  name="justificacion_gasto"
                   required
                   disabled={disabled}
                   value={justificacion}
                   onChange={(e) => emit(cantidad, e.target.value)}
-                  placeholder="Ej.: material dañado en obra; ajuste por replanteo del ducto…"
-                  className="w-full rounded-lg border border-amber-500/40 bg-black/30 p-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                  placeholder="Motivo del sobregasto operacional en campo…"
+                  className="w-full rounded-lg border border-amber-500 bg-black/30 p-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
                   rows={2}
                 />
                 {justificacion.trim().length > 0 && !autorizado ? (

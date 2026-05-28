@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
@@ -69,8 +70,6 @@ export async function processInvoiceFromCanal(params: {
   await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
-      // Luego del pre-registro "recibido", pasamos a procesamiento OCR/IA.
-      estado: 'procesando',
       document_storage_path: storagePath,
       document_file_name: params.fileName,
       document_mime_type: params.mimeType,

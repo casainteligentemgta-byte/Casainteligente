@@ -38,6 +38,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ProcurementDocumentAttach } from '@/components/almacen/ProcurementDocumentAttach';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
+import { resolverPartidaConsumiblesCampo } from '@/lib/almacen/resolverPartidaConsumiblesCampo';
+import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
+import type { CategoriaMaterialCompra } from '@/types/inventario-obra';
 type PurchaseLine = {
     description: string;
     item_code: string;
@@ -71,6 +74,16 @@ function ProcPanel({
 function todayIsoDate(): string {
     return new Date().toISOString().split('T')[0];
 }
+
+const CATEGORIAS_MATERIAL_COMPRA: CategoriaMaterialCompra[] = [
+    'Materiales',
+    'Herramientas',
+    'Equipos',
+    'Consumibles / Logística de Campo',
+];
+
+const SELECT_ELITE =
+    'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20';
 
 function formatProcurementSaveError(error: unknown): string {
     const hintMigraciones =
@@ -128,7 +141,10 @@ export default function ProcurementClient() {
     const [documentPreviewUrl, setDocumentPreviewUrl] = useState<string | null>(null);
     const [preparingDocument, setPreparingDocument] = useState(false);
     const [documentRecortado, setDocumentRecortado] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const { isSubmitting: isSaving, runLocked } = useSyncSubmitLock();
+    const [categoriaMaterial, setCategoriaMaterial] =
+        useState<CategoriaMaterialCompra>('Materiales');
+    const [partidaConsumiblesId, setPartidaConsumiblesId] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [proyectoId, setProyectoId] = useState('');
     const [proyectoBloqueado, setProyectoBloqueado] = useState(false);
@@ -143,6 +159,22 @@ export default function ProcurementClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const proyectoIdParam = searchParams.get('proyectoId')?.trim() || '';
+
+    useEffect(() => {
+        if (categoriaMaterial !== 'Consumibles / Logística de Campo' || !proyectoId) {
+            setPartidaConsumiblesId(null);
+            return;
+        }
+        void (async () => {
+            try {
+                const supabase = createClient();
+                const id = await resolverPartidaConsumiblesCampo(supabase, proyectoId);
+                setPartidaConsumiblesId(id);
+            } catch {
+                setPartidaConsumiblesId(null);
+            }
+        })();
+    }, [categoriaMaterial, proyectoId]);
     const bloquearProyectoParam =
         searchParams.get('bloquearProyecto') === '1' ||
         searchParams.get('fromProject') === '1';
@@ -402,17 +434,22 @@ export default function ProcurementClient() {
             return;
         }
 
-        setIsSaving(true);
+        await runLocked(async () => {
         let supabase;
         try {
             supabase = createClient();
         } catch (envErr) {
             setSubmitError(formatProcurementSaveError(envErr));
-            setIsSaving(false);
             return;
         }
 
         try {
+            let partidaOperacionalId: string | null = null;
+            if (categoriaMaterial === 'Consumibles / Logística de Campo') {
+                partidaOperacionalId =
+                    partidaConsumiblesId ??
+                    (await resolverPartidaConsumiblesCampo(supabase, proyectoId));
+            }
             const totalBolivares = totalVes();
             const montos = await resolverMontosCompraBimonetario({
                 montoTotal: totalBolivares,
@@ -492,7 +529,14 @@ export default function ProcurementClient() {
                     stock_quarantine: line.quantity,
                     last_purchase_price: line.unit_price,
                     last_purchase_date: invoice.date,
+                    proyecto_id: proyectoId,
                 };
+                if (
+                    categoriaMaterial === 'Consumibles / Logística de Campo' &&
+                    partidaOperacionalId
+                ) {
+                    materialBase.presupuesto_partida_id = partidaOperacionalId;
+                }
                 if (defaultDepositId) {
                     materialBase.deposit_id = defaultDepositId;
                 }
@@ -627,9 +671,8 @@ export default function ProcurementClient() {
         } catch (error) {
             console.error('Error saving invoice:', error);
             setSubmitError(formatProcurementSaveError(error));
-        } finally {
-            setIsSaving(false);
         }
+        });
     };
 
     const processInvoiceWithAI = async (raw: File) => {
@@ -1308,7 +1351,10 @@ export default function ProcurementClient() {
                         <div className="sticky bottom-4 z-20 mt-4 p-4 rounded-3xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl">
                             <button
                                 type="button"
-                                onClick={() => void handleSubmit()}
+                                onClick={() => {
+                                    if (isSaving) return;
+                                    void handleSubmit();
+                                }}
                                 disabled={isSaving}
                                 className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:pointer-events-none text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all"
                             >

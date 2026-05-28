@@ -37,6 +37,10 @@ type DistribRowState = {
 type Props = {
   proyectoId: string;
   destinoId?: string;
+  /** Partida presupuesto (`ci_presupuesto_partidas`) elegida en destino. */
+  partidaDestinoPreferida?: string;
+  /** Partida cascada MDB (`partidas`) elegida en destino. */
+  partidaLegacyDestinoPreferida?: string;
   materialId: string;
   productoNombre: string;
   /** Cantidad máxima a despachar (techo de la línea). */
@@ -71,6 +75,8 @@ function alertaClass(nivel: NivelAlertaDespacho): string {
 export function DistribucionDespachoPartidas({
   proyectoId,
   destinoId,
+  partidaDestinoPreferida,
+  partidaLegacyDestinoPreferida,
   materialId,
   productoNombre,
   cantidadLinea,
@@ -82,6 +88,8 @@ export function DistribucionDespachoPartidas({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rows, setRows] = useState<DistribRowState[]>([]);
+  const [scope, setScope] = useState<'related' | 'all'>('related');
+  const [scopeForzado, setScopeForzado] = useState(false);
   const [ultimoToastExceso, setUltimoToastExceso] = useState<Record<string, number>>({});
 
   const cargarOpciones = useCallback(async () => {
@@ -92,25 +100,42 @@ export function DistribucionDespachoPartidas({
     setLoading(true);
     setLoadError(null);
     try {
-      const q = new URLSearchParams({ proyecto_id: proyectoId, material_id: materialId });
+      const q = new URLSearchParams({
+        proyecto_id: proyectoId,
+        material_id: materialId,
+        scope,
+      });
       const res = await fetch(`/api/almacen/partidas-despacho?${q}`, { cache: 'no-store' });
       const data = (await res.json()) as { partidas?: PartidaDespachoFila[]; error?: string };
       if (!res.ok) throw new Error(data.error || 'No se pudieron cargar partidas');
       const partidas = data.partidas ?? [];
+      if (scope === 'related' && partidas.length === 0 && !scopeForzado) {
+        setScope('all');
+        setScopeForzado(true);
+        toast.info('Sin partidas relacionadas. Mostrando todas las partidas del proyecto.');
+        return;
+      }
       setOpciones(partidas);
       setRows(
-        partidas.map((fila) => ({
-          rowId: nuevaFilaId(),
-          fila,
-          techo_disponible: calcularTechoDisponible(
-            fila.cantidad_presupuestada,
-            fila.cantidad_asignada_real,
-          ),
-          seleccionada: false,
-          cantidad: 0,
-          justificacion: '',
-          autorizado: true,
-        })),
+        partidas.map((fila) => {
+          const esPreferida =
+            (Boolean(partidaDestinoPreferida) &&
+              fila.ci_presupuesto_partida_id === partidaDestinoPreferida) ||
+            (Boolean(partidaLegacyDestinoPreferida) &&
+              fila.partida_id === partidaLegacyDestinoPreferida);
+          return {
+            rowId: nuevaFilaId(),
+            fila,
+            techo_disponible: calcularTechoDisponible(
+              fila.cantidad_presupuestada,
+              fila.cantidad_asignada_real,
+            ),
+            seleccionada: esPreferida,
+            cantidad: 0,
+            justificacion: '',
+            autorizado: true,
+          };
+        }),
       );
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Error');
@@ -119,11 +144,23 @@ export function DistribucionDespachoPartidas({
     } finally {
       setLoading(false);
     }
-  }, [proyectoId, materialId]);
+  }, [
+    proyectoId,
+    materialId,
+    scope,
+    scopeForzado,
+    partidaDestinoPreferida,
+    partidaLegacyDestinoPreferida,
+  ]);
 
   useEffect(() => {
     void cargarOpciones();
   }, [cargarOpciones]);
+
+  useEffect(() => {
+    setScope('related');
+    setScopeForzado(false);
+  }, [proyectoId, materialId]);
 
   const totalImputado = useMemo(
     () =>
@@ -217,6 +254,38 @@ export function DistribucionDespachoPartidas({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <div className="mr-1 inline-flex overflow-hidden rounded-lg border border-white/10">
+            <button
+              type="button"
+              disabled={disabled || loading}
+              onClick={() => {
+                setScopeForzado(true);
+                setScope('related');
+              }}
+              className={`px-3 py-1 text-xs font-bold transition-colors ${
+                scope === 'related'
+                  ? 'bg-sky-500/20 text-sky-200'
+                  : 'bg-black/30 text-zinc-400 hover:bg-white/[0.04]'
+              }`}
+            >
+              Sugeridas
+            </button>
+            <button
+              type="button"
+              disabled={disabled || loading}
+              onClick={() => {
+                setScopeForzado(true);
+                setScope('all');
+              }}
+              className={`px-3 py-1 text-xs font-bold transition-colors ${
+                scope === 'all'
+                  ? 'bg-sky-500/20 text-sky-200'
+                  : 'bg-black/30 text-zinc-400 hover:bg-white/[0.04]'
+              }`}
+            >
+              Ver todas las partidas del presupuesto
+            </button>
+          </div>
           <span
             className={`rounded-lg px-3 py-1 text-xs font-bold ${
               totalImputado > 0 && totalImputado <= cantidadLinea
@@ -233,6 +302,14 @@ export function DistribucionDespachoPartidas({
           ) : null}
         </div>
       </div>
+      <p className="text-[11px] text-zinc-500">
+        {scope === 'related'
+          ? 'Mostrando partidas relacionadas con el material.'
+          : 'Mostrando todas las partidas del proyecto (modo anti-embudo).'}
+        {partidaDestinoPreferida || partidaLegacyDestinoPreferida
+          ? ' Partida de destino preseleccionada desde el selector superior.'
+          : ''}
+      </p>
 
       {loading ? (
         <p className="flex items-center gap-2 text-xs text-zinc-500">
@@ -245,10 +322,16 @@ export function DistribucionDespachoPartidas({
       {!loading && opciones.length === 0 ? (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-200">
           <PackageOpen className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            No hay partidas en el presupuesto que incluyan este material en su APU. Verifique que el
-            código SAP del producto coincida con el insumo Lulo o registre techos en obra.
-          </p>
+          {scope === 'related' ? (
+            <p>
+              No hay partidas en el presupuesto que incluyan este material en su APU. Verifique que
+              el código SAP del producto coincida con el insumo Lulo o use el modo Todas.
+            </p>
+          ) : (
+            <p>
+              No hay partidas disponibles para este proyecto en el presupuesto activo.
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -301,6 +384,7 @@ export function DistribucionDespachoPartidas({
               <FilaDespachoPartida
                 fila={row.fila}
                 productoNombre={productoNombre}
+                techoDisponible={row.techo_disponible}
                 cantidad={row.cantidad}
                 justificacion={row.justificacion}
                 disabled={disabled}

@@ -568,15 +568,21 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     const caption = msg.caption?.trim();
 
     switch (estado.contexto) {
-      case 'factura':
-        await manejarFacturaTelegram({
+      case 'factura': {
+        const factura = await manejarFacturaTelegram({
           supabase,
           chatId,
           chatLabel: label,
           fileId: archivo.fileId,
           telegramMessageId: String(msg.message_id),
         });
-        break;
+        return NextResponse.json({
+          ok: true,
+          contexto: 'factura',
+          duplicate: factura.duplicate,
+          pendingId: factura.pendingId,
+        });
+      }
       case 'obra':
         if (estado.proyecto_id) {
           await manejarFotoObraTelegram({

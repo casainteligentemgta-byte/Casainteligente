@@ -16,6 +16,7 @@ import {
 } from '@/lib/contabilidad/facturaCanalApi';
 import { reubicarCompra } from '@/lib/contabilidad/reubicarCompraApi';
 import { createClient } from '@/lib/supabase/client';
+import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
 const selectClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/50';
@@ -31,11 +32,11 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [proyectoId, setProyectoId] = useState('');
   const [ubicacionId, setUbicacionId] = useState('');
   const [editando, setEditando] = useState(false);
-  const [registrando, setRegistrando] = useState(false);
-  const [guardandoUbicacion, setGuardandoUbicacion] = useState(false);
+  const { isSubmitting: registrando, runLocked: runRegistro } = useSyncSubmitLock();
+  const { isSubmitting: guardandoUbicacion, runLocked: runUbicacion } = useSyncSubmitLock();
+  const { isSubmitting: ingresandoAlmacen, runLocked: runIngreso } = useSyncSubmitLock();
   const [compraRegistrada, setCompraRegistrada] = useState(false);
   const [autoConfirmando, setAutoConfirmando] = useState(false);
-  const [ingresandoAlmacen, setIngresandoAlmacen] = useState(false);
   const [ingresoAlmacenOk, setIngresoAlmacenOk] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -115,9 +116,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       toast.success('Obra y almacén guardados');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
-    } finally {
-      setGuardandoUbicacion(false);
     }
+    });
   };
 
   const registrar = async () => {
@@ -133,33 +133,31 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       toast.error('No hay datos de la factura');
       return;
     }
-    setRegistrando(true);
-    try {
-      const r = await confirmarCompraCanal(pendingId, {
-        proyecto_id: proyectoId,
-        ubicacion_destino_id: ubicacionId,
-        extracted,
-      });
-      setCompraRegistrada(true);
-      toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo registrar');
-    } finally {
-      setRegistrando(false);
-    }
+    await runRegistro(async () => {
+      try {
+        const r = await confirmarCompraCanal(pendingId, {
+          proyecto_id: proyectoId,
+          ubicacion_destino_id: ubicacionId,
+          extracted,
+        });
+        setCompraRegistrada(true);
+        toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo registrar');
+      }
+    });
   };
 
   const registrarIngresoAlmacen = async () => {
-    setIngresandoAlmacen(true);
-    try {
-      const r = await ingresoAlmacenCanal(pendingId);
-      setIngresoAlmacenOk(true);
-      toast.success(r.yaExistia ? 'Ingreso a almacén ya registrado' : 'Ingreso a almacén registrado');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo registrar ingreso');
-    } finally {
-      setIngresandoAlmacen(false);
-    }
+    await runIngreso(async () => {
+      try {
+        const r = await ingresoAlmacenCanal(pendingId);
+        setIngresoAlmacenOk(true);
+        toast.success(r.yaExistia ? 'Ingreso a almacén ya registrado' : 'Ingreso a almacén registrado');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo registrar ingreso');
+      }
+    });
   };
 
   const nLineas = extracted?.items?.filter((it) => String(it.description ?? '').trim()).length ?? 0;
@@ -373,7 +371,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             <button
               type="button"
               disabled={!proyectoId.trim() || !ubicacionId.trim() || guardandoUbicacion}
-              onClick={() => void guardarUbicacion()}
+              onClick={() => {
+                if (guardandoUbicacion) return;
+                void guardarUbicacion();
+              }}
               className="w-full rounded-xl border border-orange-500/40 bg-orange-500/10 disabled:opacity-40 text-orange-200 text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
             >
               {guardandoUbicacion ? (
@@ -395,7 +396,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 registrando ||
                 autoConfirmando
               }
-              onClick={() => void registrar()}
+              onClick={() => {
+                if (registrando) return;
+                void registrar();
+              }}
               className="w-full rounded-xl bg-[#34C759] disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-bold py-3 flex items-center justify-center gap-2"
             >
               {registrando || autoConfirmando ? (

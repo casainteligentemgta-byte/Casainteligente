@@ -1,16 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 
 const selectClass =
-  'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/50 disabled:opacity-50';
+  'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50';
 
 type Props = {
   proyectoId: string;
   value: string;
   onChange: (ubicacionId: string) => void;
+  /** Si true, lista almacenes centrales/móviles aunque no haya proyecto (útil para origen). */
+  permitirSinProyecto?: boolean;
   disabled?: boolean;
   id?: string;
   className?: string;
@@ -21,6 +23,7 @@ export default function UbicacionInventarioSelect({
   proyectoId,
   value,
   onChange,
+  permitirSinProyecto = false,
   disabled,
   id = 'ubicacion-inventario',
   className = selectClass,
@@ -31,17 +34,15 @@ export default function UbicacionInventarioSelect({
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
-    if (!proyectoId.trim()) {
+    if (!proyectoId.trim() && !permitirSinProyecto) {
       setUbicaciones([]);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const q = new URLSearchParams({
-        proyecto_id: proyectoId,
-        flat: '1',
-      });
+      const q = new URLSearchParams({ flat: '1' });
+      if (proyectoId.trim()) q.set('proyecto_id', proyectoId);
       const res = await fetch(`/api/almacen/ubicaciones?${q}`, { cache: 'no-store' });
       const data = (await res.json()) as {
         ubicaciones?: UbicacionInventario[];
@@ -59,7 +60,7 @@ export default function UbicacionInventarioSelect({
     } finally {
       setLoading(false);
     }
-  }, [proyectoId]);
+  }, [proyectoId, permitirSinProyecto]);
 
   useEffect(() => {
     void cargar();
@@ -70,10 +71,18 @@ export default function UbicacionInventarioSelect({
     onChange('');
   }, [ubicaciones, value, onChange]);
 
-  if (!proyectoId.trim()) {
+  const valorSelect = useMemo(() => {
+    if (loading) return '';
+    if (!value) return '';
+    return ubicaciones.some((u) => u.id === value) ? value : '';
+  }, [loading, value, ubicaciones]);
+
+  if (!proyectoId.trim() && !permitirSinProyecto) {
     return (
       <select id={id} disabled className={className}>
-        <option value="">Primero seleccione la obra…</option>
+        <option value="" className="bg-[#0A0A0F] text-zinc-100">
+          Primero seleccione la obra…
+        </option>
       </select>
     );
   }
@@ -82,12 +91,14 @@ export default function UbicacionInventarioSelect({
     <div className="space-y-1">
       <select
         id={id}
-        value={value}
+        value={valorSelect}
         disabled={disabled || loading}
         onChange={(e) => onChange(e.target.value)}
         className={className}
       >
-        <option value="">{loading ? 'Cargando almacenes…' : placeholder}</option>
+        <option value="" className="bg-[#0A0A0F] text-zinc-100">
+          {loading ? 'Cargando almacenes…' : placeholder}
+        </option>
         {ubicaciones.map((u) => {
           const tipo =
             u.tipo === 'almacen_central'
@@ -98,7 +109,7 @@ export default function UbicacionInventarioSelect({
                   ? 'Obra'
                   : u.tipo;
           return (
-            <option key={u.id} value={u.id}>
+            <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
               {u.nombre} ({tipo})
             </option>
           );

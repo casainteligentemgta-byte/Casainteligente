@@ -3,6 +3,7 @@ import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInv
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
+import { reservarFacturaCanalTelegram } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { processTelegramInvoicePhoto } from '@/lib/telegram/processInvoiceFromTelegram';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { setTelegramContexto } from '@/lib/telegram/estados';
@@ -27,89 +28,46 @@ function baseUrlApp(): string {
     .replace(/\/$/, '');
 }
 
+export type ManejarFacturaTelegramResult = {
+  duplicate: boolean;
+  pendingId: string;
+};
+
 export async function manejarFacturaTelegram(params: {
   supabase: SupabaseClient;
   chatId: string;
   chatLabel: string;
   fileId: string;
   telegramMessageId?: string | null;
-}): Promise<void> {
-  const messageId = String(params.telegramMessageId ?? '').trim();
+}): Promise<ManejarFacturaTelegramResult> {
+  const reserva = await reservarFacturaCanalTelegram(params.supabase, {
+    canal: 'telegram',
+    chatId: params.chatId,
+    chatLabel: params.chatLabel,
+    telegramMessageId: params.telegramMessageId,
+  });
 
-  if (messageId) {
-    const { data: existente, error: checkErr } = await params.supabase
-      .from('ci_facturas_canal_pendientes')
-      .select('id, estado')
-      .eq('telegram_message_id', messageId)
-      .maybeSingle();
-
-    if (checkErr) {
-      await sendTelegramMessage(
-        params.chatId,
-        '⚠️ Error al validar duplicados de Telegram. Intenta de nuevo en unos segundos.',
-      );
-      throw new Error(checkErr.message);
-    }
-
-    if (existente?.id) {
-      await setTelegramContexto(params.supabase, params.chatId, {
-        contexto: 'factura',
-        pending_factura_id: existente.id,
-      });
-      await sendTelegramMessage(
-        params.chatId,
-        'ℹ️ Esta foto ya fue recibida. Continuo con el proceso existente sin duplicar.',
-      );
-      return;
-    }
-  }
-
-  const { data: pending, error: insErr } = await params.supabase
-    .from('ci_facturas_canal_pendientes')
-    .insert({
-      canal: 'telegram',
-      chat_id: params.chatId,
-      chat_label: params.chatLabel,
-      // Pre-registro inmediato para blindar reintentos de Telegram por timeout/red móvil.
-      estado: 'recibido',
-      telegram_message_id: messageId || null,
-    })
-    .select('id')
-    .single();
-
-  if (insErr || !pending) {
-    if ((insErr as { code?: string } | null)?.code === '23505' && messageId) {
-      const { data: existente } = await params.supabase
-        .from('ci_facturas_canal_pendientes')
-        .select('id')
-        .eq('telegram_message_id', messageId)
-        .maybeSingle();
-      if (existente?.id) {
-        await setTelegramContexto(params.supabase, params.chatId, {
-          contexto: 'factura',
-          pending_factura_id: existente.id,
-        });
-        await sendTelegramMessage(
-          params.chatId,
-          'ℹ️ Mensaje duplicado detectado. Se mantiene un solo registro de factura.',
-        );
-        return;
-      }
-    }
+  if (!reserva.ok) {
     await sendTelegramMessage(params.chatId, '❌ Error al registrar la factura.');
-    throw new Error(insErr?.message ?? 'insert factura');
+    throw new Error(reserva.error);
   }
 
   await setTelegramContexto(params.supabase, params.chatId, {
     contexto: 'factura',
-    pending_factura_id: pending.id,
+    pending_factura_id: reserva.pendingId,
   });
 
+  if (reserva.duplicate) {
+    return { duplicate: true, pendingId: reserva.pendingId };
+  }
+
   await processTelegramInvoicePhoto({
-    pendingId: pending.id,
+    pendingId: reserva.pendingId,
     chatId: params.chatId,
     fileId: params.fileId,
   });
+
+  return { duplicate: false, pendingId: reserva.pendingId };
 }
 
 export async function manejarFotoObraTelegram(params: {
