@@ -38,6 +38,12 @@ import {
     type PartidaRow,
     type ProyectoRow,
 } from '@/lib/almacen/inventoryClasificacion';
+import {
+    cargarStockPorUbicaciones,
+    listarUbicacionesParaFiltroInventario,
+    resolverUbicacionIdsFiltro,
+    type StockEnUbicacionResumen,
+} from '@/lib/almacen/inventarioFiltroUbicacion';
 
 const INVENTORY_SELECT = `
   *,
@@ -138,6 +144,12 @@ export default function InventoryMasterPage() {
     const [filterDepositId, setFilterDepositId] = useState('');
     const [sinClasificacionObra, setSinClasificacionObra] = useState(false);
     const [sinAlmacenAsignado, setSinAlmacenAsignado] = useState(false);
+    /** Stock en `inventario_stock` (compras registradas por ubicación, migr. 180). */
+    const [stockPorUbicacion, setStockPorUbicacion] = useState<
+        Map<string, StockEnUbicacionResumen>
+    >(new Map());
+    const [itemsDesdeStock, setItemsDesdeStock] = useState<InventoryItem[]>([]);
+    const [cargandoStockUbicacion, setCargandoStockUbicacion] = useState(false);
 
     const supabase = createClient();
 
@@ -186,6 +198,77 @@ export default function InventoryMasterPage() {
     useEffect(() => {
         fetchInventory();
     }, [activeCategory]);
+
+    const itemsCatalogo = useMemo(() => {
+        const byId = new Map<string, InventoryItem>();
+        for (const it of items) byId.set(it.id, it);
+        for (const it of itemsDesdeStock) {
+            if (!byId.has(it.id)) byId.set(it.id, it);
+        }
+        return Array.from(byId.values());
+    }, [items, itemsDesdeStock]);
+
+    useEffect(() => {
+        if (!filterProyectoId && !filterDepositId) {
+            setStockPorUbicacion(new Map());
+            setItemsDesdeStock([]);
+            return;
+        }
+
+        let cancelled = false;
+        void (async () => {
+            setCargandoStockUbicacion(true);
+            try {
+                const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
+                const ids = resolverUbicacionIdsFiltro(ubicaciones, {
+                    proyectoId: filterProyectoId || undefined,
+                    depositId: filterDepositId || undefined,
+                });
+                if (cancelled) return;
+
+                if (!ids.length) {
+                    setStockPorUbicacion(new Map());
+                    setItemsDesdeStock([]);
+                    return;
+                }
+
+                const stockMap = await cargarStockPorUbicaciones(supabase, ids);
+                if (cancelled) return;
+                setStockPorUbicacion(stockMap);
+
+                const knownIds = new Set(items.map((i) => i.id));
+                const missing = Array.from(stockMap.keys()).filter((id) => !knownIds.has(id));
+                if (!missing.length) {
+                    setItemsDesdeStock([]);
+                    return;
+                }
+
+                const { data: extraRows, error } = await supabase
+                    .from('global_inventory')
+                    .select(INVENTORY_SELECT)
+                    .in('id', missing);
+                if (cancelled) return;
+                if (error) {
+                    console.warn('[inventario] materiales por stock ubicación:', error.message);
+                    setItemsDesdeStock([]);
+                    return;
+                }
+                setItemsDesdeStock((extraRows ?? []) as InventoryItem[]);
+            } catch (e) {
+                console.warn('[inventario] stock por ubicación:', e);
+                if (!cancelled) {
+                    setStockPorUbicacion(new Map());
+                    setItemsDesdeStock([]);
+                }
+            } finally {
+                if (!cancelled) setCargandoStockUbicacion(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [filterProyectoId, filterDepositId, supabase, items]);
 
     const fetchInventory = async () => {
         setLoading(true);
@@ -299,13 +382,18 @@ export default function InventoryMasterPage() {
         }
     };
 
+    const filtroPorUbicacionActivo = Boolean(filterProyectoId || filterDepositId);
+
     const filteredItems = useMemo(() => {
-        return items.filter((item) => {
+        return itemsCatalogo.filter((item) => {
             const term = searchTerm.trim().toLowerCase();
             const dep = item.deposit_id ? depositsById.get(item.deposit_id) : undefined;
             const depLabel = dep
                 ? `${dep.name} ${dep.locality ?? ''}`.toLowerCase()
                 : '';
+            const stockUb = stockPorUbicacion.get(item.id);
+            const stockEnFiltro = stockUb?.cantidad_disponible ?? 0;
+            const ubicacionStockLabel = (stockUb?.ubicacion_nombres ?? []).join(' ').toLowerCase();
 
             const textMatch =
                 !term ||
@@ -316,19 +404,28 @@ export default function InventoryMasterPage() {
                 (item.partida?.codigo_partida?.toLowerCase().includes(term) ?? false) ||
                 (item.partida?.descripcion?.toLowerCase().includes(term) ?? false) ||
                 depLabel.includes(term) ||
+                ubicacionStockLabel.includes(term) ||
                 (item.location?.toLowerCase().includes(term) ?? false);
 
             if (!textMatch) return false;
             if (filterEntidadId && item.entidad_id !== filterEntidadId) return false;
-            if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
             if (filterPartidaId && item.presupuesto_partida_id !== filterPartidaId) return false;
             if (sinClasificacionObra && (item.proyecto_id || item.entidad_id)) return false;
-            if (filterDepositId && item.deposit_id !== filterDepositId) return false;
             if (sinAlmacenAsignado && item.deposit_id) return false;
+
+            if (filtroPorUbicacionActivo) {
+                if (stockEnFiltro > 0) return true;
+                if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
+                if (filterDepositId && item.deposit_id !== filterDepositId) return false;
+                return false;
+            }
+
+            if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
+            if (filterDepositId && item.deposit_id !== filterDepositId) return false;
             return true;
         });
     }, [
-        items,
+        itemsCatalogo,
         searchTerm,
         filterEntidadId,
         filterProyectoId,
@@ -337,10 +434,12 @@ export default function InventoryMasterPage() {
         sinClasificacionObra,
         sinAlmacenAsignado,
         depositsById,
+        filtroPorUbicacionActivo,
+        stockPorUbicacion,
     ]);
 
     const statsFiltrados = useMemo(() => {
-        const base = hayFiltrosActivos ? filteredItems : items;
+        const base = hayFiltrosActivos ? filteredItems : itemsCatalogo;
         const totalVal = base.reduce(
             (acc, item) =>
                 acc + Number(item.stock_available) * Number(item.average_weighted_cost),
@@ -356,7 +455,7 @@ export default function InventoryMasterPage() {
             totalItems: base.length,
             quarantineCount: quarantine,
         };
-    }, [filteredItems, items, hayFiltrosActivos]);
+    }, [filteredItems, itemsCatalogo, hayFiltrosActivos]);
 
     const limpiarFiltros = () => {
         setSearchTerm('');
@@ -544,7 +643,10 @@ export default function InventoryMasterPage() {
                             </span>
                         </div>
                         <span className="text-[10px] font-bold text-zinc-500">
-                            Mostrando {filteredItems.length} de {items.length} ítems
+                            Mostrando {filteredItems.length} de {itemsCatalogo.length} ítems
+                            {cargandoStockUbicacion && filtroPorUbicacionActivo
+                                ? ' · actualizando stock por almacén…'
+                                : ''}
                         </span>
                     </div>
 
@@ -670,7 +772,7 @@ export default function InventoryMasterPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/50">
-                        {loading ? (
+                        {loading || (cargandoStockUbicacion && filtroPorUbicacionActivo) ? (
                             [1, 2, 3].map(i => (
                                 <tr key={i} className="animate-pulse">
                                     <td colSpan={7} className="p-8 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Loading material data...</td>
@@ -687,7 +789,22 @@ export default function InventoryMasterPage() {
                                 </td>
                             </tr>
                         ) : (
-                            filteredItems.map(item => (
+                            filteredItems.map((item) => {
+                                const stockUb = stockPorUbicacion.get(item.id);
+                                const stockMostrar =
+                                    filtroPorUbicacionActivo && stockUb
+                                        ? stockUb.cantidad_disponible
+                                        : Number(item.stock_available);
+                                const ubicacionLabel =
+                                    filtroPorUbicacionActivo && stockUb?.ubicacion_nombres.length
+                                        ? stockUb.ubicacion_nombres.join(' · ')
+                                        : formatInventoryLocationLabel(
+                                              item,
+                                              depositsById,
+                                              furnitureById,
+                                          );
+
+                                return (
                                 <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
                                     <td className="p-5">
                                         <div className="flex items-center gap-4">
@@ -753,13 +870,18 @@ export default function InventoryMasterPage() {
                                     </td>
                                     <td className="p-5 text-right md:text-left">
                                         <div className="flex flex-col">
-                                            <span className={`text-xl font-black ${Number(item.stock_available) <= Number(item.reorder_point)
+                                            <span className={`text-xl font-black ${stockMostrar <= Number(item.reorder_point)
                                                 ? 'text-red-500'
                                                 : 'text-zinc-100'
                                                 }`}>
-                                                {item.stock_available}
+                                                {stockMostrar}
                                             </span>
-                                            {Number(item.stock_quarantine) > 0 && (
+                                            {filtroPorUbicacionActivo && stockUb ? (
+                                                <span className="text-[10px] font-black text-emerald-500/90 uppercase">
+                                                    En almacén filtrado
+                                                </span>
+                                            ) : null}
+                                            {!filtroPorUbicacionActivo && Number(item.stock_quarantine) > 0 && (
                                                 <span className="text-[10px] font-black text-amber-500 uppercase">
                                                     + {item.stock_quarantine} Cuarentena
                                                 </span>
@@ -813,7 +935,8 @@ export default function InventoryMasterPage() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))
+                            );
+                            })
                         )}
                     </tbody>
                 </table>

@@ -519,7 +519,17 @@ export default function ProcurementClient() {
                 cantidad: number;
                 precio_unitario: number;
             }> = [];
-            const defaultDepositId = await fetchDefaultDepositId(supabase);
+            let depositIdMaterial: string | null = null;
+            const { data: ubDestino } = await supabase
+                .from('inv_ubicaciones')
+                .select('deposit_id')
+                .eq('id', ubicacionDestinoId)
+                .maybeSingle();
+            if (ubDestino?.deposit_id) {
+                depositIdMaterial = String(ubDestino.deposit_id);
+            } else {
+                depositIdMaterial = await fetchDefaultDepositId(supabase);
+            }
 
             for (const line of validLines) {
                 const desc = line.description.trim();
@@ -537,8 +547,8 @@ export default function ProcurementClient() {
                 ) {
                     materialBase.presupuesto_partida_id = partidaOperacionalId;
                 }
-                if (defaultDepositId) {
-                    materialBase.deposit_id = defaultDepositId;
+                if (depositIdMaterial) {
+                    materialBase.deposit_id = depositIdMaterial;
                 }
 
                 let newMaterial: { id: string };

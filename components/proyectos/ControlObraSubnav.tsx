@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calculator, CalendarRange, Droplets, FileText, HardHat, Layers } from 'lucide-react';
+import { Calculator, CalendarRange, Droplets, FileText, HardHat, Layers, Truck } from 'lucide-react';
 
 type Tab = {
   id: string;
@@ -32,7 +32,8 @@ function tabActivo(pathname: string, tab: Tab): boolean {
         !pathname.includes('/apu') &&
         !pathname.includes('/informes') &&
         !pathname.includes('/cronograma') &&
-        !pathname.includes('/equipo'))
+        !pathname.includes('/equipo') &&
+        !pathname.includes('/maquinaria'))
     );
   }
   return pathname.includes(`/control-obra/${tab.id}`);

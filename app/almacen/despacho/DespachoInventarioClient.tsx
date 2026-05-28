@@ -42,6 +42,8 @@ type LineaDespacho = {
   categoria: string | null;
   cantidad: number;
   maxStock: number;
+  destinoId: string;
+  destinoPartidaKey: string;
   distribucion: DistribucionDespachoState;
 };
 
@@ -80,8 +82,6 @@ export default function DespachoInventarioClient() {
   const [proyectosError, setProyectosError] = useState<string | null>(null);
   const [proyectoId, setProyectoId] = useState('');
   const [origenId, setOrigenId] = useState('');
-  const [destinoId, setDestinoId] = useState('');
-  const [destinoPartidaKey, setDestinoPartidaKey] = useState('');
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loadingStock, setLoadingStock] = useState(false);
   const [lineas, setLineas] = useState<LineaDespacho[]>([]);
@@ -197,10 +197,6 @@ export default function DespachoInventarioClient() {
       toast.error('Ese material en ese almacén ya está en la lista');
       return;
     }
-    if (hit.ubicacion_id === destinoId) {
-      toast.error('Origen y destino no pueden ser el mismo almacén');
-      return;
-    }
     setLineas((prev) => [
       ...prev,
       {
@@ -213,6 +209,8 @@ export default function DespachoInventarioClient() {
         categoria: hit.categoria,
         cantidad: 1,
         maxStock: hit.cantidad_disponible,
+        destinoId: '',
+        destinoPartidaKey: '',
         distribucion: emptyDistribucion(),
       },
     ]);
@@ -225,13 +223,13 @@ export default function DespachoInventarioClient() {
 
   const puedeGuardar =
     proyectoId &&
-    destinoId &&
     lineas.length > 0 &&
     lineas.every((l) => {
       const mov = l.distribucion.totalImputado;
       return (
         l.origen_ubicacion_id &&
-        l.origen_ubicacion_id !== destinoId &&
+        l.destinoId &&
+        l.origen_ubicacion_id !== l.destinoId &&
         l.cantidad > 0 &&
         mov > 0 &&
         mov <= l.cantidad &&
@@ -313,7 +311,7 @@ export default function DespachoInventarioClient() {
           <div>
             <h1 className="text-lg font-bold">Despacho a obra</h1>
             <p className="text-xs text-zinc-500">
-              Descargue por partida del presupuesto que llevan el material; el saldo queda en origen
+              Agregue el material, elija destino (partidas filtradas por APU) y distribuya cantidades
             </p>
           </div>
         </div>
@@ -321,7 +319,7 @@ export default function DespachoInventarioClient() {
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-6">
         <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Obra y rutas</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Obra y origen</h2>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-zinc-500">Proyecto / obra</label>
             <select
@@ -330,8 +328,6 @@ export default function DespachoInventarioClient() {
               onChange={(e) => {
                 setProyectoId(e.target.value);
                 setOrigenId('');
-                setDestinoId('');
-                setDestinoPartidaKey('');
                 setLineas([]);
                 setAlertasConfig({ ...DESPACHO_ALERTAS_DEFAULT });
               }}
@@ -378,43 +374,20 @@ export default function DespachoInventarioClient() {
               </p>
             ) : null}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase text-zinc-500">
-                Filtrar almacén origen (opcional)
-              </label>
-              <UbicacionInventarioSelect
-                proyectoId={proyectoId}
-                value={origenId}
-                onChange={setOrigenId}
-                placeholder="Todos los almacenes de la obra…"
-              />
-              <p className="text-[10px] text-zinc-500">
-                Vacío = materiales, combustible, insumos y EPP en todos los almacenes de {nombreProyecto}.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase text-zinc-500">
-                Destino (obra) — almacén o partida Lulo
-              </label>
-              <DestinoObraDespachoSelect
-                proyectoId={proyectoId}
-                ubicacionId={destinoId}
-                partidaKey={destinoPartidaKey}
-                onUbicacionChange={(id) => {
-                  setDestinoId(id);
-                  setLineas((prev) =>
-                    prev.map((l) => ({ ...l, distribucion: emptyDistribucion() })),
-                  );
-                }}
-                onPartidaChange={(key) => {
-                  setDestinoPartidaKey(key);
-                  setLineas((prev) =>
-                    prev.map((l) => ({ ...l, distribucion: emptyDistribucion() })),
-                  );
-                }}
-              />
-            </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-zinc-500">
+              Filtrar almacén origen (opcional)
+            </label>
+            <UbicacionInventarioSelect
+              proyectoId={proyectoId}
+              value={origenId}
+              onChange={setOrigenId}
+              placeholder="Todos los almacenes de la obra…"
+            />
+            <p className="text-[10px] text-zinc-500">
+              Vacío = materiales, combustible, insumos y EPP en todos los almacenes de {nombreProyecto}.
+              El destino se elige por material, debajo.
+            </p>
           </div>
           {proyectoId ? (
             <DespachoAlertasConfigPanel
@@ -521,48 +494,86 @@ export default function DespachoInventarioClient() {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-              <div className="w-full max-w-[180px]">
-                <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
-                  Cantidad máxima a despachar
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="w-full max-w-[180px]">
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
+                    Cantidad máxima a despachar
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={linea.maxStock}
+                    step="any"
+                    value={linea.cantidad}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setLineas((prev) =>
+                        prev.map((l) =>
+                          l.lineId === linea.lineId
+                            ? {
+                                ...l,
+                                cantidad:
+                                  Number.isFinite(n) && n >= 0
+                                    ? Math.min(n, l.maxStock)
+                                    : 0,
+                                distribucion: emptyDistribucion(),
+                              }
+                            : l,
+                        ),
+                      );
+                    }}
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
+                  Destino de este material
                 </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={linea.maxStock}
-                  step="any"
-                  value={linea.cantidad}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
+                <DestinoObraDespachoSelect
+                  proyectoId={proyectoId}
+                  materialId={linea.material_id}
+                  materialNombre={linea.nombre}
+                  ubicacionId={linea.destinoId}
+                  partidaKey={linea.destinoPartidaKey}
+                  onUbicacionChange={(id) => {
+                    if (id && id === linea.origen_ubicacion_id) {
+                      toast.error('Origen y destino no pueden ser el mismo almacén');
+                      return;
+                    }
                     setLineas((prev) =>
                       prev.map((l) =>
                         l.lineId === linea.lineId
-                          ? {
-                              ...l,
-                              cantidad:
-                                Number.isFinite(n) && n >= 0
-                                  ? Math.min(n, l.maxStock)
-                                  : 0,
-                              distribucion: emptyDistribucion(),
-                            }
+                          ? { ...l, destinoId: id, distribucion: emptyDistribucion() }
                           : l,
                       ),
                     );
                   }}
-                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  onPartidaChange={(key) => {
+                    setLineas((prev) =>
+                      prev.map((l) =>
+                        l.lineId === linea.lineId
+                          ? { ...l, destinoPartidaKey: key, distribucion: emptyDistribucion() }
+                          : l,
+                      ),
+                    );
+                  }}
                 />
               </div>
-              {proyectoId && destinoId && linea.cantidad > 0 ? (
+
+              {proyectoId && linea.destinoId && linea.cantidad > 0 ? (
                 <DistribucionDespachoPartidas
                   proyectoId={proyectoId}
-                  destinoId={destinoId}
+                  destinoId={linea.destinoId}
                   partidaDestinoPreferida={
-                    destinoPartidaKey.startsWith('pp:')
-                      ? destinoPartidaKey.slice(3)
+                    linea.destinoPartidaKey.startsWith('pp:')
+                      ? linea.destinoPartidaKey.slice(3)
                       : undefined
                   }
                   partidaLegacyDestinoPreferida={
-                    destinoPartidaKey.startsWith('pd:')
-                      ? destinoPartidaKey.slice(3)
+                    linea.destinoPartidaKey.startsWith('pd:')
+                      ? linea.destinoPartidaKey.slice(3)
                       : undefined
                   }
                   materialId={linea.material_id}
@@ -577,9 +588,10 @@ export default function DespachoInventarioClient() {
                     );
                   }}
                 />
-              ) : proyectoId && linea.cantidad > 0 && !destinoId ? (
+              ) : linea.cantidad > 0 ? (
                 <p className="text-xs text-amber-400/90">
-                  Indique el destino (obra) arriba para ver las partidas que llevan este material.
+                  Elija el destino (almacén o partida Lulo) para ver las partidas que llevan este
+                  material y distribuir cantidades.
                 </p>
               ) : null}
             </div>

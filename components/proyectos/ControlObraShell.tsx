@@ -35,7 +35,7 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Control de obra</h1>
           <p className="text-sm text-zinc-500 mt-0.5">
-            Presupuesto, agua, informes del ingeniero y cronograma
+            Presupuesto, agua, maquinaria intercompany, informes y cronograma
           </p>
         </div>
       </header>
