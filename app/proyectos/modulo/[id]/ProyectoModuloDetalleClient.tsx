@@ -743,6 +743,14 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             ← Proyectos
           </Link>
           <div className="flex flex-wrap items-center gap-2">
+            {proyecto ? (
+              <Link
+                href={`/almacen/procurement?proyectoId=${encodeURIComponent(id)}&fromProject=1&bloquearProyecto=1`}
+                className="rounded-xl border border-emerald-500/40 bg-emerald-950/45 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/60"
+              >
+                + Factura (este proyecto)
+              </Link>
+            ) : null}
             {modoEdicion && proyecto && !tabCabeceraMinimaSinAcciones && !fichaModuloSinPestaña ? (
               <>
                 <button

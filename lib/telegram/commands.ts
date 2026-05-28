@@ -43,7 +43,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
-        '• /entrada — foto + detalle de material que ingresa\n' +
+        '• /entrada — lista de facturas pendientes por ingresar a almacén\n' +
         '• /salida — foto + detalle de material que egresa\n' +
         '• /estado — ver modo activo\n' +
         '• /cancelar — volver al menú',
@@ -62,7 +62,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/stock cemento — buscar stock por nombre (parcial)\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
-        '/entrada — material que ingresa a la obra (foto + texto)\n' +
+        '/entrada — facturas pendientes de ingreso a almacén\n' +
         '/salida — material que egresa de la obra (foto + texto)\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +

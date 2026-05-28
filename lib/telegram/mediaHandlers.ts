@@ -32,19 +32,70 @@ export async function manejarFacturaTelegram(params: {
   chatId: string;
   chatLabel: string;
   fileId: string;
+  telegramMessageId?: string | null;
 }): Promise<void> {
+  const messageId = String(params.telegramMessageId ?? '').trim();
+
+  if (messageId) {
+    const { data: existente, error: checkErr } = await params.supabase
+      .from('ci_facturas_canal_pendientes')
+      .select('id, estado')
+      .eq('telegram_message_id', messageId)
+      .maybeSingle();
+
+    if (checkErr) {
+      await sendTelegramMessage(
+        params.chatId,
+        '⚠️ Error al validar duplicados de Telegram. Intenta de nuevo en unos segundos.',
+      );
+      throw new Error(checkErr.message);
+    }
+
+    if (existente?.id) {
+      await setTelegramContexto(params.supabase, params.chatId, {
+        contexto: 'factura',
+        pending_factura_id: existente.id,
+      });
+      await sendTelegramMessage(
+        params.chatId,
+        'ℹ️ Esta foto ya fue recibida. Continuo con el proceso existente sin duplicar.',
+      );
+      return;
+    }
+  }
+
   const { data: pending, error: insErr } = await params.supabase
     .from('ci_facturas_canal_pendientes')
     .insert({
       canal: 'telegram',
       chat_id: params.chatId,
       chat_label: params.chatLabel,
-      estado: 'pendiente',
+      // Pre-registro inmediato para blindar reintentos de Telegram por timeout/red móvil.
+      estado: 'recibido',
+      telegram_message_id: messageId || null,
     })
     .select('id')
     .single();
 
   if (insErr || !pending) {
+    if ((insErr as { code?: string } | null)?.code === '23505' && messageId) {
+      const { data: existente } = await params.supabase
+        .from('ci_facturas_canal_pendientes')
+        .select('id')
+        .eq('telegram_message_id', messageId)
+        .maybeSingle();
+      if (existente?.id) {
+        await setTelegramContexto(params.supabase, params.chatId, {
+          contexto: 'factura',
+          pending_factura_id: existente.id,
+        });
+        await sendTelegramMessage(
+          params.chatId,
+          'ℹ️ Mensaje duplicado detectado. Se mantiene un solo registro de factura.',
+        );
+        return;
+      }
+    }
     await sendTelegramMessage(params.chatId, '❌ Error al registrar la factura.');
     throw new Error(insErr?.message ?? 'insert factura');
   }

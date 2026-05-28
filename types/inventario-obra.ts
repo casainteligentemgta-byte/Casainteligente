@@ -201,6 +201,13 @@ export interface CompraFacturaInsert {
   }>;
 }
 
+/** Categoría operativa sugerida al cargar compras en app/iPad. */
+export type CategoriaMaterialCompra =
+  | 'Materiales'
+  | 'Herramientas'
+  | 'Equipos'
+  | 'Consumibles / Logística de Campo';
+
 // ── Techo presupuestario por partida ────────────────────────────────────────
 
 /** Resultado de validar cantidad contra techo (UI / cliente). */

@@ -131,6 +131,7 @@ export default function ProcurementClient() {
     const [isSaving, setIsSaving] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [proyectoId, setProyectoId] = useState('');
+    const [proyectoBloqueado, setProyectoBloqueado] = useState(false);
     const [ubicacionDestinoId, setUbicacionDestinoId] = useState('');
     const [tasaBcv, setTasaBcv] = useState<number | null>(null);
     const [tasaBcvFuente, setTasaBcvFuente] = useState<string | null>(null);
@@ -141,6 +142,10 @@ export default function ProcurementClient() {
     const documentPreviewRef = useRef<string | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
+    const proyectoIdParam = searchParams.get('proyectoId')?.trim() || '';
+    const bloquearProyectoParam =
+        searchParams.get('bloquearProyecto') === '1' ||
+        searchParams.get('fromProject') === '1';
 
     const applyExtractedPayload = (
         payload: {
@@ -238,6 +243,12 @@ export default function ProcurementClient() {
     }, [searchParams]);
 
     useEffect(() => {
+        if (!proyectoIdParam) return;
+        setProyectoId(proyectoIdParam);
+        setProyectoBloqueado(bloquearProyectoParam);
+    }, [proyectoIdParam, bloquearProyectoParam]);
+
+    useEffect(() => {
         const supabase = createClient();
         void (async () => {
             const { proyectos: lista, error: catErr } = await loadCatalogoProyectosApp(supabase);
@@ -248,17 +259,17 @@ export default function ProcurementClient() {
                     ? sessionStorage.getItem('procurement_proyecto_id')
                     : null;
             if (saved && lista.some((p) => p.id === saved)) {
-                setProyectoId(saved);
+                if (!proyectoIdParam) setProyectoId(saved);
                 return;
             }
             const principal = lista.find((p) => esProyectoSmartRrhhPorNombre(p.nombre));
             if (principal?.id) {
-                setProyectoId(principal.id);
+                if (!proyectoIdParam) setProyectoId(principal.id);
             } else if (lista[0]?.id) {
-                setProyectoId(lista[0].id);
+                if (!proyectoIdParam) setProyectoId(lista[0].id);
             }
         })();
-    }, []);
+    }, [proyectoIdParam]);
 
     useEffect(() => {
         if (proyectoId && typeof window !== 'undefined') {
@@ -865,12 +876,18 @@ export default function ProcurementClient() {
                                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
                                     Imputar a proyecto / obra
                                 </label>
+                                {proyectoBloqueado ? (
+                                    <p className="text-[11px] font-bold text-emerald-400">
+                                        Proyecto fijado por contexto del módulo de proyecto.
+                                    </p>
+                                ) : null}
                                 <select
                                     value={proyectoId}
                                     onChange={(e) => {
                                         setProyectoId(e.target.value);
                                         setUbicacionDestinoId('');
                                     }}
+                                    disabled={proyectoBloqueado}
                                     className="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
                                 >
                                     <option value="">Seleccione proyecto…</option>

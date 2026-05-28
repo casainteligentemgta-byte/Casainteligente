@@ -107,6 +107,30 @@ export async function confirmarCompraCanal(
   };
 }
 
+export async function ingresoAlmacenCanal(
+  rawId: string,
+): Promise<{ compraFacturaId: string; yaExistia: boolean }> {
+  const id = resolveIdPendienteCanal(rawId);
+  const res = await fetch(
+    `/api/facturas-canal/pendientes/${encodeURIComponent(id)}/ingreso-almacen`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+  const data = (await res.json()) as {
+    compraFacturaId?: string;
+    yaExistia?: boolean;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || 'No se pudo registrar ingreso a almacén');
+  if (!data.compraFacturaId) throw new Error('Respuesta incompleta del servidor');
+  return {
+    compraFacturaId: data.compraFacturaId,
+    yaExistia: Boolean(data.yaExistia),
+  };
+}
+
 export async function eliminarPendienteCanal(
   rawId: string,
   options?: { eliminarComprasVinculadas?: boolean },

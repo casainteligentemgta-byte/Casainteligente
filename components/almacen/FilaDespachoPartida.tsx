@@ -112,7 +112,7 @@ export function FilaDespachoPartida({
             className={`w-full rounded-lg border bg-black/40 p-2.5 text-sm text-white outline-none focus:ring-2 ${
               validacion.permitido || cantidad === 0
                 ? 'border-white/10 focus:ring-sky-500/40'
-                : 'border-red-500/60 bg-red-950/30 text-red-100 focus:ring-red-500/40'
+                : 'border-amber-500/60 bg-amber-950/30 text-amber-100 focus:ring-amber-500/40'
             }`}
           />
         </div>

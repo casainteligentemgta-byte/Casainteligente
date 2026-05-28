@@ -69,6 +69,7 @@ export async function processInvoiceFromCanal(params: {
   await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
+      // Luego del pre-registro "recibido", pasamos a procesamiento OCR/IA.
       estado: 'procesando',
       document_storage_path: storagePath,
       document_file_name: params.fileName,

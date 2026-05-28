@@ -2,6 +2,16 @@ import type { ValidacionPartida } from '@/types/inventario-obra';
 
 export type { ValidacionPartida };
 
+/** Techo restante real para una partida (techo - consumido). */
+export function calcularTechoDisponible(
+  cantidadPresupuestada: number,
+  cantidadAsignadaReal: number,
+): number {
+  const techo = Math.max(0, Number(cantidadPresupuestada) || 0);
+  const asignado = Math.max(0, Number(cantidadAsignadaReal) || 0);
+  return Math.max(0, techo - asignado);
+}
+
 /**
  * Valida si la cantidad a imputar/sacar supera el techo de la partida.
  *
@@ -18,7 +28,7 @@ export function validarTechoPresupuestario(
   const techo = Math.max(0, Number(cantidadPresupuestada) || 0);
   const asignado = Math.max(0, Number(cantidadAsignadaReal) || 0);
 
-  const disponibleReal = techo - asignado;
+  const disponibleReal = calcularTechoDisponible(techo, asignado);
 
   if (sacar <= disponibleReal) {
     return {

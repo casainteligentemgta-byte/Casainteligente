@@ -11,6 +11,7 @@ import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import {
   actualizarPendienteCanal,
   confirmarCompraCanal,
+  ingresoAlmacenCanal,
   type PendienteCanal,
 } from '@/lib/contabilidad/facturaCanalApi';
 import { reubicarCompra } from '@/lib/contabilidad/reubicarCompraApi';
@@ -33,6 +34,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [registrando, setRegistrando] = useState(false);
   const [guardandoUbicacion, setGuardandoUbicacion] = useState(false);
   const [compraRegistrada, setCompraRegistrada] = useState(false);
+  const [autoConfirmando, setAutoConfirmando] = useState(false);
+  const [ingresandoAlmacen, setIngresandoAlmacen] = useState(false);
+  const [ingresoAlmacenOk, setIngresoAlmacenOk] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -137,7 +141,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         extracted,
       });
       setCompraRegistrada(true);
-      toast.success(r.yaExistia ? 'Compra ya registrada' : 'Compra registrada en contabilidad');
+      toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo registrar');
     } finally {
@@ -145,7 +149,60 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     }
   };
 
+  const registrarIngresoAlmacen = async () => {
+    setIngresandoAlmacen(true);
+    try {
+      const r = await ingresoAlmacenCanal(pendingId);
+      setIngresoAlmacenOk(true);
+      toast.success(r.yaExistia ? 'Ingreso a almacén ya registrado' : 'Ingreso a almacén registrado');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo registrar ingreso');
+    } finally {
+      setIngresandoAlmacen(false);
+    }
+  };
+
   const nLineas = extracted?.items?.filter((it) => String(it.description ?? '').trim()).length ?? 0;
+
+  useEffect(() => {
+    if (
+      autoConfirmando ||
+      registrando ||
+      compraRegistrada ||
+      !puedeRegistrar ||
+      !proyectoId.trim() ||
+      !ubicacionId.trim() ||
+      !extracted
+    ) {
+      return;
+    }
+
+    setAutoConfirmando(true);
+    void (async () => {
+      try {
+        const r = await confirmarCompraCanal(pendingId, {
+          proyecto_id: proyectoId,
+          ubicacion_destino_id: ubicacionId,
+          extracted,
+        });
+        setCompraRegistrada(true);
+        toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
+      } catch {
+        // Si falla el intento automático, el usuario puede usar el botón manual.
+      } finally {
+        setAutoConfirmando(false);
+      }
+    })();
+  }, [
+    autoConfirmando,
+    registrando,
+    compraRegistrada,
+    puedeRegistrar,
+    proyectoId,
+    ubicacionId,
+    extracted,
+    pendingId,
+  ]);
 
   return (
     <div className="min-h-screen bg-[#050508] text-white">
@@ -175,10 +232,22 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         ) : compraRegistrada || pendiente.estado === 'confirmado' ? (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-6 text-center space-y-4">
             <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto" />
-            <p className="text-sm font-semibold text-emerald-200">Compra registrada</p>
+            <p className="text-sm font-semibold text-emerald-200">Compra cargada en contabilidad</p>
             <p className="text-xs text-zinc-400">
               {extracted?.supplier_name ?? 'Proveedor'} · Nº {extracted?.invoice_number ?? '—'}
             </p>
+            <button
+              type="button"
+              onClick={() => void registrarIngresoAlmacen()}
+              disabled={ingresandoAlmacen || ingresoAlmacenOk}
+              className="w-full rounded-lg bg-[#34C759] text-black text-sm font-semibold px-4 py-2.5 disabled:opacity-50"
+            >
+              {ingresandoAlmacen
+                ? 'Registrando ingreso…'
+                : ingresoAlmacenOk
+                  ? 'Ingreso a almacén completado'
+                  : 'Ingreso a almacén'}
+            </button>
             <div className="flex flex-col gap-2 pt-2">
               <Link
                 href="/contabilidad/compras?fuente=telegram"
@@ -320,18 +389,22 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             <button
               type="button"
               disabled={
-                !puedeRegistrar || !proyectoId.trim() || !ubicacionId.trim() || registrando
+                !puedeRegistrar ||
+                !proyectoId.trim() ||
+                !ubicacionId.trim() ||
+                registrando ||
+                autoConfirmando
               }
               onClick={() => void registrar()}
               className="w-full rounded-xl bg-[#34C759] disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-bold py-3 flex items-center justify-center gap-2"
             >
-              {registrando ? (
+              {registrando || autoConfirmando ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Registrando…
+                  Confirmando…
                 </>
               ) : (
-                'Registrar compra en contabilidad'
+                'Cargar compra en contabilidad'
               )}
             </button>
 

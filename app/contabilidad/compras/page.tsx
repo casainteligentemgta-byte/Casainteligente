@@ -38,6 +38,7 @@ import {
     FileText,
     Loader2,
     MapPin,
+    PackageCheck,
     Pencil,
     Printer,
     RefreshCw,
@@ -191,6 +192,7 @@ export default function ComprasPage() {
     const [error, setError] = useState<string | null>(null);
     const [avisoCanal, setAvisoCanal] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [ingresandoAlmacenId, setIngresandoAlmacenId] = useState<string | null>(null);
     const [editandoCanal, setEditandoCanal] = useState<{
         pendienteId: string;
         extracted: ExtractedCanalHeader;
@@ -690,6 +692,30 @@ export default function ComprasPage() {
         }
     };
 
+    const handleIngresoAlmacen = async (c: CompraRow) => {
+        if (!c.purchase_invoice_id) {
+            setError('Esta compra no tiene documento base para ingreso a almacén.');
+            return;
+        }
+        setIngresandoAlmacenId(c.id);
+        setError(null);
+        try {
+            const res = await fetch(`/api/contabilidad/compras/${c.id}/ingreso-almacen`, {
+                method: 'POST',
+            });
+            const data = (await res.json()) as { yaExistia?: boolean; error?: string };
+            if (!res.ok) throw new Error(data.error || 'No se pudo registrar ingreso');
+            if (data.yaExistia) {
+                setError('Esta compra ya tenía ingreso registrado en almacén.');
+            }
+            void load();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'No se pudo registrar ingreso');
+        } finally {
+            setIngresandoAlmacenId(null);
+        }
+    };
+
     const totalFiltrado = useMemo(() => {
         let totalUsd = 0;
         let totalBs = 0;
@@ -1025,6 +1051,21 @@ export default function ComprasPage() {
                         Compras
                     </h1>
                 </div>
+                <Link
+                    href="/almacen/procurement"
+                    style={{
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        color: '#a7f3d0',
+                        textDecoration: 'none',
+                        padding: '6px 8px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(16,185,129,0.35)',
+                        background: 'rgba(16,185,129,0.12)',
+                    }}
+                >
+                    + Factura
+                </Link>
                 <Link
                     href="/contabilidad/compras/canal"
                     style={{
@@ -1910,6 +1951,34 @@ export default function ComprasPage() {
                                                 >
                                                     <MapPin size={14} />
                                                     Obra / almacén
+                                                </button>
+                                            ) : null}
+                                            {c.purchase_invoice_id ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleIngresoAlmacen(c)}
+                                                    disabled={deletingId !== null || ingresandoAlmacenId !== null}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '10px',
+                                                        border: '1px solid rgba(52,199,89,0.45)',
+                                                        background: 'rgba(52,199,89,0.14)',
+                                                        color: '#86efac',
+                                                        fontSize: '11px',
+                                                        fontWeight: 800,
+                                                        cursor: 'pointer',
+                                                        opacity: ingresandoAlmacenId === c.id ? 0.6 : 1,
+                                                    }}
+                                                >
+                                                    {ingresandoAlmacenId === c.id ? (
+                                                        <Loader2 size={14} className="animate-spin" />
+                                                    ) : (
+                                                        <PackageCheck size={14} />
+                                                    )}
+                                                    Ingreso a almacén
                                                 </button>
                                             ) : null}
                                             {c.pendiente_canal_id ? (

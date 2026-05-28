@@ -40,11 +40,15 @@ import {
   manejarTextoLitrosAguaTelegram,
 } from '@/lib/telegram/aguaRegistro';
 import {
-  manejarComandoEntradaTelegram,
   manejarComandoSalidaTelegram,
   manejarFotoEntradaSalidaTelegram,
   manejarTextoObservacionEntradaSalida,
 } from '@/lib/telegram/entradaSalidaRegistro';
+import {
+  esCallbackEntradaCompra,
+  manejarCallbackEntradaCompraTelegram,
+  manejarComandoEntradaComprasTelegram,
+} from '@/lib/telegram/entradaComprasPicker';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 import {
   esCallbackAvanceCampo,
@@ -162,7 +166,7 @@ async function aplicarComando(
   }
 
   if (cmd.comandoEntrada) {
-    await manejarComandoEntradaTelegram(supabase, chatId);
+    await manejarComandoEntradaComprasTelegram(supabase, chatId);
     return;
   }
 
@@ -287,6 +291,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledUb) {
         return NextResponse.json({ ok: true, callback: 'ubicacion_compra' });
+      }
+    }
+
+    if (esCallbackEntradaCompra(cq.data)) {
+      const handledEntradaCompra = await manejarCallbackEntradaCompraTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledEntradaCompra) {
+        return NextResponse.json({ ok: true, callback: 'entrada_compra' });
       }
     }
 
@@ -559,6 +574,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           chatId,
           chatLabel: label,
           fileId: archivo.fileId,
+          telegramMessageId: String(msg.message_id),
         });
         break;
       case 'obra':

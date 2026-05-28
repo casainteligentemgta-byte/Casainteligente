@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Loader2, PackageOpen } from 'lucide-react';
+import { toast } from 'sonner';
 import { FilaDespachoPartida } from '@/components/almacen/FilaDespachoPartida';
 import {
   DESPACHO_ALERTAS_DEFAULT,
@@ -11,6 +12,7 @@ import {
   type NivelAlertaDespacho,
 } from '@/lib/almacen/despachoAlertasConfig';
 import { validarDistribucionLinea } from '@/lib/almacen/crearTransferenciaInventario';
+import { calcularTechoDisponible } from '@/lib/almacen/validarTechoPresupuestario';
 import type { ImputacionPartidaInput, PartidaDespachoFila } from '@/types/inventario-obra';
 
 export type DistribucionDespachoState = {
@@ -25,6 +27,7 @@ export type DistribucionDespachoState = {
 type DistribRowState = {
   rowId: string;
   fila: PartidaDespachoFila;
+  techo_disponible: number;
   seleccionada: boolean;
   cantidad: number;
   justificacion: string;
@@ -79,6 +82,7 @@ export function DistribucionDespachoPartidas({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rows, setRows] = useState<DistribRowState[]>([]);
+  const [ultimoToastExceso, setUltimoToastExceso] = useState<Record<string, number>>({});
 
   const cargarOpciones = useCallback(async () => {
     if (!proyectoId || !materialId) {
@@ -98,6 +102,10 @@ export function DistribucionDespachoPartidas({
         partidas.map((fila) => ({
           rowId: nuevaFilaId(),
           fila,
+          techo_disponible: calcularTechoDisponible(
+            fila.cantidad_presupuestada,
+            fila.cantidad_asignada_real,
+          ),
           seleccionada: false,
           cantidad: 0,
           justificacion: '',
@@ -265,7 +273,7 @@ export function DistribucionDespachoPartidas({
                   const restante = Math.max(0, cantidadLinea - otros);
                   const disp = Math.max(
                     0,
-                    row.fila.cantidad_presupuestada - row.fila.cantidad_asignada_real,
+                    row.techo_disponible,
                   );
                   return prev.map((r) =>
                     r.rowId === row.rowId
@@ -289,27 +297,46 @@ export function DistribucionDespachoPartidas({
             </span>
           </label>
           {row.seleccionada ? (
-            <FilaDespachoPartida
-              fila={row.fila}
-              productoNombre={productoNombre}
-              cantidad={row.cantidad}
-              justificacion={row.justificacion}
-              disabled={disabled}
-              onChange={(v) => {
-                setRows((prev) =>
-                  prev.map((r) =>
-                    r.rowId === row.rowId
-                      ? {
-                          ...r,
-                          cantidad: v.cantidad,
-                          justificacion: v.justificacion,
-                          autorizado: v.autorizado,
-                        }
-                      : r,
-                  ),
-                );
-              }}
-            />
+            <>
+              <FilaDespachoPartida
+                fila={row.fila}
+                productoNombre={productoNombre}
+                cantidad={row.cantidad}
+                justificacion={row.justificacion}
+                disabled={disabled}
+                onChange={(v) => {
+                  if (
+                    v.validacion.requiereJustificacion &&
+                    v.cantidad > 0 &&
+                    ultimoToastExceso[row.rowId] !== v.cantidad
+                  ) {
+                    toast.warning(
+                      `La partida supera el techo Lulo. Disponible: ${row.techo_disponible}.`,
+                    );
+                    setUltimoToastExceso((prev) => ({ ...prev, [row.rowId]: v.cantidad }));
+                  }
+
+                  setRows((prev) =>
+                    prev.map((r) =>
+                      r.rowId === row.rowId
+                        ? {
+                            ...r,
+                            cantidad: v.cantidad,
+                            justificacion: v.justificacion,
+                            autorizado: v.autorizado,
+                          }
+                        : r,
+                    ),
+                  );
+                }}
+              />
+              {row.cantidad > row.techo_disponible ? (
+                <p className="px-4 pb-3 text-[11px] font-semibold text-amber-400">
+                  Saldo Lulo disponible: {row.techo_disponible}. Exceso actual:{' '}
+                  {row.cantidad - row.techo_disponible}.
+                </p>
+              ) : null}
+            </>
           ) : (
             <p className="px-4 py-2 text-[11px] text-zinc-600">{row.fila.nombre_partida}</p>
           )}
