@@ -33,7 +33,19 @@ import {
     mergeProyectosCatalogo,
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
-import { Filter, FileText, Loader2, Pencil, Printer, RefreshCw, Search, Share2, Trash2 } from 'lucide-react';
+import {
+    Filter,
+    FileText,
+    Loader2,
+    MapPin,
+    Pencil,
+    Printer,
+    RefreshCw,
+    Search,
+    Share2,
+    Trash2,
+} from 'lucide-react';
+import ReubicarCompraModal from '@/components/contabilidad/ReubicarCompraModal';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
@@ -148,6 +160,17 @@ function lineCount(row: CompraRow): number {
     return 0;
 }
 
+function puedeReubicarCompra(c: CompraRow): boolean {
+    return (
+        c.fuente_lista === 'app' ||
+        Boolean(c.purchase_invoice_id) ||
+        Boolean(c.pendiente_canal_id) ||
+        c.estado === 'REGISTRADA' ||
+        c.canal_estado === 'confirmado' ||
+        c.canal_estado === 'extraido'
+    );
+}
+
 function compraPuedeVerImagen(c: CompraRow): boolean {
     return Boolean(
         c.document_storage_path ||
@@ -171,6 +194,12 @@ export default function ComprasPage() {
     const [editandoCanal, setEditandoCanal] = useState<{
         pendienteId: string;
         extracted: ExtractedCanalHeader;
+    } | null>(null);
+    const [reubicarCompra, setReubicarCompra] = useState<{
+        id: string;
+        proyectoId?: string | null;
+        ubicacionId?: string | null;
+        titulo?: string;
     } | null>(null);
 
     const [hydrated, setHydrated] = useState(false);
@@ -380,7 +409,7 @@ export default function ComprasPage() {
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),${lineasSelect}`
+                        `id,purchase_invoice_id,proyecto_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,ubicacion_destino_id),${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -429,7 +458,22 @@ export default function ComprasPage() {
                     }
                     throw qErr;
                 }
-                filas = (data ?? []) as CompraRow[];
+                filas = (data ?? []).map((row) => {
+                    const r = row as unknown as CompraRow & {
+                        purchase_invoice?: {
+                            proyecto_id?: string | null;
+                            ubicacion_destino_id?: string | null;
+                        } | null;
+                    };
+                    const pi = r.purchase_invoice;
+                    return {
+                        ...r,
+                        fuente_lista: r.fuente_lista ?? 'app',
+                        proyecto_id: r.proyecto_id ?? pi?.proyecto_id ?? null,
+                        ubicacion_destino_id:
+                            r.ubicacion_destino_id ?? pi?.ubicacion_destino_id ?? null,
+                    };
+                });
             }
 
             const idsConocidos = proyectosIdsRef.current;
@@ -1838,6 +1882,36 @@ export default function ComprasPage() {
                                                 marginTop: '10px',
                                             }}
                                         >
+                                            {puedeReubicarCompra(c) ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setReubicarCompra({
+                                                            id: c.id,
+                                                            proyectoId: c.proyecto_id,
+                                                            ubicacionId: c.ubicacion_destino_id,
+                                                            titulo: `Reubicar — ${c.supplier_name}`,
+                                                        })
+                                                    }
+                                                    disabled={deletingId !== null}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '10px',
+                                                        border: '1px solid rgba(251,146,60,0.45)',
+                                                        background: 'rgba(234,88,12,0.15)',
+                                                        color: '#fdba74',
+                                                        fontSize: '11px',
+                                                        fontWeight: 800,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    <MapPin size={14} />
+                                                    Obra / almacén
+                                                </button>
+                                            ) : null}
                                             {c.pendiente_canal_id ? (
                                                 <button
                                                     type="button"
@@ -2050,6 +2124,16 @@ export default function ComprasPage() {
                 extracted={editandoCanal?.extracted ?? null}
                 onClose={() => setEditandoCanal(null)}
                 onGuardar={guardarEdicionTelegram}
+            />
+
+            <ReubicarCompraModal
+                open={reubicarCompra != null}
+                compraId={reubicarCompra?.id ?? ''}
+                titulo={reubicarCompra?.titulo}
+                proyectoIdInicial={reubicarCompra?.proyectoId}
+                ubicacionIdInicial={reubicarCompra?.ubicacionId}
+                onClose={() => setReubicarCompra(null)}
+                onGuardado={() => void load()}
             />
         </div>
     );
