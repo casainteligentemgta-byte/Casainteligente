@@ -53,6 +53,10 @@ function stockKey(item: Pick<StockItem, 'ubicacion_id' | 'material_id'>): string
   return `${item.ubicacion_id}:${item.material_id}`;
 }
 
+function lineaStockKey(linea: Pick<LineaDespacho, 'origen_ubicacion_id' | 'material_id'>): string {
+  return `${linea.origen_ubicacion_id}:${linea.material_id}`;
+}
+
 const emptyDistribucion = (): DistribucionDespachoState => ({
   imputaciones: [],
   totalImputado: 0,
@@ -189,7 +193,7 @@ export default function DespachoInventarioClient() {
   const agregarLinea = () => {
     const hit = stock.find((s) => stockKey(s) === materialAgregar);
     if (!hit) return;
-    if (lineas.some((l) => stockKey(l) === stockKey(hit))) {
+    if (lineas.some((l) => lineaStockKey(l) === stockKey(hit))) {
       toast.error('Ese material en ese almacén ya está en la lista');
       return;
     }
@@ -252,7 +256,7 @@ export default function DespachoInventarioClient() {
         }
 
         const codigos: string[] = [];
-        for (const [origenUbicacionId, grupo] of porOrigen) {
+        for (const [origenUbicacionId, grupo] of Array.from(porOrigen.entries())) {
           const res = await fetch('/api/almacen/transferencias', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -289,7 +293,7 @@ export default function DespachoInventarioClient() {
   };
 
   const stockDisponible = stock.filter(
-    (s) => !lineas.some((l) => stockKey(l) === stockKey(s)),
+    (s) => !lineas.some((l) => lineaStockKey(l) === stockKey(s)),
   );
 
   const nombreProyecto = proyectos.find((p) => p.id === proyectoId)?.nombre ?? 'la obra';
