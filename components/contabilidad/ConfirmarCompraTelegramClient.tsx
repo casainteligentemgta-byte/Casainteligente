@@ -236,7 +236,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             </p>
             <button
               type="button"
-              onClick={() => void registrarIngresoAlmacen()}
+              onClick={() => {
+                if (ingresandoAlmacen) return;
+                void registrarIngresoAlmacen();
+              }}
               disabled={ingresandoAlmacen || ingresoAlmacenOk}
               className="w-full rounded-lg bg-[#34C759] text-black text-sm font-semibold px-4 py-2.5 disabled:opacity-50"
             >
