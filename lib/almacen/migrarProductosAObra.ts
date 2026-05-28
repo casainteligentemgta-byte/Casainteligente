@@ -157,7 +157,7 @@ export async function migrarProductosAObra(
         name: prod.nombre.trim() || `Producto ${pid}`,
         category_id: categoryId,
         unit: 'UND',
-        stock_available: herramientas ? 1 : stockInicial > 0 ? stockInicial : 0,
+        stock_available: 0,
         stock_quarantine: 0,
         reorder_point: 0,
         average_weighted_cost: costo,
@@ -190,11 +190,13 @@ export async function migrarProductosAObra(
       result.materialIds.push(materialId);
       result.creados += 1;
 
-      if (input.ubicacionId && stockInicial > 0 && !herramientas) {
+      const deltaStock =
+        stockInicial > 0 ? stockInicial : herramientas ? 1 : 0;
+      if (input.ubicacionId && deltaStock > 0) {
         const { error: rpcErr } = await supabase.rpc('inv_stock_apply_delta', {
           p_ubicacion_id: input.ubicacionId,
           p_material_id: materialId,
-          p_delta_disponible: stockInicial,
+          p_delta_disponible: deltaStock,
           p_delta_reservada: 0,
           p_delta_transito_entrante: 0,
         });

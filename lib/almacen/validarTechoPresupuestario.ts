@@ -63,6 +63,33 @@ export function validarImputacionPartida(
   return validarTechoPresupuestario(cantidadNueva, cantidadTecho, cantidadYaConsumida);
 }
 
+/** Valida cantidad contra techo remanente (presupuesto − consumido). */
+export function validarContraTechoDisponible(
+  cantidad: number,
+  techoDisponible: number,
+  techoTotal = 0,
+): ValidacionPartida {
+  const sacar = Math.max(0, Number(cantidad) || 0);
+  const disp = Math.max(0, Number(techoDisponible) || 0);
+  if (sacar <= disp) {
+    return {
+      permitido: true,
+      diferencia: 0,
+      porcentajeExceso: 0,
+      requiereJustificacion: false,
+    };
+  }
+  const exceso = sacar - disp;
+  const porcentajeExceso =
+    techoTotal > 0 ? Math.round((exceso / techoTotal) * 100) : sacar > 0 ? 100 : 0;
+  return {
+    permitido: false,
+    diferencia: exceso,
+    porcentajeExceso,
+    requiereJustificacion: true,
+  };
+}
+
 /** Mapea fila UI → validación de techo. */
 export function validarFilaDespachoPartida(
   cantidadASacar: number,

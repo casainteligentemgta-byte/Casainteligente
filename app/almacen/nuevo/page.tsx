@@ -210,7 +210,7 @@ export default function NewInventoryItemPage() {
         name: item.name.trim(),
         category_id: item.category_id,
         unit: item.unit,
-        stock_available: isHerramientas ? 1 : 0,
+        stock_available: 0,
         stock_quarantine: 0,
         reorder_point: item.reorder_point,
         average_weighted_cost: 0,

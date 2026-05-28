@@ -8,7 +8,10 @@ export type LineaCompraInventarioInput = {
   requiere_serie?: boolean;
 };
 
-/** Registra compra en inventario (compras_facturas) y aplica stock al pasar a registrada. */
+/**
+ * Registra compra en compras_facturas y aplica stock en inventario_stock (trigger migr. 180).
+ * No modifica global_inventory.stock_available (maestro SKU).
+ */
 export async function registrarCompraInventario(
   supabase: SupabaseClient,
   params: {

@@ -439,15 +439,18 @@ export default function InventoryMasterPage() {
         stockPorUbicacion,
     ]);
 
+    const cantidadStockReal = (item: InventoryItem): number =>
+        stockPorUbicacion.get(item.id)?.cantidad_disponible ?? 0;
+
     const statsFiltrados = useMemo(() => {
         const base = hayFiltrosActivos ? filteredItems : itemsCatalogo;
         const totalVal = base.reduce(
             (acc, item) =>
-                acc + Number(item.stock_available) * Number(item.average_weighted_cost),
+                acc + cantidadStockReal(item) * Number(item.average_weighted_cost),
             0,
         );
         const lowStock = base.filter(
-            (item) => Number(item.stock_available) <= Number(item.reorder_point),
+            (item) => cantidadStockReal(item) <= Number(item.reorder_point),
         ).length;
         const quarantine = base.reduce((acc, item) => acc + Number(item.stock_quarantine), 0);
         return {
@@ -456,7 +459,7 @@ export default function InventoryMasterPage() {
             totalItems: base.length,
             quarantineCount: quarantine,
         };
-    }, [filteredItems, itemsCatalogo, hayFiltrosActivos]);
+    }, [filteredItems, itemsCatalogo, hayFiltrosActivos, stockPorUbicacion]);
 
     const limpiarFiltros = () => {
         setSearchTerm('');
@@ -475,7 +478,7 @@ export default function InventoryMasterPage() {
 
     const shareInventory = () => {
         const text = `📦 *REPORTE DE INVENTARIO - ${new Date().toLocaleDateString()}*\n\n` +
-            filteredItems.map(item => `- ${item.name}: ${item.stock_available} ${item.unit}`).join('\n') +
+            filteredItems.map(item => `- ${item.name}: ${cantidadStockReal(item)} ${item.unit}`).join('\n') +
             `\n\n*Valor Total:* ${formatCurrency(statsFiltrados.totalValue)}`;
 
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
@@ -798,10 +801,7 @@ export default function InventoryMasterPage() {
                         ) : (
                             filteredItems.map((item) => {
                                 const stockUb = stockPorUbicacion.get(item.id);
-                                const stockMostrar =
-                                    filtroPorUbicacionActivo && stockUb
-                                        ? stockUb.cantidad_disponible
-                                        : Number(item.stock_available);
+                                const stockMostrar = stockUb?.cantidad_disponible ?? 0;
                                 const ubicacionLabel =
                                     filtroPorUbicacionActivo && stockUb?.ubicacion_nombres.length
                                         ? stockUb.ubicacion_nombres.join(' · ')

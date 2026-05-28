@@ -181,7 +181,7 @@ export function DistribucionDespachoPartidas({
     for (const r of rows) {
       if (!r.seleccionada || r.cantidad <= 0) continue;
       const techo = r.fila.cantidad_presupuestada;
-      const disp = Math.max(0, techo - r.fila.cantidad_asignada_real);
+      const disp = Math.max(0, r.techo_disponible);
       if (r.cantidad > disp && techo > 0) {
         const pct = Math.round(((r.cantidad - disp) / techo) * 100);
         if (pct > max) max = pct;

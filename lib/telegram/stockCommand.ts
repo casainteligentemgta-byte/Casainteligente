@@ -4,20 +4,22 @@ import { enviarMensajeTelegram } from '@/lib/telegram/botApi';
 
 const DEPOSITO_GENERAL = 'Depósito Principal / General';
 
-type FilaInventario = {
+type MaterialMatch = {
+  id: string;
   name: string;
-  stock_available: number | null;
-  proyecto_id: string | null;
-  ci_proyectos: { nombre: string | null } | { nombre: string | null }[] | null;
 };
 
-function nombreObra(row: FilaInventario): string {
-  const p = row.ci_proyectos;
-  if (!p) return DEPOSITO_GENERAL;
-  const raw = Array.isArray(p) ? p[0]?.nombre : p.nombre;
-  const n = (raw ?? '').trim();
-  return n || DEPOSITO_GENERAL;
-}
+type StockRow = {
+  material_id: string;
+  cantidad_disponible: number | null;
+  ubicacion: {
+    ci_proyecto_id: string | null;
+    ci_proyectos: { nombre: string | null } | { nombre: string | null }[] | null;
+  } | Array<{
+    ci_proyecto_id: string | null;
+    ci_proyectos: { nombre: string | null } | { nombre: string | null }[] | null;
+  }> | null;
+};
 
 function escapeHtml(s: string): string {
   return s
@@ -26,14 +28,32 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
-/** Suma stock_available por frente de obra. */
-function consolidarPorObra(filas: FilaInventario[]): Record<string, number> {
+function nombreObraDesdeUbicacion(
+  ubicacion: StockRow['ubicacion'],
+): string {
+  const ub = Array.isArray(ubicacion) ? ubicacion[0] : ubicacion;
+  if (!ub) return DEPOSITO_GENERAL;
+  const p = ub.ci_proyectos;
+  const raw = Array.isArray(p) ? p[0]?.nombre : p?.nombre;
+  const n = (raw ?? '').trim();
+  return n || DEPOSITO_GENERAL;
+}
+
+/** Suma cantidad_disponible (inventario_stock) por frente de obra. */
+function consolidarPorObra(
+  filas: StockRow[],
+  nombresMaterial: Map<string, string>,
+): Record<string, number> {
   const consolidado: Record<string, number> = {};
 
   for (const row of filas) {
-    const obra = nombreObra(row);
-    const cant = Number(row.stock_available) || 0;
+    const obra = nombreObraDesdeUbicacion(row.ubicacion);
+    const cant = Number(row.cantidad_disponible) || 0;
+    if (cant <= 0) continue;
     consolidado[obra] = (consolidado[obra] ?? 0) + cant;
+    if (row.material_id && !nombresMaterial.has(row.material_id)) {
+      nombresMaterial.set(row.material_id, row.material_id);
+    }
   }
 
   return consolidado;
@@ -74,7 +94,7 @@ function construirMensajeConsolidado(
   );
   lineas.push('');
   lineas.push(
-    '<i>Consulta generada en tiempo real desde el ERP Casa Inteligente.</i>',
+    '<i>Stock físico desde inventario_stock (ubicaciones de obra).</i>',
   );
 
   return lineas.join('\n');
@@ -82,10 +102,7 @@ function construirMensajeConsolidado(
 
 /**
  * Consulta express de inventario: /stock &lt;material&gt;
- * 1. Búsqueda difusa: global_inventory.name ilike %término%
- * 2. Join: ci_proyectos(nombre) vía proyecto_id
- * 3. Consolidado en memoria por nombre de obra (suma stock_available)
- * 4. Respuesta formateada a Telegram
+ * Busca SKU en global_inventory y suma inventario_stock por obra.
  */
 export async function manejarComandoStockTelegram(opts: {
   supabase: SupabaseClient;
@@ -116,15 +133,15 @@ export async function manejarComandoStockTelegram(opts: {
     { parse_mode: 'HTML' },
   );
 
-  const { data, error } = await opts.supabase
+  const { data: materiales, error: matErr } = await opts.supabase
     .from('global_inventory')
-    .select('name, stock_available, proyecto_id, ci_proyectos(nombre)')
+    .select('id, name')
     .ilike('name', pattern)
     .order('name', { ascending: true })
-    .limit(500);
+    .limit(120);
 
-  if (error) {
-    console.error('[telegram /stock]', error);
+  if (matErr) {
+    console.error('[telegram /stock] materiales', matErr);
     await enviarMensajeTelegram(
       opts.chatId,
       '❌ Hubo un error técnico al consultar el inventario en la base de datos.',
@@ -132,18 +149,55 @@ export async function manejarComandoStockTelegram(opts: {
     return;
   }
 
-  const filas = (data ?? []) as FilaInventario[];
-
-  if (!filas.length) {
+  const matches = (materiales ?? []) as MaterialMatch[];
+  if (!matches.length) {
     await enviarMensajeTelegram(
       opts.chatId,
-      `📦 No se encontraron existencias de «<b>${escapeHtml(argumento)}</b>» en ningún almacén de Casa Inteligente.`,
+      `📦 No se encontraron materiales «<b>${escapeHtml(argumento)}</b>» en el catálogo.`,
       { parse_mode: 'HTML' },
     );
     return;
   }
 
-  const consolidado = consolidarPorObra(filas);
+  const materialIds = matches.map((m) => String(m.id));
+  const { data: stockRows, error: stockErr } = await opts.supabase
+    .from('inventario_stock')
+    .select(
+      `
+      material_id,
+      cantidad_disponible,
+      ubicacion:inv_ubicaciones (
+        ci_proyecto_id,
+        ci_proyectos ( nombre )
+      )
+    `,
+    )
+    .in('material_id', materialIds)
+    .gt('cantidad_disponible', 0)
+    .limit(800);
+
+  if (stockErr?.code === '42P01') {
+    await enviarMensajeTelegram(
+      opts.chatId,
+      '⚠️ Tabla inventario_stock no disponible. Aplique migraciones 180+ en Supabase.',
+    );
+    return;
+  }
+
+  if (stockErr) {
+    console.error('[telegram /stock] stock', stockErr);
+    await enviarMensajeTelegram(
+      opts.chatId,
+      '❌ Error al leer stock físico por ubicación.',
+    );
+    return;
+  }
+
+  const nombresMaterial = new Map(matches.map((m) => [String(m.id), m.name]));
+  const consolidado = consolidarPorObra(
+    (stockRows ?? []) as StockRow[],
+    nombresMaterial,
+  );
   const mensaje = construirMensajeConsolidado(argumento, consolidado);
 
   await enviarMensajeTelegram(opts.chatId, mensaje, { parse_mode: 'HTML' });

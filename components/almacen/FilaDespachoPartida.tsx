@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
   puedeAutorizarDespachoPartida,
+  validarContraTechoDisponible,
   validarFilaDespachoPartida,
 } from '@/lib/almacen/validarTechoPresupuestario';
 import type { PartidaDespachoFila, ValidacionPartida } from '@/types/inventario-obra';
@@ -30,8 +31,15 @@ function buildValue(
   cantidad: number,
   justificacion: string,
   fila: PartidaDespachoFila,
+  techoDisponible?: number,
 ): FilaDespachoPartidaValue {
-  const validacion = validarFilaDespachoPartida(cantidad, fila);
+  const disp =
+    techoDisponible ??
+    Math.max(0, fila.cantidad_presupuestada - fila.cantidad_asignada_real);
+  const validacion =
+    techoDisponible !== undefined
+      ? validarContraTechoDisponible(cantidad, disp, fila.cantidad_presupuestada)
+      : validarFilaDespachoPartida(cantidad, fila);
   return {
     cantidad,
     justificacion,
@@ -55,10 +63,20 @@ export function FilaDespachoPartida({
   const cantidad = cantidadProp ?? cantidadLocal;
   const justificacion = justificacionProp ?? justificacionLocal;
 
-  const validacion = useMemo(
-    () => validarFilaDespachoPartida(cantidad, fila),
-    [cantidad, fila],
-  );
+  const disponible =
+    techoProp ??
+    Math.max(0, fila.cantidad_presupuestada - fila.cantidad_asignada_real);
+
+  const validacion = useMemo(() => {
+    if (techoProp !== undefined) {
+      return validarContraTechoDisponible(
+        cantidad,
+        disponible,
+        fila.cantidad_presupuestada,
+      );
+    }
+    return validarFilaDespachoPartida(cantidad, fila);
+  }, [cantidad, fila, techoProp, disponible]);
 
   const autorizado = useMemo(
     () => puedeAutorizarDespachoPartida(validacion, justificacion),
@@ -69,17 +87,13 @@ export function FilaDespachoPartida({
 
   const emit = useCallback(
     (nextCantidad: number, nextJustificacion: string) => {
-      const value = buildValue(nextCantidad, nextJustificacion, fila);
+      const value = buildValue(nextCantidad, nextJustificacion, fila, techoProp);
       if (cantidadProp === undefined) setCantidadLocal(nextCantidad);
       if (justificacionProp === undefined) setJustificacionLocal(nextJustificacion);
       onChange?.(value);
     },
-    [fila, cantidadProp, justificacionProp, onChange],
+    [fila, techoProp, cantidadProp, justificacionProp, onChange],
   );
-
-  const disponible =
-    techoProp ??
-    Math.max(0, fila.cantidad_presupuestada - fila.cantidad_asignada_real);
 
   const excedeTecho = cantidad > 0 && cantidad > disponible + 0.0001;
 

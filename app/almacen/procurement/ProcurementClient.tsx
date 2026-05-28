@@ -37,7 +37,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProcurementDocumentAttach } from '@/components/almacen/ProcurementDocumentAttach';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
-import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
 import { resolverPartidaConsumiblesCampo } from '@/lib/almacen/resolverPartidaConsumiblesCampo';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import type { CategoriaMaterialCompra } from '@/types/inventario-obra';
@@ -513,12 +512,6 @@ export default function ProcurementClient() {
             }
 
             const lineasContabilidad: LineaCompraContabilidadInput[] = [];
-            const lineasInventario: Array<{
-                material_id: string;
-                descripcion: string;
-                cantidad: number;
-                precio_unitario: number;
-            }> = [];
             let depositIdMaterial: string | null = null;
             const { data: ubDestino } = await supabase
                 .from('inv_ubicaciones')
@@ -536,7 +529,10 @@ export default function ProcurementClient() {
                 const materialBase: Record<string, unknown> = {
                     name: desc,
                     unit: (line.unit || 'UND').trim() || 'UND',
-                    stock_quarantine: line.quantity,
+                    stock_available: 0,
+                    stock_quarantine: 0,
+                    reorder_point: 0,
+                    average_weighted_cost: line.unit_price,
                     last_purchase_price: line.unit_price,
                     last_purchase_date: invoice.date,
                     proyecto_id: proyectoId,
@@ -616,29 +612,9 @@ export default function ProcurementClient() {
                     precio_unitario: line.unit_price,
                 });
 
-                lineasInventario.push({
-                    material_id: newMaterial.id,
-                    descripcion: desc,
-                    cantidad: line.quantity,
-                    precio_unitario: line.unit_price,
-                });
             }
 
-            try {
-                await registrarCompraInventario(supabase, {
-                    ubicacionDestinoId,
-                    numeroFactura: payload.invoice_number,
-                    proveedorRif: payload.supplier_rif,
-                    proveedorNombre: payload.supplier_name,
-                    fechaEmision: payload.date,
-                    total: totalBolivares,
-                    purchaseInvoiceId: invData.id,
-                    documentoStoragePath: documentStoragePath,
-                    lineas: lineasInventario,
-                });
-            } catch (invErr) {
-                console.warn('[procurement] inventario compras_facturas:', invErr);
-            }
+            /* Stock físico: se aplica al aprobar calidad (inventario_stock), no en global_inventory. */
 
             const fromTelegram = searchParams.get('fromTelegram');
 
@@ -985,6 +961,54 @@ export default function ProcurementClient() {
                                     placeholder="Seleccione almacén…"
                                 />
                             </div>
+                            <div className="space-y-2 mt-6">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                                    Categoría del insumo
+                                </label>
+                                <select
+                                    value={categoriaMaterial}
+                                    onChange={(e) =>
+                                        setCategoriaMaterial(
+                                            e.target.value as CategoriaMaterialCompra,
+                                        )
+                                    }
+                                    className={SELECT_ELITE}
+                                >
+                                    {CATEGORIAS_MATERIAL_COMPRA.map((cat) => (
+                                        <option key={cat} value={cat}>
+                                            {cat}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            {categoriaMaterial === 'Consumibles / Logística de Campo' ? (
+                                <div
+                                    className="mt-4 rounded-xl border border-white/10 bg-[#0A0A0F] p-4 text-zinc-100"
+                                    role="status"
+                                >
+                                    <p className="text-xs font-black uppercase tracking-widest text-amber-200/90">
+                                        Consumibles de campo
+                                    </p>
+                                    <p className="mt-2 text-sm text-zinc-300">
+                                        Agua potable, hielo, limpieza e higiene: sin cómputos métricos ni
+                                        desglose APU. El gasto se imputa automáticamente a construcciones
+                                        provisionales / gastos de obra (Cap. 1).
+                                    </p>
+                                    {partidaConsumiblesId ? (
+                                        <p className="mt-2 text-[11px] font-bold text-emerald-400/90">
+                                            Partida operativa resuelta en presupuesto Lulo.
+                                        </p>
+                                    ) : proyectoId ? (
+                                        <p className="mt-2 text-[11px] font-bold text-amber-400/90">
+                                            Resolviendo partida operativa…
+                                        </p>
+                                    ) : (
+                                        <p className="mt-2 text-[11px] font-bold text-amber-400/90">
+                                            Seleccione proyecto para asignar partida.
+                                        </p>
+                                    )}
+                                </div>
+                            ) : null}
                         </ProcPanel>
 
                         <ProcPanel className="p-8">

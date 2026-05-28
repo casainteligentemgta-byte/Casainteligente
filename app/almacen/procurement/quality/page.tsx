@@ -20,12 +20,14 @@ import {
     formatApproveError,
 } from '@/lib/almacen/approveQualityInspection';
 import Link from 'next/link';
+import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
 export default function QualityDashboard() {
     const [inspections, setInspections] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [processing, setProcessing] = useState<string | null>(null);
+    const [processingId, setProcessingId] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
+    const { isSubmitting, runLocked } = useSyncSubmitLock();
 
     const supabase = createClient();
 
@@ -57,18 +59,21 @@ export default function QualityDashboard() {
     };
 
     const handleApprove = async (id: string) => {
-        setProcessing(id);
+        if (isSubmitting) return;
+        setProcessingId(id);
         setActionError(null);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            await approveQualityInspection(supabase, id, user?.id ?? null);
-            setInspections((prev) => prev.filter((i) => i.id !== id));
-        } catch (error) {
-            console.error('Error approving quality:', error);
-            setActionError(formatApproveError(error));
-        } finally {
-            setProcessing(null);
-        }
+        await runLocked(async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                await approveQualityInspection(supabase, id, user?.id ?? null);
+                setInspections((prev) => prev.filter((i) => i.id !== id));
+            } catch (error) {
+                console.error('Error approving quality:', error);
+                setActionError(formatApproveError(error));
+            } finally {
+                setProcessingId(null);
+            }
+        });
     };
 
     const openInvoiceDocument = async (invoiceId: string) => {
@@ -85,15 +90,19 @@ export default function QualityDashboard() {
     };
 
     const handleReject = async (id: string) => {
-        // In a real app, this might trigger a return process or just change status
-        const { error } = await supabase
-            .from('quality_inspections')
-            .update({ status: 'RECHAZADO' })
-            .eq('id', id);
+        if (isSubmitting) return;
+        setProcessingId(id);
+        await runLocked(async () => {
+            const { error } = await supabase
+                .from('quality_inspections')
+                .update({ status: 'RECHAZADO' })
+                .eq('id', id);
 
-        if (!error) {
-            setInspections(prev => prev.filter(i => i.id !== id));
-        }
+            if (!error) {
+                setInspections((prev) => prev.filter((i) => i.id !== id));
+            }
+            setProcessingId(null);
+        });
     };
 
     return (
@@ -214,7 +223,7 @@ export default function QualityDashboard() {
                                     <button
                                         type="button"
                                         onClick={() => void handleReject(insp.id)}
-                                        disabled={processing === insp.id}
+                                        disabled={isSubmitting}
                                         className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-sm bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 transition-all disabled:opacity-50"
                                     >
                                         <XCircle size={18} />
@@ -223,10 +232,10 @@ export default function QualityDashboard() {
                                     <button
                                         type="button"
                                         onClick={() => void handleApprove(insp.id)}
-                                        disabled={processing !== null}
+                                        disabled={isSubmitting}
                                         className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
                                     >
-                                        {processing === insp.id ? (
+                                        {processingId === insp.id && isSubmitting ? (
                                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                                         ) : (
                                             <>
