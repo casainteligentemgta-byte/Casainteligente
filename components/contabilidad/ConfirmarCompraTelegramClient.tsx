@@ -107,16 +107,16 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       toast.error('Seleccione obra y almacén');
       return;
     }
-    setGuardandoUbicacion(true);
-    try {
-      await reubicarCompra(`canal-${pendingId}`, {
-        proyecto_id: proyectoId,
-        ubicacion_destino_id: ubicacionId,
-      });
-      toast.success('Obra y almacén guardados');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
-    }
+    await runUbicacion(async () => {
+      try {
+        await reubicarCompra(`canal-${pendingId}`, {
+          proyecto_id: proyectoId,
+          ubicacion_destino_id: ubicacionId,
+        });
+        toast.success('Obra y almacén guardados');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
+      }
     });
   };
 
