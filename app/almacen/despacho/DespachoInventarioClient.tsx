@@ -246,21 +246,24 @@ export default function DespachoInventarioClient() {
     }
     await runLocked(async () => {
       try {
-        const porOrigen = new Map<string, LineaDespacho[]>();
+        const porRuta = new Map<string, LineaDespacho[]>();
         for (const l of lineas) {
-          const g = porOrigen.get(l.origen_ubicacion_id) ?? [];
+          const rutaKey = `${l.origen_ubicacion_id}:${l.destinoId}`;
+          const g = porRuta.get(rutaKey) ?? [];
           g.push(l);
-          porOrigen.set(l.origen_ubicacion_id, g);
+          porRuta.set(rutaKey, g);
         }
 
         const codigos: string[] = [];
-        for (const [origenUbicacionId, grupo] of Array.from(porOrigen.entries())) {
+        for (const [, grupo] of Array.from(porRuta.entries())) {
+          const origenUbicacionId = grupo[0]!.origen_ubicacion_id;
+          const destinoUbicacionId = grupo[0]!.destinoId;
           const res = await fetch('/api/almacen/transferencias', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               origen_ubicacion_id: origenUbicacionId,
-              destino_ubicacion_id: destinoId,
+              destino_ubicacion_id: destinoUbicacionId,
               ci_proyecto_id: proyectoId,
               tipo_movimiento: 'salida_obra',
               observaciones,
