@@ -430,6 +430,12 @@ export default function InventoryMasterPage() {
                         <Share2 size={18} />
                         <span className="hidden sm:inline">Compartir</span>
                     </button>
+                    <Link href="/almacen/despacho">
+                        <button className="flex items-center gap-2 bg-zinc-900 border border-orange-500/40 px-4 py-3 rounded-2xl font-bold text-orange-200 hover:bg-orange-500/10 transition-all">
+                            <ArrowUpRight size={18} />
+                            <span className="hidden sm:inline">DESPACHO</span>
+                        </button>
+                    </Link>
                     <Link href="/almacen/procurement">
                         <button className="flex items-center gap-2 bg-blue-600 px-6 py-3 rounded-2xl font-black text-white hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20">
                             <Truck size={18} />

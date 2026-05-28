@@ -72,7 +72,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       .update(update as never)
       .eq('id', id)
       .select(
-        'id, canal, chat_id, chat_label, estado, purchase_invoice_id, document_file_name, document_storage_path, extracted, mensaje_error, created_at',
+        'id, canal, chat_id, chat_label, estado, proyecto_id, ubicacion_destino_id, purchase_invoice_id, document_file_name, document_storage_path, extracted, mensaje_error, created_at',
       )
       .single();
     if (error) throw error;

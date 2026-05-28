@@ -592,6 +592,7 @@ export default function ProcurementClient() {
                 document_file_name: documentFileName,
                 lineas: lineasContabilidad,
                 origen: fromTelegram ? 'TELEGRAM' : 'RECEPCION_MERCANCIA',
+                ubicacion_destino_id: ubicacionDestinoId,
             });
             if (fromTelegram) {
                 try {

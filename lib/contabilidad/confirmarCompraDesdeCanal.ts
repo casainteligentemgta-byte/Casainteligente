@@ -178,6 +178,7 @@ export async function confirmarCompraDesdeCanal(
     document_file_name: row.document_file_name,
     lineas,
     origen: 'TELEGRAM',
+    ubicacion_destino_id: ubicacionDestinoId,
   });
 
   await supabase

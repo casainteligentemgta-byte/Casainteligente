@@ -36,6 +36,7 @@ export type RegistrarCompraContabilidadInput = {
   lineas: LineaCompraContabilidadInput[];
   /** Por defecto RECEPCION_MERCANCIA; use TELEGRAM al confirmar desde el bot. */
   origen?: string;
+  ubicacion_destino_id?: string | null;
 };
 
 export async function registerCompraDesdeRecepcion(
@@ -92,6 +93,9 @@ export async function registerCompraDesdeRecepcion(
       estado: 'REGISTRADA',
       document_storage_path: doc.storagePath,
       document_file_name: doc.fileName,
+      ...(input.ubicacion_destino_id
+        ? { ubicacion_destino_id: input.ubicacion_destino_id }
+        : {}),
     })
     .select('id')
     .single();

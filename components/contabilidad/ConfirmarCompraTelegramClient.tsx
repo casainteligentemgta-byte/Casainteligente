@@ -13,6 +13,7 @@ import {
   confirmarCompraCanal,
   type PendienteCanal,
 } from '@/lib/contabilidad/facturaCanalApi';
+import { reubicarCompra } from '@/lib/contabilidad/reubicarCompraApi';
 import { createClient } from '@/lib/supabase/client';
 
 const selectClass =
@@ -30,6 +31,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [ubicacionId, setUbicacionId] = useState('');
   const [editando, setEditando] = useState(false);
   const [registrando, setRegistrando] = useState(false);
+  const [guardandoUbicacion, setGuardandoUbicacion] = useState(false);
   const [compraRegistrada, setCompraRegistrada] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -93,6 +95,25 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     const actualizado = await actualizarPendienteCanal(pendingId, { extracted: next });
     setPendiente((prev) => (prev ? { ...prev, extracted: actualizado.extracted } : prev));
     toast.success('Datos actualizados');
+  };
+
+  const guardarUbicacion = async () => {
+    if (!proyectoId.trim() || !ubicacionId.trim()) {
+      toast.error('Seleccione obra y almacén');
+      return;
+    }
+    setGuardandoUbicacion(true);
+    try {
+      await reubicarCompra(`canal-${pendingId}`, {
+        proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionId,
+      });
+      toast.success('Obra y almacén guardados');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
+    } finally {
+      setGuardandoUbicacion(false);
+    }
   };
 
   const registrar = async () => {
@@ -279,6 +300,22 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 onChange={setUbicacionId}
               />
             </section>
+
+            <button
+              type="button"
+              disabled={!proyectoId.trim() || !ubicacionId.trim() || guardandoUbicacion}
+              onClick={() => void guardarUbicacion()}
+              className="w-full rounded-xl border border-orange-500/40 bg-orange-500/10 disabled:opacity-40 text-orange-200 text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
+            >
+              {guardandoUbicacion ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Guardando ubicación…
+                </>
+              ) : (
+                'Guardar solo obra y almacén'
+              )}
+            </button>
 
             <button
               type="button"

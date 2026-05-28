@@ -55,6 +55,8 @@ export async function actualizarPendienteCanal(
     extracted?: ExtractedCanalHeader;
     estado?: string;
     mensaje_error?: string | null;
+    proyecto_id?: string;
+    ubicacion_destino_id?: string;
   },
 ): Promise<PendienteCanal> {
   const id = resolveIdPendienteCanal(rawId);

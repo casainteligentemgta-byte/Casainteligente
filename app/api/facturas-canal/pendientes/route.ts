@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     let q = supabase
       .from('ci_facturas_canal_pendientes')
       .select(
-        'id, canal, chat_id, chat_label, proyecto_id, estado, purchase_invoice_id, document_file_name, document_storage_path, document_mime_type, extracted, mensaje_error, created_at, updated_at',
+        'id, canal, chat_id, chat_label, proyecto_id, ubicacion_destino_id, estado, purchase_invoice_id, document_file_name, document_storage_path, document_mime_type, extracted, mensaje_error, created_at, updated_at',
       )
       .order('created_at', { ascending: false })
       .limit(50);

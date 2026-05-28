@@ -203,6 +203,15 @@ export interface CompraFacturaInsert {
 
 // ── Techo presupuestario por partida ────────────────────────────────────────
 
+/** Resultado de validar cantidad contra techo (UI / cliente). */
+export interface ValidacionPartida {
+  permitido: boolean;
+  diferencia: number;
+  porcentajeExceso: number;
+  /** true si hay exceso pero la BD/UI permiten continuar con justificación */
+  requiereJustificacion: boolean;
+}
+
 export interface ObraPartidaMaterial {
   id: string;
   ci_proyecto_id: string;
@@ -216,6 +225,19 @@ export interface ObraPartidaMaterial {
   created_at?: string;
   updated_at?: string;
   material?: InventoryItem;
+}
+
+/** Fila UI para despacho / imputación a partida (techo + consumo ya cargado). */
+export interface PartidaDespachoFila {
+  obra_partida_material_id: string;
+  partida_id?: string | null;
+  ci_presupuesto_partida_id?: string | null;
+  nombre_partida: string;
+  /** Techo (`cantidad_techo` en BD). */
+  cantidad_presupuestada: number;
+  /** Ya imputado/consumido en esa partida+material. */
+  cantidad_asignada_real: number;
+  unidad?: string;
 }
 
 // ── Transferencias y custodia ───────────────────────────────────────────────

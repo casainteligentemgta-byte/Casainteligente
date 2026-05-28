@@ -12,6 +12,8 @@ export type {
   CompraFacturaInsert,
   CompraCondicionPago,
   CompraFacturaEstado,
+  ValidacionPartida,
+  PartidaDespachoFila,
   ObraPartidaMaterial,
   TransferenciaInventario,
   TransferenciaInventarioLinea,

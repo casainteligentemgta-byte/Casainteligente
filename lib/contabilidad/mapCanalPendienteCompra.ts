@@ -20,6 +20,8 @@ export type CanalPendienteParaLista = {
   id: string;
   canal: string;
   estado: string;
+  proyecto_id?: string | null;
+  ubicacion_destino_id?: string | null;
   purchase_invoice_id?: string | null;
   document_file_name: string | null;
   document_storage_path?: string | null;
@@ -60,6 +62,8 @@ export type CompraListaUnificada = {
   pendiente_canal_id?: string;
   canal_estado?: string;
   mensaje_error_canal?: string | null;
+  ubicacion_destino_id?: string | null;
+  ubicacion_nombre?: string | null;
 };
 
 export function lineasDesdeExtractedCanal(ex: ExtractedCanalHeader | null): CompraLineaUi[] {
@@ -88,7 +92,8 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
   return {
     id: `canal-${p.id}`,
     purchase_invoice_id: p.purchase_invoice_id ?? null,
-    proyecto_id: null,
+    proyecto_id: p.proyecto_id ?? null,
+    ubicacion_destino_id: p.ubicacion_destino_id ?? null,
     invoice_number: String(ex?.invoice_number ?? '—').trim() || '—',
     supplier_rif: String(ex?.supplier_rif ?? '').trim(),
     supplier_name: String(ex?.supplier_name ?? 'Proveedor').trim() || 'Proveedor',

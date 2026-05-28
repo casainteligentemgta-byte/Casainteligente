@@ -1,0 +1,241 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { asegurarUbicacionObra } from '@/lib/almacen/ubicacionesInventario';
+
+export type ReubicarCompraInput = {
+  /** contabilidad_compras.id o purchase_invoices.id */
+  referenciaId: string;
+  referenciaTipo?: 'compra' | 'purchase_invoice';
+  proyectoId: string;
+  ubicacionDestinoId: string;
+  nombreObra?: string;
+};
+
+export type ReubicarCompraResult = {
+  purchaseInvoiceId: string | null;
+  compraId: string | null;
+  stockMovido: boolean;
+  ubicacionAnteriorId: string | null;
+};
+
+async function moverStockCompraRegistrada(
+  supabase: SupabaseClient,
+  params: {
+    compraFacturaId: string;
+    ubicacionAnteriorId: string;
+    ubicacionNuevaId: string;
+  },
+): Promise<void> {
+  const { data: lineas, error: lErr } = await supabase
+    .from('compras_factura_lineas')
+    .select('material_id, cantidad')
+    .eq('factura_id', params.compraFacturaId);
+
+  if (lErr) throw new Error(lErr.message);
+  if (!lineas?.length) return;
+
+  for (const linea of lineas) {
+    const materialId = String(linea.material_id);
+    const qty = Number(linea.cantidad);
+    if (qty <= 0) continue;
+
+    const { error: outErr } = await supabase.rpc('inv_stock_apply_delta', {
+      p_ubicacion_id: params.ubicacionAnteriorId,
+      p_material_id: materialId,
+      p_delta_disponible: -qty,
+    });
+    if (outErr) throw new Error(`Stock origen: ${outErr.message}`);
+
+    const { error: inErr } = await supabase.rpc('inv_stock_apply_delta', {
+      p_ubicacion_id: params.ubicacionNuevaId,
+      p_material_id: materialId,
+      p_delta_disponible: qty,
+    });
+    if (inErr) throw new Error(`Stock destino: ${inErr.message}`);
+  }
+}
+
+/**
+ * Reasigna obra y almacén de una compra (purchase_invoices, contabilidad, canal, inventario).
+ */
+export async function reubicarCompraObra(
+  supabase: SupabaseClient,
+  input: ReubicarCompraInput,
+): Promise<ReubicarCompraResult> {
+  const proyectoId = input.proyectoId.trim();
+  const ubicacionNuevaId = input.ubicacionDestinoId.trim();
+  if (!proyectoId) throw new Error('Seleccione la obra.');
+  if (!ubicacionNuevaId) throw new Error('Seleccione el almacén de ingreso.');
+
+  const { data: ubi, error: uErr } = await supabase
+    .from('inv_ubicaciones')
+    .select('id, nombre, tipo, ci_proyecto_id, activo')
+    .eq('id', ubicacionNuevaId)
+    .maybeSingle();
+
+  if (uErr?.code === '42P01') {
+    throw new Error('Tabla inv_ubicaciones no existe. Aplique migración 180.');
+  }
+  if (uErr) throw new Error(uErr.message);
+  if (!ubi) throw new Error('Ubicación de almacén no encontrada.');
+  if (ubi.activo === false) throw new Error('La ubicación seleccionada está inactiva.');
+
+  const esDeObra =
+    ubi.tipo === 'obra' ||
+    ubi.tipo === 'almacen_movil' ||
+    (ubi.ci_proyecto_id != null && ubi.ci_proyecto_id === proyectoId);
+  const esCentral = ubi.tipo === 'almacen_central' || ubi.tipo === 'cuarentena';
+
+  if (!esCentral && !esDeObra) {
+    throw new Error('La ubicación no corresponde a la obra seleccionada.');
+  }
+
+  let purchaseInvoiceId: string | null = null;
+  let compraId: string | null = null;
+
+  if (input.referenciaTipo === 'purchase_invoice') {
+    purchaseInvoiceId = input.referenciaId;
+  } else {
+    const { data: compra, error: cErr } = await supabase
+      .from('contabilidad_compras')
+      .select('id, purchase_invoice_id')
+      .eq('id', input.referenciaId)
+      .maybeSingle();
+    if (cErr) throw new Error(cErr.message);
+    if (!compra) throw new Error('Compra no encontrada en contabilidad.');
+    compraId = String(compra.id);
+    purchaseInvoiceId = compra.purchase_invoice_id ? String(compra.purchase_invoice_id) : null;
+  }
+
+  if (!purchaseInvoiceId) {
+    const { data: inv, error: iErr } = await supabase
+      .from('purchase_invoices')
+      .select('id, ubicacion_destino_id')
+      .eq('id', input.referenciaId)
+      .maybeSingle();
+    if (!iErr && inv?.id) {
+      purchaseInvoiceId = String(inv.id);
+    }
+  }
+
+  let ubicacionAnteriorId: string | null = null;
+
+  if (purchaseInvoiceId) {
+    const { data: invRow, error: invErr } = await supabase
+      .from('purchase_invoices')
+      .select('id, ubicacion_destino_id')
+      .eq('id', purchaseInvoiceId)
+      .single();
+    if (invErr) throw new Error(invErr.message);
+    ubicacionAnteriorId = invRow.ubicacion_destino_id
+      ? String(invRow.ubicacion_destino_id)
+      : null;
+
+    const { error: upInv } = await supabase
+      .from('purchase_invoices')
+      .update({
+        proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionNuevaId,
+      })
+      .eq('id', purchaseInvoiceId);
+    if (upInv) throw new Error(upInv.message);
+  }
+
+  if (compraId) {
+    const patchCompra: Record<string, unknown> = {
+      proyecto_id: proyectoId,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: upCompra } = await supabase
+      .from('contabilidad_compras')
+      .update({ ...patchCompra, ubicacion_destino_id: ubicacionNuevaId } as never)
+      .eq('id', compraId);
+    if (upCompra && !/ubicacion_destino_id|column/i.test(upCompra.message)) {
+      throw new Error(upCompra.message);
+    }
+    if (upCompra && /ubicacion_destino_id/i.test(upCompra.message)) {
+      const { error: upSinUbi } = await supabase
+        .from('contabilidad_compras')
+        .update(patchCompra)
+        .eq('id', compraId);
+      if (upSinUbi) throw new Error(upSinUbi.message);
+    }
+  } else if (purchaseInvoiceId) {
+    const { data: compraByInv } = await supabase
+      .from('contabilidad_compras')
+      .select('id')
+      .eq('purchase_invoice_id', purchaseInvoiceId)
+      .maybeSingle();
+    if (compraByInv?.id) {
+      compraId = String(compraByInv.id);
+      await supabase
+        .from('contabilidad_compras')
+        .update({
+          proyecto_id: proyectoId,
+          ubicacion_destino_id: ubicacionNuevaId,
+        } as never)
+        .eq('id', compraId);
+    }
+  }
+
+  if (purchaseInvoiceId) {
+    await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update({
+        proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionNuevaId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('purchase_invoice_id', purchaseInvoiceId);
+  }
+
+  let stockMovido = false;
+
+  if (purchaseInvoiceId) {
+    const { data: cf, error: cfErr } = await supabase
+      .from('compras_facturas')
+      .select('id, estado, ubicacion_destino_id')
+      .eq('purchase_invoice_id', purchaseInvoiceId)
+      .maybeSingle();
+
+    if (cfErr?.code !== '42P01' && cfErr) throw new Error(cfErr.message);
+
+    if (cf?.id) {
+      const cfId = String(cf.id);
+      const estado = String(cf.estado ?? '');
+      const ubiAnt =
+        ubicacionAnteriorId ?? (cf.ubicacion_destino_id ? String(cf.ubicacion_destino_id) : null);
+
+      if (
+        estado === 'registrada' &&
+        ubiAnt &&
+        ubiAnt !== ubicacionNuevaId
+      ) {
+        await moverStockCompraRegistrada(supabase, {
+          compraFacturaId: cfId,
+          ubicacionAnteriorId: ubiAnt,
+          ubicacionNuevaId,
+        });
+        stockMovido = true;
+      }
+
+      const { error: upCf } = await supabase
+        .from('compras_facturas')
+        .update({ ubicacion_destino_id: ubicacionNuevaId })
+        .eq('id', cfId);
+      if (upCf) throw new Error(upCf.message);
+    }
+  }
+
+  if (input.nombreObra) {
+    await asegurarUbicacionObra(supabase, proyectoId, input.nombreObra).catch(() => {
+      /* opcional */
+    });
+  }
+
+  return {
+    purchaseInvoiceId,
+    compraId,
+    stockMovido,
+    ubicacionAnteriorId,
+  };
+}
