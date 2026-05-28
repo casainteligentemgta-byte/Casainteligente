@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { labelPartida } from '@/lib/almacen/inventoryClasificacion';
+import { resolverInsumoIdsParaMaterial } from '@/lib/almacen/resolverInsumosMaterial';
+import {
+  calcularTechoCantidadInsumoPartida,
+  clasificarInsumoApu,
+} from '@/lib/proyectos/apuCalculos';
 import type { PartidaDespachoFila } from '@/types/inventario-obra';
 
 type PartidaPresupuestoRow = {
@@ -88,17 +93,116 @@ async function loadPartidasPresupuesto(
   return (data ?? []) as PartidaPresupuestoRow[];
 }
 
-/** Opciones de partida para repartir cantidad de un material en despacho. */
+type InsumoApuJoin = {
+  id: string;
+  tipo: string | null;
+  unidad: string | null;
+};
+
+type ApuMaterialRowRaw = {
+  partida_id: string;
+  cantidad_rendimiento: number | null;
+  desperdicio_porcentaje: number | null;
+  insumo: InsumoApuJoin | InsumoApuJoin[] | null;
+  partida: PartidaPresupuestoRow | PartidaPresupuestoRow[] | null;
+};
+
+function insumoDesdeJoin(
+  raw: ApuMaterialRowRaw['insumo'],
+): InsumoApuJoin | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw[0] ?? null;
+  return raw;
+}
+
+function partidaDesdeJoin(
+  raw: ApuMaterialRowRaw['partida'],
+  fallbackId: string,
+  partidaById: Map<string, PartidaPresupuestoRow>,
+): PartidaPresupuestoRow | undefined {
+  if (Array.isArray(raw)) return raw[0];
+  if (raw) return raw;
+  return partidaById.get(fallbackId);
+}
+
+/** Partidas cuyo APU incluye insumos vinculados al material, con techo de cantidad calculado. */
+async function cargarPartidasDesdeApuMaterial(
+  supabase: SupabaseClient,
+  params: { proyectoId: string; insumoIds: string[] },
+): Promise<Map<string, { techo: number; unidad: string; partida: PartidaPresupuestoRow }>> {
+  const map = new Map<string, { techo: number; unidad: string; partida: PartidaPresupuestoRow }>();
+  if (!params.insumoIds.length) return map;
+
+  const partidas = await loadPartidasPresupuesto(supabase, params.proyectoId);
+  const partidaById = new Map(partidas.map((p) => [p.id, p]));
+  if (!partidas.length) return map;
+
+  const partidaIds = partidas.map((p) => p.id);
+  const BATCH = 80;
+
+  for (let i = 0; i < partidaIds.length; i += BATCH) {
+    const batchIds = partidaIds.slice(i, i + BATCH);
+    const { data, error } = await supabase
+      .from('ci_presupuesto_partida_apu')
+      .select(
+        `
+        partida_id,
+        cantidad_rendimiento,
+        desperdicio_porcentaje,
+        insumo:ci_lulo_insumos_maestro ( id, tipo, unidad ),
+        partida:ci_presupuesto_partidas!inner (
+          id, codigo_partida, descripcion, proyecto_id, unidad, cantidad_presupuestada
+        )
+      `,
+      )
+      .in('partida_id', batchIds)
+      .in('insumo_id', params.insumoIds);
+
+    if (error?.code === '42P01') return map;
+    if (error) throw new Error(error.message);
+
+    for (const row of (data ?? []) as ApuMaterialRowRaw[]) {
+      const insumo = insumoDesdeJoin(row.insumo);
+      const partida = partidaDesdeJoin(row.partida, row.partida_id, partidaById);
+      if (!insumo || !partida) continue;
+      if (clasificarInsumoApu(insumo.tipo) !== 'material') continue;
+
+      const key = partidaKey(partida);
+      const techoLinea = calcularTechoCantidadInsumoPartida(
+        Number(row.cantidad_rendimiento) || 0,
+        Number(row.desperdicio_porcentaje) || 0,
+        Number(partida.cantidad_presupuestada) || 0,
+      );
+      const prev = map.get(key);
+      const techo = (prev?.techo ?? 0) + techoLinea;
+      map.set(key, {
+        techo,
+        unidad: insumo.unidad?.trim() || partida.unidad || 'UND',
+        partida,
+      });
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Opciones de partida en destino que llevan el material (APU Lulo + techos en obra).
+ * Solo devuelve partidas asociadas al producto, no todo el presupuesto.
+ */
 export async function cargarOpcionesPartidaDespacho(
   supabase: SupabaseClient,
   params: { proyectoId: string; materialId: string },
 ): Promise<PartidaDespachoFila[]> {
-  const [partidas, consumoMap] = await Promise.all([
-    loadPartidasPresupuesto(supabase, params.proyectoId),
+  const [consumoMap, insumoIds] = await Promise.all([
     cargarConsumoPorPartidaMaterial(supabase, params),
+    resolverInsumoIdsParaMaterial(supabase, params.materialId),
   ]);
 
-  if (!partidas.length) return [];
+  const apuMap = await cargarPartidasDesdeApuMaterial(supabase, {
+    proyectoId: params.proyectoId,
+    insumoIds,
+  });
 
   const { data: techos, error: tErr } = await supabase
     .from('obra_partidas_materiales')
@@ -109,12 +213,16 @@ export async function cargarOpcionesPartidaDespacho(
     .eq('material_id', params.materialId);
 
   if (tErr?.code === '42P01') {
-    /* sin tabla 180: techo 0 */
+    /* sin tabla 180 */
   } else if (tErr) {
     throw new Error(tErr.message);
   }
 
-  const techoPorPartida = new Map<string, { id: string; techo: number; unidad: string }>();
+  const techoPorPartida = new Map<
+    string,
+    { id: string; techo: number; unidad: string; partida?: PartidaPresupuestoRow }
+  >();
+
   for (const row of techos ?? []) {
     const key =
       row.ci_presupuesto_partida_id != null
@@ -130,23 +238,44 @@ export async function cargarOpcionesPartidaDespacho(
     });
   }
 
-  return partidas.map((p) => {
-    const key = partidaKey(p);
+  const keysMaterial = new Set<string>();
+  for (const k of Array.from(techoPorPartida.keys())) keysMaterial.add(k);
+  for (const k of Array.from(apuMap.keys())) keysMaterial.add(k);
+
+  if (keysMaterial.size === 0) return [];
+
+  const partidas = await loadPartidasPresupuesto(supabase, params.proyectoId);
+  const partidaByKey = new Map(partidas.map((p) => [partidaKey(p), p]));
+
+  const filas: PartidaDespachoFila[] = [];
+
+  for (const key of Array.from(keysMaterial)) {
+    const apu = apuMap.get(key);
     const techoRow = techoPorPartida.get(key);
+    const partida =
+      apu?.partida ??
+      (key.startsWith('cpp:')
+        ? partidaByKey.get(key)
+        : undefined);
+
+    if (!partida) continue;
+
     const consumido = consumoMap.get(key) ?? 0;
     const techoMaterial = techoRow?.techo ?? 0;
-    const techoPartida = Number(p.cantidad_presupuestada ?? 0);
-    const techo =
-      techoMaterial > 0 ? techoMaterial : techoPartida > 0 ? techoPartida : 0;
+    const techoApu = apu?.techo ?? 0;
+    const techo = techoMaterial > 0 ? techoMaterial : techoApu > 0 ? techoApu : 0;
 
-    return {
-      obra_partida_material_id: techoRow?.id ?? `cpp-${p.id}`,
+    filas.push({
+      obra_partida_material_id: techoRow?.id ?? `apu-${partida.id}`,
       partida_id: null,
-      ci_presupuesto_partida_id: p.id,
-      nombre_partida: labelPartida(p),
+      ci_presupuesto_partida_id: partida.id,
+      nombre_partida: labelPartida(partida),
       cantidad_presupuestada: techo,
       cantidad_asignada_real: consumido,
-      unidad: techoRow?.unidad ?? p.unidad ?? 'UND',
-    } satisfies PartidaDespachoFila;
-  });
+      unidad: techoRow?.unidad ?? apu?.unidad ?? partida.unidad ?? 'UND',
+    });
+  }
+
+  filas.sort((a, b) => a.nombre_partida.localeCompare(b.nombre_partida, 'es'));
+  return filas;
 }

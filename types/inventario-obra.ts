@@ -327,6 +327,15 @@ export interface TransferenciaInventarioInsert {
   }>;
 }
 
+/** Umbrales de alertas de despacho guardados por proyecto (`inv_despacho_alertas_proyecto`). */
+export interface InvDespachoAlertasProyecto {
+  ci_proyecto_id: string;
+  exceso_advertencia_pct: number;
+  exceso_critico_pct: number;
+  saldo_informativo_pct: number;
+  updated_at?: string;
+}
+
 /** Resumen de desviación presupuestaria para alertas en UI */
 export interface AlertaExcesoPartida {
   partidaLabel: string;

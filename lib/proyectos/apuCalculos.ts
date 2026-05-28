@@ -80,6 +80,21 @@ export function calcularCostoUnitarioMaterialesApu(lineas: LineaApuCalculoInput[
   }, 0);
 }
 
+/**
+ * Cantidad presupuestada de un insumo material en una partida
+ * (rendimiento × (1 + desperdicio%) × cantidad de obra de la partida).
+ */
+export function calcularTechoCantidadInsumoPartida(
+  rendimiento: number,
+  desperdicioPct: number,
+  cantidadObraPartida: number,
+): number {
+  const r = Number.isFinite(rendimiento) ? rendimiento : 0;
+  const d = Number.isFinite(desperdicioPct) ? desperdicioPct : 0;
+  const obra = Number.isFinite(cantidadObraPartida) ? cantidadObraPartida : 0;
+  return Math.round(r * (1 + d / 100) * obra * 10000) / 10000;
+}
+
 /** Techo teórico de materiales = costo unitario materiales × cantidad de obra. */
 export function calcularTechoTeoricoMaterialPartida(
   lineas: LineaApuCalculoInput[],

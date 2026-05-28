@@ -1,21 +1,31 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Loader2, PackageOpen } from 'lucide-react';
 import { FilaDespachoPartida } from '@/components/almacen/FilaDespachoPartida';
+import {
+  DESPACHO_ALERTAS_DEFAULT,
+  nivelAlertaExceso,
+  nivelAlertaSaldo,
+  type DespachoAlertasConfig,
+  type NivelAlertaDespacho,
+} from '@/lib/almacen/despachoAlertasConfig';
 import { validarDistribucionLinea } from '@/lib/almacen/crearTransferenciaInventario';
 import type { ImputacionPartidaInput, PartidaDespachoFila } from '@/types/inventario-obra';
 
 export type DistribucionDespachoState = {
   imputaciones: ImputacionPartidaInput[];
   totalImputado: number;
+  saldo: number;
   valido: boolean;
   error?: string;
+  nivelAlerta?: NivelAlertaDespacho;
 };
 
 type DistribRowState = {
   rowId: string;
   fila: PartidaDespachoFila;
+  seleccionada: boolean;
   cantidad: number;
   justificacion: string;
   autorizado: boolean;
@@ -23,10 +33,12 @@ type DistribRowState = {
 
 type Props = {
   proyectoId: string;
+  destinoId?: string;
   materialId: string;
   productoNombre: string;
-  /** Cantidad total de la línea de despacho (suma de partidas debe igualar esto). */
+  /** Cantidad máxima a despachar (techo de la línea). */
   cantidadLinea: number;
+  alertasConfig?: DespachoAlertasConfig;
   onChange?: (state: DistribucionDespachoState) => void;
   disabled?: boolean;
 };
@@ -35,17 +47,9 @@ function nuevaFilaId(): string {
   return `row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function filaKey(f: PartidaDespachoFila): string {
-  return f.ci_presupuesto_partida_id
-    ? `cpp:${f.ci_presupuesto_partida_id}`
-    : f.partida_id
-      ? `p:${f.partida_id}`
-      : f.obra_partida_material_id;
-}
-
 function rowsToImputaciones(rows: DistribRowState[]): ImputacionPartidaInput[] {
   return rows
-    .filter((r) => r.cantidad > 0)
+    .filter((r) => r.seleccionada && r.cantidad > 0)
     .map((r) => ({
       partida_id: r.fila.partida_id ?? null,
       ci_presupuesto_partida_id: r.fila.ci_presupuesto_partida_id ?? null,
@@ -54,11 +58,20 @@ function rowsToImputaciones(rows: DistribRowState[]): ImputacionPartidaInput[] {
     }));
 }
 
+function alertaClass(nivel: NivelAlertaDespacho): string {
+  if (nivel === 'critico') return 'border-red-500/40 bg-red-950/30 text-red-200';
+  if (nivel === 'advertencia') return 'border-amber-500/40 bg-amber-950/25 text-amber-200';
+  if (nivel === 'info') return 'border-sky-500/30 bg-sky-950/20 text-sky-200';
+  return 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200';
+}
+
 export function DistribucionDespachoPartidas({
   proyectoId,
+  destinoId,
   materialId,
   productoNombre,
   cantidadLinea,
+  alertasConfig = DESPACHO_ALERTAS_DEFAULT,
   onChange,
   disabled,
 }: Props) {
@@ -66,7 +79,6 @@ export function DistribucionDespachoPartidas({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rows, setRows] = useState<DistribRowState[]>([]);
-  const [partidaAgregar, setPartidaAgregar] = useState('');
 
   const cargarOpciones = useCallback(async () => {
     if (!proyectoId || !materialId) {
@@ -80,196 +92,249 @@ export function DistribucionDespachoPartidas({
       const res = await fetch(`/api/almacen/partidas-despacho?${q}`, { cache: 'no-store' });
       const data = (await res.json()) as { partidas?: PartidaDespachoFila[]; error?: string };
       if (!res.ok) throw new Error(data.error || 'No se pudieron cargar partidas');
-      setOpciones(data.partidas ?? []);
+      const partidas = data.partidas ?? [];
+      setOpciones(partidas);
+      setRows(
+        partidas.map((fila) => ({
+          rowId: nuevaFilaId(),
+          fila,
+          seleccionada: false,
+          cantidad: 0,
+          justificacion: '',
+          autorizado: true,
+        })),
+      );
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Error');
       setOpciones([]);
+      setRows([]);
     } finally {
       setLoading(false);
     }
   }, [proyectoId, materialId]);
 
   useEffect(() => {
-    setRows([]);
-    setPartidaAgregar('');
     void cargarOpciones();
   }, [cargarOpciones]);
 
-  const keysUsadas = useMemo(() => new Set(rows.map((r) => filaKey(r.fila))), [rows]);
-
-  const opcionesDisponibles = useMemo(
-    () => opciones.filter((o) => !keysUsadas.has(filaKey(o))),
-    [opciones, keysUsadas],
-  );
-
   const totalImputado = useMemo(
-    () => rows.reduce((s, r) => s + (r.cantidad > 0 ? r.cantidad : 0), 0),
+    () =>
+      rows.reduce((s, r) => (r.seleccionada && r.cantidad > 0 ? s + r.cantidad : s), 0),
     [rows],
   );
+
+  const saldo = Math.max(0, cantidadLinea - totalImputado);
 
   const todasAutorizadas = useMemo(
-    () => rows.every((r) => r.cantidad === 0 || r.autorizado),
+    () =>
+      rows.every((r) => !r.seleccionada || r.cantidad === 0 || r.autorizado),
     [rows],
   );
+
+  const maxExcesoPct = useMemo(() => {
+    let max = 0;
+    for (const r of rows) {
+      if (!r.seleccionada || r.cantidad <= 0) continue;
+      const techo = r.fila.cantidad_presupuestada;
+      const disp = Math.max(0, techo - r.fila.cantidad_asignada_real);
+      if (r.cantidad > disp && techo > 0) {
+        const pct = Math.round(((r.cantidad - disp) / techo) * 100);
+        if (pct > max) max = pct;
+      } else if (r.cantidad > disp && techo <= 0 && r.cantidad > 0) {
+        max = 100;
+      }
+    }
+    return max;
+  }, [rows]);
 
   const distribucion = useMemo(() => {
     const imputaciones = rowsToImputaciones(rows);
     const base = validarDistribucionLinea(cantidadLinea, imputaciones);
-    if (!base.ok) return base;
+    if (!base.ok) {
+      return { ...base, nivelAlerta: 'ok' as NivelAlertaDespacho };
+    }
     if (!todasAutorizadas) {
       return {
         ok: false,
-        error: 'Complete la justificación en las partidas con exceso presupuestario.',
+        error: 'Complete la justificación en partidas con faltante presupuestario.',
         totalImputado,
+        saldo: base.saldo,
+        nivelAlerta: 'advertencia' as NivelAlertaDespacho,
       };
     }
-    return base;
-  }, [rows, cantidadLinea, todasAutorizadas, totalImputado]);
+    const nivelExceso = nivelAlertaExceso(maxExcesoPct, alertasConfig);
+    const nivelSaldo = nivelAlertaSaldo(saldo, cantidadLinea, alertasConfig);
+    const nivelAlerta: NivelAlertaDespacho =
+      nivelExceso === 'critico' || nivelExceso === 'advertencia'
+        ? nivelExceso
+        : nivelSaldo;
+    return { ...base, nivelAlerta };
+  }, [rows, cantidadLinea, todasAutorizadas, totalImputado, saldo, maxExcesoPct, alertasConfig]);
 
   useEffect(() => {
     onChange?.({
       imputaciones: rowsToImputaciones(rows),
       totalImputado,
+      saldo: distribucion.saldo ?? saldo,
       valido: distribucion.ok,
       error: distribucion.ok ? undefined : distribucion.error,
+      nivelAlerta: distribucion.nivelAlerta,
     });
-    // onChange establecido por el padre; no incluir en deps para evitar bucles
     // eslint-disable-next-line react-hooks/exhaustive-deps -- notificar solo cuando cambia el reparto
-  }, [rows, totalImputado, distribucion.ok, distribucion.error, cantidadLinea]);
-
-  const agregarPartida = () => {
-    const hit = opciones.find((o) => filaKey(o) === partidaAgregar);
-    if (!hit) return;
-    setRows((prev) => [
-      ...prev,
-      {
-        rowId: nuevaFilaId(),
-        fila: hit,
-        cantidad: 0,
-        justificacion: '',
-        autorizado: true,
-      },
-    ]);
-    setPartidaAgregar('');
-  };
-
-  const quitarFila = (rowId: string) => {
-    setRows((prev) => prev.filter((r) => r.rowId !== rowId));
-  };
-
-  const restante = cantidadLinea - totalImputado;
-  const sumaOk = Math.abs(restante) < 0.0001;
+  }, [rows, totalImputado, saldo, distribucion.ok, distribucion.error, distribucion.nivelAlerta, cantidadLinea]);
 
   if (!proyectoId || !materialId) {
     return (
-      <p className="text-xs text-zinc-500">Seleccione proyecto y material para distribuir por partida.</p>
+      <p className="text-xs text-zinc-500">Seleccione proyecto y material para ver partidas en destino.</p>
+    );
+  }
+
+  if (!destinoId) {
+    return (
+      <p className="text-xs text-amber-400/90">
+        Seleccione el destino (obra / bodega) para listar las partidas que llevan este material.
+      </p>
     );
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
+    <div className="space-y-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-            Reparto por partidas
+          <p className="text-xs font-bold uppercase tracking-wider text-sky-400/90">
+            Destino — partidas con {productoNombre}
           </p>
-          <p className="text-sm text-zinc-300">
-            {productoNombre} · línea: <strong>{cantidadLinea}</strong> und
+          <p className="text-[11px] text-zinc-500">
+            Marque partidas y cantidades a descargar. Lo no asignado queda como saldo en origen.
           </p>
         </div>
-        <div
-          className={`rounded-lg px-3 py-1 text-xs font-bold ${
-            sumaOk && cantidadLinea > 0
-              ? 'bg-emerald-500/15 text-emerald-300'
-              : 'bg-amber-500/15 text-amber-200'
-          }`}
-        >
-          Distribuido: {totalImputado} / {cantidadLinea}
-          {!sumaOk && cantidadLinea > 0 ? ` (faltan ${restante > 0 ? restante : -restante})` : null}
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`rounded-lg px-3 py-1 text-xs font-bold ${
+              totalImputado > 0 && totalImputado <= cantidadLinea
+                ? 'bg-emerald-500/15 text-emerald-300'
+                : 'bg-amber-500/15 text-amber-200'
+            }`}
+          >
+            Descargado: {totalImputado} / {cantidadLinea}
+          </span>
+          {saldo > 0.0001 ? (
+            <span className="rounded-lg bg-zinc-500/15 px-3 py-1 text-xs font-bold text-zinc-300">
+              Saldo origen: {saldo}
+            </span>
+          ) : null}
         </div>
       </div>
 
       {loading ? (
         <p className="flex items-center gap-2 text-xs text-zinc-500">
           <Loader2 className="h-3 w-3 animate-spin" />
-          Cargando partidas del presupuesto…
+          Buscando partidas del presupuesto con este material…
         </p>
       ) : null}
       {loadError ? <p className="text-xs text-red-400">{loadError}</p> : null}
+
       {!loading && opciones.length === 0 ? (
-        <p className="text-xs text-amber-400">
-          No hay partidas de presupuesto para esta obra. Importe Lulo o cree partidas en el módulo de
-          proyectos.
-        </p>
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-200">
+          <PackageOpen className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            No hay partidas en el presupuesto que incluyan este material en su APU. Verifique que el
+            código SAP del producto coincida con el insumo Lulo o registre techos en obra.
+          </p>
+        </div>
       ) : null}
 
       {rows.map((row) => (
-        <div key={row.rowId} className="relative">
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => quitarFila(row.rowId)}
-            className="absolute right-2 top-2 z-10 rounded-lg border border-white/10 bg-black/60 p-1.5 text-zinc-400 hover:text-red-300"
-            title="Quitar partida"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-          <FilaDespachoPartida
-            fila={row.fila}
-            productoNombre={productoNombre}
-            cantidad={row.cantidad}
-            justificacion={row.justificacion}
-            disabled={disabled}
-            onChange={(v) => {
-              setRows((prev) =>
-                prev.map((r) =>
-                  r.rowId === row.rowId
-                    ? {
-                        ...r,
-                        cantidad: v.cantidad,
-                        justificacion: v.justificacion,
-                        autorizado: v.autorizado,
-                      }
-                    : r,
-                ),
-              );
-            }}
-          />
+        <div
+          key={row.rowId}
+          className={`rounded-xl border transition-opacity ${
+            row.seleccionada ? 'border-white/15 opacity-100' : 'border-white/5 opacity-60'
+          }`}
+        >
+          <label className="flex cursor-pointer items-center gap-2 border-b border-white/5 px-3 py-2">
+            <input
+              type="checkbox"
+              disabled={disabled}
+              checked={row.seleccionada}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setRows((prev) => {
+                  const otros = prev
+                    .filter((r) => r.rowId !== row.rowId && r.seleccionada)
+                    .reduce((s, r) => s + r.cantidad, 0);
+                  const restante = Math.max(0, cantidadLinea - otros);
+                  const disp = Math.max(
+                    0,
+                    row.fila.cantidad_presupuestada - row.fila.cantidad_asignada_real,
+                  );
+                  return prev.map((r) =>
+                    r.rowId === row.rowId
+                      ? {
+                          ...r,
+                          seleccionada: on,
+                          cantidad: on
+                            ? r.cantidad > 0
+                              ? r.cantidad
+                              : Math.min(disp > 0 ? disp : restante, restante) || 0
+                            : 0,
+                        }
+                      : r,
+                  );
+                });
+              }}
+              className="rounded border-white/20"
+            />
+            <span className="text-[10px] font-bold uppercase text-zinc-500">
+              Descargar en esta partida
+            </span>
+          </label>
+          {row.seleccionada ? (
+            <FilaDespachoPartida
+              fila={row.fila}
+              productoNombre={productoNombre}
+              cantidad={row.cantidad}
+              justificacion={row.justificacion}
+              disabled={disabled}
+              onChange={(v) => {
+                setRows((prev) =>
+                  prev.map((r) =>
+                    r.rowId === row.rowId
+                      ? {
+                          ...r,
+                          cantidad: v.cantidad,
+                          justificacion: v.justificacion,
+                          autorizado: v.autorizado,
+                        }
+                      : r,
+                  ),
+                );
+              }}
+            />
+          ) : (
+            <p className="px-4 py-2 text-[11px] text-zinc-600">{row.fila.nombre_partida}</p>
+          )}
         </div>
       ))}
 
-      {opcionesDisponibles.length > 0 ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Agregar partida
-            </label>
-            <select
-              value={partidaAgregar}
-              disabled={disabled || loading}
-              onChange={(e) => setPartidaAgregar(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white"
-            >
-              <option value="">Elija partida…</option>
-              {opcionesDisponibles.map((o) => (
-                <option key={filaKey(o)} value={filaKey(o)}>
-                  {o.nombre_partida}
-                </option>
-              ))}
-            </select>
+      {distribucion.nivelAlerta && distribucion.nivelAlerta !== 'ok' ? (
+        <div
+          className={`flex items-start gap-2 rounded-lg border p-3 text-xs ${alertaClass(distribucion.nivelAlerta)}`}
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            {maxExcesoPct > 0 ? (
+              <p>
+                <strong>Faltante presupuestario:</strong> una o más partidas superan el techo (
+                {maxExcesoPct}% de exceso). Justifique o reduzca cantidades.
+              </p>
+            ) : null}
+            {saldo > 0.0001 && totalImputado > 0 ? (
+              <p className={maxExcesoPct > 0 ? 'mt-1' : ''}>
+                <strong>Saldo en origen:</strong> {saldo} unidades no se moverán en este despacho.
+              </p>
+            ) : null}
           </div>
-          <button
-            type="button"
-            disabled={disabled || !partidaAgregar}
-            onClick={agregarPartida}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-40"
-          >
-            <Plus className="h-4 w-4" />
-            Añadir
-          </button>
         </div>
-      ) : rows.length > 0 ? (
-        <p className="text-[11px] text-zinc-500">Todas las partidas del presupuesto ya están en la lista.</p>
       ) : null}
 
       {distribucion.error && cantidadLinea > 0 ? (

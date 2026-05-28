@@ -35,31 +35,43 @@ function codigoTransferencia(tipo: TransferenciaTipoMovimiento): string {
 export function validarDistribucionLinea(
   cantidadLinea: number,
   imputaciones: ImputacionPartidaInput[],
-): { ok: boolean; error?: string; totalImputado: number } {
+): {
+  ok: boolean;
+  error?: string;
+  totalImputado: number;
+  saldo: number;
+} {
   const totalImputado = imputaciones.reduce((s, i) => s + Number(i.cantidad_imputada ?? 0), 0);
+  const saldo = Math.max(0, cantidadLinea - totalImputado);
+
   if (imputaciones.length === 0) {
-    return { ok: false, error: 'Distribuya la cantidad entre al menos una partida.', totalImputado };
-  }
-  if (totalImputado <= 0) {
-    return { ok: false, error: 'Indique cantidades en las partidas.', totalImputado };
-  }
-  const diff = Math.abs(totalImputado - cantidadLinea);
-  if (diff > 0.0001) {
     return {
       ok: false,
-      error: `La suma por partidas (${totalImputado}) debe igualar la cantidad de la línea (${cantidadLinea}).`,
+      error: 'Seleccione al menos una partida en destino.',
       totalImputado,
+      saldo,
+    };
+  }
+  if (totalImputado <= 0) {
+    return { ok: false, error: 'Indique cantidades en las partidas.', totalImputado, saldo };
+  }
+  if (totalImputado - cantidadLinea > 0.0001) {
+    return {
+      ok: false,
+      error: `La suma por partidas (${totalImputado}) no puede superar la cantidad a despachar (${cantidadLinea}).`,
+      totalImputado,
+      saldo: 0,
     };
   }
   for (const imp of imputaciones) {
     if (!imp.partida_id && !imp.ci_presupuesto_partida_id) {
-      return { ok: false, error: 'Cada imputación debe tener partida.', totalImputado };
+      return { ok: false, error: 'Cada imputación debe tener partida.', totalImputado, saldo };
     }
     if (Number(imp.cantidad_imputada) <= 0) {
-      return { ok: false, error: 'Cantidades de partida deben ser mayores a cero.', totalImputado };
+      return { ok: false, error: 'Cantidades de partida deben ser mayores a cero.', totalImputado, saldo };
     }
   }
-  return { ok: true, totalImputado };
+  return { ok: true, totalImputado, saldo };
 }
 
 export async function crearTransferenciaInventario(

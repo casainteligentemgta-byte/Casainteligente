@@ -1,6 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { DespachoAlertasConfigPanel } from '@/components/almacen/DespachoAlertasConfigPanel';
+import {
+  DESPACHO_ALERTAS_DEFAULT,
+  type DespachoAlertasConfig,
+} from '@/lib/almacen/despachoAlertasConfig';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, Package, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,8 +39,9 @@ function lineId(): string {
 const emptyDistribucion = (): DistribucionDespachoState => ({
   imputaciones: [],
   totalImputado: 0,
+  saldo: 0,
   valido: false,
-  error: 'Distribuya la cantidad entre partidas.',
+  error: 'Seleccione partidas en destino y cantidades.',
 });
 
 export default function DespachoInventarioClient() {
@@ -49,6 +55,13 @@ export default function DespachoInventarioClient() {
   const [materialAgregar, setMaterialAgregar] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [alertasConfig, setAlertasConfig] = useState<DespachoAlertasConfig>({
+    ...DESPACHO_ALERTAS_DEFAULT,
+  });
+
+  const onAlertasConfigChange = useCallback((cfg: DespachoAlertasConfig) => {
+    setAlertasConfig(cfg);
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -122,17 +135,21 @@ export default function DespachoInventarioClient() {
     destinoId &&
     origenId !== destinoId &&
     lineas.length > 0 &&
-    lineas.every(
-      (l) =>
+    lineas.every((l) => {
+      const mov = l.distribucion.totalImputado;
+      return (
         l.cantidad > 0 &&
-        l.cantidad <= l.maxStock &&
+        mov > 0 &&
+        mov <= l.cantidad &&
+        mov <= l.maxStock &&
         l.distribucion.valido &&
-        l.distribucion.imputaciones.length > 0,
-    );
+        l.distribucion.imputaciones.length > 0
+      );
+    });
 
   const guardar = async () => {
     if (!puedeGuardar) {
-      toast.error('Complete obra, ubicaciones, cantidades y reparto por partidas.');
+      toast.error('Complete obra, destino, cantidades y partidas a descargar.');
       return;
     }
     setGuardando(true);
@@ -148,7 +165,7 @@ export default function DespachoInventarioClient() {
           observaciones,
           lineas: lineas.map((l) => ({
             material_id: l.material_id,
-            cantidad: l.cantidad,
+            cantidad: l.distribucion.totalImputado,
             imputaciones: l.distribucion.imputaciones as ImputacionPartidaInput[],
           })),
         }),
@@ -183,7 +200,7 @@ export default function DespachoInventarioClient() {
           <div>
             <h1 className="text-lg font-bold">Despacho a obra</h1>
             <p className="text-xs text-zinc-500">
-              Un mismo producto puede repartirse entre varias partidas del presupuesto
+              Descargue por partida del presupuesto que llevan el material; el saldo queda en origen
             </p>
           </div>
         </div>
@@ -199,6 +216,7 @@ export default function DespachoInventarioClient() {
               onChange={(e) => {
                 setProyectoId(e.target.value);
                 setLineas([]);
+                setAlertasConfig({ ...DESPACHO_ALERTAS_DEFAULT });
               }}
               className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm"
             >
@@ -225,11 +243,22 @@ export default function DespachoInventarioClient() {
               <UbicacionInventarioSelect
                 proyectoId={proyectoId}
                 value={destinoId}
-                onChange={setDestinoId}
+                onChange={(id) => {
+                  setDestinoId(id);
+                  setLineas((prev) =>
+                    prev.map((l) => ({ ...l, distribucion: emptyDistribucion() })),
+                  );
+                }}
                 placeholder="Hacia obra / bodega…"
               />
             </div>
           </div>
+          {proyectoId ? (
+            <DespachoAlertasConfigPanel
+              proyectoId={proyectoId}
+              onConfigChange={onAlertasConfigChange}
+            />
+          ) : null}
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-zinc-500">Observaciones</label>
             <textarea
@@ -296,6 +325,15 @@ export default function DespachoInventarioClient() {
                   <p className="font-semibold text-zinc-100">{linea.nombre}</p>
                   <p className="text-[11px] text-zinc-500">
                     Stock origen: {linea.maxStock} {linea.unidad}
+                    {linea.distribucion.totalImputado > 0 ? (
+                      <>
+                        {' '}
+                        · se moverán: {linea.distribucion.totalImputado} {linea.unidad}
+                        {linea.distribucion.saldo > 0.0001
+                          ? ` · saldo: ${linea.distribucion.saldo}`
+                          : null}
+                      </>
+                    ) : null}
                   </p>
                 </div>
                 <button
@@ -306,9 +344,9 @@ export default function DespachoInventarioClient() {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-              <div className="w-full max-w-[140px]">
+              <div className="w-full max-w-[180px]">
                 <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
-                  Cantidad total a despachar
+                  Cantidad máxima a despachar
                 </label>
                 <input
                   type="number"
@@ -327,6 +365,7 @@ export default function DespachoInventarioClient() {
                                 Number.isFinite(n) && n >= 0
                                   ? Math.min(n, l.maxStock)
                                   : 0,
+                              distribucion: emptyDistribucion(),
                             }
                           : l,
                       ),
@@ -335,12 +374,14 @@ export default function DespachoInventarioClient() {
                   className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
                 />
               </div>
-              {proyectoId && linea.cantidad > 0 ? (
+              {proyectoId && destinoId && linea.cantidad > 0 ? (
                 <DistribucionDespachoPartidas
                   proyectoId={proyectoId}
+                  destinoId={destinoId}
                   materialId={linea.material_id}
                   productoNombre={linea.nombre}
                   cantidadLinea={linea.cantidad}
+                  alertasConfig={alertasConfig}
                   onChange={(dist) => {
                     setLineas((prev) =>
                       prev.map((l) =>
@@ -349,6 +390,10 @@ export default function DespachoInventarioClient() {
                     );
                   }}
                 />
+              ) : proyectoId && linea.cantidad > 0 && !destinoId ? (
+                <p className="text-xs text-amber-400/90">
+                  Indique el destino (obra) arriba para ver las partidas que llevan este material.
+                </p>
               ) : null}
             </div>
           ))}

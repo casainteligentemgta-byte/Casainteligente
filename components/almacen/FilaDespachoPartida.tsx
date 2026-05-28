@@ -124,8 +124,9 @@ export function FilaDespachoPartida({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
             <div className="w-full min-w-0">
               <p className="text-xs font-medium text-amber-100/95">
-                <strong>Exceso presupuestario:</strong> retiras {validacion.diferencia}{' '}
-                {unidad} de más ({validacion.porcentajeExceso}% sobre el techo de la partida).
+                <strong>Faltante presupuestario:</strong> esta descarga supera el techo en{' '}
+                {validacion.diferencia} {unidad} ({validacion.porcentajeExceso}% de exceso). Se
+                registrará alerta de sobrecosto.
               </p>
               <div className="mt-2">
                 <label
