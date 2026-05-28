@@ -19,6 +19,7 @@ import {
     Trash2,
     ArrowUpRight,
     ArrowDownRight,
+    ArrowRightLeft,
     Share2
 } from 'lucide-react';
 import { InventoryItem } from '@/types/inventory';
@@ -529,6 +530,12 @@ export default function InventoryMasterPage() {
                         <Share2 size={18} />
                         <span className="hidden sm:inline">Compartir</span>
                     </button>
+                    <Link href="/almacen/migrar-obra">
+                        <button className="flex items-center gap-2 bg-zinc-900 border border-violet-500/40 px-4 py-3 rounded-2xl font-bold text-violet-200 hover:bg-violet-500/10 transition-all">
+                            <ArrowRightLeft size={18} />
+                            <span className="hidden sm:inline">A OBRA</span>
+                        </button>
+                    </Link>
                     <Link href="/almacen/despacho">
                         <button className="flex items-center gap-2 bg-zinc-900 border border-orange-500/40 px-4 py-3 rounded-2xl font-bold text-orange-200 hover:bg-orange-500/10 transition-all">
                             <ArrowUpRight size={18} />
