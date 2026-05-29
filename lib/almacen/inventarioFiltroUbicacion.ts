@@ -39,7 +39,7 @@ export function ubicacionPerteneceAProyecto(
   proyectoId: string,
   proyectoNombre?: string,
 ): boolean {
-  if (u.obra_id === proyectoId || u.ci_proyecto_id === proyectoId) return true;
+  if (u.obra_id === proyectoId) return true;
 
   const pn = normalizarEtiquetaUbicacion(proyectoNombre ?? '');
   if (!pn || (u.tipo !== 'almacen_central' && u.tipo !== 'almacen_movil')) return false;

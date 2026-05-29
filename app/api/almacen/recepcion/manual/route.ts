@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     p_num_doc: String(body.num_doc ?? '').trim() || 'S/N',
     p_lineas: lineas,
     p_usuario_id: user?.id ?? null,
-  });
+  } as never);
 
   if (rpcErr) {
     const msg = rpcErr.message ?? 'Error al registrar ingreso';
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
   if (body.observaciones?.trim()) patch.observaciones = body.observaciones.trim();
 
   if (Object.keys(patch).length > 0) {
-    await supabase.from('ci_recepciones_campo').update(patch).eq('id', id);
+    await supabase.from('ci_recepciones_campo').update(patch as never).eq('id', id);
   }
 
   return NextResponse.json({

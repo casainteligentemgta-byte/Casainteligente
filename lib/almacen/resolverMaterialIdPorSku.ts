@@ -54,6 +54,8 @@ type LineaCompraDb = {
   material_id: string | null;
   item_code: string | null;
   descripcion: string | null;
+  cantidad: number | null;
+  precio_unitario: number | null;
 };
 
 /**

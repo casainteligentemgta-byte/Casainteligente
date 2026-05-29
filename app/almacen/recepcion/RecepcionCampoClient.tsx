@@ -96,8 +96,8 @@ export default function RecepcionCampoClient() {
   const tipoManual: TipoRecepcionCampo = tab === 'emergencia' ? 'emergencia' : 'nota_entrega';
 
   useEffect(() => {
-    void loadCatalogoProyectosApp(supabase).then((rows) => {
-      setProyectos(rows.map((r) => ({ id: r.id, nombre: r.nombre })));
+    void loadCatalogoProyectosApp(supabase).then(({ proyectos: lista }) => {
+      if (lista.length) setProyectos(lista.map((r) => ({ id: r.id, nombre: r.nombre })));
     });
   }, [supabase]);
 
