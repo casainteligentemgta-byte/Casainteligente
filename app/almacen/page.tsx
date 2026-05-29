@@ -232,14 +232,14 @@ export default function InventoryMasterPage() {
                 if (!ids.length && filterProyectoId) {
                     const agg = await getStockAgregadoPorMaterialObra(supabase, filterProyectoId);
                     stockMap = new Map();
-                    for (const [materialId, qty] of agg) {
+                    agg.forEach((qty, materialId) => {
                         if (qty > 0) {
                             stockMap.set(materialId, {
                                 cantidad_disponible: qty,
                                 ubicacion_nombres: ['Obra'],
                             });
                         }
-                    }
+                    });
                 } else if (!ids.length) {
                     setStockPorUbicacion(new Map());
                     setItemsDesdeStock([]);
