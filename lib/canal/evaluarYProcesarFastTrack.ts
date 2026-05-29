@@ -65,7 +65,16 @@ export async function evaluarYProcesarFastTrack(
   datosOcr: DatosOcrFastTrack,
 ): Promise<ResultadoEvaluarYProcesarFastTrack> {
   try {
-    const evaluacion = await evaluarFastTrackFactura(supabase, datosOcr);
+    const { data: pendMeta } = await supabase
+      .from('ci_facturas_canal_pendientes')
+      .select('proyecto_id')
+      .eq('id', facturaId)
+      .maybeSingle();
+
+    const proyectoId =
+      typeof pendMeta?.proyecto_id === 'string' ? pendMeta.proyecto_id : null;
+
+    const evaluacion = await evaluarFastTrackFactura(supabase, datosOcr, proyectoId);
 
     if (!evaluacion.elegible) {
       await persistirEstadoExtraido(supabase, facturaId, datosOcr, {

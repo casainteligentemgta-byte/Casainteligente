@@ -33,11 +33,6 @@ export async function ejecutarFastTrackFacturaCanal(
   pendingId: string,
   extracted: ExtractedPurchaseInvoice & { confidence_score?: number },
 ): Promise<ResultadoFastTrack> {
-  const evaluacion = await evaluarFastTrackFactura(supabase, extracted);
-  if (!evaluacion.elegible) {
-    return { aplicado: false, motivo: evaluacion.motivo, confidenceScore: evaluacion.confidenceScore };
-  }
-
   const { data: pendiente, error: pErr } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select('id, proyecto_id, ubicacion_destino_id, document_storage_path, document_file_name')
@@ -50,6 +45,11 @@ export async function ejecutarFastTrackFacturaCanal(
 
   const row = pendiente as PendienteRow;
   const proyectoId = row.proyecto_id?.trim() ?? '';
+
+  const evaluacion = await evaluarFastTrackFactura(supabase, extracted, proyectoId || null);
+  if (!evaluacion.elegible) {
+    return { aplicado: false, motivo: evaluacion.motivo, confidenceScore: evaluacion.confidenceScore };
+  }
   if (!proyectoId) {
     return {
       aplicado: false,

@@ -210,7 +210,7 @@ async function aplicarComando(
     return;
   }
 
-  if (cmd.resetProyecto && userId) {
+  if (userId && (cmd.resetProyecto || cmd.contexto === 'factura')) {
     await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);
   }
 
@@ -470,11 +470,6 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     const label = chatLabel(msg);
     const texto = msg.text?.trim() ?? '';
 
-    if (texto && CMD_FACTURAS.test(texto)) {
-      const r = await manejarComandoFacturasDirecto(chatId);
-      return NextResponse.json({ ok: true, command: 'facturas', warn: r.warn });
-    }
-
     const userId = String(msg.from?.id ?? msg.chat.id);
 
     const admin = telegramSupabaseAdmin();
@@ -488,6 +483,12 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     const supabase = admin.client;
+
+    if (texto && CMD_FACTURAS.test(texto)) {
+      await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);
+      const r = await manejarComandoFacturasDirecto(chatId);
+      return NextResponse.json({ ok: true, command: 'facturas', warn: r.warn });
+    }
 
     if (texto?.toLowerCase().startsWith('/start')) {
       const vinculado = await manejarStartVinculoTelegram(
@@ -633,6 +634,26 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (msg.photo?.length) {
+      const estadoFoto = await getTelegramEstado(supabase, chatId);
+      if (estadoFoto.contexto === 'factura') {
+        const fileIdFactura = msg.photo[msg.photo.length - 1]?.file_id;
+        if (fileIdFactura) {
+          const factura = await manejarFacturaTelegram({
+            supabase,
+            chatId,
+            chatLabel: label,
+            fileId: fileIdFactura,
+            telegramMessageId: String(msg.message_id),
+          });
+          return NextResponse.json({
+            ok: true,
+            contexto: 'factura',
+            duplicate: factura.duplicate,
+            pendingId: factura.pendingId,
+          });
+        }
+      }
+
       const fotoNotaEntrega = await manejarFotoNotaEntregaTelegram({
         supabase,
         chatId,

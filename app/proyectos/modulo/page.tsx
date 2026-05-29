@@ -13,6 +13,7 @@ import {
 } from '@/lib/ui/moduloProyectosTheme';
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
+import ModalConfigFastTrack from '@/components/proyectos/ModalConfigFastTrack';
 
 /** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
@@ -32,6 +33,7 @@ type ProyectoRow = {
   obrerosContratados: number | null;
   entidad_id?: string | null;
   patrono_nombre?: string | null;
+  limite_fast_track_usd: number;
 };
 
 function customerName(r: ProyectoRow): string {
@@ -76,6 +78,11 @@ const estadoChip: Record<string, { bg: string; text: string }> = {
 const LISTA_TIMEOUT_MS = 38_000;
 
 /** PostgREST cuando la columna no existe en la tabla remota (p. ej. migración 086 no aplicada). */
+function parseLimiteFastTrackUsd(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 100;
+}
+
 function esErrorColumnaInexistente(msg: string, columna: string): boolean {
   const m = msg.toLowerCase();
   return m.includes('does not exist') && m.includes(columna.toLowerCase());
@@ -97,6 +104,7 @@ type ProyectoDbRow = {
   obra_estado_legacy?: string | null;
   obra_precio_venta_usd?: number | null;
   obra_presupuesto_ves?: number | null;
+  limite_fast_track_usd?: number | string | null;
 };
 
 type FilaProyectoLegacy = {
@@ -285,6 +293,7 @@ export default function ModuloProyectosPage() {
         customer_name: byId[r.customer_id] || null,
         obrerosContratados: null,
         patrono_nombre: r.entidad_id ? patronoPorId[String(r.entidad_id)] ?? null : null,
+        limite_fast_track_usd: parseLimiteFastTrackUsd(r.limite_fast_track_usd),
       }));
 
       const obraIds = obrasRaw.map((o) => o.id);
@@ -309,6 +318,7 @@ export default function ModuloProyectosPage() {
         obrerosContratados: porObra[o.id] ?? 0,
         entidad_id: o.entidad_id ?? null,
         patrono_nombre: o.entidad_id ? patronoPorId[String(o.entidad_id)] ?? null : null,
+        limite_fast_track_usd: parseLimiteFastTrackUsd(o.limite_fast_track_usd),
       }));
 
       const merged = [...desdeModulo, ...desdeObra].sort((a, b) => {
@@ -577,6 +587,19 @@ export default function ModuloProyectosPage() {
                           Control de obra
                         </button>
                       </Link>
+                      <ModalConfigFastTrack
+                        proyectoId={r.id}
+                        proyectoNombre={r.nombre}
+                        limiteInicial={r.limite_fast_track_usd}
+                        onGuardado={(limite) => {
+                          setItems((prev) =>
+                            prev.map((p) =>
+                              p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
+                            ),
+                          );
+                        }}
+                        triggerClassName="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04] text-zinc-300 backdrop-blur-xl transition hover:border-[#FF9500]/40 hover:text-[#FF9500]"
+                      />
                       <button
                         type="button"
                         onClick={() => void borrarProyecto(r)}

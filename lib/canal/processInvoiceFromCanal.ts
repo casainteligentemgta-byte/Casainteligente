@@ -144,6 +144,7 @@ export async function processInvoiceFromCanal(params: {
     })
     .eq('id', params.pendingId);
 
+  // Fast-Track: umbral USD por proyecto (ci_proyectos.limite_fast_track_usd; fallback $100).
   let fastTrackMsg = '';
   const ft = await evaluarYProcesarFastTrack(supabase, params.pendingId, datosOcr);
   if (ft.estado === 'aprobado_sistema') {

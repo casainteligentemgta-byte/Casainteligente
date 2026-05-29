@@ -17,6 +17,7 @@ import {
   type ExtraccionRegistroAgua,
 } from '@/lib/telegram/extractAguaGemini';
 import { parseLitrosEntregados } from '@/lib/telegram/parseLitrosAgua';
+import { getTelegramEstado } from '@/lib/telegram/estados';
 import {
   medidorCargaFotoCamionAgua,
   medidorCargaFotoPruebaAgua,
@@ -446,6 +447,11 @@ export async function manejarTextoLitrosAguaTelegram(params: {
   userId: string;
   texto: string;
 }): Promise<ResultadoTextoAgua> {
+  const ctxTelegram = await getTelegramEstado(params.supabase, params.chatId);
+  if (ctxTelegram.contexto === 'factura') {
+    return { handled: false };
+  }
+
   const estado = await getBotEstadoAgua(params.supabase, params.userId);
   if (!estado || estado.estado !== 'ESPERANDO_LITROS') {
     return { handled: false };
@@ -537,6 +543,11 @@ export async function manejarFotoRegistroAguaTelegram(params: {
 }): Promise<ResultadoFotoAgua> {
   const fileId = fileIdFotoTelegramMaxResolucion(params.photo);
   if (!fileId) return { handled: false };
+
+  const ctxTelegram = await getTelegramEstado(params.supabase, params.chatId);
+  if (ctxTelegram.contexto === 'factura') {
+    return { handled: false };
+  }
 
   const estado = await getBotEstadoAgua(params.supabase, params.userId);
   if (!estado) return { handled: false };

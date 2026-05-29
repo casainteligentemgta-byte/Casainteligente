@@ -1,10 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ExtractedPurchaseInvoice } from '@/lib/almacen/extractPurchaseInvoiceGemini';
-import {
-  calcularConfidenceScoreOcr,
-  cumpleUmbralFastTrack,
-  UMBRAL_MONTO_FAST_TRACK_USD,
-} from '@/lib/canal/calcularConfidenceScoreOcr';
+import { calcularConfidenceScoreOcr, cumpleUmbralFastTrack } from '@/lib/canal/calcularConfidenceScoreOcr';
+import { resolverLimiteFastTrackUsd } from '@/lib/canal/limiteFastTrackUsd';
 import { resolverMontosCompraBimonetario } from '@/lib/contabilidad/comprasBimonetario';
 
 export type ResultadoEvalFastTrack = {
@@ -23,6 +20,7 @@ function normSku(s: string): string {
 export async function evaluarFastTrackFactura(
   supabase: SupabaseClient,
   extracted: ExtractedPurchaseInvoice & { confidence_score?: number },
+  proyectoId?: string | null,
 ): Promise<ResultadoEvalFastTrack> {
   const confidenceScore = calcularConfidenceScoreOcr(
     extracted,
@@ -68,14 +66,15 @@ export async function evaluarFastTrackFactura(
     fecha,
   });
   const totalUsd = montos.montoUsd;
+  const limiteUsd = await resolverLimiteFastTrackUsd(supabase, proyectoId);
 
-  if (!(totalUsd > 0 && totalUsd < UMBRAL_MONTO_FAST_TRACK_USD)) {
+  if (!(totalUsd > 0 && totalUsd < limiteUsd)) {
     return {
       elegible: false,
       confidenceScore,
       totalUsd,
       skuCoinciden: false,
-      motivo: `Monto ${totalUsd.toFixed(2)} USD fuera de fast-track (< $100)`,
+      motivo: `Monto ${totalUsd.toFixed(2)} USD fuera de fast-track (< $${limiteUsd.toFixed(2)})`,
       materialIds: [],
     };
   }
