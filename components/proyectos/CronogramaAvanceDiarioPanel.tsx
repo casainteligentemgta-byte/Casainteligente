@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { useColaAvanceOffline } from '@/hooks/useColaAvanceOffline';
-import { encolarAvanceOffline } from '@/lib/campo/colaAvanceOffline';
+import { ColaAvanceStorageError, encolarAvanceOffline } from '@/lib/campo/colaAvanceOffline';
 import type { CronogramaCapitulo, CronogramaTarea } from '@/types/cronograma';
 import { cn } from '@/lib/utils';
 import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
@@ -108,6 +108,28 @@ export default function CronogramaAvanceDiarioPanel({
     patchAvance(key, row.porcentaje_avance + delta);
   };
 
+  const guardarEnColaLocal = useCallback(
+    (actualizaciones: Parameters<typeof encolarAvanceOffline>[1], mensajeOk: string) => {
+      try {
+        encolarAvanceOffline(proyectoId, actualizaciones);
+        setGuardadoLocal(true);
+        refrescar();
+        setDirty(false);
+        toast.success(mensajeOk);
+        return true;
+      } catch (e) {
+        if (e instanceof ColaAvanceStorageError) {
+          toast.error(e.message);
+        } else {
+          console.error('Error guardando caché offline en el iPad:', e);
+          toast.error('Error de almacenamiento local. Libera espacio en Safari.');
+        }
+        return false;
+      }
+    },
+    [proyectoId, refrescar, setGuardadoLocal],
+  );
+
   const guardar = () => {
     void runLocked(async () => {
       try {
@@ -125,11 +147,10 @@ export default function CronogramaAvanceDiarioPanel({
         const payload = { actualizaciones };
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          encolarAvanceOffline(proyectoId, actualizaciones);
-          setGuardadoLocal(true);
-          refrescar();
-          setDirty(false);
-          toast.success('Reporte guardado localmente. Se sincronizará al recuperar señal.');
+          guardarEnColaLocal(
+            actualizaciones,
+            'Reporte guardado localmente. Se sincronizará al recuperar señal.',
+          );
           return;
         }
 
@@ -149,21 +170,19 @@ export default function CronogramaAvanceDiarioPanel({
         onSaved?.();
       } catch (e) {
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          const actualizaciones = Array.from(avances.values()).map((a) => ({
-            id: a.id.startsWith('borrador-') ? undefined : a.id,
-            partida_id: a.partida_id,
-            codigo_partida: a.codigo_partida,
-            nombre_tarea: a.nombre_tarea,
-            porcentaje_avance: a.porcentaje_avance,
-            fecha_inicio_planificada: a.fecha_inicio_planificada,
-            fecha_fin_planificada: a.fecha_fin_planificada,
-            orden: a.orden,
-          }));
-          encolarAvanceOffline(proyectoId, actualizaciones);
-          setGuardadoLocal(true);
-          refrescar();
-          setDirty(false);
-          toast.success('Reporte guardado localmente. Sincronización pendiente por red.');
+          guardarEnColaLocal(
+            Array.from(avances.values()).map((a) => ({
+              id: a.id.startsWith('borrador-') ? undefined : a.id,
+              partida_id: a.partida_id,
+              codigo_partida: a.codigo_partida,
+              nombre_tarea: a.nombre_tarea,
+              porcentaje_avance: a.porcentaje_avance,
+              fecha_inicio_planificada: a.fecha_inicio_planificada,
+              fecha_fin_planificada: a.fecha_fin_planificada,
+              orden: a.orden,
+            })),
+            'Reporte guardado localmente. Sincronización pendiente por red.',
+          );
           return;
         }
         toast.error(formatErrorMessage(e));

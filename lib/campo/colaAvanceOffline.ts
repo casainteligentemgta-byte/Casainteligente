@@ -1,6 +1,15 @@
 import type { ActualizacionAvanceCronograma } from '@/lib/proyectos/aplicarAvanceCronograma';
 
-export const COLA_AVANCE_STORAGE_KEY = 'ci_cola_avance_campo_v1';
+export const COLA_AVANCE_STORAGE_KEY = 'ci_cola_avance';
+const COLA_AVANCE_LEGACY_KEY = 'ci_cola_avance_campo_v1';
+
+export class ColaAvanceStorageError extends Error {
+  constructor(cause?: unknown) {
+    super('Error de almacenamiento local. Libera espacio en Safari.');
+    this.name = 'ColaAvanceStorageError';
+    if (cause instanceof Error) this.cause = cause;
+  }
+}
 
 export type ReporteAvancePendiente = {
   id: string;
@@ -15,11 +24,13 @@ export type ReporteAvancePendiente = {
 function leerColaRaw(): ReporteAvancePendiente[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(COLA_AVANCE_STORAGE_KEY);
+    const raw =
+      localStorage.getItem(COLA_AVANCE_STORAGE_KEY) ??
+      localStorage.getItem(COLA_AVANCE_LEGACY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    const items = parsed.filter(
       (x): x is ReporteAvancePendiente =>
         Boolean(x) &&
         typeof x === 'object' &&
@@ -27,6 +38,15 @@ function leerColaRaw(): ReporteAvancePendiente[] {
         typeof (x as ReporteAvancePendiente).proyectoId === 'string' &&
         Array.isArray((x as ReporteAvancePendiente).payload?.actualizaciones),
     );
+    if (localStorage.getItem(COLA_AVANCE_LEGACY_KEY) && !localStorage.getItem(COLA_AVANCE_STORAGE_KEY)) {
+      try {
+        localStorage.setItem(COLA_AVANCE_STORAGE_KEY, JSON.stringify(items));
+        localStorage.removeItem(COLA_AVANCE_LEGACY_KEY);
+      } catch {
+        /* migración best-effort */
+      }
+    }
+    return items;
   } catch {
     return [];
   }
@@ -34,7 +54,12 @@ function leerColaRaw(): ReporteAvancePendiente[] {
 
 function escribirCola(items: ReporteAvancePendiente[]): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(COLA_AVANCE_STORAGE_KEY, JSON.stringify(items));
+  try {
+    localStorage.setItem(COLA_AVANCE_STORAGE_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error('Error guardando caché offline en el iPad:', e);
+    throw new ColaAvanceStorageError(e);
+  }
 }
 
 export function listarColaAvanceOffline(proyectoId?: string): ReporteAvancePendiente[] {
