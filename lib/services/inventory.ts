@@ -70,7 +70,7 @@ export class InventoryService {
 
         if (movementError) throw movementError;
 
-        return { newStock, newCost };
+        return { newStock: 0, newCost };
     }
 
     /**
