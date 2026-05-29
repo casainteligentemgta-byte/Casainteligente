@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { reubicarCompraObra } from '@/lib/almacen/reubicarCompraObra';
+import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
@@ -25,6 +26,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     }
 
     const body = (await req.json()) as {
+      entidad_id?: string;
       proyecto_id?: string;
       ubicacion_destino_id?: string;
       nombre_obra?: string;
@@ -32,6 +34,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
 
     const proyectoId = String(body.proyecto_id ?? '').trim();
     const ubicacionDestinoId = String(body.ubicacion_destino_id ?? '').trim();
+    let entidadId = String(body.entidad_id ?? '').trim() || null;
 
     if (!proyectoId || !ubicacionDestinoId) {
       return NextResponse.json(
@@ -42,11 +45,15 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
 
     const supabase = admin.client;
 
+    if (!entidadId) {
+      entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
+    }
+
     if (id.startsWith('canal-')) {
       const referenciaId = id.slice('canal-'.length);
       const { data: pendiente, error: pErr } = await supabase
         .from('ci_facturas_canal_pendientes')
-        .select('id, purchase_invoice_id, proyecto_id, ubicacion_destino_id, extracted')
+        .select('id, purchase_invoice_id, entidad_id, proyecto_id, ubicacion_destino_id, extracted')
         .eq('id', referenciaId)
         .single();
 
@@ -57,11 +64,13 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       const pend = pendiente as {
         id: string;
         purchase_invoice_id: string | null;
+        entidad_id: string | null;
         proyecto_id: string | null;
         ubicacion_destino_id: string | null;
         extracted: Record<string, unknown> | null;
       };
       if (
+        String(pend.entidad_id ?? '') === (entidadId ?? '') &&
         String(pend.proyecto_id ?? '') === proyectoId &&
         String(pend.ubicacion_destino_id ?? '') === ubicacionDestinoId
       ) {
@@ -74,28 +83,32 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       }
 
       const prevExtracted = pend.extracted ?? {};
+      const patchCanal: Record<string, unknown> = {
+        proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionDestinoId,
+        extracted: {
+          ...prevExtracted,
+          reubicacion: {
+            reubicado_automaticamente: true,
+            fecha_reubicacion: new Date().toISOString(),
+            entidad_id: entidadId,
+            proyecto_id: proyectoId,
+            ubicacion_destino_id: ubicacionDestinoId,
+          },
+        },
+        updated_at: new Date().toISOString(),
+      };
+      if (entidadId) patchCanal.entidad_id = entidadId;
       await supabase
         .from('ci_facturas_canal_pendientes')
-        .update({
-          proyecto_id: proyectoId,
-          ubicacion_destino_id: ubicacionDestinoId,
-          extracted: {
-            ...prevExtracted,
-            reubicacion: {
-              reubicado_automaticamente: true,
-              fecha_reubicacion: new Date().toISOString(),
-              proyecto_id: proyectoId,
-              ubicacion_destino_id: ubicacionDestinoId,
-            },
-          },
-          updated_at: new Date().toISOString(),
-        } as never)
+        .update(patchCanal as never)
         .eq('id', referenciaId);
 
       if (pend.purchase_invoice_id) {
         const result = await reubicarCompraObra(supabase, {
           referenciaId: String(pend.purchase_invoice_id),
           referenciaTipo: 'purchase_invoice',
+          entidadId,
           proyectoId,
           ubicacionDestinoId,
           nombreObra: body.nombre_obra,
@@ -123,6 +136,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     const result = await reubicarCompraObra(supabase, {
       referenciaId: id,
       referenciaTipo: 'compra',
+      entidadId,
       proyectoId,
       ubicacionDestinoId,
       nombreObra: body.nombre_obra,

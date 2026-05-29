@@ -5,6 +5,7 @@ export type ReubicarCompraInput = {
   /** contabilidad_compras.id o purchase_invoices.id */
   referenciaId: string;
   referenciaTipo?: 'compra' | 'purchase_invoice';
+  entidadId?: string | null;
   proyectoId: string;
   ubicacionDestinoId: string;
   nombreObra?: string;
@@ -65,6 +66,7 @@ export async function reubicarCompraObra(
 ): Promise<ReubicarCompraResult> {
   const proyectoId = input.proyectoId.trim();
   const ubicacionNuevaId = input.ubicacionDestinoId.trim();
+  const entidadId = input.entidadId?.trim() || null;
   if (!proyectoId) throw new Error('Seleccione la obra.');
   if (!ubicacionNuevaId) throw new Error('Seleccione el almacén de ingreso.');
 
@@ -164,12 +166,14 @@ export async function reubicarCompraObra(
       ? String(invRow.ubicacion_destino_id)
       : null;
 
+    const patchInv: Record<string, unknown> = {
+      proyecto_id: proyectoId,
+      ubicacion_destino_id: ubicacionNuevaId,
+    };
+    if (entidadId) patchInv.entidad_id = entidadId;
     const { error: upInv } = await supabase
       .from('purchase_invoices')
-      .update({
-        proyecto_id: proyectoId,
-        ubicacion_destino_id: ubicacionNuevaId,
-      })
+      .update(patchInv)
       .eq('id', purchaseInvoiceId);
     if (upInv) throw new Error(upInv.message);
   }
@@ -179,6 +183,7 @@ export async function reubicarCompraObra(
       proyecto_id: proyectoId,
       updated_at: new Date().toISOString(),
     };
+    if (entidadId) patchCompra.entidad_id = entidadId;
     const { error: upCompra } = await supabase
       .from('contabilidad_compras')
       .update({ ...patchCompra, ubicacion_destino_id: ubicacionNuevaId } as never)
@@ -201,12 +206,14 @@ export async function reubicarCompraObra(
       .maybeSingle();
     if (compraByInv?.id) {
       compraId = String(compraByInv.id);
+      const patchByInv: Record<string, unknown> = {
+        proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionNuevaId,
+      };
+      if (entidadId) patchByInv.entidad_id = entidadId;
       await supabase
         .from('contabilidad_compras')
-        .update({
-          proyecto_id: proyectoId,
-          ubicacion_destino_id: ubicacionNuevaId,
-        } as never)
+        .update(patchByInv as never)
         .eq('id', compraId);
     }
   }
@@ -219,22 +226,25 @@ export async function reubicarCompraObra(
 
     for (const pend of pendientes ?? []) {
       const prev = (pend.extracted as Record<string, unknown> | null) ?? {};
+      const patchCanal: Record<string, unknown> = {
+        proyecto_id: proyectoId,
+        ubicacion_destino_id: ubicacionNuevaId,
+        extracted: {
+          ...prev,
+          reubicacion: {
+            reubicado_automaticamente: true,
+            fecha_reubicacion: new Date().toISOString(),
+            entidad_id: entidadId,
+            proyecto_id: proyectoId,
+            ubicacion_destino_id: ubicacionNuevaId,
+          },
+        },
+        updated_at: new Date().toISOString(),
+      };
+      if (entidadId) patchCanal.entidad_id = entidadId;
       await supabase
         .from('ci_facturas_canal_pendientes')
-        .update({
-          proyecto_id: proyectoId,
-          ubicacion_destino_id: ubicacionNuevaId,
-          extracted: {
-            ...prev,
-            reubicacion: {
-              reubicado_automaticamente: true,
-              fecha_reubicacion: new Date().toISOString(),
-              proyecto_id: proyectoId,
-              ubicacion_destino_id: ubicacionNuevaId,
-            },
-          },
-          updated_at: new Date().toISOString(),
-        })
+        .update(patchCanal)
         .eq('id', pend.id);
     }
   }

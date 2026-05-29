@@ -148,6 +148,9 @@ export default function ComprasLineasTable({
             <SortTh col="factura" label="Factura" />
             <SortTh col="proveedor" label="Proveedor" />
             <SortTh col="rif" label="RIF" />
+            <th style={th}>Entidad</th>
+            <th style={th}>Proyecto</th>
+            <th style={th}>Almacén</th>
             <SortTh col="articulo" label="Artículo" />
             <SortTh col="cantidad" label="Cant." align="right" />
             <SortTh col="precioUnitario" label="P.U. (Bs)" align="right" />
@@ -184,6 +187,13 @@ export default function ComprasLineasTable({
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
                 <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{row.rif}</td>
+                <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>
+                  {row.entidad || '—'}
+                </td>
+                <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>
+                  {row.proyecto || '—'}
+                </td>
+                <td style={{ ...td, maxWidth: 130, color: '#fdba74' }}>{row.almacen || '—'}</td>
                 <td style={{ ...td, maxWidth: 180 }}>
                   {row.esLinea ? row.articulo : <span style={{ opacity: 0.4 }}>(cabecera)</span>}
                 </td>

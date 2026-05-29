@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, MapPin, X } from 'lucide-react';
 import { toast } from 'sonner';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import { reubicarCompra } from '@/lib/contabilidad/reubicarCompraApi';
 import { createClient } from '@/lib/supabase/client';
+import {
+  filtrarProyectosPorEntidad,
+  type ProyectoRow,
+} from '@/lib/almacen/inventoryClasificacion';
 import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
 
 type Props = {
@@ -14,6 +18,7 @@ type Props = {
   /** contabilidad_compras.id o canal-{uuid} */
   compraId: string;
   titulo?: string;
+  entidadIdInicial?: string | null;
   proyectoIdInicial?: string | null;
   ubicacionIdInicial?: string | null;
   onGuardado?: () => void;
@@ -22,44 +27,66 @@ type Props = {
 const selectClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-500/50';
 
+type EntidadRow = { id: string; nombre: string };
+
 export default function ReubicarCompraModal({
   open,
   onClose,
   compraId,
   titulo = 'Reubicar compra',
+  entidadIdInicial,
   proyectoIdInicial,
   ubicacionIdInicial,
   onGuardado,
 }: Props) {
-  const [proyectos, setProyectos] = useState<{ id: string; nombre: string }[]>([]);
+  const [entidades, setEntidades] = useState<EntidadRow[]>([]);
+  const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
+  const [entidadId, setEntidadId] = useState('');
   const [proyectoId, setProyectoId] = useState('');
   const [ubicacionId, setUbicacionId] = useState('');
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setEntidadId(entidadIdInicial ?? '');
     setProyectoId(proyectoIdInicial ?? '');
     setUbicacionId(ubicacionIdInicial ?? '');
     void (async () => {
       try {
-        const supabase = createClient();
-        const { proyectos: lista } = await loadCatalogoProyectosApp(supabase);
-        setProyectos(lista);
+        const [entRes, cat] = await Promise.all([
+          fetch('/api/almacen/entidades', { cache: 'no-store' }),
+          loadCatalogoProyectosApp(createClient()),
+        ]);
+        const entData = (await entRes.json()) as { entidades?: EntidadRow[] };
+        setEntidades(entData.entidades ?? []);
+        setProyectos(
+          (cat.proyectos ?? []).map((p) => ({
+            id: p.id,
+            nombre: p.nombre,
+            entidad_id: p.entidad_id ?? null,
+          })),
+        );
       } catch {
         /* opcional */
       }
     })();
-  }, [open, proyectoIdInicial, ubicacionIdInicial]);
+  }, [open, entidadIdInicial, proyectoIdInicial, ubicacionIdInicial]);
+
+  const proyectosFiltrados = useMemo(
+    () => filtrarProyectosPorEntidad(proyectos, entidadId || null),
+    [proyectos, entidadId],
+  );
 
   const guardar = async () => {
-    if (!proyectoId || !ubicacionId) {
-      toast.error('Seleccione obra y almacén');
+    if (!entidadId || !proyectoId || !ubicacionId) {
+      toast.error('Seleccione entidad, obra y almacén');
       return;
     }
     const nombreObra = proyectos.find((p) => p.id === proyectoId)?.nombre;
     setGuardando(true);
     try {
       const r = await reubicarCompra(compraId, {
+        entidad_id: entidadId,
         proyecto_id: proyectoId,
         ubicacion_destino_id: ubicacionId,
         nombre_obra: nombreObra,
@@ -70,7 +97,7 @@ export default function ReubicarCompraModal({
             ? 'Compra reubicada y stock trasladado al nuevo almacén'
             : r.sinCambios
               ? 'La compra ya estaba en esa ubicación'
-              : 'Obra y almacén actualizados'),
+              : 'Entidad, obra y almacén actualizados'),
       );
       onGuardado?.();
       onClose();
@@ -107,23 +134,46 @@ export default function ReubicarCompraModal({
         </div>
 
         <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
-          Asigne la obra y el almacén donde queda localizado el material. Si la compra ya ingresó a
-          inventario, el stock se traslada al nuevo almacén.
+          Asigne la <b className="text-zinc-400">entidad</b>, la <b className="text-zinc-400">obra</b> y el{' '}
+          <b className="text-zinc-400">almacén</b> donde queda el material. Si ya ingresó a inventario, el
+          stock se traslada.
         </p>
 
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">Obra</label>
+            <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">Entidad</label>
+            <select
+              value={entidadId}
+              onChange={(e) => {
+                setEntidadId(e.target.value);
+                setProyectoId('');
+                setUbicacionId('');
+              }}
+              className={selectClass}
+            >
+              <option value="">Seleccione entidad…</option>
+              {entidades.map((en) => (
+                <option key={en.id} value={en.id}>
+                  {en.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">Obra / proyecto</label>
             <select
               value={proyectoId}
+              disabled={!entidadId}
               onChange={(e) => {
                 setProyectoId(e.target.value);
                 setUbicacionId('');
               }}
               className={selectClass}
             >
-              <option value="">Seleccione obra…</option>
-              {proyectos.map((p) => (
+              <option value="">
+                {entidadId ? 'Seleccione obra…' : 'Primero elija entidad…'}
+              </option>
+              {proyectosFiltrados.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
                 </option>
@@ -138,6 +188,7 @@ export default function ReubicarCompraModal({
               proyectoId={proyectoId}
               value={ubicacionId}
               onChange={setUbicacionId}
+              disabled={!proyectoId}
             />
           </div>
         </div>
@@ -152,7 +203,7 @@ export default function ReubicarCompraModal({
           </button>
           <button
             type="button"
-            disabled={guardando || !proyectoId || !ubicacionId}
+            disabled={guardando || !entidadId || !proyectoId || !ubicacionId}
             onClick={() => void guardar()}
             className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 py-2.5 text-sm font-bold text-black disabled:opacity-40 flex items-center justify-center gap-2"
           >

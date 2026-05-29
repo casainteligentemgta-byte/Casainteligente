@@ -5,6 +5,7 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
   { command: 'entrada', description: 'Nota de entrega: proveedor + productos → cola compras' },
   { command: 'ingreso', description: 'Facturas cargadas pendientes de ingreso a almacén' },
+  { command: 'liberar', description: 'Liberar material de cuarentena (depositario)' },
   { command: 'salida', description: 'Egreso de material (capítulo, foto, stock)' },
   { command: 'memoria', description: 'Memoria descriptiva: foto de avance por partida' },
   { command: 'obra', description: 'Elegir obra y subir fotos de evidencia' },

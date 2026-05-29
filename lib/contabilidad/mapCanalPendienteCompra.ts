@@ -21,6 +21,7 @@ export type CanalPendienteParaLista = {
   canal: string;
   estado: string;
   proyecto_id?: string | null;
+  entidad_id?: string | null;
   ubicacion_destino_id?: string | null;
   purchase_invoice_id?: string | null;
   document_file_name: string | null;
@@ -43,6 +44,9 @@ export type CompraListaUnificada = {
   id: string;
   purchase_invoice_id: string | null;
   proyecto_id: string | null;
+  entidad_id?: string | null;
+  entidad_nombre?: string | null;
+  proyecto_nombre?: string | null;
   invoice_number: string;
   supplier_rif: string;
   supplier_name: string;
@@ -93,6 +97,7 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
     id: `canal-${p.id}`,
     purchase_invoice_id: p.purchase_invoice_id ?? null,
     proyecto_id: p.proyecto_id ?? null,
+    entidad_id: p.entidad_id ?? null,
     ubicacion_destino_id: p.ubicacion_destino_id ?? null,
     invoice_number: String(ex?.invoice_number ?? '—').trim() || '—',
     supplier_rif: String(ex?.supplier_rif ?? '').trim(),
@@ -152,6 +157,9 @@ function enriquecerCompraConCanal(
     pendiente_canal_id: canal.id,
     canal_estado: canal.estado,
     origen: 'TELEGRAM',
+    proyecto_id: c.proyecto_id ?? canal.proyecto_id ?? null,
+    entidad_id: c.entidad_id ?? canal.entidad_id ?? null,
+    ubicacion_destino_id: c.ubicacion_destino_id ?? canal.ubicacion_destino_id ?? null,
     document_storage_path: c.document_storage_path ?? canal.document_storage_path ?? null,
     document_file_name: c.document_file_name ?? canal.document_file_name,
     contabilidad_compra_lineas: tieneLineas ? lineasActuales : lineasCanal,

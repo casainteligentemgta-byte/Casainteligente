@@ -60,6 +60,11 @@ import {
   manejarCallbackEntradaCompraTelegram,
   manejarComandoEntradaComprasTelegram,
 } from '@/lib/telegram/entradaComprasPicker';
+import {
+  esCallbackLiberarCuarentena,
+  manejarCallbackLiberarCuarentenaTelegram,
+  manejarComandoLiberarCuarentenaTelegram,
+} from '@/lib/telegram/liberarCuarentenaPicker';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 import {
   esCallbackAvanceCampo,
@@ -192,6 +197,11 @@ async function aplicarComando(
 
   if (cmd.comandoIngresoAlmacen) {
     await manejarComandoEntradaComprasTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoLiberarCuarentena) {
+    await manejarComandoLiberarCuarentenaTelegram(supabase, chatId);
     return;
   }
 
@@ -358,6 +368,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledEntradaCompra) {
         return NextResponse.json({ ok: true, callback: 'entrada_compra' });
+      }
+    }
+
+    if (esCallbackLiberarCuarentena(cq.data)) {
+      const handledLiberar = await manejarCallbackLiberarCuarentenaTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledLiberar) {
+        return NextResponse.json({ ok: true, callback: 'liberar_cuarentena' });
       }
     }
 

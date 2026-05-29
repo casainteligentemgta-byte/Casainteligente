@@ -20,6 +20,8 @@ export type ComandoTelegramResult = {
   comandoSalida?: boolean;
   /** Lista compras ya registradas pendientes de ingreso físico a almacén. */
   comandoIngresoAlmacen?: boolean;
+  /** Lista material en cuarentena para liberar (depositario). */
+  comandoLiberarCuarentena?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -47,6 +49,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /entrada — nota de entrega: proveedor + productos → cola de compras\n' +
         '• /ingreso — facturas ya cargadas pendientes de ingreso a almacén\n' +
+        '• /liberar — material en cuarentena: aprobar y sumar stock\n' +
         '• /salida — foto + detalle de material que egresa\n' +
         '• /avance — reporte numérico diario de partida\n' +
         '• /memoria — memoria descriptiva: foto de avance por partida\n' +
@@ -69,6 +72,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/agua — obra, camión, prueba PPM, litros\n' +
         '/entrada — nota de entrega (depositario → cola de compras)\n' +
         '/ingreso — facturas pendientes de ingreso físico a almacén\n' +
+        '/liberar — liberar material de cuarentena (depositario)\n' +
         '/salida — egreso de material (capítulo + foto + almacén origen + stock)\n' +
         '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +
         '/menu — menú principal\n' +
@@ -144,6 +148,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
 
   if (cmd === '/ingreso') {
     return { handled: true, comandoIngresoAlmacen: true };
+  }
+
+  if (cmd === '/liberar' || cmd === '/cuarentena') {
+    return { handled: true, comandoLiberarCuarentena: true };
   }
 
   if (cmd === '/salida') {

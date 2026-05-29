@@ -26,6 +26,9 @@ export type FilaFacturaCanal = {
   factura: string;
   proveedor: string;
   rif: string;
+  entidad?: string;
+  proyecto?: string;
+  almacen?: string;
   montoBs: number;
   montoUsd: number | null;
   /** Tasa BCV de la factura (bolívares por 1 USD). */
@@ -180,6 +183,8 @@ export type CompraConfirmadaParaLineas = {
   origen: string;
   estado: string;
   proyectoNombre?: string;
+  entidadNombre?: string;
+  almacenNombre?: string;
   lineas: Array<{
     descripcion: string;
     item_code: string | null;
@@ -204,6 +209,9 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       factura: c.invoice_number ?? '',
       proveedor: c.supplier_name ?? '',
       rif: c.supplier_rif ?? '',
+      entidad: c.entidadNombre?.trim() || '',
+      proyecto: c.proyectoNombre?.trim() || '',
+      almacen: c.almacenNombre?.trim() || '',
       montoBs: Number(c.total_amount) || 0,
       montoUsd,
       tasaBcv: tasaBcvCompra(c),

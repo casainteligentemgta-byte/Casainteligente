@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
@@ -24,6 +25,7 @@ type PendienteRow = {
   estado: string;
   extracted: ExtractedCanalHeader | null;
   proyecto_id: string | null;
+  entidad_id: string | null;
   ubicacion_destino_id: string | null;
   document_storage_path: string | null;
   document_file_name: string | null;
@@ -53,6 +55,7 @@ export async function confirmarCompraDesdeCanal(
     pendingId: string;
     proyectoId: string;
     ubicacionDestinoId: string;
+    entidadId?: string;
     extractedOverride?: ExtractedCanalHeader;
     lineasOverride?: LineaCompraContabilidadInput[];
   },
@@ -60,7 +63,7 @@ export async function confirmarCompraDesdeCanal(
   const { data: pendiente, error: pErr } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select(
-      'id,estado,extracted,proyecto_id,ubicacion_destino_id,document_storage_path,document_file_name,document_mime_type,purchase_invoice_id',
+      'id,estado,extracted,entidad_id,proyecto_id,ubicacion_destino_id,document_storage_path,document_file_name,document_mime_type,purchase_invoice_id',
     )
     .eq('id', params.pendingId)
     .single();
@@ -103,6 +106,12 @@ export async function confirmarCompraDesdeCanal(
     throw new Error('Seleccione el proyecto al que pertenece la compra.');
   }
 
+  let entidadId =
+    params.entidadId?.trim() || row.entidad_id?.trim() || '';
+  if (!entidadId) {
+    entidadId = (await resolverEntidadIdDesdeProyecto(supabase, proyectoId)) ?? '';
+  }
+
   const ubicacionDestinoId =
     params.ubicacionDestinoId.trim() || row.ubicacion_destino_id?.trim() || '';
   if (!ubicacionDestinoId) {
@@ -140,6 +149,7 @@ export async function confirmarCompraDesdeCanal(
       status: 'REGISTRADA',
       proyecto_id: proyectoId,
       ubicacion_destino_id: ubicacionDestinoId,
+      ...(entidadId ? { entidad_id: entidadId } : {}),
       ...payloadCompraBimonetario(montos),
       document_storage_path: row.document_storage_path,
       document_file_name: row.document_file_name,
@@ -160,6 +170,7 @@ export async function confirmarCompraDesdeCanal(
       .update({
         proyecto_id: proyectoId,
         ubicacion_destino_id: ubicacionDestinoId,
+        ...(entidadId ? { entidad_id: entidadId } : {}),
       })
       .eq('id', purchaseInvoiceId);
   }
@@ -180,6 +191,7 @@ export async function confirmarCompraDesdeCanal(
     lineas,
     origen: 'TELEGRAM',
     ubicacion_destino_id: ubicacionDestinoId,
+    ...(entidadId ? { entidad_id: entidadId } : {}),
   });
 
   await supabase
@@ -188,6 +200,7 @@ export async function confirmarCompraDesdeCanal(
       estado: 'confirmado',
       proyecto_id: proyectoId,
       ubicacion_destino_id: ubicacionDestinoId,
+      ...(entidadId ? { entidad_id: entidadId } : {}),
       purchase_invoice_id: purchaseInvoiceId,
       extracted,
       mensaje_error: null,

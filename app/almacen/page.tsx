@@ -1005,6 +1005,13 @@ export default function InventoryMasterPage() {
                                     </button>
                                 ))
                             )}
+                            <Link
+                                href="/almacen/procurement/quality"
+                                onClick={(e) => e.stopPropagation()}
+                                className="mt-2 inline-flex text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
+                            >
+                                Liberar cuarentena →
+                            </Link>
                         </div>
                     }
                 />

@@ -77,6 +77,7 @@ import {
     type CompraListaUnificada,
     type FiltroFuenteCompra,
 } from '@/lib/contabilidad/mapCanalPendienteCompra';
+import { enriquecerComprasConDestino } from '@/lib/contabilidad/enriquecerComprasDestino';
 import {
     buildComprasCuadroShareUrl,
     copiarTextoCuadro,
@@ -199,6 +200,7 @@ export default function ComprasPage() {
     } | null>(null);
     const [reubicarCompra, setReubicarCompra] = useState<{
         id: string;
+        entidadId?: string | null;
         proyectoId?: string | null;
         ubicacionId?: string | null;
         titulo?: string;
@@ -411,7 +413,7 @@ export default function ComprasPage() {
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,ubicacion_destino_id),${lineasSelect}`
+                        `id,purchase_invoice_id,proyecto_id,entidad_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -464,6 +466,7 @@ export default function ComprasPage() {
                     const r = row as unknown as CompraRow & {
                         purchase_invoice?: {
                             proyecto_id?: string | null;
+                            entidad_id?: string | null;
                             ubicacion_destino_id?: string | null;
                         } | null;
                     };
@@ -472,6 +475,7 @@ export default function ComprasPage() {
                         ...r,
                         fuente_lista: r.fuente_lista ?? 'app',
                         proyecto_id: r.proyecto_id ?? pi?.proyecto_id ?? null,
+                        entidad_id: r.entidad_id ?? pi?.entidad_id ?? null,
                         ubicacion_destino_id:
                             r.ubicacion_destino_id ?? pi?.ubicacion_destino_id ?? null,
                     };
@@ -530,6 +534,8 @@ export default function ComprasPage() {
                 if (!compraCumpleFiltrosLineas(lineas, filtrosAvanzados)) return false;
                 return true;
             });
+
+            filas = await enriquecerComprasConDestino(supabase, filas);
 
             setCompras(filas);
         } catch (e) {
@@ -792,6 +798,13 @@ export default function ComprasPage() {
             tasa_bcv_ves_por_usd: tasaParaCompra(c),
             origen: c.origen,
             estado: c.estado,
+            entidadNombre: c.entidad_nombre ?? undefined,
+            proyectoNombre:
+                c.proyecto_nombre ??
+                (Array.isArray(c.ci_proyectos)
+                    ? c.ci_proyectos[0]?.nombre ?? undefined
+                    : c.ci_proyectos?.nombre ?? undefined),
+            almacenNombre: c.ubicacion_nombre ?? undefined,
             lineas: lineasDetalle(c).map((l) => {
                 const cantidad = Number(l.cantidad) || 0;
                 const precio =
@@ -1915,6 +1928,59 @@ export default function ComprasPage() {
                                                 {etiquetaOrigenCompra(c)}
                                             </span>
                                         </p>
+                                        {(c.entidad_nombre || c.proyecto_nombre || c.ubicacion_nombre) ? (
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    flexWrap: 'wrap',
+                                                    gap: '6px',
+                                                    marginTop: '8px',
+                                                }}
+                                            >
+                                                {c.entidad_nombre ? (
+                                                    <span
+                                                        style={{
+                                                            fontSize: '10px',
+                                                            fontWeight: 700,
+                                                            padding: '4px 8px',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(255,255,255,0.06)',
+                                                            color: 'rgba(255,255,255,0.55)',
+                                                        }}
+                                                    >
+                                                        {c.entidad_nombre}
+                                                    </span>
+                                                ) : null}
+                                                {c.proyecto_nombre ? (
+                                                    <span
+                                                        style={{
+                                                            fontSize: '10px',
+                                                            fontWeight: 700,
+                                                            padding: '4px 8px',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(167,139,250,0.12)',
+                                                            color: '#c4b5fd',
+                                                        }}
+                                                    >
+                                                        {c.proyecto_nombre}
+                                                    </span>
+                                                ) : null}
+                                                {c.ubicacion_nombre ? (
+                                                    <span
+                                                        style={{
+                                                            fontSize: '10px',
+                                                            fontWeight: 700,
+                                                            padding: '4px 8px',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(234,88,12,0.15)',
+                                                            color: '#fdba74',
+                                                        }}
+                                                    >
+                                                        {c.ubicacion_nombre}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                        ) : null}
                                         <div
                                             style={{
                                                 display: 'flex',
@@ -1929,6 +1995,7 @@ export default function ComprasPage() {
                                                     onClick={() =>
                                                         setReubicarCompra({
                                                             id: c.id,
+                                                            entidadId: c.entidad_id,
                                                             proyectoId: c.proyecto_id,
                                                             ubicacionId: c.ubicacion_destino_id,
                                                             titulo: `Reubicar — ${c.supplier_name}`,
@@ -2199,6 +2266,7 @@ export default function ComprasPage() {
                 open={reubicarCompra != null}
                 compraId={reubicarCompra?.id ?? ''}
                 titulo={reubicarCompra?.titulo}
+                entidadIdInicial={reubicarCompra?.entidadId}
                 proyectoIdInicial={reubicarCompra?.proyectoId}
                 ubicacionIdInicial={reubicarCompra?.ubicacionId}
                 onClose={() => setReubicarCompra(null)}

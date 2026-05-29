@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { QualityInspection } from '@/types/inventory';
 import {
-    approveQualityInspection,
     formatApproveError,
 } from '@/lib/almacen/approveQualityInspection';
 import Link from 'next/link';
@@ -64,8 +63,11 @@ export default function QualityDashboard() {
         setActionError(null);
         await runLocked(async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser();
-                await approveQualityInspection(supabase, id, user?.id ?? null);
+                const res = await fetch(`/api/almacen/quality/${encodeURIComponent(id)}/aprobar`, {
+                    method: 'POST',
+                });
+                const json = (await res.json()) as { error?: string };
+                if (!res.ok) throw new Error(json.error ?? 'No se pudo liberar el material.');
                 setInspections((prev) => prev.filter((i) => i.id !== id));
             } catch (error) {
                 console.error('Error approving quality:', error);
@@ -93,13 +95,14 @@ export default function QualityDashboard() {
         if (isSubmitting) return;
         setProcessingId(id);
         await runLocked(async () => {
-            const { error } = await supabase
-                .from('quality_inspections')
-                .update({ status: 'RECHAZADO' })
-                .eq('id', id);
-
-            if (!error) {
+            const res = await fetch(`/api/almacen/quality/${encodeURIComponent(id)}/rechazar`, {
+                method: 'POST',
+            });
+            const json = (await res.json()) as { error?: string };
+            if (res.ok) {
                 setInspections((prev) => prev.filter((i) => i.id !== id));
+            } else if (json.error) {
+                setActionError(json.error);
             }
             setProcessingId(null);
         });
@@ -145,9 +148,10 @@ export default function QualityDashboard() {
                 {/* Info Box */}
                 <div className="bg-blue-600/10 border border-blue-600/20 p-6 rounded-3xl mb-8 flex gap-4 items-start">
                     <Info className="text-blue-500 shrink-0" size={24} />
-                    <p className="text-blue-200/80 font-bold text-sm leading-relaxed">
-                        La mercancía en esta lista ha sido capturada por compras pero aún no forma parte del Stock Disponible.
-                        El Jefe de Almacén debe validar físicamente el estado de los materiales para proceder con el <span className="text-blue-400 font-black">INTERNAMIENTO (Movimiento 101)</span>.
+                            <p className="text-blue-200/80 font-bold text-sm leading-relaxed">
+                        La mercancía en esta lista fue recepcionada por compras y aún no forma parte del stock disponible.
+                        El <span className="text-blue-400 font-black">depositario</span> o jefe de almacén puede liberarla aquí
+                        o con <span className="text-blue-400 font-black">/liberar</span> en Telegram (movimiento 101).
                     </p>
                 </div>
 
@@ -240,7 +244,7 @@ export default function QualityDashboard() {
                                         ) : (
                                             <>
                                                 <CheckCircle2 size={18} />
-                                                APROBAR Y SUMAR STOCK (101)
+                                                APROBAR Y LIBERAR STOCK (101)
                                             </>
                                         )}
                                     </button>

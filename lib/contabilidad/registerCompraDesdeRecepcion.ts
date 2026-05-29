@@ -8,6 +8,7 @@ import {
   resolverDocumentoCompra,
   sincronizarDocumentoEnCompra,
 } from '@/lib/contabilidad/syncDocumentoCompraRecepcion';
+import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id?: string | null;
@@ -37,6 +38,7 @@ export type RegistrarCompraContabilidadInput = {
   /** Por defecto RECEPCION_MERCANCIA; use TELEGRAM al confirmar desde el bot. */
   origen?: string;
   ubicacion_destino_id?: string | null;
+  entidad_id?: string | null;
 };
 
 export async function registerCompraDesdeRecepcion(
@@ -79,6 +81,11 @@ export async function registerCompraDesdeRecepcion(
 
   const bimonetario = payloadCompraBimonetario(montos);
 
+  let entidadId = input.entidad_id?.trim() || null;
+  if (!entidadId && input.proyecto_id) {
+    entidadId = await resolverEntidadIdDesdeProyecto(supabase, input.proyecto_id);
+  }
+
   const { data: compra, error: compraError } = await supabase
     .from('contabilidad_compras')
     .insert({
@@ -96,6 +103,7 @@ export async function registerCompraDesdeRecepcion(
       ...(input.ubicacion_destino_id
         ? { ubicacion_destino_id: input.ubicacion_destino_id }
         : {}),
+      ...(entidadId ? { entidad_id: entidadId } : {}),
     })
     .select('id')
     .single();

@@ -417,7 +417,7 @@ export async function loadOpcionesProyectoReclutamiento(
 }
 
 /** Catálogo id + nombre para selects (compras, almacén, etc.). */
-export type ProyectoCatalogo = { id: string; nombre: string };
+export type ProyectoCatalogo = { id: string; nombre: string; entidad_id?: string | null };
 
 /** Video de frente y Rancho Flamboyant primero; el resto por nombre. Proyectos nuevos en BD al recargar. */
 export function ordenarProyectosCatalogoApp(proyectos: ProyectoCatalogo[]): ProyectoCatalogo[] {
@@ -431,7 +431,10 @@ export function ordenarProyectosCatalogoApp(proyectos: ProyectoCatalogo[]): Proy
 export async function loadCatalogoProyectosApp(
   supabase: SupabaseClient,
 ): Promise<{ proyectos: ProyectoCatalogo[]; error: string | null }> {
-  const { data, error } = await supabase.from('ci_proyectos').select('id,nombre').limit(1000);
+  const { data, error } = await supabase
+    .from('ci_proyectos')
+    .select('id,nombre,entidad_id')
+    .limit(1000);
 
   if (error) {
     return { proyectos: [], error: error.message ?? 'No se pudieron cargar proyectos.' };
@@ -441,6 +444,10 @@ export async function loadCatalogoProyectosApp(
     (data ?? []).map((r) => ({
       id: String((r as { id: unknown }).id),
       nombre: String((r as { nombre?: unknown }).nombre ?? 'Sin nombre').trim() || 'Sin nombre',
+      entidad_id:
+        (r as { entidad_id?: unknown }).entidad_id != null
+          ? String((r as { entidad_id: unknown }).entidad_id)
+          : null,
     })),
   );
 
