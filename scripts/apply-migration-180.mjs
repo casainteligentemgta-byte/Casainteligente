@@ -109,11 +109,25 @@ async function main() {
     env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] ?? '';
 
   const sql = await connectPostgres(url, projectRef || 'unknown');
-  const body = fs.readFileSync(path.join(root, 'supabase', 'migrations', FILE), 'utf8');
+  const files = [FILE, '197_repair_compras_facturas_180.sql'];
   try {
-    console.log(`Aplicando ${FILE}…`);
-    await sql.unsafe(body);
-    console.log('OK 180');
+    for (const file of files) {
+      const full = path.join(root, 'supabase', 'migrations', file);
+      if (!fs.existsSync(full)) continue;
+      const body = fs.readFileSync(full, 'utf8');
+      console.log(`Aplicando ${file}…`);
+      try {
+        await sql.unsafe(body);
+        console.log(`OK ${file}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/already exists|duplicate/i.test(msg)) {
+          console.warn(`⚠️  ${file} — parcial (${msg.slice(0, 100)})`);
+        } else {
+          throw e;
+        }
+      }
+    }
   } finally {
     await sql.end({ timeout: 5 }).catch(() => {});
   }

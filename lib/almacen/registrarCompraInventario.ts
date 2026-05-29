@@ -55,10 +55,15 @@ export async function registrarCompraInventario(
     .single();
 
   if (fErr) {
-    if (fErr.code === '42P01' || /compras_facturas|does not exist/i.test(fErr.message ?? '')) {
-      throw new Error('Tabla compras_facturas no existe. Aplique la migración 180.');
+    if (fErr.code === '42P01') {
+      throw new Error('Tabla compras_facturas no existe. Aplique la migración 180 o 197.');
     }
-    throw new Error(fErr.message);
+    if (/schema cache|could not find the table/i.test(fErr.message ?? '')) {
+      throw new Error(
+        `${fErr.message} Ejecute en Supabase SQL: notify pgrst, 'reload schema'; (migr. 197).`,
+      );
+    }
+    throw new Error(fErr.message ?? 'Error al registrar compras_facturas.');
   }
 
   const facturaId = String((factura as { id: string }).id);
