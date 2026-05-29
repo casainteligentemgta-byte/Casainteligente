@@ -97,6 +97,19 @@ function categoriaCoincideFiltro(item: InventoryItem, filtro: string): boolean {
     }
 }
 
+function labelUbicacionEnTabla(
+    item: InventoryItem,
+    stockUb: StockEnUbicacionResumen | undefined,
+    filtroPorUbicacionActivo: boolean,
+    depositsById: Map<string, DepositRow>,
+    furnitureById: Map<string, FurnitureRow>,
+): string {
+    if (filtroPorUbicacionActivo && stockUb?.ubicacion_nombres?.length) {
+        return stockUb.ubicacion_nombres.join(' · ');
+    }
+    return formatInventoryLocationLabel(item, depositsById, furnitureById);
+}
+
 const NAV_ALMACEN = [
     { href: '/almacen/recepcion', label: 'Ingreso', icon: Package, className: 'border-[#FF9500]/40 bg-[#FF9500]/10 text-[#FF9500]' },
     { href: '/almacen/procurement', label: 'Compras', icon: Truck, className: 'border-blue-500/40 bg-blue-600/20 text-blue-100' },
@@ -346,7 +359,8 @@ export default function InventoryMasterPage() {
 
     useEffect(() => {
         fetchInventory();
-    }, [activeCategory]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial; categoría filtra en cliente
+    }, []);
 
     const itemsCatalogo = useMemo(() => {
         const byId = new Map<string, InventoryItem>();
@@ -601,8 +615,9 @@ export default function InventoryMasterPage() {
     );
 
     const filteredItems = useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+
         return itemsCatalogo.filter((item) => {
-            const term = searchTerm.trim().toLowerCase();
             const dep = item.deposit_id ? depositsById.get(item.deposit_id) : undefined;
             const depLabel = dep
                 ? `${dep.name} ${dep.locality ?? ''}`.toLowerCase()
@@ -631,15 +646,16 @@ export default function InventoryMasterPage() {
             if (sinAlmacenAsignado && item.deposit_id) return false;
 
             if (filtroPorUbicacionActivo) {
-                if (stockEnFiltro > 0) return true;
-                if (materialCoincideFiltroProyectoDeposito(item, optsFiltroProyectoDeposito)) {
-                    return true;
-                }
-                return false;
+                const enStockFiltro = stockEnFiltro > 0;
+                const enCatalogoFiltro = materialCoincideFiltroProyectoDeposito(
+                    item,
+                    optsFiltroProyectoDeposito,
+                );
+                if (!enStockFiltro && !enCatalogoFiltro) return false;
+            } else {
+                if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
+                if (filterDepositId && item.deposit_id !== filterDepositId) return false;
             }
-
-            if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
-            if (filterDepositId && item.deposit_id !== filterDepositId) return false;
 
             const qty = cantidadStockReal(item);
             if (kpiVista === 'stock_bajo' && qty > Number(item.reorder_point)) return false;
@@ -1266,7 +1282,7 @@ export default function InventoryMasterPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/50">
-                        {loading || (cargandoStockUbicacion && filtroPorUbicacionActivo) ? (
+                        {loading && items.length === 0 ? (
                             [1, 2, 3].map(i => (
                                 <tr key={i} className="animate-pulse">
                                     <td colSpan={7} className="p-8 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Loading material data...</td>
@@ -1358,10 +1374,12 @@ export default function InventoryMasterPage() {
                                     <td className="p-5">
                                         <div className="flex items-center gap-2 text-zinc-400 font-bold text-sm capitalize">
                                             <div className="w-2 h-2 rounded-full bg-zinc-700"></div>
-                                            {formatInventoryLocationLabel(
+                                            {labelUbicacionEnTabla(
                                                 item,
+                                                stockUb,
+                                                filtroPorUbicacionActivo,
                                                 depositsById,
-                                                furnitureById
+                                                furnitureById,
                                             )}
                                         </div>
                                     </td>
