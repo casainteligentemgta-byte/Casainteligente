@@ -44,6 +44,7 @@ import {
     cargarStockPorUbicaciones,
     cargarValorInventarioPorDeposito,
     listarUbicacionesParaFiltroInventario,
+    materialCoincideFiltroProyectoDeposito,
     resolverUbicacionIdsFiltro,
     type StockEnUbicacionResumen,
     type ValorInventarioDeposito,
@@ -97,14 +98,14 @@ function categoriaCoincideFiltro(item: InventoryItem, filtro: string): boolean {
 }
 
 const NAV_ALMACEN = [
-    { href: '/almacen/movimientos', label: 'Movimientos', icon: History, className: 'border-violet-500/35 text-violet-200' },
-    { href: '/almacen/kardex', label: 'Kardex', icon: History, className: 'border-zinc-800 text-zinc-300' },
-    { href: '/almacen/maestros', label: 'Maestros', icon: Settings2, className: 'border-zinc-800 text-zinc-300' },
-    { href: null, label: 'Compartir', icon: Share2, className: 'border-zinc-800 text-zinc-300', action: 'share' as const },
-    { href: '/almacen/migrar-obra', label: 'A obra', icon: ArrowRightLeft, className: 'border-violet-500/35 text-violet-200' },
-    { href: '/almacen/despacho', label: 'Despacho', icon: ArrowUpRight, className: 'border-orange-500/35 text-orange-200' },
+    { href: '/almacen/recepcion', label: 'Ingreso', icon: Package, className: 'border-[#FF9500]/40 bg-[#FF9500]/10 text-[#FF9500]' },
     { href: '/almacen/procurement', label: 'Compras', icon: Truck, className: 'border-blue-500/40 bg-blue-600/20 text-blue-100' },
-    { href: '/almacen/recepcion', label: 'Recepción campo', icon: Package, className: 'border-[#FF9500]/40 bg-[#FF9500]/10 text-[#FF9500]' },
+    { href: '/almacen/despacho', label: 'SALIDA', icon: ArrowUpRight, className: 'border-orange-500/35 text-orange-200' },
+    { href: '/almacen/movimientos', label: 'Movimientos', icon: History, className: 'border-violet-500/35 text-violet-200' },
+    { href: '/almacen/migrar-obra', label: 'A obra', icon: ArrowRightLeft, className: 'border-violet-500/35 text-violet-200' },
+    { href: '/almacen/maestros', label: 'Configuración', icon: Settings2, className: 'border-zinc-800 text-zinc-300' },
+    { href: '/almacen/kardex', label: 'Kardex', icon: History, className: 'border-zinc-800 text-zinc-300' },
+    { href: null, label: 'Compartir', icon: Share2, className: 'border-zinc-800 text-zinc-300', action: 'share' as const },
     { href: '/almacen/nuevo', label: 'Nuevo', icon: Plus, className: 'border-white/20 bg-white text-black' },
 ] as const;
 
@@ -379,7 +380,11 @@ export default function InventoryMasterPage() {
 
                 let stockMap: Map<string, StockEnUbicacionResumen>;
                 if (!ids.length && filterProyectoId) {
-                    const agg = await getStockAgregadoPorMaterialObra(supabase, filterProyectoId);
+                    const agg = await getStockAgregadoPorMaterialObra(
+                        supabase,
+                        filterProyectoId,
+                        nombreProyectoFiltro || undefined,
+                    );
                     stockMap = new Map();
                     agg.forEach((qty, materialId) => {
                         if (qty > 0) {
@@ -570,16 +575,29 @@ export default function InventoryMasterPage() {
 
     const filtroPorUbicacionActivo = Boolean(filterProyectoId || filterDepositId);
 
+    const optsFiltroProyectoDeposito = useMemo(
+        () => ({
+            proyectoId: filterProyectoId || undefined,
+            depositId: filterDepositId || undefined,
+        }),
+        [filterProyectoId, filterDepositId],
+    );
+
     const cantidadStockReal = useCallback(
         (item: InventoryItem): number => {
             if (filtroPorUbicacionActivo) {
-                return stockPorUbicacion.get(item.id)?.cantidad_disponible ?? 0;
+                const fromUb = stockPorUbicacion.get(item.id)?.cantidad_disponible;
+                if (fromUb != null && fromUb > 0) return fromUb;
+                if (materialCoincideFiltroProyectoDeposito(item, optsFiltroProyectoDeposito)) {
+                    return Number(item.stock_available) || 0;
+                }
+                return fromUb ?? 0;
             }
             const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
             if (fromStock != null && fromStock > 0) return fromStock;
             return Number(item.stock_available) || 0;
         },
-        [filtroPorUbicacionActivo, stockPorUbicacion, stockGlobal],
+        [filtroPorUbicacionActivo, stockPorUbicacion, stockGlobal, optsFiltroProyectoDeposito],
     );
 
     const filteredItems = useMemo(() => {
@@ -614,8 +632,9 @@ export default function InventoryMasterPage() {
 
             if (filtroPorUbicacionActivo) {
                 if (stockEnFiltro > 0) return true;
-                if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
-                if (filterDepositId && item.deposit_id !== filterDepositId) return false;
+                if (materialCoincideFiltroProyectoDeposito(item, optsFiltroProyectoDeposito)) {
+                    return true;
+                }
                 return false;
             }
 
@@ -643,6 +662,7 @@ export default function InventoryMasterPage() {
         stockPorUbicacion,
         cantidadStockReal,
         kpiVista,
+        optsFiltroProyectoDeposito,
     ]);
 
     const statsFiltrados = useMemo(() => {

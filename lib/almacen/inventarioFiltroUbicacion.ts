@@ -69,6 +69,16 @@ export function resolverUbicacionIdsFiltro(
   return candidatas.map((u) => u.id);
 }
 
+/** Coincide asignación de catálogo (global_inventory.proyecto_id / deposit_id). */
+export function materialCoincideFiltroProyectoDeposito(
+  material: { proyecto_id?: string | null; deposit_id?: string | null },
+  opts: { proyectoId?: string; depositId?: string },
+): boolean {
+  if (opts.proyectoId && String(material.proyecto_id ?? '') !== opts.proyectoId) return false;
+  if (opts.depositId && String(material.deposit_id ?? '') !== opts.depositId) return false;
+  return Boolean(opts.proyectoId || opts.depositId);
+}
+
 const SELECT_STOCK_FILTRO = `
   material_id,
   cantidad_disponible,

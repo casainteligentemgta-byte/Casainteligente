@@ -27,11 +27,18 @@ export default function ContabilidadPage() {
             color: '#5856D6'
         },
         {
-            title: 'Facturación',
-            description: 'Emisión y control de facturas',
+            title: 'Registro de facturas',
+            description: 'Ingreso de facturas de proveedor (IA o manual)',
             icon: '📄',
+            href: '/almacen/procurement',
+            color: '#10B981',
+        },
+        {
+            title: 'Facturación',
+            description: 'Emisión y control de facturas de venta',
+            icon: '🧾',
             href: '#',
-            color: '#007AFF'
+            color: '#007AFF',
         },
         {
             title: 'Tesorería',

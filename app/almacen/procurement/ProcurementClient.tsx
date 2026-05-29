@@ -37,11 +37,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProcurementDocumentAttach } from '@/components/almacen/ProcurementDocumentAttach';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
-import { resolverPartidaConsumiblesCampo } from '@/lib/almacen/resolverPartidaConsumiblesCampo';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
-import type { CategoriaMaterialCompra } from '@/types/inventario-obra';
 type PurchaseLine = {
     description: string;
     item_code: string;
@@ -75,16 +73,6 @@ function ProcPanel({
 function todayIsoDate(): string {
     return new Date().toISOString().split('T')[0];
 }
-
-const CATEGORIAS_MATERIAL_COMPRA: CategoriaMaterialCompra[] = [
-    'Materiales',
-    'Herramientas',
-    'Equipos',
-    'Consumibles / Logística de Campo',
-];
-
-const SELECT_ELITE =
-    'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20';
 
 function formatProcurementSaveError(error: unknown): string {
     const hintMigraciones =
@@ -143,9 +131,6 @@ export default function ProcurementClient() {
     const [preparingDocument, setPreparingDocument] = useState(false);
     const [documentRecortado, setDocumentRecortado] = useState(false);
     const { isSubmitting: isSaving, runLocked } = useSyncSubmitLock();
-    const [categoriaMaterial, setCategoriaMaterial] =
-        useState<CategoriaMaterialCompra>('Materiales');
-    const [partidaConsumiblesId, setPartidaConsumiblesId] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [proyectoId, setProyectoId] = useState('');
     const {
@@ -165,21 +150,6 @@ export default function ProcurementClient() {
     const searchParams = useSearchParams();
     const proyectoIdParam = searchParams.get('proyectoId')?.trim() || '';
 
-    useEffect(() => {
-        if (categoriaMaterial !== 'Consumibles / Logística de Campo' || !proyectoId) {
-            setPartidaConsumiblesId(null);
-            return;
-        }
-        void (async () => {
-            try {
-                const supabase = createClient();
-                const id = await resolverPartidaConsumiblesCampo(supabase, proyectoId);
-                setPartidaConsumiblesId(id);
-            } catch {
-                setPartidaConsumiblesId(null);
-            }
-        })();
-    }, [categoriaMaterial, proyectoId]);
     const bloquearProyectoParam =
         searchParams.get('bloquearProyecto') === '1' ||
         searchParams.get('fromProject') === '1';
@@ -227,7 +197,7 @@ export default function ProcurementClient() {
         void refrescarTasaBcv(payload.date || todayIsoDate());
         setAiSuccess(
             (successPrefix ? `${successPrefix}. ` : '') +
-                'Revise datos y guarde la recepción.',
+                'Revise datos y guarde la factura.',
         );
     };
 
@@ -460,12 +430,6 @@ export default function ProcurementClient() {
         }
 
         try {
-            let partidaOperacionalId: string | null = null;
-            if (categoriaMaterial === 'Consumibles / Logística de Campo') {
-                partidaOperacionalId =
-                    partidaConsumiblesId ??
-                    (await resolverPartidaConsumiblesCampo(supabase, proyectoId));
-            }
             const totalBolivares = totalVes();
             const montos = await resolverMontosCompraBimonetario({
                 montoTotal: totalBolivares,
@@ -554,12 +518,6 @@ export default function ProcurementClient() {
                     last_purchase_date: invoice.date,
                     proyecto_id: proyectoId,
                 };
-                if (
-                    categoriaMaterial === 'Consumibles / Logística de Campo' &&
-                    partidaOperacionalId
-                ) {
-                    materialBase.presupuesto_partida_id = partidaOperacionalId;
-                }
                 if (depositIdMaterial) {
                     materialBase.deposit_id = depositIdMaterial;
                 }
@@ -789,7 +747,7 @@ export default function ProcurementClient() {
                         </button>
                     </Link>
                     <h1 className="text-3xl font-black tracking-tighter">
-                        RECEPCIÓN DE MERCANCÍA
+                        REGISTRO DE FACTURAS
                     </h1>
                 </div>
 
@@ -984,54 +942,6 @@ export default function ProcurementClient() {
                                     placeholder="Seleccione almacén…"
                                 />
                             </div>
-                            <div className="space-y-2 mt-6">
-                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
-                                    Categoría del insumo
-                                </label>
-                                <select
-                                    value={categoriaMaterial}
-                                    onChange={(e) =>
-                                        setCategoriaMaterial(
-                                            e.target.value as CategoriaMaterialCompra,
-                                        )
-                                    }
-                                    className={SELECT_ELITE}
-                                >
-                                    {CATEGORIAS_MATERIAL_COMPRA.map((cat) => (
-                                        <option key={cat} value={cat}>
-                                            {cat}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            {categoriaMaterial === 'Consumibles / Logística de Campo' ? (
-                                <div
-                                    className="mt-4 rounded-xl border border-white/10 bg-[#0A0A0F] p-4 text-zinc-100"
-                                    role="status"
-                                >
-                                    <p className="text-xs font-black uppercase tracking-widest text-amber-200/90">
-                                        Consumibles de campo
-                                    </p>
-                                    <p className="mt-2 text-sm text-zinc-300">
-                                        Agua potable, hielo, limpieza e higiene: sin cómputos métricos ni
-                                        desglose APU. El gasto se imputa automáticamente a construcciones
-                                        provisionales / gastos de obra (Cap. 1).
-                                    </p>
-                                    {partidaConsumiblesId ? (
-                                        <p className="mt-2 text-[11px] font-bold text-emerald-400/90">
-                                            Partida operativa resuelta en presupuesto Lulo.
-                                        </p>
-                                    ) : proyectoId ? (
-                                        <p className="mt-2 text-[11px] font-bold text-amber-400/90">
-                                            Resolviendo partida operativa…
-                                        </p>
-                                    ) : (
-                                        <p className="mt-2 text-[11px] font-bold text-amber-400/90">
-                                            Seleccione proyecto para asignar partida.
-                                        </p>
-                                    )}
-                                </div>
-                            ) : null}
                         </ProcPanel>
 
                         <ProcPanel className="p-8">

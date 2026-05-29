@@ -229,6 +229,10 @@ export default function ComprasPage() {
     const [compartidoOk, setCompartidoOk] = useState(false);
     const [sortColumn, setSortColumn] = useState<ColumnaOrdenCompras | null>(null);
     const [sortDir, setSortDir] = useState<DireccionOrden>('asc');
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [deletingBulk, setDeletingBulk] = useState(false);
+    const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+    const selectAllRef = useRef<HTMLInputElement>(null);
     const proyectosIdsRef = useRef<Set<string>>(new Set());
     const shareParamsAplicados = useRef(false);
 
@@ -618,6 +622,30 @@ export default function ComprasPage() {
         await load();
     };
 
+    const eliminarCompraEnServidor = async (
+        c: CompraRow,
+        incluirDuplicados: boolean,
+    ): Promise<{ ids: Set<string>; materialPermaneceEnStock?: boolean }> => {
+        const canalId = idCanalTelegram(c);
+        const q = new URLSearchParams({
+            duplicados: incluirDuplicados ? '1' : '0',
+        });
+        if (canalId) q.set('canalId', canalId);
+        const res = await fetch(`/api/contabilidad/compras/${c.id}?${q}`, {
+            method: 'DELETE',
+        });
+        const data = (await res.json()) as {
+            deletedIds?: string[];
+            materialPermaneceEnStock?: boolean;
+            error?: string;
+        };
+        if (!res.ok) throw new Error(data.error || 'No se pudo eliminar');
+        return {
+            ids: new Set(data.deletedIds ?? [c.id]),
+            materialPermaneceEnStock: data.materialPermaneceEnStock,
+        };
+    };
+
     const handleDelete = async (c: CompraRow) => {
         const canalId = idCanalTelegram(c);
         const esSoloColaCanal = c.id.startsWith('canal-');
@@ -632,6 +660,11 @@ export default function ComprasPage() {
             try {
                 await eliminarPendienteCanal(canalId);
                 setCompras((prev) => prev.filter((row) => row.id !== c.id));
+                setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(c.id);
+                    return next;
+                });
             } catch (e) {
                 setError(e instanceof Error ? e.message : 'No se pudo eliminar');
             } finally {
@@ -669,22 +702,14 @@ export default function ComprasPage() {
         setDeletingId(c.id);
         setError(null);
         try {
-            const q = new URLSearchParams({
-                duplicados: incluirDuplicados ? '1' : '0',
+            const removed = await eliminarCompraEnServidor(c, incluirDuplicados);
+            setCompras((prev) => prev.filter((row) => !removed.ids.has(row.id)));
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                for (const id of Array.from(removed.ids)) next.delete(id);
+                return next;
             });
-            if (canalId) q.set('canalId', canalId);
-            const res = await fetch(`/api/contabilidad/compras/${c.id}?${q}`, {
-                method: 'DELETE',
-            });
-            const data = (await res.json()) as {
-                deletedIds?: string[];
-                materialPermaneceEnStock?: boolean;
-                error?: string;
-            };
-            if (!res.ok) throw new Error(data.error || 'No se pudo eliminar');
-            const removed = new Set(data.deletedIds ?? [c.id]);
-            setCompras((prev) => prev.filter((row) => !removed.has(row.id)));
-            if (data.materialPermaneceEnStock) {
+            if (removed.materialPermaneceEnStock) {
                 setError(
                     'Compra eliminada del listado. El material permanece en inventario porque ya estaba aprobado en recepción.',
                 );
@@ -696,6 +721,59 @@ export default function ComprasPage() {
         } finally {
             setDeletingId(null);
         }
+    };
+
+    const handleBulkDelete = async () => {
+        const items = compras.filter((c) => selectedIds.has(c.id));
+        if (!items.length) return;
+
+        const ok = window.confirm(
+            `¿Eliminar ${items.length} compra(s) seleccionada(s)?\n\nSe quitarán de contabilidad y recepción de mercancía.`,
+        );
+        if (!ok) return;
+
+        setDeletingBulk(true);
+        setError(null);
+        const removedAll = new Set<string>();
+        let materialPermanece = false;
+        let fallos = 0;
+
+        for (const c of items) {
+            const canalId = idCanalTelegram(c);
+            const esSoloColaCanal = c.id.startsWith('canal-');
+            try {
+                if (canalId && esSoloColaCanal) {
+                    await eliminarPendienteCanal(canalId);
+                    removedAll.add(c.id);
+                    continue;
+                }
+                const result = await eliminarCompraEnServidor(c, false);
+                for (const id of Array.from(result.ids)) removedAll.add(id);
+                if (result.materialPermaneceEnStock) materialPermanece = true;
+            } catch {
+                fallos += 1;
+            }
+        }
+
+        setCompras((prev) => prev.filter((row) => !removedAll.has(row.id)));
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            for (const id of Array.from(removedAll)) next.delete(id);
+            return next;
+        });
+
+        if (fallos > 0) {
+            setError(
+                `${fallos} compra(s) no se pudieron eliminar. ${removedAll.size} eliminada(s) correctamente.`,
+            );
+        } else if (materialPermanece) {
+            setError(
+                'Compras eliminadas. El material permanece en inventario porque ya estaba aprobado en recepción.',
+            );
+        }
+
+        void load();
+        setDeletingBulk(false);
     };
 
     const handleIngresoAlmacen = async (c: CompraRow) => {
@@ -876,6 +954,45 @@ export default function ComprasPage() {
     const showList = !loading && compras.length > 0;
     const showLineas = !loading && lineasOrdenadas.length > 0;
 
+    const todasSeleccionadas = useMemo(
+        () => compras.length > 0 && compras.every((c) => selectedIds.has(c.id)),
+        [compras, selectedIds],
+    );
+
+    const algunaSeleccionada = selectedIds.size > 0;
+    const seleccionIndeterminada = algunaSeleccionada && !todasSeleccionadas;
+
+    useEffect(() => {
+        const el = selectAllRef.current;
+        if (el) el.indeterminate = seleccionIndeterminada;
+    }, [seleccionIndeterminada]);
+
+    useEffect(() => {
+        setSelectedIds((prev) => {
+            const visible = new Set(compras.map((c) => c.id));
+            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [compras]);
+
+    const toggleSelectAll = useCallback(() => {
+        setSelectedIds((prev) => {
+            if (compras.length > 0 && compras.every((c) => prev.has(c.id))) {
+                return new Set();
+            }
+            return new Set(compras.map((c) => c.id));
+        });
+    }, [compras]);
+
+    const toggleSelectCompra = useCallback((id: string) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
     const compraPorId = useMemo(() => new Map(compras.map((c) => [c.id, c])), [compras]);
 
     const accionesCompra = useCallback(
@@ -908,6 +1025,40 @@ export default function ComprasPage() {
         [compraPorId],
     );
     const periodoLabel = fechaRefActiva ? etiquetaPeriodo(periodo, fechaRefActiva, rangoActivo) : '';
+
+    const filtrosActivos = useMemo(() => {
+        const tags: string[] = [];
+        if (fuenteFiltro !== 'todos') {
+            tags.push(
+                fuenteFiltro === 'telegram' ? 'Telegram' : 'App / recepción',
+            );
+        }
+        if (periodo !== 'todas' && periodoLabel) tags.push(periodoLabel);
+        if (proyectoFiltro) tags.push(proyectoFiltroEtiqueta);
+        if (proveedorFiltro) tags.push(proveedorFiltro);
+        if (rifFiltro.trim()) tags.push(`RIF ${rifFiltro.trim()}`);
+        if (articuloFiltro.trim()) tags.push(`Artículo: ${articuloFiltro.trim()}`);
+        if (busquedaAplicada) tags.push(`«${busquedaAplicada}»`);
+        if (montoMinBs || montoMaxBs || montoMinUsd || montoMaxUsd) tags.push('Monto');
+        if (cantidadMin || cantidadMax) tags.push('Cantidad');
+        return tags;
+    }, [
+        fuenteFiltro,
+        periodo,
+        periodoLabel,
+        proyectoFiltro,
+        proyectoFiltroEtiqueta,
+        proveedorFiltro,
+        rifFiltro,
+        articuloFiltro,
+        busquedaAplicada,
+        montoMinBs,
+        montoMaxBs,
+        montoMinUsd,
+        montoMaxUsd,
+        cantidadMin,
+        cantidadMax,
+    ]);
 
     function tasaDisplayCompra(c: CompraRow): number | null {
         return tasaParaCompra(c);
@@ -1068,60 +1219,49 @@ export default function ComprasPage() {
                         Compras
                     </h1>
                 </div>
-                <Link
-                    href="/almacen/procurement"
-                    style={{
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        color: '#a7f3d0',
-                        textDecoration: 'none',
-                        padding: '6px 8px',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(16,185,129,0.35)',
-                        background: 'rgba(16,185,129,0.12)',
-                    }}
-                >
-                    + Factura
-                </Link>
-                <Link
-                    href="/contabilidad/compras/canal"
-                    style={{
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        color: '#7dd3fc',
-                        textDecoration: 'none',
-                        padding: '6px 8px',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(56,189,248,0.25)',
-                    }}
-                >
-                    Cola
-                </Link>
                 <button
                     type="button"
-                    onClick={() => {
-                        setFuenteFiltro((f) => (f === 'telegram' ? 'todos' : 'telegram'));
-                        router.replace(
-                            fuenteFiltro === 'telegram'
-                                ? '/contabilidad/compras'
-                                : '/contabilidad/compras?fuente=telegram',
-                        );
-                    }}
+                    onClick={() => setFiltrosAbiertos((v) => !v)}
+                    aria-expanded={filtrosAbiertos}
                     style={{
                         fontSize: '11px',
-                        fontWeight: 600,
-                        color: fuenteFiltro === 'telegram' ? '#fff' : '#7dd3fc',
+                        fontWeight: 700,
+                        color: filtrosAbiertos || filtrosActivos.length ? '#fff' : 'rgba(255,255,255,0.7)',
                         padding: '6px 10px',
                         borderRadius: '8px',
-                        border: '1px solid rgba(56,189,248,0.35)',
-                        background:
-                            fuenteFiltro === 'telegram'
-                                ? 'rgba(14,116,144,0.55)'
-                                : 'rgba(14,116,144,0.2)',
+                        border:
+                            filtrosAbiertos || filtrosActivos.length
+                                ? '1px solid rgba(88,86,214,0.55)'
+                                : '1px solid rgba(255,255,255,0.15)',
+                        background: filtrosAbiertos
+                            ? 'rgba(88,86,214,0.35)'
+                            : filtrosActivos.length
+                              ? 'rgba(88,86,214,0.2)'
+                              : 'rgba(255,255,255,0.06)',
                         cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
                     }}
                 >
-                    Telegram
+                    <Filter size={13} />
+                    Filtros
+                    {filtrosActivos.length && !filtrosAbiertos ? (
+                        <span
+                            style={{
+                                minWidth: 16,
+                                height: 16,
+                                padding: '0 4px',
+                                borderRadius: 999,
+                                background: '#5856D6',
+                                fontSize: '9px',
+                                fontWeight: 800,
+                                lineHeight: '16px',
+                            }}
+                        >
+                            {filtrosActivos.length}
+                        </span>
+                    ) : null}
                 </button>
                 <button
                     type="button"
@@ -1178,10 +1318,37 @@ export default function ComprasPage() {
                     </p>
                 </div>
 
+                {filtrosAbiertos ? (
                 <div className="compras-no-imprimir" style={{ ...glass, padding: '20px', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                        <Filter size={16} style={{ color: '#5856D6' }} />
-                        <p style={{ color: 'white', fontSize: '13px', fontWeight: 800 }}>FILTROS</p>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            marginBottom: '12px',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Filter size={16} style={{ color: '#5856D6' }} />
+                            <p style={{ color: 'white', fontSize: '13px', fontWeight: 800, margin: 0 }}>FILTROS</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setFiltrosAbiertos(false)}
+                            style={{
+                                padding: '6px 10px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(88,86,214,0.45)',
+                                background: 'rgba(88,86,214,0.2)',
+                                color: '#c4b5fd',
+                                fontSize: '10px',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Ocultar
+                        </button>
                     </div>
 
                     <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
@@ -1211,6 +1378,17 @@ export default function ComprasPage() {
                                 {label}
                             </button>
                         ))}
+                        <Link
+                            href="/contabilidad/compras/canal"
+                            style={{
+                                ...periodBtn(false),
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                            }}
+                        >
+                            Cola
+                        </Link>
                     </div>
 
                     <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
@@ -1495,6 +1673,41 @@ export default function ComprasPage() {
                         </p>
                     ) : null}
                 </div>
+                ) : filtrosActivos.length > 0 ? (
+                    <div
+                        className="compras-no-imprimir"
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '16px',
+                            padding: '10px 14px',
+                            borderRadius: '14px',
+                            border: '1px solid rgba(88,86,214,0.25)',
+                            background: 'rgba(88,86,214,0.08)',
+                        }}
+                    >
+                        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 800 }}>
+                            Filtros activos:
+                        </span>
+                        {filtrosActivos.map((tag) => (
+                            <span
+                                key={tag}
+                                style={{
+                                    fontSize: '10px',
+                                    fontWeight: 700,
+                                    padding: '4px 8px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(88,86,214,0.2)',
+                                    color: '#c4b5fd',
+                                }}
+                            >
+                                {tag}
+                            </span>
+                        ))}
+                    </div>
+                ) : null}
 
                 <div className="compras-cuadro-imprimible" style={{ ...glass, padding: '20px', marginBottom: '20px' }}>
                     <div className="compras-solo-imprimir" style={{ marginBottom: '16px' }}>
@@ -1788,6 +2001,83 @@ export default function ComprasPage() {
                     </div>
                 ) : null}
 
+                {showList ? (
+                    <div
+                        className="compras-no-imprimir"
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginBottom: '16px',
+                            padding: '12px 14px',
+                            borderRadius: '14px',
+                            border: algunaSeleccionada
+                                ? '1px solid rgba(88,86,214,0.45)'
+                                : '1px solid rgba(255,255,255,0.08)',
+                            background: algunaSeleccionada
+                                ? 'rgba(88,86,214,0.12)'
+                                : 'rgba(255,255,255,0.03)',
+                        }}
+                    >
+                        <label
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                cursor: 'pointer',
+                                color: 'white',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                            }}
+                        >
+                            <input
+                                ref={selectAllRef}
+                                type="checkbox"
+                                checked={todasSeleccionadas}
+                                onChange={toggleSelectAll}
+                                style={{ width: 16, height: 16, accentColor: '#5856D6' }}
+                            />
+                            {todasSeleccionadas
+                                ? 'Quitar selección'
+                                : `Seleccionar todas (${compras.length})`}
+                        </label>
+                        {algunaSeleccionada ? (
+                            <>
+                                <span style={{ color: '#a5a3ff', fontSize: '12px', fontWeight: 800 }}>
+                                    {selectedIds.size} seleccionada(s)
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleBulkDelete()}
+                                    disabled={deletingBulk || deletingId !== null}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,59,48,0.35)',
+                                        background: 'rgba(255,59,48,0.12)',
+                                        color: '#FF6B6B',
+                                        fontSize: '11px',
+                                        fontWeight: 800,
+                                        cursor: deletingBulk ? 'not-allowed' : 'pointer',
+                                        opacity: deletingBulk ? 0.6 : 1,
+                                    }}
+                                >
+                                    {deletingBulk ? (
+                                        <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                        <Trash2 size={14} />
+                                    )}
+                                    Borrar seleccionadas
+                                </button>
+                            </>
+                        ) : null}
+                    </div>
+                ) : null}
+
                 <div className="compras-cuadro-pantalla">
                 {!loading && vistaListado === 'lineas' && lineasOrdenadas.length > 0 ? (
                     <p
@@ -1827,6 +2117,11 @@ export default function ComprasPage() {
                             sortDir={sortDir}
                             onSort={onSortColumna}
                             ordenPlano={ordenPlanoTabla}
+                            selectedIds={selectedIds}
+                            onToggleCompra={toggleSelectCompra}
+                            onToggleSelectAll={toggleSelectAll}
+                            todasSeleccionadas={todasSeleccionadas}
+                            selectAllIndeterminate={seleccionIndeterminada}
                         />
                     ) : (
                         <div style={{ textAlign: 'center', marginTop: '24px', color: 'rgba(255,255,255,0.35)' }}>
@@ -1852,7 +2147,20 @@ export default function ComprasPage() {
                 {showList && vistaListado === 'facturas' ? (
                     <div style={{ display: 'grid', gap: '12px' }}>
                         {compras.map((c) => (
-                            <div id={`compra-card-${c.id}`} key={c.id} style={{ ...glass, padding: '18px' }}>
+                            <div
+                                id={`compra-card-${c.id}`}
+                                key={c.id}
+                                style={{
+                                    ...glass,
+                                    padding: '18px',
+                                    border: selectedIds.has(c.id)
+                                        ? '1px solid rgba(88,86,214,0.55)'
+                                        : glass.border,
+                                    background: selectedIds.has(c.id)
+                                        ? 'rgba(88,86,214,0.1)'
+                                        : glass.background,
+                                }}
+                            >
                                 <div
                                     style={{
                                         display: 'flex',
@@ -1861,6 +2169,23 @@ export default function ComprasPage() {
                                         gap: '12px',
                                     }}
                                 >
+                                    <label
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            paddingTop: '4px',
+                                            cursor: 'pointer',
+                                            flexShrink: 0,
+                                        }}
+                                        title="Seleccionar factura"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedIds.has(c.id)}
+                                            onChange={() => toggleSelectCompra(c.id)}
+                                            style={{ width: 16, height: 16, accentColor: '#5856D6' }}
+                                        />
+                                    </label>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         {(() => {
                                             const puedeImagen = compraPuedeVerImagen(c);
@@ -2005,7 +2330,7 @@ export default function ComprasPage() {
                                                             titulo: `Reubicar — ${c.supplier_name}`,
                                                         })
                                                     }
-                                                    disabled={deletingId !== null}
+                                                    disabled={deletingId !== null || deletingBulk}
                                                     style={{
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
@@ -2056,7 +2381,7 @@ export default function ComprasPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => void abrirEditarTelegram(c)}
-                                                    disabled={deletingId !== null}
+                                                    disabled={deletingId !== null || deletingBulk}
                                                     style={{
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
@@ -2078,7 +2403,7 @@ export default function ComprasPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => void handleDelete(c)}
-                                                disabled={deletingId !== null}
+                                                disabled={deletingId !== null || deletingBulk}
                                                 style={{
                                                     display: 'inline-flex',
                                                     alignItems: 'center',

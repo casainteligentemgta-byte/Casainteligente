@@ -3,6 +3,7 @@ import {
   listarUbicacionesInventario,
   propagarObraIdFlat,
 } from '@/lib/almacen/ubicacionesInventario';
+import { ubicacionPerteneceAProyecto } from '@/lib/almacen/inventarioFiltroUbicacion';
 import type { StockProyectoItem } from '@/lib/almacen/listarStockProyecto';
 
 type RpcStockRow = {
@@ -24,6 +25,7 @@ export async function getStockRealObra(
     ubicacionId?: string;
     materialId?: string;
     soloConStock?: boolean;
+    proyectoNombre?: string;
   },
 ): Promise<StockProyectoItem[]> {
   const { data, error } = await supabase.rpc('get_stock_real_obra', {
@@ -54,8 +56,12 @@ export async function getStockRealObra(
 export async function getStockAgregadoPorMaterialObra(
   supabase: SupabaseClient,
   proyectoId: string,
+  proyectoNombre?: string,
 ): Promise<Map<string, number>> {
-  const filas = await getStockRealObra(supabase, proyectoId, { soloConStock: false });
+  const filas = await getStockRealObra(supabase, proyectoId, {
+    soloConStock: false,
+    proyectoNombre,
+  });
   const map = new Map<string, number>();
   for (const f of filas) {
     map.set(f.material_id, (map.get(f.material_id) ?? 0) + f.cantidad_disponible);
@@ -67,11 +73,13 @@ export async function getStockAgregadoPorMaterialObra(
 async function listarStockProyectoDesdeTablas(
   supabase: SupabaseClient,
   proyectoId: string,
-  opts?: { ubicacionId?: string; soloConStock?: boolean },
+  opts?: { ubicacionId?: string; soloConStock?: boolean; proyectoNombre?: string },
 ): Promise<StockProyectoItem[]> {
   const todas = await listarUbicacionesInventario(supabase, { soloActivas: true });
   propagarObraIdFlat(todas);
-  let ubicacionesObra = todas.filter((u) => u.obra_id === proyectoId);
+  let ubicacionesObra = todas.filter((u) =>
+    ubicacionPerteneceAProyecto(u, proyectoId, opts?.proyectoNombre),
+  );
   if (opts?.ubicacionId) {
     ubicacionesObra = ubicacionesObra.filter((u) => u.id === opts.ubicacionId);
   }

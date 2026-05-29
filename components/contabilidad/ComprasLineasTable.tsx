@@ -29,6 +29,11 @@ type Props = {
   onSort?: (column: ColumnaOrdenCompras) => void;
   /** Sin rowSpan cuando el orden no agrupa por factura. */
   ordenPlano?: boolean;
+  selectedIds?: Set<string>;
+  onToggleCompra?: (compraId: string) => void;
+  onToggleSelectAll?: () => void;
+  todasSeleccionadas?: boolean;
+  selectAllIndeterminate?: boolean;
 };
 
 function subtotalUsdFila(row: FilaFacturaCanal, subtotalBs: number): number | null {
@@ -57,8 +62,14 @@ export default function ComprasLineasTable({
   sortDir = 'asc',
   onSort,
   ordenPlano = false,
+  selectedIds,
+  onToggleCompra,
+  onToggleSelectAll,
+  todasSeleccionadas = false,
+  selectAllIndeterminate = false,
 }: Props) {
   const muestraAcciones = Boolean(onEliminar || onModificar);
+  const muestraSeleccion = Boolean(onToggleCompra);
 
   const filasPorFactura = useMemo(() => {
     const m = new Map<string, number>();
@@ -144,6 +155,20 @@ export default function ComprasLineasTable({
       <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}>
+            {muestraSeleccion ? (
+              <th style={{ ...th, width: 36, padding: '10px 8px' }}>
+                <input
+                  type="checkbox"
+                  checked={todasSeleccionadas}
+                  ref={(el) => {
+                    if (el) el.indeterminate = selectAllIndeterminate;
+                  }}
+                  onChange={() => onToggleSelectAll?.()}
+                  aria-label="Seleccionar todas las facturas"
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
+                />
+              </th>
+            ) : null}
             <SortTh col="fecha" label="Fecha" />
             <SortTh col="factura" label="Factura" />
             <SortTh col="proveedor" label="Proveedor" />
@@ -178,11 +203,39 @@ export default function ComprasLineasTable({
                 ? (filasPorFactura.get(row.pendienteId) ?? 1)
                 : 1;
 
+            const seleccionada = selectedIds?.has(row.pendienteId) ?? false;
+
             return (
               <tr
                 key={`${row.pendienteId}-${i}`}
-                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                style={{
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  background: seleccionada ? 'rgba(88,86,214,0.08)' : undefined,
+                }}
               >
+                {muestraSeleccion ? (
+                  mostrarAcciones ? (
+                    <td style={{ ...td, verticalAlign: 'top' }} rowSpan={rowSpan}>
+                      <input
+                        type="checkbox"
+                        checked={seleccionada}
+                        onChange={() => onToggleCompra?.(row.pendienteId)}
+                        aria-label={`Seleccionar factura ${row.factura || row.proveedor}`}
+                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
+                      />
+                    </td>
+                  ) : ordenPlano ? (
+                    <td style={td}>
+                      <input
+                        type="checkbox"
+                        checked={seleccionada}
+                        onChange={() => onToggleCompra?.(row.pendienteId)}
+                        aria-label={`Seleccionar factura ${row.factura || row.proveedor}`}
+                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
+                      />
+                    </td>
+                  ) : null
+                ) : null}
                 <td style={td}>{row.fecha || '—'}</td>
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
