@@ -68,6 +68,15 @@ export function listarColaAvanceOffline(proyectoId?: string): ReporteAvancePendi
   return cola.filter((x) => x.proyectoId === proyectoId);
 }
 
+function claveActualizacion(act: ActualizacionAvanceCronograma): string {
+  return (
+    act.partida_id?.trim() ||
+    act.id?.trim() ||
+    act.codigo_partida?.trim() ||
+    `${act.nombre_tarea ?? 'partida'}-${act.orden ?? 0}`
+  );
+}
+
 export function encolarAvanceOffline(
   proyectoId: string,
   actualizaciones: ActualizacionAvanceCronograma[],
@@ -83,6 +92,34 @@ export function encolarAvanceOffline(
   cola.push(item);
   escribirCola(cola);
   return item;
+}
+
+/** Fusiona partidas en el último lote pendiente del proyecto (evita duplicados offline). */
+export function encolarAvanceOfflineMerge(
+  proyectoId: string,
+  actualizaciones: ActualizacionAvanceCronograma[],
+): ReporteAvancePendiente {
+  const cola = leerColaRaw();
+  const idx = cola.findLastIndex((x) => x.proyectoId === proyectoId && x.pendiente);
+
+  if (idx >= 0) {
+    const merged = new Map<string, ActualizacionAvanceCronograma>();
+    for (const act of cola[idx].payload.actualizaciones) {
+      merged.set(claveActualizacion(act), act);
+    }
+    for (const act of actualizaciones) {
+      merged.set(claveActualizacion(act), act);
+    }
+    cola[idx] = {
+      ...cola[idx],
+      createdAt: new Date().toISOString(),
+      payload: { actualizaciones: Array.from(merged.values()) },
+    };
+    escribirCola(cola);
+    return cola[idx];
+  }
+
+  return encolarAvanceOffline(proyectoId, actualizaciones);
 }
 
 export function quitarDeColaAvanceOffline(id: string): void {

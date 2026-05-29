@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
-import { ejecutarFastTrackFacturaCanal } from '@/lib/canal/ejecutarFastTrackFactura';
+import {
+  evaluarYProcesarFastTrack,
+  type DatosOcrFastTrack,
+} from '@/lib/canal/evaluarYProcesarFastTrack';
 import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
@@ -127,56 +130,32 @@ export async function processInvoiceFromCanal(params: {
     return;
   }
 
-  const inv = extracted as {
-    invoice_number?: string;
-    supplier_name?: string;
-    supplier_rif?: string;
-    total_amount?: number | null;
-    items?: unknown[];
-  };
-
   await prog?.reportar(95, 'Guardando en la aplicación…');
+
+  const datosOcr = extracted as DatosOcrFastTrack;
 
   await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
       estado: 'extraido',
-      extracted,
+      extracted: datosOcr,
       mensaje_error: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.pendingId);
 
-  const invData = extracted as {
-    invoice_number?: string;
-    supplier_name?: string;
-    supplier_rif?: string;
-    total_amount?: number | null;
-    items?: unknown[];
-    confidence_score?: number;
-  };
-
   let fastTrackMsg = '';
-  try {
-    const ft = await ejecutarFastTrackFacturaCanal(supabase, params.pendingId, {
-      invoice_number: String(invData.invoice_number ?? ''),
-      supplier_rif: String(invData.supplier_rif ?? ''),
-      supplier_name: String(invData.supplier_name ?? ''),
-      date: String((extracted as { date?: string }).date ?? ''),
-      total_amount: invData.total_amount ?? null,
-      items: (invData.items ?? []) as import('@/lib/almacen/extractPurchaseInvoiceGemini').ExtractedInvoiceItem[],
-      confidence_score: invData.confidence_score,
-    });
-    if (ft.aplicado) {
-      fastTrackMsg =
-        `\n⚡ <b>Fast-Track</b> (${ft.confidenceScore?.toFixed(0)}% confianza): aprobado_sistema e ingreso a inventario.`;
-    }
-  } catch (ftErr) {
-    console.warn('[processInvoiceFromCanal] fast-track omitido:', ftErr);
+  const ft = await evaluarYProcesarFastTrack(supabase, params.pendingId, datosOcr);
+  if (ft.estado === 'aprobado_sistema') {
+    fastTrackMsg =
+      `\n⚡ <b>Fast-Track</b> (${ft.confidenceScore?.toFixed(0) ?? '—'}% confianza): aprobado_sistema e ingreso a inventario.`;
+  } else if (ft.error) {
+    console.warn('[processInvoiceFromCanal] fast-track degradado:', ft.error);
   }
 
   await prog?.reportar(100, 'Completado');
 
+  const inv = datosOcr;
   const nItems = Array.isArray(inv.items) ? inv.items.length : 0;
   const detalleOk =
     `📄 Nº: <code>${inv.invoice_number ?? '—'}</code>\n` +

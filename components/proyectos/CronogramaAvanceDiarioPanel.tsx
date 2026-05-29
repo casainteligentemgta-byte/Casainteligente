@@ -2,15 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
-import { useColaAvanceOffline } from '@/hooks/useColaAvanceOffline';
-import { ColaAvanceStorageError, encolarAvanceOffline } from '@/lib/campo/colaAvanceOffline';
-import type { CronogramaCapitulo, CronogramaTarea } from '@/types/cronograma';
+import { useAvanceCampoManager } from '@/hooks/useAvanceCampoManager';
+import type { CronogramaCapitulo } from '@/types/cronograma';
 import { cn } from '@/lib/utils';
-import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
-import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 
 type Props = {
   proyectoId: string;
@@ -45,9 +41,14 @@ export default function CronogramaAvanceDiarioPanel({
   loading = false,
   onSaved,
 }: Props) {
-  const { isSubmitting, runLocked } = useSyncSubmitLock();
-  const { pendientes, guardadoLocal, setGuardadoLocal, sincronizando, refrescar } =
-    useColaAvanceOffline(proyectoId, onSaved);
+  const { isSubmitting: isSubmittingLock, runLocked } = useSyncSubmitLock();
+  const {
+    registrarAvanceFisico,
+    isSubmitting: isSubmittingAvance,
+    tienePendientesOffline,
+    sincronizando,
+  } = useAvanceCampoManager(proyectoId, { onSynced: onSaved });
+  const isSubmitting = isSubmittingLock || isSubmittingAvance;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [avances, setAvances] = useState<Map<string, AvanceLocal>>(new Map());
   const [dirty, setDirty] = useState(false);
@@ -108,84 +109,24 @@ export default function CronogramaAvanceDiarioPanel({
     patchAvance(key, row.porcentaje_avance + delta);
   };
 
-  const guardarEnColaLocal = useCallback(
-    (actualizaciones: Parameters<typeof encolarAvanceOffline>[1], mensajeOk: string) => {
-      try {
-        encolarAvanceOffline(proyectoId, actualizaciones);
-        setGuardadoLocal(true);
-        refrescar();
-        setDirty(false);
-        toast.success(mensajeOk);
-        return true;
-      } catch (e) {
-        if (e instanceof ColaAvanceStorageError) {
-          toast.error(e.message);
-        } else {
-          console.error('Error guardando caché offline en el iPad:', e);
-          toast.error('Error de almacenamiento local. Libera espacio en Safari.');
-        }
-        return false;
-      }
-    },
-    [proyectoId, refrescar, setGuardadoLocal],
-  );
-
   const guardar = () => {
     void runLocked(async () => {
-      try {
-        const actualizaciones = Array.from(avances.values()).map((a) => ({
-          id: a.id.startsWith('borrador-') ? undefined : a.id,
-          partida_id: a.partida_id,
-          codigo_partida: a.codigo_partida,
-          nombre_tarea: a.nombre_tarea,
-          porcentaje_avance: a.porcentaje_avance,
-          fecha_inicio_planificada: a.fecha_inicio_planificada,
-          fecha_fin_planificada: a.fecha_fin_planificada,
-          orden: a.orden,
-        }));
+      const actualizaciones = Array.from(avances.values()).map((a) => ({
+        id: a.id.startsWith('borrador-') ? undefined : a.id,
+        partida_id: a.partida_id,
+        codigo_partida: a.codigo_partida,
+        nombre_tarea: a.nombre_tarea,
+        porcentaje_avance: a.porcentaje_avance,
+        fecha_inicio_planificada: a.fecha_inicio_planificada,
+        fecha_fin_planificada: a.fecha_fin_planificada,
+        orden: a.orden,
+      }));
 
-        const payload = { actualizaciones };
-
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          guardarEnColaLocal(
-            actualizaciones,
-            'Reporte guardado localmente. Se sincronizará al recuperar señal.',
-          );
-          return;
-        }
-
-        const res = await fetch(
-          `/api/proyectos/${encodeURIComponent(proyectoId)}/campo/avance`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          },
-        );
-        const data = await parseFetchJson<{ error?: string; guardados?: number }>(res);
-        if (!res.ok) throw new Error(formatApiErrorBody(data, 'Error al guardar avance'));
-        toast.success(`Avance confirmado (${data.guardados ?? actualizaciones.length} partida(s)).`);
+      const resultado = await registrarAvanceFisico(actualizaciones);
+      if ('success' in resultado && resultado.success) {
         setDirty(false);
-        setGuardadoLocal(false);
-        onSaved?.();
-      } catch (e) {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          guardarEnColaLocal(
-            Array.from(avances.values()).map((a) => ({
-              id: a.id.startsWith('borrador-') ? undefined : a.id,
-              partida_id: a.partida_id,
-              codigo_partida: a.codigo_partida,
-              nombre_tarea: a.nombre_tarea,
-              porcentaje_avance: a.porcentaje_avance,
-              fecha_inicio_planificada: a.fecha_inicio_planificada,
-              fecha_fin_planificada: a.fecha_fin_planificada,
-              orden: a.orden,
-            })),
-            'Reporte guardado localmente. Sincronización pendiente por red.',
-          );
-          return;
-        }
-        toast.error(formatErrorMessage(e));
+      } else if ('offline' in resultado && resultado.offline) {
+        setDirty(false);
       }
     });
   };
@@ -209,16 +150,28 @@ export default function CronogramaAvanceDiarioPanel({
 
   return (
     <div className="space-y-4 select-none">
-      {(guardadoLocal || pendientes > 0) ? (
-        <p
-          className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-400"
+      {tienePendientesOffline ? (
+        <div
+          className={cn(
+            'mb-4 flex w-full select-none flex-col items-start justify-between gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 backdrop-blur-xl sm:flex-row sm:items-center',
+            !sincronizando && 'animate-pulse',
+          )}
           role="status"
         >
-          {sincronizando
-            ? 'Sincronizando reportes pendientes…'
-            : 'Reporte guardado localmente. Sincronización pendiente por red.'}
-          {pendientes > 1 ? ` (${pendientes} en cola)` : ''}
-        </p>
+          <div className="flex items-center space-x-2">
+            <div className="h-2 w-2 rounded-full bg-amber-500" />
+            <span className="font-mono text-xs uppercase tracking-wider text-amber-400">
+              {sincronizando
+                ? 'Sincronizando reportes de campo con Supabase…'
+                : 'Frente de obra operando en modo Offline'}
+            </span>
+          </div>
+          <span className="font-mono text-[10px] uppercase text-zinc-500">
+            {sincronizando
+              ? 'Enviando cola local al servidor central'
+              : 'Se guardará localmente hasta detectar señal Movistar/Digitel'}
+          </span>
+        </div>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">

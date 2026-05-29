@@ -1,58 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { contarColaAvanceOffline } from '@/lib/campo/colaAvanceOffline';
-import { sincronizarColaAvanceOffline } from '@/lib/campo/sincronizarColaAvanceOffline';
+import { useAvanceCampoManager } from '@/hooks/useAvanceCampoManager';
 
+/** @deprecated Usar `useAvanceCampoManager` — wrapper de compatibilidad. */
 export function useColaAvanceOffline(proyectoId: string, onSynced?: () => void) {
-  const [pendientes, setPendientes] = useState(0);
-  const [guardadoLocal, setGuardadoLocal] = useState(false);
-  const [sincronizando, setSincronizando] = useState(false);
-
-  const refrescar = useCallback(() => {
-    setPendientes(contarColaAvanceOffline(proyectoId));
-  }, [proyectoId]);
-
-  const flush = useCallback(async () => {
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-    setSincronizando(true);
-    try {
-      const r = await sincronizarColaAvanceOffline(proyectoId);
-      if (r.enviados > 0) {
-        setGuardadoLocal(false);
-        onSynced?.();
-      }
-      refrescar();
-      return r;
-    } finally {
-      setSincronizando(false);
-    }
-  }, [proyectoId, refrescar, onSynced]);
-
-  useEffect(() => {
-    refrescar();
-  }, [refrescar]);
-
-  useEffect(() => {
-    const onOnline = () => {
-      void flush();
-    };
-    window.addEventListener('online', onOnline);
-    return () => window.removeEventListener('online', onOnline);
-  }, [flush]);
-
-  useEffect(() => {
-    if (navigator.onLine && pendientes > 0) {
-      void flush();
-    }
-  }, [pendientes, flush]);
+  const manager = useAvanceCampoManager(proyectoId, { onSynced });
 
   return {
-    pendientes,
-    guardadoLocal,
-    setGuardadoLocal,
-    sincronizando,
-    refrescar,
-    flush,
+    pendientes: manager.pendientes,
+    guardadoLocal: manager.guardadoLocal,
+    setGuardadoLocal: () => {},
+    sincronizando: manager.sincronizando,
+    refrescar: manager.refrescar,
+    flush: manager.procesarColaOffline,
   };
 }
