@@ -18,6 +18,9 @@ import {
   type ProyectoEquipoRow,
 } from '@/lib/proyectos/proyectoEquipos';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
+import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
+import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
+import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
@@ -215,6 +218,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [sugerenciasIA, setSugerenciasIA] = useState<string | null>(null);
   const [sugerenciasDesdeGemini, setSugerenciasDesdeGemini] = useState(false);
   const [vacanteModalOpen, setVacanteModalOpen] = useState(false);
+  const [contratoAdModalOpen, setContratoAdModalOpen] = useState(false);
+  const {
+    autorizado: logisticaAutorizada,
+    loading: cargandoContratoAd,
+    contrato: contratoAd,
+    refrescar: refrescarContratoAd,
+  } = useContratoAdProyecto(id);
   const [rrhhVacantesTick, setRrhhVacantesTick] = useState(0);
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
   const rrhhPanelRef = useRef<HTMLDivElement>(null);
@@ -744,12 +754,31 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             {proyecto ? (
-              <Link
-                href={`/almacen/procurement?proyectoId=${encodeURIComponent(id)}&fromProject=1&bloquearProyecto=1`}
-                className="rounded-xl border border-emerald-500/40 bg-emerald-950/45 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/60"
-              >
-                + Factura (este proyecto)
-              </Link>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setContratoAdModalOpen(true)}
+                  className="rounded-xl border border-amber-500/40 bg-amber-950/45 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-900/60"
+                  title="Contrato de Administración Delegada"
+                >
+                  {contratoAd?.estado === 'exitoso' ? 'Contrato AD ✓' : 'Contrato AD'}
+                </button>
+                {logisticaAutorizada ? (
+                  <Link
+                    href={`/almacen/procurement?proyectoId=${encodeURIComponent(id)}&fromProject=1&bloquearProyecto=1`}
+                    className="rounded-xl border border-emerald-500/40 bg-emerald-950/45 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/60"
+                  >
+                    + Factura (este proyecto)
+                  </Link>
+                ) : (
+                  <span
+                    className="cursor-not-allowed rounded-xl border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-zinc-500"
+                    title="Requiere Contrato AD registrado"
+                  >
+                    + Factura (bloqueado)
+                  </span>
+                )}
+              </>
             ) : null}
             {modoEdicion && proyecto && !tabCabeceraMinimaSinAcciones && !fichaModuloSinPestaña ? (
               <>
@@ -811,6 +840,14 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               Volver a la ficha del proyecto
             </Link>
           </div>
+        ) : null}
+        {proyecto && !cargandoContratoAd && !logisticaAutorizada ? (
+          <ProyectoAdLogisticaBanner
+            proyectoId={id}
+            autorizado={logisticaAutorizada}
+            onAbrirContratoAd={() => setContratoAdModalOpen(true)}
+            className="mt-4"
+          />
         ) : null}
         {loading ? <p className="mt-6 text-sm text-zinc-500">Cargando...</p> : null}
         {error ? <p className="mt-6 text-sm text-red-400">{error}</p> : null}
@@ -1311,6 +1348,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         proyectoModuloId={id}
         proyectoNombre={proyecto?.nombre ?? null}
         onVacanteCreada={() => setRrhhVacantesTick((n) => n + 1)}
+      />
+      <GenerarContratoDelegadoModal
+        open={contratoAdModalOpen}
+        onClose={() => setContratoAdModalOpen(false)}
+        proyectoId={id}
+        proyectoNombre={proyecto?.nombre ?? null}
+        onContratoGenerado={() => void refrescarContratoAd()}
       />
     </div>
   );

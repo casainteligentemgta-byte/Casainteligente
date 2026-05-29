@@ -49,6 +49,7 @@ export interface InventoryItem {
         descripcion: string;
         proyecto_id?: string;
     } | null;
+    category?: { id: string; name: string } | null;
     created_at?: string;
     updated_at?: string;
 }

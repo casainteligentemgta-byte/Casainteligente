@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
+import CronogramaAvanceDiarioPanel from '@/components/proyectos/CronogramaAvanceDiarioPanel';
 import CronogramaGantt from '@/components/proyectos/CronogramaGantt';
 import CronogramaTareaSlideOver from '@/components/proyectos/CronogramaTareaSlideOver';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { CronogramaCapitulo, CronogramaTarea } from '@/types/cronograma';
 import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
@@ -62,16 +64,15 @@ export default function CronogramaObraPanel({
   }, [load]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-[#0A0A0F]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-zinc-500 max-w-xl">
-          Actividades agrupadas por capítulo del presupuesto. Pulse un capítulo para desplegar sus
-          partidas en cascada. Clic en una partida para ver detalle, APU y evidencias Telegram.
+          Control diario de avance físico y planificación Gantt por capítulos Lulo.
         </p>
         <button
           type="button"
           onClick={() => void load()}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800"
+          className="inline-flex select-none items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/[0.08] touch-manipulation"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Actualizar
@@ -101,12 +102,40 @@ export default function CronogramaObraPanel({
         </p>
       ) : null}
 
-      <CronogramaGantt
-        tareas={tareas}
-        capitulos={capitulos}
-        loading={loading}
-        onTareaClick={setTareaActiva}
-      />
+      <Tabs defaultValue="avance" className="w-full">
+        <TabsList className="grid h-12 w-full max-w-lg grid-cols-2 border border-white/10 bg-white/[0.04] p-1">
+          <TabsTrigger
+            value="avance"
+            className="select-none rounded-lg text-xs font-bold uppercase tracking-wide data-[state=active]:bg-white/10 data-[state=active]:text-white"
+          >
+            Avance diario
+          </TabsTrigger>
+          <TabsTrigger
+            value="gantt"
+            className="select-none rounded-lg text-xs font-bold uppercase tracking-wide data-[state=active]:bg-white/10 data-[state=active]:text-white"
+          >
+            Gantt / planificación
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="avance" className="mt-4">
+          <CronogramaAvanceDiarioPanel
+            proyectoId={proyectoId}
+            capitulos={capitulos}
+            loading={loading}
+            onSaved={() => void load()}
+          />
+        </TabsContent>
+
+        <TabsContent value="gantt" className="mt-4">
+          <CronogramaGantt
+            tareas={tareas}
+            capitulos={capitulos}
+            loading={loading}
+            onTareaClick={setTareaActiva}
+          />
+        </TabsContent>
+      </Tabs>
 
       <CronogramaTareaSlideOver tarea={tareaActiva} onClose={() => setTareaActiva(null)} />
     </div>

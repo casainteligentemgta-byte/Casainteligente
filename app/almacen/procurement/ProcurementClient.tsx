@@ -39,6 +39,8 @@ import { ProcurementDocumentAttach } from '@/components/almacen/ProcurementDocum
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import { resolverPartidaConsumiblesCampo } from '@/lib/almacen/resolverPartidaConsumiblesCampo';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
+import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
+import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import type { CategoriaMaterialCompra } from '@/types/inventario-obra';
 type PurchaseLine = {
     description: string;
@@ -146,6 +148,10 @@ export default function ProcurementClient() {
     const [partidaConsumiblesId, setPartidaConsumiblesId] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [proyectoId, setProyectoId] = useState('');
+    const {
+        autorizado: logisticaAutorizada,
+        loading: cargandoContratoAd,
+    } = useContratoAdProyecto(proyectoId || undefined);
     const [proyectoBloqueado, setProyectoBloqueado] = useState(false);
     const [ubicacionDestinoId, setUbicacionDestinoId] = useState('');
     const [tasaBcv, setTasaBcv] = useState<number | null>(null);
@@ -418,6 +424,12 @@ export default function ProcurementClient() {
         }
         if (!proyectoId) {
             setSubmitError('Seleccione el proyecto al que pertenece esta compra.');
+            return;
+        }
+        if (proyectoId && !logisticaAutorizada) {
+            setSubmitError(
+                'Registre el Contrato de Administración Delegada (AD) en la ficha del proyecto antes de comprar.',
+            );
             return;
         }
         if (!ubicacionDestinoId) {
@@ -850,6 +862,12 @@ export default function ProcurementClient() {
                     </ProcPanel>
                 ) : (
                     <div className="space-y-6">
+                        {proyectoId && !cargandoContratoAd && !logisticaAutorizada ? (
+                            <ProyectoAdLogisticaBanner
+                                proyectoId={proyectoId}
+                                autorizado={logisticaAutorizada}
+                            />
+                        ) : null}
                         <ProcPanel className="p-6">
                             <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500 mb-4">
                                 Archivo de factura o presupuesto
@@ -1389,7 +1407,7 @@ export default function ProcurementClient() {
                                     if (isSaving) return;
                                     void handleSubmit();
                                 }}
-                                disabled={isSaving}
+                                disabled={isSaving || (Boolean(proyectoId) && !logisticaAutorizada)}
                                 className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:pointer-events-none text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all"
                             >
                                 {isSaving ? (

@@ -106,3 +106,60 @@ export async function listarUbicacionesParaFiltroInventario(
 ): Promise<UbicacionInventario[]> {
   return listarUbicacionesInventario(supabase, { soloActivas: true });
 }
+
+export type ValorInventarioDeposito = {
+  depositId: string;
+  name: string;
+  value: number;
+  unidades: number;
+};
+
+/** Valor USD (cantidad × costo ponderado) agrupado por depósito físico. */
+export async function cargarValorInventarioPorDeposito(
+  supabase: SupabaseClient,
+  costoPorMaterial: Map<string, number>,
+  depositLabels: Map<string, string>,
+): Promise<ValorInventarioDeposito[]> {
+  const valorByDeposit = new Map<string, { value: number; unidades: number }>();
+  const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
+  const flat = [...ubicaciones];
+  propagarDepositIdFlat(flat);
+  const ubToDeposit = new Map(flat.map((u) => [u.id, u.deposit_id ?? '']));
+
+  const ubicacionIds = flat.map((u) => u.id);
+  const BATCH = 40;
+  for (let i = 0; i < ubicacionIds.length; i += BATCH) {
+    const batch = ubicacionIds.slice(i, i + BATCH);
+    const { data, error } = await supabase
+      .from('inventario_stock')
+      .select('material_id, cantidad_disponible, ubicacion_id')
+      .in('ubicacion_id', batch)
+      .gt('cantidad_disponible', 0);
+
+    if (error?.code === '42P01') return [];
+    if (error) throw new Error(error.message);
+
+    for (const row of data ?? []) {
+      const materialId = String(row.material_id ?? '');
+      const qty = Number(row.cantidad_disponible ?? 0);
+      if (!materialId || qty <= 0) continue;
+      const ubId = String(row.ubicacion_id ?? '');
+      const depositId = ubToDeposit.get(ubId) || '';
+      if (!depositId) continue;
+      const cost = costoPorMaterial.get(materialId) ?? 0;
+      const prev = valorByDeposit.get(depositId) ?? { value: 0, unidades: 0 };
+      prev.value += qty * cost;
+      prev.unidades += qty;
+      valorByDeposit.set(depositId, prev);
+    }
+  }
+
+  return Array.from(valorByDeposit.entries())
+    .map(([depositId, agg]) => ({
+      depositId,
+      name: depositLabels.get(depositId) ?? 'Almacén',
+      value: agg.value,
+      unidades: agg.unidades,
+    }))
+    .sort((a, b) => b.value - a.value);
+}

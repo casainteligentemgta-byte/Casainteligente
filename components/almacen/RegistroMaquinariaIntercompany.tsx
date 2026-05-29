@@ -397,6 +397,8 @@ export default function RegistroMaquinariaIntercompany({ proyectoId }: Props) {
                   Justificación de uso (obligatoria)
                 </span>
                 <textarea
+                  id="justificacion_uso"
+                  name="justificacion_uso"
                   value={justificacionUso}
                   onChange={(e) => setJustificacionUso(e.target.value)}
                   rows={3}
@@ -464,12 +466,12 @@ export default function RegistroMaquinariaIntercompany({ proyectoId }: Props) {
 
             <button
               type="button"
-              disabled={!puedeConfirmar}
+              disabled={!puedeConfirmar || guardando}
               onClick={() => {
                 if (guardando) return;
                 void registrar();
               }}
-              className="mt-auto flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-4 text-base font-black text-black shadow-lg shadow-amber-900/30 disabled:opacity-40 active:scale-[0.99]"
+              className="mt-auto flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-4 text-base font-black text-black shadow-lg shadow-amber-900/30 disabled:pointer-events-none disabled:opacity-40 active:scale-[0.99]"
             >
               {guardando ? (
                 <>
@@ -477,7 +479,7 @@ export default function RegistroMaquinariaIntercompany({ proyectoId }: Props) {
                   Registrando…
                 </>
               ) : (
-                'Registrar parte diario'
+                'Registrar Parte Diario'
               )}
             </button>
           </div>

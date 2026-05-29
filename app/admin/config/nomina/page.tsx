@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
+import KpiEficienciaAdOficina from '@/components/admin/KpiEficienciaAdOficina';
 import { Calculator, RefreshCw, Trash2, FileJson } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -10,12 +11,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { calcularCostoHoraTotal, HORAS_MES_LEGAL } from '@/lib/finanzas/costoHoraNomina';
+import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
 import { createClient } from '@/lib/supabase/client';
-import { CARGOS_OBREROS } from '@/lib/constants/cargosObreros';
 import { filasTabuladorGacetaReferencia } from '@/lib/nomina/tabuladorGacetaReferencia';
 import { CESTATICKET_MENSUAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
+import {
+  esCargoGastoAdministrativo,
+  esCargoManoObraDirecta,
+} from '@/lib/nomina/clasificarCargoNomina';
+import { costoMensualCargoVes } from '@/lib/nomina/calcularEficienciaAdOficina';
+import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
 type Row = {
   id: string;
@@ -31,13 +39,17 @@ function fmtVes(n: number) {
   return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
+function fmtUsd(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+}
+
 export default function AdminConfigNominaPage() {
   const supabase = useMemo(() => createClient(), []);
+  const { tasa: tasaBcv } = useTasaBcvHoy();
+  const { isSubmitting, runLocked } = useSyncSubmitLock();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [aplicando, setAplicando] = useState(false);
-  const [sincronizando, setSincronizando] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,19 +77,25 @@ export default function AdminConfigNominaPage() {
     void load();
   }, [load]);
 
+  const rowsObra = useMemo(
+    () => rows.filter((r) => esCargoManoObraDirecta(r.cargo_codigo)),
+    [rows],
+  );
+  const rowsOficina = useMemo(
+    () => rows.filter((r) => esCargoGastoAdministrativo(r.cargo_codigo)),
+    [rows],
+  );
+
   const previewCosto = useCallback((r: Row) => {
     return calcularCostoHoraTotal(r.salario_base_mensual, r.factor_prestacional, r.cestaticket_mensual);
   }, []);
 
-  const chartData = useMemo(
-    () =>
-      [...rows]
-        .map((r) => ({
-          cargo: r.cargo_nombre.slice(0, 14),
-          costo_hora: previewCosto(r),
-        }))
-        .sort((a, b) => b.costo_hora - a.costo_hora),
-    [rows, previewCosto],
+  const previewCostoUsd = useCallback(
+    (r: Row) => {
+      const ves = previewCosto(r);
+      return tasaBcv && tasaBcv > 0 ? ves / tasaBcv : null;
+    },
+    [previewCosto, tasaBcv],
   );
 
   function patchLocal(id: string, patch: Partial<Row>) {
@@ -105,154 +123,119 @@ export default function AdminConfigNominaPage() {
     toast.success('Cargo actualizado');
   }
 
-  async function addRow() {
-    const { data, error } = await supabase
-      .from('ci_config_nomina')
-      .insert({
-        cargo_nombre: 'Nuevo cargo',
-        cargo_codigo: null,
-        salario_base_mensual: 300,
+  const addRow = (tipo: 'obra' | 'oficina') =>
+    runLocked(async () => {
+      const { error } = await supabase.from('ci_config_nomina').insert({
+        cargo_nombre: tipo === 'obra' ? 'Nuevo oficio obra' : 'Nuevo cargo administrativo',
+        cargo_codigo: tipo === 'obra' ? '1.1' : 'ADM',
+        salario_base_mensual: tipo === 'obra' ? 300 : 800,
         factor_prestacional: 1.6,
         cestaticket_mensual: 95,
-      })
-      .select('id')
-      .single();
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    await load();
-    toast.success('Fila creada');
-    void data;
-  }
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      await load();
+      toast.success('Fila creada');
+    });
 
-  async function deleteRow(id: string) {
-    if (!window.confirm('¿Eliminar este cargo del tabulador?')) return;
-    const { error } = await supabase.from('ci_config_nomina').delete().eq('id', id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    setRows((p) => p.filter((x) => x.id !== id));
-    toast.success('Eliminado');
-  }
+  const deleteRow = (id: string) =>
+    runLocked(async () => {
+      if (!window.confirm('¿Eliminar este cargo del tabulador?')) return;
+      const { error } = await supabase.from('ci_config_nomina').delete().eq('id', id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setRows((p) => p.filter((x) => x.id !== id));
+      toast.success('Eliminado');
+    });
 
-  async function aplicarProyectos() {
-    setAplicando(true);
-    try {
+  const aplicarProyectos = () =>
+    runLocked(async () => {
       const res = await fetch('/api/admin/config-nomina/aplicar-proyectos', { method: 'POST' });
       const j = (await res.json()) as { ok?: boolean; error?: string; actualizados?: number; revisados?: number };
       if (!res.ok) {
         toast.error(j.error ?? 'Error');
         return;
       }
-      toast.success(`Presupuesto mano de obra actualizado en ${j.actualizados ?? 0} / ${j.revisados ?? 0} proyectos activos.`);
-    } catch {
-      toast.error('Error de red');
-    } finally {
-      setAplicando(false);
-    }
-  }
+      toast.success(
+        `Presupuesto mano de obra actualizado en ${j.actualizados ?? 0} / ${j.revisados ?? 0} proyectos activos.`,
+      );
+    });
 
-  async function syncGaceta() {
-    if (!window.confirm('¿Sincronizar tabulador con todos los oficios de la Gaceta 6.752? Se agregarán los cargos faltantes.')) return;
-    setSincronizando(true);
-    try {
+  const syncGaceta = () =>
+    runLocked(async () => {
+      if (
+        !window.confirm(
+          '¿Sincronizar tabulador con todos los oficios de la Gaceta 6.752? Se agregarán los cargos faltantes.',
+        )
+      )
+        return;
+
       const gaceta = filasTabuladorGacetaReferencia();
-      const existingCodigos = new Set(rows.map(r => r.cargo_codigo).filter(Boolean));
-      
-      const missing = gaceta.filter(g => !existingCodigos.has(g.codigo));
-      
+      const existingCodigos = new Set(rows.map((r) => r.cargo_codigo).filter(Boolean));
+      const missing = gaceta.filter((g) => !existingCodigos.has(g.codigo));
+
       if (missing.length === 0) {
         toast.info('El tabulador ya contiene todos los oficios de la Gaceta.');
         return;
       }
 
-      const toInsert = missing.map(m => {
-        const tasa = tasaBcvVesPorUsdFromEnv() ?? 36.5; // Fallback razonable si no hay env
+      const toInsert = missing.map((m) => {
+        const tasa = tasaBcvVesPorUsdFromEnv() ?? 36.5;
         const cestaticketVes = Math.round(CESTATICKET_MENSUAL_USD * tasa * 100) / 100;
-
         return {
           cargo_nombre: m.nombre,
           cargo_codigo: m.codigo,
           salario_base_mensual: m.salarioBasicoMensualRef30,
           factor_prestacional: 1.6,
-          cestaticket_mensual: Math.max(1300, cestaticketVes), // Garantizar al menos el indexado de 1300
+          cestaticket_mensual: Math.max(1300, cestaticketVes),
         };
       });
 
       const { error } = await supabase.from('ci_config_nomina').insert(toInsert);
-      
-      if (error) throw error;
-      
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
       await load();
       toast.success(`Sincronizados ${missing.length} cargos nuevos.`);
-    } catch (e: any) {
-      toast.error(e.message || 'Error al sincronizar');
-    } finally {
-      setSincronizando(false);
-    }
-  }
+    });
 
-  return (
-    <div className="min-h-screen bg-[#0A0A0F] px-4 py-8 text-zinc-200 md:px-8" style={{ backgroundColor: '#0A0A0F' }}>
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-6">
-          <div>
-            <Link href="/admin/dashboard" className="text-xs font-semibold text-sky-400 hover:text-sky-300">
-              ← Admin
-            </Link>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Configuración de costos — Nómina</h1>
-            <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-              Define el costo hora total por cargo con carga prestacional (IVSS, FAOV, INCES, prestaciones) vía factor y
-              cestaticket mensual.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => void syncGaceta()} disabled={sincronizando || loading}>
-              <FileJson className={sincronizando ? 'animate-spin' : 'mr-2 h-4 w-4'} aria-hidden />
-              {sincronizando ? 'Sincronizando…' : 'Sincronizar Gaceta'}
-            </Button>
-            <Button type="button" variant="elitePrimary" onClick={() => void aplicarProyectos()} disabled={aplicando}>
-              <RefreshCw className={aplicando ? 'animate-spin mr-2' : 'mr-2'} aria-hidden />
-              {aplicando ? 'Aplicando…' : 'Aplicar a proyectos activos'}
-            </Button>
-            <Button type="button" variant="elite" onClick={() => void addRow()}>
-              Nuevo cargo
-            </Button>
-          </div>
-        </header>
+  function renderTabulador(filas: Row[], titulo: string, emptyMsg: string) {
+    const chartData = [...filas]
+      .map((r) => ({
+        cargo: r.cargo_nombre.slice(0, 14),
+        costo_hora: previewCosto(r),
+      }))
+      .sort((a, b) => b.costo_hora - a.costo_hora);
 
-        <CuadroNominaContratados titulo="Contratados activos" />
+    const totalMensualVes = filas.reduce(
+      (acc, r) =>
+        acc + costoMensualCargoVes(r.salario_base_mensual, r.factor_prestacional, r.cestaticket_mensual),
+      0,
+    );
+    const totalMensualUsd = tasaBcv && tasaBcv > 0 ? totalMensualVes / tasaBcv : null;
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl backdrop-blur-xl">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-500/30 bg-sky-500/10">
-              <Calculator className="h-5 w-5 text-sky-400" aria-hidden />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Visualizador de fórmula</h2>
-              <p className="mt-2 text-sm text-zinc-300">
-                Costo hora total (VES) ={' '}
-                <span className="font-mono text-emerald-300/95">
-                  ((Salario base × Factor prestacional) + Cestaticket) ÷ {HORAS_MES_LEGAL}
-                </span>
-              </p>
-              <p className="mt-2 text-xs text-zinc-500">
-                El factor agrega IVSS, FAOV, INCES y prestaciones sociales de forma agregada (ej. 1,60 ≈ 60% de carga).
-                Denominador 173,33 h/mes según práctica de costeo laboral.
-              </p>
-            </div>
-          </div>
-        </section>
-
+    return (
+      <div className="space-y-6">
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Tabulador por cargo</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">{titulo}</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Bimonetario: Bs {fmtVes(totalMensualVes)}/mes
+                {totalMensualUsd !== null ? ` · ${fmtUsd(totalMensualUsd)}/mes USD` : ''}
+              </p>
+            </div>
+          </div>
           {loading ? <p className="mt-4 text-sm text-zinc-500">Cargando…</p> : null}
-          {!loading && rows.length === 0 ? (
-            <p className="mt-4 text-sm text-zinc-500">Sin filas. Ejecuta la migración 088 o pulsa «Nuevo cargo».</p>
+          {!loading && filas.length === 0 ? (
+            <p className="mt-4 text-sm text-zinc-500">{emptyMsg}</p>
           ) : null}
-          {!loading && rows.length > 0 ? (
+          {!loading && filas.length > 0 ? (
             <Table className="mt-4">
               <TableHeader>
                 <TableRow>
@@ -261,13 +244,14 @@ export default function AdminConfigNominaPage() {
                   <TableHead className="text-right">Salario base / mes</TableHead>
                   <TableHead className="text-right">Factor</TableHead>
                   <TableHead className="text-right">Cestaticket</TableHead>
-                  <TableHead className="text-right">Costo h / VES</TableHead>
+                  <TableHead className="text-right">Costo h</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => {
+                {filas.map((r) => {
                   const live = previewCosto(r);
+                  const usd = previewCostoUsd(r);
                   return (
                     <TableRow key={r.id}>
                       <TableCell>
@@ -278,14 +262,14 @@ export default function AdminConfigNominaPage() {
                           id={`cn-${r.id}`}
                           value={r.cargo_nombre}
                           onChange={(e) => patchLocal(r.id, { cargo_nombre: e.target.value })}
-                          className="border-white/10 bg-black/30 font-medium text-white"
+                          className="select-none border-white/10 bg-black/30 font-medium text-white"
                         />
                       </TableCell>
                       <TableCell>
                         <Input
                           value={r.cargo_codigo ?? ''}
                           onChange={(e) => patchLocal(r.id, { cargo_codigo: e.target.value || null })}
-                          className="border-white/10 bg-black/30 text-white"
+                          className="select-none border-white/10 bg-black/30 text-white"
                           placeholder="COD"
                         />
                       </TableCell>
@@ -294,8 +278,12 @@ export default function AdminConfigNominaPage() {
                           type="number"
                           inputMode="decimal"
                           value={r.salario_base_mensual}
-                          onChange={(e) => patchLocal(r.id, { salario_base_mensual: Number(e.target.value.replace(',', '.')) || 0 })}
-                          className="ml-auto max-w-[140px] border-white/10 bg-black/30 text-right font-mono text-white tabular-nums"
+                          onChange={(e) =>
+                            patchLocal(r.id, {
+                              salario_base_mensual: Number(e.target.value.replace(',', '.')) || 0,
+                            })
+                          }
+                          className="ml-auto max-w-[140px] select-none border-white/10 bg-black/30 text-right font-mono text-white tabular-nums"
                         />
                       </TableCell>
                       <TableCell className="text-right">
@@ -303,8 +291,12 @@ export default function AdminConfigNominaPage() {
                           type="number"
                           inputMode="decimal"
                           value={r.factor_prestacional}
-                          onChange={(e) => patchLocal(r.id, { factor_prestacional: Number(e.target.value.replace(',', '.')) || 1 })}
-                          className="ml-auto max-w-[100px] border-white/10 bg-black/30 text-right font-mono text-white tabular-nums"
+                          onChange={(e) =>
+                            patchLocal(r.id, {
+                              factor_prestacional: Number(e.target.value.replace(',', '.')) || 1,
+                            })
+                          }
+                          className="ml-auto max-w-[100px] select-none border-white/10 bg-black/30 text-right font-mono text-white tabular-nums"
                         />
                       </TableCell>
                       <TableCell className="text-right">
@@ -312,13 +304,21 @@ export default function AdminConfigNominaPage() {
                           type="number"
                           inputMode="decimal"
                           value={r.cestaticket_mensual}
-                          onChange={(e) => patchLocal(r.id, { cestaticket_mensual: Number(e.target.value.replace(',', '.')) || 0 })}
-                          className="ml-auto max-w-[120px] border-white/10 bg-black/30 text-right font-mono text-white tabular-nums"
+                          onChange={(e) =>
+                            patchLocal(r.id, {
+                              cestaticket_mensual: Number(e.target.value.replace(',', '.')) || 0,
+                            })
+                          }
+                          className="ml-auto max-w-[120px] select-none border-white/10 bg-black/30 text-right font-mono text-white tabular-nums"
                         />
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm tabular-nums text-emerald-300/95">
-                        {fmtVes(live)}
-                        <span className="mt-0.5 block text-[10px] font-normal text-zinc-500">VES/h · instantáneo</span>
+                        {fmtVes(live)} <span className="text-zinc-500">VES/h</span>
+                        {usd !== null ? (
+                          <span className="mt-0.5 block text-[10px] font-normal text-sky-400/90">
+                            {fmtUsd(usd)}/h USD
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -326,12 +326,20 @@ export default function AdminConfigNominaPage() {
                             type="button"
                             size="sm"
                             variant="elitePrimary"
-                            disabled={savingId === r.id}
+                            disabled={isSubmitting || savingId === r.id}
                             onClick={() => void saveRow(r)}
+                            className="select-none touch-manipulation"
                           >
                             Guardar
                           </Button>
-                          <Button type="button" size="sm" variant="elite" onClick={() => void deleteRow(r.id)}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="elite"
+                            disabled={isSubmitting}
+                            onClick={() => void deleteRow(r.id)}
+                            className="select-none touch-manipulation"
+                          >
                             <Trash2 className="h-4 w-4" aria-hidden />
                           </Button>
                         </div>
@@ -344,13 +352,12 @@ export default function AdminConfigNominaPage() {
           ) : null}
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Comparativa costo hora (VES)</h2>
-          <p className="mt-1 text-xs text-zinc-500">Distribución relativa entre cargos del tabulador.</p>
-          <div className="mt-4 h-[280px] w-full min-w-0">
-            {chartData.length === 0 ? (
-              <p className="text-sm text-zinc-500">Sin datos para graficar.</p>
-            ) : (
+        {chartData.length > 0 ? (
+          <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">
+              Comparativa costo hora (VES)
+            </h2>
+            <div className="mt-4 h-[240px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
@@ -382,9 +389,131 @@ export default function AdminConfigNominaPage() {
                   </defs>
                 </BarChart>
               </ResponsiveContainer>
-            )}
+            </div>
+          </section>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0A0A0F] px-4 py-8 text-zinc-200 md:px-8" style={{ backgroundColor: '#0A0A0F' }}>
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-6">
+          <div>
+            <Link href="/admin/dashboard" className="text-xs font-semibold text-sky-400 hover:text-sky-300">
+              ← Admin
+            </Link>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">
+              Nóminas bimonetarias — Personal y costos
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-500">
+              Mano de obra directa en proyectos y gasto administrativo de oficina, con alerta de eficiencia AD en
+              tiempo real.
+            </p>
+          </div>
+        </header>
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl backdrop-blur-xl">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-500/30 bg-sky-500/10">
+              <Calculator className="h-5 w-5 text-sky-400" aria-hidden />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Visualizador de fórmula</h2>
+              <p className="mt-2 text-sm text-zinc-300">
+                Costo hora total (VES) ={' '}
+                <span className="font-mono text-emerald-300/95">
+                  ((Salario base × Factor prestacional) + Cestaticket) ÷ {HORAS_MES_LEGAL}
+                </span>
+              </p>
+              <p className="mt-2 text-xs text-zinc-500">
+                Conversión USD vía tasa BCV del día{tasaBcv ? ` (${fmtVes(tasaBcv)} Bs/USD)` : ''}.
+              </p>
+            </div>
           </div>
         </section>
+
+        <Tabs defaultValue="proyectos" className="w-full">
+          <TabsList className="grid h-14 w-full max-w-3xl grid-cols-2 border border-white/10 bg-white/[0.04] p-1">
+            <TabsTrigger
+              value="proyectos"
+              className="select-none rounded-xl text-xs font-bold uppercase tracking-wide data-[state=active]:bg-white/10 data-[state=active]:text-white"
+            >
+              Mano de Obra Directa (Proyectos)
+            </TabsTrigger>
+            <TabsTrigger
+              value="oficina"
+              className="select-none rounded-xl text-xs font-bold uppercase tracking-wide data-[state=active]:bg-white/10 data-[state=active]:text-white"
+            >
+              Gasto Administrativo (Oficina)
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="proyectos" className="mt-6 space-y-6">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSubmitting || loading}
+                onClick={() => void syncGaceta()}
+                className="select-none touch-manipulation"
+              >
+                <FileJson className="mr-2 h-4 w-4" aria-hidden />
+                Sincronizar Gaceta
+              </Button>
+              <Button
+                type="button"
+                variant="elitePrimary"
+                disabled={isSubmitting}
+                onClick={() => void aplicarProyectos()}
+                className="select-none touch-manipulation"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
+                Aplicar a proyectos activos
+              </Button>
+              <Button
+                type="button"
+                variant="elite"
+                disabled={isSubmitting}
+                onClick={() => void addRow('obra')}
+                className="select-none touch-manipulation"
+              >
+                Nuevo oficio obra
+              </Button>
+            </div>
+
+            <CuadroNominaContratados titulo="Contratados activos en obra" />
+
+            {renderTabulador(
+              rowsObra,
+              'Tabulador — Mano de obra directa',
+              'Sin cargos de obra. Sincronice la Gaceta o agregue un oficio.',
+            )}
+          </TabsContent>
+
+          <TabsContent value="oficina" className="mt-6 space-y-6">
+            <KpiEficienciaAdOficina filasOficina={rowsOficina} />
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="elite"
+                disabled={isSubmitting}
+                onClick={() => void addRow('oficina')}
+                className="select-none touch-manipulation"
+              >
+                Nuevo cargo administrativo
+              </Button>
+            </div>
+
+            {renderTabulador(
+              rowsOficina,
+              'Tabulador — Gasto administrativo oficina',
+              'Sin cargos administrativos. Agregue personal de oficina (códigos fuera del tabulador obrero).',
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

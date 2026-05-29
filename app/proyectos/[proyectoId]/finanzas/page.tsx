@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import AnalisisCostosProyecto from '@/components/finanzas/AnalisisCostosProyecto';
+import FinanzasProyectoPageClient from '@/components/finanzas/FinanzasProyectoPageClient';
 import {
   moduloProyectosPageShell,
   moduloProyectosStickyHeader,
@@ -19,17 +19,17 @@ export default function ProyectoFinanzasPage({ params }: PageProps) {
           >
             ← Proyectos
           </Link>
-          <h1 style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: '8px 0 0' }}>Finanzas del proyecto</h1>
+          <h1 style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: '8px 0 0' }}>
+            Finanzas del proyecto
+          </h1>
           <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', margin: '4px 0 0' }}>
-            Análisis de mano de obra y riesgo de liquidación (referencial).
+            Abonos del cliente, capital consolidado y análisis de mano de obra.
           </p>
         </div>
       </div>
       <div className="mx-auto max-w-5xl px-4 pb-10 pt-2">
         {id ? (
-          <div className="mt-2">
-            <AnalisisCostosProyecto proyectoId={id} />
-          </div>
+          <FinanzasProyectoPageClient proyectoId={id} />
         ) : (
           <p className="mt-8 text-sm text-red-400">ID de proyecto inválido.</p>
         )}

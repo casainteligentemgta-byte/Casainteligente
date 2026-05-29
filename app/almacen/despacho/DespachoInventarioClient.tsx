@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { DespachoAlertasConfigPanel } from '@/components/almacen/DespachoAlertasConfigPanel';
 import {
   DESPACHO_ALERTAS_DEFAULT,
@@ -18,6 +19,8 @@ import {
   loadCatalogoProyectosApp,
 } from '@/lib/proyectos/proyectosUnificados';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
+import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
+import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import type { ImputacionPartidaInput } from '@/types/inventario-obra';
 
 type ProyectoRow = { id: string; nombre: string };
@@ -76,6 +79,8 @@ function DespachoCargando() {
 }
 
 export default function DespachoInventarioClient() {
+  const searchParams = useSearchParams();
+  const proyectoIdParam = searchParams.get('proyectoId')?.trim() || '';
   const [montado, setMontado] = useState(false);
   const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
   const [loadingProyectos, setLoadingProyectos] = useState(true);
@@ -88,6 +93,10 @@ export default function DespachoInventarioClient() {
   const [materialAgregar, setMaterialAgregar] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const { isSubmitting: guardando, runLocked } = useSyncSubmitLock();
+  const {
+    autorizado: logisticaAutorizada,
+    loading: cargandoContratoAd,
+  } = useContratoAdProyecto(proyectoId || undefined);
   const [alertasConfig, setAlertasConfig] = useState<DespachoAlertasConfig>({
     ...DESPACHO_ALERTAS_DEFAULT,
   });
@@ -137,6 +146,9 @@ export default function DespachoInventarioClient() {
         }
 
         setProyectos(lista);
+        if (proyectoIdParam && lista.some((p) => p.id === proyectoIdParam)) {
+          setProyectoId(proyectoIdParam);
+        }
         if (lista.length === 0) {
           setProyectosError('No hay proyectos activos en ci_proyectos.');
         } else if (apiFallo) {
@@ -150,7 +162,11 @@ export default function DespachoInventarioClient() {
         setLoadingProyectos(false);
       }
     })();
-  }, [montado]);
+  }, [montado, proyectoIdParam]);
+
+  useEffect(() => {
+    if (proyectoIdParam) setProyectoId(proyectoIdParam);
+  }, [proyectoIdParam]);
 
   const cargarStock = useCallback(async (obraId: string, filtroUbicacionId?: string) => {
     if (!obraId) {
@@ -222,6 +238,7 @@ export default function DespachoInventarioClient() {
   };
 
   const puedeGuardar =
+    logisticaAutorizada &&
     proyectoId &&
     lineas.length > 0 &&
     lineas.every((l) => {
@@ -240,6 +257,10 @@ export default function DespachoInventarioClient() {
     });
 
   const guardar = async () => {
+    if (!logisticaAutorizada) {
+      toast.error('Registre el Contrato AD del proyecto antes de despachar materiales.');
+      return;
+    }
     if (!puedeGuardar) {
       toast.error('Complete obra, destino, cantidades y partidas a descargar.');
       return;
@@ -321,6 +342,12 @@ export default function DespachoInventarioClient() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+        {proyectoId && !cargandoContratoAd && !logisticaAutorizada ? (
+          <ProyectoAdLogisticaBanner
+            proyectoId={proyectoId}
+            autorizado={logisticaAutorizada}
+          />
+        ) : null}
         <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Obra y origen</h2>
           <div className="space-y-2">
