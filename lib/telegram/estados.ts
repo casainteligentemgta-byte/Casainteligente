@@ -125,7 +125,7 @@ export function etiquetaContexto(ctx: TelegramContexto): string {
     case 'esperando_audio_bitacora':
       return 'Bitácora de obra (nota de voz)';
     case 'entrada_obra':
-      return 'Entrada de material a obra';
+      return 'Nota de entrega / entrada (depositario)';
     case 'salida_obra':
       return 'Salida de material de obra';
     case 'avance_campo':

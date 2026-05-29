@@ -9,6 +9,17 @@ export function emojiMovimiento(tipo: 'entrada' | 'salida'): string {
 export function mensajeInicioEntradaSalida(tipo: 'entrada' | 'salida'): string {
   const e = emojiMovimiento(tipo);
   const titulo = tituloMovimiento(tipo);
+  if (tipo === 'salida') {
+    return (
+      `${e} <b>${titulo}</b>\n\n` +
+      '1️⃣ Elige la obra.\n' +
+      '2️⃣ Elige el <b>capítulo</b> presupuestario.\n' +
+      '3️⃣ Envía una <b>foto</b> (se leen materiales con OCR).\n' +
+      '4️⃣ Escribe la <b>observación</b>.\n' +
+      '5️⃣ Elige el <b>almacén de origen</b> (descuento de stock).\n\n' +
+      '<code>/cancelar</code> para abortar.'
+    );
+  }
   return (
     `${e} <b>${titulo}</b>\n\n` +
     '1️⃣ Elige la obra en la lista.\n' +

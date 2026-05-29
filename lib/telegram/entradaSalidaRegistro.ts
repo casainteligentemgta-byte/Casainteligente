@@ -18,21 +18,41 @@ import {
 } from '@/lib/telegram/proyectoPicker';
 import type { TelegramPhotoSize } from '@/lib/telegram/aguaRegistro';
 import { fileIdFotoTelegramMaxResolucion } from '@/lib/telegram/aguaRegistro';
+import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
+import {
+  ejecutarDespachoTelegramSalida,
+  matchearLineasOcrSalida,
+  type LineaOcrSalida,
+} from '@/lib/almacen/despachoTelegramSalida';
+import { enviarPickerOrigenSalidaTelegram, hayAlmacenesOrigenSalida } from '@/lib/telegram/salidaOrigenPicker';
 
 const BUCKET = 'ci-proyectos-media';
 const MIN_OBS = 3;
 
 export type TipoMovimientoObra = 'entrada' | 'salida';
 
-export type PasoEntradaSalida = 'foto' | 'observacion';
+export type PasoEntradaSalida =
+  | 'capitulo'
+  | 'nuevo_capitulo'
+  | 'foto'
+  | 'observacion'
+  | 'origen';
 
 export type MetadataEntradaSalida = {
   paso?: PasoEntradaSalida;
   tipo_movimiento?: TipoMovimientoObra;
+  capitulo_id?: string;
+  capitulo_nombre?: string;
   foto_storage_path?: string;
   foto_url?: string;
   telegram_user_id?: string;
   telegram_username?: string | null;
+  lineas_ocr?: LineaOcrSalida[];
+  ocr_ok?: boolean;
+  observacion_text?: string;
+  nombre_obra?: string;
+  n_materiales_match?: number;
+  origen_ubicacion_id?: string;
 };
 
 function baseUrlApp(): string {
@@ -49,12 +69,11 @@ function meta(estado: TelegramEstado): MetadataEntradaSalida {
   return (estado.metadata ?? {}) as MetadataEntradaSalida;
 }
 
-function contextoEsEntradaSalida(ctx: string): ctx is 'entrada_obra' | 'salida_obra' {
-  return ctx === 'entrada_obra' || ctx === 'salida_obra';
+function contextoEsSalidaObra(ctx: string): ctx is 'salida_obra' {
+  return ctx === 'salida_obra';
 }
 
 export function tipoDesdeContexto(ctx: string): TipoMovimientoObra | null {
-  if (ctx === 'entrada_obra') return 'entrada';
   if (ctx === 'salida_obra') return 'salida';
   return null;
 }
@@ -71,21 +90,6 @@ function mensajeMigracion(): string {
   );
 }
 
-export async function manejarComandoEntradaTelegram(
-  supabase: SupabaseClient,
-  chatId: string,
-): Promise<void> {
-  await setTelegramContexto(supabase, chatId, {
-    contexto: 'entrada_obra',
-    proyecto_id: null,
-    metadata: { paso: 'foto', tipo_movimiento: 'entrada' },
-  });
-  await sendTelegramMessage(chatId, mensajeInicioEntradaSalida('entrada'), {
-    parse_mode: 'HTML',
-  });
-  await enviarPickerProyectosTelegram(supabase, chatId, 'entrada_obra');
-}
-
 export async function manejarComandoSalidaTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -98,6 +102,12 @@ export async function manejarComandoSalidaTelegram(
   await sendTelegramMessage(chatId, mensajeInicioEntradaSalida('salida'), {
     parse_mode: 'HTML',
   });
+  await sendTelegramMessage(
+    chatId,
+    'Tras elegir la obra podrás seleccionar el <b>capítulo</b> presupuestario (o crear uno nuevo).\n' +
+      'Si la foto permite leer materiales, se descontará stock del almacén que elijas.',
+    { parse_mode: 'HTML' },
+  );
   await enviarPickerProyectosTelegram(supabase, chatId, 'salida_obra');
 }
 
@@ -148,8 +158,13 @@ async function guardarMovimiento(params: {
   chatId: string;
   userId: string;
   username?: string | null;
+  capituloId?: string | null;
+  capituloNombre?: string | null;
+  transferenciaId?: string | null;
+  stockAplicado?: boolean;
+  lineasExtraidas?: LineaOcrSalida[] | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await params.supabase.from('ci_obra_movimientos_material').insert({
+  const row: Record<string, unknown> = {
     proyecto_id: params.proyectoId,
     tipo: params.tipo,
     foto_storage_path: params.storagePath,
@@ -158,7 +173,20 @@ async function guardarMovimiento(params: {
     chat_id: params.chatId,
     telegram_user_id: params.userId,
     telegram_username: params.username ?? null,
-  });
+    stock_aplicado: params.stockAplicado ?? false,
+  };
+  if (params.capituloId) {
+    row.capitulo_id = params.capituloId;
+    row.capitulo_nombre = params.capituloNombre?.trim() || null;
+  }
+  if (params.transferenciaId) {
+    row.transferencia_id = params.transferenciaId;
+  }
+  if (params.lineasExtraidas?.length) {
+    row.lineas_extraidas = params.lineasExtraidas;
+  }
+
+  const { error } = await params.supabase.from('ci_obra_movimientos_material').insert(row);
   if (error) {
     if (tablaMovimientosFalta(error)) return { ok: false, error: 'migration' };
     return { ok: false, error: error.message };
@@ -166,11 +194,83 @@ async function guardarMovimiento(params: {
   return { ok: true };
 }
 
-async function finalizarMovimiento(
+function lineasConMatch(lineas?: LineaOcrSalida[]): LineaOcrSalida[] {
+  return (lineas ?? []).filter((l) => l.material_id && l.match_ok);
+}
+
+function resumenLineasOcr(lineas: LineaOcrSalida[]): string {
+  const matched = lineasConMatch(lineas);
+  if (!matched.length) {
+    return 'ℹ️ No identifiqué materiales en inventario. Se guardará solo el registro fotográfico.';
+  }
+  const detalle = matched
+    .slice(0, 5)
+    .map((l) => `• ${l.material_nombre ?? l.description} × ${l.quantity}`)
+    .join('\n');
+  const extra = matched.length > 5 ? `\n… y ${matched.length - 5} más` : '';
+  return `🔍 Detecté <b>${matched.length}</b> material(es) en inventario:\n${detalle}${extra}`;
+}
+
+async function continuarTrasObservacionSalida(
   supabase: SupabaseClient,
   chatId: string,
   estado: TelegramEstado,
   observacion: string,
+): Promise<void> {
+  const metaState = meta(estado);
+  const proyectoId = estado.proyecto_id;
+  if (!proyectoId) return;
+
+  const matched = lineasConMatch(metaState.lineas_ocr);
+  const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
+
+  if (!matched.length || !metaState.capitulo_id) {
+    await finalizarMovimientoFotografico(supabase, chatId, estado, observacion, {
+      avisoStock: !matched.length ? 'sin_ocr' : 'sin_capitulo',
+    });
+    return;
+  }
+
+  const hayAlmacenes = await hayAlmacenesOrigenSalida(supabase, proyectoId);
+  if (!hayAlmacenes) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ No hay almacenes centrales o móviles configurados.',
+      { parse_mode: 'HTML' },
+    );
+    await finalizarMovimientoFotografico(supabase, chatId, estado, observacion, {
+      avisoStock: 'fallo_transferencia',
+      detalleError: 'sin almacenes de origen',
+    });
+    return;
+  }
+
+  await setTelegramContexto(supabase, chatId, {
+    metadata: {
+      ...metaState,
+      paso: 'origen',
+      observacion_text: observacion.trim(),
+      nombre_obra: nombre,
+      n_materiales_match: matched.length,
+    },
+  });
+
+  await sendTelegramMessage(chatId, resumenLineasOcr(metaState.lineas_ocr ?? []), {
+    parse_mode: 'HTML',
+  });
+  await enviarPickerOrigenSalidaTelegram(supabase, chatId, {
+    proyectoId,
+    nombreObra: nombre,
+    nMateriales: matched.length,
+  });
+}
+
+async function finalizarMovimientoFotografico(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  observacion: string,
+  opts?: { avisoStock?: 'sin_ocr' | 'sin_capitulo' | 'fallo_transferencia'; detalleError?: string },
 ): Promise<void> {
   const tipo = meta(estado).tipo_movimiento ?? tipoDesdeContexto(estado.contexto);
   const proyectoId = estado.proyecto_id;
@@ -182,20 +282,10 @@ async function finalizarMovimiento(
   if (!tipo || !proyectoId || !storagePath) {
     await sendTelegramMessage(
       chatId,
-      '❌ Registro incompleto. Reinicia con <code>/entrada</code> o <code>/salida</code>.',
+      '❌ Registro incompleto. Reinicia con <code>/salida</code>.',
       { parse_mode: 'HTML' },
     );
     await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
-    return;
-  }
-
-  const obs = observacion.trim();
-  if (obs.length < MIN_OBS) {
-    await sendTelegramMessage(
-      chatId,
-      `✏️ La observación es muy corta (mín. ${MIN_OBS} caracteres). Describe lo visto en la foto.`,
-      { parse_mode: 'HTML' },
-    );
     return;
   }
 
@@ -205,10 +295,14 @@ async function finalizarMovimiento(
     tipo,
     storagePath,
     publicUrl,
-    observacion: obs,
+    observacion: observacion.trim(),
     chatId,
     userId,
     username,
+    capituloId: meta(estado).capitulo_id ?? null,
+    capituloNombre: meta(estado).capitulo_nombre ?? null,
+    stockAplicado: false,
+    lineasExtraidas: meta(estado).lineas_ocr ?? null,
   });
 
   if (!guardado.ok) {
@@ -222,13 +316,148 @@ async function finalizarMovimiento(
 
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
   const link = `${baseUrlApp()}/proyectos/modulo/${proyectoId}/control-obra`;
+  const cap = meta(estado).capitulo_nombre?.trim();
+  const capLine = cap ? `\n📂 Capítulo: <b>${cap}</b>` : '';
+
+  let aviso = '';
+  if (opts?.avisoStock === 'sin_ocr') {
+    aviso = '\n\n⚠️ Sin descuento de stock (no se leyeron materiales del inventario).';
+  } else if (opts?.avisoStock === 'sin_capitulo') {
+    aviso = '\n\n⚠️ Sin descuento de stock (capítulo sin partidas).';
+  } else if (opts?.avisoStock === 'fallo_transferencia') {
+    aviso = `\n\n⚠️ Sin descuento de stock: ${opts.detalleError ?? 'error en transferencia'}.`;
+  }
 
   await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
   await sendTelegramMessage(
     chatId,
-    mensajeRegistroCompleto({ tipo, nombreObra: nombre, observacion: obs, linkObra: link }),
+    mensajeRegistroCompleto({ tipo, nombreObra: nombre, observacion: observacion.trim(), linkObra: link })
+      .replace('\n\n📝', `${capLine}\n\n📝`) + aviso,
     { parse_mode: 'HTML' },
   );
+}
+
+/** Callback del picker de almacén origen en /salida. */
+export async function manejarOrigenSalidaTelegram(params: {
+  supabase: SupabaseClient;
+  chatId: string;
+  origenUbicacionId: string;
+}): Promise<void> {
+  const estado = await getTelegramEstado(params.supabase, params.chatId);
+  const metaState = meta(estado);
+  const proyectoId = estado.proyecto_id;
+  const observacion = metaState.observacion_text?.trim() ?? '';
+  const storagePath = metaState.foto_storage_path;
+  const capituloId = metaState.capitulo_id;
+
+  if (!proyectoId || !storagePath || !capituloId || observacion.length < MIN_OBS) {
+    await sendTelegramMessage(params.chatId, '❌ Datos incompletos. Reinicia con <code>/salida</code>.', {
+      parse_mode: 'HTML',
+    });
+    await setTelegramContexto(params.supabase, params.chatId, { contexto: 'menu', metadata: {} });
+    return;
+  }
+
+  const nombre = (await nombreProyectoTelegram(params.supabase, proyectoId)) ?? 'Obra';
+  const lineasOcr = metaState.lineas_ocr ?? [];
+  const matched = lineasConMatch(lineasOcr);
+
+  if (!matched.length) {
+    await finalizarMovimientoFotografico(params.supabase, params.chatId, estado, observacion, {
+      avisoStock: 'sin_ocr',
+    });
+    return;
+  }
+
+  const resultado = await ejecutarDespachoTelegramSalida({
+    supabase: params.supabase,
+    proyectoId,
+    nombreObra: nombre,
+    capituloId,
+    origenUbicacionId: params.origenUbicacionId,
+    lineasOcr: matched,
+    observacion,
+  });
+
+  if (!resultado.ok) {
+    await finalizarMovimientoFotografico(params.supabase, params.chatId, estado, observacion, {
+      avisoStock: 'fallo_transferencia',
+      detalleError: resultado.error,
+    });
+    return;
+  }
+
+  const userId = metaState.telegram_user_id ?? params.chatId;
+  const guardado = await guardarMovimiento({
+    supabase: params.supabase,
+    proyectoId,
+    tipo: 'salida',
+    storagePath,
+    publicUrl: metaState.foto_url ?? null,
+    observacion,
+    chatId: params.chatId,
+    userId,
+    username: metaState.telegram_username ?? null,
+    capituloId,
+    capituloNombre: metaState.capitulo_nombre ?? null,
+    transferenciaId: resultado.transferenciaId,
+    stockAplicado: true,
+    lineasExtraidas: lineasOcr,
+  });
+
+  if (!guardado.ok) {
+    await sendTelegramMessage(
+      params.chatId,
+      guardado.error === 'migration' ? mensajeMigracion() : `❌ ${guardado.error}`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  const link = `${baseUrlApp()}/proyectos/modulo/${proyectoId}/control-obra`;
+  const cap = metaState.capitulo_nombre?.trim();
+  const capLine = cap ? `\n📂 Capítulo: <b>${cap}</b>` : '';
+
+  await setTelegramContexto(params.supabase, params.chatId, { contexto: 'menu', metadata: {} });
+  await sendTelegramMessage(
+    params.chatId,
+    mensajeRegistroCompleto({
+      tipo: 'salida',
+      nombreObra: nombre,
+      observacion,
+      linkObra: link,
+    }).replace(
+      '\n\n📝',
+      `${capLine}\n\n📦 Transferencia <b>${resultado.codigo}</b> · ${resultado.nLineas} material(es)\n✅ Stock descontado\n\n📝`,
+    ),
+    { parse_mode: 'HTML' },
+  );
+}
+
+async function finalizarMovimiento(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  observacion: string,
+): Promise<void> {
+  const tipo = meta(estado).tipo_movimiento ?? tipoDesdeContexto(estado.contexto);
+  const obs = observacion.trim();
+
+  if (obs.length < MIN_OBS) {
+    await sendTelegramMessage(
+      chatId,
+      `✏️ La observación es muy corta (mín. ${MIN_OBS} caracteres). Describe lo visto en la foto.`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  if (tipo === 'salida') {
+    await continuarTrasObservacionSalida(supabase, chatId, estado, obs);
+    return;
+  }
+
+  await finalizarMovimientoFotografico(supabase, chatId, estado, obs);
 }
 
 export type ResultadoEntradaSalida = { handled: boolean; motivo?: string };
@@ -242,7 +471,7 @@ export async function manejarFotoEntradaSalidaTelegram(params: {
   caption?: string;
 }): Promise<ResultadoEntradaSalida> {
   const estado = await getTelegramEstado(params.supabase, params.chatId);
-  if (!contextoEsEntradaSalida(estado.contexto)) {
+  if (!contextoEsSalidaObra(estado.contexto)) {
     return { handled: false };
   }
 
@@ -284,6 +513,22 @@ export async function manejarFotoEntradaSalidaTelegram(params: {
       ext,
     );
 
+    let lineasOcr: LineaOcrSalida[] = [];
+    let ocrOk = false;
+    if (tipo === 'salida') {
+      try {
+        const { data } = await extractPurchaseInvoiceFromFile({
+          buffer,
+          mimeType,
+          fileName: `salida-obra.${ext}`,
+        });
+        lineasOcr = await matchearLineasOcrSalida(params.supabase, data.items ?? []);
+        ocrOk = lineasConMatch(lineasOcr).length > 0;
+      } catch (err) {
+        console.warn('[telegram salida OCR]', err);
+      }
+    }
+
     const metadataActualizado: MetadataEntradaSalida = {
       ...meta(estado),
       paso: 'observacion',
@@ -291,6 +536,8 @@ export async function manejarFotoEntradaSalidaTelegram(params: {
       foto_url: publicUrl ?? undefined,
       telegram_user_id: params.userId,
       telegram_username: params.username ?? null,
+      lineas_ocr: lineasOcr,
+      ocr_ok: ocrOk,
     };
 
     const caption = params.caption?.trim();
@@ -307,6 +554,11 @@ export async function manejarFotoEntradaSalidaTelegram(params: {
     await setTelegramContexto(params.supabase, params.chatId, {
       metadata: metadataActualizado,
     });
+
+    if (tipo === 'salida' && lineasOcr.length) {
+      await sendTelegramMessage(params.chatId, resumenLineasOcr(lineasOcr), { parse_mode: 'HTML' });
+    }
+
     await sendTelegramMessage(params.chatId, mensajePedirObservacion(tipo), {
       parse_mode: 'HTML',
     });
@@ -328,11 +580,20 @@ export async function manejarTextoObservacionEntradaSalida(params: {
   texto: string;
 }): Promise<ResultadoEntradaSalida> {
   const estado = await getTelegramEstado(params.supabase, params.chatId);
-  if (!contextoEsEntradaSalida(estado.contexto)) {
+  if (!contextoEsSalidaObra(estado.contexto)) {
     return { handled: false };
   }
 
   const paso = meta(estado).paso;
+  if (paso === 'origen') {
+    await sendTelegramMessage(
+      params.chatId,
+      '📦 Elige el <b>almacén de origen</b> con los botones del mensaje anterior.',
+      { parse_mode: 'HTML' },
+    );
+    return { handled: true, motivo: 'esperando_origen' };
+  }
+
   if (paso !== 'observacion' || !meta(estado).foto_storage_path) {
     if (paso === 'foto' && estado.proyecto_id) {
       await sendTelegramMessage(

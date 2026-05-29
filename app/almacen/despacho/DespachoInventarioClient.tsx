@@ -11,7 +11,9 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2, Package, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DistribucionDespachoPartidas, type DistribucionDespachoState } from '@/components/almacen/DistribucionDespachoPartidas';
-import DestinoObraDespachoSelect from '@/components/almacen/DestinoObraDespachoSelect';
+import DestinoObraDespachoSelect, {
+  type ModoDestinoDespacho,
+} from '@/components/almacen/DestinoObraDespachoSelect';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -46,6 +48,8 @@ type LineaDespacho = {
   cantidad: number;
   maxStock: number;
   destinoId: string;
+  destinoModo: ModoDestinoDespacho;
+  destinoEntidadId: string;
   destinoPartidaKey: string;
   distribucion: DistribucionDespachoState;
 };
@@ -226,6 +230,8 @@ export default function DespachoInventarioClient() {
         cantidad: 1,
         maxStock: hit.cantidad_disponible,
         destinoId: '',
+        destinoModo: 'partida_lulo',
+        destinoEntidadId: '',
         destinoPartidaKey: '',
         distribucion: emptyDistribucion(),
       },
@@ -237,6 +243,16 @@ export default function DespachoInventarioClient() {
     setLineas((prev) => prev.filter((l) => l.lineId !== id));
   };
 
+  const destinoCompleto = (l: LineaDespacho): boolean => {
+    if (l.destinoModo === 'partida_lulo') {
+      return Boolean(l.destinoPartidaKey && l.destinoId);
+    }
+    if (l.destinoModo === 'otra_entidad') {
+      return Boolean(l.destinoEntidadId && l.destinoId);
+    }
+    return Boolean(l.destinoId);
+  };
+
   const puedeGuardar =
     logisticaAutorizada &&
     proyectoId &&
@@ -245,7 +261,7 @@ export default function DespachoInventarioClient() {
       const mov = l.distribucion.totalImputado;
       return (
         l.origen_ubicacion_id &&
-        l.destinoId &&
+        destinoCompleto(l) &&
         l.origen_ubicacion_id !== l.destinoId &&
         l.cantidad > 0 &&
         mov > 0 &&
@@ -269,7 +285,7 @@ export default function DespachoInventarioClient() {
       try {
         const porRuta = new Map<string, LineaDespacho[]>();
         for (const l of lineas) {
-          const rutaKey = `${l.origen_ubicacion_id}:${l.destinoId}`;
+          const rutaKey = `${l.origen_ubicacion_id}:${l.destinoId}:${l.destinoModo}`;
           const g = porRuta.get(rutaKey) ?? [];
           g.push(l);
           porRuta.set(rutaKey, g);
@@ -279,6 +295,7 @@ export default function DespachoInventarioClient() {
         for (const [, grupo] of Array.from(porRuta.entries())) {
           const origenUbicacionId = grupo[0]!.origen_ubicacion_id;
           const destinoUbicacionId = grupo[0]!.destinoId;
+          const esSalidaObra = grupo.every((l) => l.destinoModo !== 'otra_entidad');
           const res = await fetch('/api/almacen/transferencias', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -286,7 +303,7 @@ export default function DespachoInventarioClient() {
               origen_ubicacion_id: origenUbicacionId,
               destino_ubicacion_id: destinoUbicacionId,
               ci_proyecto_id: proyectoId,
-              tipo_movimiento: 'salida_obra',
+              tipo_movimiento: esSalidaObra ? 'salida_obra' : 'transferencia',
               observaciones,
               lineas: grupo.map((l) => ({
                 material_id: l.material_id,
@@ -335,7 +352,8 @@ export default function DespachoInventarioClient() {
           <div>
             <h1 className="text-lg font-bold">Despacho a obra</h1>
             <p className="text-xs text-zinc-500">
-              Agregue el material, elija destino (partidas filtradas por APU) y distribuya cantidades
+              Agregue el material, elija destino (partida Lulo, almacén en obra u otra entidad) y
+              distribuya cantidades por partida presupuestaria.
             </p>
           </div>
         </div>
@@ -565,8 +583,35 @@ export default function DespachoInventarioClient() {
                   proyectoId={proyectoId}
                   materialId={linea.material_id}
                   materialNombre={linea.nombre}
+                  modo={linea.destinoModo}
+                  entidadId={linea.destinoEntidadId}
                   ubicacionId={linea.destinoId}
                   partidaKey={linea.destinoPartidaKey}
+                  onModoChange={(modo) => {
+                    setLineas((prev) =>
+                      prev.map((l) =>
+                        l.lineId === linea.lineId
+                          ? {
+                              ...l,
+                              destinoModo: modo,
+                              destinoEntidadId: '',
+                              destinoId: '',
+                              destinoPartidaKey: '',
+                              distribucion: emptyDistribucion(),
+                            }
+                          : l,
+                      ),
+                    );
+                  }}
+                  onEntidadChange={(id) => {
+                    setLineas((prev) =>
+                      prev.map((l) =>
+                        l.lineId === linea.lineId
+                          ? { ...l, destinoEntidadId: id, destinoId: '', distribucion: emptyDistribucion() }
+                          : l,
+                      ),
+                    );
+                  }}
                   onUbicacionChange={(id) => {
                     if (id && id === linea.origen_ubicacion_id) {
                       toast.error('Origen y destino no pueden ser el mismo almacén');
@@ -592,7 +637,7 @@ export default function DespachoInventarioClient() {
                 />
               </div>
 
-              {proyectoId && linea.destinoId && linea.cantidad > 0 ? (
+              {proyectoId && destinoCompleto(linea) && linea.cantidad > 0 ? (
                 <DistribucionDespachoPartidas
                   proyectoId={proyectoId}
                   destinoId={linea.destinoId}
@@ -620,8 +665,8 @@ export default function DespachoInventarioClient() {
                 />
               ) : linea.cantidad > 0 ? (
                 <p className="text-xs text-amber-400/90">
-                  Elija el destino (almacén o partida Lulo) para ver las partidas que llevan este
-                  material y distribuir cantidades.
+                  Elija el tipo de destino (partida Lulo, almacén en obra u otra entidad) para
+                  distribuir cantidades al presupuesto.
                 </p>
               ) : null}
             </div>

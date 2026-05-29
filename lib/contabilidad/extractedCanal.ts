@@ -15,6 +15,10 @@ export type ExtractedCanalHeader = {
   items?: ExtractedCanalItem[];
   modelUsed?: string;
   fromGemini?: boolean;
+  /** nota_entrega_telegram cuando el depositario registró solo la nota de entrega. */
+  document_kind?: string;
+  /** La factura fiscal aún no fue cargada por contabilidad. */
+  factura_pendiente?: boolean;
 };
 
 export type LineaFacturaCanalForm = {

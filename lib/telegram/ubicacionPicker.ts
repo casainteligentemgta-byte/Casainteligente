@@ -10,6 +10,10 @@ import {
 } from '@/lib/almacen/ubicacionesInventario';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import {
+  esNotaEntregaExtracted,
+  mensajeNotaEntregaFinalizada,
+} from '@/lib/telegram/notaEntregaRegistro';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 
 const PREFIX_SEL = 'ub:';
@@ -82,17 +86,25 @@ function buildKeyboard(
 export async function enviarPickerUbicacionesTelegram(
   supabase: SupabaseClient,
   chatId: string,
-  params: { pendingId: string; proyectoId: string; nombreObra: string; page?: number },
+  params: {
+    pendingId: string;
+    proyectoId: string;
+    nombreObra: string;
+    page?: number;
+    esNotaEntrega?: boolean;
+  },
 ): Promise<void> {
   await asegurarUbicacionObra(supabase, params.proyectoId, params.nombreObra);
 
   await setTelegramContexto(supabase, chatId, {
-    contexto: 'factura',
+    contexto: params.esNotaEntrega ? 'entrada_obra' : 'factura',
     pending_factura_id: params.pendingId,
     proyecto_id: params.proyectoId,
     metadata: {
       factura_picker_proyecto_id: params.proyectoId,
       factura_picker_nombre_obra: params.nombreObra,
+      es_nota_entrega: params.esNotaEntrega ?? false,
+      ...(params.esNotaEntrega ? { flujo: 'nota_entrega' as const } : {}),
     },
   });
 
@@ -174,6 +186,37 @@ export async function manejarCallbackUbicacionTelegram(
 
   const link = linkConfirmarCompraTelegram(pendingId);
   await answerCallbackQuery(params.callbackId, String(ubi.nombre));
+
+  const esNotaEntrega = Boolean(estado.metadata?.es_nota_entrega);
+  const { data: pendiente } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('extracted')
+    .eq('id', pendingId)
+    .maybeSingle();
+  const extracted = (pendiente?.extracted ?? {}) as Record<string, unknown>;
+  const notaEntrega = esNotaEntrega || esNotaEntregaExtracted(extracted);
+
+  if (notaEntrega) {
+    const proveedor = String(extracted.supplier_name ?? 'Proveedor');
+    const nItems = Array.isArray(extracted.items) ? extracted.items.length : 0;
+    await setTelegramContexto(supabase, params.chatId, {
+      contexto: 'menu',
+      pending_factura_id: null,
+      metadata: {},
+    });
+    await sendTelegramMessage(
+      params.chatId,
+      mensajeNotaEntregaFinalizada({
+        proveedor,
+        ubicacionNombre: String(ubi.nombre),
+        nItems,
+        pendingId,
+      }),
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
+
   await sendTelegramMessage(
     params.chatId,
     `✅ <b>Almacén:</b> ${ubi.nombre}\n\n` +

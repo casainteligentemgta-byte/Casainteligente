@@ -18,6 +18,8 @@ export type ComandoTelegramResult = {
   comandoAgua?: boolean;
   comandoEntrada?: boolean;
   comandoSalida?: boolean;
+  /** Lista compras ya registradas pendientes de ingreso físico a almacén. */
+  comandoIngresoAlmacen?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -43,7 +45,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
-        '• /entrada — lista de facturas pendientes por ingresar a almacén\n' +
+        '• /entrada — nota de entrega: proveedor + productos → cola de compras\n' +
+        '• /ingreso — facturas ya cargadas pendientes de ingreso a almacén\n' +
         '• /salida — foto + detalle de material que egresa\n' +
         '• /avance — reporte numérico diario de partida\n' +
         '• /memoria — memoria descriptiva: foto de avance por partida\n' +
@@ -64,8 +67,9 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/stock cemento — buscar stock por nombre (parcial)\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
-        '/entrada — facturas pendientes de ingreso a almacén\n' +
-        '/salida — material que egresa de la obra (foto + texto)\n' +
+        '/entrada — nota de entrega (depositario → cola de compras)\n' +
+        '/ingreso — facturas pendientes de ingreso físico a almacén\n' +
+        '/salida — egreso de material (capítulo + foto + almacén origen + stock)\n' +
         '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +
@@ -134,8 +138,12 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoAgua: true };
   }
 
-  if (cmd === '/entrada') {
+  if (cmd === '/entrada' || cmd === '/nota') {
     return { handled: true, comandoEntrada: true };
+  }
+
+  if (cmd === '/ingreso') {
+    return { handled: true, comandoIngresoAlmacen: true };
   }
 
   if (cmd === '/salida') {

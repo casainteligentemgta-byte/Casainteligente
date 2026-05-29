@@ -31,6 +31,7 @@ import {
   type FilaFacturaCanal,
   type FiltrosFacturaCanal,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
+import { esNotaEntregaExtracted } from '@/lib/telegram/notaEntregaRegistro';
 
 type Pendiente = PendienteCanal;
 
@@ -511,10 +512,11 @@ export default function FacturasCanalClient() {
               <ol className="text-left text-sm text-zinc-500 space-y-2 max-w-md mx-auto list-decimal pl-5">
                 <li>Abre el bot de Telegram de Casa Inteligente.</li>
                 <li>
-                  Envía <span className="font-mono text-sky-300/90">/factura</span> o{' '}
-                  <span className="font-mono text-sky-300/90">/facturas</span>.
+                  Envía <span className="font-mono text-sky-300/90">/entrada</span> (nota de entrega del
+                  depositario) o{' '}
+                  <span className="font-mono text-sky-300/90">/factura</span> (factura completa).
                 </li>
-                <li>Adjunta la foto o PDF de la factura (cámara, fototeca o archivo).</li>
+                <li>Adjunta la foto o PDF del documento (cámara, fototeca o archivo).</li>
                 <li>Vuelve aquí y pulsa Actualizar; la factura aparecerá en unos segundos.</li>
               </ol>
               {estadoCanal ? (
@@ -595,6 +597,11 @@ export default function FacturasCanalClient() {
                   <p className="text-sm font-semibold">
                     {p.extracted?.invoice_number ? `#${p.extracted.invoice_number}` : 'Sin número'} ·{' '}
                     {p.extracted?.supplier_name ?? 'Proveedor'}
+                    {esNotaEntregaExtracted(p.extracted as Record<string, unknown> | null) ? (
+                      <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-200">
+                        Nota entrega · factura pendiente
+                      </span>
+                    ) : null}
                   </p>
                   <p className="text-xs text-zinc-500 mt-1">
                     <span className="text-violet-300/90 uppercase">{p.estado}</span>

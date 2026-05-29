@@ -5,6 +5,7 @@ import {
   etiquetaUbicacionSelector,
   listarArbolUbicacionesInventario,
   listarUbicacionesParaSelector,
+  listarUbicacionesPorEntidad,
 } from '@/lib/almacen/ubicacionesInventario';
 import type { TipoUbicacion } from '@/types/inventario-obra';
 
@@ -34,6 +35,8 @@ export async function GET(req: Request) {
   const soloActivas = url.searchParams.get('activo') !== 'false';
   const tipo = parseTipo(url.searchParams.get('tipo'));
   const proyectoId = url.searchParams.get('proyecto_id')?.trim() || undefined;
+  const entidadId = url.searchParams.get('entidad_id')?.trim() || undefined;
+  const excluirProyectoId = url.searchParams.get('excluir_proyecto_id')?.trim() || undefined;
   const flat = url.searchParams.get('flat') === '1';
 
   if (url.searchParams.get('tipo') && !tipo) {
@@ -47,11 +50,15 @@ export async function GET(req: Request) {
 
   try {
     if (flat) {
-      const ubicaciones = await listarUbicacionesParaSelector(supabase, {
-        soloActivas,
-        tipo,
-        proyectoId,
-      });
+      const ubicaciones = entidadId
+        ? await listarUbicacionesPorEntidad(supabase, entidadId, {
+            excluirProyectoId,
+          })
+        : await listarUbicacionesParaSelector(supabase, {
+            soloActivas,
+            tipo,
+            proyectoId,
+          });
       return NextResponse.json({
         ok: true,
         ubicaciones: ubicaciones.map((u, i, arr) => ({

@@ -5,7 +5,6 @@ import {
 } from '@/lib/telegram/botApi';
 import type { TelegramContexto } from '@/lib/telegram/estados';
 import { etiquetaContexto, setTelegramContexto } from '@/lib/telegram/estados';
-import { prepararEntradaSalidaTrasObra } from '@/lib/telegram/entradaSalidaRegistro';
 import {
   loadCatalogoProyectosApp,
   type ProyectoCatalogo,
@@ -85,7 +84,7 @@ function tituloPicker(modo: ProyectoPickerModo): string {
     case 'esperando_audio_bitacora':
       return '📋 <b>Elige la obra</b> para la bitácora:';
     case 'entrada_obra':
-      return '📥 <b>Elige la obra</b> (entrada de material):';
+      return '📥 <b>Elige la obra</b> (nota de entrega / entrada):';
     case 'salida_obra':
       return '📤 <b>Elige la obra</b> (salida de material):';
     case 'factura_compra':
@@ -252,15 +251,17 @@ export async function manejarCallbackProyectoTelegram(
     return true;
   }
 
-  if (parsed.modo === 'entrada_obra' || parsed.modo === 'salida_obra') {
-    const tipo = parsed.modo === 'entrada_obra' ? 'entrada' : 'salida';
-    await prepararEntradaSalidaTrasObra(
-      supabase,
-      params.chatId,
-      parsed.proyectoId,
-      tipo,
-    );
+  if (parsed.modo === 'entrada_obra') {
     await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { prepararNotaEntregaTrasObra } = await import('@/lib/telegram/notaEntregaRegistro');
+    await prepararNotaEntregaTrasObra(supabase, params.chatId, parsed.proyectoId);
+    return true;
+  }
+
+  if (parsed.modo === 'salida_obra') {
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { enviarPickerCapitulosSalidaTelegram } = await import('@/lib/telegram/salidaCapituloPicker');
+    await enviarPickerCapitulosSalidaTelegram(supabase, params.chatId, parsed.proyectoId);
     return true;
   }
 

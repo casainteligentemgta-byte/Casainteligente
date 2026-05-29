@@ -47,8 +47,14 @@ import {
 import {
   manejarComandoSalidaTelegram,
   manejarFotoEntradaSalidaTelegram,
+  manejarOrigenSalidaTelegram,
   manejarTextoObservacionEntradaSalida,
 } from '@/lib/telegram/entradaSalidaRegistro';
+import {
+  manejarComandoEntradaTelegram,
+  manejarFotoNotaEntregaTelegram,
+  manejarTextoProveedorNotaEntrega,
+} from '@/lib/telegram/notaEntregaRegistro';
 import {
   esCallbackEntradaCompra,
   manejarCallbackEntradaCompraTelegram,
@@ -68,6 +74,15 @@ import {
   esCallbackUbicacion,
   manejarCallbackUbicacionTelegram,
 } from '@/lib/telegram/ubicacionPicker';
+import {
+  esCallbackSalidaCapitulo,
+  manejarCallbackSalidaCapituloTelegram,
+  manejarTextoNuevoCapituloSalida,
+} from '@/lib/telegram/salidaCapituloPicker';
+import {
+  esCallbackSalidaOrigen,
+  manejarCallbackSalidaOrigenTelegram,
+} from '@/lib/telegram/salidaOrigenPicker';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
@@ -171,6 +186,11 @@ async function aplicarComando(
   }
 
   if (cmd.comandoEntrada) {
+    await manejarComandoEntradaTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoIngresoAlmacen) {
     await manejarComandoEntradaComprasTelegram(supabase, chatId);
     return;
   }
@@ -289,6 +309,35 @@ export async function handleTelegramCallbackQuery(
 
   try {
     const userId = String(cq.from.id);
+
+    if (esCallbackSalidaCapitulo(cq.data)) {
+      const handledSalidaCap = await manejarCallbackSalidaCapituloTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledSalidaCap) {
+        return NextResponse.json({ ok: true, callback: 'salida_capitulo' });
+      }
+    }
+
+    if (esCallbackSalidaOrigen(cq.data)) {
+      const handledSalidaOrigen = await manejarCallbackSalidaOrigenTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        onOrigenSeleccionado: async (supabase, p) => {
+          await manejarOrigenSalidaTelegram({
+            supabase,
+            chatId: p.chatId,
+            origenUbicacionId: p.origenUbicacionId,
+          });
+        },
+      });
+      if (handledSalidaOrigen) {
+        return NextResponse.json({ ok: true, callback: 'salida_origen' });
+      }
+    }
 
     if (esCallbackUbicacion(cq.data)) {
       const handledUb = await manejarCallbackUbicacionTelegram(admin.client, {
@@ -461,6 +510,27 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (texto && !texto.startsWith('/')) {
+      const notaProveedor = await manejarTextoProveedorNotaEntrega({
+        supabase,
+        chatId,
+        texto,
+      });
+      if (notaProveedor.handled) {
+        return NextResponse.json({
+          ok: true,
+          nota_entrega: notaProveedor.motivo ?? true,
+        });
+      }
+
+      const nuevoCapSalida = await manejarTextoNuevoCapituloSalida({
+        supabase,
+        chatId,
+        texto,
+      });
+      if (nuevoCapSalida) {
+        return NextResponse.json({ ok: true, salida_capitulo_nuevo: true });
+      }
+
       const obsEntradaSalida = await manejarTextoObservacionEntradaSalida({
         supabase,
         chatId,
@@ -542,6 +612,20 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (msg.photo?.length) {
+      const fotoNotaEntrega = await manejarFotoNotaEntregaTelegram({
+        supabase,
+        chatId,
+        chatLabel: label,
+        photo: msg.photo,
+        telegramMessageId: String(msg.message_id),
+      });
+      if (fotoNotaEntrega.handled) {
+        return NextResponse.json({
+          ok: true,
+          nota_entrega: fotoNotaEntrega.motivo ?? true,
+        });
+      }
+
       const fotoEntradaSalida = await manejarFotoEntradaSalidaTelegram({
         supabase,
         chatId,

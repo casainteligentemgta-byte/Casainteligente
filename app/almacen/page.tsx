@@ -97,6 +97,7 @@ function categoriaCoincideFiltro(item: InventoryItem, filtro: string): boolean {
 }
 
 const NAV_ALMACEN = [
+    { href: '/almacen/movimientos', label: 'Movimientos', icon: History, className: 'border-violet-500/35 text-violet-200' },
     { href: '/almacen/kardex', label: 'Kardex', icon: History, className: 'border-zinc-800 text-zinc-300' },
     { href: '/almacen/maestros', label: 'Maestros', icon: Settings2, className: 'border-zinc-800 text-zinc-300' },
     { href: null, label: 'Compartir', icon: Share2, className: 'border-zinc-800 text-zinc-300', action: 'share' as const },

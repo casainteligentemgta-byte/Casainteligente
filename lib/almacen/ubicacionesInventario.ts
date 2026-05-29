@@ -167,6 +167,55 @@ export async function listarUbicacionesParaSelector(
   });
 }
 
+/** Ubicaciones de destino para transferencias a otra entidad (almacenes + obras de sus proyectos). */
+export async function listarUbicacionesPorEntidad(
+  supabase: SupabaseClient,
+  entidadId: string,
+  opts?: { excluirProyectoId?: string },
+): Promise<UbicacionInventario[]> {
+  const eid = entidadId.trim();
+  if (!eid) return [];
+
+  const { data: proys, error: pErr } = await supabase
+    .from('ci_proyectos')
+    .select('id, nombre')
+    .eq('entidad_id', eid)
+    .order('nombre');
+  if (pErr?.code === '42P01') return [];
+  if (pErr) throw new Error(pErr.message);
+
+  const proyectoIds = new Set(
+    (proys ?? [])
+      .map((p) => String(p.id))
+      .filter((id) => !opts?.excluirProyectoId || id !== opts.excluirProyectoId),
+  );
+
+  const todas = await listarUbicacionesInventario(supabase, { soloActivas: true });
+  propagarObraIdFlat(todas);
+
+  const almacenes = todas.filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil');
+  const obrasEntidad = todas.filter((u) => u.obra_id && proyectoIds.has(u.obra_id));
+
+  const byId = new Map<string, UbicacionInventario>();
+  for (const u of [...almacenes, ...obrasEntidad]) {
+    byId.set(u.id, u);
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    const order: Record<TipoUbicacion, number> = {
+      almacen_central: 0,
+      almacen_movil: 1,
+      obra: 2,
+      cuarentena: 3,
+      garantias: 4,
+    };
+    const ta = order[a.tipo] ?? 9;
+    const tb = order[b.tipo] ?? 9;
+    if (ta !== tb) return ta - tb;
+    return a.nombre.localeCompare(b.nombre, 'es');
+  });
+}
+
 /** Crea o actualiza inv_ubicacion vinculada a un depósito físico (Maestros → Depósitos). */
 export async function asegurarUbicacionDeposito(
   supabase: SupabaseClient,
