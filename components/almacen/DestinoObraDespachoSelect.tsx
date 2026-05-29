@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PartidaDespachoFila, UbicacionInventario } from '@/types/inventario-obra';
+import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 
 const selectClass =
   'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50';
@@ -241,21 +242,11 @@ export default function DestinoObraDespachoSelect({
 
         {ubicaciones.length > 0 ? (
           <optgroup label="Almacenes / ubicaciones" className="bg-[#0A0A0F] text-zinc-100">
-            {ubicaciones.map((u) => {
-              const tipo =
-                u.tipo === 'almacen_central'
-                  ? 'Central'
-                  : u.tipo === 'almacen_movil'
-                    ? 'Móvil'
-                    : u.tipo === 'obra'
-                      ? 'Obra'
-                      : u.tipo;
-              return (
-                <option key={u.id} value={`ub:${u.id}`} className="bg-[#0A0A0F] text-zinc-100">
-                  {u.nombre} ({tipo})
-                </option>
-              );
-            })}
+            {ubicaciones.map((u) => (
+              <option key={u.id} value={`ub:${u.id}`} className="bg-[#0A0A0F] text-zinc-100">
+                {labelUbicacionOpcion(u)}
+              </option>
+            ))}
           </optgroup>
         ) : null}
 

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
+import { ejecutarFastTrackFacturaCanal } from '@/lib/canal/ejecutarFastTrackFactura';
 import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
@@ -146,6 +147,34 @@ export async function processInvoiceFromCanal(params: {
     })
     .eq('id', params.pendingId);
 
+  const invData = extracted as {
+    invoice_number?: string;
+    supplier_name?: string;
+    supplier_rif?: string;
+    total_amount?: number | null;
+    items?: unknown[];
+    confidence_score?: number;
+  };
+
+  let fastTrackMsg = '';
+  try {
+    const ft = await ejecutarFastTrackFacturaCanal(supabase, params.pendingId, {
+      invoice_number: String(invData.invoice_number ?? ''),
+      supplier_rif: String(invData.supplier_rif ?? ''),
+      supplier_name: String(invData.supplier_name ?? ''),
+      date: String((extracted as { date?: string }).date ?? ''),
+      total_amount: invData.total_amount ?? null,
+      items: (invData.items ?? []) as import('@/lib/almacen/extractPurchaseInvoiceGemini').ExtractedInvoiceItem[],
+      confidence_score: invData.confidence_score,
+    });
+    if (ft.aplicado) {
+      fastTrackMsg =
+        `\n⚡ <b>Fast-Track</b> (${ft.confidenceScore?.toFixed(0)}% confianza): aprobado_sistema e ingreso a inventario.`;
+    }
+  } catch (ftErr) {
+    console.warn('[processInvoiceFromCanal] fast-track omitido:', ftErr);
+  }
+
   await prog?.reportar(100, 'Completado');
 
   const nItems = Array.isArray(inv.items) ? inv.items.length : 0;
@@ -154,8 +183,9 @@ export async function processInvoiceFromCanal(params: {
     `🏢 ${inv.supplier_name ?? 'Proveedor'}\n` +
     `🆔 RIF: ${inv.supplier_rif ?? '—'}\n` +
     `💰 Total: ${inv.total_amount != null ? `${inv.total_amount} Bs` : '—'}\n` +
-    `📦 Líneas: ${nItems}\n\n` +
-    `<a href="${link}">Abrir en Casa Inteligente</a>`;
+    `📦 Líneas: ${nItems}\n` +
+    fastTrackMsg +
+    `\n\n<a href="${link}">Abrir en Casa Inteligente</a>`;
 
   const html =
     params.canal === 'telegram'
@@ -179,7 +209,7 @@ export async function processInvoiceFromCanal(params: {
 
   if (prog) {
     await prog.ok(detalleOk);
-    if (params.canal === 'telegram') {
+    if (params.canal === 'telegram' && !fastTrackMsg) {
       const { enviarPickerProyectosTelegram } = await import('@/lib/telegram/proyectoPicker');
       await enviarPickerProyectosTelegram(supabase, params.chatId, 'factura_compra');
     }

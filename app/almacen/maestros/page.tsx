@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { asegurarUbicacionDeposito } from '@/lib/almacen/ubicacionesInventario';
 import { GlassCard } from '@/components/inventory/GlassCard';
 import { ArrowLeft, Building2, Layers, Tag, Ruler, Plus, Trash2 } from 'lucide-react';
 
@@ -96,15 +97,34 @@ export default function AlmacenMaestrosPage() {
         return;
       }
     }
-    const { error } = await supabase.from('inventory_deposits').insert({
-      code: depForm.code.trim().toUpperCase(),
-      name: depForm.name.trim(),
-      locality: depForm.locality.trim() || null,
-      is_default: depForm.is_default,
-    });
+    const code = depForm.code.trim().toUpperCase();
+    const name = depForm.name.trim();
+    const { data: inserted, error } = await supabase
+      .from('inventory_deposits')
+      .insert({
+        code,
+        name,
+        locality: depForm.locality.trim() || null,
+        is_default: depForm.is_default,
+      })
+      .select('id,code,name')
+      .single();
     if (error) {
       alert(error.message);
       return;
+    }
+    try {
+      await asegurarUbicacionDeposito(supabase, {
+        id: inserted.id,
+        code: inserted.code,
+        name: inserted.name,
+      });
+    } catch (syncErr) {
+      alert(
+        syncErr instanceof Error
+          ? `Depósito guardado, pero no se sincronizó la ubicación de inventario: ${syncErr.message}`
+          : 'Depósito guardado, pero falló la sincronización con inv_ubicaciones.',
+      );
     }
     setDepForm({ code: '', name: '', locality: '', is_default: false });
     loadAll();

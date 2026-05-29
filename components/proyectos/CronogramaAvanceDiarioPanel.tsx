@@ -5,6 +5,8 @@ import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
+import { useColaAvanceOffline } from '@/hooks/useColaAvanceOffline';
+import { encolarAvanceOffline } from '@/lib/campo/colaAvanceOffline';
 import type { CronogramaCapitulo, CronogramaTarea } from '@/types/cronograma';
 import { cn } from '@/lib/utils';
 import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
@@ -44,6 +46,8 @@ export default function CronogramaAvanceDiarioPanel({
   onSaved,
 }: Props) {
   const { isSubmitting, runLocked } = useSyncSubmitLock();
+  const { pendientes, guardadoLocal, setGuardadoLocal, sincronizando, refrescar } =
+    useColaAvanceOffline(proyectoId, onSaved);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [avances, setAvances] = useState<Map<string, AvanceLocal>>(new Map());
   const [dirty, setDirty] = useState(false);
@@ -118,17 +122,50 @@ export default function CronogramaAvanceDiarioPanel({
           orden: a.orden,
         }));
 
-        const res = await fetch(`/api/proyectos/${encodeURIComponent(proyectoId)}/cronograma`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ actualizaciones }),
-        });
+        const payload = { actualizaciones };
+
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          encolarAvanceOffline(proyectoId, actualizaciones);
+          setGuardadoLocal(true);
+          refrescar();
+          setDirty(false);
+          toast.success('Reporte guardado localmente. Se sincronizará al recuperar señal.');
+          return;
+        }
+
+        const res = await fetch(
+          `/api/proyectos/${encodeURIComponent(proyectoId)}/campo/avance`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+        );
         const data = await parseFetchJson<{ error?: string; guardados?: number }>(res);
         if (!res.ok) throw new Error(formatApiErrorBody(data, 'Error al guardar avance'));
-        toast.success(`Avance registrado (${data.guardados ?? actualizaciones.length} partida(s)).`);
+        toast.success(`Avance confirmado (${data.guardados ?? actualizaciones.length} partida(s)).`);
         setDirty(false);
+        setGuardadoLocal(false);
         onSaved?.();
       } catch (e) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          const actualizaciones = Array.from(avances.values()).map((a) => ({
+            id: a.id.startsWith('borrador-') ? undefined : a.id,
+            partida_id: a.partida_id,
+            codigo_partida: a.codigo_partida,
+            nombre_tarea: a.nombre_tarea,
+            porcentaje_avance: a.porcentaje_avance,
+            fecha_inicio_planificada: a.fecha_inicio_planificada,
+            fecha_fin_planificada: a.fecha_fin_planificada,
+            orden: a.orden,
+          }));
+          encolarAvanceOffline(proyectoId, actualizaciones);
+          setGuardadoLocal(true);
+          refrescar();
+          setDirty(false);
+          toast.success('Reporte guardado localmente. Sincronización pendiente por red.');
+          return;
+        }
         toast.error(formatErrorMessage(e));
       }
     });
@@ -153,6 +190,18 @@ export default function CronogramaAvanceDiarioPanel({
 
   return (
     <div className="space-y-4 select-none">
+      {(guardadoLocal || pendientes > 0) ? (
+        <p
+          className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-400"
+          role="status"
+        >
+          {sincronizando
+            ? 'Sincronizando reportes pendientes…'
+            : 'Reporte guardado localmente. Sincronización pendiente por red.'}
+          {pendientes > 1 ? ` (${pendientes} en cola)` : ''}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
         <p className="text-xs text-zinc-400 max-w-xl">
           Registro táctil de avance físico del día. Si la partida no tiene tareas en cronograma, el porcentaje
@@ -170,7 +219,7 @@ export default function CronogramaAvanceDiarioPanel({
           ) : (
             <Save className="mr-2 h-4 w-4" aria-hidden />
           )}
-          {isSubmitting ? 'Guardando…' : 'Registrar avance'}
+          {isSubmitting ? 'Guardando…' : 'Confirmar Avance'}
         </Button>
       </div>
 

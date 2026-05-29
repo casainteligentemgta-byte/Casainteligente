@@ -20,11 +20,13 @@ const SELECT_UBICACION = `
   notas,
   created_at,
   updated_at,
-  proyecto:ci_proyectos ( id, nombre )
+  proyecto:ci_proyectos ( id, nombre ),
+  deposit:inventory_deposits ( id, locality )
 `;
 
 type UbicacionDbRow = InvUbicacionRow & {
   proyecto?: { id: string; nombre: string } | Array<{ id: string; nombre: string }> | null;
+  deposit?: { id: string; locality: string | null } | Array<{ id: string; locality: string | null }> | null;
 };
 
 function mapRow(row: UbicacionDbRow): UbicacionInventario {
@@ -34,6 +36,11 @@ function mapRow(row: UbicacionDbRow): UbicacionInventario {
   if (proy?.id) {
     base.proyecto = { id: String(proy.id), nombre: String(proy.nombre ?? '') };
     base.obra_id = base.obra_id ?? String(proy.id);
+  }
+  const depRaw = row.deposit;
+  const dep = Array.isArray(depRaw) ? depRaw[0] : depRaw;
+  if (dep?.locality?.trim()) {
+    base.deposit_locality = dep.locality.trim();
   }
   return base;
 }
@@ -103,8 +110,23 @@ const ETIQUETA_TIPO: Record<TipoUbicacion, string> = {
 
 export function etiquetaUbicacionSelector(u: UbicacionInventario, indent = 0): string {
   const pref = indent > 0 ? `${'  '.repeat(indent)}↳ ` : '';
-  const tipo = ETIQUETA_TIPO[u.tipo] ?? u.tipo;
-  return `${pref}${u.nombre} (${tipo})`;
+  return `${pref}${labelUbicacionOpcion(u)}`;
+}
+
+/** Etiqueta corta para `<option>` en selects de almacén/obra. */
+export function labelUbicacionOpcion(u: UbicacionInventario): string {
+  const tipo =
+    u.tipo === 'almacen_central'
+      ? 'Almacén'
+      : u.tipo === 'almacen_movil'
+        ? 'Móvil'
+        : u.tipo === 'obra'
+          ? 'Obra'
+          : (ETIQUETA_TIPO[u.tipo] ?? u.tipo);
+  const loc = u.deposit_locality?.trim();
+  const sufijo =
+    loc && (u.tipo === 'almacen_central' || u.tipo === 'almacen_movil') ? ` · ${loc}` : '';
+  return `${u.nombre} (${tipo}${sufijo})`;
 }
 
 /** Lista plana para selects: almacenes + obra del proyecto y sus subsitios. */
@@ -143,6 +165,47 @@ export async function listarUbicacionesParaSelector(
     if (ta !== tb) return ta - tb;
     return a.nombre.localeCompare(b.nombre, 'es');
   });
+}
+
+/** Crea o actualiza inv_ubicacion vinculada a un depósito físico (Maestros → Depósitos). */
+export async function asegurarUbicacionDeposito(
+  supabase: SupabaseClient,
+  deposit: { id: string; code: string; name: string },
+): Promise<string> {
+  const codigo = `DEP-${deposit.code.trim()}`;
+  const { data: existing, error: selErr } = await supabase
+    .from('inv_ubicaciones')
+    .select('id')
+    .eq('deposit_id', deposit.id)
+    .maybeSingle();
+  if (selErr?.code === '42P01') throw new Error('Tabla inv_ubicaciones no existe. Aplique migración 180.');
+  if (selErr) throw new Error(selErr.message);
+  if (existing?.id) {
+    const { error: updErr } = await supabase
+      .from('inv_ubicaciones')
+      .update({
+        codigo,
+        nombre: deposit.name.trim(),
+        tipo: 'almacen_central',
+        activo: true,
+      })
+      .eq('id', existing.id);
+    if (updErr) throw new Error(updErr.message);
+    return String(existing.id);
+  }
+
+  const { data: created, error } = await supabase
+    .from('inv_ubicaciones')
+    .insert({
+      codigo,
+      nombre: deposit.name.trim(),
+      tipo: 'almacen_central',
+      deposit_id: deposit.id,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  return String(created.id);
 }
 
 /** Crea ubicación raíz tipo obra si no existe (para ingreso de compras en sitio). */

@@ -5,6 +5,8 @@ import {
   isValidProyectoUuid,
   mensajeProyectoIdInvalido,
 } from '@/lib/proyectos/validarProyectoUuid';
+import { aplicarAvanceCronograma } from '@/lib/proyectos/aplicarAvanceCronograma';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,4 +47,33 @@ export async function GET(req: Request, { params }: RouteCtx) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ avances: data ?? [] });
+}
+
+/** Registra avance diario de cronograma (endpoint de sincronización offline iPad). */
+export async function POST(req: Request, { params }: RouteCtx) {
+  const proyectoId = params.proyectoId?.trim() ?? '';
+  if (!isValidProyectoUuid(proyectoId)) {
+    return NextResponse.json(
+      { error: mensajeProyectoIdInvalido(proyectoId) },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const body = (await req.json()) as {
+      actualizaciones?: Parameters<typeof aplicarAvanceCronograma>[2];
+    };
+    const actualizaciones = body.actualizaciones ?? [];
+    if (!actualizaciones.length) {
+      return NextResponse.json({ error: 'Sin actualizaciones' }, { status: 400 });
+    }
+
+    const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
+    const guardados = await aplicarAvanceCronograma(supabase, proyectoId, actualizaciones);
+
+    return NextResponse.json({ ok: true, guardados });
+  } catch (err: unknown) {
+    console.error('[POST campo/avance]', err);
+    return NextResponse.json({ error: formatErrorMessage(err) }, { status: 500 });
+  }
 }

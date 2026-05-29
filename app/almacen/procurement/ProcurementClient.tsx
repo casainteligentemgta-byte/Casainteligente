@@ -269,6 +269,11 @@ export default function ProcurementClient() {
                 if (data.ubicacion_destino_id) {
                     setUbicacionDestinoId(String(data.ubicacion_destino_id));
                 }
+                if (data.estado === 'aprobado_sistema') {
+                    setAiSuccess(
+                        'Fast-Track: factura aprobada por sistema (OCR >95%, SKU exacto, monto < $100 USD). Stock impactado en inventario.',
+                    );
+                }
                 applyExtractedPayload(
                     data.extracted as Parameters<typeof applyExtractedPayload>[0],
                     'Factura cargada desde Telegram',

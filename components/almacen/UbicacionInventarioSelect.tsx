@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { UbicacionInventario } from '@/types/inventario-obra';
+import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 
 const selectClass =
   'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50';
@@ -99,21 +100,11 @@ export default function UbicacionInventarioSelect({
         <option value="" className="bg-[#0A0A0F] text-zinc-100">
           {loading ? 'Cargando almacenes…' : placeholder}
         </option>
-        {ubicaciones.map((u) => {
-          const tipo =
-            u.tipo === 'almacen_central'
-              ? 'Central'
-              : u.tipo === 'almacen_movil'
-                ? 'Móvil'
-                : u.tipo === 'obra'
-                  ? 'Obra'
-                  : u.tipo;
-          return (
-            <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
-              {u.nombre} ({tipo})
-            </option>
-          );
-        })}
+        {ubicaciones.map((u) => (
+          <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
+            {labelUbicacionOpcion(u)}
+          </option>
+        ))}
       </select>
       {loading ? (
         <p className="text-[10px] text-zinc-500 flex items-center gap-1">

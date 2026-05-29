@@ -3,6 +3,7 @@ import {
   procurementModelCandidates,
 } from '@/lib/almacen/geminiProcurementModels';
 import { geminiGenerateWithDocument } from '@/lib/gemini/client';
+import { calcularConfidenceScoreOcr } from '@/lib/canal/calcularConfidenceScoreOcr';
 
 export type ExtractedInvoiceItem = {
   description: string;
@@ -19,6 +20,8 @@ export type ExtractedPurchaseInvoice = {
   date: string;
   total_amount: number | null;
   items: ExtractedInvoiceItem[];
+  /** Confianza OCR 0–100 (Gemini + heurística estructural). */
+  confidence_score?: number;
 };
 
 const ALLOWED_MIME = new Set([
@@ -82,6 +85,10 @@ const RESPONSE_SCHEMA = {
     total_amount: {
       type: 'number',
       description: 'Monto total de la factura; 0 si no aparece',
+    },
+    confidence_score: {
+      type: 'number',
+      description: 'Confianza global de la extracción OCR entre 0 y 100',
     },
     items: {
       type: 'array',
@@ -474,7 +481,10 @@ export function parseExtractedPurchaseInvoice(text: string): ExtractedPurchaseIn
     flat.gran_total ??
     flat.importe_total;
 
-  return {
+  const confidenceRaw =
+    flat.confidence_score ?? flat.confidenceScore ?? flat.ocr_confidence;
+
+  const base = {
     invoice_number,
     supplier_rif,
     supplier_name,
@@ -482,6 +492,16 @@ export function parseExtractedPurchaseInvoice(text: string): ExtractedPurchaseIn
     total_amount:
       totalRaw != null && totalRaw !== '' ? toNumber(totalRaw, 0) : null,
     items,
+  };
+
+  const ocrHint =
+    confidenceRaw != null && confidenceRaw !== ''
+      ? toNumber(confidenceRaw, 0)
+      : undefined;
+
+  return {
+    ...base,
+    confidence_score: calcularConfidenceScoreOcr(base, ocrHint),
   };
 }
 

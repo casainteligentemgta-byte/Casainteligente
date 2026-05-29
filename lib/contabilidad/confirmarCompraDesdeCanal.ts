@@ -1,9 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
-import {
-  registerCompraDesdeRecepcion,
-  type LineaCompraContabilidadInput,
-} from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
@@ -56,6 +54,7 @@ export async function confirmarCompraDesdeCanal(
     proyectoId: string;
     ubicacionDestinoId: string;
     extractedOverride?: ExtractedCanalHeader;
+    lineasOverride?: LineaCompraContabilidadInput[];
   },
 ): Promise<{ compraId: string; purchaseInvoiceId: string; yaExistia: boolean }> {
   const { data: pendiente, error: pErr } = await supabase
@@ -111,7 +110,9 @@ export async function confirmarCompraDesdeCanal(
   }
 
   const fecha = (extracted.date ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
-  const lineas = lineasDesdeExtracted(extracted);
+  const lineas = params.lineasOverride?.length
+    ? params.lineasOverride
+    : lineasDesdeExtracted(extracted);
   if (lineas.length === 0) {
     throw new Error('Agregue al menos una línea con descripción.');
   }
