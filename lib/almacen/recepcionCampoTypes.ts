@@ -1,0 +1,23 @@
+export type TipoRecepcionCampo = 'nota_entrega' | 'emergencia';
+
+export type LineaRecepcionCampoInput = {
+  material_id: string;
+  cantidad: number;
+  unidad?: string;
+  descripcion?: string;
+  observaciones?: string;
+};
+
+export type PayloadRecepcionManualApi = {
+  proyecto_id: string;
+  ubicacion_id: string;
+  proveedor_id?: string | null;
+  proveedor_nombre?: string;
+  tipo: TipoRecepcionCampo;
+  num_doc?: string;
+  lineas: LineaRecepcionCampoInput[];
+  soporte_storage_path?: string | null;
+  soporte_file_name?: string | null;
+  soporte_mime_type?: string | null;
+  observaciones?: string | null;
+};

@@ -104,6 +104,7 @@ const NAV_ALMACEN = [
     { href: '/almacen/migrar-obra', label: 'A obra', icon: ArrowRightLeft, className: 'border-violet-500/35 text-violet-200' },
     { href: '/almacen/despacho', label: 'Despacho', icon: ArrowUpRight, className: 'border-orange-500/35 text-orange-200' },
     { href: '/almacen/procurement', label: 'Compras', icon: Truck, className: 'border-blue-500/40 bg-blue-600/20 text-blue-100' },
+    { href: '/almacen/recepcion', label: 'Recepción campo', icon: Package, className: 'border-[#FF9500]/40 bg-[#FF9500]/10 text-[#FF9500]' },
     { href: '/almacen/nuevo', label: 'Nuevo', icon: Plus, className: 'border-white/20 bg-white text-black' },
 ] as const;
 
