@@ -10,6 +10,9 @@ export type InspeccionCuarentenaRow = {
   material_unit: string | null;
   invoice_number: string | null;
   supplier_name: string | null;
+  document_storage_path: string | null;
+  document_file_name: string | null;
+  ubicacion_destino_id: string | null;
   created_at: string | null;
 };
 
@@ -29,7 +32,7 @@ export async function listarInspeccionesCuarentenaPendientes(
       line_description,
       created_at,
       global_inventory(name, unit),
-      purchase_invoices(invoice_number, supplier_name),
+      purchase_invoices(invoice_number, supplier_name, document_storage_path, document_file_name, ubicacion_destino_id),
       purchase_details(description)
     `,
     )
@@ -52,8 +55,20 @@ export async function listarInspeccionesCuarentenaPendientes(
         | Array<{ name: string; unit: string }>
         | null;
       purchase_invoices?:
-        | { invoice_number: string; supplier_name: string }
-        | Array<{ invoice_number: string; supplier_name: string }>
+        | {
+            invoice_number: string;
+            supplier_name: string;
+            document_storage_path: string | null;
+            document_file_name: string | null;
+            ubicacion_destino_id: string | null;
+          }
+        | Array<{
+            invoice_number: string;
+            supplier_name: string;
+            document_storage_path: string | null;
+            document_file_name: string | null;
+            ubicacion_destino_id: string | null;
+          }>
         | null;
       purchase_details?: { description: string } | Array<{ description: string }> | null;
     };
@@ -69,6 +84,9 @@ export async function listarInspeccionesCuarentenaPendientes(
       material_unit: gi?.unit ?? null,
       invoice_number: inv?.invoice_number ?? null,
       supplier_name: inv?.supplier_name ?? null,
+      document_storage_path: inv?.document_storage_path ?? null,
+      document_file_name: inv?.document_file_name ?? null,
+      ubicacion_destino_id: inv?.ubicacion_destino_id ?? null,
       created_at: r.created_at,
     };
   });

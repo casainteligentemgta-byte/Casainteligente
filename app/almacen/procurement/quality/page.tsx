@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/inventory/GlassCard';
 import {
     ShieldCheck,
@@ -18,17 +17,33 @@ import { QualityInspection } from '@/types/inventory';
 import {
     formatApproveError,
 } from '@/lib/almacen/approveQualityInspection';
+import { apiUrl } from '@/lib/http/apiUrl';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
+type InspeccionCuarentenaUi = {
+    id: string;
+    invoice_id: string;
+    quantity: number;
+    line_description: string | null;
+    global_inventory?: { name: string | null; unit: string | null; sap_code: string | null };
+    purchase_details?: { description: string | null; item_code: string | null };
+    purchase_invoices?: {
+        supplier_name: string | null;
+        invoice_number: string | null;
+        document_storage_path: string | null;
+        document_file_name: string | null;
+        ubicacion_destino_id: string | null;
+    };
+};
+
 export default function QualityDashboard() {
-    const [inspections, setInspections] = useState<any[]>([]);
+    const [inspections, setInspections] = useState<InspeccionCuarentenaUi[]>([]);
     const [loading, setLoading] = useState(true);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
     const { isSubmitting, runLocked } = useSyncSubmitLock();
-
-    const supabase = createClient();
 
     useEffect(() => {
         fetchInspections();
@@ -36,22 +51,54 @@ export default function QualityDashboard() {
 
     const fetchInspections = async () => {
         setLoading(true);
+        setActionError(null);
         try {
-            const { data, error } = await supabase
-                .from('quality_inspections')
-                .select(`
-          *,
-          global_inventory(name, unit, sap_code),
-          purchase_invoices(invoice_number, supplier_name, document_file_name, document_storage_path),
-          purchase_details(description, item_code)
-        `)
-                .eq('status', 'PENDIENTE')
-                .order('created_at', { ascending: false });
+            const res = await fetch(apiUrl('/api/almacen/quality/pendientes'), { cache: 'no-store' });
+            const json = (await res.json()) as {
+                items?: Array<{
+                    id: string;
+                    invoice_id: string;
+                    quantity: number;
+                    line_description: string | null;
+                    material_name: string | null;
+                    material_unit: string | null;
+                    invoice_number: string | null;
+                    supplier_name: string | null;
+                    document_storage_path: string | null;
+                    document_file_name: string | null;
+                    ubicacion_destino_id: string | null;
+                }>;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(json.error ?? 'No se pudo cargar la cuarentena.');
 
-            if (error) throw error;
-            setInspections(data || []);
+            setInspections(
+                (json.items ?? []).map((row) => ({
+                    id: row.id,
+                    invoice_id: row.invoice_id,
+                    quantity: row.quantity,
+                    line_description: row.line_description,
+                    global_inventory: {
+                        name: row.material_name,
+                        unit: row.material_unit,
+                        sap_code: null,
+                    },
+                    purchase_details: { description: null, item_code: null },
+                    purchase_invoices: {
+                        supplier_name: row.supplier_name,
+                        invoice_number: row.invoice_number,
+                        document_storage_path: row.document_storage_path,
+                        document_file_name: row.document_file_name,
+                        ubicacion_destino_id: row.ubicacion_destino_id,
+                    },
+                })),
+            );
         } catch (error) {
             console.error('Error fetching inspections:', error);
+            setActionError(
+                error instanceof Error ? error.message : 'Error al cargar inspecciones pendientes.',
+            );
+            setInspections([]);
         } finally {
             setLoading(false);
         }
@@ -63,12 +110,16 @@ export default function QualityDashboard() {
         setActionError(null);
         await runLocked(async () => {
             try {
-                const res = await fetch(`/api/almacen/quality/${encodeURIComponent(id)}/aprobar`, {
+                const res = await fetch(apiUrl(`/api/almacen/quality/${encodeURIComponent(id)}/aprobar`), {
                     method: 'POST',
                 });
-                const json = (await res.json()) as { error?: string };
-                if (!res.ok) throw new Error(json.error ?? 'No se pudo liberar el material.');
+                const json = (await res.json()) as { error?: string; hint?: string };
+                if (!res.ok) {
+                    const detalle = json.hint ? `${json.error ?? ''} ${json.hint}`.trim() : json.error;
+                    throw new Error(detalle ?? 'No se pudo liberar el material.');
+                }
                 setInspections((prev) => prev.filter((i) => i.id !== id));
+                toast.success('Material liberado al stock del almacén asignado.');
             } catch (error) {
                 console.error('Error approving quality:', error);
                 setActionError(formatApproveError(error));
@@ -80,7 +131,7 @@ export default function QualityDashboard() {
 
     const openInvoiceDocument = async (invoiceId: string) => {
         try {
-            const res = await fetch(`/api/almacen/procurement/invoices/${invoiceId}/document`);
+            const res = await fetch(apiUrl(`/api/almacen/procurement/invoices/${invoiceId}/document`));
             const data = (await res.json()) as { url?: string; error?: string };
             if (!res.ok || !data.url) {
                 throw new Error(data.error || 'No se pudo abrir el documento.');
@@ -94,17 +145,21 @@ export default function QualityDashboard() {
     const handleReject = async (id: string) => {
         if (isSubmitting) return;
         setProcessingId(id);
+        setActionError(null);
         await runLocked(async () => {
-            const res = await fetch(`/api/almacen/quality/${encodeURIComponent(id)}/rechazar`, {
-                method: 'POST',
-            });
-            const json = (await res.json()) as { error?: string };
-            if (res.ok) {
+            try {
+                const res = await fetch(apiUrl(`/api/almacen/quality/${encodeURIComponent(id)}/rechazar`), {
+                    method: 'POST',
+                });
+                const json = (await res.json()) as { error?: string };
+                if (!res.ok) throw new Error(json.error ?? 'No se pudo rechazar la inspección.');
                 setInspections((prev) => prev.filter((i) => i.id !== id));
-            } else if (json.error) {
-                setActionError(json.error);
+                toast.message('Inspección rechazada (sin ingreso a stock).');
+            } catch (error) {
+                setActionError(error instanceof Error ? error.message : 'Error al rechazar.');
+            } finally {
+                setProcessingId(null);
             }
-            setProcessingId(null);
         });
     };
 
@@ -200,6 +255,11 @@ export default function QualityDashboard() {
                                             <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
                                                 {insp.purchase_invoices?.supplier_name} • Factura #{insp.purchase_invoices?.invoice_number}
                                             </p>
+                                            {!insp.purchase_invoices?.ubicacion_destino_id ? (
+                                                <p className="mt-2 text-[10px] font-black text-amber-500 uppercase tracking-widest">
+                                                    Sin almacén destino — asigne ubicación en recepción o Telegram antes de liberar
+                                                </p>
+                                            ) : null}
                                             {insp.purchase_invoices?.document_storage_path ? (
                                                 <button
                                                     type="button"
@@ -236,8 +296,16 @@ export default function QualityDashboard() {
                                     <button
                                         type="button"
                                         onClick={() => void handleApprove(insp.id)}
-                                        disabled={isSubmitting}
-                                        className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                                        disabled={
+                                            isSubmitting ||
+                                            !insp.purchase_invoices?.ubicacion_destino_id
+                                        }
+                                        title={
+                                            !insp.purchase_invoices?.ubicacion_destino_id
+                                                ? 'Falta almacén destino en la factura'
+                                                : 'Suma cantidad a inventario_stock (mov. 101)'
+                                        }
+                                        className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {processingId === insp.id && isSubmitting ? (
                                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>

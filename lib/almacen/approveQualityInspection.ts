@@ -64,15 +64,8 @@ async function asegurarCompraRegistradaEnUbicacion(
     .eq('purchase_invoice_id', params.invoiceId)
     .maybeSingle();
 
+  // Stock ya sumado por trigger tr_inv_compra_registrar_stock al pasar a «registrada».
   if (existente?.estado === 'registrada') {
-    const { error: rpcErr } = await supabase.rpc('inv_stock_apply_delta', {
-      p_ubicacion_id: params.ubicacionDestinoId,
-      p_material_id: params.materialId,
-      p_delta_disponible: params.quantity,
-      p_delta_reservada: 0,
-      p_delta_transito_entrante: 0,
-    });
-    if (rpcErr && rpcErr.code !== '42883') throw rpcErr;
     return;
   }
 
@@ -151,17 +144,6 @@ export async function approveQualityInspection(
   const qty = Number(inspection.quantity) || 0;
   if (qty <= 0) throw new Error('Cantidad de inspección inválida.');
 
-  const { error: updateInspError } = await supabase
-    .from('quality_inspections')
-    .update({
-      status: 'APROBADO',
-      inspector_id: inspectorId ?? null,
-      inspected_at: new Date().toISOString(),
-    })
-    .eq('id', inspectionId);
-
-  if (updateInspError) throw updateInspError;
-
   await actualizarCostoMaestroSku(supabase, inspection.material_id, qty, unitPrice);
 
   await asegurarCompraRegistradaEnUbicacion(supabase, {
@@ -188,6 +170,17 @@ export async function approveQualityInspection(
   if (movErr && movErr.code !== '42P01') {
     console.warn('[approveQualityInspection] inventory_movements:', movErr.message);
   }
+
+  const { error: updateInspError } = await supabase
+    .from('quality_inspections')
+    .update({
+      status: 'APROBADO',
+      inspector_id: inspectorId ?? null,
+      inspected_at: new Date().toISOString(),
+    })
+    .eq('id', inspectionId);
+
+  if (updateInspError) throw updateInspError;
 }
 
 export { formatApproveError };
