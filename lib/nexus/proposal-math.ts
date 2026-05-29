@@ -54,3 +54,17 @@ export function validateMinMargin(
   }
   return { ok: true };
 }
+
+/** Descuento efectivo máximo (línea o global) para candado Nexus ↔ nómina AD. */
+export function calcularDescuentoSolicitadoPct(
+  lines: LineInput[],
+  subtotal: number,
+  discountTotalUsd: number,
+): number {
+  const maxLine = lines.reduce((m, l) => Math.max(m, Number(l.discountPct) || 0), 0);
+  if (discountTotalUsd > 0 && subtotal > 0) {
+    const globalPct = (discountTotalUsd / subtotal) * 100;
+    return Math.round(Math.max(maxLine, globalPct) * 100) / 100;
+  }
+  return maxLine;
+}

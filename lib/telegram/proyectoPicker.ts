@@ -16,7 +16,7 @@ import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 export type ProyectoPickerModo =
   | Extract<
       TelegramContexto,
-      'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra'
+      'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra' | 'memoria_obra'
     >
   | 'factura_compra';
 
@@ -28,6 +28,7 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   esperando_audio_bitacora: 'b',
   entrada_obra: 'n',
   salida_obra: 'l',
+  memoria_obra: 'm',
   factura_compra: 'f',
 };
 
@@ -37,6 +38,7 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   b: 'esperando_audio_bitacora',
   n: 'entrada_obra',
   l: 'salida_obra',
+  m: 'memoria_obra',
   f: 'factura_compra',
 };
 
@@ -88,6 +90,8 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '📤 <b>Elige la obra</b> (salida de material):';
     case 'factura_compra':
       return '🏗 <b>Elige la obra</b> de esta compra:';
+    case 'memoria_obra':
+      return '📸 <b>Elige la obra</b> para memoria descriptiva de avance:';
   }
 }
 
@@ -113,6 +117,8 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
     case 'salida_obra':
       return '';
     case 'factura_compra':
+      return '';
+    case 'memoria_obra':
       return '';
   }
 }
@@ -255,6 +261,13 @@ export async function manejarCallbackProyectoTelegram(
       tipo,
     );
     await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    return true;
+  }
+
+  if (parsed.modo === 'memoria_obra') {
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { enviarPickerPartidasMemoriaObra } = await import('@/lib/telegram/memoriaObra');
+    await enviarPickerPartidasMemoriaObra(supabase, params.chatId, parsed.proyectoId);
     return true;
   }
 

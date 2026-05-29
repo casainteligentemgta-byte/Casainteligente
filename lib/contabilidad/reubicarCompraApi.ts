@@ -6,6 +6,9 @@ export type ReubicarCompraBody = {
 
 export type ReubicarCompraResponse = {
   ok: boolean;
+  success?: boolean;
+  sinCambios?: boolean;
+  message?: string;
   purchaseInvoiceId?: string | null;
   compraId?: string | null;
   stockMovido?: boolean;

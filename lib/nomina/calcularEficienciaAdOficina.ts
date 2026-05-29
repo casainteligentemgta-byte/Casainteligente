@@ -11,7 +11,23 @@ export type ResultadoEficienciaAd = {
   eficiente: boolean;
   deficienciaUsd: number;
   proyectosConAd: number;
+  ratioEficienciaPct: number;
 };
+
+/** Umbral: nómina oficina ≥ 90% de honorarios AD → congelar descuentos comerciales Nexus. */
+export const UMBRAL_BLOQUEO_DESCUENTO_NEXUS = 90;
+
+export function ratioEficienciaAdPct(
+  honorariosAdUsd: number,
+  nominaOficinaUsd: number,
+): number {
+  if (!(honorariosAdUsd > 0)) return nominaOficinaUsd > 0 ? 100 : 0;
+  return Math.round((nominaOficinaUsd / honorariosAdUsd) * 1000) / 10;
+}
+
+export function debeBloquearDescuentosNexus(ratioPct: number): boolean {
+  return ratioPct >= UMBRAL_BLOQUEO_DESCUENTO_NEXUS;
+}
 
 export function costoMensualCargoVes(
   salarioBase: number,
@@ -38,6 +54,7 @@ export function calcularEficienciaAdOficina(
   const nominaOficinaUsd = tasa ? nominaOficinaVes / tasa : 0;
   const eficiente = tasa !== null && honorariosAdUsd >= nominaOficinaUsd;
   const deficienciaUsd = eficiente ? 0 : Math.max(0, nominaOficinaUsd - honorariosAdUsd);
+  const ratioEficienciaPct = ratioEficienciaAdPct(honorariosAdUsd, nominaOficinaUsd);
 
   return {
     honorariosAdUsd,
@@ -46,5 +63,6 @@ export function calcularEficienciaAdOficina(
     eficiente,
     deficienciaUsd,
     proyectosConAd: 0,
+    ratioEficienciaPct,
   };
 }

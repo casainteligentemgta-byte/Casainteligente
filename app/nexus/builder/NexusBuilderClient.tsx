@@ -4,6 +4,7 @@ import { GlassCard } from '@/components/nexus/GlassCard';
 import { Button } from '@/components/nexus/ui/button';
 import { Mono } from '@/components/nexus/Mono';
 import {
+  calcularDescuentoSolicitadoPct,
   grandTotal,
   lineSubtotal,
   marginPercent,
@@ -11,6 +12,7 @@ import {
   taxFromSubtotal,
   validateMinMargin,
 } from '@/lib/nexus/proposal-math';
+import { useNexusMarginLock } from '@/hooks/useNexusMarginLock';
 import {
   DndContext,
   DragEndEvent,
@@ -85,6 +87,12 @@ export function NexusBuilderClient() {
   const [taxRate, setTaxRate] = useState(16);
   const [discountTotal, setDiscountTotal] = useState(0);
   const marginMin = 18;
+  const {
+    bloquearDescuentos,
+    porcentajeEficienciaAD,
+    isLoadingValidacion,
+    validarYProcesarCotizacionNexus,
+  } = useNexusMarginLock();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -108,6 +116,21 @@ export function NexusBuilderClient() {
     return { subtotal, taxAmount, grand, marginPct: m, marginCheck };
   }, [lines, taxRate, discountTotal, marginMin]);
 
+  const descuentoSolicitado = useMemo(
+    () =>
+      calcularDescuentoSolicitadoPct(
+        lines.map((l) => ({
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+          discountPct: l.discountPct,
+          costPrice: l.costPrice,
+        })),
+        totals.subtotal,
+        discountTotal,
+      ),
+    [lines, totals.subtotal, discountTotal],
+  );
+
   function onDragStart(e: DragStartEvent) {
     const id = String(e.active.id);
     const item = MOCK_CATALOG.find((c) => c.id === id);
@@ -130,7 +153,20 @@ export function NexusBuilderClient() {
   }
 
   function updateLine(key: string, patch: Partial<CanvasLine>) {
+    if (bloquearDescuentos && patch.discountPct != null && patch.discountPct > 0) return;
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  async function generarPropuestaPdf() {
+    await validarYProcesarCotizacionNexus(
+      {
+        monto_base_usd: totals.grand,
+        descuento_solicitado: descuentoSolicitado,
+      },
+      async () => {
+        window.open('/api/nexus/proposals/demo/pdf', '_blank', 'noopener,noreferrer');
+      },
+    );
   }
 
   function removeLine(key: string) {
@@ -191,8 +227,9 @@ export function NexusBuilderClient() {
                             min={0}
                             max={100}
                             value={l.discountPct}
+                            disabled={bloquearDescuentos}
                             onChange={(e) => updateLine(l.key, { discountPct: Number(e.target.value) })}
-                            className="w-16 rounded-lg border border-[rgba(255,255,255,0.12)] bg-[rgba(0,0,0,0.3)] px-2 py-1 font-mono text-sm text-white"
+                            className="w-16 rounded-lg border border-[rgba(255,255,255,0.12)] bg-[rgba(0,0,0,0.3)] px-2 py-1 font-mono text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                           />
                         </label>
                         <Mono className="text-[var(--nexus-green)]">
@@ -235,8 +272,9 @@ export function NexusBuilderClient() {
                 <input
                   type="number"
                   value={discountTotal}
-                  onChange={(e) => setDiscountTotal(Number(e.target.value))}
-                  className="mt-1 w-full rounded-xl border border-[rgba(255,255,255,0.12)] bg-[rgba(0,0,0,0.35)] px-3 py-2 font-mono text-white"
+                  disabled={bloquearDescuentos}
+                  onChange={(e) => setDiscountTotal(Math.max(0, Number(e.target.value)))}
+                  className="mt-1 w-full rounded-xl border border-[rgba(255,255,255,0.12)] bg-[rgba(0,0,0,0.35)] px-3 py-2 font-mono text-white disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </label>
             </div>
@@ -262,18 +300,36 @@ export function NexusBuilderClient() {
                 </div>
               ) : null}
             </div>
+            {bloquearDescuentos ? (
+              <div
+                className="mt-3 flex w-full select-none flex-col space-y-1 rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 backdrop-blur-xl"
+                role="status"
+              >
+                <div className="flex items-center space-x-2">
+                  <div className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-rose-400">
+                    Candado de margen activo por Holding
+                  </span>
+                </div>
+                <p className="font-mono text-[9px] uppercase leading-normal text-zinc-500">
+                  Los honorarios de administración delegada están cubriendo el costo operativo de
+                  oficina al {porcentajeEficienciaAD.toFixed(1)}%. Descuentos inhabilitados en este
+                  ciclo.
+                </p>
+              </div>
+            ) : null}
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button type="button" variant="glass" disabled>
+              <Button type="button" variant="glass" disabled={isLoadingValidacion || bloquearDescuentos}>
                 Guardar propuesta (DB)
               </Button>
-              <Button asChild>
-                <a href="/api/nexus/proposals/demo/pdf" target="_blank" rel="noopener noreferrer">
-                  Generar propuesta PDF
-                </a>
+              <Button type="button" onClick={() => void generarPropuestaPdf()} disabled={isLoadingValidacion}>
+                Generar propuesta PDF
               </Button>
             </div>
             <p className="mt-2 text-xs text-[var(--nexus-text-dim)]">
-              El PDF de demo es HTML premium oscuro; conecta propuestas reales en una siguiente fase.
+              {isLoadingValidacion
+                ? 'Validando índice AD vs nómina oficina…'
+                : 'El PDF de demo es HTML premium oscuro; conecta propuestas reales en una siguiente fase.'}
             </p>
           </GlassCard>
         </div>

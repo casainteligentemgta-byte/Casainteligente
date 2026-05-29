@@ -65,9 +65,12 @@ export default function ReubicarCompraModal({
         nombre_obra: nombreObra,
       });
       toast.success(
-        r.stockMovido
-          ? 'Compra reubicada y stock trasladado al nuevo almacén'
-          : 'Obra y almacén actualizados',
+        r.message ??
+          (r.stockMovido
+            ? 'Compra reubicada y stock trasladado al nuevo almacén'
+            : r.sinCambios
+              ? 'La compra ya estaba en esa ubicación'
+              : 'Obra y almacén actualizados'),
       );
       onGuardado?.();
       onClose();

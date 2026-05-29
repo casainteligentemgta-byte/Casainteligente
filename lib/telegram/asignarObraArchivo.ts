@@ -175,7 +175,7 @@ function resolverPendingAsignacion(
   return p;
 }
 
-async function registrarEvidenciaObra(params: {
+export async function registrarEvidenciaObra(params: {
   supabase: SupabaseClient;
   proyectoId: string;
   buffer: Buffer;

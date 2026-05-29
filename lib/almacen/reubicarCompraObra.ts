@@ -15,6 +15,8 @@ export type ReubicarCompraResult = {
   compraId: string | null;
   stockMovido: boolean;
   ubicacionAnteriorId: string | null;
+  sinCambios?: boolean;
+  message?: string;
 };
 
 async function moverStockCompraRegistrada(
@@ -91,33 +93,65 @@ export async function reubicarCompraObra(
 
   let purchaseInvoiceId: string | null = null;
   let compraId: string | null = null;
+  let proyectoActual: string | null = null;
+  let ubicacionActual: string | null = null;
 
   if (input.referenciaTipo === 'purchase_invoice') {
     purchaseInvoiceId = input.referenciaId;
   } else {
     const { data: compra, error: cErr } = await supabase
       .from('contabilidad_compras')
-      .select('id, purchase_invoice_id')
+      .select('id, purchase_invoice_id, proyecto_id, ubicacion_destino_id')
       .eq('id', input.referenciaId)
       .maybeSingle();
     if (cErr) throw new Error(cErr.message);
     if (!compra) throw new Error('Compra no encontrada en contabilidad.');
     compraId = String(compra.id);
     purchaseInvoiceId = compra.purchase_invoice_id ? String(compra.purchase_invoice_id) : null;
+    proyectoActual = compra.proyecto_id ? String(compra.proyecto_id) : null;
+    ubicacionActual = compra.ubicacion_destino_id ? String(compra.ubicacion_destino_id) : null;
   }
 
   if (!purchaseInvoiceId) {
     const { data: inv, error: iErr } = await supabase
       .from('purchase_invoices')
-      .select('id, ubicacion_destino_id')
+      .select('id, proyecto_id, ubicacion_destino_id')
       .eq('id', input.referenciaId)
       .maybeSingle();
     if (!iErr && inv?.id) {
       purchaseInvoiceId = String(inv.id);
+      proyectoActual = inv.proyecto_id ? String(inv.proyecto_id) : proyectoActual;
+      ubicacionActual = inv.ubicacion_destino_id ? String(inv.ubicacion_destino_id) : ubicacionActual;
     }
   }
 
-  let ubicacionAnteriorId: string | null = null;
+  if (purchaseInvoiceId && (!proyectoActual || !ubicacionActual)) {
+    const { data: invRow } = await supabase
+      .from('purchase_invoices')
+      .select('proyecto_id, ubicacion_destino_id')
+      .eq('id', purchaseInvoiceId)
+      .maybeSingle();
+    if (invRow) {
+      proyectoActual = invRow.proyecto_id ? String(invRow.proyecto_id) : proyectoActual;
+      ubicacionActual = invRow.ubicacion_destino_id ? String(invRow.ubicacion_destino_id) : ubicacionActual;
+    }
+  }
+
+  if (
+    proyectoActual === proyectoId &&
+    ubicacionActual === ubicacionNuevaId
+  ) {
+    return {
+      purchaseInvoiceId,
+      compraId,
+      stockMovido: false,
+      ubicacionAnteriorId: ubicacionActual,
+      sinCambios: true,
+      message: 'La compra ya se encuentra en la ubicación seleccionada.',
+    };
+  }
+
+  let ubicacionAnteriorId: string | null = ubicacionActual;
 
   if (purchaseInvoiceId) {
     const { data: invRow, error: invErr } = await supabase
@@ -178,14 +212,31 @@ export async function reubicarCompraObra(
   }
 
   if (purchaseInvoiceId) {
-    await supabase
+    const { data: pendientes } = await supabase
       .from('ci_facturas_canal_pendientes')
-      .update({
-        proyecto_id: proyectoId,
-        ubicacion_destino_id: ubicacionNuevaId,
-        updated_at: new Date().toISOString(),
-      })
+      .select('id, extracted')
       .eq('purchase_invoice_id', purchaseInvoiceId);
+
+    for (const pend of pendientes ?? []) {
+      const prev = (pend.extracted as Record<string, unknown> | null) ?? {};
+      await supabase
+        .from('ci_facturas_canal_pendientes')
+        .update({
+          proyecto_id: proyectoId,
+          ubicacion_destino_id: ubicacionNuevaId,
+          extracted: {
+            ...prev,
+            reubicacion: {
+              reubicado_automaticamente: true,
+              fecha_reubicacion: new Date().toISOString(),
+              proyecto_id: proyectoId,
+              ubicacion_destino_id: ubicacionNuevaId,
+            },
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', pend.id);
+    }
   }
 
   let stockMovido = false;
@@ -237,5 +288,8 @@ export async function reubicarCompraObra(
     compraId,
     stockMovido,
     ubicacionAnteriorId,
+    message: stockMovido
+      ? 'Compra reubicada con éxito. Inventarios físicos y libros contables bimonetarios sincronizados en caliente.'
+      : 'Obra y almacén de ingreso actualizados.',
   };
 }

@@ -9,7 +9,9 @@ export type TelegramContexto =
   | 'entrada_obra'
   | 'salida_obra'
   | 'avance_campo'
-  | 'avance_campo_cantidad';
+  | 'avance_campo_cantidad'
+  | 'memoria_obra'
+  | 'memoria_obra_foto';
 
 export type TelegramEstado = {
   chat_id: string;
@@ -30,6 +32,8 @@ const CONTEXTOS: TelegramContexto[] = [
   'salida_obra',
   'avance_campo',
   'avance_campo_cantidad',
+  'memoria_obra',
+  'memoria_obra_foto',
 ];
 
 export function isTelegramContexto(v: string): v is TelegramContexto {
@@ -128,6 +132,10 @@ export function etiquetaContexto(ctx: TelegramContexto): string {
       return 'Avance diario de campo';
     case 'avance_campo_cantidad':
       return 'Cantidad ejecutada (avance)';
+    case 'memoria_obra':
+      return 'Memoria descriptiva (elegir partida)';
+    case 'memoria_obra_foto':
+      return 'Memoria descriptiva (foto de avance)';
     default:
       return 'Menú principal';
   }

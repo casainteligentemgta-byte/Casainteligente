@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { reubicarCompraObra } from '@/lib/almacen/reubicarCompraObra';
-import { createClient } from '@/lib/supabase/server';
-import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,11 @@ async function resolveParams(
   return params instanceof Promise ? params : Promise.resolve(params);
 }
 
+/** Reasigna obra/almacén de una compra y traslada stock si ya estaba registrada en inventario. */
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+
   try {
     const { id } = await resolveParams(ctx.params);
     if (!id?.trim() || id === 'undefined') {
@@ -31,71 +35,113 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
 
     if (!proyectoId || !ubicacionDestinoId) {
       return NextResponse.json(
-        { error: 'proyecto_id y ubicacion_destino_id son obligatorios.' },
+        { error: 'Faltan parámetros de destino obligatorios.' },
         { status: 400 },
       );
     }
 
-    const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
-
-    const referenciaId = id.startsWith('canal-') ? id.slice('canal-'.length) : id;
-    const referenciaTipo = id.startsWith('canal-') ? undefined : 'compra';
-
-    let result;
+    const supabase = admin.client;
 
     if (id.startsWith('canal-')) {
+      const referenciaId = id.slice('canal-'.length);
       const { data: pendiente, error: pErr } = await supabase
         .from('ci_facturas_canal_pendientes')
-        .select('id, purchase_invoice_id')
+        .select('id, purchase_invoice_id, proyecto_id, ubicacion_destino_id, extracted')
         .eq('id', referenciaId)
         .single();
+
       if (pErr || !pendiente) {
         return NextResponse.json({ error: 'Factura de canal no encontrada' }, { status: 404 });
       }
 
+      const pend = pendiente as {
+        id: string;
+        purchase_invoice_id: string | null;
+        proyecto_id: string | null;
+        ubicacion_destino_id: string | null;
+        extracted: Record<string, unknown> | null;
+      };
+      if (
+        String(pend.proyecto_id ?? '') === proyectoId &&
+        String(pend.ubicacion_destino_id ?? '') === ubicacionDestinoId
+      ) {
+        return NextResponse.json({
+          success: true,
+          ok: true,
+          sinCambios: true,
+          message: 'La compra ya se encuentra en la ubicación seleccionada.',
+        });
+      }
+
+      const prevExtracted = pend.extracted ?? {};
       await supabase
         .from('ci_facturas_canal_pendientes')
         .update({
           proyecto_id: proyectoId,
           ubicacion_destino_id: ubicacionDestinoId,
+          extracted: {
+            ...prevExtracted,
+            reubicacion: {
+              reubicado_automaticamente: true,
+              fecha_reubicacion: new Date().toISOString(),
+              proyecto_id: proyectoId,
+              ubicacion_destino_id: ubicacionDestinoId,
+            },
+          },
           updated_at: new Date().toISOString(),
-        })
+        } as never)
         .eq('id', referenciaId);
 
-      if (pendiente.purchase_invoice_id) {
-        result = await reubicarCompraObra(supabase, {
-          referenciaId: String(pendiente.purchase_invoice_id),
+      if (pend.purchase_invoice_id) {
+        const result = await reubicarCompraObra(supabase, {
+          referenciaId: String(pend.purchase_invoice_id),
           referenciaTipo: 'purchase_invoice',
           proyectoId,
           ubicacionDestinoId,
           nombreObra: body.nombre_obra,
         });
-      } else {
-        result = {
-          purchaseInvoiceId: null,
-          compraId: null,
-          stockMovido: false,
-          ubicacionAnteriorId: null,
-        };
+
+        return NextResponse.json({
+          success: true,
+          ok: true,
+          sinCambios: result.sinCambios ?? false,
+          message: result.message,
+          purchaseInvoiceId: result.purchaseInvoiceId,
+          compraId: result.compraId,
+          stockMovido: result.stockMovido,
+        });
       }
-    } else {
-      result = await reubicarCompraObra(supabase, {
-        referenciaId: id,
-        referenciaTipo: 'compra',
-        proyectoId,
-        ubicacionDestinoId,
-        nombreObra: body.nombre_obra,
+
+      return NextResponse.json({
+        success: true,
+        ok: true,
+        message: 'Obra y almacén actualizados en la cola del canal.',
+        stockMovido: false,
       });
     }
 
+    const result = await reubicarCompraObra(supabase, {
+      referenciaId: id,
+      referenciaTipo: 'compra',
+      proyectoId,
+      ubicacionDestinoId,
+      nombreObra: body.nombre_obra,
+    });
+
     return NextResponse.json({
+      success: true,
       ok: true,
+      sinCambios: result.sinCambios ?? false,
+      message: result.message,
       purchaseInvoiceId: result.purchaseInvoiceId,
       compraId: result.compraId,
       stockMovido: result.stockMovido,
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error al reubicar';
-    return NextResponse.json({ error: message }, { status: 400 });
+  } catch (err: unknown) {
+    console.error('[CRITICAL REUBICAR COMPRA ERROR]:', err);
+    return NextResponse.json(
+      { error: formatErrorMessage(err) || 'Error interno al procesar la reubicación de la compra.' },
+      { status: 500 },
+    );
   }
 }

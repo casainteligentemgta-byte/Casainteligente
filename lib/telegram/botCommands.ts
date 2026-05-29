@@ -5,6 +5,7 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
   { command: 'entrada', description: 'Material que ingresa a la obra (foto + detalle)' },
   { command: 'salida', description: 'Material que egresa de la obra (foto + detalle)' },
+  { command: 'memoria', description: 'Memoria descriptiva: foto de avance por partida' },
   { command: 'obra', description: 'Elegir obra y subir fotos de evidencia' },
   { command: 'gasto', description: 'Comprobante de gasto de obra' },
   { command: 'bitacora', description: 'Bitácora por nota de voz' },

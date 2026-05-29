@@ -19,6 +19,11 @@ import {
   manejarGastoObraTelegram,
 } from '@/lib/telegram/mediaHandlers';
 import { manejarVozBitacoraTelegram } from '@/lib/telegram/bitacoraVoice';
+import {
+  esCallbackMemoriaObra,
+  manejarCallbackMemoriaObra,
+  manejarFotoMemoriaObraTelegram,
+} from '@/lib/telegram/memoriaObra';
 import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
 import {
   enviarPickerAsignarObraTelegram,
@@ -196,7 +201,9 @@ async function aplicarComando(
   if (cmd.mostrarPickerProyecto) {
     const est = await getTelegramEstado(supabase, chatId);
     const needsPicker =
-      cmd.mostrarPickerProyecto === 'obra' || !est.proyecto_id;
+      cmd.mostrarPickerProyecto === 'obra' ||
+      cmd.mostrarPickerProyecto === 'memoria_obra' ||
+      !est.proyecto_id;
     if (needsPicker) {
       await enviarPickerProyectosTelegram(supabase, chatId, cmd.mostrarPickerProyecto);
     } else if (cmd.mostrarPickerProyecto !== 'obra') {
@@ -314,6 +321,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledAvance) {
         return NextResponse.json({ ok: true, callback: 'avance_campo' });
+      }
+    }
+
+    if (esCallbackMemoriaObra(cq.data)) {
+      const handledMemoria = await manejarCallbackMemoriaObra(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledMemoria) {
+        return NextResponse.json({ ok: true, callback: 'memoria_obra' });
       }
     }
 
@@ -622,6 +640,30 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
             destino: 'gasto_obra',
           });
         }
+        break;
+      case 'memoria_obra_foto':
+        if (archivo.tipo === 'photo') {
+          await manejarFotoMemoriaObraTelegram({
+            supabase,
+            chatId,
+            estado,
+            fileId: archivo.fileId,
+            caption,
+          });
+        } else {
+          await sendTelegramMessage(
+            chatId,
+            '⚠️ En memoria descriptiva solo se aceptan <b>fotos</b> del avance físico.',
+            { parse_mode: 'HTML' },
+          );
+        }
+        break;
+      case 'memoria_obra':
+        await sendTelegramMessage(
+          chatId,
+          '📋 Elige primero la <b>partida</b> en los botones anteriores, o usa /memoria de nuevo.',
+          { parse_mode: 'HTML' },
+        );
         break;
       default:
         await enviarPickerAsignarObraTelegram({

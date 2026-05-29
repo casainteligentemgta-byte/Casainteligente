@@ -45,6 +45,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /entrada — lista de facturas pendientes por ingresar a almacén\n' +
         '• /salida — foto + detalle de material que egresa\n' +
+        '• /avance — reporte numérico diario de partida\n' +
+        '• /memoria — memoria descriptiva: foto de avance por partida\n' +
         '• /estado — ver modo activo\n' +
         '• /cancelar — volver al menú',
     };
@@ -64,6 +66,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/agua — obra, camión, prueba PPM, litros\n' +
         '/entrada — facturas pendientes de ingreso a almacén\n' +
         '/salida — material que egresa de la obra (foto + texto)\n' +
+        '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +
         '/estado — contexto actual',
@@ -137,6 +140,18 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
 
   if (cmd === '/salida') {
     return { handled: true, comandoSalida: true };
+  }
+
+  if (cmd === '/memoria') {
+    return {
+      handled: true,
+      contexto: 'memoria_obra',
+      mostrarPickerProyecto: 'memoria_obra',
+      mensaje:
+        '📸 <b>Memoria descriptiva de avance</b>\n\n' +
+        'Documenta el avance físico con fotos vinculadas a cada partida del presupuesto.\n' +
+        'Elige la obra abajo → partida → envía la foto.',
+    };
   }
 
   if (cmd === '/bitacora') {
