@@ -155,7 +155,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         setIngresoAlmacenOk(true);
         toast.success(r.yaExistia ? 'Ingreso a almacén ya registrado' : 'Ingreso a almacén registrado');
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'No se pudo registrar ingreso');
+        const msg = e instanceof Error ? e.message : 'No se pudo registrar ingreso';
+        toast.error(msg, { duration: 8000 });
       }
     });
   };
@@ -415,9 +416,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               )}
             </button>
 
-            <p className="text-[11px] text-zinc-500 text-center leading-relaxed">
-              El almacén queda asociado a la compra. Para recepción con líneas e inspección de
-              calidad use Almacén → Recepción de mercancía.
+            <p className="text-[11px] text-amber-200/90 text-center leading-relaxed">
+              Tras confirmar, pulse <strong className="text-amber-100">Ingreso a almacén</strong>.
+              Cada línea debe traer <strong className="text-amber-100">item_code (SKU)</strong>{' '}
+              igual al catálogo Almacén; si falta, edite la factura antes del ingreso.
             </p>
           </>
         )}

@@ -25,10 +25,33 @@ function propagarDepositIdFlat(flat: UbicacionInventario[]): void {
   }
 }
 
+function normalizarEtiquetaUbicacion(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Misma lógica operativa que el selector de ingreso (Telegram/compras):
+ * obra del proyecto + almacén central/móvil cuyo nombre coincide con la obra
+ * (p. ej. depósito «RANCHO FLAMBOYANT» sin ci_proyecto_id en BD).
+ */
+export function ubicacionPerteneceAProyecto(
+  u: UbicacionInventario,
+  proyectoId: string,
+  proyectoNombre?: string,
+): boolean {
+  if (u.obra_id === proyectoId || u.ci_proyecto_id === proyectoId) return true;
+
+  const pn = normalizarEtiquetaUbicacion(proyectoNombre ?? '');
+  if (!pn || (u.tipo !== 'almacen_central' && u.tipo !== 'almacen_movil')) return false;
+
+  const un = normalizarEtiquetaUbicacion(u.nombre);
+  return un === pn || un.includes(pn) || pn.includes(un);
+}
+
 /** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */
 export function resolverUbicacionIdsFiltro(
   ubicaciones: UbicacionInventario[],
-  opts: { proyectoId?: string; depositId?: string },
+  opts: { proyectoId?: string; proyectoNombre?: string; depositId?: string },
 ): string[] {
   const flat = [...ubicaciones];
   propagarObraIdFlat(flat);
@@ -36,7 +59,9 @@ export function resolverUbicacionIdsFiltro(
 
   let candidatas = flat;
   if (opts.proyectoId) {
-    candidatas = candidatas.filter((u) => u.obra_id === opts.proyectoId);
+    candidatas = candidatas.filter((u) =>
+      ubicacionPerteneceAProyecto(u, opts.proyectoId!, opts.proyectoNombre),
+    );
   }
   if (opts.depositId) {
     candidatas = candidatas.filter((u) => u.deposit_id === opts.depositId);

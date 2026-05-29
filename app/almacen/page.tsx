@@ -368,8 +368,11 @@ export default function InventoryMasterPage() {
             setCargandoStockUbicacion(true);
             try {
                 const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
+                const nombreProyectoFiltro =
+                    proyectos.find((p) => p.id === filterProyectoId)?.nombre ?? '';
                 const ids = resolverUbicacionIdsFiltro(ubicaciones, {
                     proyectoId: filterProyectoId || undefined,
+                    proyectoNombre: nombreProyectoFiltro || undefined,
                     depositId: filterDepositId || undefined,
                 });
                 if (cancelled) return;
@@ -428,7 +431,7 @@ export default function InventoryMasterPage() {
         return () => {
             cancelled = true;
         };
-    }, [filterProyectoId, filterDepositId, supabase, items]);
+    }, [filterProyectoId, filterDepositId, supabase, items, proyectos]);
 
     useEffect(() => {
         if (!itemsCatalogo.length || !depositsLista.length) {

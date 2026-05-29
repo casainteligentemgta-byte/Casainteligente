@@ -7,6 +7,7 @@ import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
+import { enriquecerLineasConMaterialPorSku } from '@/lib/almacen/resolverMaterialIdPorSku';
 
 export function linkConfirmarCompraTelegram(pendingId: string, baseUrl?: string): string {
   const base = (
@@ -119,11 +120,18 @@ export async function confirmarCompraDesdeCanal(
   }
 
   const fecha = (extracted.date ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
-  const lineas = params.lineasOverride?.length
+  const lineasBase = params.lineasOverride?.length
     ? params.lineasOverride
     : lineasDesdeExtracted(extracted);
-  if (lineas.length === 0) {
+  if (lineasBase.length === 0) {
     throw new Error('Agregue al menos una línea con descripción.');
+  }
+
+  const { lineas, sinMatch } = await enriquecerLineasConMaterialPorSku(supabase, lineasBase);
+  if (sinMatch.length === lineas.length) {
+    throw new Error(
+      'Ninguna línea tiene SKU reconocido en global_inventory. Edite la factura y asigne item_code (SAP) o registre por Recepción de mercancía.',
+    );
   }
 
   const sumLineas = lineas.reduce((s, l) => s + l.cantidad * l.precio_unitario, 0);

@@ -709,7 +709,11 @@ export default function ComprasPage() {
             const res = await fetch(`/api/contabilidad/compras/${c.id}/ingreso-almacen`, {
                 method: 'POST',
             });
-            const data = (await res.json()) as { yaExistia?: boolean; error?: string };
+            const data = (await res.json()) as {
+                yaExistia?: boolean;
+                error?: string;
+                sinMatch?: string[];
+            };
             if (!res.ok) throw new Error(data.error || 'No se pudo registrar ingreso');
             if (data.yaExistia) {
                 setError('Esta compra ya tenía ingreso registrado en almacén.');

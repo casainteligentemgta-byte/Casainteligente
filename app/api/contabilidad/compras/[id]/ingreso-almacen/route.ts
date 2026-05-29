@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import {
+  mensajeLineasSinMaterialSku,
+  resolverMaterialIdLineasCompra,
+} from '@/lib/almacen/resolverMaterialIdPorSku';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
@@ -14,13 +18,6 @@ type CompraContableRow = {
   total_amount: number | null;
   ubicacion_destino_id: string | null;
   document_storage_path: string | null;
-};
-
-type LineaContableRow = {
-  material_id: string | null;
-  descripcion: string | null;
-  cantidad: number | null;
-  precio_unitario: number | null;
 };
 
 type CompraFacturaExistente = { id: string };
@@ -77,33 +74,19 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       });
     }
 
-    const { data: lineasRaw, error: lErr } = await supabase
-      .from('contabilidad_compra_lineas')
-      .select('material_id,descripcion,cantidad,precio_unitario')
-      .eq('compra_id', compraId);
-    const lineas = (lineasRaw ?? []) as LineaContableRow[];
-    if (lErr) {
-      return NextResponse.json(
-        { error: `No se pudieron leer líneas de la compra: ${lErr.message}` },
-        { status: 400 },
-      );
-    }
-
-    const lineasInventario = lineas
-      .filter((l) => String(l.material_id ?? '').trim())
-      .map((l) => ({
-        material_id: String(l.material_id),
-        descripcion: String(l.descripcion ?? '').trim() || 'Ítem',
-        cantidad: Number(l.cantidad ?? 0),
-        precio_unitario: Number(l.precio_unitario ?? 0),
-      }))
-      .filter((l) => l.cantidad > 0);
+    const resuelto = await resolverMaterialIdLineasCompra(supabase, compraId);
+    const lineasInventario = resuelto.lineas;
 
     if (!lineasInventario.length) {
+      const detalle = mensajeLineasSinMaterialSku(resuelto.sinMatch);
       return NextResponse.json(
         {
-          error:
-            'La compra no tiene materiales vinculados para inventario. Asigne material_id en líneas de contabilidad.',
+          error: detalle
+            ? `${detalle} Luego pulse de nuevo Ingreso a almacén.`
+            : 'La compra no tiene materiales vinculados para inventario. Asigne item_code (SKU) en las líneas.',
+          sinMatch: resuelto.sinMatch,
+          vinculadas: resuelto.vinculadas,
+          total: resuelto.total,
         },
         { status: 400 },
       );
