@@ -254,7 +254,6 @@ export default function EditInventoryItemPage() {
         name: item.name.trim(),
         category_id: item.category_id,
         unit: item.unit,
-        stock_available: Number(item.stock_available) || 0,
         stock_quarantine: Number(item.stock_quarantine) || 0,
         reorder_point: Number(item.reorder_point) || 0,
         average_weighted_cost: Number(item.average_weighted_cost) || 0,
@@ -478,14 +477,12 @@ export default function EditInventoryItemPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Stock disponible (cantidad)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={item.stock_available}
-                    onChange={(e) => setItem((prev) => (prev ? { ...prev, stock_available: Number(e.target.value) } : prev))}
-                    className="w-full bg-black border border-zinc-800 rounded-xl py-4 px-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
-                  />
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                    Stock físico (inventario_stock)
+                  </label>
+                  <p className="w-full rounded-xl border border-white/10 bg-[#0A0A0F] py-4 px-4 text-sm font-bold text-zinc-400">
+                    Se gestiona por ubicación (compras, transferencias y despacho). No editable en el maestro SKU.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

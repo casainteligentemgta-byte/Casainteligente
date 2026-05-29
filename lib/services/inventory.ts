@@ -33,39 +33,17 @@ export class InventoryService {
 
         if (itemError || !item) throw new Error('Material not found');
 
-        const prevStock = Number(item.stock_available);
         const prevCost = Number(item.average_weighted_cost);
-        let newStock = prevStock;
         let newCost = prevCost;
 
-        // 2. Calculate new stock and cost based on movement type
-        switch (type) {
-            case '101': // Entry by Purchase
-                newStock = prevStock + quantity;
-                if (unit_price !== undefined) {
-                    // Average Weighted Cost Formula: (Stock Anterior * Costo Anterior + Stock Nuevo * Precio Nuevo) / (Stock Total)
-                    newCost = (prevStock * prevCost + quantity * unit_price) / newStock;
-                }
-                break;
-            case '201': // Consumption
-                newStock = prevStock - quantity;
-                break;
-            case '311': // Transfer (In this simple model, we just record the movement, maybe stock doesn't change if it's within same logical inventory)
-                // Usually 311 involves two movements (one out, one in). For now let's assume it's just a record.
-                break;
-            case '501': // Audit Entry
-                newStock = prevStock + quantity;
-                break;
-            case '601': // Return
-                newStock = prevStock + quantity;
-                break;
+        // Stock físico: inventario_stock + RPC; aquí solo costo en maestro SKU
+        if (type === '101' && unit_price !== undefined && quantity > 0) {
+            newCost = unit_price;
         }
 
-        // 3. Update Global Inventory
         const { error: updateError } = await this.supabase
             .from('global_inventory')
             .update({
-                stock_available: newStock,
                 average_weighted_cost: newCost,
                 updated_at: new Date().toISOString()
             })
@@ -78,8 +56,8 @@ export class InventoryService {
             material_id,
             movement_type_code: type,
             quantity,
-            previous_stock: prevStock,
-            new_stock: newStock,
+            previous_stock: 0,
+            new_stock: 0,
             previous_cost: prevCost,
             new_cost: newCost,
             reference_id: reference_id || null,

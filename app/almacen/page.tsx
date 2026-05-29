@@ -39,6 +39,7 @@ import {
     type PartidaRow,
     type ProyectoRow,
 } from '@/lib/almacen/inventoryClasificacion';
+import { getStockAgregadoPorMaterialObra } from '@/lib/almacen/getStockRealObra';
 import {
     cargarStockPorUbicaciones,
     listarUbicacionesParaFiltroInventario,
@@ -227,13 +228,25 @@ export default function InventoryMasterPage() {
                 });
                 if (cancelled) return;
 
-                if (!ids.length) {
+                let stockMap: Map<string, StockEnUbicacionResumen>;
+                if (!ids.length && filterProyectoId) {
+                    const agg = await getStockAgregadoPorMaterialObra(supabase, filterProyectoId);
+                    stockMap = new Map();
+                    for (const [materialId, qty] of agg) {
+                        if (qty > 0) {
+                            stockMap.set(materialId, {
+                                cantidad_disponible: qty,
+                                ubicacion_nombres: ['Obra'],
+                            });
+                        }
+                    }
+                } else if (!ids.length) {
                     setStockPorUbicacion(new Map());
                     setItemsDesdeStock([]);
                     return;
+                } else {
+                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
                 }
-
-                const stockMap = await cargarStockPorUbicaciones(supabase, ids);
                 if (cancelled) return;
                 setStockPorUbicacion(stockMap);
 
@@ -362,11 +375,9 @@ export default function InventoryMasterPage() {
                 setCatalogImagenByProductId({});
             }
 
-            // Calculate stats
-            const totalVal = inventoryItems.reduce((acc, item) =>
-                acc + (Number(item.stock_available) * Number(item.average_weighted_cost)), 0);
-            const lowStock = inventoryItems.filter(item =>
-                Number(item.stock_available) <= Number(item.reorder_point)).length;
+            // KPIs de stock usan inventario_stock (filtro obra); sin filtro el valor es referencial del catálogo
+            const totalVal = 0;
+            const lowStock = 0;
             const quarantine = inventoryItems.reduce((acc, item) =>
                 acc + Number(item.stock_quarantine), 0);
 
