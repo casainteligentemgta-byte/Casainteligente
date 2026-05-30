@@ -8,7 +8,70 @@ import type { UbicacionInventario } from '@/types/inventario-obra';
 export type StockEnUbicacionResumen = {
   cantidad_disponible: number;
   ubicacion_nombres: string[];
+  /** Proyecto(s) de obra según inv_ubicaciones / stock físico (no solo catálogo). */
+  proyecto_ids: string[];
+  proyecto_nombres: string[];
 };
+
+export function crearStockResumenVacio(): StockEnUbicacionResumen {
+  return {
+    cantidad_disponible: 0,
+    ubicacion_nombres: [],
+    proyecto_ids: [],
+    proyecto_nombres: [],
+  };
+}
+
+function agregarProyectoAlResumen(
+  resumen: StockEnUbicacionResumen,
+  proyectoId?: string | null,
+  proyectoNombre?: string | null,
+): void {
+  const pid = proyectoId?.trim();
+  if (pid && !resumen.proyecto_ids.includes(pid)) {
+    resumen.proyecto_ids.push(pid);
+  }
+  const nombre = proyectoNombre?.trim();
+  if (nombre && !resumen.proyecto_nombres.includes(nombre)) {
+    resumen.proyecto_nombres.push(nombre);
+  }
+}
+
+/** Fusiona cantidad y etiquetas de ubicación/proyecto en el resumen por material. */
+export function fusionarFilaEnResumenStock(
+  map: Map<string, StockEnUbicacionResumen>,
+  materialId: string,
+  opts: {
+    cantidad: number;
+    ubicacionNombre: string;
+    proyectoId?: string | null;
+    proyectoNombre?: string | null;
+  },
+): void {
+  const nombreUb = opts.ubicacionNombre.trim() || 'Almacén';
+  const prev = map.get(materialId) ?? crearStockResumenVacio();
+  prev.cantidad_disponible += opts.cantidad;
+  if (!prev.ubicacion_nombres.includes(nombreUb)) {
+    prev.ubicacion_nombres.push(nombreUb);
+  }
+  agregarProyectoAlResumen(prev, opts.proyectoId, opts.proyectoNombre);
+  map.set(materialId, prev);
+}
+
+/** Rellena proyecto en resúmenes que solo tienen ubicación (p. ej. fallback RPC). */
+export function enriquecerMapaStockConProyectoFiltro(
+  map: Map<string, StockEnUbicacionResumen>,
+  opts: { proyectoId?: string; proyectoNombre?: string },
+): void {
+  const pid = opts.proyectoId?.trim();
+  const nombre = opts.proyectoNombre?.trim();
+  if (!pid && !nombre) return;
+  for (const resumen of Array.from(map.values())) {
+    if (!resumen.proyecto_ids.length && !resumen.proyecto_nombres.length) {
+      agregarProyectoAlResumen(resumen, pid, nombre);
+    }
+  }
+}
 
 function propagarDepositIdFlat(flat: UbicacionInventario[]): void {
   const byId = new Map(flat.map((u) => [u.id, u]));
@@ -97,8 +160,35 @@ export function materialCoincideFiltroProyectoDeposito(
 const SELECT_STOCK_FILTRO = `
   material_id,
   cantidad_disponible,
-  ubicacion:inv_ubicaciones ( id, nombre, deposit_id, ci_proyecto_id )
+  ubicacion:inv_ubicaciones (
+    id,
+    nombre,
+    deposit_id,
+    ci_proyecto_id,
+    proyecto:ci_proyectos ( id, nombre )
+  )
 `;
+
+type UbicacionStockRow = {
+  nombre?: string;
+  ci_proyecto_id?: string | null;
+  proyecto?: { id: string; nombre: string } | Array<{ id: string; nombre: string }> | null;
+};
+
+function parseUbicacionStockRow(
+  raw: UbicacionStockRow | UbicacionStockRow[] | null | undefined,
+): { nombre: string; proyectoId?: string; proyectoNombre?: string } {
+  const ub = Array.isArray(raw) ? raw[0] : raw;
+  const proyRaw = ub?.proyecto;
+  const proy = Array.isArray(proyRaw) ? proyRaw[0] : proyRaw;
+  const proyectoId = String(proy?.id ?? ub?.ci_proyecto_id ?? '').trim() || undefined;
+  const proyectoNombre = String(proy?.nombre ?? '').trim() || undefined;
+  return {
+    nombre: String(ub?.nombre ?? 'Almacén').trim() || 'Almacén',
+    proyectoId,
+    proyectoNombre,
+  };
+}
 
 /** Stock físico por material en las ubicaciones indicadas (migr. 180). */
 export async function cargarStockPorUbicaciones(
@@ -126,25 +216,15 @@ export async function cargarStockPorUbicaciones(
       const qty = Number(row.cantidad_disponible ?? 0);
       if (qty <= 0) continue;
 
-      const ubRaw = row.ubicacion as
-        | { nombre?: string }
-        | Array<{ nombre?: string }>
-        | null;
-      const ub = Array.isArray(ubRaw) ? ubRaw[0] : ubRaw;
-      const nombre = String(ub?.nombre ?? 'Almacén').trim() || 'Almacén';
-
-      const prev = map.get(materialId);
-      if (prev) {
-        prev.cantidad_disponible += qty;
-        if (!prev.ubicacion_nombres.includes(nombre)) {
-          prev.ubicacion_nombres.push(nombre);
-        }
-      } else {
-        map.set(materialId, {
-          cantidad_disponible: qty,
-          ubicacion_nombres: [nombre],
-        });
-      }
+      const ub = parseUbicacionStockRow(
+        row.ubicacion as UbicacionStockRow | UbicacionStockRow[] | null,
+      );
+      fusionarFilaEnResumenStock(map, materialId, {
+        cantidad: qty,
+        ubicacionNombre: ub.nombre,
+        proyectoId: ub.proyectoId,
+        proyectoNombre: ub.proyectoNombre,
+      });
     }
   }
 

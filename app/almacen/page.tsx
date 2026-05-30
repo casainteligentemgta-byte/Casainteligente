@@ -45,6 +45,8 @@ import { getStockAgregadoPorMaterialObra } from '@/lib/almacen/getStockRealObra'
 import {
     cargarStockPorUbicaciones,
     cargarValorInventarioPorDeposito,
+    enriquecerMapaStockConProyectoFiltro,
+    fusionarFilaEnResumenStock,
     listarUbicacionesParaFiltroInventario,
     resolverUbicacionIdsFiltro,
     type StockEnUbicacionResumen,
@@ -106,9 +108,37 @@ function labelUbicacionEnTabla(
     furnitureById: Map<string, FurnitureRow>,
 ): string {
     if (filtroPorUbicacionActivo && stockUb?.ubicacion_nombres?.length) {
-        return stockUb.ubicacion_nombres.join(' · ');
+        const almacenes = stockUb.ubicacion_nombres.join(' · ');
+        const obras = (stockUb.proyecto_nombres ?? []).filter(Boolean).join(' · ');
+        if (obras && !almacenes.toLowerCase().includes(obras.toLowerCase())) {
+            return `${almacenes} · ${obras}`;
+        }
+        return almacenes;
     }
     return formatInventoryLocationLabel(item, depositsById, furnitureById);
+}
+
+function obraMostradaEnTabla(
+    item: InventoryItem,
+    stockUb: StockEnUbicacionResumen | undefined,
+    filtroPorUbicacionActivo: boolean,
+    filterProyectoId: string,
+    proyectos: ProyectoRow[],
+): { nombre: string; desdeStockFisico: boolean } | null {
+    if (item.proyecto?.nombre?.trim()) {
+        return { nombre: item.proyecto.nombre.trim(), desdeStockFisico: false };
+    }
+    const desdeUbicacion = stockUb?.proyecto_nombres?.find((n) => n.trim());
+    if (desdeUbicacion) {
+        return { nombre: desdeUbicacion.trim(), desdeStockFisico: true };
+    }
+    if (filtroPorUbicacionActivo && filterProyectoId) {
+        const pr = proyectos.find((p) => p.id === filterProyectoId);
+        if (pr?.nombre?.trim()) {
+            return { nombre: pr.nombre.trim(), desdeStockFisico: true };
+        }
+    }
+    return null;
 }
 
 const NAV_ALMACEN = [
@@ -410,10 +440,20 @@ export default function InventoryMasterPage() {
                 });
                 if (cancelled) return;
 
-                const nombresUbicacionFiltro = ubicaciones
-                    .filter((u) => ids.includes(u.id))
+                const ubicacionesFiltro = ubicaciones.filter((u) => ids.includes(u.id));
+                const nombresUbicacionFiltro = ubicacionesFiltro
                     .map((u) => u.nombre)
                     .filter(Boolean);
+                const proyectoDesdeUbicaciones = ubicacionesFiltro.find(
+                    (u) => u.proyecto?.id || u.obra_id,
+                );
+                const proyectoIdStock =
+                    proyectoDesdeUbicaciones?.proyecto?.id ??
+                    proyectoDesdeUbicaciones?.obra_id ??
+                    filterProyectoId;
+                const proyectoNombreStock =
+                    proyectoDesdeUbicaciones?.proyecto?.nombre ??
+                    (nombreProyectoFiltro || undefined);
 
                 let stockMap: Map<string, StockEnUbicacionResumen>;
                 if (!ids.length && filterProyectoId) {
@@ -423,13 +463,15 @@ export default function InventoryMasterPage() {
                         nombreProyectoFiltro || undefined,
                     );
                     stockMap = new Map();
+                    const etiquetaUb =
+                        nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
                     agg.forEach((qty, materialId) => {
                         if (qty > 0) {
-                            stockMap.set(materialId, {
-                                cantidad_disponible: qty,
-                                ubicacion_nombres: nombresUbicacionFiltro.length
-                                    ? nombresUbicacionFiltro
-                                    : [nombreProyectoFiltro || 'Obra'],
+                            fusionarFilaEnResumenStock(stockMap, materialId, {
+                                cantidad: qty,
+                                ubicacionNombre: etiquetaUb,
+                                proyectoId: filterProyectoId,
+                                proyectoNombre: nombreProyectoFiltro || undefined,
                             });
                         }
                     });
@@ -445,16 +487,24 @@ export default function InventoryMasterPage() {
                             filterProyectoId,
                             nombreProyectoFiltro || undefined,
                         );
-                        const etiquetaObra =
+                        const etiquetaUb =
                             nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
                         agg.forEach((qty, materialId) => {
                             if (qty <= 0 || stockMap.has(materialId)) return;
-                            stockMap.set(materialId, {
-                                cantidad_disponible: qty,
-                                ubicacion_nombres: [etiquetaObra],
+                            fusionarFilaEnResumenStock(stockMap, materialId, {
+                                cantidad: qty,
+                                ubicacionNombre: etiquetaUb,
+                                proyectoId: proyectoIdStock,
+                                proyectoNombre: proyectoNombreStock,
                             });
                         });
                     }
+                }
+                if (filterProyectoId) {
+                    enriquecerMapaStockConProyectoFiltro(stockMap, {
+                        proyectoId: filterProyectoId,
+                        proyectoNombre: nombreProyectoFiltro || undefined,
+                    });
                 }
                 if (cancelled) return;
                 setStockPorUbicacion(stockMap);
@@ -476,7 +526,24 @@ export default function InventoryMasterPage() {
                     setItemsDesdeStock([]);
                     return;
                 }
-                setItemsDesdeStock((extraRows ?? []) as InventoryItem[]);
+                const prFiltro = filterProyectoId
+                    ? proyectos.find((p) => p.id === filterProyectoId)
+                    : undefined;
+                setItemsDesdeStock(
+                    (extraRows ?? []).map((row) => {
+                        const item = row as InventoryItem;
+                        if (item.proyecto_id?.trim() || !prFiltro) return item;
+                        return {
+                            ...item,
+                            proyecto_id: prFiltro.id,
+                            proyecto: {
+                                id: prFiltro.id,
+                                nombre: prFiltro.nombre,
+                                entidad_id: prFiltro.entidad_id,
+                            },
+                        };
+                    }),
+                );
             } catch (e) {
                 console.warn('[inventario] stock por ubicación:', e);
                 if (!cancelled) {
@@ -1337,6 +1404,13 @@ export default function InventoryMasterPage() {
                                 const stockUb = filtroPorUbicacionActivo
                                     ? stockPorUbicacion.get(item.id)
                                     : undefined;
+                                const obraTabla = obraMostradaEnTabla(
+                                    item,
+                                    stockUb,
+                                    filtroPorUbicacionActivo,
+                                    filterProyectoId,
+                                    proyectos,
+                                );
 
                                 return (
                                 <tr
@@ -1385,9 +1459,22 @@ export default function InventoryMasterPage() {
                                             ) : (
                                                 <p className="text-zinc-600 uppercase tracking-wider">Sin entidad</p>
                                             )}
-                                            {item.proyecto?.nombre ? (
-                                                <p className="text-sky-400/90 truncate" title={item.proyecto.nombre}>
-                                                    {item.proyecto.nombre}
+                                            {obraTabla ? (
+                                                <p
+                                                    className={`truncate ${
+                                                        obraTabla.desdeStockFisico
+                                                            ? 'text-sky-300/95'
+                                                            : 'text-sky-400/90'
+                                                    }`}
+                                                    title={obraTabla.nombre}
+                                                >
+                                                    {obraTabla.nombre}
+                                                    {obraTabla.desdeStockFisico &&
+                                                    !item.proyecto_id ? (
+                                                        <span className="ml-1 text-[9px] font-black uppercase text-zinc-500">
+                                                            · stock
+                                                        </span>
+                                                    ) : null}
                                                 </p>
                                             ) : (
                                                 <p className="text-zinc-600">Sin proyecto</p>
