@@ -10,7 +10,10 @@ import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
-import { enriquecerLineasConMaterialPorSku } from '@/lib/almacen/resolverMaterialIdPorSku';
+import {
+  asegurarMaterialesLineasCompra,
+  mensajeLineasSinMaterialSku,
+} from '@/lib/almacen/resolverMaterialIdPorSku';
 
 export function linkConfirmarCompraTelegram(pendingId: string, baseUrl?: string): string {
   const base = (
@@ -130,10 +133,18 @@ export async function confirmarCompraDesdeCanal(
     throw new Error('Agregue al menos una línea con descripción.');
   }
 
-  const { lineas, sinMatch } = await enriquecerLineasConMaterialPorSku(supabase, lineasBase);
-  if (sinMatch.length === lineas.length) {
+  const { lineas, sinMatch } = await asegurarMaterialesLineasCompra(supabase, lineasBase, {
+    proyectoId,
+    fecha,
+    ubicacionDestinoId,
+  });
+
+  const lineasConMaterial = lineas.filter((l) => l.material_id?.trim());
+  if (!lineasConMaterial.length) {
+    const detalle = mensajeLineasSinMaterialSku(sinMatch);
     throw new Error(
-      'Ninguna línea tiene SKU reconocido en global_inventory. Edite la factura y asigne item_code (SAP) o registre por Recepción de mercancía.',
+      detalle ||
+        'No se pudo vincular ninguna línea al catálogo. Revise descripciones o códigos SAP en la factura.',
     );
   }
 

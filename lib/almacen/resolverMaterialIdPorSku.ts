@@ -1,8 +1,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  matchProcurementMaterialId,
+  type MaterialCatalogRow,
+} from '@/lib/almacen/matchProcurementMaterial';
+import { fetchDefaultDepositId } from '@/lib/almacen/formatInventoryLocation';
+import {
+  crearMaterialParaLineaCompra,
+  resolverMaterialParaLineaCompra,
+} from '@/lib/almacen/resolverMaterialParaCompra';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 
+/** Normaliza códigos SAP / item_code para comparación (OCR suele omitir prefijos o espacios). */
 export function normSkuCodigo(s: string): string {
-  return s.trim().toUpperCase();
+  return s
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/^SAP-?/, '');
 }
 
 export async function cargarMapaSkuGlobalInventory(
@@ -24,29 +38,86 @@ export async function cargarMapaSkuGlobalInventory(
   return map;
 }
 
+export async function cargarCatalogoMaterialCompra(
+  supabase: SupabaseClient,
+): Promise<MaterialCatalogRow[]> {
+  const { data, error } = await supabase
+    .from('global_inventory')
+    .select('id, name, sap_code')
+    .limit(5000);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as MaterialCatalogRow[];
+}
+
+async function resolverMaterialIdEnLinea(
+  supabase: SupabaseClient,
+  l: LineaCompraContabilidadInput,
+  opts: {
+    mapaSku: Map<string, string>;
+    catalogo: MaterialCatalogRow[];
+    proyectoId?: string;
+  },
+): Promise<{ linea: LineaCompraContabilidadInput; sinMatch?: string }> {
+  if (l.material_id?.trim()) return { linea: l };
+
+  const cod = normSkuCodigo(String(l.item_code ?? ''));
+  if (cod) {
+    const porMapa = opts.mapaSku.get(cod);
+    if (porMapa) return { linea: { ...l, material_id: porMapa } };
+  }
+
+  const desc = l.descripcion?.trim() ?? '';
+  if (desc.length >= 3) {
+    const porNombre = await resolverMaterialParaLineaCompra(supabase, {
+      item_code: l.item_code ?? undefined,
+      description: desc,
+      proyectoId: opts.proyectoId,
+    });
+    if (porNombre) {
+      return { linea: { ...l, material_id: porNombre.id } };
+    }
+
+    const porFuzzy = matchProcurementMaterialId(desc, opts.catalogo);
+    if (porFuzzy) return { linea: { ...l, material_id: porFuzzy } };
+  }
+
+  const etiqueta = cod || desc || 'Línea sin identificar';
+  return { linea: l, sinMatch: etiqueta };
+}
+
+/** SKU + nombre exacto + coincidencia aproximada por descripción (como recepción de mercancía). */
+export async function enriquecerLineasConMaterial(
+  supabase: SupabaseClient,
+  lineas: LineaCompraContabilidadInput[],
+  opts?: { proyectoId?: string },
+): Promise<{ lineas: LineaCompraContabilidadInput[]; sinMatch: string[] }> {
+  const [mapa, catalogo] = await Promise.all([
+    cargarMapaSkuGlobalInventory(supabase),
+    cargarCatalogoMaterialCompra(supabase),
+  ]);
+  const sinMatch: string[] = [];
+  const out: LineaCompraContabilidadInput[] = [];
+
+  for (const l of lineas) {
+    const r = await resolverMaterialIdEnLinea(supabase, l, {
+      mapaSku: mapa,
+      catalogo,
+      proyectoId: opts?.proyectoId,
+    });
+    out.push(r.linea);
+    if (r.sinMatch) sinMatch.push(r.sinMatch);
+  }
+
+  return { lineas: out, sinMatch };
+}
+
+/** @deprecated Use enriquecerLineasConMaterial */
 export async function enriquecerLineasConMaterialPorSku(
   supabase: SupabaseClient,
   lineas: LineaCompraContabilidadInput[],
+  opts?: { proyectoId?: string },
 ): Promise<{ lineas: LineaCompraContabilidadInput[]; sinMatch: string[] }> {
-  const mapa = await cargarMapaSkuGlobalInventory(supabase);
-  const sinMatch: string[] = [];
-
-  const out = lineas.map((l) => {
-    if (l.material_id?.trim()) return l;
-    const cod = normSkuCodigo(String(l.item_code ?? ''));
-    if (!cod) {
-      sinMatch.push(l.descripcion?.trim() || 'Línea sin SKU');
-      return l;
-    }
-    const matId = mapa.get(cod);
-    if (!matId) {
-      sinMatch.push(cod);
-      return l;
-    }
-    return { ...l, material_id: matId };
-  });
-
-  return { lineas: out, sinMatch };
+  return enriquecerLineasConMaterial(supabase, lineas, opts);
 }
 
 type LineaCompraDb = {
@@ -83,8 +154,36 @@ export async function resolverMaterialIdLineasCompra(
   if (error) throw new Error(error.message);
 
   const lineas = (raw ?? []) as LineaCompraDb[];
-  const mapa = await cargarMapaSkuGlobalInventory(supabase);
-  const sinMatch: string[] = [];
+  const { data: compraRow } = await supabase
+    .from('contabilidad_compras')
+    .select('proyecto_id, fecha, ubicacion_destino_id')
+    .eq('id', compraId)
+    .maybeSingle();
+  const compraMeta = compraRow as {
+    proyecto_id?: string;
+    fecha?: string;
+    ubicacion_destino_id?: string | null;
+  } | null;
+  const proyectoId = String(compraMeta?.proyecto_id ?? '').trim();
+  const fecha =
+    (compraMeta?.fecha ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+
+  const inputs: LineaCompraContabilidadInput[] = lineas.map((l) => ({
+    material_id: l.material_id,
+    descripcion: String(l.descripcion ?? '').trim() || 'Ítem',
+    item_code: l.item_code,
+    unidad: 'UND',
+    cantidad: Number(l.cantidad ?? 0),
+    precio_unitario: Number(l.precio_unitario ?? 0),
+  }));
+
+  const { lineas: enriquecidas, sinMatch } = proyectoId
+    ? await asegurarMaterialesLineasCompra(supabase, inputs, {
+        proyectoId,
+        fecha,
+        ubicacionDestinoId: compraMeta?.ubicacion_destino_id,
+      })
+    : await enriquecerLineasConMaterial(supabase, inputs);
   let vinculadas = 0;
 
   const paraInventario: Array<{
@@ -94,23 +193,15 @@ export async function resolverMaterialIdLineasCompra(
     precio_unitario: number;
   }> = [];
 
-  for (const l of lineas) {
-    let matId = l.material_id?.trim() ?? '';
-    if (!matId) {
-      const cod = normSkuCodigo(String(l.item_code ?? ''));
-      if (cod) {
-        matId = mapa.get(cod) ?? '';
-        if (matId) {
-          await supabase
-            .from('contabilidad_compra_lineas')
-            .update({ material_id: matId })
-            .eq('id', l.id);
-        } else {
-          sinMatch.push(cod);
-        }
-      } else {
-        sinMatch.push(String(l.descripcion ?? 'Sin SKU').trim() || 'Línea');
-      }
+  for (let i = 0; i < lineas.length; i++) {
+    const l = lineas[i];
+    const enr = enriquecidas[i];
+    const matId = enr?.material_id?.trim() ?? l.material_id?.trim() ?? '';
+    if (matId && matId !== (l.material_id?.trim() ?? '')) {
+      await supabase
+        .from('contabilidad_compra_lineas')
+        .update({ material_id: matId })
+        .eq('id', l.id);
     }
     if (matId) {
       vinculadas += 1;
@@ -132,6 +223,81 @@ export async function resolverMaterialIdLineasCompra(
     sinMatch,
     lineas: paraInventario,
   };
+}
+
+/**
+ * Resuelve material_id por SKU/nombre y crea ítems faltantes (paridad con recepción de mercancía).
+ */
+export async function asegurarMaterialesLineasCompra(
+  supabase: SupabaseClient,
+  lineas: LineaCompraContabilidadInput[],
+  opts: {
+    proyectoId: string;
+    fecha: string;
+    ubicacionDestinoId?: string | null;
+  },
+): Promise<{ lineas: LineaCompraContabilidadInput[]; sinMatch: string[]; creados: number }> {
+  let depositId: string | null = null;
+  const ubId = opts.ubicacionDestinoId?.trim();
+  if (ubId) {
+    const { data: ub } = await supabase
+      .from('inv_ubicaciones')
+      .select('deposit_id')
+      .eq('id', ubId)
+      .maybeSingle();
+    if (ub?.deposit_id) depositId = String(ub.deposit_id);
+  }
+  if (!depositId) {
+    depositId = await fetchDefaultDepositId(supabase);
+  }
+
+  const { lineas: enriquecidas, sinMatch: prevSinMatch } = await enriquecerLineasConMaterial(
+    supabase,
+    lineas,
+    { proyectoId: opts.proyectoId },
+  );
+
+  const sinMatch: string[] = [];
+  let creados = 0;
+  const out: LineaCompraContabilidadInput[] = [];
+
+  for (const l of enriquecidas) {
+    if (l.material_id?.trim()) {
+      out.push(l);
+      continue;
+    }
+    const desc = l.descripcion?.trim() ?? '';
+    if (desc.length < 2) {
+      sinMatch.push('Línea sin descripción');
+      out.push(l);
+      continue;
+    }
+    try {
+      const materialId = await crearMaterialParaLineaCompra(supabase, {
+        descripcion: desc,
+        item_code: l.item_code,
+        unidad: l.unidad,
+        precio_unitario: l.precio_unitario,
+        fecha: opts.fecha,
+        proyectoId: opts.proyectoId,
+        depositId,
+      });
+      creados += 1;
+      out.push({ ...l, material_id: materialId });
+    } catch {
+      sinMatch.push(l.item_code?.trim() || desc);
+      out.push(l);
+    }
+  }
+
+  const hayMaterial = out.some((l) => l.material_id?.trim());
+  if (!hayMaterial) {
+    for (const s of prevSinMatch) {
+      if (!sinMatch.includes(s)) sinMatch.push(s);
+    }
+  }
+
+  return { lineas: out, sinMatch, creados };
 }
 
 export function mensajeLineasSinMaterialSku(sinMatch: string[]): string {

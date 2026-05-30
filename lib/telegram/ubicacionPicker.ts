@@ -110,6 +110,7 @@ export async function enviarPickerUbicacionesTelegram(
 
   const ubicaciones = await listarUbicacionesParaSelector(supabase, {
     proyectoId: params.proyectoId,
+    soloAlmacenes: true,
   });
 
   if (!ubicaciones.length) {
@@ -125,7 +126,7 @@ export async function enviarPickerUbicacionesTelegram(
 
   await sendTelegramMessage(
     chatId,
-    `📦 <b>Elige el almacén de ingreso</b>\nObra: <b>${params.nombreObra}</b>\n<i>Almacén central, móvil o bodega en obra</i>`,
+    `📦 <b>Elige el almacén de ingreso</b>\nObra: <b>${params.nombreObra}</b>\n<i>Almacén central o móvil</i>`,
     { parse_mode: 'HTML', reply_markup: keyboard },
   );
 }

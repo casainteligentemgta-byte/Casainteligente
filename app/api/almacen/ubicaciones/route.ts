@@ -38,6 +38,7 @@ export async function GET(req: Request) {
   const entidadId = url.searchParams.get('entidad_id')?.trim() || undefined;
   const excluirProyectoId = url.searchParams.get('excluir_proyecto_id')?.trim() || undefined;
   const flat = url.searchParams.get('flat') === '1';
+  const soloAlmacenes = url.searchParams.get('solo_almacenes') === '1';
 
   if (url.searchParams.get('tipo') && !tipo) {
     return NextResponse.json(
@@ -58,6 +59,7 @@ export async function GET(req: Request) {
             soloActivas,
             tipo,
             proyectoId,
+            soloAlmacenes,
           });
       return NextResponse.json({
         ok: true,

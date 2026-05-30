@@ -14,6 +14,8 @@ type Props = {
   onChange: (ubicacionId: string) => void;
   /** Si true, lista almacenes centrales/móviles aunque no haya proyecto (útil para origen). */
   permitirSinProyecto?: boolean;
+  /** Excluye ubicaciones de obra (solo central y móvil). Por defecto true en ingreso de compra. */
+  soloAlmacenes?: boolean;
   disabled?: boolean;
   id?: string;
   className?: string;
@@ -25,6 +27,7 @@ export default function UbicacionInventarioSelect({
   value,
   onChange,
   permitirSinProyecto = false,
+  soloAlmacenes = true,
   disabled,
   id = 'ubicacion-inventario',
   className = selectClass,
@@ -44,6 +47,7 @@ export default function UbicacionInventarioSelect({
     try {
       const q = new URLSearchParams({ flat: '1' });
       if (proyectoId.trim()) q.set('proyecto_id', proyectoId);
+      if (soloAlmacenes) q.set('solo_almacenes', '1');
       const res = await fetch(`/api/almacen/ubicaciones?${q}`, { cache: 'no-store' });
       const data = (await res.json()) as {
         ubicaciones?: UbicacionInventario[];
@@ -61,7 +65,7 @@ export default function UbicacionInventarioSelect({
     } finally {
       setLoading(false);
     }
-  }, [proyectoId, permitirSinProyecto]);
+  }, [proyectoId, permitirSinProyecto, soloAlmacenes]);
 
   useEffect(() => {
     void cargar();
@@ -115,7 +119,7 @@ export default function UbicacionInventarioSelect({
       {error ? <p className="text-[10px] text-amber-500">{error}</p> : null}
       {!loading && !error && ubicaciones.length === 0 && proyectoId ? (
         <p className="text-[10px] text-amber-500">
-          Sin almacenes para esta obra. Se creará la ubicación de obra al guardar.
+          Sin almacén central o móvil configurado. Revise Maestros → Depósitos o migraciones 180–181.
         </p>
       ) : null}
     </div>

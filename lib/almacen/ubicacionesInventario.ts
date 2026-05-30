@@ -129,23 +129,40 @@ export function labelUbicacionOpcion(u: UbicacionInventario): string {
   return `${u.nombre} (${tipo}${sufijo})`;
 }
 
-/** Lista plana para selects: almacenes + obra del proyecto y sus subsitios. */
+function esAlmacenIngreso(u: UbicacionInventario): boolean {
+  return u.tipo === 'almacen_central' || u.tipo === 'almacen_movil';
+}
+
+/** Lista plana para selects: almacenes (+ obra del proyecto si `soloAlmacenes` es false). */
 export async function listarUbicacionesParaSelector(
   supabase: SupabaseClient,
-  opts?: { soloActivas?: boolean; tipo?: TipoUbicacion; proyectoId?: string },
+  opts?: {
+    soloActivas?: boolean;
+    tipo?: TipoUbicacion;
+    proyectoId?: string;
+    /** Solo almacén central y móvil (sin bodegas/subsitios de obra). */
+    soloAlmacenes?: boolean;
+  },
 ): Promise<UbicacionInventario[]> {
   const todas = await listarUbicacionesInventario(supabase, {
     soloActivas: opts?.soloActivas,
     tipo: opts?.tipo,
   });
   if (!opts?.proyectoId) {
+    if (opts?.soloAlmacenes) {
+      return todas.filter(esAlmacenIngreso);
+    }
     return todas.filter((u) => u.tipo !== 'obra' || !u.ubicacion_padre_id);
   }
 
   propagarObraIdFlat(todas);
 
   const pid = opts.proyectoId;
-  const almacenes = todas.filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil');
+  const almacenes = todas.filter(esAlmacenIngreso);
+  if (opts?.soloAlmacenes) {
+    return almacenes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  }
+
   const deObra = todas.filter((u) => u.obra_id === pid);
 
   const byId = new Map<string, UbicacionInventario>();

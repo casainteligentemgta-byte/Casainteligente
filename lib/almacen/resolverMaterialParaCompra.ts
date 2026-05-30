@@ -109,3 +109,45 @@ export async function actualizarMaterialExistenteCompra(
   const { error } = await supabase.from('global_inventory').update(patch).eq('id', materialId);
   if (error) throw error;
 }
+
+/** Crea material en catálogo cuando no hubo coincidencia (misma lógica que recepción de mercancía). */
+export async function crearMaterialParaLineaCompra(
+  supabase: SupabaseClient,
+  opts: {
+    descripcion: string;
+    item_code?: string | null;
+    unidad?: string;
+    precio_unitario: number;
+    fecha: string;
+    proyectoId: string;
+    depositId?: string | null;
+  },
+): Promise<string> {
+  const desc = opts.descripcion.trim();
+  if (desc.length < 2) {
+    throw new Error('Descripción demasiado corta para crear material.');
+  }
+
+  const materialBase: Record<string, unknown> = {
+    name: desc,
+    unit: (opts.unidad || 'UND').trim() || 'UND',
+    stock_available: 0,
+    stock_quarantine: 0,
+    reorder_point: 0,
+    average_weighted_cost: opts.precio_unitario,
+    last_purchase_price: opts.precio_unitario,
+    last_purchase_date: opts.fecha,
+    proyecto_id: opts.proyectoId,
+  };
+  const sap = opts.item_code?.trim();
+  if (sap) materialBase.sap_code = sap;
+  if (opts.depositId) materialBase.deposit_id = opts.depositId;
+
+  let res = await supabase.from('global_inventory').insert(materialBase).select('id').single();
+  if (res.error && /deposit_id/i.test(res.error.message)) {
+    const { deposit_id: _d, ...sinDeposito } = materialBase;
+    res = await supabase.from('global_inventory').insert(sinDeposito).select('id').single();
+  }
+  if (res.error) throw new Error(res.error.message);
+  return String((res.data as { id: string }).id);
+}

@@ -233,6 +233,7 @@ export default function MigrarProductosObraPanel({ proyectoIdInicial }: Props) {
                   proyectoId={clasificacion.proyecto_id}
                   value={ubicacionId}
                   onChange={setUbicacionId}
+                  soloAlmacenes={false}
                   placeholder="Sin stock en ubicación…"
                 />
               </label>

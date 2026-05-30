@@ -3,6 +3,7 @@ import type { ExtractedPurchaseInvoice } from '@/lib/almacen/extractPurchaseInvo
 import { calcularConfidenceScoreOcr, cumpleUmbralFastTrack } from '@/lib/canal/calcularConfidenceScoreOcr';
 import { resolverLimiteFastTrackUsd } from '@/lib/canal/limiteFastTrackUsd';
 import { resolverMontosCompraBimonetario } from '@/lib/contabilidad/comprasBimonetario';
+import { normSkuCodigo } from '@/lib/almacen/resolverMaterialIdPorSku';
 
 export type ResultadoEvalFastTrack = {
   elegible: boolean;
@@ -12,10 +13,6 @@ export type ResultadoEvalFastTrack = {
   motivo?: string;
   materialIds: string[];
 };
-
-function normSku(s: string): string {
-  return s.trim().toUpperCase();
-}
 
 export async function evaluarFastTrackFactura(
   supabase: SupabaseClient,
@@ -97,14 +94,14 @@ export async function evaluarFastTrackFactura(
 
   const porSku = new Map<string, string>();
   for (const row of catalogo ?? []) {
-    const sku = normSku(String((row as { sap_code?: string }).sap_code ?? ''));
+    const sku = normSkuCodigo(String((row as { sap_code?: string }).sap_code ?? ''));
     const id = String((row as { id: string }).id);
     if (sku) porSku.set(sku, id);
   }
 
   const materialIds: string[] = [];
   for (const cod of codigos) {
-    const matId = porSku.get(normSku(cod));
+    const matId = porSku.get(normSkuCodigo(cod));
     if (!matId) {
       return {
         elegible: false,

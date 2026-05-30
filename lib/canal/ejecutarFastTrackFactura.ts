@@ -5,6 +5,7 @@ import { asegurarUbicacionObra } from '@/lib/almacen/ubicacionesInventario';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { normSkuCodigo } from '@/lib/almacen/resolverMaterialIdPorSku';
 
 type PendienteRow = {
   id: string;
@@ -13,10 +14,6 @@ type PendienteRow = {
   document_storage_path: string | null;
   document_file_name: string | null;
 };
-
-function normSku(s: string): string {
-  return s.trim().toUpperCase();
-}
 
 export type ResultadoFastTrack = {
   aplicado: boolean;
@@ -79,12 +76,12 @@ export async function ejecutarFastTrackFacturaCanal(
 
   const porSku = new Map<string, string>();
   for (const m of catalogo ?? []) {
-    const sku = normSku(String((m as { sap_code?: string }).sap_code ?? ''));
+    const sku = normSkuCodigo(String((m as { sap_code?: string }).sap_code ?? ''));
     if (sku) porSku.set(sku, String((m as { id: string }).id));
   }
 
   const lineas: LineaCompraContabilidadInput[] = (extracted.items ?? []).map((it) => {
-    const sku = normSku(String(it.item_code ?? ''));
+    const sku = normSkuCodigo(String(it.item_code ?? ''));
     return {
       material_id: porSku.get(sku) ?? null,
       descripcion: String(it.description ?? '').trim() || sku,
