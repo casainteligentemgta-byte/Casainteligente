@@ -23,6 +23,8 @@ import {
     RotateCw,
 } from 'lucide-react';
 import { InventoryItem } from '@/types/inventory';
+import { apiUrl } from '@/lib/http/apiUrl';
+import type { InspeccionCuarentenaRow } from '@/lib/almacen/listarInspeccionesCuarentena';
 import {
     formatInventoryLocationLabel,
     type DepositRow,
@@ -289,12 +291,28 @@ export default function InventoryMasterPage() {
     const [valorRotateIdx, setValorRotateIdx] = useState(0);
     const [kpiVista, setKpiVista] = useState<KpiVista>('ninguno');
     const [valorPorDeposito, setValorPorDeposito] = useState<ValorInventarioDeposito[]>([]);
+    /** Inspecciones PENDIENTE (fuente operativa de cuarentena). */
+    const [cuarentenaOperativa, setCuarentenaOperativa] = useState<InspeccionCuarentenaRow[]>([]);
 
     const toggleStatFlip = useCallback((key: StatFlipKey) => {
         setStatFlips((prev) => ({ ...prev, [key]: !prev[key] }));
     }, []);
 
     const supabase = createClient();
+
+    const cargarCuarentenaOperativa = useCallback(async () => {
+        try {
+            const res = await fetch(apiUrl('/api/almacen/quality/pendientes'), { cache: 'no-store' });
+            const json = (await res.json()) as { items?: InspeccionCuarentenaRow[] };
+            if (!res.ok) return;
+            const items = json.items ?? [];
+            setCuarentenaOperativa(items);
+            const unidades = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+            setStats((prev) => ({ ...prev, quarantineCount: unidades }));
+        } catch {
+            /* KPI opcional */
+        }
+    }, []);
 
     useEffect(() => {
         void (async () => {
@@ -358,9 +376,10 @@ export default function InventoryMasterPage() {
         kpiVista !== 'ninguno';
 
     useEffect(() => {
-        fetchInventory();
+        void fetchInventory();
+        void cargarCuarentenaOperativa();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial; categoría filtra en cliente
-    }, []);
+    }, [cargarCuarentenaOperativa]);
 
     const itemsCatalogo = useMemo(() => {
         const byId = new Map<string, InventoryItem>();
@@ -571,15 +590,12 @@ export default function InventoryMasterPage() {
             // KPIs de stock usan inventario_stock (filtro obra); sin filtro el valor es referencial del catálogo
             const totalVal = 0;
             const lowStock = 0;
-            const quarantine = inventoryItems.reduce((acc, item) =>
-                acc + Number(item.stock_quarantine), 0);
-
-            setStats({
+            setStats((prev) => ({
                 totalValue: totalVal,
                 lowStockCount: lowStock,
                 totalItems: inventoryItems.length,
-                quarantineCount: quarantine
-            });
+                quarantineCount: prev.quarantineCount,
+            }));
         } catch (error) {
             console.error('Error fetching inventory:', error);
         } finally {
@@ -659,7 +675,10 @@ export default function InventoryMasterPage() {
 
             const qty = cantidadStockReal(item);
             if (kpiVista === 'stock_bajo' && qty > Number(item.reorder_point)) return false;
-            if (kpiVista === 'cuarentena' && Number(item.stock_quarantine) <= 0) return false;
+            if (kpiVista === 'cuarentena') {
+                const idsCuarentena = new Set(cuarentenaOperativa.map((i) => i.material_id));
+                if (!idsCuarentena.has(item.id)) return false;
+            }
 
             return true;
         });
@@ -679,6 +698,7 @@ export default function InventoryMasterPage() {
         cantidadStockReal,
         kpiVista,
         optsFiltroProyectoDeposito,
+        cuarentenaOperativa,
     ]);
 
     const statsFiltrados = useMemo(() => {
@@ -691,14 +711,17 @@ export default function InventoryMasterPage() {
         const lowStock = base.filter(
             (item) => cantidadStockReal(item) <= Number(item.reorder_point),
         ).length;
-        const quarantine = base.reduce((acc, item) => acc + Number(item.stock_quarantine), 0);
+        const quarantineUnidades = cuarentenaOperativa.reduce(
+            (acc, i) => acc + (Number(i.quantity) || 0),
+            0,
+        );
         return {
             totalValue: totalVal,
             lowStockCount: lowStock,
             totalItems: base.length,
-            quarantineCount: quarantine,
+            quarantineCount: quarantineUnidades,
         };
-    }, [filteredItems, itemsCatalogo, hayFiltrosActivos, cantidadStockReal]);
+    }, [filteredItems, itemsCatalogo, hayFiltrosActivos, cantidadStockReal, cuarentenaOperativa]);
 
     const baseItemsKpi = useMemo(
         () => (hayFiltrosActivos ? filteredItems : itemsCatalogo),
@@ -740,14 +763,21 @@ export default function InventoryMasterPage() {
         [baseItemsKpi, cantidadStockReal],
     );
 
-    const itemsCuarentena = useMemo(
-        () =>
-            baseItemsKpi
-                .filter((item) => Number(item.stock_quarantine) > 0)
-                .sort((a, b) => Number(b.stock_quarantine) - Number(a.stock_quarantine))
-                .slice(0, 8),
-        [baseItemsKpi],
-    );
+    const itemsCuarentenaResumen = useMemo(() => {
+        const byMaterial = new Map<string, { nombre: string; qty: number; unit: string }>();
+        for (const insp of cuarentenaOperativa) {
+            const mid = insp.material_id;
+            const nombre =
+                String(insp.material_name ?? insp.line_description ?? 'Material').trim() || 'Material';
+            const prev = byMaterial.get(mid) ?? { nombre, qty: 0, unit: insp.material_unit ?? 'UND' };
+            prev.qty += Number(insp.quantity) || 0;
+            byMaterial.set(mid, prev);
+        }
+        return Array.from(byMaterial.entries())
+            .map(([id, v]) => ({ id, ...v }))
+            .sort((a, b) => b.qty - a.qty)
+            .slice(0, 8);
+    }, [cuarentenaOperativa]);
 
     const skuPorCategoria = useMemo(() => {
         const map = new Map<string, number>();
@@ -1023,12 +1053,12 @@ export default function InventoryMasterPage() {
                     back={
                         <div className="space-y-2">
                             <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-1">
-                                Unidades en cuarentena
+                                Inspecciones pendientes ({cuarentenaOperativa.length})
                             </p>
-                            {itemsCuarentena.length === 0 ? (
+                            {itemsCuarentenaResumen.length === 0 ? (
                                 <p className="text-xs text-zinc-500">Sin cuarentena activa</p>
                             ) : (
-                                itemsCuarentena.map((item) => (
+                                itemsCuarentenaResumen.map((item) => (
                                     <button
                                         key={item.id}
                                         type="button"
@@ -1038,9 +1068,9 @@ export default function InventoryMasterPage() {
                                         }}
                                         className="w-full flex justify-between gap-2 text-left text-[11px] font-bold border-b border-zinc-800/60 pb-1 hover:text-amber-300"
                                     >
-                                        <span className="text-zinc-400 truncate">{item.name}</span>
+                                        <span className="text-zinc-400 truncate">{item.nombre}</span>
                                         <span className="text-amber-400 shrink-0">
-                                            {item.stock_quarantine} {item.unit}
+                                            {item.qty} {item.unit}
                                         </span>
                                     </button>
                                 ))

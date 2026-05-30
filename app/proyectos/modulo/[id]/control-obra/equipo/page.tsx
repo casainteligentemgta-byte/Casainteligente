@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import RegistroMaquinariaIntercompany from '@/components/almacen/RegistroMaquinariaIntercompany';
 import ProyectoEquipoAlertasPanel from '@/components/proyectos/ProyectoEquipoAlertasPanel';
+import ProyectoDepositarioTelegramPanel from '@/components/proyectos/ProyectoDepositarioTelegramPanel';
 import { normalizarProyectoIdCandidato } from '@/lib/proyectos/validarProyectoUuid';
 
 type Props = {
@@ -14,6 +15,7 @@ export default function ControlObraEquipoPage({ params }: Props) {
   return (
     <div className="space-y-8">
       <ProyectoEquipoAlertasPanel proyectoId={proyectoId} />
+      <ProyectoDepositarioTelegramPanel proyectoId={proyectoId} />
       <Suspense
         fallback={
           <p className="text-sm text-zinc-500 py-8" role="status">

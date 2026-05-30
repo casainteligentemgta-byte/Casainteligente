@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
+import { approveAllQualityInspectionsForInvoice } from '@/lib/almacen/approveQualityInspection';
 import {
   mensajeLineasSinMaterialSku,
   resolverMaterialIdLineasCompra,
 } from '@/lib/almacen/resolverMaterialIdPorSku';
+import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
+import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -67,10 +70,44 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       .maybeSingle();
     const existente = existenteRaw as CompraFacturaExistente | null;
     if (existente?.id) {
+      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
       return NextResponse.json({
         success: true,
         yaExistia: true,
         compraFacturaId: String(existente.id),
+        estadoLogistica: 'en_almacen',
+      });
+    }
+
+    const { count: pendientesCount } = await supabase
+      .from('quality_inspections')
+      .select('id', { count: 'exact', head: true })
+      .eq('invoice_id', purchaseInvoiceId)
+      .eq('status', 'PENDIENTE');
+
+    if ((pendientesCount ?? 0) > 0) {
+      const { aprobadas } = await approveAllQualityInspectionsForInvoice(
+        supabase,
+        purchaseInvoiceId,
+        null,
+      );
+
+      const { data: cfRaw } = await supabase
+        .from('compras_facturas')
+        .select('id')
+        .eq('purchase_invoice_id', purchaseInvoiceId)
+        .maybeSingle();
+      const cf = cfRaw as CompraFacturaExistente | null;
+
+      await finalizarLiberacionCuarentena(supabase, purchaseInvoiceId);
+
+      return NextResponse.json({
+        success: true,
+        yaExistia: false,
+        viaCuarentena: true,
+        aprobadas,
+        compraFacturaId: cf?.id ? String(cf.id) : undefined,
+        estadoLogistica: 'en_almacen',
       });
     }
 
@@ -104,14 +141,17 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       lineas: lineasInventario,
     });
 
+    await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+
     return NextResponse.json({
       success: true,
       yaExistia: false,
+      viaCuarentena: false,
       compraFacturaId: r.compraFacturaId,
+      estadoLogistica: 'en_almacen',
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al ingresar compra en almacén';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

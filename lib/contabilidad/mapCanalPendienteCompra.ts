@@ -1,5 +1,10 @@
 /** Convierte facturas Telegram pendientes al mismo formato que `contabilidad_compras` en la UI. */
 
+import type {
+  EstadoLogisticaCompra,
+  LogisticaConteos,
+} from '@/lib/contabilidad/estadoLogisticaCompra';
+
 export type ExtractedCanalItem = {
   description?: string;
   item_code?: string;
@@ -68,6 +73,13 @@ export type CompraListaUnificada = {
   mensaje_error_canal?: string | null;
   ubicacion_destino_id?: string | null;
   ubicacion_nombre?: string | null;
+  /** Flujo logístico: registrada → cuarentena → en_almacén */
+  estado_logistica?: EstadoLogisticaCompra | null;
+  logistica_conteos?: LogisticaConteos | null;
+  compra_factura_id?: string | null;
+  ingresado_almacen_at?: string | null;
+  cuarentena_rechazo_total?: boolean;
+  compra_factura?: { numero_factura?: string | null; estado?: string | null } | null;
 };
 
 export function lineasDesdeExtractedCanal(ex: ExtractedCanalHeader | null): CompraLineaUi[] {

@@ -78,6 +78,17 @@ import {
     type FiltroFuenteCompra,
 } from '@/lib/contabilidad/mapCanalPendienteCompra';
 import { enriquecerComprasConDestino } from '@/lib/contabilidad/enriquecerComprasDestino';
+import { enriquecerComprasPuenteInventario } from '@/lib/contabilidad/enriquecerComprasPuenteInventario';
+import {
+    coloresEstadoLogistica,
+    compraPermiteIngresoAlmacen,
+    enriquecerComprasEstadoLogistica,
+    etiquetaEstadoLogistica,
+} from '@/lib/contabilidad/estadoLogisticaCompra';
+import {
+    compraTieneDetallePuenteInventario,
+    lineasDetallePuenteInventario,
+} from '@/lib/contabilidad/formatDetalleLogisticaCompra';
 import {
     buildComprasCuadroShareUrl,
     copiarTextoCuadro,
@@ -413,11 +424,15 @@ export default function ComprasPage() {
 
             const rifPattern = patronIlike(rifFiltro);
 
-            const buildComprasQuery = () => {
+            const selectLogistica =
+                'compra_factura_id,ingresado_almacen_at,cuarentena_rechazo_total,compra_factura:compras_facturas(numero_factura,estado)';
+
+            const buildComprasQuery = (conPuenteInventario = true) => {
+                const camposPuente = conPuenteInventario ? `,${selectLogistica}` : '';
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,entidad_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${lineasSelect}`
+                        `id,purchase_invoice_id,proyecto_id,entidad_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -453,7 +468,17 @@ export default function ComprasPage() {
             let filas: CompraRow[] = [];
 
             {
-                const { data, error: qErr } = await buildComprasQuery().limit(limiteCompras);
+                let { data, error: qErr } = await buildComprasQuery(true).limit(limiteCompras);
+                if (
+                    qErr &&
+                    /compra_factura_id|ingresado_almacen_at|cuarentena_rechazo_total|compra_factura|42703|schema cache/i.test(
+                        qErr.message ?? '',
+                    )
+                ) {
+                    const retry = await buildComprasQuery(false).limit(limiteCompras);
+                    data = retry.data;
+                    qErr = retry.error;
+                }
                 if (qErr) {
                     if (
                         qErr.message.includes('contabilidad_compras') ||
@@ -540,6 +565,8 @@ export default function ComprasPage() {
             });
 
             filas = await enriquecerComprasConDestino(supabase, filas);
+            filas = await enriquecerComprasPuenteInventario(supabase, filas);
+            filas = await enriquecerComprasEstadoLogistica(supabase, filas);
 
             setCompras(filas);
         } catch (e) {
@@ -781,6 +808,14 @@ export default function ComprasPage() {
             setError('Esta compra no tiene documento base para ingreso a almacén.');
             return;
         }
+        if (c.estado_logistica === 'en_almacen') {
+            setError('Esta compra ya está totalmente en almacén.');
+            return;
+        }
+        if (c.estado_logistica === 'rechazo_cuarentena') {
+            setError('Todas las líneas fueron rechazadas en cuarentena. Revise la compra contable.');
+            return;
+        }
         setIngresandoAlmacenId(c.id);
         setError(null);
         try {
@@ -789,12 +824,20 @@ export default function ComprasPage() {
             });
             const data = (await res.json()) as {
                 yaExistia?: boolean;
+                viaCuarentena?: boolean;
+                aprobadas?: number;
                 error?: string;
                 sinMatch?: string[];
             };
             if (!res.ok) throw new Error(data.error || 'No se pudo registrar ingreso');
             if (data.yaExistia) {
                 setError('Esta compra ya tenía ingreso registrado en almacén.');
+            } else if (data.viaCuarentena) {
+                setError(
+                    data.aprobadas
+                        ? `Cuarentena liberada: ${data.aprobadas} línea(s) ingresadas al almacén.`
+                        : 'Material liberado desde cuarentena.',
+                );
             }
             void load();
         } catch (e) {
@@ -2256,7 +2299,52 @@ export default function ComprasPage() {
                                             >
                                                 {etiquetaOrigenCompra(c)}
                                             </span>
+                                            {c.estado_logistica && c.estado_logistica !== 'sin_documento' ? (
+                                                <span
+                                                    style={{
+                                                        marginLeft: '8px',
+                                                        fontSize: '10px',
+                                                        fontWeight: 800,
+                                                        padding: '2px 7px',
+                                                        borderRadius: '6px',
+                                                        ...coloresEstadoLogistica(c.estado_logistica),
+                                                    }}
+                                                >
+                                                    {etiquetaEstadoLogistica(
+                                                        c.estado_logistica,
+                                                        c.logistica_conteos,
+                                                    )}
+                                                </span>
+                                            ) : null}
                                         </p>
+                                        {compraTieneDetallePuenteInventario(c) ? (
+                                            <div
+                                                style={{
+                                                    marginTop: '8px',
+                                                    padding: '8px 10px',
+                                                    borderRadius: '10px',
+                                                    background: 'rgba(52,199,89,0.08)',
+                                                    border: '1px solid rgba(52,199,89,0.22)',
+                                                }}
+                                            >
+                                                {lineasDetallePuenteInventario(c).map((linea) => (
+                                                    <p
+                                                        key={linea}
+                                                        style={{
+                                                            margin: 0,
+                                                            fontSize: '11px',
+                                                            fontWeight: 600,
+                                                            color: c.cuarentena_rechazo_total
+                                                                ? '#fca5a5'
+                                                                : 'rgba(134,239,172,0.95)',
+                                                            lineHeight: 1.45,
+                                                        }}
+                                                    >
+                                                        {linea}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        ) : null}
                                         {(c.entidad_nombre || c.proyecto_nombre || c.ubicacion_nombre) ? (
                                             <div
                                                 style={{
@@ -2349,7 +2437,8 @@ export default function ComprasPage() {
                                                     Obra / almacén
                                                 </button>
                                             ) : null}
-                                            {c.purchase_invoice_id ? (
+                                            {c.purchase_invoice_id &&
+                                            compraPermiteIngresoAlmacen(c.estado_logistica) ? (
                                                 <button
                                                     type="button"
                                                     onClick={() => void handleIngresoAlmacen(c)}
@@ -2360,9 +2449,21 @@ export default function ComprasPage() {
                                                         gap: '6px',
                                                         padding: '8px 12px',
                                                         borderRadius: '10px',
-                                                        border: '1px solid rgba(52,199,89,0.45)',
-                                                        background: 'rgba(52,199,89,0.14)',
-                                                        color: '#86efac',
+                                                        border:
+                                                            c.estado_logistica === 'cuarentena' ||
+                                                            c.estado_logistica === 'en_almacen_parcial'
+                                                                ? '1px solid rgba(245,158,11,0.45)'
+                                                                : '1px solid rgba(52,199,89,0.45)',
+                                                        background:
+                                                            c.estado_logistica === 'cuarentena' ||
+                                                            c.estado_logistica === 'en_almacen_parcial'
+                                                                ? 'rgba(245,158,11,0.14)'
+                                                                : 'rgba(52,199,89,0.14)',
+                                                        color:
+                                                            c.estado_logistica === 'cuarentena' ||
+                                                            c.estado_logistica === 'en_almacen_parcial'
+                                                                ? '#fcd34d'
+                                                                : '#86efac',
                                                         fontSize: '11px',
                                                         fontWeight: 800,
                                                         cursor: 'pointer',
@@ -2374,7 +2475,11 @@ export default function ComprasPage() {
                                                     ) : (
                                                         <PackageCheck size={14} />
                                                     )}
-                                                    Ingreso a almacén
+                                                    {c.estado_logistica === 'en_almacen_parcial'
+                                                        ? 'Liberar pendiente'
+                                                        : c.estado_logistica === 'cuarentena'
+                                                          ? 'Liberar cuarentena'
+                                                          : 'Ingreso a almacén'}
                                                 </button>
                                             ) : null}
                                             {c.pendiente_canal_id ? (

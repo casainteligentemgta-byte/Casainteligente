@@ -40,6 +40,16 @@ import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioS
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
+import {
+    actualizarMaterialExistenteCompra,
+    resolverMaterialParaLineaCompra,
+    type MaterialCompraResuelto,
+} from '@/lib/almacen/resolverMaterialParaCompra';
+import { validarCompraProcurement } from '@/lib/almacen/validarCompraProcurement';
+import {
+    buildExtractedFromProcurementForm,
+    intentarFastTrackProcurementApp,
+} from '@/lib/almacen/intentarFastTrackProcurementApp';
 type PurchaseLine = {
     description: string;
     item_code: string;
@@ -114,7 +124,7 @@ function formatProcurementSaveError(error: unknown): string {
 }
 
 export default function ProcurementClient() {
-    const [mode, setMode] = useState<'AUTO' | 'MANUAL'>('MANUAL');
+    const [mode, setMode] = useState<'AUTO' | 'MANUAL'>('AUTO');
     const [invoice, setInvoice] = useState({
         invoice_number: '',
         supplier_rif: '',
@@ -144,11 +154,29 @@ export default function ProcurementClient() {
     const [cargandoTasa, setCargandoTasa] = useState(false);
     /** Si el usuario editó el total a mano, no sobrescribir al cambiar líneas. */
     const [totalManual, setTotalManual] = useState(false);
+    /** Confianza OCR (Gemini) para evaluar Fast-Track en app. */
+    const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+    const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const [materialMatches, setMaterialMatches] = useState<
+        Record<number, MaterialCompraResuelto | null>
+    >({});
+    const [saveNotice, setSaveNotice] = useState<string | null>(null);
     const [proyectos, setProyectos] = useState<Array<{ id: string; nombre: string }>>([]);
     const documentPreviewRef = useRef<string | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
     const proyectoIdParam = searchParams.get('proyectoId')?.trim() || '';
+    const resultadoGuardado = searchParams.get('resultado');
+
+    useEffect(() => {
+        if (resultadoGuardado === 'fasttrack') {
+            setSaveNotice(
+                'Fast-Track: factura aprobada e ingresada al almacén. Stock disponible en inventario.',
+            );
+        } else if (resultadoGuardado === 'cuarentena') {
+            setSaveNotice('Factura guardada. Revise y apruebe las líneas en cuarentena.');
+        }
+    }, [resultadoGuardado]);
 
     const bloquearProyectoParam =
         searchParams.get('bloquearProyecto') === '1' ||
@@ -161,6 +189,7 @@ export default function ProcurementClient() {
             supplier_name?: string;
             date?: string;
             total_amount?: number | null;
+            confidence_score?: number;
             items?: Array<{
                 description: string;
                 item_code?: string;
@@ -194,6 +223,9 @@ export default function ProcurementClient() {
         setTotalManual(Math.abs(totalAi - lineTotal) > 0.02);
         setItems(mappedItems);
         setMode('MANUAL');
+        if (payload.confidence_score != null && Number.isFinite(Number(payload.confidence_score))) {
+            setOcrConfidence(Number(payload.confidence_score));
+        }
         void refrescarTasaBcv(payload.date || todayIsoDate());
         setAiSuccess(
             (successPrefix ? `${successPrefix}. ` : '') +
@@ -386,6 +418,71 @@ export default function ProcurementClient() {
         void refrescarTasaBcv(invoice.date);
     }, [invoice.date]);
 
+    useEffect(() => {
+        if (!items.length) {
+            setMaterialMatches({});
+            return;
+        }
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            void (async () => {
+                try {
+                    const supabase = createClient();
+                    const next: Record<number, MaterialCompraResuelto | null> = {};
+                    for (let i = 0; i < items.length; i++) {
+                        const it = items[i];
+                        if (!it.description.trim() && !it.item_code.trim()) {
+                            next[i] = null;
+                            continue;
+                        }
+                        next[i] = await resolverMaterialParaLineaCompra(supabase, {
+                            item_code: it.item_code,
+                            description: it.description,
+                            proyectoId: proyectoId || undefined,
+                        });
+                    }
+                    if (!cancelled) setMaterialMatches(next);
+                } catch {
+                    /* preview opcional */
+                }
+            })();
+        }, 450);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [items, proyectoId]);
+
+    useEffect(() => {
+        if (!items.length && !invoice.invoice_number.trim()) {
+            setValidationWarnings([]);
+            return;
+        }
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            void (async () => {
+                try {
+                    const supabase = createClient();
+                    const v = await validarCompraProcurement(supabase, {
+                        invoice_number: invoice.invoice_number,
+                        supplier_rif: invoice.supplier_rif,
+                        supplier_name: invoice.supplier_name,
+                        total_amount: totalVes(),
+                        tasa_bcv: tasaBcv,
+                        lineas: items,
+                    });
+                    if (!cancelled) setValidationWarnings(v.advertencias);
+                } catch {
+                    if (!cancelled) setValidationWarnings([]);
+                }
+            })();
+        }, 500);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [items, invoice, tasaBcv, totalManual]);
+
     const handleSubmit = async () => {
         setSubmitError(null);
 
@@ -420,6 +517,11 @@ export default function ProcurementClient() {
             return;
         }
 
+        if (!tasaBcv || tasaBcv <= 0) {
+            setSubmitError('Indique la tasa BCV (pulse BCV o escríbala manualmente).');
+            return;
+        }
+
         await runLocked(async () => {
         let supabase;
         try {
@@ -430,6 +532,27 @@ export default function ProcurementClient() {
         }
 
         try {
+            const validacion = await validarCompraProcurement(supabase, {
+                invoice_number: invoice.invoice_number,
+                supplier_rif: invoice.supplier_rif,
+                supplier_name: invoice.supplier_name,
+                total_amount: totalVes(),
+                tasa_bcv: tasaBcv,
+                lineas: validLines,
+            });
+
+            if (!validacion.ok) {
+                setSubmitError(validacion.errores.join(' '));
+                return;
+            }
+
+            if (validacion.advertencias.length) {
+                const continuar = window.confirm(
+                    validacion.advertencias.join('\n\n') + '\n\n¿Desea continuar con el registro?',
+                );
+                if (!continuar) return;
+            }
+
             const totalBolivares = totalVes();
             const montos = await resolverMontosCompraBimonetario({
                 montoTotal: totalBolivares,
@@ -507,46 +630,69 @@ export default function ProcurementClient() {
 
             for (const line of validLines) {
                 const desc = line.description.trim();
-                const materialBase: Record<string, unknown> = {
-                    name: desc,
-                    unit: (line.unit || 'UND').trim() || 'UND',
-                    stock_available: 0,
-                    stock_quarantine: 0,
-                    reorder_point: 0,
-                    average_weighted_cost: line.unit_price,
-                    last_purchase_price: line.unit_price,
-                    last_purchase_date: invoice.date,
-                    proyecto_id: proyectoId,
-                };
-                if (depositIdMaterial) {
-                    materialBase.deposit_id = depositIdMaterial;
-                }
+                const resuelto = await resolverMaterialParaLineaCompra(supabase, {
+                    item_code: line.item_code,
+                    description: desc,
+                    proyectoId,
+                });
 
-                let newMaterial: { id: string };
-                const matRes = await supabase
-                    .from('global_inventory')
-                    .insert(materialBase)
-                    .select('id')
-                    .single();
+                let materialId: string;
 
-                if (matRes.error && /deposit_id/i.test(matRes.error.message)) {
-                    const { deposit_id: _d, ...sinDeposito } = materialBase;
-                    const retry = await supabase
+                if (resuelto) {
+                    materialId = resuelto.id;
+                    await actualizarMaterialExistenteCompra(supabase, materialId, {
+                        unitPrice: line.unit_price,
+                        purchaseDate: invoice.date,
+                        proyectoId,
+                        depositId: depositIdMaterial,
+                        sapCode: line.item_code.trim() || undefined,
+                    });
+                } else {
+                    const materialBase: Record<string, unknown> = {
+                        name: desc,
+                        unit: (line.unit || 'UND').trim() || 'UND',
+                        stock_available: 0,
+                        stock_quarantine: 0,
+                        reorder_point: 0,
+                        average_weighted_cost: line.unit_price,
+                        last_purchase_price: line.unit_price,
+                        last_purchase_date: invoice.date,
+                        proyecto_id: proyectoId,
+                    };
+                    if (line.item_code.trim()) {
+                        materialBase.sap_code = line.item_code.trim();
+                    }
+                    if (depositIdMaterial) {
+                        materialBase.deposit_id = depositIdMaterial;
+                    }
+
+                    let newMaterial: { id: string };
+                    const matRes = await supabase
                         .from('global_inventory')
-                        .insert(sinDeposito)
+                        .insert(materialBase)
                         .select('id')
                         .single();
-                    if (retry.error) throw retry.error;
-                    newMaterial = retry.data as { id: string };
-                } else if (matRes.error) {
-                    throw matRes.error;
-                } else {
-                    newMaterial = matRes.data as { id: string };
+
+                    if (matRes.error && /deposit_id/i.test(matRes.error.message)) {
+                        const { deposit_id: _d, ...sinDeposito } = materialBase;
+                        const retry = await supabase
+                            .from('global_inventory')
+                            .insert(sinDeposito)
+                            .select('id')
+                            .single();
+                        if (retry.error) throw retry.error;
+                        newMaterial = retry.data as { id: string };
+                    } else if (matRes.error) {
+                        throw matRes.error;
+                    } else {
+                        newMaterial = matRes.data as { id: string };
+                    }
+                    materialId = newMaterial.id;
                 }
 
                 const detailRow: Record<string, unknown> = {
                     invoice_id: invData.id,
-                    material_id: newMaterial.id,
+                    material_id: materialId,
                     description: desc,
                     item_code: line.item_code.trim() || null,
                     quantity: line.quantity,
@@ -564,7 +710,7 @@ export default function ProcurementClient() {
 
                 const qualityRow: Record<string, unknown> = {
                     invoice_id: invData.id,
-                    material_id: newMaterial.id,
+                    material_id: materialId,
                     quantity: line.quantity,
                     purchase_detail_id: detailData.id,
                     status: 'PENDIENTE',
@@ -579,7 +725,7 @@ export default function ProcurementClient() {
 
                 lineasContabilidad.push({
                     purchase_detail_id: detailData.id,
-                    material_id: newMaterial.id,
+                    material_id: materialId,
                     descripcion: desc,
                     item_code: line.item_code.trim() || null,
                     unidad: (line.unit || 'UND').trim() || 'UND',
@@ -628,7 +774,40 @@ export default function ProcurementClient() {
                 }
             }
 
-            router.push('/almacen/procurement/quality');
+            const extractedForm = buildExtractedFromProcurementForm({
+                invoice_number: payload.invoice_number,
+                supplier_rif: payload.supplier_rif,
+                supplier_name: payload.supplier_name,
+                date: payload.date,
+                total_amount: totalBolivares,
+                items: validLines,
+                confidence_score: ocrConfidence ?? undefined,
+            });
+
+            const fastTrack = await intentarFastTrackProcurementApp(supabase, {
+                purchaseInvoiceId: invData.id,
+                proyectoId,
+                extracted: extractedForm,
+            });
+
+            if (fastTrack.aplicado) {
+                router.push(
+                    `/almacen/procurement?resultado=fasttrack&factura=${encodeURIComponent(payload.invoice_number)}`,
+                );
+                return;
+            }
+
+            try {
+                await fetch('/api/almacen/quality/notificar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ purchaseInvoiceId: invData.id }),
+                });
+            } catch {
+                /* no bloquear flujo */
+            }
+
+            router.push('/almacen/procurement/quality?resultado=cuarentena');
         } catch (error) {
             console.error('Error saving invoice:', error);
             setSubmitError(formatProcurementSaveError(error));
@@ -671,6 +850,7 @@ export default function ProcurementClient() {
                 supplier_name?: string;
                 date?: string;
                 total_amount?: number | null;
+                confidence_score?: number;
                 items?: Array<{
                     description: string;
                     item_code?: string;
@@ -695,6 +875,9 @@ export default function ProcurementClient() {
             }
 
             applyExtractedPayload(payload);
+            if (payload.confidence_score != null && Number.isFinite(Number(payload.confidence_score))) {
+                setOcrConfidence(Number(payload.confidence_score));
+            }
             const mappedItems = Array.isArray(payload.items)
                 ? payload.items.map((it) => ({
                       description: (it.description || '').trim(),
@@ -749,6 +932,45 @@ export default function ProcurementClient() {
                     <h1 className="text-3xl font-black tracking-tighter">
                         REGISTRO DE FACTURAS
                     </h1>
+                </div>
+
+                {saveNotice ? (
+                    <div className="mb-6 p-4 rounded-2xl bg-emerald-600/10 border border-emerald-600/30 space-y-3">
+                        <div className="flex items-start gap-2 text-emerald-400 text-sm font-bold">
+                            <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+                            <span>{saveNotice}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wide">
+                            <Link
+                                href="/almacen"
+                                className="px-3 py-1.5 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                            >
+                                Ver inventario
+                            </Link>
+                            <Link
+                                href="/contabilidad/compras"
+                                className="px-3 py-1.5 rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
+                            >
+                                Ver en compras
+                            </Link>
+                            {resultadoGuardado !== 'fasttrack' ? (
+                                <Link
+                                    href="/almacen/procurement/quality"
+                                    className="px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                                >
+                                    Cuarentena
+                                </Link>
+                            ) : null}
+                        </div>
+                    </div>
+                ) : null}
+
+                <div className="mb-6 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    <span className={mode === 'AUTO' ? 'text-blue-400' : ''}>1 · Documento</span>
+                    <span>→</span>
+                    <span className={mode === 'MANUAL' ? 'text-white' : ''}>2 · Revisar y guardar</span>
+                    <span>→</span>
+                    <span>3 · Almacén</span>
                 </div>
 
                 <div className="flex gap-4 mb-8">
@@ -1127,8 +1349,8 @@ export default function ProcurementClient() {
                                         Artículos de la factura
                                     </h3>
                                     <p className="text-zinc-600 text-xs font-bold mt-1">
-                                        Compra nueva: se registran los productos tal como vienen en el
-                                        documento (no se eligen del almacén actual).
+                                        Si el código/SKU coincide con el catálogo, se reutiliza el material
+                                        existente. Si no, se crea uno nuevo al guardar.
                                     </p>
                                 </div>
                                 <button
@@ -1153,6 +1375,19 @@ export default function ProcurementClient() {
                                             key={index}
                                             className="flex flex-col gap-4 bg-black/40 p-4 rounded-2xl border border-zinc-800/50"
                                         >
+                                            {materialMatches[index] ? (
+                                                <p className="text-[10px] font-black uppercase tracking-wide text-emerald-400/90">
+                                                    Material existente (
+                                                    {materialMatches[index]?.matchedBy === 'sku'
+                                                        ? 'SKU'
+                                                        : 'nombre'}
+                                                    ): {materialMatches[index]?.name}
+                                                </p>
+                                            ) : item.description.trim() || item.item_code.trim() ? (
+                                                <p className="text-[10px] font-black uppercase tracking-wide text-zinc-500">
+                                                    Material nuevo al guardar
+                                                </p>
+                                            ) : null}
                                             <div className="space-y-2">
                                                 <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">
                                                     Descripción del artículo
@@ -1308,6 +1543,17 @@ export default function ProcurementClient() {
                             ) : null}
                         </ProcPanel>
 
+                        {validationWarnings.length > 0 ? (
+                            <div className="flex items-start gap-2 p-4 rounded-2xl bg-amber-600/10 border border-amber-600/30 text-amber-300 text-sm font-bold">
+                                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                                <ul className="list-disc list-inside space-y-1 text-xs">
+                                    {validationWarnings.map((w) => (
+                                        <li key={w}>{w}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+
                         {submitError ? (
                             <div className="flex items-start gap-2 p-4 rounded-2xl bg-red-600/10 border border-red-600/30 text-red-400 text-sm font-bold">
                                 <AlertCircle size={18} className="shrink-0 mt-0.5" />
@@ -1346,7 +1592,7 @@ export default function ProcurementClient() {
                                 )}
                             </button>
                             <p className="text-center text-[10px] text-zinc-600 font-bold mt-2 uppercase tracking-widest">
-                                Requiere encabezado completo y al menos un artículo
+                                Fast-Track automático si OCR &gt;95%, SKU en catálogo y monto bajo umbral
                             </p>
                         </div>
                     </div>

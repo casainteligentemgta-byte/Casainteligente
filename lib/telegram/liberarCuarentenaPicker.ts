@@ -3,6 +3,7 @@ import {
   approveQualityInspection,
   formatApproveError,
 } from '@/lib/almacen/approveQualityInspection';
+import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
 import {
   etiquetaInspeccionCuarentena,
   listarInspeccionesCuarentenaPendientes,
@@ -144,7 +145,7 @@ export async function manejarCallbackLiberarCuarentenaTelegram(
 
     const { data: insp } = await supabase
       .from('quality_inspections')
-      .select('id, status')
+      .select('id, status, invoice_id')
       .eq('id', inspectionId)
       .maybeSingle();
 
@@ -157,6 +158,12 @@ export async function manejarCallbackLiberarCuarentenaTelegram(
       .from('quality_inspections')
       .update({ status: 'RECHAZADO', inspected_at: new Date().toISOString() })
       .eq('id', inspectionId);
+
+    if (!error && insp.invoice_id) {
+      await finalizarLiberacionCuarentena(supabase, String(insp.invoice_id), {
+        sincronizarInventario: false,
+      });
+    }
 
     await answerCallbackQuery(params.callbackId, error ? 'Error' : 'Rechazado');
     if (error) {
