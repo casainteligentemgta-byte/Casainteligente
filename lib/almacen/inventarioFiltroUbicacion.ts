@@ -39,13 +39,28 @@ export function ubicacionPerteneceAProyecto(
   proyectoId: string,
   proyectoNombre?: string,
 ): boolean {
-  if (u.obra_id === proyectoId) return true;
+  if (u.obra_id === proyectoId || u.proyecto?.id === proyectoId) return true;
 
-  const pn = normalizarEtiquetaUbicacion(proyectoNombre ?? '');
-  if (!pn || (u.tipo !== 'almacen_central' && u.tipo !== 'almacen_movil')) return false;
+  const pn = normalizarEtiquetaUbicacion(proyectoNombre ?? u.proyecto?.nombre ?? '');
+  if (!pn) return false;
 
-  const un = normalizarEtiquetaUbicacion(u.nombre);
-  return un === pn || un.includes(pn) || pn.includes(un);
+  const etiquetas = [
+    u.nombre,
+    u.deposit_locality ?? '',
+    u.proyecto?.nombre ?? '',
+  ]
+    .map(normalizarEtiquetaUbicacion)
+    .filter(Boolean);
+
+  if (u.tipo === 'obra' || u.tipo === 'cuarentena' || u.tipo === 'garantias') {
+    return etiquetas.some((e) => e === pn || e.includes(pn) || pn.includes(e));
+  }
+
+  if (u.tipo === 'almacen_central' || u.tipo === 'almacen_movil') {
+    return etiquetas.some((e) => e === pn || e.includes(pn) || pn.includes(e));
+  }
+
+  return false;
 }
 
 /** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */

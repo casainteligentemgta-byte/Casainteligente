@@ -46,7 +46,6 @@ import {
     cargarStockPorUbicaciones,
     cargarValorInventarioPorDeposito,
     listarUbicacionesParaFiltroInventario,
-    materialCoincideFiltroProyectoDeposito,
     resolverUbicacionIdsFiltro,
     type StockEnUbicacionResumen,
     type ValorInventarioDeposito,
@@ -411,6 +410,11 @@ export default function InventoryMasterPage() {
                 });
                 if (cancelled) return;
 
+                const nombresUbicacionFiltro = ubicaciones
+                    .filter((u) => ids.includes(u.id))
+                    .map((u) => u.nombre)
+                    .filter(Boolean);
+
                 let stockMap: Map<string, StockEnUbicacionResumen>;
                 if (!ids.length && filterProyectoId) {
                     const agg = await getStockAgregadoPorMaterialObra(
@@ -423,7 +427,9 @@ export default function InventoryMasterPage() {
                         if (qty > 0) {
                             stockMap.set(materialId, {
                                 cantidad_disponible: qty,
-                                ubicacion_nombres: ['Obra'],
+                                ubicacion_nombres: nombresUbicacionFiltro.length
+                                    ? nombresUbicacionFiltro
+                                    : [nombreProyectoFiltro || 'Obra'],
                             });
                         }
                     });
@@ -433,6 +439,22 @@ export default function InventoryMasterPage() {
                     return;
                 } else {
                     stockMap = await cargarStockPorUbicaciones(supabase, ids);
+                    if (filterProyectoId) {
+                        const agg = await getStockAgregadoPorMaterialObra(
+                            supabase,
+                            filterProyectoId,
+                            nombreProyectoFiltro || undefined,
+                        );
+                        const etiquetaObra =
+                            nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
+                        agg.forEach((qty, materialId) => {
+                            if (qty <= 0 || stockMap.has(materialId)) return;
+                            stockMap.set(materialId, {
+                                cantidad_disponible: qty,
+                                ubicacion_nombres: [etiquetaObra],
+                            });
+                        });
+                    }
                 }
                 if (cancelled) return;
                 setStockPorUbicacion(stockMap);
@@ -605,29 +627,16 @@ export default function InventoryMasterPage() {
 
     const filtroPorUbicacionActivo = Boolean(filterProyectoId || filterDepositId);
 
-    const optsFiltroProyectoDeposito = useMemo(
-        () => ({
-            proyectoId: filterProyectoId || undefined,
-            depositId: filterDepositId || undefined,
-        }),
-        [filterProyectoId, filterDepositId],
-    );
-
     const cantidadStockReal = useCallback(
         (item: InventoryItem): number => {
             if (filtroPorUbicacionActivo) {
-                const fromUb = stockPorUbicacion.get(item.id)?.cantidad_disponible;
-                if (fromUb != null && fromUb > 0) return fromUb;
-                if (materialCoincideFiltroProyectoDeposito(item, optsFiltroProyectoDeposito)) {
-                    return Number(item.stock_available) || 0;
-                }
-                return fromUb ?? 0;
+                return stockPorUbicacion.get(item.id)?.cantidad_disponible ?? 0;
             }
             const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
             if (fromStock != null && fromStock > 0) return fromStock;
             return Number(item.stock_available) || 0;
         },
-        [filtroPorUbicacionActivo, stockPorUbicacion, stockGlobal, optsFiltroProyectoDeposito],
+        [filtroPorUbicacionActivo, stockPorUbicacion, stockGlobal],
     );
 
     const filteredItems = useMemo(() => {
@@ -662,12 +671,7 @@ export default function InventoryMasterPage() {
             if (sinAlmacenAsignado && item.deposit_id) return false;
 
             if (filtroPorUbicacionActivo) {
-                const enStockFiltro = stockEnFiltro > 0;
-                const enCatalogoFiltro = materialCoincideFiltroProyectoDeposito(
-                    item,
-                    optsFiltroProyectoDeposito,
-                );
-                if (!enStockFiltro && !enCatalogoFiltro) return false;
+                if (stockEnFiltro <= 0) return false;
             } else {
                 if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
                 if (filterDepositId && item.deposit_id !== filterDepositId) return false;
@@ -697,7 +701,6 @@ export default function InventoryMasterPage() {
         stockPorUbicacion,
         cantidadStockReal,
         kpiVista,
-        optsFiltroProyectoDeposito,
         cuarentenaOperativa,
     ]);
 
