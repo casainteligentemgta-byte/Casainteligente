@@ -111,7 +111,8 @@ export async function ejecutarFastTrackFacturaCanal(
     precio_unitario: l.precio_unitario,
   }));
 
-  await registrarCompraInventario(supabase, {
+  try {
+    await registrarCompraInventario(supabase, {
     ubicacionDestinoId,
     numeroFactura: (extracted.invoice_number ?? 'S/N').trim(),
     proveedorRif: extracted.supplier_rif ?? 'S/R',
@@ -121,7 +122,21 @@ export async function ejecutarFastTrackFacturaCanal(
     purchaseInvoiceId,
     documentoStoragePath: row.document_storage_path,
     lineas: lineasInventario,
-  });
+    });
+  } catch (stockErr: unknown) {
+    const msg =
+      stockErr instanceof Error ? stockErr.message : 'Error al impactar inventario (fast-track)';
+    const { encolarIngresoAlmacenFallback } = await import(
+      '@/lib/contabilidad/encolarIngresoAlmacenFallback'
+    );
+    await encolarIngresoAlmacenFallback(supabase, pendingId, msg);
+    return {
+      aplicado: false,
+      motivo: `Contabilidad OK; stock pendiente: ${msg}`,
+      confidenceScore: evaluacion.confidenceScore,
+      compraId,
+    };
+  }
 
   await supabase
     .from('ci_facturas_canal_pendientes')

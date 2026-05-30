@@ -70,9 +70,19 @@ function extraerNumero(extracted: Record<string, unknown> | null): string {
   return String(extracted.invoice_number ?? extracted.numero ?? '—').trim() || '—';
 }
 
+function RecepcionCargando() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center bg-[#0A0A0F] text-sm text-zinc-500">
+      <Loader2 className="mr-2 h-4 w-4 animate-spin text-[#FF9500]" />
+      Cargando recepción…
+    </div>
+  );
+}
+
 export default function RecepcionCampoClient() {
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
+  const [montado, setMontado] = useState(false);
   const { isSubmitting, runLocked } = useSyncSubmitLock();
 
   const tabInicial = searchParams.get('tab');
@@ -91,6 +101,10 @@ export default function RecepcionCampoClient() {
   const [ingresandoId, setIngresandoId] = useState<string | null>(null);
 
   const [pendientes, setPendientes] = useState<PendienteCanal[]>([]);
+
+  useEffect(() => {
+    setMontado(true);
+  }, []);
   const [loadingPendientes, setLoadingPendientes] = useState(false);
 
   const tipoManual: TipoRecepcionCampo = tab === 'emergencia' ? 'emergencia' : 'nota_entrega';
@@ -145,20 +159,25 @@ export default function RecepcionCampoClient() {
   }
 
   async function ingresarFacturaAlmacen(p: PendienteCanal) {
+    if (isSubmitting) return;
     setIngresandoId(p.id);
-    try {
-      const res = await fetch(apiUrl(`/api/facturas-canal/pendientes/${p.id}/ingreso-almacen`), {
-        method: 'POST',
-      });
-      const json = (await res.json()) as { error?: string; success?: boolean; yaExistia?: boolean };
-      if (!res.ok) throw new Error(json.error ?? 'No se pudo registrar ingreso');
-      toast.success(json.yaExistia ? 'Ingreso ya estaba registrado.' : 'Stock ingresado desde factura Telegram.');
-      void cargarPendientes();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error de ingreso');
-    } finally {
-      setIngresandoId(null);
-    }
+    await runLocked(async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/facturas-canal/pendientes/${p.id}/ingreso-almacen`), {
+          method: 'POST',
+        });
+        const json = (await res.json()) as { error?: string; success?: boolean; yaExistia?: boolean };
+        if (!res.ok) throw new Error(json.error ?? 'No se pudo registrar ingreso');
+        toast.success(
+          json.yaExistia ? 'Ingreso ya estaba registrado.' : 'Stock ingresado desde factura Telegram.',
+        );
+        void cargarPendientes();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error de ingreso');
+      } finally {
+        setIngresandoId(null);
+      }
+    });
   }
 
   async function guardarManual() {
@@ -245,6 +264,8 @@ export default function RecepcionCampoClient() {
     { id: 'nota', label: 'Cargar Nota de Entrega (Sin Factura)', icon: Truck },
     { id: 'emergencia', label: 'Ingreso de Emergencia (Sin Papeles)', icon: Zap },
   ];
+
+  if (!montado) return <RecepcionCargando />;
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-zinc-100">
@@ -351,8 +372,11 @@ export default function RecepcionCampoClient() {
                         {puedeIngreso ? (
                           <button
                             type="button"
-                            disabled={ingresandoId === p.id}
-                            onClick={() => void ingresarFacturaAlmacen(p)}
+                            disabled={isSubmitting}
+                            onClick={() => {
+                              if (isSubmitting) return;
+                              void ingresarFacturaAlmacen(p);
+                            }}
                             className="rounded-xl border border-[#FF9500]/50 bg-[#FF9500]/10 px-4 py-2.5 text-xs font-black text-[#FF9500] disabled:opacity-50"
                           >
                             {ingresandoId === p.id ? 'Ingresando…' : 'Ingresar a almacén'}

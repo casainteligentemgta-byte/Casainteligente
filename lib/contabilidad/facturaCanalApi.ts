@@ -82,20 +82,36 @@ export async function confirmarCompraCanal(
     ubicacion_destino_id: string;
     extracted?: ExtractedCanalHeader;
   },
-): Promise<{ compraId: string; purchaseInvoiceId: string; yaExistia: boolean }> {
+): Promise<{
+  compraId: string;
+  purchaseInvoiceId: string;
+  yaExistia: boolean;
+  ingresoAlmacen?: {
+    success: boolean;
+    compraFacturaId?: string;
+    yaExistia?: boolean;
+    error?: string;
+  } | null;
+}> {
   const id = resolveIdPendienteCanal(rawId);
   const res = await fetch(
     `/api/facturas-canal/pendientes/${encodeURIComponent(id)}/confirmar-compra`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, ingreso_almacen_automatico: true }),
     },
   );
   const data = (await res.json()) as {
     compraId?: string;
     purchaseInvoiceId?: string;
     yaExistia?: boolean;
+    ingresoAlmacen?: {
+      success: boolean;
+      compraFacturaId?: string;
+      yaExistia?: boolean;
+      error?: string;
+    } | null;
     error?: string;
   };
   if (!res.ok) throw new Error(data.error || 'No se pudo registrar la compra');
@@ -104,6 +120,7 @@ export async function confirmarCompraCanal(
     compraId: data.compraId,
     purchaseInvoiceId: data.purchaseInvoiceId ?? '',
     yaExistia: Boolean(data.yaExistia),
+    ingresoAlmacen: data.ingresoAlmacen ?? null,
   };
 }
 

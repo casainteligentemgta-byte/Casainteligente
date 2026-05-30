@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
+import { TarjetaSugerenciaConciliacionField } from '@/components/contabilidad/TarjetaSugerenciaConciliacionField';
 import {
   normalizarMonedaExtracted,
   type ExtractedCanalHeader,
@@ -23,14 +24,28 @@ import { createClient } from '@/lib/supabase/client';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
 const selectClass =
-  'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/50';
+  'w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#FF9500]/50 focus:ring-2 focus:ring-[#FF9500]/20';
+
+const panelClass =
+  'rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl';
+
+function ConfirmarCompraCargando() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-zinc-500">
+      <Loader2 className="h-4 w-4 animate-spin text-[#FF9500]" />
+      Cargando factura…
+    </div>
+  );
+}
 
 type Props = {
   pendingId: string;
 };
 
 export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
+  const [montado, setMontado] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [bloquearCompraNueva, setBloquearCompraNueva] = useState(false);
   const [pendiente, setPendiente] = useState<PendienteCanal | null>(null);
   const [proyectos, setProyectos] = useState<{ id: string; nombre: string }[]>([]);
   const [proyectoId, setProyectoId] = useState('');
@@ -63,8 +78,13 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   }, [pendingId]);
 
   useEffect(() => {
+    setMontado(true);
+  }, []);
+
+  useEffect(() => {
+    if (!montado) return;
     void cargar();
-  }, [cargar]);
+  }, [cargar, montado]);
 
   useEffect(() => {
     void (async () => {
@@ -156,6 +176,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   };
 
   const registrar = async () => {
+    if (bloquearCompraNueva) {
+      toast.error('Concilie primero el ingreso de campo (FRM) para no duplicar stock.');
+      return;
+    }
     if (!proyectoId.trim()) {
       toast.error('Seleccione el proyecto');
       return;
@@ -177,7 +201,25 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         });
         setCompraRegistrada(true);
         setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
-        toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
+        if (r.ingresoAlmacen?.success) {
+          setIngresoAlmacenOk(true);
+          toast.success(
+            r.yaExistia
+              ? 'Compra ya confirmada · ingreso a almacén listo'
+              : r.ingresoAlmacen.yaExistia
+                ? 'Compra confirmada · ingreso a almacén ya existía'
+                : 'Compra confirmada e ingreso a almacén registrado',
+          );
+        } else if (r.ingresoAlmacen && !r.ingresoAlmacen.success) {
+          toast.warning(
+            r.ingresoAlmacen.error
+              ? `Compra confirmada. Ingreso pendiente: ${r.ingresoAlmacen.error}`
+              : 'Compra confirmada. Pulse «Ingreso a almacén» para completar el stock.',
+            { duration: 10000 },
+          );
+        } else {
+          toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
+        }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'No se pudo registrar');
       }
@@ -199,9 +241,17 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
 
   const nLineas = extracted?.items?.filter((it) => String(it.description ?? '').trim()).length ?? 0;
 
+  if (!montado) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0F] text-zinc-100">
+        <ConfirmarCompraCargando />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#050508] text-white">
-      <header className="border-b border-white/10 px-4 py-4 flex items-center gap-3">
+    <div className="min-h-screen bg-[#0A0A0F] text-zinc-100">
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0A0A0F]/90 backdrop-blur-xl px-4 py-4 flex items-center gap-3">
         <Link
           href="/contabilidad/compras/canal"
           className="rounded-lg border border-white/10 p-2 text-zinc-400 hover:text-white"
@@ -209,23 +259,23 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>
-          <h1 className="text-base font-bold">Registrar compra (Telegram)</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF9500]">
+            Contabilidad · Canal
+          </p>
+          <h1 className="text-base font-black text-white">Registrar compra (Telegram)</h1>
           <p className="text-xs text-zinc-500">Obra y almacén de ingreso (desde Telegram o aquí)</p>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-5">
+      <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-5">
         {loading ? (
-          <div className="flex gap-2 text-zinc-500 text-sm py-12 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Cargando factura…
-          </div>
+          <ConfirmarCompraCargando />
         ) : !pendiente ? (
-          <div className="rounded-xl border border-white/10 p-6 text-center text-sm text-zinc-400">
+          <div className={`${panelClass} text-center text-sm text-zinc-400`}>
             Factura no encontrada.
           </div>
         ) : compraRegistrada || pendiente.estado === 'confirmado' ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-6 text-center space-y-4">
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-6 text-center space-y-4 backdrop-blur-xl">
             <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto" />
             <p className="text-sm font-semibold text-emerald-200">Compra cargada en contabilidad</p>
             <p className="text-xs text-zinc-400">
@@ -264,7 +314,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         ) : (
           <>
             {(pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-amber-100/90 flex items-start gap-2">
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-amber-100/90 flex items-start gap-2 backdrop-blur-xl">
                 <Loader2 className="h-4 w-4 animate-spin shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold">Procesando con IA…</p>
@@ -284,7 +334,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             )}
 
             {pendiente.estado === 'error' && (
-              <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 text-sm">
+              <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm backdrop-blur-xl">
                 <p className="font-semibold text-red-200">Error al leer la factura</p>
                 {pendiente.mensaje_error ? (
                   <p className="text-xs text-red-300/90 mt-1">{pendiente.mensaje_error}</p>
@@ -304,7 +354,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               />
             ) : null}
 
-            <section className="rounded-xl border border-white/10 bg-zinc-900/60 p-4 space-y-3">
+            <section className={`${panelClass} space-y-3`}>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold">Datos de la factura</h2>
                 <button
@@ -338,7 +388,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                     <select
                       value={monedaFactura}
                       onChange={(e) => void actualizarMoneda(normalizarMonedaExtracted(e.target.value))}
-                      className="rounded-md border border-white/15 bg-black/50 px-2 py-0.5 text-[11px] font-bold text-zinc-200 outline-none focus:border-sky-500/50"
+                      className="rounded-md border border-white/10 bg-[#0A0A0F] px-2 py-0.5 text-[11px] font-bold text-zinc-200 outline-none focus:border-[#FF9500]/50"
                       aria-label="Moneda del total"
                     >
                       <option value="VES">VES</option>
@@ -388,6 +438,22 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               />
             </section>
 
+            <TarjetaSugerenciaConciliacionField
+              facturaId={pendingId}
+              proyectoId={proyectoId}
+              proveedorRif={extracted?.supplier_rif}
+              proveedorNombre={extracted?.supplier_name}
+              extracted={extracted}
+              onFrmPendienteChange={setBloquearCompraNueva}
+              onConciliadoExito={() => {
+                setBloquearCompraNueva(false);
+                setCompraRegistrada(true);
+                setIngresoAlmacenOk(true);
+                setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
+                void cargar();
+              }}
+            />
+
             <button
               type="button"
               disabled={!proyectoId.trim() || !ubicacionId.trim() || guardandoUbicacion}
@@ -395,7 +461,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 if (guardandoUbicacion) return;
                 void guardarUbicacion();
               }}
-              className="w-full rounded-xl border border-orange-500/40 bg-orange-500/10 disabled:opacity-40 text-orange-200 text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
+              className="w-full rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/10 disabled:opacity-40 text-[#FF9500] text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
             >
               {guardandoUbicacion ? (
                 <>
@@ -410,6 +476,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             <button
               type="button"
               disabled={
+                bloquearCompraNueva ||
                 !puedeRegistrar ||
                 !proyectoId.trim() ||
                 !ubicacionId.trim() ||
@@ -417,9 +484,14 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 guardandoUbicacion
               }
               onClick={() => {
-                if (registrando) return;
+                if (registrando || bloquearCompraNueva) return;
                 void registrar();
               }}
+              title={
+                bloquearCompraNueva
+                  ? 'Hay recepción FRM pendiente: use Conciliar e inyectar costo'
+                  : undefined
+              }
               className="w-full rounded-xl bg-[#34C759] disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-bold py-3 flex items-center justify-center gap-2"
             >
               {registrando ? (
@@ -427,16 +499,29 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Confirmando…
                 </>
+              ) : bloquearCompraNueva ? (
+                'Bloqueado — concilie FRM arriba'
               ) : (
                 'Cargar compra en contabilidad'
               )}
             </button>
 
-            <p className="text-[11px] text-amber-200/90 text-center leading-relaxed">
-              Guarde obra y almacén si viene del bot, luego pulse{' '}
-              <strong className="text-amber-100">Cargar compra en contabilidad</strong>. Después use{' '}
-              <strong className="text-amber-100">Ingreso a almacén</strong>. Cada línea debe traer{' '}
-              <strong className="text-amber-100">item_code (SKU)</strong> del catálogo.
+            <p className="text-[11px] text-zinc-500 text-center leading-relaxed">
+              {bloquearCompraNueva ? (
+                <>
+                  <span className="text-[#FF9500] font-semibold">
+                    Ingreso manual detectado en obra.
+                  </span>{' '}
+                  Use <strong className="text-zinc-300">Conciliar e inyectar costo</strong> en la
+                  tarjeta naranja. No cargue compra nueva ni duplicará inventario.
+                </>
+              ) : (
+                <>
+                  Guarde obra y almacén si viene del bot, luego{' '}
+                  <strong className="text-zinc-300">Cargar compra en contabilidad</strong>. Cada línea
+                  debe traer <strong className="text-zinc-300">item_code (SKU)</strong> del catálogo.
+                </>
+              )}
             </p>
           </>
         )}

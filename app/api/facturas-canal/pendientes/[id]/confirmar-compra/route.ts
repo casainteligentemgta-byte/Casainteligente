@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
+import { encolarIngresoAlmacenFallback } from '@/lib/contabilidad/encolarIngresoAlmacenFallback';
+import { ingresoAlmacenDesdePendienteCanal } from '@/lib/contabilidad/ingresoAlmacenDesdePendienteCanal';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -29,6 +31,8 @@ export async function POST(req: Request, ctx: RouteCtx) {
       proyecto_id?: string;
       ubicacion_destino_id?: string;
       extracted?: ExtractedCanalHeader;
+      /** Si false, solo contabilidad (comportamiento anterior). */
+      ingreso_almacen_automatico?: boolean;
     };
 
     const proyectoId = String(body.proyecto_id ?? '').trim();
@@ -51,11 +55,34 @@ export async function POST(req: Request, ctx: RouteCtx) {
       extractedOverride: body.extracted,
     });
 
+    const ingresoAutomatico = body.ingreso_almacen_automatico !== false;
+    let ingresoAlmacen: Awaited<ReturnType<typeof ingresoAlmacenDesdePendienteCanal>> | null =
+      null;
+
+    if (ingresoAutomatico) {
+      try {
+        ingresoAlmacen = await ingresoAlmacenDesdePendienteCanal(admin.client, id);
+        if (ingresoAlmacen && !ingresoAlmacen.success) {
+          await encolarIngresoAlmacenFallback(
+            admin.client,
+            id,
+            ingresoAlmacen.error ?? 'Ingreso a almacén no completado',
+          );
+        }
+      } catch (ingresoErr: unknown) {
+        const msg =
+          ingresoErr instanceof Error ? ingresoErr.message : 'Error al registrar ingreso a almacén';
+        ingresoAlmacen = { success: false, error: msg };
+        await encolarIngresoAlmacenFallback(admin.client, id, msg);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       compraId: result.compraId,
       purchaseInvoiceId: result.purchaseInvoiceId,
       yaExistia: result.yaExistia,
+      ingresoAlmacen,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al registrar compra';

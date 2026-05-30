@@ -1,4 +1,6 @@
 import { processInvoiceFromCanal, type ProgresoFacturaCanal } from '@/lib/canal/processInvoiceFromCanal';
+import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
+import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import { downloadTelegramFile, mimeFromTelegramPath, sendTelegramMessage } from '@/lib/telegram/botApi';
 import {
   conProgresoSimulado,
@@ -28,6 +30,18 @@ export async function processTelegramInvoicePhoto(params: {
   const progreso = progresoTelegram(params.chatId);
   await progreso.reportar(5, 'Descargando archivo de Telegram…');
 
+  const admin = telegramSupabaseAdmin();
+  if (admin.ok) {
+    const claim = await reclamarProcesamientoFacturaCanal(admin.client, params.pendingId);
+    if (claim === 'already_done' || claim === 'already_processing') {
+      return;
+    }
+    if (claim === 'not_found') {
+      await progreso.bad('Factura pendiente no encontrada en el sistema.');
+      return;
+    }
+  }
+
   try {
     await processInvoiceFromCanal({
       canal: 'telegram',
@@ -46,6 +60,16 @@ export async function processTelegramInvoicePhoto(params: {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+    if (admin.ok) {
+      await admin.client
+        .from('ci_facturas_canal_pendientes')
+        .update({
+          estado: 'error',
+          mensaje_error: raw.slice(0, 500),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.pendingId);
+    }
     await progreso.bad(safe);
     throw e;
   }

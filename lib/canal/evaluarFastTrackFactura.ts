@@ -4,6 +4,7 @@ import { calcularConfidenceScoreOcr, cumpleUmbralFastTrack } from '@/lib/canal/c
 import { resolverLimiteFastTrackUsd } from '@/lib/canal/limiteFastTrackUsd';
 import { resolverMontosCompraBimonetario } from '@/lib/contabilidad/comprasBimonetario';
 import { normSkuCodigo } from '@/lib/almacen/resolverMaterialIdPorSku';
+import { tieneRecepcionesCampoSinConciliar } from '@/lib/almacen/tieneRecepcionesCampoSinConciliar';
 
 export type ResultadoEvalFastTrack = {
   elegible: boolean;
@@ -74,6 +75,24 @@ export async function evaluarFastTrackFactura(
       motivo: `Monto ${totalUsd.toFixed(2)} USD fuera de fast-track (< $${limiteUsd.toFixed(2)})`,
       materialIds: [],
     };
+  }
+
+  if (proyectoId) {
+    const hayFrm = await tieneRecepcionesCampoSinConciliar(supabase, {
+      proyectoId,
+      supplierRif: extracted.supplier_rif,
+      supplierName: extracted.supplier_name,
+    });
+    if (hayFrm) {
+      return {
+        elegible: false,
+        confidenceScore,
+        totalUsd,
+        skuCoinciden: false,
+        motivo: 'Existe recepción FRM sin conciliar para este proveedor — use conciliación manual',
+        materialIds: [],
+      };
+    }
   }
 
   const { data: catalogo, error } = await supabase
