@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInventario';
 import { asegurarUbicacionObra } from '@/lib/almacen/ubicacionesInventario';
 
 export type ReubicarCompraInput = {
@@ -41,19 +42,19 @@ async function moverStockCompraRegistrada(
     const qty = Number(linea.cantidad);
     if (qty <= 0) continue;
 
-    const { error: outErr } = await supabase.rpc('inv_stock_apply_delta', {
-      p_ubicacion_id: params.ubicacionAnteriorId,
-      p_material_id: materialId,
-      p_delta_disponible: -qty,
+    await aplicarDeltaStockInventario(supabase, {
+      ubicacionId: params.ubicacionAnteriorId,
+      materialId,
+      deltaDisponible: -qty,
+      tipoMovimiento: 'transferencia_salida',
     });
-    if (outErr) throw new Error(`Stock origen: ${outErr.message}`);
 
-    const { error: inErr } = await supabase.rpc('inv_stock_apply_delta', {
-      p_ubicacion_id: params.ubicacionNuevaId,
-      p_material_id: materialId,
-      p_delta_disponible: qty,
+    await aplicarDeltaStockInventario(supabase, {
+      ubicacionId: params.ubicacionNuevaId,
+      materialId,
+      deltaDisponible: qty,
+      tipoMovimiento: 'transferencia_entrada',
     });
-    if (inErr) throw new Error(`Stock destino: ${inErr.message}`);
   }
 }
 

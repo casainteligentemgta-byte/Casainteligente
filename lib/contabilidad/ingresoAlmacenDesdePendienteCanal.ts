@@ -1,19 +1,41 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { approveAllQualityInspectionsForInvoice } from '@/lib/almacen/approveQualityInspection';
+import { crearCuarentenaDesdeFactura } from '@/lib/almacen/crearCuarentenaDesdeFactura';
+import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
 import {
   mensajeLineasSinMaterialSku,
   resolverMaterialIdLineasCompra,
 } from '@/lib/almacen/resolverMaterialIdPorSku';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
+import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
 
 export type ResultadoIngresoAlmacenCanal = {
   success: boolean;
   compraFacturaId?: string;
   yaExistia?: boolean;
+  viaCuarentena?: boolean;
+  aprobadas?: number;
   error?: string;
 };
 
+async function contarPendientesCuarentena(
+  supabase: SupabaseClient,
+  purchaseInvoiceId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('quality_inspections')
+    .select('id', { count: 'exact', head: true })
+    .eq('invoice_id', purchaseInvoiceId)
+    .eq('status', 'PENDIENTE');
+
+  if (error && !/does not exist/i.test(error.message ?? '')) {
+    throw new Error(error.message);
+  }
+  return count ?? 0;
+}
+
 /**
- * Registra compras_facturas + stock tras confirmar compra contable (migr. 180).
+ * Ingreso a almacén desde factura Telegram: aprueba cuarentena pendiente o fallback legacy.
  */
 export async function ingresoAlmacenDesdePendienteCanal(
   supabase: SupabaseClient,
@@ -40,6 +62,7 @@ export async function ingresoAlmacenDesdePendienteCanal(
     .maybeSingle();
 
   if (existente?.id) {
+    await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
     return {
       success: true,
       yaExistia: true,
@@ -81,6 +104,46 @@ export async function ingresoAlmacenDesdePendienteCanal(
   }
 
   try {
+    let pendientes = await contarPendientesCuarentena(supabase, purchaseInvoiceId);
+
+    if (pendientes === 0) {
+      await crearCuarentenaDesdeFactura(supabase, {
+        purchaseInvoiceId,
+        lineas: lineasInventario.map((l) => ({
+          material_id: l.material_id,
+          descripcion: l.descripcion,
+          cantidad: l.cantidad,
+          precio_unitario: l.precio_unitario,
+        })),
+      });
+      pendientes = await contarPendientesCuarentena(supabase, purchaseInvoiceId);
+    }
+
+    if (pendientes > 0) {
+      const { aprobadas } = await approveAllQualityInspectionsForInvoice(
+        supabase,
+        purchaseInvoiceId,
+        null,
+      );
+
+      const { data: cf } = await supabase
+        .from('compras_facturas')
+        .select('id')
+        .eq('purchase_invoice_id', purchaseInvoiceId)
+        .maybeSingle();
+
+      await finalizarLiberacionCuarentena(supabase, purchaseInvoiceId);
+      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+
+      return {
+        success: true,
+        yaExistia: false,
+        viaCuarentena: true,
+        aprobadas,
+        compraFacturaId: cf?.id ? String(cf.id) : undefined,
+      };
+    }
+
     const result = await registrarCompraInventario(supabase, {
       ubicacionDestinoId: destino,
       numeroFactura: String(compra.invoice_number ?? 'S/N'),
@@ -92,9 +155,12 @@ export async function ingresoAlmacenDesdePendienteCanal(
       lineas: lineasInventario,
     });
 
+    await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+
     return {
       success: true,
       yaExistia: false,
+      viaCuarentena: false,
       compraFacturaId: result.compraFacturaId,
     };
   } catch (e) {

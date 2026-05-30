@@ -5,6 +5,7 @@ export type MaterialCompraResuelto = {
   id: string;
   matchedBy: 'sku' | 'nombre';
   name: string;
+  category_id?: string | null;
 };
 
 function normalizarNombre(s: string): string {
@@ -26,7 +27,7 @@ export async function resolverMaterialParaLineaCompra(
   if (sku) {
     const { data: rows, error } = await supabase
       .from('global_inventory')
-      .select('id, sap_code, name')
+      .select('id, sap_code, name, category_id')
       .not('sap_code', 'is', null);
     if (error) throw new Error(error.message);
     for (const row of rows ?? []) {
@@ -35,6 +36,7 @@ export async function resolverMaterialParaLineaCompra(
           id: String(row.id),
           matchedBy: 'sku',
           name: String(row.name ?? opts.description),
+          category_id: row.category_id ? String(row.category_id) : null,
         };
       }
     }
@@ -43,7 +45,7 @@ export async function resolverMaterialParaLineaCompra(
   const nombre = normalizarNombre(opts.description);
   if (nombre.length < 3) return null;
 
-  let q = supabase.from('global_inventory').select('id, name, proyecto_id');
+  let q = supabase.from('global_inventory').select('id, name, proyecto_id, category_id');
   if (opts.proyectoId) {
     q = q.eq('proyecto_id', opts.proyectoId);
   }
@@ -56,6 +58,7 @@ export async function resolverMaterialParaLineaCompra(
         id: String(row.id),
         matchedBy: 'nombre',
         name: String(row.name),
+        category_id: row.category_id ? String(row.category_id) : null,
       };
     }
   }
@@ -63,7 +66,7 @@ export async function resolverMaterialParaLineaCompra(
   if (opts.proyectoId) {
     const { data: globalRows, error: globalErr } = await supabase
       .from('global_inventory')
-      .select('id, name')
+      .select('id, name, category_id')
       .is('proyecto_id', null)
       .limit(300);
     if (globalErr) throw new Error(globalErr.message);
@@ -73,6 +76,7 @@ export async function resolverMaterialParaLineaCompra(
           id: String(row.id),
           matchedBy: 'nombre',
           name: String(row.name),
+          category_id: row.category_id ? String(row.category_id) : null,
         };
       }
     }
@@ -91,6 +95,7 @@ export async function actualizarMaterialExistenteCompra(
     proyectoId?: string;
     depositId?: string | null;
     sapCode?: string;
+    categoryId?: string | null;
   },
 ): Promise<void> {
   const patch: Record<string, unknown> = {
@@ -105,6 +110,7 @@ export async function actualizarMaterialExistenteCompra(
   if (opts.depositId) patch.deposit_id = opts.depositId;
   const sap = opts.sapCode?.trim();
   if (sap) patch.sap_code = sap;
+  if (opts.categoryId) patch.category_id = opts.categoryId;
 
   const { error } = await supabase.from('global_inventory').update(patch).eq('id', materialId);
   if (error) throw error;
@@ -121,6 +127,7 @@ export async function crearMaterialParaLineaCompra(
     fecha: string;
     proyectoId: string;
     depositId?: string | null;
+    categoryId?: string | null;
   },
 ): Promise<string> {
   const desc = opts.descripcion.trim();
@@ -142,6 +149,7 @@ export async function crearMaterialParaLineaCompra(
   const sap = opts.item_code?.trim();
   if (sap) materialBase.sap_code = sap;
   if (opts.depositId) materialBase.deposit_id = opts.depositId;
+  if (opts.categoryId) materialBase.category_id = opts.categoryId;
 
   let res = await supabase.from('global_inventory').insert(materialBase).select('id').single();
   if (res.error && /deposit_id/i.test(res.error.message)) {

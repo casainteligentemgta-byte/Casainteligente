@@ -5,7 +5,10 @@ import {
   type DatosOcrFastTrack,
 } from '@/lib/canal/evaluarYProcesarFastTrack';
 import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
-import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
+import {
+  mensajeAmigableErrorStorage,
+  PROCUREMENT_DOCUMENTS_BUCKET,
+} from '@/lib/almacen/procurementDocumentStorage';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 
 export type CanalFactura = 'telegram' | 'whatsapp';
@@ -67,7 +70,9 @@ export async function processInvoiceFromCanal(params: {
       contentType: params.mimeType,
       upsert: true,
     });
-  if (upErr) throw new Error(`Storage: ${upErr.message}`);
+  if (upErr) {
+    throw new Error(mensajeAmigableErrorStorage(upErr.message, 'subir'));
+  }
 
   await prog?.reportar(30, 'Subiendo documento al almacén…');
 

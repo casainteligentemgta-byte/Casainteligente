@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInventario';
 
 export type ProductoCatalogoRow = {
   id: number;
@@ -193,16 +194,16 @@ export async function migrarProductosAObra(
       const deltaStock =
         stockInicial > 0 ? stockInicial : herramientas ? 1 : 0;
       if (input.ubicacionId && deltaStock > 0) {
-        const { error: rpcErr } = await supabase.rpc('inv_stock_apply_delta', {
-          p_ubicacion_id: input.ubicacionId,
-          p_material_id: materialId,
-          p_delta_disponible: deltaStock,
-          p_delta_reservada: 0,
-          p_delta_transito_entrante: 0,
-        });
-        if (rpcErr && rpcErr.code !== '42883') {
+        try {
+          await aplicarDeltaStockInventario(supabase, {
+            ubicacionId: input.ubicacionId,
+            materialId,
+            deltaDisponible: deltaStock,
+            tipoMovimiento: 'ingreso_compra',
+          });
+        } catch (rpcErr) {
           result.errores.push(
-            `${prod.nombre}: material creado pero stock en ubicación falló (${rpcErr.message}).`,
+            `${prod.nombre}: material creado pero stock en ubicación falló (${rpcErr instanceof Error ? rpcErr.message : 'error'}).`,
           );
         }
       }

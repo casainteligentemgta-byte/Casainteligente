@@ -208,6 +208,7 @@ export type CategoriaMaterialCompra =
   | 'Materiales'
   | 'Herramientas'
   | 'Equipos'
+  | 'Servicios'
   | 'Consumibles / Logística de Campo';
 
 // ── Techo presupuestario por partida ────────────────────────────────────────

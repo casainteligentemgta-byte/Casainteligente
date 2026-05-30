@@ -10,10 +10,14 @@ import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
+import { copiarDocumentoProcurementAInvoice } from '@/lib/almacen/procurementDocumentStorage';
 import {
   asegurarMaterialesLineasCompra,
   mensajeLineasSinMaterialSku,
+  resolverMaterialIdLineasCompra,
 } from '@/lib/almacen/resolverMaterialIdPorSku';
+import { crearCuarentenaDesdeFactura } from '@/lib/almacen/crearCuarentenaDesdeFactura';
+import { notificarCuarentenaParaInvoice } from '@/lib/almacen/notificarCuarentenaParaInvoice';
 
 export function linkConfirmarCompraTelegram(pendingId: string, baseUrl?: string): string {
   const base = (
@@ -66,7 +70,12 @@ export async function confirmarCompraDesdeCanal(
     extractedOverride?: ExtractedCanalHeader;
     lineasOverride?: LineaCompraContabilidadInput[];
   },
-): Promise<{ compraId: string; purchaseInvoiceId: string; yaExistia: boolean }> {
+): Promise<{
+  compraId: string;
+  purchaseInvoiceId: string;
+  yaExistia: boolean;
+  cuarentena?: { lineasCreadas: number; yaExistia: boolean; notificado?: boolean };
+}> {
   const { data: pendiente, error: pErr } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select(
@@ -87,10 +96,26 @@ export async function confirmarCompraDesdeCanal(
       .eq('purchase_invoice_id', row.purchase_invoice_id)
       .maybeSingle();
     if (compraExistente?.id) {
+      const resuelto = await resolverMaterialIdLineasCompra(supabase, compraExistente.id);
+      const cuarentena = await crearCuarentenaDesdeFactura(supabase, {
+        purchaseInvoiceId: row.purchase_invoice_id,
+        lineas: resuelto.lineas.map((l) => ({
+          material_id: l.material_id,
+          descripcion: l.descripcion,
+          cantidad: l.cantidad,
+          precio_unitario: l.precio_unitario,
+        })),
+      });
+      let notificado = false;
+      if (cuarentena.lineasCreadas > 0 || cuarentena.yaExistia) {
+        const notify = await notificarCuarentenaParaInvoice(supabase, row.purchase_invoice_id);
+        notificado = Boolean(notify.ok && !notify.skipped);
+      }
       return {
         compraId: compraExistente.id,
         purchaseInvoiceId: row.purchase_invoice_id,
         yaExistia: true,
+        cuarentena: { ...cuarentena, notificado },
       };
     }
   }
@@ -161,6 +186,9 @@ export async function confirmarCompraDesdeCanal(
   });
 
   let purchaseInvoiceId = row.purchase_invoice_id ?? '';
+  let docStoragePath = row.document_storage_path?.trim() || null;
+  let docFileName = row.document_file_name?.trim() || null;
+  let docMimeType = row.document_mime_type?.trim() || null;
 
   if (!purchaseInvoiceId) {
     const invPayload = {
@@ -173,9 +201,9 @@ export async function confirmarCompraDesdeCanal(
       ubicacion_destino_id: ubicacionDestinoId,
       ...(entidadId ? { entidad_id: entidadId } : {}),
       ...payloadCompraBimonetario(montos),
-      document_storage_path: row.document_storage_path,
-      document_file_name: row.document_file_name,
-      document_mime_type: row.document_mime_type,
+      document_storage_path: docStoragePath,
+      document_file_name: docFileName,
+      document_mime_type: docMimeType,
     };
 
     const { data: inv, error: invErr } = await supabase
@@ -197,6 +225,36 @@ export async function confirmarCompraDesdeCanal(
       .eq('id', purchaseInvoiceId);
   }
 
+  if (docStoragePath && purchaseInvoiceId) {
+    const enCarpetaFactura = docStoragePath.startsWith(`${purchaseInvoiceId}/`);
+    const enColaCanal = /-pending\//i.test(docStoragePath);
+    if (!enCarpetaFactura || enColaCanal) {
+      const copiado = await copiarDocumentoProcurementAInvoice(supabase, {
+        sourcePath: docStoragePath,
+        purchaseInvoiceId,
+        fileName: docFileName,
+        mimeType: docMimeType,
+      });
+      if (copiado) {
+        docStoragePath = copiado.path;
+        docFileName = copiado.fileName;
+        docMimeType = copiado.mimeType;
+      } else {
+        docStoragePath = null;
+        docFileName = null;
+        docMimeType = null;
+      }
+      await supabase
+        .from('purchase_invoices')
+        .update({
+          document_storage_path: docStoragePath,
+          document_file_name: docFileName,
+          document_mime_type: docMimeType,
+        })
+        .eq('id', purchaseInvoiceId);
+    }
+  }
+
   const { compraId } = await registerCompraDesdeRecepcion(supabase, {
     purchase_invoice_id: purchaseInvoiceId,
     proyecto_id: proyectoId,
@@ -208,8 +266,8 @@ export async function confirmarCompraDesdeCanal(
     moneda: montos.monedaOriginal,
     tasa_bcv_ves_por_usd: montos.tasaApplied,
     total_amount_usd: montos.montoUsd,
-    document_storage_path: row.document_storage_path,
-    document_file_name: row.document_file_name,
+    document_storage_path: docStoragePath,
+    document_file_name: docFileName,
     lineas,
     origen: 'TELEGRAM',
     ubicacion_destino_id: ubicacionDestinoId,
@@ -230,5 +288,28 @@ export async function confirmarCompraDesdeCanal(
     })
     .eq('id', params.pendingId);
 
-  return { compraId, purchaseInvoiceId, yaExistia: false };
+  const cuarentena = await crearCuarentenaDesdeFactura(supabase, {
+    purchaseInvoiceId,
+    lineas: lineasConMaterial.map((l) => ({
+      material_id: l.material_id!,
+      descripcion: l.descripcion,
+      item_code: l.item_code,
+      cantidad: l.cantidad,
+      precio_unitario: l.precio_unitario,
+      unidad: l.unidad,
+    })),
+  });
+
+  let notificado = false;
+  if (cuarentena.lineasCreadas > 0 || cuarentena.yaExistia) {
+    const notify = await notificarCuarentenaParaInvoice(supabase, purchaseInvoiceId);
+    notificado = Boolean(notify.ok && !notify.skipped);
+  }
+
+  return {
+    compraId,
+    purchaseInvoiceId,
+    yaExistia: false,
+    cuarentena: { ...cuarentena, notificado },
+  };
 }

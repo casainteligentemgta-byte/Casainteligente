@@ -107,11 +107,21 @@ export default function MovimientosInventarioClient() {
     setEliminandoId(f.id);
     setError(null);
     try {
-      const res = await fetch(`/api/almacen/movimientos/${encodeURIComponent(f.id)}`, {
+      const res = await fetch('/api/almacen/movimientos', {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: f.id }),
+        cache: 'no-store',
       });
       const json = (await res.json()) as { error?: string; mensaje?: string };
       if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
+      setFilas((prev) => prev.filter((row) => row.id !== f.id));
+      setResumen((prev) => ({
+        ...prev,
+        ingresado: f.tipo === 'ingreso' ? Math.max(0, prev.ingresado - 1) : prev.ingresado,
+        despachado: f.tipo === 'despacho' ? Math.max(0, prev.despachado - 1) : prev.despachado,
+        almacenado: f.tipo === 'almacenado' ? Math.max(0, prev.almacenado - 1) : prev.almacenado,
+      }));
       await cargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al eliminar');

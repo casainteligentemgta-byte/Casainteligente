@@ -45,6 +45,12 @@ import {
     resolverMaterialParaLineaCompra,
     type MaterialCompraResuelto,
 } from '@/lib/almacen/resolverMaterialParaCompra';
+import {
+    asegurarCategoriasCompraSugeridas,
+    resolverCategoriaPorDefecto,
+    type MaterialCategoryRow,
+} from '@/lib/almacen/categoriasMaterialCompra';
+import SelectorCategoriaMaterial from '@/components/almacen/SelectorCategoriaMaterial';
 import { validarCompraProcurement } from '@/lib/almacen/validarCompraProcurement';
 import {
     buildExtractedFromProcurementForm,
@@ -56,7 +62,19 @@ type PurchaseLine = {
     unit: string;
     quantity: number;
     unit_price: number;
+    category_id: string;
 };
+
+function lineaCompraVacia(categoryId: string): PurchaseLine {
+    return {
+        description: '',
+        item_code: '',
+        unit: 'UND',
+        quantity: 1,
+        unit_price: 0,
+        category_id: categoryId,
+    };
+}
 
 const panelStyle: React.CSSProperties = {
     background: 'rgba(28, 28, 30, 0.6)',
@@ -160,6 +178,8 @@ export default function ProcurementClient() {
     const [materialMatches, setMaterialMatches] = useState<
         Record<number, MaterialCompraResuelto | null>
     >({});
+    const [materialCategories, setMaterialCategories] = useState<MaterialCategoryRow[]>([]);
+    const [defaultCategoryId, setDefaultCategoryId] = useState('');
     const [saveNotice, setSaveNotice] = useState<string | null>(null);
     const [proyectos, setProyectos] = useState<Array<{ id: string; nombre: string }>>([]);
     const documentPreviewRef = useRef<string | null>(null);
@@ -207,6 +227,7 @@ export default function ProcurementClient() {
             unit: (it.unit || 'UND').trim() || 'UND',
             quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
             unit_price: Number(it.unit_price) >= 0 ? Number(it.unit_price) : 0,
+            category_id: defaultCategoryId,
         }));
         const lineTotal = mappedItems.reduce((acc, it) => acc + it.quantity * it.unit_price, 0);
         const totalAi =
@@ -232,6 +253,25 @@ export default function ProcurementClient() {
                 'Revise datos y guarde la factura.',
         );
     };
+
+    useEffect(() => {
+        void (async () => {
+            try {
+                const supabase = createClient();
+                const cats = await asegurarCategoriasCompraSugeridas(supabase);
+                const defId = resolverCategoriaPorDefecto(cats);
+                setMaterialCategories(cats);
+                setDefaultCategoryId(defId);
+                setItems((prev) =>
+                    prev.map((line) =>
+                        line.category_id ? line : { ...line, category_id: defId },
+                    ),
+                );
+            } catch {
+                /* categorías opcionales al cargar */
+            }
+        })();
+    }, []);
 
     useEffect(() => {
         const fromTelegram = searchParams.get('fromTelegram');
@@ -361,10 +401,7 @@ export default function ProcurementClient() {
     }, []);
 
     const handleAddItem = () => {
-        setItems([
-            ...items,
-            { description: '', item_code: '', unit: 'UND', quantity: 1, unit_price: 0 },
-        ]);
+        setItems([...items, lineaCompraVacia(defaultCategoryId)]);
     };
 
     const removeItem = (index: number) => {
@@ -441,7 +478,15 @@ export default function ProcurementClient() {
                             proyectoId: proyectoId || undefined,
                         });
                     }
-                    if (!cancelled) setMaterialMatches(next);
+                    if (!cancelled) {
+                        setMaterialMatches(next);
+                        setItems((prev) =>
+                            prev.map((line, i) => {
+                                const cat = next[i]?.category_id;
+                                return cat ? { ...line, category_id: cat } : line;
+                            }),
+                        );
+                    }
                 } catch {
                     /* preview opcional */
                 }
@@ -514,6 +559,11 @@ export default function ProcurementClient() {
             setSubmitError(
                 'Agregue al menos un artículo con descripción (botón + en Artículos de la factura).'
             );
+            return;
+        }
+
+        if (validLines.some((l) => !l.category_id?.trim())) {
+            setSubmitError('Seleccione la categoría de material en cada línea de la factura.');
             return;
         }
 
@@ -646,6 +696,7 @@ export default function ProcurementClient() {
                         proyectoId,
                         depositId: depositIdMaterial,
                         sapCode: line.item_code.trim() || undefined,
+                        categoryId: line.category_id,
                     });
                 } else {
                     const materialBase: Record<string, unknown> = {
@@ -658,6 +709,7 @@ export default function ProcurementClient() {
                         last_purchase_price: line.unit_price,
                         last_purchase_date: invoice.date,
                         proyecto_id: proyectoId,
+                        category_id: line.category_id,
                     };
                     if (line.item_code.trim()) {
                         materialBase.sap_code = line.item_code.trim();
@@ -1406,6 +1458,21 @@ export default function ProcurementClient() {
                                                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 font-bold text-sm outline-none focus:bg-white focus:text-black transition-all"
                                                 />
                                             </div>
+                                            <SelectorCategoriaMaterial
+                                                value={item.category_id}
+                                                onChange={(categoryId) =>
+                                                    updateItem(index, 'category_id', categoryId)
+                                                }
+                                                categories={materialCategories}
+                                                onCategoriesChange={(cats) => {
+                                                    setMaterialCategories(cats);
+                                                    if (!defaultCategoryId && cats.length) {
+                                                        setDefaultCategoryId(
+                                                            resolverCategoriaPorDefecto(cats),
+                                                        );
+                                                    }
+                                                }}
+                                            />
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-2">
                                                     <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">

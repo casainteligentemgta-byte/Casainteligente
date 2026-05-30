@@ -88,7 +88,7 @@ const navItems = [
     },
     {
         href: '/almacen',
-        label: 'Inventario',
+        label: 'Almacenes',
         icon: (active: boolean) => (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" stroke={active ? '#FF2D55' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? 'rgba(255,45,85,0.1)' : 'none'} />
@@ -144,7 +144,7 @@ export default function IOSNavBar() {
                     const activeColor =
                         item.label === 'Conta'
                             ? '#5856D6'
-                            : item.label === 'Inventario'
+                            : item.label === 'Almacenes'
                                 ? '#FF2D55'
                                 : item.label === 'Productos'
                                     ? '#FF9500'

@@ -31,7 +31,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       proyecto_id?: string;
       ubicacion_destino_id?: string;
       extracted?: ExtractedCanalHeader;
-      /** Si false, solo contabilidad (comportamiento anterior). */
+      /** Si true, intenta ingreso directo (fast-track vía cuarentena). Por defecto false. */
       ingreso_almacen_automatico?: boolean;
     };
 
@@ -55,7 +55,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       extractedOverride: body.extracted,
     });
 
-    const ingresoAutomatico = body.ingreso_almacen_automatico !== false;
+    const ingresoAutomatico = body.ingreso_almacen_automatico === true;
     let ingresoAlmacen: Awaited<ReturnType<typeof ingresoAlmacenDesdePendienteCanal>> | null =
       null;
 
@@ -82,6 +82,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       compraId: result.compraId,
       purchaseInvoiceId: result.purchaseInvoiceId,
       yaExistia: result.yaExistia,
+      cuarentena: result.cuarentena ?? null,
       ingresoAlmacen,
     });
   } catch (err: unknown) {

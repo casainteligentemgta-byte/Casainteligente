@@ -201,14 +201,37 @@ export async function cargarStockPorUbicaciones(
   const BATCH = 40;
   for (let i = 0; i < ubicacionIds.length; i += BATCH) {
     const batch = ubicacionIds.slice(i, i + BATCH);
-    const { data, error } = await supabase
+    let data: Array<Record<string, unknown>> | null = null;
+    let error: { code?: string; message?: string } | null = null;
+
+    const res = await supabase
       .from('inventario_stock')
       .select(SELECT_STOCK_FILTRO)
       .in('ubicacion_id', batch)
       .gt('cantidad_disponible', 0);
+    data = res.data;
+    error = res.error;
 
-    if (error?.code === '42P01') return map;
-    if (error) throw new Error(error.message);
+    if (error) {
+      const fallback = await supabase
+        .from('inventario_stock')
+        .select('material_id, cantidad_disponible, ubicacion_id')
+        .in('ubicacion_id', batch)
+        .gt('cantidad_disponible', 0);
+      if (fallback.error?.code === '42P01') return map;
+      if (fallback.error) throw new Error(fallback.error.message);
+      for (const row of fallback.data ?? []) {
+        const materialId = String(row.material_id ?? '');
+        if (!materialId) continue;
+        const qty = Number(row.cantidad_disponible ?? 0);
+        if (qty <= 0) continue;
+        fusionarFilaEnResumenStock(map, materialId, {
+          cantidad: qty,
+          ubicacionNombre: 'Almacén',
+        });
+      }
+      continue;
+    }
 
     for (const row of data ?? []) {
       const materialId = String(row.material_id ?? '');

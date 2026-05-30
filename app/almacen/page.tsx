@@ -100,6 +100,23 @@ function categoriaCoincideFiltro(item: InventoryItem, filtro: string): boolean {
     }
 }
 
+/** Entidad del catálogo puede estar vacía aunque el material tenga stock físico en la obra filtrada. */
+function materialPasaFiltroEntidad(
+    item: InventoryItem,
+    opts: {
+        filterEntidadId?: string;
+        filterProyectoId?: string;
+        stockEnFiltro: number;
+        filtroPorUbicacionActivo: boolean;
+    },
+): boolean {
+    if (!opts.filterEntidadId) return true;
+    if (item.entidad_id === opts.filterEntidadId) return true;
+    if (opts.filterProyectoId && item.proyecto_id === opts.filterProyectoId) return true;
+    if (opts.filtroPorUbicacionActivo && opts.stockEnFiltro > 0) return true;
+    return false;
+}
+
 function labelUbicacionEnTabla(
     item: InventoryItem,
     stockUb: StockEnUbicacionResumen | undefined,
@@ -732,7 +749,16 @@ export default function InventoryMasterPage() {
 
             if (!textMatch) return false;
             if (!categoriaCoincideFiltro(item, activeCategory)) return false;
-            if (filterEntidadId && item.entidad_id !== filterEntidadId) return false;
+            if (
+                !materialPasaFiltroEntidad(item, {
+                    filterEntidadId,
+                    filterProyectoId,
+                    stockEnFiltro,
+                    filtroPorUbicacionActivo,
+                })
+            ) {
+                return false;
+            }
             if (filterPartidaId && item.presupuesto_partida_id !== filterPartidaId) return false;
             if (sinClasificacionObra && (item.proyecto_id || item.entidad_id)) return false;
             if (sinAlmacenAsignado && item.deposit_id) return false;
@@ -864,6 +890,12 @@ export default function InventoryMasterPage() {
         const slots: { label: string; value: number }[] = [
             { label: 'Valor total', value: statsFiltrados.totalValue },
         ];
+        if (filtroPorUbicacionActivo || filterProyectoId || filterDepositId) {
+            for (const d of valorPorAlmacen) {
+                if (d.value > 0) slots.push({ label: d.name, value: d.value });
+            }
+            return slots;
+        }
         for (const d of valorPorDeposito) {
             slots.push({ label: d.name, value: d.value });
         }
@@ -873,7 +905,14 @@ export default function InventoryMasterPage() {
             }
         }
         return slots;
-    }, [statsFiltrados.totalValue, valorPorDeposito, valorPorAlmacen]);
+    }, [
+        statsFiltrados.totalValue,
+        valorPorDeposito,
+        valorPorAlmacen,
+        filtroPorUbicacionActivo,
+        filterProyectoId,
+        filterDepositId,
+    ]);
 
     const valorSlotActual = valorSlots[valorRotateIdx % Math.max(valorSlots.length, 1)] ?? {
         label: 'Valor total',
@@ -1020,12 +1059,19 @@ export default function InventoryMasterPage() {
                             <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">
                                 Valor por almacén
                             </p>
-                            {(valorPorDeposito.length ? valorPorDeposito : valorPorAlmacen.map((r) => ({ name: r.name, value: r.value }))).length === 0 ? (
+                            {(filtroPorUbicacionActivo || filterProyectoId || filterDepositId
+                                ? valorPorAlmacen.filter((r) => r.value > 0)
+                                : valorPorDeposito.length
+                                  ? valorPorDeposito
+                                  : valorPorAlmacen
+                            ).length === 0 ? (
                                 <p className="text-xs text-zinc-500">Sin datos de almacén</p>
                             ) : (
-                                (valorPorDeposito.length
-                                    ? valorPorDeposito.map((r) => ({ name: r.name, value: r.value }))
-                                    : valorPorAlmacen
+                                (filtroPorUbicacionActivo || filterProyectoId || filterDepositId
+                                    ? valorPorAlmacen.filter((r) => r.value > 0)
+                                    : valorPorDeposito.length
+                                      ? valorPorDeposito
+                                      : valorPorAlmacen
                                 ).map((row) => (
                                     <div
                                         key={row.name}

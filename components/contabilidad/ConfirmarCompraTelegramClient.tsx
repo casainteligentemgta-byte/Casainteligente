@@ -205,17 +205,28 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           setIngresoAlmacenOk(true);
           toast.success(
             r.yaExistia
-              ? 'Compra ya confirmada · ingreso a almacén listo'
+              ? 'Compra ya confirmada · stock liberado'
               : r.ingresoAlmacen.yaExistia
                 ? 'Compra confirmada · ingreso a almacén ya existía'
-                : 'Compra confirmada e ingreso a almacén registrado',
+                : r.ingresoAlmacen.viaCuarentena
+                  ? `Compra confirmada · ${r.ingresoAlmacen.aprobadas ?? 0} línea(s) liberadas en almacén`
+                  : 'Compra confirmada e ingreso a almacén registrado',
           );
         } else if (r.ingresoAlmacen && !r.ingresoAlmacen.success) {
           toast.warning(
             r.ingresoAlmacen.error
               ? `Compra confirmada. Ingreso pendiente: ${r.ingresoAlmacen.error}`
-              : 'Compra confirmada. Pulse «Ingreso a almacén» para completar el stock.',
+              : 'Compra confirmada. Pulse «Liberar en almacén» para completar el stock.',
             { duration: 10000 },
+          );
+        } else if (r.cuarentena && (r.cuarentena.lineasCreadas > 0 || r.cuarentena.yaExistia)) {
+          toast.success(
+            r.yaExistia
+              ? 'Compra ya confirmada · material en cuarentena'
+              : `Compra confirmada · ${r.cuarentena.lineasCreadas} línea(s) en cuarentena${
+                  r.cuarentena.notificado ? ' (Telegram enviado)' : ''
+                }`,
+            { duration: 8000 },
           );
         } else {
           toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
@@ -231,7 +242,11 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       try {
         const r = await ingresoAlmacenCanal(pendingId);
         setIngresoAlmacenOk(true);
-        toast.success(r.yaExistia ? 'Ingreso a almacén ya registrado' : 'Ingreso a almacén registrado');
+        toast.success(
+          r.yaExistia
+            ? 'Ingreso a almacén ya registrado'
+            : 'Material liberado en almacén (cuarentena aprobada)',
+        );
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'No se pudo registrar ingreso';
         toast.error(msg, { duration: 8000 });
@@ -281,6 +296,16 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             <p className="text-xs text-zinc-400">
               {extracted?.supplier_name ?? 'Proveedor'} · Nº {extracted?.invoice_number ?? '—'}
             </p>
+            <p className="text-xs text-amber-200/80">
+              El material queda en cuarentena hasta inspección en almacén. Use el botón inferior solo
+              para liberar todo sin revisar línea a línea.
+            </p>
+            <Link
+              href="/almacen/procurement/quality"
+              className="block w-full rounded-lg border border-[#FF9500]/40 text-[#FF9500] text-sm font-semibold px-4 py-2.5"
+            >
+              Abrir cuarentena
+            </Link>
             <button
               type="button"
               onClick={() => {
@@ -291,10 +316,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               className="w-full rounded-lg bg-[#34C759] text-black text-sm font-semibold px-4 py-2.5 disabled:opacity-50"
             >
               {ingresandoAlmacen
-                ? 'Registrando ingreso…'
+                ? 'Liberando…'
                 : ingresoAlmacenOk
-                  ? 'Ingreso a almacén completado'
-                  : 'Ingreso a almacén'}
+                  ? 'Stock liberado en almacén'
+                  : 'Liberar en almacén (fast-track)'}
             </button>
             <div className="flex flex-col gap-2 pt-2">
               <Link

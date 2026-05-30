@@ -2613,7 +2613,9 @@ export default function ComprasPage() {
                                             <CompraFacturaImagen
                                                 compraId={c.id}
                                                 documentApiPath={
-                                                    c.pendiente_canal_id
+                                                    c.pendiente_canal_id &&
+                                                    (c.id.startsWith('canal-') ||
+                                                        !c.purchase_invoice_id)
                                                         ? `/api/facturas-canal/pendientes/${c.pendiente_canal_id}/document`
                                                         : undefined
                                                 }

@@ -81,15 +81,24 @@ export async function confirmarCompraCanal(
     proyecto_id: string;
     ubicacion_destino_id: string;
     extracted?: ExtractedCanalHeader;
+    /** Fast-track: liberar cuarentena al confirmar (omitir en flujo normal). */
+    ingreso_almacen_automatico?: boolean;
   },
 ): Promise<{
   compraId: string;
   purchaseInvoiceId: string;
   yaExistia: boolean;
+  cuarentena?: {
+    lineasCreadas: number;
+    yaExistia: boolean;
+    notificado?: boolean;
+  } | null;
   ingresoAlmacen?: {
     success: boolean;
     compraFacturaId?: string;
     yaExistia?: boolean;
+    viaCuarentena?: boolean;
+    aprobadas?: number;
     error?: string;
   } | null;
 }> {
@@ -99,17 +108,24 @@ export async function confirmarCompraCanal(
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, ingreso_almacen_automatico: true }),
+      body: JSON.stringify(body),
     },
   );
   const data = (await res.json()) as {
     compraId?: string;
     purchaseInvoiceId?: string;
     yaExistia?: boolean;
+    cuarentena?: {
+      lineasCreadas: number;
+      yaExistia: boolean;
+      notificado?: boolean;
+    } | null;
     ingresoAlmacen?: {
       success: boolean;
       compraFacturaId?: string;
       yaExistia?: boolean;
+      viaCuarentena?: boolean;
+      aprobadas?: number;
       error?: string;
     } | null;
     error?: string;
@@ -120,6 +136,7 @@ export async function confirmarCompraCanal(
     compraId: data.compraId,
     purchaseInvoiceId: data.purchaseInvoiceId ?? '',
     yaExistia: Boolean(data.yaExistia),
+    cuarentena: data.cuarentena ?? null,
     ingresoAlmacen: data.ingresoAlmacen ?? null,
   };
 }

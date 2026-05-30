@@ -47,7 +47,9 @@ export default function CompraFacturaImagen({
           data.error ||
             (data.code === 'SIN_DOCUMENTO_STORAGE'
               ? 'No hay imagen guardada para esta compra.'
-              : 'No se pudo cargar la factura.'),
+              : data.code === 'ARCHIVO_NO_EN_BUCKET'
+                ? 'El comprobante no está en Storage. Puede registrar la compra igual; vuelva a adjuntar la foto si la necesita.'
+                : 'No se pudo cargar la factura.'),
         );
       }
       setUrl(data.url);

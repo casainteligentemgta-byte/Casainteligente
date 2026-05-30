@@ -28,10 +28,24 @@ export async function GET(_req: Request, ctx: RouteCtx) {
       );
     }
 
-    const url = await createProcurementDocumentSignedUrl(
-      supabase,
-      row.document_storage_path
-    );
+    let url: string;
+    try {
+      url = await createProcurementDocumentSignedUrl(
+        supabase,
+        row.document_storage_path,
+      );
+    } catch (storageErr) {
+      const msg = storageErr instanceof Error ? storageErr.message : '';
+      const notFound = /not found|object not found|ya no está en Storage/i.test(msg);
+      return NextResponse.json(
+        {
+          error: msg || 'No se pudo abrir el documento.',
+          code: notFound ? 'ARCHIVO_NO_EN_BUCKET' : 'STORAGE_ERROR',
+          storagePath: row.document_storage_path,
+        },
+        { status: notFound ? 404 : 500 },
+      );
+    }
 
     return NextResponse.json({
       url,

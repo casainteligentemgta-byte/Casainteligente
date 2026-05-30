@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
+import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInventario';
 import {
   registrarCompraInventario,
   type LineaCompraInventarioInput,
@@ -56,15 +57,21 @@ async function aplicarDeltaStock(
   ubicacionDestinoId: string,
   materialId: string,
   cantidad: number,
+  meta?: {
+    invoiceId?: string;
+    referenciaId?: string;
+    referenciaTipo?: string;
+  },
 ): Promise<void> {
-  const { error: rpcErr } = await supabase.rpc('inv_stock_apply_delta', {
-    p_ubicacion_id: ubicacionDestinoId,
-    p_material_id: materialId,
-    p_delta_disponible: cantidad,
-    p_delta_reservada: 0,
-    p_delta_transito_entrante: 0,
+  await aplicarDeltaStockInventario(supabase, {
+    ubicacionId: ubicacionDestinoId,
+    materialId,
+    deltaDisponible: cantidad,
+    tipoMovimiento: 'ingreso_compra',
+    documentoId: meta?.invoiceId ?? null,
+    referenciaId: meta?.referenciaId ?? null,
+    referenciaTipo: meta?.referenciaTipo ?? 'quality_inspection',
   });
-  if (rpcErr) throw rpcErr;
 }
 
 async function registrarLineaEnCompraFactura(
