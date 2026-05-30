@@ -45,7 +45,6 @@ import {
   manejarTextoLitrosAguaTelegram,
 } from '@/lib/telegram/aguaRegistro';
 import {
-  manejarComandoSalidaTelegram,
   manejarFotoEntradaSalidaTelegram,
   manejarOrigenSalidaTelegram,
   manejarTextoObservacionEntradaSalida,
@@ -84,6 +83,15 @@ import {
   manejarCallbackSalidaCapituloTelegram,
   manejarTextoNuevoCapituloSalida,
 } from '@/lib/telegram/salidaCapituloPicker';
+import {
+  esCallbackSalidaEgreso,
+  esFlujoEgresoV2,
+  manejarCallbackSalidaEgreso,
+  manejarComandoSalidaEgresoTelegram,
+  manejarFotoSalidaEgreso,
+  manejarOrigenSalidaEgreso,
+  manejarTextoSalidaEgreso,
+} from '@/lib/telegram/salidaEgresoFlujo';
 import {
   esCallbackSalidaOrigen,
   manejarCallbackSalidaOrigenTelegram,
@@ -206,7 +214,7 @@ async function aplicarComando(
   }
 
   if (cmd.comandoSalida) {
-    await manejarComandoSalidaTelegram(supabase, chatId);
+    await manejarComandoSalidaEgresoTelegram(supabase, chatId);
     return;
   }
 
@@ -320,6 +328,17 @@ export async function handleTelegramCallbackQuery(
   try {
     const userId = String(cq.from.id);
 
+    if (esCallbackSalidaEgreso(cq.data)) {
+      const handledEgreso = await manejarCallbackSalidaEgreso(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledEgreso) {
+        return NextResponse.json({ ok: true, callback: 'salida_egreso' });
+      }
+    }
+
     if (esCallbackSalidaCapitulo(cq.data)) {
       const handledSalidaCap = await manejarCallbackSalidaCapituloTelegram(admin.client, {
         chatId,
@@ -337,6 +356,21 @@ export async function handleTelegramCallbackQuery(
         callbackId: cq.id,
         data: cq.data,
         onOrigenSeleccionado: async (supabase, p) => {
+          const estadoOrigen = await getTelegramEstado(supabase, p.chatId);
+          if (esFlujoEgresoV2(estadoOrigen)) {
+            const { data: ubi } = await supabase
+              .from('inv_ubicaciones')
+              .select('nombre')
+              .eq('id', p.origenUbicacionId)
+              .maybeSingle();
+            await manejarOrigenSalidaEgreso(
+              supabase,
+              p.chatId,
+              p.origenUbicacionId,
+              String(ubi?.nombre ?? 'Almacén'),
+            );
+            return;
+          }
           await manejarOrigenSalidaTelegram({
             supabase,
             chatId: p.chatId,
@@ -553,6 +587,17 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, salida_capitulo_nuevo: true });
       }
 
+      const textoSalidaEgreso = await manejarTextoSalidaEgreso(
+        supabase,
+        chatId,
+        texto,
+        userId,
+        msg.from?.username ?? null,
+      );
+      if (textoSalidaEgreso) {
+        return NextResponse.json({ ok: true, salida_egreso_texto: true });
+      }
+
       const obsEntradaSalida = await manejarTextoObservacionEntradaSalida({
         supabase,
         chatId,
@@ -666,6 +711,40 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           ok: true,
           nota_entrega: fotoNotaEntrega.motivo ?? true,
         });
+      }
+
+      const fotoSalidaEgreso = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoEgreso = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoEgresoV2(estadoEgreso)) return false;
+        const paso = (estadoEgreso.metadata as { paso?: string })?.paso;
+        if (paso !== 'foto' && paso !== 'observacion') return false;
+        const fileId = photos[photos.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          await manejarFotoSalidaEgreso({
+            supabase,
+            chatId,
+            userId,
+            username: msg.from?.username ?? null,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+            caption: msg.caption,
+          });
+          return true;
+        } catch (err) {
+          console.error('[telegram salida egreso foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoSalidaEgreso) {
+        return NextResponse.json({ ok: true, salida_egreso_foto: true });
       }
 
       const fotoEntradaSalida = await manejarFotoEntradaSalidaTelegram({

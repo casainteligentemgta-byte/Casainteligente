@@ -260,8 +260,8 @@ export async function manejarCallbackProyectoTelegram(
 
   if (parsed.modo === 'salida_obra') {
     await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { enviarPickerCapitulosSalidaTelegram } = await import('@/lib/telegram/salidaCapituloPicker');
-    await enviarPickerCapitulosSalidaTelegram(supabase, params.chatId, parsed.proyectoId);
+    const { iniciarSalidaEgresoTrasObra } = await import('@/lib/telegram/salidaEgresoFlujo');
+    await iniciarSalidaEgresoTrasObra(supabase, params.chatId, parsed.proyectoId);
     return true;
   }
 
