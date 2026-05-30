@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { movimientoInventarioEsEliminable } from '@/lib/almacen/eliminarMovimientoInventario';
 
 export type VistaMovimientoInventario = 'ingresado' | 'despachado' | 'almacenado' | 'todos';
 
@@ -31,6 +32,7 @@ export type FilaMovimientoInventario = {
   referencia: string | null;
   capitulo: string | null;
   notas: string | null;
+  eliminable: boolean;
 };
 
 function norm(s: string): string {
@@ -143,6 +145,7 @@ async function cargarIngresos(
         referencia: String(fac.numero_factura ?? ''),
         capitulo: null,
         notas: null,
+        eliminable: true,
       });
       continue;
     }
@@ -166,6 +169,7 @@ async function cargarIngresos(
         referencia: String(fac.numero_factura ?? ''),
         capitulo: null,
         notas: null,
+        eliminable: true,
       });
     }
   }
@@ -259,6 +263,7 @@ async function cargarDespachosTransferencia(
         referencia: String(tr.codigo ?? ''),
         capitulo,
         notas: String(tr.observaciones ?? '') || null,
+        eliminable: true,
       });
     }
   }
@@ -319,6 +324,7 @@ async function cargarDespachosTelegram(
       referencia: 'Telegram /salida',
       capitulo: capLabel,
       notas: String(m.observacion ?? '').slice(0, 300) || null,
+      eliminable: true,
     };
   });
 }
@@ -376,6 +382,7 @@ async function cargarAlmacenado(
       referencia: null,
       capitulo: null,
       notas: null,
+      eliminable: movimientoInventarioEsEliminable(`stk-${row.id}`),
     };
   });
 }

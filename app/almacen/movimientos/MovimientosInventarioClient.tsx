@@ -11,6 +11,7 @@ import {
   Package,
   RefreshCw,
   Search,
+  Trash2,
 } from 'lucide-react';
 import type {
   FilaMovimientoInventario,
@@ -60,6 +61,7 @@ export default function MovimientosInventarioClient() {
   const [resumen, setResumen] = useState({ ingresado: 0, despachado: 0, almacenado: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -93,6 +95,30 @@ export default function MovimientosInventarioClient() {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  const eliminarMovimiento = async (f: FilaMovimientoInventario) => {
+    if (!f.eliminable) return;
+    const etiqueta = `${labelTipo(f.tipo)} · ${f.material_nombre}`.slice(0, 80);
+    const ok = window.confirm(
+      `¿Eliminar este movimiento?\n\n${etiqueta}\n\nSe ajustará el inventario si el registro ya impactó stock.`,
+    );
+    if (!ok) return;
+
+    setEliminandoId(f.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/almacen/movimientos/${encodeURIComponent(f.id)}`, {
+        method: 'DELETE',
+      });
+      const json = (await res.json()) as { error?: string; mensaje?: string };
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setEliminandoId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#050508] text-white p-4 md:p-6 pb-24">
@@ -234,19 +260,20 @@ export default function MovimientosInventarioClient() {
                   <th className="p-3">Origen → Destino</th>
                   <th className="p-3">Capítulo</th>
                   <th className="p-3">Ref.</th>
+                  <th className="p-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="p-10 text-center text-zinc-500">
+                    <td colSpan={9} className="p-10 text-center text-zinc-500">
                       <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
                       Cargando movimientos…
                     </td>
                   </tr>
                 ) : filas.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-12 text-center text-zinc-600">
+                    <td colSpan={9} className="p-12 text-center text-zinc-600">
                       Sin registros con estos filtros.
                     </td>
                   </tr>
@@ -283,6 +310,26 @@ export default function MovimientosInventarioClient() {
                         {f.capitulo ?? '—'}
                       </td>
                       <td className="p-3 text-zinc-500 text-xs max-w-[100px] truncate">{f.referencia ?? '—'}</td>
+                      <td className="p-3 text-right">
+                        {f.eliminable ? (
+                          <button
+                            type="button"
+                            disabled={eliminandoId === f.id}
+                            onClick={() => void eliminarMovimiento(f)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-950/30 px-2 py-1 text-[10px] font-bold uppercase text-red-300 hover:bg-red-950/50 disabled:opacity-40"
+                            title="Eliminar movimiento"
+                          >
+                            {eliminandoId === f.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            Borrar
+                          </button>
+                        ) : (
+                          <span className="text-zinc-600 text-xs">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -293,7 +340,7 @@ export default function MovimientosInventarioClient() {
 
         <p className="text-[11px] text-zinc-600 text-center">
           {filas.length} fila(s) mostradas · Ingresos desde compras registradas · Despachos desde transferencias y{' '}
-          <code className="text-zinc-500">/salida</code> Telegram
+          <code className="text-zinc-500">/salida</code> Telegram · Borrar revierte stock cuando aplica
         </p>
       </div>
     </div>
