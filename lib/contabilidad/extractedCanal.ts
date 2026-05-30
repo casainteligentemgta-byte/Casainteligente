@@ -1,3 +1,5 @@
+import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
+
 export type ExtractedCanalItem = {
   description?: string;
   item_code?: string;
@@ -6,12 +8,21 @@ export type ExtractedCanalItem = {
   unit_price?: number;
 };
 
+export function normalizarMonedaExtracted(moneda?: string | null): MonedaOrigen {
+  const m = String(moneda ?? 'VES')
+    .trim()
+    .toUpperCase();
+  return m === 'USD' ? 'USD' : 'VES';
+}
+
 export type ExtractedCanalHeader = {
   invoice_number?: string;
   supplier_name?: string;
   supplier_rif?: string;
   date?: string;
   total_amount?: number | null;
+  /** Moneda del total y precios unitarios de líneas (por defecto VES). */
+  moneda?: MonedaOrigen | string | null;
   items?: ExtractedCanalItem[];
   modelUsed?: string;
   fromGemini?: boolean;
@@ -33,6 +44,7 @@ export type FacturaCanalForm = {
   supplier_name: string;
   supplier_rif: string;
   date: string;
+  moneda: MonedaOrigen;
   total_amount: string;
   items: LineaFacturaCanalForm[];
 };
@@ -49,6 +61,7 @@ export function formDesdeExtracted(ex: ExtractedCanalHeader | null): FacturaCana
     supplier_name: String(ex?.supplier_name ?? '').trim(),
     supplier_rif: String(ex?.supplier_rif ?? '').trim(),
     date: (ex?.date ?? '').slice(0, 10),
+    moneda: normalizarMonedaExtracted(ex?.moneda),
     total_amount:
       ex?.total_amount != null && Number.isFinite(Number(ex.total_amount))
         ? String(ex.total_amount)
@@ -85,6 +98,7 @@ export function extractedDesdeForm(
     supplier_name: form.supplier_name.trim() || undefined,
     supplier_rif: form.supplier_rif.trim() || undefined,
     date: form.date.trim().slice(0, 10) || undefined,
+    moneda: form.moneda,
     total_amount,
     items,
   };

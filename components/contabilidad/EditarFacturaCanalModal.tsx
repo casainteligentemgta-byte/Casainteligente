@@ -8,7 +8,9 @@ import {
   lineaVacia,
   type ExtractedCanalHeader,
   type FacturaCanalForm,
+  normalizarMonedaExtracted,
 } from '@/lib/contabilidad/extractedCanal';
+import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
@@ -40,6 +42,8 @@ export default function EditarFacturaCanalModal({
   }, [open, extracted]);
 
   if (!open) return null;
+
+  const simboloMoneda = form.moneda === 'USD' ? 'USD' : 'Bs';
 
   const actualizarLinea = (idx: number, patch: Partial<FacturaCanalForm['items'][0]>) => {
     setForm((f) => ({
@@ -166,7 +170,7 @@ export default function EditarFacturaCanalModal({
                   />
                   <input
                     className={inputClass}
-                    placeholder="P.U. Bs"
+                    placeholder={`P.U. ${simboloMoneda}`}
                     inputMode="decimal"
                     value={linea.unit_price}
                     onChange={(e) => actualizarLinea(idx, { unit_price: e.target.value })}

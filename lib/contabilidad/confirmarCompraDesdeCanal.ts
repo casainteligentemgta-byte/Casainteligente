@@ -1,5 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import {
+  normalizarMonedaExtracted,
+  type ExtractedCanalHeader,
+} from '@/lib/contabilidad/extractedCanal';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
@@ -142,7 +145,7 @@ export async function confirmarCompraDesdeCanal(
 
   const montos = await resolverMontosCompraBimonetario({
     montoTotal: totalManual,
-    moneda: 'VES',
+    moneda: normalizarMonedaExtracted(extracted.moneda),
     fecha,
   });
 

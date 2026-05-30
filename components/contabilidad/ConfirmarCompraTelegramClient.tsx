@@ -7,7 +7,11 @@ import { toast } from 'sonner';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
-import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import {
+  normalizarMonedaExtracted,
+  type ExtractedCanalHeader,
+} from '@/lib/contabilidad/extractedCanal';
+import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 import {
   actualizarPendienteCanal,
   confirmarCompraCanal,
@@ -88,6 +92,20 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   }, [pendiente]);
 
   const extracted = pendiente?.extracted ?? null;
+  const monedaFactura = normalizarMonedaExtracted(extracted?.moneda);
+  const etiquetaMoneda = monedaFactura === 'USD' ? 'USD' : 'Bs';
+
+  const actualizarMoneda = async (moneda: MonedaOrigen) => {
+    if (!extracted) return;
+    const next: ExtractedCanalHeader = { ...extracted, moneda };
+    try {
+      const actualizado = await actualizarPendienteCanal(pendingId, { extracted: next });
+      setPendiente((prev) => (prev ? { ...prev, extracted: actualizado.extracted } : prev));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar la moneda');
+    }
+  };
+
   const puedeRegistrar = useMemo(
     () =>
       pendiente &&
@@ -308,8 +326,27 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 <dt className="text-zinc-500">Fecha</dt>
                 <dd>{extracted?.date ?? '—'}</dd>
                 <dt className="text-zinc-500">Total</dt>
-                <dd>
-                  {extracted?.total_amount != null ? `${extracted.total_amount} Bs` : '—'}
+                <dd className="flex flex-wrap items-center gap-2">
+                  {extracted?.total_amount != null ? (
+                    <span>
+                      {extracted.total_amount} {etiquetaMoneda}
+                    </span>
+                  ) : (
+                    <span>—</span>
+                  )}
+                  {extracted && !(compraRegistrada || pendiente?.estado === 'confirmado') ? (
+                    <select
+                      value={monedaFactura}
+                      onChange={(e) => void actualizarMoneda(normalizarMonedaExtracted(e.target.value))}
+                      className="rounded-md border border-white/15 bg-black/50 px-2 py-0.5 text-[11px] font-bold text-zinc-200 outline-none focus:border-sky-500/50"
+                      aria-label="Moneda del total"
+                    >
+                      <option value="VES">VES</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  ) : (
+                    <span className="text-[10px] text-zinc-500">{monedaFactura}</span>
+                  )}
                 </dd>
                 <dt className="text-zinc-500">Líneas</dt>
                 <dd>{nLineas}</dd>
