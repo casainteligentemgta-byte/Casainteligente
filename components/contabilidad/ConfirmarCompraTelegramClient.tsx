@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,8 +36,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const { isSubmitting: guardandoUbicacion, runLocked: runUbicacion } = useSyncSubmitLock();
   const { isSubmitting: ingresandoAlmacen, runLocked: runIngreso } = useSyncSubmitLock();
   const [compraRegistrada, setCompraRegistrada] = useState(false);
-  const [autoConfirmando, setAutoConfirmando] = useState(false);
   const [ingresoAlmacenOk, setIngresoAlmacenOk] = useState(false);
+
+  const pendienteSyncIdRef = useRef<string | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -77,14 +78,14 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     })();
   }, []);
 
+  /** Sincroniza formulario una sola vez por pendiente cargado (evita reponer almacén al cambiar obra). */
   useEffect(() => {
-    if (pendiente?.proyecto_id && !proyectoId) {
-      setProyectoId(pendiente.proyecto_id);
-    }
-    if (pendiente?.ubicacion_destino_id && !ubicacionId) {
-      setUbicacionId(pendiente.ubicacion_destino_id);
-    }
-  }, [pendiente?.proyecto_id, pendiente?.ubicacion_destino_id, proyectoId, ubicacionId]);
+    if (!pendiente?.id) return;
+    if (pendienteSyncIdRef.current === pendiente.id) return;
+    pendienteSyncIdRef.current = pendiente.id;
+    setProyectoId(pendiente.proyecto_id ?? '');
+    setUbicacionId(pendiente.ubicacion_destino_id ?? '');
+  }, [pendiente]);
 
   const extracted = pendiente?.extracted ?? null;
   const puedeRegistrar = useMemo(
@@ -109,10 +110,26 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     }
     await runUbicacion(async () => {
       try {
-        await reubicarCompra(`canal-${pendingId}`, {
-          proyecto_id: proyectoId,
-          ubicacion_destino_id: ubicacionId,
-        });
+        if (pendiente?.purchase_invoice_id) {
+          await reubicarCompra(`canal-${pendingId}`, {
+            proyecto_id: proyectoId,
+            ubicacion_destino_id: ubicacionId,
+          });
+        } else {
+          const actualizado = await actualizarPendienteCanal(pendingId, {
+            proyecto_id: proyectoId,
+            ubicacion_destino_id: ubicacionId,
+          });
+          setPendiente((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  proyecto_id: actualizado.proyecto_id,
+                  ubicacion_destino_id: actualizado.ubicacion_destino_id,
+                }
+              : actualizado,
+          );
+        }
         toast.success('Obra y almacén guardados');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
@@ -141,6 +158,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           extracted,
         });
         setCompraRegistrada(true);
+        setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
         toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'No se pudo registrar');
@@ -162,46 +180,6 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   };
 
   const nLineas = extracted?.items?.filter((it) => String(it.description ?? '').trim()).length ?? 0;
-
-  useEffect(() => {
-    if (
-      autoConfirmando ||
-      registrando ||
-      compraRegistrada ||
-      !puedeRegistrar ||
-      !proyectoId.trim() ||
-      !ubicacionId.trim() ||
-      !extracted
-    ) {
-      return;
-    }
-
-    setAutoConfirmando(true);
-    void (async () => {
-      try {
-        const r = await confirmarCompraCanal(pendingId, {
-          proyecto_id: proyectoId,
-          ubicacion_destino_id: ubicacionId,
-          extracted,
-        });
-        setCompraRegistrada(true);
-        toast.success(r.yaExistia ? 'Compra ya confirmada' : 'Compra confirmada');
-      } catch {
-        // Si falla el intento automático, el usuario puede usar el botón manual.
-      } finally {
-        setAutoConfirmando(false);
-      }
-    })();
-  }, [
-    autoConfirmando,
-    registrando,
-    compraRegistrada,
-    puedeRegistrar,
-    proyectoId,
-    ubicacionId,
-    extracted,
-    pendingId,
-  ]);
 
   return (
     <div className="min-h-screen bg-[#050508] text-white">
@@ -369,6 +347,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 proyectoId={proyectoId}
                 value={ubicacionId}
                 onChange={setUbicacionId}
+                disabled={!proyectoId.trim()}
               />
             </section>
 
@@ -398,7 +377,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 !proyectoId.trim() ||
                 !ubicacionId.trim() ||
                 registrando ||
-                autoConfirmando
+                guardandoUbicacion
               }
               onClick={() => {
                 if (registrando) return;
@@ -406,7 +385,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               }}
               className="w-full rounded-xl bg-[#34C759] disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-bold py-3 flex items-center justify-center gap-2"
             >
-              {registrando || autoConfirmando ? (
+              {registrando ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Confirmando…
@@ -417,9 +396,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             </button>
 
             <p className="text-[11px] text-amber-200/90 text-center leading-relaxed">
-              Tras confirmar, pulse <strong className="text-amber-100">Ingreso a almacén</strong>.
-              Cada línea debe traer <strong className="text-amber-100">item_code (SKU)</strong>{' '}
-              igual al catálogo Almacén; si falta, edite la factura antes del ingreso.
+              Guarde obra y almacén si viene del bot, luego pulse{' '}
+              <strong className="text-amber-100">Cargar compra en contabilidad</strong>. Después use{' '}
+              <strong className="text-amber-100">Ingreso a almacén</strong>. Cada línea debe traer{' '}
+              <strong className="text-amber-100">item_code (SKU)</strong> del catálogo.
             </p>
           </>
         )}
