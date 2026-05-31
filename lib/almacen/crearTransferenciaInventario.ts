@@ -46,10 +46,9 @@ export function validarDistribucionLinea(
 
   if (imputaciones.length === 0) {
     return {
-      ok: false,
-      error: 'Seleccione al menos una partida en destino.',
-      totalImputado,
-      saldo,
+      ok: true,
+      totalImputado: 0,
+      saldo: cantidadLinea,
     };
   }
   if (totalImputado <= 0) {
@@ -140,11 +139,13 @@ export async function crearTransferenciaInventario(
       justificacion_exceso: imp.justificacion_exceso?.trim() || null,
     }));
 
-    const { error: impErr } = await supabase
-      .from('detalle_transferencia_partidas')
-      .insert(imputacionesPayload);
+    if (imputacionesPayload.length > 0) {
+      const { error: impErr } = await supabase
+        .from('detalle_transferencia_partidas')
+        .insert(imputacionesPayload);
 
-    if (impErr) throw new Error(impErr.message);
+      if (impErr) throw new Error(impErr.message);
+    }
   }
 
   return { transferenciaId, codigo: String((trf as { codigo: string }).codigo) };

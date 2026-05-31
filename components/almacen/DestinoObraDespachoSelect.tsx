@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { HardHat, Loader2, MapPin, Layers } from 'lucide-react';
+import { CalendarDays, HardHat, Layers, Loader2, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PartidaDespachoFila, UbicacionInventario } from '@/types/inventario-obra';
 import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
@@ -9,8 +9,14 @@ import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 const selectClass =
   'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50';
 
-/** Destino del material en salida de almacén. */
-export type ModoDestinoDespacho = 'partida_lulo' | 'otro_almacen' | 'otra_obra';
+/** Dónde va físicamente el material. */
+export type DestinoFisicoDespacho = 'obra_actual' | 'otro_almacen' | 'otra_obra';
+
+/** Cómo se imputa en presupuesto / cronograma. */
+export type ImputacionDespacho = 'partida_lulo' | 'actividad';
+
+/** @deprecated Use DestinoFisicoDespacho */
+export type ModoDestinoDespacho = DestinoFisicoDespacho | 'partida_lulo';
 
 export type PartidaProyectoOption = {
   key: string;
@@ -20,22 +26,37 @@ export type PartidaProyectoOption = {
   fuente?: 'presupuesto' | 'cascada';
 };
 
+export type TareaCronogramaOption = {
+  id: string;
+  nombre_tarea: string;
+  codigo_partida: string | null;
+  partida_id: string | null;
+};
+
 type ProyectoOption = { id: string; nombre: string };
 
 type Props = {
   proyectoId: string;
+  proyectoNombre?: string;
+  origenUbicacionId?: string;
   proyectos: ProyectoOption[];
   materialId?: string;
   materialNombre?: string;
-  modo: ModoDestinoDespacho;
+  destinoFisico: DestinoFisicoDespacho;
+  imputacionTipo: ImputacionDespacho;
   destinoProyectoId: string;
   ubicacionId: string;
   partidaKey: string;
-  onModoChange: (modo: ModoDestinoDespacho) => void;
+  cronogramaTareaId: string;
+  onDestinoFisicoChange: (modo: DestinoFisicoDespacho) => void;
+  onImputacionTipoChange: (tipo: ImputacionDespacho) => void;
   onDestinoProyectoChange: (proyectoId: string) => void;
   onUbicacionChange: (ubicacionId: string) => void;
   onPartidaChange: (partidaKey: string) => void;
+  onTareaChange: (tareaId: string, meta?: TareaCronogramaOption) => void;
   onDestinoEtiquetaChange?: (etiqueta: string) => void;
+  /** Solo paso 1 (obra/almacén destino), sin partida ni actividad. */
+  soloDestinoFisico?: boolean;
   disabled?: boolean;
   className?: string;
 };
@@ -67,12 +88,17 @@ function partidasDespachoToOptions(filas: PartidaDespachoFila[]): PartidaProyect
   });
 }
 
-const MODO_OPTS: Array<{ id: ModoDestinoDespacho; label: string; hint: string; icon: typeof Layers }> = [
+const FISICO_OPTS: Array<{
+  id: DestinoFisicoDespacho;
+  label: string;
+  hint: string;
+  icon: typeof MapPin;
+}> = [
   {
-    id: 'partida_lulo',
-    label: 'Partida Lulo',
-    hint: 'Presupuesto de esta obra',
-    icon: Layers,
+    id: 'obra_actual',
+    label: 'Bodega de esta obra',
+    hint: 'Material va al frente / obra actual',
+    icon: HardHat,
   },
   {
     id: 'otro_almacen',
@@ -90,27 +116,36 @@ const MODO_OPTS: Array<{ id: ModoDestinoDespacho; label: string; hint: string; i
 
 export default function DestinoObraDespachoSelect({
   proyectoId,
+  proyectoNombre,
+  origenUbicacionId,
   proyectos,
   materialId,
   materialNombre,
-  modo,
+  destinoFisico,
+  imputacionTipo,
   destinoProyectoId,
   ubicacionId,
   partidaKey,
-  onModoChange,
+  cronogramaTareaId,
+  onDestinoFisicoChange,
+  onImputacionTipoChange,
   onDestinoProyectoChange,
   onUbicacionChange,
   onPartidaChange,
+  onTareaChange,
   onDestinoEtiquetaChange,
+  soloDestinoFisico = false,
   disabled,
   className = selectClass,
 }: Props) {
   const [loadingUb, setLoadingUb] = useState(false);
   const [loadingPar, setLoadingPar] = useState(false);
+  const [loadingTareas, setLoadingTareas] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ubicaciones, setUbicaciones] = useState<UbicacionInventario[]>([]);
   const [ubicacionesObra, setUbicacionesObra] = useState<UbicacionInventario[]>([]);
   const [partidas, setPartidas] = useState<PartidaProyectoOption[]>([]);
+  const [tareas, setTareas] = useState<TareaCronogramaOption[]>([]);
   const [scope, setScope] = useState<'related' | 'all'>('related');
   const [scopeForzado, setScopeForzado] = useState(false);
 
@@ -118,6 +153,8 @@ export default function DestinoObraDespachoSelect({
     () => proyectos.filter((p) => p.id !== proyectoId),
     [proyectos, proyectoId],
   );
+
+  const partidaPresupuestoId = partidaKey.startsWith('pp:') ? partidaKey.slice(3) : '';
 
   const cargarUbicacionesObra = useCallback(async () => {
     if (!proyectoId.trim()) {
@@ -135,11 +172,11 @@ export default function DestinoObraDespachoSelect({
   }, [proyectoId]);
 
   const cargarUbicaciones = useCallback(async () => {
-    if (modo === 'partida_lulo') {
+    if (destinoFisico === 'obra_actual') {
       setUbicaciones([]);
       return;
     }
-    if (modo === 'otra_obra' && !destinoProyectoId.trim()) {
+    if (destinoFisico === 'otra_obra' && !destinoProyectoId.trim()) {
       setUbicaciones([]);
       return;
     }
@@ -147,9 +184,9 @@ export default function DestinoObraDespachoSelect({
     setError(null);
     try {
       const qUb = new URLSearchParams({ flat: '1' });
-      if (modo === 'otro_almacen') {
+      if (destinoFisico === 'otro_almacen') {
         qUb.set('solo_almacenes', '1');
-      } else if (modo === 'otra_obra') {
+      } else if (destinoFisico === 'otra_obra') {
         qUb.set('proyecto_id', destinoProyectoId);
       }
       const resUb = await fetch(`/api/almacen/ubicaciones?${qUb}`, { cache: 'no-store' });
@@ -165,10 +202,10 @@ export default function DestinoObraDespachoSelect({
     } finally {
       setLoadingUb(false);
     }
-  }, [modo, destinoProyectoId]);
+  }, [destinoFisico, destinoProyectoId]);
 
   const cargarPartidas = useCallback(async () => {
-    if (!proyectoId.trim() || !materialId?.trim() || modo !== 'partida_lulo') {
+    if (!proyectoId.trim() || !materialId?.trim() || imputacionTipo !== 'partida_lulo') {
       setPartidas([]);
       return;
     }
@@ -214,7 +251,29 @@ export default function DestinoObraDespachoSelect({
     } finally {
       setLoadingPar(false);
     }
-  }, [proyectoId, materialId, modo, scope, scopeForzado]);
+  }, [proyectoId, materialId, imputacionTipo, scope, scopeForzado]);
+
+  const cargarTareas = useCallback(async () => {
+    if (!proyectoId.trim() || imputacionTipo !== 'actividad') {
+      setTareas([]);
+      return;
+    }
+    setLoadingTareas(true);
+    setError(null);
+    try {
+      const q = new URLSearchParams({ proyecto_id: proyectoId });
+      if (partidaPresupuestoId) q.set('partida_id', partidaPresupuestoId);
+      const res = await fetch(`/api/almacen/tareas-cronograma?${q}`, { cache: 'no-store' });
+      const data = (await res.json()) as { tareas?: TareaCronogramaOption[]; error?: string };
+      if (!res.ok) throw new Error(data.error || 'No se pudieron cargar actividades');
+      setTareas(data.tareas ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar actividades');
+      setTareas([]);
+    } finally {
+      setLoadingTareas(false);
+    }
+  }, [proyectoId, imputacionTipo, partidaPresupuestoId]);
 
   useEffect(() => {
     void cargarUbicacionesObra();
@@ -227,56 +286,83 @@ export default function DestinoObraDespachoSelect({
   useEffect(() => {
     setScope('related');
     setScopeForzado(false);
-    if (modo === 'partida_lulo') onPartidaChange('');
-  }, [proyectoId, materialId, modo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [proyectoId, materialId, imputacionTipo]);
 
   useEffect(() => {
     void cargarPartidas();
   }, [cargarPartidas]);
 
-  const obraUbicacionId = useMemo(() => {
-    const deObra = ubicacionesObra.find((u) => u.tipo === 'obra' && u.obra_id === proyectoId);
-    return deObra?.id ?? ubicacionesObra.find((u) => u.tipo === 'obra')?.id ?? '';
-  }, [ubicacionesObra, proyectoId]);
+  useEffect(() => {
+    void cargarTareas();
+  }, [cargarTareas]);
 
   useEffect(() => {
-    if (modo !== 'partida_lulo' || !partidaKey || !obraUbicacionId) return;
-    if (ubicacionId !== obraUbicacionId) onUbicacionChange(obraUbicacionId);
-  }, [modo, partidaKey, obraUbicacionId, ubicacionId, onUbicacionChange]);
+    if (destinoFisico !== 'obra_actual' || ubicacionId) return;
+    const candidatas = ubicacionesObra.filter((u) => u.id !== origenUbicacionId);
+    const preferida =
+      candidatas.find((u) => u.tipo === 'obra')?.id ??
+      candidatas.find((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')?.id ??
+      candidatas[0]?.id ??
+      '';
+    if (preferida) onUbicacionChange(preferida);
+  }, [destinoFisico, ubicacionId, ubicacionesObra, origenUbicacionId, onUbicacionChange]);
 
-  const loading = loadingUb || loadingPar;
-
-  const resumenDestino = useMemo(() => {
-    if (modo === 'partida_lulo') {
-      const partida = partidas.find((p) => (p.key ?? `pp:${p.id}`) === partidaKey);
-      const ub = ubicacionesObra.find((u) => u.id === ubicacionId);
-      if (partida && ub) {
-        return `Partida: ${partida.nombre} → ${labelUbicacionOpcion(ub)}`;
-      }
-      if (partida) return `Partida: ${partida.nombre}`;
-      return '';
+  const nombreObraDestino = useMemo(() => {
+    if (destinoFisico === 'obra_actual') {
+      return proyectoNombre ?? proyectos.find((p) => p.id === proyectoId)?.nombre ?? 'Esta obra';
     }
-    if (modo === 'otro_almacen') {
-      const ub = ubicaciones.find((u) => u.id === ubicacionId);
-      return ub ? `Almacén: ${labelUbicacionOpcion(ub)}` : '';
-    }
-    if (modo === 'otra_obra') {
-      const pr = proyectos.find((p) => p.id === destinoProyectoId);
-      const ub = ubicaciones.find((u) => u.id === ubicacionId);
-      if (pr && ub) return `Obra: ${pr.nombre} · ${labelUbicacionOpcion(ub)}`;
-      if (pr) return `Obra: ${pr.nombre}`;
-      return '';
+    if (destinoFisico === 'otra_obra') {
+      return proyectos.find((p) => p.id === destinoProyectoId)?.nombre ?? '';
     }
     return '';
+  }, [destinoFisico, destinoProyectoId, proyectoId, proyectoNombre, proyectos]);
+
+  const ubicacionesObraActual = useMemo(
+    () => ubicacionesObra.filter((u) => u.id !== origenUbicacionId),
+    [ubicacionesObra, origenUbicacionId],
+  );
+
+  const loading = loadingUb || loadingPar || loadingTareas;
+
+  const resumenDestino = useMemo(() => {
+    const partes: string[] = [];
+
+    if (nombreObraDestino) partes.push(`Obra: ${nombreObraDestino}`);
+    else if (destinoFisico === 'otro_almacen') partes.push('Obra/almacén: depósito externo');
+
+    const ubLista =
+      destinoFisico === 'obra_actual'
+        ? ubicacionesObra
+        : destinoFisico === 'otro_almacen' || destinoFisico === 'otra_obra'
+          ? ubicaciones
+          : [];
+    const ub = ubLista.find((u) => u.id === ubicacionId);
+    if (ub) partes.push(`Almacén/bodega: ${labelUbicacionOpcion(ub)}`);
+
+    if (!soloDestinoFisico) {
+      if (imputacionTipo === 'partida_lulo') {
+        const partida = partidas.find((p) => (p.key ?? `pp:${p.id}`) === partidaKey);
+        if (partida) partes.push(`Partida destino: ${partida.nombre}`);
+      } else {
+        const tarea = tareas.find((t) => t.id === cronogramaTareaId);
+        if (tarea) partes.push(`Actividad destino: ${tarea.nombre_tarea}`);
+      }
+    }
+
+    return partes.join(' · ');
   }, [
-    modo,
-    partidaKey,
+    destinoFisico,
+    imputacionTipo,
     ubicacionId,
     destinoProyectoId,
+    partidaKey,
+    cronogramaTareaId,
     partidas,
+    tareas,
     ubicaciones,
     ubicacionesObra,
-    proyectos,
+    nombreObraDestino,
+    soloDestinoFisico,
   ]);
 
   useEffect(() => {
@@ -293,7 +379,7 @@ export default function DestinoObraDespachoSelect({
     );
   }
 
-  if (!materialId?.trim()) {
+  if (!materialId?.trim() && !soloDestinoFisico) {
     return (
       <select disabled className={className}>
         <option value="" className="bg-[#0A0A0F] text-zinc-100">
@@ -304,41 +390,225 @@ export default function DestinoObraDespachoSelect({
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-[10px] text-zinc-500">
-        Elija si el material va a una partida Lulo de esta obra, a otro almacén o a otra obra.
-      </p>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {MODO_OPTS.map(({ id, label, hint, icon: Icon }) => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <p className="text-[10px] font-bold uppercase text-zinc-500">
+          Paso 1 · ¿A qué obra o almacén va?
+        </p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {FISICO_OPTS.map(({ id, label, hint, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              disabled={disabled || loading}
+              onClick={() => {
+                onDestinoFisicoChange(id);
+                onDestinoProyectoChange('');
+                if (id !== 'obra_actual') onUbicacionChange('');
+              }}
+              className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                destinoFisico === id
+                  ? 'border-sky-500/50 bg-sky-500/15 text-sky-100'
+                  : 'border-white/10 bg-black/30 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-xs font-bold">
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                {label}
+              </span>
+              <span className="mt-0.5 block text-[10px] leading-snug opacity-80">{hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {destinoFisico === 'obra_actual' ? (
+        <div className="space-y-3 rounded-lg border border-sky-500/20 bg-black/20 p-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-sky-400/90">Obra destino</label>
+            <p className="text-sm font-semibold text-zinc-100">{nombreObraDestino}</p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-zinc-500">
+              Almacén o bodega destino en la obra
+            </label>
+            <select
+              value={ubicacionId}
+              disabled={disabled || ubicacionesObraActual.length === 0}
+              onChange={(e) => onUbicacionChange(e.target.value)}
+              className={className}
+            >
+              <option value="" className="bg-[#0A0A0F] text-zinc-100">
+                {ubicacionesObraActual.length === 0
+                  ? 'Sin ubicaciones distintas al origen'
+                  : 'Seleccione bodega o almacén de la obra…'}
+              </option>
+              {ubicacionesObraActual.filter((u) => u.tipo === 'obra').length > 0 ? (
+                <optgroup label="Bodega en obra" className="bg-[#0A0A0F] text-zinc-100">
+                  {ubicacionesObraActual
+                    .filter((u) => u.tipo === 'obra')
+                    .map((u) => (
+                      <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
+                        {labelUbicacionOpcion(u)}
+                      </option>
+                    ))}
+                </optgroup>
+              ) : null}
+              {ubicacionesObraActual.filter(
+                (u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil',
+              ).length > 0 ? (
+                <optgroup label="Almacenes de la obra" className="bg-[#0A0A0F] text-zinc-100">
+                  {ubicacionesObraActual
+                    .filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
+                    .map((u) => (
+                      <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
+                        {labelUbicacionOpcion(u)}
+                      </option>
+                    ))}
+                </optgroup>
+              ) : null}
+            </select>
+          </div>
+        </div>
+      ) : null}
+
+      {destinoFisico === 'otro_almacen' ? (
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-zinc-500">Almacén destino</label>
+          <select
+            value={ubicacionId}
+            disabled={disabled || loadingUb}
+            onChange={(e) => onUbicacionChange(e.target.value)}
+            className={className}
+          >
+            <option value="" className="bg-[#0A0A0F] text-zinc-100">
+              {loadingUb ? 'Cargando…' : 'Seleccione depósito central o móvil…'}
+            </option>
+            {ubicaciones.map((u) => (
+              <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
+                {labelUbicacionOpcion(u)}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      {destinoFisico === 'otra_obra' ? (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-zinc-500">Obra destino</label>
+            <select
+              value={destinoProyectoId}
+              disabled={disabled || otrosProyectos.length === 0}
+              onChange={(e) => {
+                onDestinoProyectoChange(e.target.value);
+                onUbicacionChange('');
+              }}
+              className={className}
+            >
+              <option value="" className="bg-[#0A0A0F] text-zinc-100">
+                {otrosProyectos.length === 0
+                  ? 'No hay otras obras'
+                  : 'Seleccione proyecto / obra…'}
+              </option>
+              {otrosProyectos.map((p) => (
+                <option key={p.id} value={p.id} className="bg-[#0A0A0F] text-zinc-100">
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          {destinoProyectoId ? (
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-zinc-500">
+                Almacén o bodega destino en la obra
+              </label>
+              <select
+                value={ubicacionId}
+                disabled={disabled || loadingUb}
+                onChange={(e) => onUbicacionChange(e.target.value)}
+                className={className}
+              >
+                <option value="" className="bg-[#0A0A0F] text-zinc-100">
+                  {loadingUb ? 'Cargando…' : 'Bodega o almacén de la obra…'}
+                </option>
+                {ubicaciones.map((u) => (
+                  <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
+                    {labelUbicacionOpcion(u)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {resumenDestino && soloDestinoFisico ? (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
+          <p className="text-[10px] font-bold uppercase text-emerald-400/90">Destino físico</p>
+          <p className="mt-1 text-sm font-medium leading-snug text-emerald-100">{resumenDestino}</p>
+        </div>
+      ) : null}
+
+      {!soloDestinoFisico && resumenDestino ? (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
+          <p className="text-[10px] font-bold uppercase text-emerald-400/90">Destino confirmado</p>
+          <p className="mt-1 text-sm font-medium leading-snug text-emerald-100">{resumenDestino}</p>
+        </div>
+      ) : null}
+
+      {!soloDestinoFisico ? (
+      <>
+      <div className="space-y-2 border-t border-white/10 pt-3">
+        <p className="text-[10px] font-bold uppercase text-zinc-500">
+          Paso 2 · ¿A qué partida Lulo o actividad va?
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
           <button
-            key={id}
             type="button"
-            disabled={disabled || loading}
+            disabled={disabled}
             onClick={() => {
-              onModoChange(id);
-              onDestinoProyectoChange('');
-              onUbicacionChange('');
-              onPartidaChange('');
+              onImputacionTipoChange('partida_lulo');
+              onTareaChange('');
             }}
             className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
-              modo === id
-                ? 'border-sky-500/50 bg-sky-500/15 text-sky-100'
-                : 'border-white/10 bg-black/30 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+              imputacionTipo === 'partida_lulo'
+                ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-100'
+                : 'border-white/10 bg-black/30 text-zinc-400 hover:border-white/20'
             }`}
           >
             <span className="flex items-center gap-1.5 text-xs font-bold">
-              <Icon className="h-3.5 w-3.5 shrink-0" />
-              {label}
+              <Layers className="h-3.5 w-3.5" />
+              Partida Lulo
             </span>
-            <span className="mt-0.5 block text-[10px] leading-snug opacity-80">{hint}</span>
+            <span className="mt-0.5 block text-[10px] opacity-80">Presupuesto de la obra</span>
           </button>
-        ))}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onImputacionTipoChange('actividad');
+              onPartidaChange('');
+            }}
+            className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+              imputacionTipo === 'actividad'
+                ? 'border-violet-500/50 bg-violet-500/15 text-violet-100'
+                : 'border-white/10 bg-black/30 text-zinc-400 hover:border-white/20'
+            }`}
+          >
+            <span className="flex items-center gap-1.5 text-xs font-bold">
+              <CalendarDays className="h-3.5 w-3.5" />
+              Actividad (cronograma)
+            </span>
+            <span className="mt-0.5 block text-[10px] opacity-80">Tarea Gantt del proyecto</span>
+          </button>
+        </div>
       </div>
 
-      {modo === 'partida_lulo' ? (
+      {imputacionTipo === 'partida_lulo' ? (
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-zinc-500">
-            Partida del presupuesto Lulo (obra actual)
+            Partida destino (presupuesto Lulo)
           </label>
           <select
             value={partidaKey}
@@ -369,10 +639,8 @@ export default function DestinoObraDespachoSelect({
                   setScopeForzado(true);
                   setScope('related');
                 }}
-                className={`px-2.5 py-1 text-[10px] font-bold transition-colors ${
-                  scope === 'related'
-                    ? 'bg-sky-500/20 text-sky-200'
-                    : 'bg-black/30 text-zinc-400 hover:bg-white/[0.04]'
+                className={`px-2.5 py-1 text-[10px] font-bold ${
+                  scope === 'related' ? 'bg-emerald-500/20 text-emerald-200' : 'bg-black/30 text-zinc-400'
                 }`}
               >
                 Con este material
@@ -384,10 +652,8 @@ export default function DestinoObraDespachoSelect({
                   setScopeForzado(true);
                   setScope('all');
                 }}
-                className={`px-2.5 py-1 text-[10px] font-bold transition-colors ${
-                  scope === 'all'
-                    ? 'bg-sky-500/20 text-sky-200'
-                    : 'bg-black/30 text-zinc-400 hover:bg-white/[0.04]'
+                className={`px-2.5 py-1 text-[10px] font-bold ${
+                  scope === 'all' ? 'bg-emerald-500/20 text-emerald-200' : 'bg-black/30 text-zinc-400'
                 }`}
               >
                 Todas las partidas
@@ -400,116 +666,49 @@ export default function DestinoObraDespachoSelect({
               </span>
             ) : null}
           </div>
-          {partidaKey && obraUbicacionId ? (
-            <p className="text-[10px] text-sky-400/90">
-              El material ingresa a la bodega de esta obra y se carga a la partida seleccionada.
-            </p>
-          ) : null}
         </div>
-      ) : null}
-
-      {modo === 'otro_almacen' ? (
+      ) : (
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-zinc-500">
-            Almacén destino
+            Actividad destino (cronograma)
           </label>
           <select
-            value={ubicacionId}
-            disabled={disabled || loadingUb}
-            onChange={(e) => onUbicacionChange(e.target.value)}
+            value={cronogramaTareaId}
+            disabled={disabled || loadingTareas}
+            onChange={(e) => {
+              const id = e.target.value;
+              const t = tareas.find((x) => x.id === id);
+              onTareaChange(id, t);
+            }}
             className={className}
           >
             <option value="" className="bg-[#0A0A0F] text-zinc-100">
-              {loadingUb ? 'Cargando almacenes…' : 'Seleccione depósito central o móvil…'}
+              {loadingTareas ? 'Cargando actividades…' : 'Seleccione actividad / tarea…'}
             </option>
-            {ubicaciones.map((u) => (
-              <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
-                {labelUbicacionOpcion(u)}
+            {tareas.map((t) => (
+              <option key={t.id} value={t.id} className="bg-[#0A0A0F] text-zinc-100">
+                {t.nombre_tarea}
+                {t.codigo_partida ? ` · ${t.codigo_partida}` : ''}
               </option>
             ))}
           </select>
-          <p className="text-[10px] text-zinc-500">
-            Transferencia a otro depósito físico (puede ser de la misma u otra entidad).
-          </p>
-        </div>
-      ) : null}
-
-      {modo === 'otra_obra' ? (
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-zinc-500">Obra destino</label>
-            <select
-              value={destinoProyectoId}
-              disabled={disabled || otrosProyectos.length === 0}
-              onChange={(e) => {
-                onDestinoProyectoChange(e.target.value);
-                onUbicacionChange('');
-              }}
-              className={className}
-            >
-              <option value="" className="bg-[#0A0A0F] text-zinc-100">
-                {otrosProyectos.length === 0
-                  ? 'No hay otras obras registradas'
-                  : 'Seleccione proyecto / obra…'}
-              </option>
-              {otrosProyectos.map((p) => (
-                <option key={p.id} value={p.id} className="bg-[#0A0A0F] text-zinc-100">
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          {destinoProyectoId ? (
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase text-zinc-500">
-                Ubicación en la obra
-              </label>
-              <select
-                value={ubicacionId}
-                disabled={disabled || loadingUb}
-                onChange={(e) => onUbicacionChange(e.target.value)}
-                className={className}
-              >
-                <option value="" className="bg-[#0A0A0F] text-zinc-100">
-                  {loadingUb ? 'Cargando…' : 'Almacén o bodega de la obra…'}
-                </option>
-                {ubicaciones.filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
-                  .length > 0 ? (
-                  <optgroup label="Almacenes" className="bg-[#0A0A0F] text-zinc-100">
-                    {ubicaciones
-                      .filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
-                      .map((u) => (
-                        <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
-                          {labelUbicacionOpcion(u)}
-                        </option>
-                      ))}
-                  </optgroup>
-                ) : null}
-                {ubicaciones.filter((u) => u.tipo === 'obra').length > 0 ? (
-                  <optgroup label="Bodega en obra" className="bg-[#0A0A0F] text-zinc-100">
-                    {ubicaciones
-                      .filter((u) => u.tipo === 'obra')
-                      .map((u) => (
-                        <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
-                          {labelUbicacionOpcion(u)}
-                        </option>
-                      ))}
-                  </optgroup>
-                ) : null}
-              </select>
-            </div>
+          {tareas.length === 0 && !loadingTareas ? (
+            <p className="text-[10px] text-amber-400">
+              Sin actividades en el cronograma. Importe el Gantt o use partida Lulo.
+            </p>
           ) : null}
         </div>
-      ) : null}
-
-      {resumenDestino ? (
-        <p className="rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-200">
-          Destino: {resumenDestino}
-        </p>
+      )}
+      </>
       ) : null}
 
       {error ? <p className="text-[10px] font-bold text-amber-400">{error}</p> : null}
-      {!loading && modo === 'partida_lulo' && materialId && partidas.length === 0 && scope === 'related' ? (
+      {!soloDestinoFisico &&
+      !loading &&
+      imputacionTipo === 'partida_lulo' &&
+      materialId &&
+      partidas.length === 0 &&
+      scope === 'related' ? (
         <p className="text-[10px] font-bold text-amber-400">
           Sin partidas relacionadas en APU para {materialNombre ?? 'este material'}. Use «Todas las
           partidas» o importe el presupuesto Lulo.

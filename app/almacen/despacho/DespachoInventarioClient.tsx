@@ -8,12 +8,15 @@ import {
   type DespachoAlertasConfig,
 } from '@/lib/almacen/despachoAlertasConfig';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Package, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Package, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DistribucionDespachoPartidas, type DistribucionDespachoState } from '@/components/almacen/DistribucionDespachoPartidas';
-import DestinoObraDespachoSelect, {
-  type ModoDestinoDespacho,
-} from '@/components/almacen/DestinoObraDespachoSelect';
+import DespachoDestinoDocumentoPanel, {
+  type DespachoDestinoDocumentoValue,
+} from '@/components/almacen/DespachoDestinoDocumentoPanel';
+import type { DestinoFisicoDespacho, ImputacionDespacho } from '@/components/almacen/DestinoObraDespachoSelect';
+import { FotosDespachoInput, type FotoDespachoItem } from '@/components/almacen/FotosDespachoInput';
+import { ReceptorDespachoSelect, type ReceptorDespachoValue } from '@/components/almacen/ReceptorDespachoSelect';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -46,10 +49,16 @@ type LineaDespacho = {
   unidad: string;
   categoria: string | null;
   maxStock: number;
-  destinoId: string;
-  destinoModo: ModoDestinoDespacho;
+  cantidadSalida: number;
+  destinoFisico: DestinoFisicoDespacho;
+  imputacionTipo: ImputacionDespacho;
   destinoProyectoId: string;
+  destinoId: string;
   destinoPartidaKey: string;
+  partidaLabel: string;
+  cronogramaTareaId: string;
+  tareaEtiqueta: string;
+  tareaPartidaId: string;
   destinoEtiqueta: string;
   distribucion: DistribucionDespachoState;
 };
@@ -74,6 +83,91 @@ const emptyDistribucion = (): DistribucionDespachoState => ({
   error: 'Seleccione partidas en destino y cantidades.',
 });
 
+const emptyDestinoDoc = (): DespachoDestinoDocumentoValue => ({
+  tipoDestino: 'obra',
+  destinoFisico: 'obra_actual',
+  destinoProyectoId: '',
+  destinoId: '',
+  destinoEtiqueta: '',
+  capituloId: '',
+  capituloLabel: '',
+  imputacionObra: 'partida',
+  partidaKey: '',
+  partidaLabel: '',
+  actividadTexto: '',
+  cronogramaTareaId: '',
+  tareaEtiqueta: '',
+});
+
+function distribucionDesdePartidaKey(
+  cantidad: number,
+  partidaKey: string,
+): DistribucionDespachoState {
+  if (!partidaKey.trim() || cantidad <= 0) return emptyDistribucion();
+  const imputaciones: ImputacionPartidaInput[] = [
+    partidaKey.startsWith('pp:')
+      ? { ci_presupuesto_partida_id: partidaKey.slice(3), cantidad_imputada: cantidad }
+      : partidaKey.startsWith('pd:')
+        ? { partida_id: partidaKey.slice(3), cantidad_imputada: cantidad }
+        : { ci_presupuesto_partida_id: partidaKey, cantidad_imputada: cantidad },
+  ];
+  return {
+    imputaciones,
+    totalImputado: cantidad,
+    saldo: 0,
+    valido: true,
+  };
+}
+
+function aplicarDestinoDocALinea(
+  linea: LineaDespacho,
+  doc: DespachoDestinoDocumentoValue,
+): LineaDespacho {
+  const partidaKey = doc.partidaKey;
+  const esActividad = doc.tipoDestino === 'obra' && doc.imputacionObra === 'actividad';
+  const distribucion =
+    partidaKey && linea.cantidadSalida > 0
+      ? distribucionDesdePartidaKey(linea.cantidadSalida, partidaKey)
+      : emptyDistribucion();
+
+  const etiquetaPartes = [doc.destinoEtiqueta];
+  if (doc.tipoDestino === 'obra') {
+    if (doc.capituloLabel) etiquetaPartes.push(`Cap. ${doc.capituloLabel}`);
+    if (doc.imputacionObra === 'partida' && doc.partidaLabel) {
+      etiquetaPartes.push(`Partida: ${doc.partidaLabel}`);
+    }
+    if (esActividad) {
+      const act = doc.tareaEtiqueta || doc.actividadTexto.trim();
+      if (act) etiquetaPartes.push(`Actividad: ${act}`);
+    }
+  }
+
+  return {
+    ...linea,
+    destinoFisico: doc.destinoFisico,
+    destinoProyectoId: doc.destinoProyectoId,
+    destinoId: doc.destinoId,
+    destinoEtiqueta: etiquetaPartes.filter(Boolean).join(' · '),
+    imputacionTipo: esActividad && doc.cronogramaTareaId ? 'actividad' : 'partida_lulo',
+    destinoPartidaKey: partidaKey,
+    partidaLabel: doc.partidaLabel,
+    cronogramaTareaId: doc.cronogramaTareaId,
+    tareaEtiqueta: doc.tareaEtiqueta || doc.actividadTexto.trim(),
+    tareaPartidaId: '',
+    distribucion,
+  };
+}
+
+function destinoDocCompleto(doc: DespachoDestinoDocumentoValue): boolean {
+  if (!doc.destinoId) return false;
+  if (doc.tipoDestino === 'almacen') return true;
+  if (!doc.capituloId) return false;
+  if (doc.imputacionObra === 'actividad') {
+    return Boolean(doc.actividadTexto.trim() || doc.cronogramaTareaId);
+  }
+  return true;
+}
+
 function DespachoCargando() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0A0A0F] text-sm text-zinc-500">
@@ -95,7 +189,16 @@ export default function DespachoInventarioClient() {
   const [loadingStock, setLoadingStock] = useState(false);
   const [lineas, setLineas] = useState<LineaDespacho[]>([]);
   const [materialAgregar, setMaterialAgregar] = useState('');
+  const [cantidadAgregar, setCantidadAgregar] = useState('');
   const [observaciones, setObservaciones] = useState('');
+  const [receptor, setReceptor] = useState<ReceptorDespachoValue>({
+    modo: 'nomina',
+    empleadoId: '',
+    nombre: '',
+    oficio: '',
+  });
+  const [fotos, setFotos] = useState<FotoDespachoItem[]>([]);
+  const [destinoDoc, setDestinoDoc] = useState<DespachoDestinoDocumentoValue>(emptyDestinoDoc);
   const { isSubmitting: guardando, runLocked } = useSyncSubmitLock();
   const {
     autorizado: logisticaAutorizada,
@@ -208,113 +311,216 @@ export default function DespachoInventarioClient() {
     void cargarStock(proyectoId, origenId || undefined);
     setLineas([]);
     setMaterialAgregar('');
+    setCantidadAgregar('');
+    setReceptor({ modo: 'nomina', empleadoId: '', nombre: '', oficio: '' });
+    setFotos([]);
+    setDestinoDoc(emptyDestinoDoc());
   }, [proyectoId, origenId, cargarStock]);
 
+  useEffect(() => {
+    if (!destinoDocCompleto(destinoDoc)) return;
+    setLineas((prev) => prev.map((l) => aplicarDestinoDocALinea(l, destinoDoc)));
+  }, [destinoDoc]);
+
+  const materialSeleccionado = stock.find((s) => stockKey(s) === materialAgregar);
+
+  const parseCantidad = (raw: string, max: number): number | null => {
+    const n = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0) return null;
+    if (n > max + 0.0001) return null;
+    return n;
+  };
+
   const agregarLinea = () => {
-    const hit = stock.find((s) => stockKey(s) === materialAgregar);
+    if (!destinoDocCompleto(destinoDoc)) {
+      toast.error('Complete almacén/obra destino y capítulo antes de agregar materiales.');
+      return;
+    }
+    const hit = materialSeleccionado;
     if (!hit) return;
+    const qty = parseCantidad(cantidadAgregar, hit.cantidad_disponible);
+    if (qty == null) {
+      toast.error(`Indique una cantidad entre 0 y ${hit.cantidad_disponible} ${hit.unidad}`);
+      return;
+    }
     if (lineas.some((l) => lineaStockKey(l) === stockKey(hit))) {
       toast.error('Ese material en ese almacén ya está en la lista');
       return;
     }
-    setLineas((prev) => [
-      ...prev,
-      {
-        lineId: lineId(),
-        material_id: hit.material_id,
-        origen_ubicacion_id: hit.ubicacion_id,
-        origen_nombre: hit.ubicacion_nombre,
-        nombre: hit.nombre,
-        unidad: hit.unidad,
-        categoria: hit.categoria,
-        maxStock: hit.cantidad_disponible,
-        destinoId: '',
-        destinoModo: 'partida_lulo',
-        destinoProyectoId: '',
-        destinoPartidaKey: '',
-        destinoEtiqueta: '',
-        distribucion: emptyDistribucion(),
-      },
-    ]);
+    if (hit.ubicacion_id === destinoDoc.destinoId) {
+      toast.error('Origen y destino no pueden ser el mismo almacén');
+      return;
+    }
+    const base: LineaDespacho = {
+      lineId: lineId(),
+      material_id: hit.material_id,
+      origen_ubicacion_id: hit.ubicacion_id,
+      origen_nombre: hit.ubicacion_nombre,
+      nombre: hit.nombre,
+      unidad: hit.unidad,
+      categoria: hit.categoria,
+      maxStock: hit.cantidad_disponible,
+      cantidadSalida: qty,
+      destinoFisico: destinoDoc.destinoFisico,
+      imputacionTipo: 'partida_lulo',
+      destinoProyectoId: destinoDoc.destinoProyectoId,
+      destinoId: destinoDoc.destinoId,
+      destinoPartidaKey: destinoDoc.partidaKey,
+      partidaLabel: destinoDoc.partidaLabel,
+      cronogramaTareaId: '',
+      tareaEtiqueta: '',
+      tareaPartidaId: '',
+      destinoEtiqueta: '',
+      distribucion: emptyDistribucion(),
+    };
+    setLineas((prev) => [...prev, aplicarDestinoDocALinea(base, destinoDoc)]);
     setMaterialAgregar('');
+    setCantidadAgregar('');
   };
 
   const quitarLinea = (id: string) => {
     setLineas((prev) => prev.filter((l) => l.lineId !== id));
   };
 
-  const destinoCompleto = (l: LineaDespacho): boolean => {
-    if (l.destinoModo === 'partida_lulo') {
-      return Boolean(l.destinoPartidaKey && l.destinoId);
-    }
-    if (l.destinoModo === 'otra_obra') {
-      return Boolean(l.destinoProyectoId && l.destinoId);
-    }
+  const destinoFisicoCompleto = (l: LineaDespacho): boolean => {
+    if (l.destinoFisico === 'obra_actual') return Boolean(l.destinoId);
+    if (l.destinoFisico === 'otra_obra') return Boolean(l.destinoProyectoId && l.destinoId);
     return Boolean(l.destinoId);
+  };
+
+  const imputacionCompleta = (l: LineaDespacho): boolean => {
+    if (destinoDoc.tipoDestino === 'almacen') return true;
+    if (l.destinoPartidaKey) return l.distribucion.valido || destinoDoc.capituloId.length > 0;
+    if (destinoDoc.imputacionObra === 'actividad') {
+      return Boolean(destinoDoc.actividadTexto.trim() || destinoDoc.cronogramaTareaId);
+    }
+    return Boolean(destinoDoc.capituloId);
+  };
+
+  const lineaLista = (l: LineaDespacho): boolean => {
+    const mov = l.distribucion.totalImputado;
+    const conPartida = Boolean(l.destinoPartidaKey);
+    return (
+      destinoDocCompleto(destinoDoc) &&
+      destinoFisicoCompleto(l) &&
+      imputacionCompleta(l) &&
+      l.origen_ubicacion_id !== l.destinoId &&
+      l.cantidadSalida > 0 &&
+      l.cantidadSalida <= l.maxStock &&
+      (conPartida
+        ? mov > 0 && mov <= l.cantidadSalida + 0.0001 && l.distribucion.valido
+        : true)
+    );
   };
 
   const puedeGuardar =
     logisticaAutorizada &&
     proyectoId &&
+    destinoDocCompleto(destinoDoc) &&
+    receptor.nombre.trim().length > 0 &&
     lineas.length > 0 &&
-    lineas.every((l) => {
-      const mov = l.distribucion.totalImputado;
-      return (
-        l.origen_ubicacion_id &&
-        destinoCompleto(l) &&
-        l.origen_ubicacion_id !== l.destinoId &&
-        mov > 0 &&
-        mov <= l.maxStock &&
-        l.distribucion.valido &&
-        l.distribucion.imputaciones.length > 0
-      );
-    });
+    lineas.every(lineaLista);
 
   const guardar = async () => {
     if (!logisticaAutorizada) {
       toast.error('Registre el Contrato AD del proyecto antes de despachar materiales.');
       return;
     }
-    if (!puedeGuardar) {
-      toast.error('Complete obra, destino, cantidades y partidas a descargar.');
+    if (!receptor.nombre.trim()) {
+      toast.error('Indique el obrero que recibe el material.');
       return;
     }
+    if (!puedeGuardar) {
+      toast.error('Complete destino, capítulo, cantidades y obrero receptor.');
+      return;
+    }
+
     await runLocked(async () => {
       try {
-        const porRuta = new Map<string, LineaDespacho[]>();
-        for (const l of lineas) {
-          const rutaKey = `${l.origen_ubicacion_id}:${l.destinoId}:${l.destinoModo}`;
-          const g = porRuta.get(rutaKey) ?? [];
-          g.push(l);
-          porRuta.set(rutaKey, g);
-        }
+        const lineasPayload = await Promise.all(
+          lineas.map(async (l) => {
+            let imputaciones = l.distribucion.imputaciones as ImputacionPartidaInput[];
+            let cantidad = l.distribucion.totalImputado || l.cantidadSalida;
+            let partidaKey = l.destinoPartidaKey;
+            let partidaLabel = l.partidaLabel;
 
-        const codigos: string[] = [];
-        for (const [, grupo] of Array.from(porRuta.entries())) {
-          const origenUbicacionId = grupo[0]!.origen_ubicacion_id;
-          const destinoUbicacionId = grupo[0]!.destinoId;
-          const esSalidaObra = grupo.every((l) => l.destinoModo === 'partida_lulo');
-          const res = await fetch('/api/almacen/transferencias', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              origen_ubicacion_id: origenUbicacionId,
-              destino_ubicacion_id: destinoUbicacionId,
-              ci_proyecto_id: proyectoId,
-              tipo_movimiento: esSalidaObra ? 'salida_obra' : 'transferencia',
-              observaciones,
-              lineas: grupo.map((l) => ({
-                material_id: l.material_id,
-                cantidad: l.distribucion.totalImputado,
-                imputaciones: l.distribucion.imputaciones as ImputacionPartidaInput[],
-              })),
-            }),
-          });
-          const data = (await res.json()) as { codigo?: string; error?: string };
-          if (!res.ok) throw new Error(data.error || 'No se pudo registrar el despacho');
-          if (data.codigo) codigos.push(data.codigo);
-        }
+            if (!imputaciones.length && destinoDoc.tipoDestino === 'almacen') {
+              cantidad = l.cantidadSalida;
+            } else if (!imputaciones.length) {
+              if (partidaKey) {
+                const dist = distribucionDesdePartidaKey(l.cantidadSalida, partidaKey);
+                imputaciones = dist.imputaciones;
+                cantidad = l.cantidadSalida;
+              } else if (destinoDoc.capituloId) {
+                const q = new URLSearchParams({
+                  proyecto_id: proyectoId,
+                  capitulo_id: destinoDoc.capituloId,
+                });
+                const resPar = await fetch(`/api/almacen/partidas-capitulo?${q}`, {
+                  cache: 'no-store',
+                });
+                const dataPar = (await resPar.json()) as {
+                  partidas?: Array<{ key: string; nombre: string }>;
+                  error?: string;
+                };
+                if (!resPar.ok) throw new Error(dataPar.error || 'No se pudieron cargar partidas');
+                const first = dataPar.partidas?.[0];
+                if (!first?.key) {
+                  throw new Error(
+                    `El capítulo «${destinoDoc.capituloLabel}» no tiene partidas para imputar.`,
+                  );
+                }
+                partidaKey = first.key;
+                partidaLabel = first.nombre;
+                imputaciones = distribucionDesdePartidaKey(l.cantidadSalida, first.key).imputaciones;
+                cantidad = l.cantidadSalida;
+              }
+            }
 
+            const imp = imputaciones[0];
+            return {
+              material_id: l.material_id,
+              material_nombre: l.nombre,
+              unidad: l.unidad,
+              cantidad,
+              origen_ubicacion_id: l.origen_ubicacion_id,
+              destino_ubicacion_id: l.destinoId,
+              destino_fisico: l.destinoFisico,
+              imputacion_tipo: l.imputacionTipo,
+              imputaciones,
+              ci_presupuesto_partida_id:
+                imp?.ci_presupuesto_partida_id ??
+                (partidaKey.startsWith('pp:') ? partidaKey.slice(3) : null),
+              partida_id:
+                imp?.partida_id ?? (partidaKey.startsWith('pd:') ? partidaKey.slice(3) : null),
+              partida_label: partidaLabel || destinoDoc.capituloLabel || null,
+              cronograma_tarea_id: l.cronogramaTareaId || destinoDoc.cronogramaTareaId || null,
+              tarea_label: l.tareaEtiqueta || destinoDoc.tareaEtiqueta || destinoDoc.actividadTexto.trim() || null,
+            };
+          }),
+        );
+
+        const payload = {
+          proyectoId,
+          observaciones,
+          obreroEmpleadoId: receptor.empleadoId || null,
+          obreroNombre: receptor.nombre.trim(),
+          obreroOficio: receptor.oficio.trim() || null,
+          lineas: lineasPayload,
+        };
+
+        const form = new FormData();
+        form.append('payload', JSON.stringify(payload));
+        fotos.forEach((f, i) => form.append(`foto${i}`, f.file));
+
+        const res = await fetch('/api/almacen/despacho', { method: 'POST', body: form });
+        const data = (await res.json()) as {
+          codigos?: string[];
+          error?: string;
+        };
+        if (!res.ok) throw new Error(data.error || 'No se pudo registrar el despacho');
+
+        const codigos = data.codigos ?? [];
         toast.success(
           codigos.length > 1
             ? `Despachos ${codigos.join(', ')} registrados`
@@ -322,6 +528,10 @@ export default function DespachoInventarioClient() {
         );
         setLineas([]);
         setObservaciones('');
+        setReceptor({ modo: 'nomina', empleadoId: '', nombre: '', oficio: '' });
+        setDestinoDoc(emptyDestinoDoc());
+        fotos.forEach((f) => URL.revokeObjectURL(f.previewUrl));
+        setFotos([]);
         void cargarStock(proyectoId, origenId || undefined);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error al guardar');
@@ -332,6 +542,8 @@ export default function DespachoInventarioClient() {
   const stockDisponible = stock.filter(
     (s) => !lineas.some((l) => lineaStockKey(l) === stockKey(s)),
   );
+
+  const almacenesSugeridosIds = Array.from(new Set(stock.map((s) => s.ubicacion_id)));
 
   const nombreProyecto = proyectos.find((p) => p.id === proyectoId)?.nombre ?? 'la obra';
 
@@ -350,8 +562,7 @@ export default function DespachoInventarioClient() {
           <div>
             <h1 className="text-lg font-bold">Salida de almacén</h1>
             <p className="text-xs text-zinc-500">
-              Por cada material elija destino: partida Lulo de la obra, otro almacén u otra obra.
-              La cantidad a salir se define abajo (puede ser menor al stock almacenado).
+              Obra origen, almacén/obra destino, capítulo e imputación opcional por partida.
             </p>
           </div>
         </div>
@@ -359,11 +570,9 @@ export default function DespachoInventarioClient() {
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-6">
         {proyectoId && !cargandoContratoAd && !logisticaAutorizada ? (
-          <ProyectoAdLogisticaBanner
-            proyectoId={proyectoId}
-            autorizado={logisticaAutorizada}
-          />
+          <ProyectoAdLogisticaBanner proyectoId={proyectoId} autorizado={logisticaAutorizada} />
         ) : null}
+
         <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Obra y origen</h2>
           <div className="space-y-2">
@@ -405,19 +614,8 @@ export default function DespachoInventarioClient() {
                 </optgroup>
               ) : null}
             </select>
-            {loadingProyectos ? (
-              <p className="flex items-center gap-1 text-[10px] text-zinc-500">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Cargando obras…
-              </p>
-            ) : null}
             {proyectosError ? (
               <p className="text-[10px] font-bold text-amber-400">{proyectosError}</p>
-            ) : null}
-            {!loadingProyectos && !proyectosError && proyectos.length === 0 ? (
-              <p className="text-[10px] font-bold text-amber-400">
-                Sin proyectos en base de datos. Cree uno en Proyectos → Módulo.
-              </p>
             ) : null}
           </div>
           <div className="space-y-2">
@@ -430,16 +628,24 @@ export default function DespachoInventarioClient() {
               onChange={setOrigenId}
               placeholder="Todos los almacenes de la obra…"
             />
-            <p className="text-[10px] text-zinc-500">
-              Vacío = materiales, combustible, insumos y EPP en todos los almacenes de {nombreProyecto}.
-              El destino se elige por material, debajo.
-            </p>
           </div>
           {proyectoId ? (
-            <DespachoAlertasConfigPanel
-              proyectoId={proyectoId}
-              onConfigChange={onAlertasConfigChange}
-            />
+            <>
+              <ReceptorDespachoSelect proyectoId={proyectoId} value={receptor} onChange={setReceptor} />
+              <FotosDespachoInput fotos={fotos} onChange={setFotos} />
+              <DespachoAlertasConfigPanel
+                proyectoId={proyectoId}
+                onConfigChange={onAlertasConfigChange}
+              />
+              <DespachoDestinoDocumentoPanel
+                proyectoId={proyectoId}
+                proyectoNombre={nombreProyecto}
+                origenUbicacionId={origenId || undefined}
+                almacenesSugeridosIds={almacenesSugeridosIds}
+                value={destinoDoc}
+                onChange={setDestinoDoc}
+              />
+            </>
           ) : null}
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-zinc-500">Observaciones</label>
@@ -448,7 +654,7 @@ export default function DespachoInventarioClient() {
               onChange={(e) => setObservaciones(e.target.value)}
               rows={2}
               className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
-              placeholder="Transporte, responsable en obra…"
+              placeholder="Transporte, vehículo, notas adicionales…"
             />
           </div>
         </section>
@@ -466,21 +672,25 @@ export default function DespachoInventarioClient() {
               <Loader2 className="h-3 w-3 animate-spin" />
               Cargando stock de {nombreProyecto}…
             </p>
-          ) : stockDisponible.length === 0 ? (
+          ) : stockDisponible.length === 0 && lineas.length === 0 ? (
             <p className="text-xs text-amber-400/90">
               No hay stock en los almacenes de {nombreProyecto}
-              {origenId ? ' en el almacén filtrado' : ''}. Registre ingresos desde Compras → ingreso a
-              almacén.
+              {origenId ? ' en el almacén filtrado' : ''}.
             </p>
-          ) : (
+          ) : stockDisponible.length > 0 ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
-                  Agregar material o producto ({stockDisponible.length} en obra)
+                  Agregar material ({stockDisponible.length} disponibles)
                 </label>
                 <select
                   value={materialAgregar}
-                  onChange={(e) => setMaterialAgregar(e.target.value)}
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    setMaterialAgregar(key);
+                    const hit = stock.find((s) => stockKey(s) === key);
+                    setCantidadAgregar(hit ? String(hit.cantidad_disponible) : '');
+                  }}
                   className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm"
                 >
                   <option value="">Seleccione material / producto…</option>
@@ -492,9 +702,27 @@ export default function DespachoInventarioClient() {
                   ))}
                 </select>
               </div>
+              <div className="w-full sm:w-36">
+                <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
+                  Cantidad
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  disabled={!materialAgregar}
+                  value={cantidadAgregar}
+                  onChange={(e) => setCantidadAgregar(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm disabled:opacity-40"
+                />
+              </div>
               <button
                 type="button"
-                disabled={!materialAgregar}
+                disabled={
+                  !materialAgregar ||
+                  parseCantidad(cantidadAgregar, materialSeleccionado?.cantidad_disponible ?? 0) ==
+                    null
+                }
                 onClick={agregarLinea}
                 className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-orange-500 to-orange-700 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-40"
               >
@@ -502,7 +730,7 @@ export default function DespachoInventarioClient() {
                 Agregar
               </button>
             </div>
-          )}
+          ) : null}
 
           {lineas.map((linea) => (
             <div
@@ -511,41 +739,9 @@ export default function DespachoInventarioClient() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-semibold text-zinc-100">
-                    {linea.categoria ? (
-                      <span className="text-[10px] font-bold uppercase text-zinc-500">
-                        {linea.categoria} ·{' '}
-                      </span>
-                    ) : null}
-                    {linea.nombre}
-                  </p>
+                  <p className="font-semibold text-zinc-100">{linea.nombre}</p>
                   <p className="text-[11px] text-zinc-500">
                     Origen: {linea.origen_nombre} · stock: {linea.maxStock} {linea.unidad}
-                    {linea.destinoEtiqueta ? (
-                      <>
-                        {' '}
-                        ·{' '}
-                        <span className="text-sky-300/90">
-                          Destino: {linea.destinoEtiqueta}
-                        </span>
-                      </>
-                    ) : null}
-                    {linea.distribucion.totalImputado > 0 ? (
-                      <>
-                        {' '}
-                        ·{' '}
-                        <span className="text-orange-300/90">
-                          A salir: {linea.distribucion.totalImputado} {linea.unidad}
-                        </span>
-                        {linea.distribucion.totalImputado < linea.maxStock - 0.0001 ? (
-                          <span className="text-zinc-500">
-                            {' '}
-                            (quedan {linea.maxStock - linea.distribucion.totalImputado}{' '}
-                            {linea.unidad} en origen)
-                          </span>
-                        ) : null}
-                      </>
-                    ) : null}
                   </p>
                 </div>
                 <button
@@ -557,84 +753,50 @@ export default function DespachoInventarioClient() {
                 </button>
               </div>
 
-              <div className="space-y-2 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
-                  Destino de este material / producto
-                </label>
-                <DestinoObraDespachoSelect
-                  proyectoId={proyectoId}
-                  proyectos={proyectos}
-                  materialId={linea.material_id}
-                  materialNombre={linea.nombre}
-                  modo={linea.destinoModo}
-                  destinoProyectoId={linea.destinoProyectoId}
-                  ubicacionId={linea.destinoId}
-                  partidaKey={linea.destinoPartidaKey}
-                  onModoChange={(modo) => {
-                    setLineas((prev) =>
-                      prev.map((l) =>
-                        l.lineId === linea.lineId
-                          ? {
-                              ...l,
-                              destinoModo: modo,
-                              destinoProyectoId: '',
-                              destinoId: '',
-                              destinoPartidaKey: '',
-                              destinoEtiqueta: '',
-                              distribucion: emptyDistribucion(),
-                            }
-                          : l,
-                      ),
-                    );
-                  }}
-                  onDestinoProyectoChange={(id) => {
-                    setLineas((prev) =>
-                      prev.map((l) =>
-                        l.lineId === linea.lineId
-                          ? {
-                              ...l,
-                              destinoProyectoId: id,
-                              destinoId: '',
-                              destinoEtiqueta: '',
-                              distribucion: emptyDistribucion(),
-                            }
-                          : l,
-                      ),
-                    );
-                  }}
-                  onUbicacionChange={(id) => {
-                    if (id && id === linea.origen_ubicacion_id) {
-                      toast.error('Origen y destino no pueden ser el mismo almacén');
-                      return;
-                    }
-                    setLineas((prev) =>
-                      prev.map((l) =>
-                        l.lineId === linea.lineId
-                          ? { ...l, destinoId: id, distribucion: emptyDistribucion() }
-                          : l,
-                      ),
-                    );
-                  }}
-                  onPartidaChange={(key) => {
-                    setLineas((prev) =>
-                      prev.map((l) =>
-                        l.lineId === linea.lineId
-                          ? { ...l, destinoPartidaKey: key, distribucion: emptyDistribucion() }
-                          : l,
-                      ),
-                    );
-                  }}
-                  onDestinoEtiquetaChange={(etiqueta) => {
-                    setLineas((prev) =>
-                      prev.map((l) =>
-                        l.lineId === linea.lineId ? { ...l, destinoEtiqueta: etiqueta } : l,
-                      ),
-                    );
-                  }}
-                />
+              {linea.destinoEtiqueta ? (
+                <div className="flex items-start gap-2.5 rounded-xl border border-sky-500/25 bg-sky-500/8 px-3 py-2.5">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
+                  <p className="text-xs leading-snug text-sky-100">{linea.destinoEtiqueta}</p>
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-end gap-3 rounded-lg border border-orange-500/25 bg-black/20 p-3">
+                <div className="w-full sm:w-40">
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-orange-400/90">
+                    Cantidad a salir
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={linea.cantidadSalida}
+                    onChange={(e) => {
+                      const qty = parseCantidad(e.target.value, linea.maxStock);
+                      if (qty == null && e.target.value.trim() !== '') {
+                        toast.error(`Máximo ${linea.maxStock} ${linea.unidad}`);
+                        return;
+                      }
+                      setLineas((prev) =>
+                        prev.map((l) => {
+                          if (l.lineId !== linea.lineId) return l;
+                          const qtyVal = qty ?? 0;
+                          const next = {
+                            ...l,
+                            cantidadSalida: qtyVal,
+                            distribucion: l.destinoPartidaKey
+                              ? distribucionDesdePartidaKey(qtyVal, l.destinoPartidaKey)
+                              : emptyDistribucion(),
+                          };
+                          return next;
+                        }),
+                      );
+                    }}
+                    className="w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2 text-sm"
+                  />
+                </div>
               </div>
 
-              {proyectoId && destinoCompleto(linea) ? (
+              {linea.destinoPartidaKey && linea.cantidadSalida > 0 ? (
                 <DistribucionDespachoPartidas
                   proyectoId={proyectoId}
                   destinoId={linea.destinoId}
@@ -650,7 +812,7 @@ export default function DespachoInventarioClient() {
                   }
                   materialId={linea.material_id}
                   productoNombre={linea.nombre}
-                  cantidadLinea={linea.maxStock}
+                  cantidadLinea={linea.cantidadSalida}
                   alertasConfig={alertasConfig}
                   onChange={(dist) => {
                     setLineas((prev) =>
@@ -660,12 +822,20 @@ export default function DespachoInventarioClient() {
                     );
                   }}
                 />
-              ) : (
-                <p className="text-xs text-amber-400/90">
-                  Elija destino: partida Lulo, otro almacén u otra obra. Luego indique cuánto sale
-                  por partida presupuestaria.
+              ) : destinoDoc.tipoDestino === 'obra' && destinoDoc.imputacionObra === 'actividad' ? (
+                <p className="text-xs text-violet-200/90">
+                  Actividad:{' '}
+                  <strong>{destinoDoc.tareaEtiqueta || destinoDoc.actividadTexto}</strong>
+                  {linea.cantidadSalida <= 0 ? ' — indique cantidad.' : ''}
                 </p>
-              )}
+              ) : destinoDoc.capituloLabel && !linea.destinoPartidaKey ? (
+                <p className="text-xs text-zinc-400">
+                  Imputación al capítulo <strong className="text-zinc-200">{destinoDoc.capituloLabel}</strong>
+                  {linea.cantidadSalida <= 0 ? ' — indique cantidad a salir.' : ' (sin partida específica).'}
+                </p>
+              ) : linea.cantidadSalida <= 0 ? (
+                <p className="text-xs text-amber-400/90">Indique cantidad a salir.</p>
+              ) : null}
             </div>
           ))}
         </section>

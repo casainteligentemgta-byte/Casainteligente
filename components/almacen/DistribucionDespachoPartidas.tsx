@@ -294,7 +294,7 @@ export function DistribucionDespachoPartidas({
                 : 'bg-amber-500/15 text-amber-200'
             }`}
           >
-            Descargado: {totalImputado} / {cantidadLinea} en stock
+            Descargado: {totalImputado} / {cantidadLinea} a salir
           </span>
           {saldo > 0.0001 ? (
             <span className="rounded-lg bg-zinc-500/15 px-3 py-1 text-xs font-bold text-zinc-300">
