@@ -250,7 +250,8 @@ export function DistribucionDespachoPartidas({
             Destino — partidas con {productoNombre}
           </p>
           <p className="text-[11px] text-zinc-500">
-            Marque partidas y cantidades a descargar. Lo no asignado queda como saldo en origen.
+            Marque partidas e indique cuánto sale. No es obligatorio mover todo el stock: puede
+            despachar una cantidad menor a la almacenada.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -293,7 +294,7 @@ export function DistribucionDespachoPartidas({
                 : 'bg-amber-500/15 text-amber-200'
             }`}
           >
-            Descargado: {totalImputado} / {cantidadLinea}
+            Descargado: {totalImputado} / {cantidadLinea} en stock
           </span>
           {saldo > 0.0001 ? (
             <span className="rounded-lg bg-zinc-500/15 px-3 py-1 text-xs font-bold text-zinc-300">
@@ -350,24 +351,12 @@ export function DistribucionDespachoPartidas({
               onChange={(e) => {
                 const on = e.target.checked;
                 setRows((prev) => {
-                  const otros = prev
-                    .filter((r) => r.rowId !== row.rowId && r.seleccionada)
-                    .reduce((s, r) => s + r.cantidad, 0);
-                  const restante = Math.max(0, cantidadLinea - otros);
-                  const disp = Math.max(
-                    0,
-                    row.techo_disponible,
-                  );
                   return prev.map((r) =>
                     r.rowId === row.rowId
                       ? {
                           ...r,
                           seleccionada: on,
-                          cantidad: on
-                            ? r.cantidad > 0
-                              ? r.cantidad
-                              : Math.min(disp > 0 ? disp : restante, restante) || 0
-                            : 0,
+                          cantidad: on ? r.cantidad : 0,
                         }
                       : r,
                   );
@@ -400,18 +389,23 @@ export function DistribucionDespachoPartidas({
                     setUltimoToastExceso((prev) => ({ ...prev, [row.rowId]: v.cantidad }));
                   }
 
-                  setRows((prev) =>
-                    prev.map((r) =>
+                  setRows((prev) => {
+                    const otros = prev
+                      .filter((r) => r.rowId !== row.rowId && r.seleccionada)
+                      .reduce((s, r) => s + r.cantidad, 0);
+                    const maxParaEsta = Math.max(0, cantidadLinea - otros);
+                    const qty = Math.min(Math.max(0, v.cantidad), maxParaEsta);
+                    return prev.map((r) =>
                       r.rowId === row.rowId
                         ? {
                             ...r,
-                            cantidad: v.cantidad,
+                            cantidad: qty,
                             justificacion: v.justificacion,
                             autorizado: v.autorizado,
                           }
                         : r,
-                    ),
-                  );
+                    );
+                  });
                 }}
               />
               {row.cantidad > row.techo_disponible ? (

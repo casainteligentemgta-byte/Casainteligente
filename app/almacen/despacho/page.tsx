@@ -2,7 +2,7 @@ import DespachoInventarioClient from './DespachoInventarioClient';
 import { Suspense } from 'react';
 
 export const metadata = {
-  title: 'Despacho a obra | Almacén',
+  title: 'Salida de almacén | Almacén',
 };
 
 export default function DespachoInventarioPage() {

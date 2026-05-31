@@ -45,12 +45,12 @@ type LineaDespacho = {
   nombre: string;
   unidad: string;
   categoria: string | null;
-  cantidad: number;
   maxStock: number;
   destinoId: string;
   destinoModo: ModoDestinoDespacho;
   destinoEntidadId: string;
   destinoPartidaKey: string;
+  destinoEtiqueta: string;
   distribucion: DistribucionDespachoState;
 };
 
@@ -227,12 +227,12 @@ export default function DespachoInventarioClient() {
         nombre: hit.nombre,
         unidad: hit.unidad,
         categoria: hit.categoria,
-        cantidad: 1,
         maxStock: hit.cantidad_disponible,
         destinoId: '',
         destinoModo: 'partida_lulo',
         destinoEntidadId: '',
         destinoPartidaKey: '',
+        destinoEtiqueta: '',
         distribucion: emptyDistribucion(),
       },
     ]);
@@ -263,9 +263,7 @@ export default function DespachoInventarioClient() {
         l.origen_ubicacion_id &&
         destinoCompleto(l) &&
         l.origen_ubicacion_id !== l.destinoId &&
-        l.cantidad > 0 &&
         mov > 0 &&
-        mov <= l.cantidad &&
         mov <= l.maxStock &&
         l.distribucion.valido &&
         l.distribucion.imputaciones.length > 0
@@ -350,10 +348,10 @@ export default function DespachoInventarioClient() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <h1 className="text-lg font-bold">Despacho a obra</h1>
+            <h1 className="text-lg font-bold">Salida de almacén</h1>
             <p className="text-xs text-zinc-500">
-              Agregue el material, elija destino (partida Lulo, almacén en obra u otra entidad) y
-              distribuya cantidades por partida presupuestaria.
+              Indique el destino de cada material o producto (partida Lulo, almacén en obra u otra
+              entidad) y distribuya cantidades por partida presupuestaria.
             </p>
           </div>
         </div>
@@ -458,7 +456,7 @@ export default function DespachoInventarioClient() {
         <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-zinc-500">
             <Package className="h-4 w-4" />
-            Materiales
+            Materiales y productos
           </h2>
 
           {!proyectoId ? (
@@ -478,14 +476,14 @@ export default function DespachoInventarioClient() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
-                  Agregar material ({stockDisponible.length} en obra)
+                  Agregar material o producto ({stockDisponible.length} en obra)
                 </label>
                 <select
                   value={materialAgregar}
                   onChange={(e) => setMaterialAgregar(e.target.value)}
                   className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm"
                 >
-                  <option value="">Material, combustible, insumo, EPP…</option>
+                  <option value="">Seleccione material / producto…</option>
                   {stockDisponible.map((s) => (
                     <option key={stockKey(s)} value={stockKey(s)}>
                       {s.categoria ? `${s.categoria}: ` : ''}
@@ -523,13 +521,29 @@ export default function DespachoInventarioClient() {
                   </p>
                   <p className="text-[11px] text-zinc-500">
                     Origen: {linea.origen_nombre} · stock: {linea.maxStock} {linea.unidad}
+                    {linea.destinoEtiqueta ? (
+                      <>
+                        {' '}
+                        ·{' '}
+                        <span className="text-sky-300/90">
+                          Destino: {linea.destinoEtiqueta}
+                        </span>
+                      </>
+                    ) : null}
                     {linea.distribucion.totalImputado > 0 ? (
                       <>
                         {' '}
-                        · se moverán: {linea.distribucion.totalImputado} {linea.unidad}
-                        {linea.distribucion.saldo > 0.0001
-                          ? ` · saldo: ${linea.distribucion.saldo}`
-                          : null}
+                        ·{' '}
+                        <span className="text-orange-300/90">
+                          A salir: {linea.distribucion.totalImputado} {linea.unidad}
+                        </span>
+                        {linea.distribucion.totalImputado < linea.maxStock - 0.0001 ? (
+                          <span className="text-zinc-500">
+                            {' '}
+                            (quedan {linea.maxStock - linea.distribucion.totalImputado}{' '}
+                            {linea.unidad} en origen)
+                          </span>
+                        ) : null}
                       </>
                     ) : null}
                   </p>
@@ -542,42 +556,10 @@ export default function DespachoInventarioClient() {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="w-full max-w-[180px]">
-                  <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
-                    Cantidad máxima a despachar
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={linea.maxStock}
-                    step="any"
-                    value={linea.cantidad}
-                    onChange={(e) => {
-                      const n = Number(e.target.value);
-                      setLineas((prev) =>
-                        prev.map((l) =>
-                          l.lineId === linea.lineId
-                            ? {
-                                ...l,
-                                cantidad:
-                                  Number.isFinite(n) && n >= 0
-                                    ? Math.min(n, l.maxStock)
-                                    : 0,
-                                distribucion: emptyDistribucion(),
-                              }
-                            : l,
-                        ),
-                      );
-                    }}
-                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
 
               <div className="space-y-2 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
-                  Destino de este material
+                  Destino de este material / producto
                 </label>
                 <DestinoObraDespachoSelect
                   proyectoId={proyectoId}
@@ -597,6 +579,7 @@ export default function DespachoInventarioClient() {
                               destinoEntidadId: '',
                               destinoId: '',
                               destinoPartidaKey: '',
+                              destinoEtiqueta: '',
                               distribucion: emptyDistribucion(),
                             }
                           : l,
@@ -607,7 +590,13 @@ export default function DespachoInventarioClient() {
                     setLineas((prev) =>
                       prev.map((l) =>
                         l.lineId === linea.lineId
-                          ? { ...l, destinoEntidadId: id, destinoId: '', distribucion: emptyDistribucion() }
+                          ? {
+                              ...l,
+                              destinoEntidadId: id,
+                              destinoId: '',
+                              destinoEtiqueta: '',
+                              distribucion: emptyDistribucion(),
+                            }
                           : l,
                       ),
                     );
@@ -634,10 +623,17 @@ export default function DespachoInventarioClient() {
                       ),
                     );
                   }}
+                  onDestinoEtiquetaChange={(etiqueta) => {
+                    setLineas((prev) =>
+                      prev.map((l) =>
+                        l.lineId === linea.lineId ? { ...l, destinoEtiqueta: etiqueta } : l,
+                      ),
+                    );
+                  }}
                 />
               </div>
 
-              {proyectoId && destinoCompleto(linea) && linea.cantidad > 0 ? (
+              {proyectoId && destinoCompleto(linea) ? (
                 <DistribucionDespachoPartidas
                   proyectoId={proyectoId}
                   destinoId={linea.destinoId}
@@ -653,7 +649,7 @@ export default function DespachoInventarioClient() {
                   }
                   materialId={linea.material_id}
                   productoNombre={linea.nombre}
-                  cantidadLinea={linea.cantidad}
+                  cantidadLinea={linea.maxStock}
                   alertasConfig={alertasConfig}
                   onChange={(dist) => {
                     setLineas((prev) =>
@@ -663,12 +659,12 @@ export default function DespachoInventarioClient() {
                     );
                   }}
                 />
-              ) : linea.cantidad > 0 ? (
+              ) : (
                 <p className="text-xs text-amber-400/90">
-                  Elija el tipo de destino (partida Lulo, almacén en obra u otra entidad) para
-                  distribuir cantidades al presupuesto.
+                  Defina el destino del material o producto (partida Lulo, almacén en obra u otra
+                  entidad) e indique cuánto sale — puede ser menos que el stock almacenado.
                 </p>
-              ) : null}
+              )}
             </div>
           ))}
         </section>
