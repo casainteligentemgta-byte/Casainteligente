@@ -40,7 +40,12 @@ export async function getStockRealObra(
   }
   if (error) throw new Error(error.message);
 
-  return ((data ?? []) as RpcStockRow[]).map((row) => ({
+  const rows = (data ?? []) as RpcStockRow[];
+  if (!rows.length) {
+    return listarStockProyectoDesdeTablas(supabase, proyectoId, opts);
+  }
+
+  return rows.map((row) => ({
     material_id: String(row.material_id),
     ubicacion_id: String(row.ubicacion_id),
     ubicacion_nombre: String(row.ubicacion_nombre ?? 'Almacén'),

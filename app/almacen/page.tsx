@@ -448,8 +448,16 @@ export default function InventoryMasterPage() {
             setCargandoStockUbicacion(true);
             try {
                 const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
-                const nombreProyectoFiltro =
+                let nombreProyectoFiltro =
                     proyectos.find((p) => p.id === filterProyectoId)?.nombre ?? '';
+                if (filterProyectoId && !nombreProyectoFiltro.trim()) {
+                    const { data: prRow } = await supabase
+                        .from('ci_proyectos')
+                        .select('nombre')
+                        .eq('id', filterProyectoId)
+                        .maybeSingle();
+                    nombreProyectoFiltro = String(prRow?.nombre ?? '').trim();
+                }
                 const ids = resolverUbicacionIdsFiltro(ubicaciones, {
                     proyectoId: filterProyectoId || undefined,
                     proyectoNombre: nombreProyectoFiltro || undefined,
@@ -826,16 +834,44 @@ export default function InventoryMasterPage() {
 
     const valorPorAlmacen = useMemo(() => {
         const map = new Map<string, { name: string; value: number }>();
-        for (const item of baseItemsKpi) {
-            const qty = cantidadStockReal(item);
-            const val = qty * Number(item.average_weighted_cost);
-            const depId = item.deposit_id ?? '__sin__';
-            const dep = item.deposit_id ? depositsById.get(item.deposit_id) : null;
-            const name = dep
+
+        const depositLabel = (depId: string) => {
+            const dep = depositsById.get(depId);
+            return dep
                 ? dep.locality
                     ? `${dep.name} (${dep.locality})`
                     : dep.name
-                : 'Sin almacén asignado';
+                : 'Almacén';
+        };
+
+        for (const item of baseItemsKpi) {
+            const qty = cantidadStockReal(item);
+            const val = qty * Number(item.average_weighted_cost);
+            if (val <= 0) continue;
+
+            if (filtroPorUbicacionActivo) {
+                const stockUb = stockPorUbicacion.get(item.id);
+                let depId: string;
+                if (filterDepositId) {
+                    depId = filterDepositId;
+                } else if (stockUb?.deposit_ids?.length === 1) {
+                    depId = stockUb.deposit_ids[0]!;
+                } else if (stockUb?.deposit_ids?.length) {
+                    depId = stockUb.deposit_ids[0]!;
+                } else {
+                    depId = item.deposit_id ?? '__sin__';
+                }
+                const name = depId === '__sin__' ? 'Sin almacén asignado' : depositLabel(depId);
+                const prev = map.get(depId) ?? { name, value: 0 };
+                map.set(depId, { name: prev.name, value: prev.value + val });
+                continue;
+            }
+
+            const depId = item.deposit_id ?? '__sin__';
+            const name =
+                depId === '__sin__'
+                    ? 'Sin almacén asignado'
+                    : depositLabel(depId);
             const prev = map.get(depId) ?? { name, value: 0 };
             map.set(depId, { name: prev.name, value: prev.value + val });
         }
@@ -848,7 +884,15 @@ export default function InventoryMasterPage() {
             }
         }
         return Array.from(map.values()).sort((a, b) => b.value - a.value);
-    }, [baseItemsKpi, cantidadStockReal, depositsById, depositsLista]);
+    }, [
+        baseItemsKpi,
+        cantidadStockReal,
+        depositsById,
+        depositsLista,
+        filtroPorUbicacionActivo,
+        filterDepositId,
+        stockPorUbicacion,
+    ]);
 
     const itemsStockBajo = useMemo(
         () =>
