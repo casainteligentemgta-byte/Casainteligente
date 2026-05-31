@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Loader2, MapPin, Layers } from 'lucide-react';
+import { HardHat, Loader2, MapPin, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PartidaDespachoFila, UbicacionInventario } from '@/types/inventario-obra';
 import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
@@ -9,7 +9,8 @@ import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 const selectClass =
   'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50';
 
-export type ModoDestinoDespacho = 'partida_lulo' | 'otra_entidad' | 'obra_almacen';
+/** Destino del material en salida de almacén. */
+export type ModoDestinoDespacho = 'partida_lulo' | 'otro_almacen' | 'otra_obra';
 
 export type PartidaProyectoOption = {
   key: string;
@@ -19,21 +20,21 @@ export type PartidaProyectoOption = {
   fuente?: 'presupuesto' | 'cascada';
 };
 
-type EntidadRow = { id: string; nombre: string; rif: string | null };
+type ProyectoOption = { id: string; nombre: string };
 
 type Props = {
   proyectoId: string;
+  proyectos: ProyectoOption[];
   materialId?: string;
   materialNombre?: string;
   modo: ModoDestinoDespacho;
-  entidadId: string;
+  destinoProyectoId: string;
   ubicacionId: string;
   partidaKey: string;
   onModoChange: (modo: ModoDestinoDespacho) => void;
-  onEntidadChange: (entidadId: string) => void;
+  onDestinoProyectoChange: (proyectoId: string) => void;
   onUbicacionChange: (ubicacionId: string) => void;
   onPartidaChange: (partidaKey: string) => void;
-  /** Etiqueta legible del destino (partida, almacén u entidad). */
   onDestinoEtiquetaChange?: (etiqueta: string) => void;
   disabled?: boolean;
   className?: string;
@@ -70,33 +71,34 @@ const MODO_OPTS: Array<{ id: ModoDestinoDespacho; label: string; hint: string; i
   {
     id: 'partida_lulo',
     label: 'Partida Lulo',
-    hint: 'Imputa al presupuesto de la obra',
+    hint: 'Presupuesto de esta obra',
     icon: Layers,
   },
   {
-    id: 'obra_almacen',
-    label: 'Almacén en obra',
-    hint: 'Bodega o ubicación del proyecto',
+    id: 'otro_almacen',
+    label: 'Otro almacén',
+    hint: 'Depósito central o móvil',
     icon: MapPin,
   },
   {
-    id: 'otra_entidad',
-    label: 'Otra entidad',
-    hint: 'Almacén de otra empresa / filial',
-    icon: Building2,
+    id: 'otra_obra',
+    label: 'Otra obra',
+    hint: 'Bodega de otro proyecto',
+    icon: HardHat,
   },
 ];
 
 export default function DestinoObraDespachoSelect({
   proyectoId,
+  proyectos,
   materialId,
   materialNombre,
   modo,
-  entidadId,
+  destinoProyectoId,
   ubicacionId,
   partidaKey,
   onModoChange,
-  onEntidadChange,
+  onDestinoProyectoChange,
   onUbicacionChange,
   onPartidaChange,
   onDestinoEtiquetaChange,
@@ -105,35 +107,39 @@ export default function DestinoObraDespachoSelect({
 }: Props) {
   const [loadingUb, setLoadingUb] = useState(false);
   const [loadingPar, setLoadingPar] = useState(false);
-  const [loadingEnt, setLoadingEnt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ubicaciones, setUbicaciones] = useState<UbicacionInventario[]>([]);
+  const [ubicacionesObra, setUbicacionesObra] = useState<UbicacionInventario[]>([]);
   const [partidas, setPartidas] = useState<PartidaProyectoOption[]>([]);
-  const [entidades, setEntidades] = useState<EntidadRow[]>([]);
   const [scope, setScope] = useState<'related' | 'all'>('related');
   const [scopeForzado, setScopeForzado] = useState(false);
 
-  const cargarEntidades = useCallback(async () => {
-    setLoadingEnt(true);
-    try {
-      const res = await fetch('/api/almacen/entidades', { cache: 'no-store' });
-      const data = (await res.json()) as { entidades?: EntidadRow[]; error?: string };
-      if (!res.ok) throw new Error(data.error || 'No se pudieron cargar entidades');
-      setEntidades(data.entidades ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al cargar entidades');
-      setEntidades([]);
-    } finally {
-      setLoadingEnt(false);
+  const otrosProyectos = useMemo(
+    () => proyectos.filter((p) => p.id !== proyectoId),
+    [proyectos, proyectoId],
+  );
+
+  const cargarUbicacionesObra = useCallback(async () => {
+    if (!proyectoId.trim()) {
+      setUbicacionesObra([]);
+      return;
     }
-  }, []);
+    try {
+      const qUb = new URLSearchParams({ flat: '1', proyecto_id: proyectoId });
+      const resUb = await fetch(`/api/almacen/ubicaciones?${qUb}`, { cache: 'no-store' });
+      const dataUb = (await resUb.json()) as { ubicaciones?: UbicacionInventario[] };
+      setUbicacionesObra(dataUb.ubicaciones ?? []);
+    } catch {
+      setUbicacionesObra([]);
+    }
+  }, [proyectoId]);
 
   const cargarUbicaciones = useCallback(async () => {
-    if (!proyectoId.trim()) {
+    if (modo === 'partida_lulo') {
       setUbicaciones([]);
       return;
     }
-    if (modo === 'otra_entidad' && !entidadId.trim()) {
+    if (modo === 'otra_obra' && !destinoProyectoId.trim()) {
       setUbicaciones([]);
       return;
     }
@@ -141,11 +147,10 @@ export default function DestinoObraDespachoSelect({
     setError(null);
     try {
       const qUb = new URLSearchParams({ flat: '1' });
-      if (modo === 'otra_entidad') {
-        qUb.set('entidad_id', entidadId);
-        qUb.set('excluir_proyecto_id', proyectoId);
-      } else {
-        qUb.set('proyecto_id', proyectoId);
+      if (modo === 'otro_almacen') {
+        qUb.set('solo_almacenes', '1');
+      } else if (modo === 'otra_obra') {
+        qUb.set('proyecto_id', destinoProyectoId);
       }
       const resUb = await fetch(`/api/almacen/ubicaciones?${qUb}`, { cache: 'no-store' });
       const dataUb = (await resUb.json()) as {
@@ -160,7 +165,7 @@ export default function DestinoObraDespachoSelect({
     } finally {
       setLoadingUb(false);
     }
-  }, [proyectoId, modo, entidadId]);
+  }, [modo, destinoProyectoId]);
 
   const cargarPartidas = useCallback(async () => {
     if (!proyectoId.trim() || !materialId?.trim() || modo !== 'partida_lulo') {
@@ -212,8 +217,8 @@ export default function DestinoObraDespachoSelect({
   }, [proyectoId, materialId, modo, scope, scopeForzado]);
 
   useEffect(() => {
-    if (modo === 'otra_entidad') void cargarEntidades();
-  }, [modo, cargarEntidades]);
+    void cargarUbicacionesObra();
+  }, [cargarUbicacionesObra]);
 
   useEffect(() => {
     void cargarUbicaciones();
@@ -230,36 +235,36 @@ export default function DestinoObraDespachoSelect({
   }, [cargarPartidas]);
 
   const obraUbicacionId = useMemo(() => {
-    const deObra = ubicaciones.find((u) => u.tipo === 'obra' && u.obra_id === proyectoId);
-    return deObra?.id ?? ubicaciones.find((u) => u.tipo === 'obra')?.id ?? '';
-  }, [ubicaciones, proyectoId]);
+    const deObra = ubicacionesObra.find((u) => u.tipo === 'obra' && u.obra_id === proyectoId);
+    return deObra?.id ?? ubicacionesObra.find((u) => u.tipo === 'obra')?.id ?? '';
+  }, [ubicacionesObra, proyectoId]);
 
   useEffect(() => {
     if (modo !== 'partida_lulo' || !partidaKey || !obraUbicacionId) return;
     if (ubicacionId !== obraUbicacionId) onUbicacionChange(obraUbicacionId);
   }, [modo, partidaKey, obraUbicacionId, ubicacionId, onUbicacionChange]);
 
-  const loading = loadingUb || loadingPar || loadingEnt;
+  const loading = loadingUb || loadingPar;
 
   const resumenDestino = useMemo(() => {
     if (modo === 'partida_lulo') {
       const partida = partidas.find((p) => (p.key ?? `pp:${p.id}`) === partidaKey);
-      const ub = ubicaciones.find((u) => u.id === ubicacionId);
+      const ub = ubicacionesObra.find((u) => u.id === ubicacionId);
       if (partida && ub) {
-        return `${partida.nombre} → ${labelUbicacionOpcion(ub)}`;
+        return `Partida: ${partida.nombre} → ${labelUbicacionOpcion(ub)}`;
       }
-      if (partida) return partida.nombre;
+      if (partida) return `Partida: ${partida.nombre}`;
       return '';
     }
-    if (modo === 'obra_almacen') {
+    if (modo === 'otro_almacen') {
       const ub = ubicaciones.find((u) => u.id === ubicacionId);
-      return ub ? labelUbicacionOpcion(ub) : '';
+      return ub ? `Almacén: ${labelUbicacionOpcion(ub)}` : '';
     }
-    if (modo === 'otra_entidad') {
-      const ent = entidades.find((e) => e.id === entidadId);
+    if (modo === 'otra_obra') {
+      const pr = proyectos.find((p) => p.id === destinoProyectoId);
       const ub = ubicaciones.find((u) => u.id === ubicacionId);
-      if (ent && ub) return `${ent.nombre} · ${labelUbicacionOpcion(ub)}`;
-      if (ent) return ent.nombre;
+      if (pr && ub) return `Obra: ${pr.nombre} · ${labelUbicacionOpcion(ub)}`;
+      if (pr) return `Obra: ${pr.nombre}`;
       return '';
     }
     return '';
@@ -267,10 +272,11 @@ export default function DestinoObraDespachoSelect({
     modo,
     partidaKey,
     ubicacionId,
-    entidadId,
+    destinoProyectoId,
     partidas,
     ubicaciones,
-    entidades,
+    ubicacionesObra,
+    proyectos,
   ]);
 
   useEffect(() => {
@@ -299,6 +305,9 @@ export default function DestinoObraDespachoSelect({
 
   return (
     <div className="space-y-3">
+      <p className="text-[10px] text-zinc-500">
+        Elija si el material va a una partida Lulo de esta obra, a otro almacén o a otra obra.
+      </p>
       <div className="grid gap-2 sm:grid-cols-3">
         {MODO_OPTS.map(({ id, label, hint, icon: Icon }) => (
           <button
@@ -307,7 +316,7 @@ export default function DestinoObraDespachoSelect({
             disabled={disabled || loading}
             onClick={() => {
               onModoChange(id);
-              onEntidadChange('');
+              onDestinoProyectoChange('');
               onUbicacionChange('');
               onPartidaChange('');
             }}
@@ -329,7 +338,7 @@ export default function DestinoObraDespachoSelect({
       {modo === 'partida_lulo' ? (
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-zinc-500">
-            Partida del presupuesto Lulo
+            Partida del presupuesto Lulo (obra actual)
           </label>
           <select
             value={partidaKey}
@@ -393,16 +402,16 @@ export default function DestinoObraDespachoSelect({
           </div>
           {partidaKey && obraUbicacionId ? (
             <p className="text-[10px] text-sky-400/90">
-              El material se moverá a la ubicación de obra y se cargará a la partida seleccionada.
+              El material ingresa a la bodega de esta obra y se carga a la partida seleccionada.
             </p>
           ) : null}
         </div>
       ) : null}
 
-      {modo === 'obra_almacen' ? (
+      {modo === 'otro_almacen' ? (
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-zinc-500">
-            Ubicación en la obra
+            Almacén destino
           </label>
           <select
             value={ubicacionId}
@@ -411,7 +420,7 @@ export default function DestinoObraDespachoSelect({
             className={className}
           >
             <option value="" className="bg-[#0A0A0F] text-zinc-100">
-              {loadingUb ? 'Cargando…' : 'Almacén central, móvil o bodega en obra…'}
+              {loadingUb ? 'Cargando almacenes…' : 'Seleccione depósito central o móvil…'}
             </option>
             {ubicaciones.map((u) => (
               <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
@@ -419,37 +428,41 @@ export default function DestinoObraDespachoSelect({
               </option>
             ))}
           </select>
+          <p className="text-[10px] text-zinc-500">
+            Transferencia a otro depósito físico (puede ser de la misma u otra entidad).
+          </p>
         </div>
       ) : null}
 
-      {modo === 'otra_entidad' ? (
+      {modo === 'otra_obra' ? (
         <div className="space-y-3">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-zinc-500">Entidad destino</label>
+            <label className="text-[10px] font-bold uppercase text-zinc-500">Obra destino</label>
             <select
-              value={entidadId}
-              disabled={disabled || loadingEnt}
+              value={destinoProyectoId}
+              disabled={disabled || otrosProyectos.length === 0}
               onChange={(e) => {
-                onEntidadChange(e.target.value);
+                onDestinoProyectoChange(e.target.value);
                 onUbicacionChange('');
               }}
               className={className}
             >
               <option value="" className="bg-[#0A0A0F] text-zinc-100">
-                {loadingEnt ? 'Cargando entidades…' : 'Seleccione entidad…'}
+                {otrosProyectos.length === 0
+                  ? 'No hay otras obras registradas'
+                  : 'Seleccione proyecto / obra…'}
               </option>
-              {entidades.map((en) => (
-                <option key={en.id} value={en.id} className="bg-[#0A0A0F] text-zinc-100">
-                  {en.nombre}
-                  {en.rif ? ` · ${en.rif}` : ''}
+              {otrosProyectos.map((p) => (
+                <option key={p.id} value={p.id} className="bg-[#0A0A0F] text-zinc-100">
+                  {p.nombre}
                 </option>
               ))}
             </select>
           </div>
-          {entidadId ? (
+          {destinoProyectoId ? (
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase text-zinc-500">
-                Almacén de la entidad
+                Ubicación en la obra
               </label>
               <select
                 value={ubicacionId}
@@ -458,11 +471,11 @@ export default function DestinoObraDespachoSelect({
                 className={className}
               >
                 <option value="" className="bg-[#0A0A0F] text-zinc-100">
-                  {loadingUb ? 'Cargando almacenes…' : 'Almacén central, móvil u obra de la entidad…'}
+                  {loadingUb ? 'Cargando…' : 'Almacén o bodega de la obra…'}
                 </option>
                 {ubicaciones.filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
                   .length > 0 ? (
-                  <optgroup label="Almacenes centrales / móviles" className="bg-[#0A0A0F] text-zinc-100">
+                  <optgroup label="Almacenes" className="bg-[#0A0A0F] text-zinc-100">
                     {ubicaciones
                       .filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
                       .map((u) => (
@@ -473,7 +486,7 @@ export default function DestinoObraDespachoSelect({
                   </optgroup>
                 ) : null}
                 {ubicaciones.filter((u) => u.tipo === 'obra').length > 0 ? (
-                  <optgroup label="Obras de la entidad" className="bg-[#0A0A0F] text-zinc-100">
+                  <optgroup label="Bodega en obra" className="bg-[#0A0A0F] text-zinc-100">
                     {ubicaciones
                       .filter((u) => u.tipo === 'obra')
                       .map((u) => (
@@ -484,9 +497,6 @@ export default function DestinoObraDespachoSelect({
                   </optgroup>
                 ) : null}
               </select>
-              <p className="text-[10px] text-zinc-500">
-                Incluye almacenes corporativos y bodegas de obras vinculadas a la entidad.
-              </p>
             </div>
           ) : null}
         </div>
@@ -508,4 +518,3 @@ export default function DestinoObraDespachoSelect({
     </div>
   );
 }
-

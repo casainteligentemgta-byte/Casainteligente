@@ -48,7 +48,7 @@ type LineaDespacho = {
   maxStock: number;
   destinoId: string;
   destinoModo: ModoDestinoDespacho;
-  destinoEntidadId: string;
+  destinoProyectoId: string;
   destinoPartidaKey: string;
   destinoEtiqueta: string;
   distribucion: DistribucionDespachoState;
@@ -230,7 +230,7 @@ export default function DespachoInventarioClient() {
         maxStock: hit.cantidad_disponible,
         destinoId: '',
         destinoModo: 'partida_lulo',
-        destinoEntidadId: '',
+        destinoProyectoId: '',
         destinoPartidaKey: '',
         destinoEtiqueta: '',
         distribucion: emptyDistribucion(),
@@ -247,8 +247,8 @@ export default function DespachoInventarioClient() {
     if (l.destinoModo === 'partida_lulo') {
       return Boolean(l.destinoPartidaKey && l.destinoId);
     }
-    if (l.destinoModo === 'otra_entidad') {
-      return Boolean(l.destinoEntidadId && l.destinoId);
+    if (l.destinoModo === 'otra_obra') {
+      return Boolean(l.destinoProyectoId && l.destinoId);
     }
     return Boolean(l.destinoId);
   };
@@ -293,7 +293,7 @@ export default function DespachoInventarioClient() {
         for (const [, grupo] of Array.from(porRuta.entries())) {
           const origenUbicacionId = grupo[0]!.origen_ubicacion_id;
           const destinoUbicacionId = grupo[0]!.destinoId;
-          const esSalidaObra = grupo.every((l) => l.destinoModo !== 'otra_entidad');
+          const esSalidaObra = grupo.every((l) => l.destinoModo === 'partida_lulo');
           const res = await fetch('/api/almacen/transferencias', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -350,8 +350,8 @@ export default function DespachoInventarioClient() {
           <div>
             <h1 className="text-lg font-bold">Salida de almacén</h1>
             <p className="text-xs text-zinc-500">
-              Indique el destino de cada material o producto (partida Lulo, almacén en obra u otra
-              entidad) y distribuya cantidades por partida presupuestaria.
+              Por cada material elija destino: partida Lulo de la obra, otro almacén u otra obra.
+              La cantidad a salir se define abajo (puede ser menor al stock almacenado).
             </p>
           </div>
         </div>
@@ -563,10 +563,11 @@ export default function DespachoInventarioClient() {
                 </label>
                 <DestinoObraDespachoSelect
                   proyectoId={proyectoId}
+                  proyectos={proyectos}
                   materialId={linea.material_id}
                   materialNombre={linea.nombre}
                   modo={linea.destinoModo}
-                  entidadId={linea.destinoEntidadId}
+                  destinoProyectoId={linea.destinoProyectoId}
                   ubicacionId={linea.destinoId}
                   partidaKey={linea.destinoPartidaKey}
                   onModoChange={(modo) => {
@@ -576,7 +577,7 @@ export default function DespachoInventarioClient() {
                           ? {
                               ...l,
                               destinoModo: modo,
-                              destinoEntidadId: '',
+                              destinoProyectoId: '',
                               destinoId: '',
                               destinoPartidaKey: '',
                               destinoEtiqueta: '',
@@ -586,13 +587,13 @@ export default function DespachoInventarioClient() {
                       ),
                     );
                   }}
-                  onEntidadChange={(id) => {
+                  onDestinoProyectoChange={(id) => {
                     setLineas((prev) =>
                       prev.map((l) =>
                         l.lineId === linea.lineId
                           ? {
                               ...l,
-                              destinoEntidadId: id,
+                              destinoProyectoId: id,
                               destinoId: '',
                               destinoEtiqueta: '',
                               distribucion: emptyDistribucion(),
@@ -661,8 +662,8 @@ export default function DespachoInventarioClient() {
                 />
               ) : (
                 <p className="text-xs text-amber-400/90">
-                  Defina el destino del material o producto (partida Lulo, almacén en obra u otra
-                  entidad) e indique cuánto sale — puede ser menos que el stock almacenado.
+                  Elija destino: partida Lulo, otro almacén u otra obra. Luego indique cuánto sale
+                  por partida presupuestaria.
                 </p>
               )}
             </div>
