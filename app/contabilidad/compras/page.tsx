@@ -112,6 +112,8 @@ import {
     monedaOriginalCompra,
     montosBimonetariosLista,
     montoNominalMonedaOriginal,
+    subtotalBsLineaCompra,
+    subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
@@ -769,14 +771,35 @@ export default function ComprasPage() {
                         total_amount: montoNominalMonedaOriginal(c),
                     },
                 });
+                setCompras((prev) =>
+                    prev.map((row) =>
+                        row.id === c.id
+                            ? {
+                                  ...row,
+                                  moneda,
+                                  moneda_original: moneda,
+                              }
+                            : row,
+                    ),
+                );
             } else {
                 const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(c.id)}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ moneda }),
                 });
-                const data = (await res.json()) as { error?: string };
+                const data = (await res.json()) as {
+                    error?: string;
+                    compra?: Partial<CompraRow>;
+                };
                 if (!res.ok) throw new Error(data.error || 'No se pudo cambiar la moneda');
+                if (data.compra) {
+                    setCompras((prev) =>
+                        prev.map((row) =>
+                            row.id === c.id ? { ...row, ...data.compra } : row,
+                        ),
+                    );
+                }
 
                 if (canalId) {
                     try {
@@ -1014,16 +1037,17 @@ export default function ComprasPage() {
         let comprasSinTasaEnFactura = 0;
 
         for (const c of compras) {
-            const bs = montoVesCompra(c);
-            totalBs += bs;
             const tasaFactura = tasaParaCompra(c);
-            if (tasaFactura) {
+            const { bs, usd } = montosBimonetariosLista(c, tasaFactura);
+            totalBs += bs;
+            if (usd != null) totalUsd += usd;
+            if (tasaBcvCompra(c)) {
+                tasas.add(tasaBcvCompra(c)!);
+            } else if (tasaFactura) {
                 tasas.add(tasaFactura);
             } else {
                 comprasSinTasaEnFactura += 1;
             }
-            const usd = vesAUsdConTasa(bs, tasaFactura) ?? montoUsdCompra(c);
-            totalUsd += usd;
 
             const f = String(c.fecha ?? '').slice(0, 10);
             if (f) fechas.add(f);
@@ -1080,6 +1104,10 @@ export default function ComprasPage() {
             total_amount: c.total_amount,
             total_amount_usd: c.total_amount_usd,
             tasa_bcv_ves_por_usd: tasaParaCompra(c),
+            moneda: c.moneda,
+            moneda_original: c.moneda_original,
+            monto_ves: c.monto_ves,
+            monto_usd: c.monto_usd,
             origen: c.origen,
             estado: c.estado,
             entidadNombre: c.entidad_nombre ?? undefined,
@@ -1130,10 +1158,7 @@ export default function ComprasPage() {
 
     const totalLineasBs = useMemo(
         () =>
-            lineasOrdenadas.reduce((acc, row) => {
-                const bs = row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
-                return acc + bs;
-            }, 0),
+            lineasOrdenadas.reduce((acc, row) => acc + subtotalBsLineaCompra(row), 0),
         [lineasOrdenadas],
     );
 
@@ -1141,13 +1166,8 @@ export default function ComprasPage() {
         () =>
             Math.round(
                 lineasOrdenadas.reduce((acc, row) => {
-                    const bs = row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
-                    const usd = vesAUsdConTasa(bs, row.tasaBcv) ?? row.montoUsd;
-                    if (usd != null) return acc + usd;
-                    if (row.montoUsd != null && row.montoBs > 0) {
-                        return acc + (bs / row.montoBs) * row.montoUsd;
-                    }
-                    return acc;
+                    const usd = subtotalUsdLineaCompra(row);
+                    return usd != null ? acc + usd : acc;
                 }, 0) * 100,
             ) / 100,
         [lineasOrdenadas],

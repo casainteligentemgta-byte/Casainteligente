@@ -3,8 +3,8 @@ import {
   formatearBs,
   formatearTasaBcv,
   formatearUsd,
-  vesAUsdConTasa,
 } from '@/lib/contabilidad/comprasMontos';
+import { subtotalBsLineaCompra, subtotalUsdLineaCompra } from '@/lib/contabilidad/monedaCompra';
 import { etiquetaColumnaOrden, type ColumnaOrdenCompras, type DireccionOrden } from '@/lib/contabilidad/ordenarLineasCompras';
 
 function escapeHtml(s: string): string {
@@ -16,16 +16,12 @@ function escapeHtml(s: string): string {
 }
 
 function subtotalBs(row: FilaFacturaCanal): number {
-  return row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
+  return subtotalBsLineaCompra(row);
 }
 
 function usdRow(row: FilaFacturaCanal, bs: number): number | null {
-  const directo = vesAUsdConTasa(bs, row.tasaBcv);
-  if (directo != null) return directo;
-  if (row.montoUsd != null && row.montoBs > 0) {
-    return Math.round(((bs / row.montoBs) * row.montoUsd) * 100) / 100;
-  }
-  return row.esLinea ? null : row.montoUsd;
+  void bs;
+  return subtotalUsdLineaCompra(row);
 }
 
 export type ComprasCuadroPrintInput = {

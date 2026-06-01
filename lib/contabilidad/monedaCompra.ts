@@ -3,7 +3,7 @@ import {
   type MonedaOrigen,
 } from '@/lib/finanzas/currency-converter';
 import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
-import { montoUsdCompra, montoVesCompra } from '@/lib/contabilidad/comprasMontos';
+import { montoUsdCompra, montoVesCompra, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 
 export type FilaMonedaCompra = {
   total_amount: number;
@@ -13,6 +13,16 @@ export type FilaMonedaCompra = {
   moneda_original?: string | null;
   monto_ves?: number | null;
   monto_usd?: number | null;
+};
+
+export type FilaMontoLineaCompra = {
+  esLinea: boolean;
+  cantidad: number;
+  precioUnitario: number;
+  montoBs: number;
+  montoUsd?: number | null;
+  monedaOriginal?: MonedaOrigen | string | null;
+  tasaBcv?: number | null;
 };
 
 export function monedaOriginalCompra(row: FilaMonedaCompra): MonedaOrigen {
@@ -50,4 +60,40 @@ export function montosBimonetariosLista(
   const bs = montoVesCompra(row);
   const usd = montoUsdCompra(row);
   return { bs, usd: Number.isFinite(usd) && usd > 0 ? usd : null, moneda };
+}
+
+/** Subtotal nominal de una fila (línea o cabecera) en la moneda original de la factura. */
+export function subtotalNominalLineaCompra(row: FilaMontoLineaCompra): number {
+  return row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
+}
+
+/** Convierte subtotal de línea/cabecera a bolívares según moneda original. */
+export function subtotalBsLineaCompra(row: FilaMontoLineaCompra): number {
+  const nominal = subtotalNominalLineaCompra(row);
+  const moneda = normalizarMonedaExtracted(row.monedaOriginal);
+  if (moneda === 'USD') {
+    const t = Number(row.tasaBcv);
+    if (Number.isFinite(t) && t > 0) {
+      return Math.round(nominal * t * 100) / 100;
+    }
+  }
+  return nominal;
+}
+
+/** Equivalente USD de una fila de línea/cabecera. */
+export function subtotalUsdLineaCompra(row: FilaMontoLineaCompra): number | null {
+  const nominal = subtotalNominalLineaCompra(row);
+  const moneda = normalizarMonedaExtracted(row.monedaOriginal);
+  const bs = subtotalBsLineaCompra(row);
+
+  if (moneda === 'USD') {
+    return Math.round(nominal * 100) / 100;
+  }
+
+  const directo = vesAUsdConTasa(bs, row.tasaBcv);
+  if (directo != null) return directo;
+  if (row.montoUsd != null && row.montoBs > 0) {
+    return Math.round(((bs / row.montoBs) * row.montoUsd) * 100) / 100;
+  }
+  return row.esLinea ? null : row.montoUsd ?? null;
 }

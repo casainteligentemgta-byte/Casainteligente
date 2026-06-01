@@ -1,5 +1,12 @@
 import { parseMontoFiltro } from '@/lib/contabilidad/comprasQueryFiltros';
 import { montoUsdCompra, tasaBcvCompra, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
+import {
+  monedaOriginalCompra,
+  montosBimonetariosLista,
+  subtotalBsLineaCompra,
+  subtotalUsdLineaCompra,
+} from '@/lib/contabilidad/monedaCompra';
+import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
 export type ExtractedInvoiceItem = {
   description?: string;
@@ -33,6 +40,8 @@ export type FilaFacturaCanal = {
   montoUsd: number | null;
   /** Tasa BCV de la factura (bolívares por 1 USD). */
   tasaBcv: number | null;
+  /** Moneda original de la factura (precios de línea en esta moneda). */
+  monedaOriginal?: MonedaOrigen;
   articulo: string;
   codigo: string;
   cantidad: number;
@@ -151,15 +160,9 @@ export function filtrarFilasFacturaCanal(
     if (row.esLinea && (minCant !== null || maxCant !== null)) {
       if (!enRango(row.cantidad, minCant, maxCant)) return false;
     }
-    const montoLineaBs = row.esLinea
-      ? row.cantidad * row.precioUnitario
-      : row.montoBs;
+    const montoLineaBs = subtotalBsLineaCompra(row);
     if (!enRango(montoLineaBs, minBs, maxBs)) return false;
-    const usdLinea =
-      vesAUsdConTasa(montoLineaBs, row.tasaBcv) ??
-      (row.montoUsd != null && row.montoBs > 0
-        ? (montoLineaBs / row.montoBs) * row.montoUsd
-        : row.montoUsd);
+    const usdLinea = subtotalUsdLineaCompra(row);
     if (minUsd !== null || maxUsd !== null) {
       if (usdLinea == null || !enRango(usdLinea, minUsd, maxUsd)) return false;
     }
@@ -180,6 +183,10 @@ export type CompraConfirmadaParaLineas = {
   total_amount: number;
   total_amount_usd?: number | null;
   tasa_bcv_ves_por_usd?: number | null;
+  moneda?: string | null;
+  moneda_original?: string | null;
+  monto_ves?: number | null;
+  monto_usd?: number | null;
   origen: string;
   estado: string;
   proyectoNombre?: string;
@@ -199,7 +206,9 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
   const filas: FilaFacturaCanal[] = [];
 
   for (const c of compras) {
-    const montoUsd = montoUsdCompra(c);
+    const tasa = c.tasa_bcv_ves_por_usd ?? tasaBcvCompra(c);
+    const montos = montosBimonetariosLista(c, tasa);
+    const moneda = monedaOriginalCompra(c);
     const base = {
       pendienteId: c.id,
       canal: c.origen || 'compra',
@@ -212,9 +221,10 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       entidad: c.entidadNombre?.trim() || '',
       proyecto: c.proyectoNombre?.trim() || '',
       almacen: c.almacenNombre?.trim() || '',
-      montoBs: Number(c.total_amount) || 0,
-      montoUsd,
-      tasaBcv: tasaBcvCompra(c),
+      montoBs: montos.bs,
+      montoUsd: montos.usd,
+      tasaBcv: tasa ?? tasaBcvCompra(c),
+      monedaOriginal: moneda,
     };
 
     if (!c.lineas.length) {

@@ -9,8 +9,8 @@ import {
   formatearBs,
   formatearTasaBcv,
   formatearUsd,
-  vesAUsdConTasa,
 } from '@/lib/contabilidad/comprasMontos';
+import { subtotalBsLineaCompra, subtotalUsdLineaCompra } from '@/lib/contabilidad/monedaCompra';
 
 export type AccionesCompraLinea = {
   puedeModificar: boolean;
@@ -35,15 +35,6 @@ type Props = {
   todasSeleccionadas?: boolean;
   selectAllIndeterminate?: boolean;
 };
-
-function subtotalUsdFila(row: FilaFacturaCanal, subtotalBs: number): number | null {
-  const directo = vesAUsdConTasa(subtotalBs, row.tasaBcv);
-  if (directo != null) return directo;
-  if (row.montoUsd != null && row.montoBs > 0) {
-    return Math.round(((subtotalBs / row.montoBs) * row.montoUsd) * 100) / 100;
-  }
-  return row.esLinea ? null : row.montoUsd;
-}
 
 function esFilaAcciones(filas: FilaFacturaCanal[], row: FilaFacturaCanal, index: number): boolean {
   if (!row.esLinea) return true;
@@ -188,10 +179,8 @@ export default function ComprasLineasTable({
         </thead>
         <tbody>
           {filas.map((row, i) => {
-            const subtotalBs = row.esLinea
-              ? row.cantidad * row.precioUnitario
-              : row.montoBs;
-            const usd = subtotalUsdFila(row, subtotalBs);
+            const subtotalBs = subtotalBsLineaCompra(row);
+            const usd = subtotalUsdLineaCompra(row);
             const mostrarAcciones = muestraAcciones && esFilaAcciones(filas, row, i);
             const acc =
               mostrarAcciones && accionesPorCompra

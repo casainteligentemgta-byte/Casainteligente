@@ -1,5 +1,5 @@
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
-import { vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
+import { subtotalBsLineaCompra, subtotalUsdLineaCompra } from '@/lib/contabilidad/monedaCompra';
 
 export type ColumnaOrdenCompras =
   | 'fecha'
@@ -42,17 +42,11 @@ export function parseDireccionOrden(v: string | null | undefined): DireccionOrde
 }
 
 function subtotalBsFila(row: FilaFacturaCanal): number {
-  return row.esLinea ? row.cantidad * row.precioUnitario : row.montoBs;
+  return subtotalBsLineaCompra(row);
 }
 
 function usdFila(row: FilaFacturaCanal): number | null {
-  const bs = subtotalBsFila(row);
-  const directo = vesAUsdConTasa(bs, row.tasaBcv);
-  if (directo != null) return directo;
-  if (row.montoUsd != null && row.montoBs > 0) {
-    return Math.round(((bs / row.montoBs) * row.montoUsd) * 100) / 100;
-  }
-  return row.esLinea ? null : row.montoUsd;
+  return subtotalUsdLineaCompra(row);
 }
 
 function valorOrden(row: FilaFacturaCanal, col: ColumnaOrdenCompras): string | number | null {
