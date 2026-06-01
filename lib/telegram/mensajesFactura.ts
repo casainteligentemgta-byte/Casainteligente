@@ -12,7 +12,7 @@ export function baseUrlAppTelegram(): string {
 /** Mensaje al activar modo recepción de facturas por Telegram (/facturas). */
 export function mensajeModoFacturasActivado(): string {
   return (
-    'Listo oara recibir factura.\n' +
-    'Envia ahora una foto o Pdf de la factura de compra.'
+    '✅ <b>Listo para recibir factura.</b>\n\n' +
+    'Envía ahora una <b>foto</b> o <b>PDF</b> de la factura de compra.'
   );
 }

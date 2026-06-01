@@ -233,13 +233,7 @@ async function aplicarComando(
   }
 
   if (cmd.mensaje) {
-    const esFacturas =
-      cmd.contexto === 'factura' && cmd.mensaje === mensajeModoFacturasActivado();
-    await sendTelegramMessage(
-      chatId,
-      cmd.mensaje,
-      esFacturas ? { plain: true } : { parse_mode: 'HTML' },
-    );
+    await sendTelegramMessage(chatId, cmd.mensaje, { parse_mode: 'HTML' });
   }
 
   if (cmd.mostrarPickerProyecto) {
@@ -282,7 +276,7 @@ async function manejarComandoFacturasDirecto(chatId: string): Promise<{
   ok: boolean;
   warn?: string;
 }> {
-  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), { plain: true });
+  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), { parse_mode: 'HTML' });
 
   const admin = telegramSupabaseAdmin();
   if (!admin.ok) {
