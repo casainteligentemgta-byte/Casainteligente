@@ -9,15 +9,10 @@ export function baseUrlAppTelegram(): string {
     .replace(/\/$/, '');
 }
 
-/** Mensaje al activar modo recepción de facturas por Telegram. */
+/** Mensaje al activar modo recepción de facturas por Telegram (/facturas). */
 export function mensajeModoFacturasActivado(): string {
-  const link = `${baseUrlAppTelegram()}/contabilidad/compras/canal`;
   return (
-    '✅ <b>Listo para recibir factura.</b>\n\n' +
-    'Leí tu comando: modo <b>facturas</b> activo.\n' +
-    'Envía ahora una <b>foto</b> o <b>PDF</b> de la factura de compra.\n\n' +
-    '• La analizaré con IA (Gemini)\n' +
-    '• Quedará pendiente para registrar la compra en contabilidad\n\n' +
-    `📲 <a href="${link}">Abrir cargas Telegram en Casa Inteligente</a>`
+    'Listo oara recibir factura.\n' +
+    'Envia ahora una foto o Pdf de la factura de compra.'
   );
 }

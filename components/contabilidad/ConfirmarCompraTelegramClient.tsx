@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
+import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
+import type { UbicacionInventario } from '@/types/inventario-obra';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import { TarjetaSugerenciaConciliacionField } from '@/components/contabilidad/TarjetaSugerenciaConciliacionField';
@@ -50,6 +52,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [proyectos, setProyectos] = useState<{ id: string; nombre: string }[]>([]);
   const [proyectoId, setProyectoId] = useState('');
   const [ubicacionId, setUbicacionId] = useState('');
+  const [editandoUbicacion, setEditandoUbicacion] = useState(false);
+  const [ubicacionesDisponibles, setUbicacionesDisponibles] = useState<UbicacionInventario[]>([]);
   const [editando, setEditando] = useState(false);
   const { isSubmitting: registrando, runLocked: runRegistro } = useSyncSubmitLock();
   const { isSubmitting: guardandoUbicacion, runLocked: runUbicacion } = useSyncSubmitLock();
@@ -109,7 +113,40 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     pendienteSyncIdRef.current = pendiente.id;
     setProyectoId(pendiente.proyecto_id ?? '');
     setUbicacionId(pendiente.ubicacion_destino_id ?? '');
+    setEditandoUbicacion(false);
   }, [pendiente]);
+
+  useEffect(() => {
+    if (!montado || !proyectoId.trim()) {
+      setUbicacionesDisponibles([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const q = new URLSearchParams({ flat: '1', proyecto_id: proyectoId, solo_almacenes: '1' });
+        const res = await fetch(`/api/almacen/ubicaciones?${q}`, { cache: 'no-store' });
+        const data = (await res.json()) as { ubicaciones?: UbicacionInventario[]; error?: string };
+        if (!res.ok) throw new Error(data.error || 'No se pudieron cargar almacenes');
+        setUbicacionesDisponibles(data.ubicaciones ?? []);
+      } catch {
+        setUbicacionesDisponibles([]);
+      }
+    })();
+  }, [montado, proyectoId]);
+
+  const factura = pendiente;
+  const almacenPrecargado = useMemo(
+    () => ubicacionesDisponibles.find((u) => u.id === factura?.ubicacion_destino_id),
+    [ubicacionesDisponibles, factura?.ubicacion_destino_id],
+  );
+  const mostrarPanelPrecargado = Boolean(almacenPrecargado) && !editandoUbicacion;
+  const mostrarSelectorUbicacion =
+    editandoUbicacion || !factura?.ubicacion_destino_id || !almacenPrecargado;
+
+  const revertirUbicacionTelegram = useCallback(() => {
+    setUbicacionId(factura?.ubicacion_destino_id ?? '');
+    setEditandoUbicacion(false);
+  }, [factura?.ubicacion_destino_id]);
 
   const extracted = pendiente?.extracted ?? null;
   const monedaFactura = normalizarMonedaExtracted(extracted?.moneda);
@@ -454,13 +491,51 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               <label htmlFor="ubicacion-telegram" className="text-xs font-bold text-zinc-500">
                 ALMACÉN DE INGRESO
               </label>
-              <UbicacionInventarioSelect
-                id="ubicacion-telegram"
-                proyectoId={proyectoId}
-                value={ubicacionId}
-                onChange={setUbicacionId}
-                disabled={!proyectoId.trim()}
-              />
+
+              {mostrarPanelPrecargado && almacenPrecargado ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <span className="font-mono text-sm text-zinc-100 truncate">
+                      {labelUbicacionOpcion(almacenPrecargado)}
+                    </span>
+                    <span
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: '#FFD60A', border: '1px solid rgba(255, 214, 10, 0.35)' }}
+                    >
+                      PRECARGADO
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditandoUbicacion(true)}
+                    className="shrink-0 text-sm font-semibold underline-offset-2 hover:underline"
+                    style={{ color: '#FF9500' }}
+                  >
+                    Modificar Ubicación
+                  </button>
+                </div>
+              ) : null}
+
+              {montado && mostrarSelectorUbicacion ? (
+                <div className="space-y-1.5">
+                  <UbicacionInventarioSelect
+                    id="ubicacion-telegram"
+                    proyectoId={proyectoId}
+                    value={ubicacionId}
+                    onChange={setUbicacionId}
+                    disabled={!proyectoId.trim()}
+                  />
+                  {factura?.ubicacion_destino_id ? (
+                    <button
+                      type="button"
+                      onClick={revertirUbicacionTelegram}
+                      className="text-xs text-[#FF9500] underline-offset-2 hover:underline"
+                    >
+                      Revertir al almacén original de Telegram
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </section>
 
             <TarjetaSugerenciaConciliacionField
@@ -479,24 +554,26 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               }}
             />
 
-            <button
-              type="button"
-              disabled={!proyectoId.trim() || !ubicacionId.trim() || guardandoUbicacion}
-              onClick={() => {
-                if (guardandoUbicacion) return;
-                void guardarUbicacion();
-              }}
-              className="w-full rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/10 disabled:opacity-40 text-[#FF9500] text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
-            >
-              {guardandoUbicacion ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Guardando ubicación…
-                </>
-              ) : (
-                'Guardar solo obra y almacén'
-              )}
-            </button>
+            {!mostrarPanelPrecargado ? (
+              <button
+                type="button"
+                disabled={!proyectoId.trim() || !ubicacionId.trim() || guardandoUbicacion}
+                onClick={() => {
+                  if (guardandoUbicacion) return;
+                  void guardarUbicacion();
+                }}
+                className="w-full rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/10 disabled:opacity-40 text-[#FF9500] text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
+              >
+                {guardandoUbicacion ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Guardando ubicación…
+                  </>
+                ) : (
+                  'Guardar solo obra y almacén'
+                )}
+              </button>
+            ) : null}
 
             <button
               type="button"
@@ -540,9 +617,16 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                   Use <strong className="text-zinc-300">Conciliar e inyectar costo</strong> en la
                   tarjeta naranja. No cargue compra nueva ni duplicará inventario.
                 </>
+              ) : mostrarPanelPrecargado ? (
+                <>
+                  Almacén heredado de Telegram. Pulse{' '}
+                  <strong className="text-zinc-300">Cargar compra en contabilidad</strong> para asentar
+                  stock en un solo paso. Cada línea debe traer{' '}
+                  <strong className="text-zinc-300">item_code (SKU)</strong> del catálogo.
+                </>
               ) : (
                 <>
-                  Guarde obra y almacén si viene del bot, luego{' '}
+                  Seleccione obra y almacén, luego{' '}
                   <strong className="text-zinc-300">Cargar compra en contabilidad</strong>. Cada línea
                   debe traer <strong className="text-zinc-300">item_code (SKU)</strong> del catálogo.
                 </>

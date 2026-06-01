@@ -233,7 +233,13 @@ async function aplicarComando(
   }
 
   if (cmd.mensaje) {
-    await sendTelegramMessage(chatId, cmd.mensaje, { parse_mode: 'HTML' });
+    const esFacturas =
+      cmd.contexto === 'factura' && cmd.mensaje === mensajeModoFacturasActivado();
+    await sendTelegramMessage(
+      chatId,
+      cmd.mensaje,
+      esFacturas ? { plain: true } : { parse_mode: 'HTML' },
+    );
   }
 
   if (cmd.mostrarPickerProyecto) {
@@ -276,18 +282,11 @@ async function manejarComandoFacturasDirecto(chatId: string): Promise<{
   ok: boolean;
   warn?: string;
 }> {
-  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), {
-    parse_mode: 'HTML',
-  });
+  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), { plain: true });
 
   const admin = telegramSupabaseAdmin();
   if (!admin.ok) {
-    await sendTelegramMessage(
-      chatId,
-      '⚠️ El servidor no tiene <b>SUPABASE_SERVICE_ROLE_KEY</b> (Vercel → Variables de entorno). ' +
-        'La factura por foto puede fallar hasta configurarlo.',
-      { parse_mode: 'HTML' },
-    );
+    console.warn('[telegram /facturas] sin SUPABASE_SERVICE_ROLE_KEY');
     return { ok: true, warn: 'supabase_config' };
   }
 
@@ -295,12 +294,6 @@ async function manejarComandoFacturasDirecto(chatId: string): Promise<{
     await setTelegramContexto(admin.client, chatId, { contexto: 'factura' });
   } catch (err) {
     console.error('[telegram /facturas estado]', err);
-    await sendTelegramMessage(
-      chatId,
-      '⚠️ Recibí el comando pero no pude guardar el estado en BD. ' +
-        'Ejecuta <code>npm run db:apply-lulo-telegram</code> o revisa Supabase.',
-      { parse_mode: 'HTML' },
-    );
     return { ok: true, warn: 'estado_db' };
   }
 

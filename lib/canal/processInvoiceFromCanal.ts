@@ -168,9 +168,8 @@ export async function processInvoiceFromCanal(params: {
     `🏢 ${inv.supplier_name ?? 'Proveedor'}\n` +
     `🆔 RIF: ${inv.supplier_rif ?? '—'}\n` +
     `💰 Total: ${inv.total_amount != null ? `${inv.total_amount} Bs` : '—'}\n` +
-    `📦 Líneas: ${nItems}\n` +
-    fastTrackMsg +
-    `\n\n<a href="${link}">Abrir en Casa Inteligente</a>`;
+    `📦 Líneas: ${nItems}` +
+    fastTrackMsg;
 
   const html =
     params.canal === 'telegram'

@@ -31,9 +31,16 @@ export function crearNotificadorProgresoFacturaTelegram(
   chatId: string,
 ): NotificadorProgresoFacturaTelegram {
   let messageId: number | null = null;
+  let fase: 'cargando' | 'barra' = 'cargando';
 
   async function reportar(pct: number, etapa: string): Promise<void> {
-    const text = textoProgreso(pct, etapa);
+    const text =
+      fase === 'cargando'
+        ? '⏳ Cargando…'
+        : textoProgreso(pct, etapa);
+    if (fase === 'cargando') {
+      fase = 'barra';
+    }
     if (messageId == null) {
       messageId = await sendTelegramMessageWithId(chatId, text, {
         parse_mode: 'HTML',

@@ -40,10 +40,17 @@ export async function telegramApi<T>(
   return json.result as T;
 }
 
+export type TelegramMessageExtra = {
+  parse_mode?: 'HTML' | 'Markdown';
+  reply_markup?: unknown;
+  /** Sin parse_mode (texto plano, sin etiquetas HTML). */
+  plain?: boolean;
+};
+
 export async function sendTelegramMessage(
   chatId: string | number,
   text: string,
-  extra?: { parse_mode?: 'HTML' | 'Markdown'; reply_markup?: unknown },
+  extra?: TelegramMessageExtra,
 ): Promise<void> {
   await sendTelegramMessageWithId(chatId, text, extra);
 }
@@ -52,15 +59,19 @@ export async function sendTelegramMessage(
 export async function sendTelegramMessageWithId(
   chatId: string | number,
   text: string,
-  extra?: { parse_mode?: 'HTML' | 'Markdown'; reply_markup?: unknown },
+  extra?: TelegramMessageExtra,
 ): Promise<number> {
-  const result = await telegramApi<{ message_id: number }>('sendMessage', {
+  const { plain, parse_mode, ...rest } = extra ?? {};
+  const body: Record<string, unknown> = {
     chat_id: chatId,
     text,
-    parse_mode: extra?.parse_mode ?? 'HTML',
     disable_web_page_preview: false,
-    ...extra,
-  });
+    ...rest,
+  };
+  if (!plain) {
+    body.parse_mode = parse_mode ?? 'HTML';
+  }
+  const result = await telegramApi<{ message_id: number }>('sendMessage', body);
   return result.message_id;
 }
 

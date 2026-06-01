@@ -8,7 +8,6 @@ import {
   etiquetaUbicacionSelector,
   listarUbicacionesParaSelector,
 } from '@/lib/almacen/ubicacionesInventario';
-import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import {
   esNotaEntregaExtracted,
@@ -185,7 +184,6 @@ export async function manejarCallbackUbicacionTelegram(
     return true;
   }
 
-  const link = linkConfirmarCompraTelegram(pendingId);
   await answerCallbackQuery(params.callbackId, String(ubi.nombre));
 
   const esNotaEntrega = Boolean(estado.metadata?.es_nota_entrega);
@@ -220,8 +218,9 @@ export async function manejarCallbackUbicacionTelegram(
 
   await sendTelegramMessage(
     params.chatId,
-    `✅ <b>Almacén:</b> ${ubi.nombre}\n\n` +
-      `Confirma la compra en la app (contabilidad + inventario):\n<a href="${link}">${link}</a>`,
+    `✅ <b>Factura cargada en almacén</b>\n` +
+      `Obra: <b>${nombreObra}</b>\n` +
+      `Almacén: <b>${ubi.nombre}</b>`,
     { parse_mode: 'HTML' },
   );
   return true;
