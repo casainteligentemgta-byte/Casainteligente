@@ -68,7 +68,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const { data: updated, error: upErr } = await admin.client
       .from('contabilidad_compras')
-      .update(payloadCompraBimonetario(montos) as Record<string, unknown>)
+      .update(payloadCompraBimonetario(montos) as never)
       .eq('id', params.id)
       .select(
         'id,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd',
