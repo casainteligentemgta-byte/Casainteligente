@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * GET — Lista contratos express usando cliente admin (bypass RLS).

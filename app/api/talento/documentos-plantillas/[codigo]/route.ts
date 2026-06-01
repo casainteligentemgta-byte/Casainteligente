@@ -3,6 +3,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { guardarPlantillaPorCodigo, obtenerPlantillaPorCodigo } from '@/lib/talento/plantillaContratoObreroRepo';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, context: { params: { codigo: string } }) {
   const codigo = (context.params?.codigo ?? '').trim();

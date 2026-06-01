@@ -3,6 +3,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { listarPlantillasDocumento, obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /** Lista plantillas de la biblioteca (requiere service role en servidor). */
 export async function GET() {
