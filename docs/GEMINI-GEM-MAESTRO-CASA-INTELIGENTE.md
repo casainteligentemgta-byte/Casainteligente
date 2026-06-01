@@ -109,7 +109,9 @@ CRON_SECRET (cron avance 17:00 Caracas)
 | `/almacen` | Inventario global (`global_inventory`) |
 | `/almacen/procurement` | Recepción mercancía (factura + IA) |
 | `/almacen/procurement/quality` | Cuarentena calidad |
-| `/almacen/despacho` | Despacho a obra + reparto por partidas |
+| `/almacen/despacho` | Salida: destino documento OBRA/ALMACÉN, capítulo, receptor, fotos (`POST /api/almacen/despacho`) |
+| `/almacen/recepcion` | Ingreso campo / FRM / tránsito Telegram |
+| `/almacen/movimientos` | Historial ingresos y despachos |
 | `/almacen/kardex`, `/maestros`, `/nuevo`, `/editar/[id]` | Kardex y maestros |
 | `/contabilidad/compras` | Libro compras bimonetario |
 | `/contabilidad/compras/canal` | Panel facturas Telegram/WhatsApp |
@@ -197,17 +199,24 @@ CRON_SECRET (cron avance 17:00 Caracas)
 ## FLUJOS DE NEGOCIO (DETALLE)
 
 ### 1. Compra por Telegram
-1. Usuario envía foto/PDF → **pre-insert** `estado=recibido` + `telegram_message_id` (migr. **185**); duplicado **23505** → HTTP 200 sin segundo OCR (`reservarFacturaCanalTelegram.ts`)
-2. `reclamarProcesamientoFacturaCanal` en `processInvoiceFromTelegram.ts` → un solo worker en `procesando` (si falla OCR → `estado=error`)
-3. Gemini OCR → `processInvoiceFromCanal.ts` → estado `extraido`
-4. **Fast-Track** (`evaluarYProcesarFastTrack`): si confianza ≥95%, SKU 100%, monto &lt; `limite_fast_track_usd` y **sin FRM sin conciliar** → `aprobado_sistema` + contabilidad + stock; si falla stock → `extracted._ingreso_almacen_pendiente`
-5. Picker inline **obra** (`proyectoPicker` modo `factura_compra`)
-6. Picker **almacén** (`ubicacionPicker` callbacks `ub:` / `up:`)
-7. Link: `/contabilidad/compras/telegram/[id]` → `ConfirmarCompraTelegramClient` (UI `#0A0A0F`, patrón `montado`)
-8. **Conciliación FRM** (si hay `ci_recepciones_campo` sin `factura_canal_pendiente_id`): tarjeta naranja → `POST /api/contabilidad/compras/conciliar-frm` → contabilidad **sin** segundo movimiento de stock; botón «Cargar compra» **bloqueado**
-9. Si no hay FRM: `POST .../confirmar-compra` → `confirmarCompraDesdeCanal` + `ingresoAlmacenDesdePendienteCanal` en la misma petición (`ingreso_almacen_automatico: true`); si ingreso falla → `extracted._ingreso_almacen_pendiente` + reintento manual «Ingreso a almacén»
+**Comando `/facturas`:** mensaje único HTML (`lib/telegram/mensajesFactura.ts`):
+- `✅ **Listo para recibir factura.**`
+- `Envía ahora una **foto** o **PDF** de la factura de compra.`
 
-**Archivos:** `lib/telegram/webhook.ts`, `lib/canal/reservarFacturaCanalTelegram.ts`, `lib/canal/processInvoiceFromCanal.ts`, `lib/telegram/processInvoiceFromTelegram.ts`, `lib/canal/evaluarYProcesarFastTrack.ts`, `lib/telegram/mediaHandlers.ts`, `lib/telegram/ubicacionPicker.ts`, `lib/contabilidad/confirmarCompraDesdeCanal.ts`, `lib/contabilidad/ingresoAlmacenDesdePendienteCanal.ts`, `lib/contabilidad/conciliarFrmConFacturaCanal.ts`, `components/contabilidad/TarjetaSugerenciaConciliacionField.tsx`
+**Al enviar foto/PDF:**
+1. **pre-insert** `estado=recibido` + `telegram_message_id` (migr. **185**); duplicado **23505** → sin segundo OCR
+2. `reclamarProcesamientoFacturaCanal` → un solo worker `procesando`
+3. Progreso en un mensaje (`facturaProgresoTelegram.ts`): `⏳ Cargando…` → barra % → `✅ OK — Factura cargada correctamente` + datos (sin enlace a la app)
+4. Gemini OCR → `processInvoiceFromCanal.ts` → `extraido` + **Fast-Track** opcional (`evaluarYProcesarFastTrack`)
+5. Picker **obra** (`proyectoPicker` modo `factura_compra`)
+6. Picker **almacén** (`ubicacionPicker` `ub:` / `up:`) → mensaje `✅ Factura cargada en almacén` (obra + almacén, **sin** link «Confirmar compra»)
+7. Contabilidad web (opcional): `/contabilidad/compras/telegram/[id]` → `ConfirmarCompraTelegramClient`
+   - Almacén **PRECARGADO** desde `ubicacion_destino_id` del bot (badge amarillo, «Modificar Ubicación»)
+   - Un clic: `POST .../confirmar-compra` con `ubicacionId` actual; `useSyncSubmitLock`
+8. **Conciliación FRM:** `TarjetaSugerenciaConciliacionField` → `POST /api/contabilidad/compras/conciliar-frm`; bloquea «Cargar compra» si hay FRM sin conciliar
+9. Sin FRM: `confirmarCompraDesdeCanal` + `ingresoAlmacenDesdePendienteCanal` en la misma petición
+
+**Archivos:** `lib/telegram/webhook.ts`, `lib/telegram/mensajesFactura.ts`, `lib/telegram/facturaProgresoTelegram.ts`, `lib/canal/processInvoiceFromCanal.ts`, `lib/telegram/proyectoPicker.ts`, `lib/telegram/ubicacionPicker.ts`, `components/contabilidad/ConfirmarCompraTelegramClient.tsx`, `lib/contabilidad/confirmarCompraDesdeCanal.ts`, `components/contabilidad/TarjetaSugerenciaConciliacionField.tsx`
 
 ### 1b. Recepción en campo (FRM) — sin factura fiscal
 1. `/almacen/recepcion` — pestañas: Tránsito (Telegram), Nota de entrega, Emergencia
@@ -228,16 +237,20 @@ CRON_SECRET (cron avance 17:00 Caracas)
 - Actualiza: `purchase_invoices`, `contabilidad_compras`, canal pendiente, `compras_facturas`
 - Si compra inventario ya `registrada`: traslada stock (`inv_stock_apply_delta`) vía `reubicarCompraObra.ts`
 
-### 4. Despacho a obra (multi-partida)
-1. `/almacen/despacho` — proyecto → stock de **todos los almacenes de la obra** (`GET /api/almacen/stock?proyecto_id=`)
-2. Destino: almacén **o partida Lulo** (`DestinoObraDespachoSelect`: `ub:`, `pp:`, `pd:`)
-3. Filtro origen opcional; cada línea lleva `origen_ubicacion_id` (varios orígenes → varias transferencias)
-4. Por material: cantidad + **DistribucionDespachoPartidas** (`scope=related` → fallback **Ver todas las partidas del presupuesto**)
-5. `validarTechoPresupuestario` en cliente — exceso → `border-amber-500` + **`justificacion_gasto`** (mín. 8 caracteres)
-6. `POST /api/almacen/transferencias` + `detalle_transferencia_partidas`; trigger SQL valida techo en servidor
-7. UI: patrón `montado` anti-hidratación; `useSyncSubmitLock` anti double-tap
+### 4. Despacho web (salida de almacén)
+**Hub `/almacen` — orden botones NAV:** Compras → Ingreso → SALIDA → Movimientos → Configuración → Kardex → Compartir → Nuevo (sin botón «A obra» en hub).
 
-**Archivos:** `DespachoInventarioClient.tsx`, `DestinoObraDespachoSelect.tsx`, `DistribucionDespachoPartidas.tsx`, `FilaDespachoPartida.tsx`, `lib/almacen/listarStockProyecto.ts`, `lib/almacen/cargarPartidasDespacho.ts`, `lib/almacen/crearTransferenciaInventario.ts`, `hooks/useSyncSubmitLock.ts`
+1. `/almacen/despacho?proyectoId=` — stock obra (`GET /api/almacen/stock?proyecto_id=`, migr. **207**)
+2. **Panel documento** `DespachoDestinoDocumentoPanel` (nivel documento, no por línea):
+   - **OBRA:** ubicación en obra → capítulo (oblig.) → partida opcional o actividad (texto / cronograma)
+   - **ALMACÉN:** botones rápidos + dropdown; sin capítulo obligatorio
+3. Líneas: cantidad + **DistribucionDespachoPartidas**; receptor; fotos opcionales; alertas
+4. `validarTechoPresupuestario` + `justificacion_gasto` si exceso
+5. **`POST /api/almacen/despacho`** (multipart: JSON + fotos) → `registrarDespachoWeb.ts` → `inv_egresos_campo` (migr. **206** trazabilidad, **208** `fotos jsonb`)
+6. APIs auxiliares: `/api/almacen/capitulos`, `partidas-capitulo`, `empleados-egreso`, `tareas-cronograma`, `despacho-alertas`
+7. UI: `montado` + `useSyncSubmitLock`
+
+**Archivos:** `DespachoInventarioClient.tsx`, `DespachoDestinoDocumentoPanel.tsx`, `DistribucionDespachoPartidas.tsx`, `lib/almacen/registrarDespachoWeb.ts`, `lib/almacen/inventarioFiltroUbicacion.ts`
 
 ### 5. Importación presupuesto Lulo (MDB)
 1. `ImportarPresupuestoLulo.tsx` — MDB/ACCDB/CSV
@@ -249,9 +262,15 @@ CRON_SECRET (cron avance 17:00 Caracas)
 ### 6. Gestión de campo / Telegram obra
 1. Vincular Telegram: `/start` token → `perfiles.telegram_chat_id`
 2. `/avance` — reporte avance diario por obra
-3. Cron 17:00 Caracas: `/api/cron/avance-diario-campo`
-4. Ingeniero residente: datos manuales en ficha proyecto (179), no solo RRHH
-5. Equipo: `/proyectos/modulo/[id]/control-obra/equipo`
+3. **Offline avance:** `useAvanceCampoManager` + cola `ci_cola_avance` (`lib/campo/colaAvanceOffline.ts`, `sincronizarColaAvanceOffline.ts`) — **no** usar `useAvanceCampoResiliente` (no existe)
+4. Cron 17:00 Caracas: `/api/cron/avance-diario-campo`
+5. Ingeniero residente: ficha proyecto (179)
+6. Equipo: `/proyectos/modulo/[id]/control-obra/equipo`
+
+### 6b. Recepción depositario (compras_facturas, migr. 209)
+- Columna `estado_recepcion_fisica`: `por_verificar` | `ingresada_almacen` | `discrepancia`
+- RPC `obtener_lineas_para_depositario(uuid)` — sin precios
+- RPC `ingresar_mercancia_almacen(uuid, telegram_id, jsonb)` — `material_id` + `cantidad_real`; stock vía `inv_stock_apply_delta` si factura aún no `registrada`
 
 ### 7. Examen y contratación obrero
 1. RRHH emite invitación: `POST /api/registro/emitir-invitacion-examen`
@@ -274,6 +293,11 @@ POST   /api/almacen/procurement/extract-invoice
 GET    /api/almacen/ubicaciones?proyecto_id=&flat=1
 GET    /api/almacen/stock?ubicacion_id=
 GET    /api/almacen/partidas-despacho?proyecto_id=&material_id=
+GET    /api/almacen/capitulos?proyecto_id=
+GET    /api/almacen/partidas-capitulo?proyecto_id=&capitulo_id=
+GET    /api/almacen/empleados-egreso
+GET    /api/almacen/tareas-cronograma?proyecto_id=
+POST   /api/almacen/despacho
 POST   /api/almacen/transferencias
 PATCH  /api/contabilidad/compras/[id]/reubicar
 GET/POST /api/facturas-canal/pendientes
@@ -330,6 +354,10 @@ POST   /api/usuarios-roles
 | 200 | `200_quality_inspections_remarks.sql` |
 | 201 | `201_telegram_enrutamiento_almacen.sql` |
 | 202 | `202_contabilidad_logistica_compra.sql` — logística compra / puente contabilidad |
+| 206 | `206_inv_egresos_campo_trazabilidad.sql` — egresos despacho Telegram/web |
+| 207 | `207_get_stock_real_obra_almacen_central.sql` — RPC stock por obra |
+| 208 | `208_inv_egresos_campo_fotos_json.sql` — fotos en egresos |
+| 209 | `209_compras_facturas_recepcion_depositario.sql` — recepción física depositario |
 
 ### Presupuesto / partidas recientes
 | 175 | `precio_unitario` en partidas |
@@ -415,11 +443,15 @@ lib/telegram/ubicacionPicker.ts
 supabase/migrations/185_ci_facturas_canal_idempotencia_telegram.sql
 
 # Despacho / stock obra
+lib/almacen/registrarDespachoWeb.ts
 lib/almacen/listarStockProyecto.ts
-lib/almacen/listarPartidasProyectoDespacho.ts
-lib/almacen/resolverPartidaConsumiblesCampo.ts
-components/almacen/DestinoObraDespachoSelect.tsx
+components/almacen/DespachoDestinoDocumentoPanel.tsx
+app/almacen/despacho/DespachoInventarioClient.tsx
 hooks/useSyncSubmitLock.ts
+
+# Campo offline
+hooks/useAvanceCampoManager.ts
+lib/campo/colaAvanceOffline.ts
 
 # Lulo / proyectos
 lib/proyectos/importarLuloPresupuesto.ts
@@ -628,10 +660,10 @@ Los **5 pilares de blindaje** que todo cambio debe respetar:
 5. **Anti double-tap** — `useSyncSubmitLock` en confirmaciones táctiles.
 6. **FRM vs factura fiscal** — conciliar antes de «Cargar compra»; Fast-Track no aplica si hay FRM sin conciliar; fallback ingreso en `extracted._ingreso_almacen_pendiente`.
 
-**Checklist post-deploy:** migr. 180–185 y **199–202** en Supabase · reload schema · probar `/almacen/despacho` · reenviar misma foto Telegram · FRM nota + factura mismo proveedor → solo conciliación (sin doble stock).
+**Checklist post-deploy:** migr. **180–185, 199–202, 206–209** en Supabase · `notify pgrst, 'reload schema'` · `/facturas` Telegram · `/almacen/despacho` · confirmar compra web con almacén PRECARGADO.
 
-**Último deploy documentado:** commit `613aefc` (rama `integracion-diseno-vercel-funcionalidad-local`) — Vercel **casainteligente** OK.
+**Último deploy documentado:** commit `e1d89cb` (rama `integracion-diseno-vercel-funcionalidad-local`) — https://casainteligente.company
 
 ---
 
-*Gem maestro v2026-05-30 — FRM/conciliación, pipeline confirmar+ingreso, blindaje QA iPad y migr. 199–202.*
+*Gem maestro v2026-05-31 — Telegram sin enlaces post-OCR, despacho OBRA/ALMACÉN, confirmación web PRECARGADO, migr. 206–209, NAV almacén reordenado.*
