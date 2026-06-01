@@ -125,7 +125,25 @@ export default function EditarFacturaCanalModal({
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-zinc-500">TOTAL (Bs)</label>
+              <label className="text-[10px] font-bold text-zinc-500">MONEDA</label>
+              <select
+                className={`${inputClass} mt-1`}
+                value={form.moneda}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    moneda: normalizarMonedaExtracted(e.target.value),
+                  }))
+                }
+              >
+                <option value="VES">Bs (VES)</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-zinc-500">
+                TOTAL ({simboloMoneda})
+              </label>
               <input
                 type="text"
                 inputMode="decimal"

@@ -13,6 +13,7 @@ export type ComprasCuadroShareState = {
   fechaDesde: string;
   fechaHasta: string;
   proyectoFiltro: string;
+  entidadFiltro: string;
   proveedorFiltro: string;
   rifFiltro: string;
   busqueda: string;
@@ -43,6 +44,7 @@ export function buildComprasCuadroShareUrl(
   setParam(qs, 'desde', state.fechaDesde);
   setParam(qs, 'hasta', state.fechaHasta);
   setParam(qs, 'proyecto', state.proyectoFiltro);
+  setParam(qs, 'entidad', state.entidadFiltro);
   setParam(qs, 'proveedor', state.proveedorFiltro);
   setParam(qs, 'rif', state.rifFiltro);
   setParam(qs, 'q', state.busqueda);
@@ -86,6 +88,8 @@ export function parseComprasCuadroShareParams(
   if (hasta) out.fechaHasta = hasta;
   const proyecto = params.get('proyecto')?.trim();
   if (proyecto) out.proyectoFiltro = proyecto;
+  const entidad = params.get('entidad')?.trim();
+  if (entidad) out.entidadFiltro = entidad;
   const proveedor = params.get('proveedor')?.trim();
   if (proveedor) out.proveedorFiltro = proveedor;
   const rif = params.get('rif')?.trim();

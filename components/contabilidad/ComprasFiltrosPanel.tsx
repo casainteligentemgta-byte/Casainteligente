@@ -22,6 +22,8 @@ export function buildComprasFiltrosChips(input: {
     periodoLabel: string;
     proyectoFiltro: string;
     proyectoFiltroEtiqueta: string;
+    entidadFiltro: string;
+    entidadFiltroEtiqueta: string;
     proveedorFiltro: string;
     rifFiltro: string;
     articuloFiltro: string;
@@ -46,6 +48,9 @@ export function buildComprasFiltrosChips(input: {
     }
     if (input.proyectoFiltro) {
         chips.push({ id: 'proyecto', label: input.proyectoFiltroEtiqueta });
+    }
+    if (input.entidadFiltro) {
+        chips.push({ id: 'entidad', label: input.entidadFiltroEtiqueta });
     }
     if (input.proveedorFiltro) {
         chips.push({ id: 'proveedor', label: input.proveedorFiltro });
@@ -136,6 +141,8 @@ export type ComprasFiltrosValores = {
     fechaRefActiva: string;
     fechaDesde: string;
     fechaHasta: string;
+    entidadFiltro: string;
+    entidadFiltroEtiqueta: string;
     proyectoFiltro: string;
     proyectoFiltroEtiqueta: string;
     proveedorFiltro: string;
@@ -153,6 +160,8 @@ export type ComprasFiltrosValores = {
 };
 
 type ProyectoOpcion = ProyectoCatalogo;
+
+export type EntidadOpcion = { id: string; nombre: string };
 
 export function ComprasFiltrosActivosBar({
     chips,
@@ -247,6 +256,7 @@ export function ComprasFiltrosActivosBar({
 
 export default function ComprasFiltrosPanel({
     valores,
+    entidades,
     proyectos,
     proveedores,
     fuenteFiltro,
@@ -259,6 +269,7 @@ export default function ComprasFiltrosPanel({
     setFechaRef,
     setFechaDesde,
     setFechaHasta,
+    setEntidadFiltro,
     setProyectoFiltro,
     setProveedorFiltro,
     setRifFiltro,
@@ -273,6 +284,7 @@ export default function ComprasFiltrosPanel({
     setBusqueda,
 }: {
     valores: ComprasFiltrosValores;
+    entidades: EntidadOpcion[];
     proyectos: ProyectoOpcion[];
     proveedores: ProveedorOpcion[];
     fuenteFiltro: FiltroFuenteCompra;
@@ -285,6 +297,7 @@ export default function ComprasFiltrosPanel({
     setFechaRef: (v: string) => void;
     setFechaDesde: (v: string) => void;
     setFechaHasta: (v: string) => void;
+    setEntidadFiltro: (v: string) => void;
     setProyectoFiltro: (v: string) => void;
     setProveedorFiltro: (v: string) => void;
     setRifFiltro: (v: string) => void;
@@ -299,11 +312,23 @@ export default function ComprasFiltrosPanel({
     setBusqueda: (v: string) => void;
 }) {
     const router = useRouter();
-    const { fechaRefActiva, fechaDesde, fechaHasta, proyectoFiltro, proyectoFiltroEtiqueta } =
-        valores;
+    const {
+        fechaRefActiva,
+        fechaDesde,
+        fechaHasta,
+        entidadFiltro,
+        entidadFiltroEtiqueta,
+        proyectoFiltro,
+        proyectoFiltroEtiqueta,
+    } = valores;
 
-    const proyectosPrincipales = proyectos.filter((p) => esProyectoSmartRrhhPorNombre(p.nombre));
-    const proyectosResto = proyectos.filter((p) => !esProyectoSmartRrhhPorNombre(p.nombre));
+    const proyectosVisibles = React.useMemo(() => {
+        if (!entidadFiltro || entidadFiltro === 'sin_entidad') return proyectos;
+        return proyectos.filter((p) => p.entidad_id === entidadFiltro);
+    }, [proyectos, entidadFiltro]);
+
+    const proyectosPrincipales = proyectosVisibles.filter((p) => esProyectoSmartRrhhPorNombre(p.nombre));
+    const proyectosResto = proyectosVisibles.filter((p) => !esProyectoSmartRrhhPorNombre(p.nombre));
 
     return (
         <div className="compras-no-imprimir" style={{ ...glass, padding: '20px', marginBottom: '16px' }}>
@@ -356,6 +381,29 @@ export default function ComprasFiltrosPanel({
                         Cerrar
                     </button>
                 </div>
+            </div>
+
+            <p style={sectionLabel}>ENTIDAD / PATRONO</p>
+            <div style={{ marginBottom: '16px' }}>
+                <select
+                    value={entidadFiltro}
+                    onChange={(e) => setEntidadFiltro(e.target.value)}
+                    style={inputStyle}
+                    aria-label="Filtrar por entidad o patrono"
+                >
+                    <option value="">Todas las entidades</option>
+                    <option value="sin_entidad">Sin entidad asignada</option>
+                    {entidades.map((e) => (
+                        <option key={e.id} value={e.id}>
+                            {e.nombre}
+                        </option>
+                    ))}
+                </select>
+                {entidadFiltro ? (
+                    <p style={{ color: '#5856D6', fontSize: '11px', fontWeight: 700, marginTop: '8px' }}>
+                        {entidadFiltroEtiqueta}
+                    </p>
+                ) : null}
             </div>
 
             <p style={sectionLabel}>OBRA / PROYECTO</p>

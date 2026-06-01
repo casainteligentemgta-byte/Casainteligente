@@ -328,3 +328,71 @@ export function compraCumpleFiltroRif(
   if (!rif?.trim()) return true;
   return incluye(row.supplier_rif, rif);
 }
+
+export function compraCumpleFiltroEntidad(
+  row: { entidad_id?: string | null },
+  entidadFiltro: string | undefined,
+): boolean {
+  const e = String(entidadFiltro ?? '').trim();
+  if (!e) return true;
+  if (e === 'sin_entidad') return !row.entidad_id;
+  return row.entidad_id === e;
+}
+
+export function compraCumpleFiltroProyecto(
+  row: { proyecto_id?: string | null },
+  proyectoFiltro: string | undefined,
+): boolean {
+  const p = String(proyectoFiltro ?? '').trim();
+  if (!p) return true;
+  if (p === 'sin_proyecto') return !row.proyecto_id;
+  return row.proyecto_id === p;
+}
+
+export function compraCumpleFiltroProveedor(
+  row: { supplier_name?: string | null },
+  proveedorFiltro: string | undefined,
+): boolean {
+  const prov = String(proveedorFiltro ?? '').trim();
+  if (!prov) return true;
+  return String(row.supplier_name ?? '').trim() === prov;
+}
+
+export function compraCumpleFiltroFecha(
+  row: { fecha?: string | null; created_at?: string | null },
+  desde: string | undefined,
+  hasta: string | undefined,
+): boolean {
+  const d = String(desde ?? '').trim();
+  const h = String(hasta ?? '').trim();
+  if (!d && !h) return true;
+  const f = String(row.fecha ?? row.created_at ?? '').slice(0, 10);
+  if (!f) return false;
+  if (d && f < d) return false;
+  if (h && f > h) return false;
+  return true;
+}
+
+/** Filtros de destino (entidad, obra, proveedor, fechas) tras enriquecer filas unificadas. */
+export function compraCumpleFiltrosDestino(
+  row: {
+    entidad_id?: string | null;
+    proyecto_id?: string | null;
+    supplier_name?: string | null;
+    fecha?: string | null;
+    created_at?: string | null;
+  },
+  filtros: {
+    entidadFiltro?: string;
+    proyectoFiltro?: string;
+    proveedorFiltro?: string;
+    fechaDesde?: string;
+    fechaHasta?: string;
+  },
+): boolean {
+  if (!compraCumpleFiltroEntidad(row, filtros.entidadFiltro)) return false;
+  if (!compraCumpleFiltroProyecto(row, filtros.proyectoFiltro)) return false;
+  if (!compraCumpleFiltroProveedor(row, filtros.proveedorFiltro)) return false;
+  if (!compraCumpleFiltroFecha(row, filtros.fechaDesde, filtros.fechaHasta)) return false;
+  return true;
+}

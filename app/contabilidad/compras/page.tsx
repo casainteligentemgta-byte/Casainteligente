@@ -22,6 +22,7 @@ import {
 } from '@/lib/contabilidad/comprasQueryFiltros';
 import {
     compraCumpleFiltroRif,
+    compraCumpleFiltrosDestino,
     compraCumpleFiltrosLineas,
     compraCumpleFiltrosMontos,
     filtrarLineasComprasConfirmadas,
@@ -30,6 +31,7 @@ import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
 import ComprasFiltrosPanel, {
     buildComprasFiltrosChips,
     ComprasFiltrosActivosBar,
+    type EntidadOpcion,
 } from '@/components/contabilidad/ComprasFiltrosPanel';
 import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 import {
@@ -70,6 +72,7 @@ import { tasaBcvPorFechaCompra } from '@/lib/contabilidad/tasaBcvPorFechaCompra'
 import { cargarCanalParaCompras } from '@/lib/contabilidad/cargarCanalParaCompras';
 import {
     extractedDesdeCompraLista,
+    normalizarMonedaExtracted,
     type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
 import { actualizarPendienteCanal, eliminarPendienteCanal } from '@/lib/contabilidad/facturaCanalApi';
@@ -105,6 +108,12 @@ import {
     type ColumnaOrdenCompras,
     type DireccionOrden,
 } from '@/lib/contabilidad/ordenarLineasCompras';
+import {
+    monedaOriginalCompra,
+    montosBimonetariosLista,
+    montoNominalMonedaOriginal,
+} from '@/lib/contabilidad/monedaCompra';
+import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
 type CompraRow = CompraListaUnificada;
 
@@ -203,12 +212,14 @@ export default function ComprasPage() {
     const searchParams = useSearchParams();
     const [compras, setCompras] = useState<CompraRow[]>([]);
     const [proyectos, setProyectos] = useState<ProyectoOpcion[]>([]);
+    const [entidades, setEntidades] = useState<EntidadOpcion[]>([]);
     const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [avisoCanal, setAvisoCanal] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [ingresandoAlmacenId, setIngresandoAlmacenId] = useState<string | null>(null);
+    const [cambiandoMonedaId, setCambiandoMonedaId] = useState<string | null>(null);
     const [editandoCanal, setEditandoCanal] = useState<{
         pendienteId: string;
         extracted: ExtractedCanalHeader;
@@ -227,6 +238,7 @@ export default function ComprasPage() {
     const [fechaDesde, setFechaDesde] = useState('');
     const [fechaHasta, setFechaHasta] = useState('');
     const [proyectoFiltro, setProyectoFiltro] = useState<string>('');
+    const [entidadFiltro, setEntidadFiltro] = useState<string>('');
     const [proveedorFiltro, setProveedorFiltro] = useState<string>('');
     const [rifFiltro, setRifFiltro] = useState('');
     const [articuloFiltro, setArticuloFiltro] = useState('');
@@ -263,6 +275,7 @@ export default function ComprasPage() {
         if (parsed.fechaDesde) setFechaDesde(parsed.fechaDesde);
         if (parsed.fechaHasta) setFechaHasta(parsed.fechaHasta);
         if (parsed.proyectoFiltro) setProyectoFiltro(parsed.proyectoFiltro);
+        if (parsed.entidadFiltro) setEntidadFiltro(parsed.entidadFiltro);
         if (parsed.proveedorFiltro) setProveedorFiltro(parsed.proveedorFiltro);
         if (parsed.rifFiltro) setRifFiltro(parsed.rifFiltro);
         if (parsed.articuloFiltro) setArticuloFiltro(parsed.articuloFiltro);
@@ -354,6 +367,57 @@ export default function ComprasPage() {
         return m;
     }, [proyectos]);
 
+    const loadEntidades = useCallback(async () => {
+        try {
+            const supabase = createClient();
+            const { data } = await supabase
+                .from('ci_entidades')
+                .select('id,nombre')
+                .order('nombre')
+                .limit(300);
+            if (data?.length) {
+                setEntidades(
+                    (data as { id: string; nombre: string | null }[]).map((e) => ({
+                        id: e.id,
+                        nombre: (e.nombre || 'Entidad').trim(),
+                    })),
+                );
+            }
+        } catch {
+            /* catálogo opcional */
+        }
+    }, []);
+
+    useEffect(() => {
+        const t = window.setTimeout(() => void loadEntidades(), 1200);
+        return () => window.clearTimeout(t);
+    }, [loadEntidades]);
+
+    const entidadesMap = useMemo(() => {
+        const m = new Map<string, string>();
+        for (const e of entidades) m.set(e.id, e.nombre);
+        return m;
+    }, [entidades]);
+
+    const entidadFiltroEtiqueta = useMemo(() => {
+        if (!entidadFiltro) return 'Todas las entidades';
+        if (entidadFiltro === 'sin_entidad') return 'Sin entidad asignada';
+        return entidadesMap.get(entidadFiltro) ?? 'Entidad';
+    }, [entidadFiltro, entidadesMap]);
+
+    const handleEntidadFiltro = useCallback(
+        (next: string) => {
+            setEntidadFiltro(next);
+            if (!next || next === 'sin_entidad') return;
+            if (!proyectoFiltro || proyectoFiltro === 'sin_proyecto') return;
+            const proy = proyectos.find((p) => p.id === proyectoFiltro);
+            if (proy?.entidad_id && proy.entidad_id !== next) {
+                setProyectoFiltro('');
+            }
+        },
+        [proyectoFiltro, proyectos],
+    );
+
     const proyectoFiltroEtiqueta = useMemo(() => {
         if (!proyectoFiltro) return 'Todos los proyectos';
         if (proyectoFiltro === 'sin_proyecto') return 'Sin proyecto asignado';
@@ -377,8 +441,6 @@ export default function ComprasPage() {
                 Promise.resolve(createClient()),
             ]);
             if (errorCanal) setAvisoCanal(errorCanal);
-
-            const omitirRangoPorTelegram = fuenteFiltro === 'telegram';
 
             const [idsArticuloBusqueda, idsArt, idsCant] = await Promise.all([
                 busquedaAplicada
@@ -429,7 +491,7 @@ export default function ComprasPage() {
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,entidad_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
+                        `id,purchase_invoice_id,proyecto_id,entidad_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -441,6 +503,11 @@ export default function ComprasPage() {
                     q = q.is('proyecto_id', null);
                 } else if (proyectoFiltro) {
                     q = q.eq('proyecto_id', proyectoFiltro);
+                }
+                if (entidadFiltro === 'sin_entidad') {
+                    q = q.is('entidad_id', null);
+                } else if (entidadFiltro) {
+                    q = q.eq('entidad_id', entidadFiltro);
                 }
                 if (proveedorFiltro) {
                     q = q.eq('supplier_name', proveedorFiltro);
@@ -562,6 +629,16 @@ export default function ComprasPage() {
             });
 
             filas = await enriquecerComprasConDestino(supabase, filas);
+
+            const filtrosDestino = {
+                entidadFiltro,
+                proyectoFiltro,
+                proveedorFiltro,
+                fechaDesde: periodo !== 'todas' ? rangoActivo?.desde : undefined,
+                fechaHasta: periodo !== 'todas' ? rangoActivo?.hasta : undefined,
+            };
+            filas = filas.filter((c) => compraCumpleFiltrosDestino(c, filtrosDestino));
+
             filas = await enriquecerComprasPuenteInventario(supabase, filas);
             filas = await enriquecerComprasEstadoLogistica(supabase, filas);
 
@@ -579,6 +656,7 @@ export default function ComprasPage() {
     }, [
         periodo,
         rangoActivo,
+        entidadFiltro,
         proyectoFiltro,
         proveedorFiltro,
         rifFiltro,
@@ -649,6 +727,85 @@ export default function ComprasPage() {
         });
         setEditandoCanal(null);
         await load();
+    };
+
+    const cambiarMonedaCompra = async (c: CompraRow, moneda: MonedaOrigen) => {
+        if (monedaOriginalCompra(c) === moneda) return;
+        setCambiandoMonedaId(c.id);
+        setError(null);
+        try {
+            const canalId = idCanalTelegram(c);
+            const esSoloCanal = c.id.startsWith('canal-');
+
+            if (esSoloCanal && canalId) {
+                let extracted: ExtractedCanalHeader | null = null;
+                try {
+                    const res = await fetch(`/api/facturas-canal/pendientes/${canalId}`, {
+                        cache: 'no-store',
+                    });
+                    const data = (await res.json()) as {
+                        extracted?: ExtractedCanalHeader | null;
+                    };
+                    if (res.ok && data.extracted) extracted = data.extracted;
+                } catch {
+                    /* fallback fila */
+                }
+                const base =
+                    extracted ??
+                    extractedDesdeCompraLista({
+                        ...c,
+                        contabilidad_compra_lineas: lineasDetalle(c).map((l) => ({
+                            descripcion: l.descripcion,
+                            item_code: l.item_code,
+                            cantidad: l.cantidad,
+                            precio_unitario: l.precio_unitario,
+                            subtotal: l.subtotal,
+                        })),
+                    });
+                await actualizarPendienteCanal(canalId, {
+                    extracted: {
+                        ...base,
+                        moneda,
+                        total_amount: montoNominalMonedaOriginal(c),
+                    },
+                });
+            } else {
+                const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(c.id)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ moneda }),
+                });
+                const data = (await res.json()) as { error?: string };
+                if (!res.ok) throw new Error(data.error || 'No se pudo cambiar la moneda');
+
+                if (canalId) {
+                    try {
+                        const resCanal = await fetch(`/api/facturas-canal/pendientes/${canalId}`, {
+                            cache: 'no-store',
+                        });
+                        const canalData = (await resCanal.json()) as {
+                            extracted?: ExtractedCanalHeader | null;
+                        };
+                        if (resCanal.ok && canalData.extracted) {
+                            await actualizarPendienteCanal(canalId, {
+                                extracted: {
+                                    ...canalData.extracted,
+                                    moneda,
+                                    total_amount: montoNominalMonedaOriginal(c),
+                                },
+                            });
+                        }
+                    } catch {
+                        /* canal opcional */
+                    }
+                }
+            }
+            await load();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'No se pudo cambiar la moneda');
+        } finally {
+            setCambiandoMonedaId(null);
+        }
     };
 
     const eliminarCompraEnServidor = async (
@@ -1079,6 +1236,8 @@ export default function ComprasPage() {
                 periodoLabel,
                 proyectoFiltro,
                 proyectoFiltroEtiqueta,
+                entidadFiltro,
+                entidadFiltroEtiqueta,
                 proveedorFiltro,
                 rifFiltro,
                 articuloFiltro,
@@ -1097,6 +1256,8 @@ export default function ComprasPage() {
             periodoLabel,
             proyectoFiltro,
             proyectoFiltroEtiqueta,
+            entidadFiltro,
+            entidadFiltroEtiqueta,
             proveedorFiltro,
             rifFiltro,
             articuloFiltro,
@@ -1116,6 +1277,7 @@ export default function ComprasPage() {
         setFechaDesde('');
         setFechaHasta('');
         setProyectoFiltro('');
+        setEntidadFiltro('');
         setProveedorFiltro('');
         setRifFiltro('');
         setArticuloFiltro('');
@@ -1144,6 +1306,9 @@ export default function ComprasPage() {
                     break;
                 case 'proyecto':
                     setProyectoFiltro('');
+                    break;
+                case 'entidad':
+                    setEntidadFiltro('');
                     break;
                 case 'proveedor':
                     setProveedorFiltro('');
@@ -1208,6 +1373,7 @@ export default function ComprasPage() {
             fechaRef: fechaRefActiva,
             fechaDesde,
             fechaHasta,
+            entidadFiltro,
             proyectoFiltro,
             proveedorFiltro,
             rifFiltro,
@@ -1229,6 +1395,7 @@ export default function ComprasPage() {
             fechaRefActiva,
             fechaDesde,
             fechaHasta,
+            entidadFiltro,
             proyectoFiltro,
             proveedorFiltro,
             rifFiltro,
@@ -1249,6 +1416,7 @@ export default function ComprasPage() {
     const subtituloCuadro = useMemo(() => {
         const partes = [
             periodoLabel,
+            entidadFiltro ? entidadFiltroEtiqueta : null,
             proyectoFiltro ? proyectoFiltroEtiqueta : null,
             fuenteFiltro !== 'todos' ? `Fuente: ${fuenteFiltro}` : null,
             `${lineasOrdenadas.length} línea(s) · ${compras.length} factura(s)`,
@@ -1256,6 +1424,8 @@ export default function ComprasPage() {
         return partes.join(' · ');
     }, [
         periodoLabel,
+        entidadFiltro,
+        entidadFiltroEtiqueta,
         proyectoFiltro,
         proyectoFiltroEtiqueta,
         fuenteFiltro,
@@ -1452,6 +1622,8 @@ export default function ComprasPage() {
                             fechaRefActiva,
                             fechaDesde,
                             fechaHasta,
+                            entidadFiltro,
+                            entidadFiltroEtiqueta,
                             proyectoFiltro,
                             proyectoFiltroEtiqueta,
                             proveedorFiltro,
@@ -1467,6 +1639,7 @@ export default function ComprasPage() {
                             busqueda,
                             busquedaAplicada,
                         }}
+                        entidades={entidades}
                         proyectos={proyectos}
                         proveedores={proveedores}
                         fuenteFiltro={fuenteFiltro}
@@ -1479,6 +1652,7 @@ export default function ComprasPage() {
                         setFechaRef={setFechaRef}
                         setFechaDesde={setFechaDesde}
                         setFechaHasta={setFechaHasta}
+                        setEntidadFiltro={handleEntidadFiltro}
                         setProyectoFiltro={setProyectoFiltro}
                         setProveedorFiltro={setProveedorFiltro}
                         setRifFiltro={setRifFiltro}
@@ -1509,6 +1683,7 @@ export default function ComprasPage() {
                         <p style={{ fontSize: '11px', margin: 0, opacity: 0.75 }}>
                             Casa Inteligente · {new Date().toLocaleDateString('es-VE')}
                             {periodoLabel ? ` · ${periodoLabel}` : ''}
+                            {entidadFiltro ? ` · ${entidadFiltroEtiqueta}` : ''}
                             {proyectoFiltro ? ` · ${proyectoFiltroEtiqueta}` : ''}
                             {fuenteFiltro !== 'todos' ? ` · ${fuenteFiltro}` : ''}
                         </p>
@@ -1751,7 +1926,7 @@ export default function ComprasPage() {
                     <div className="compras-no-imprimir" style={{ textAlign: 'center', marginTop: '48px', color: 'rgba(255,255,255,0.35)' }}>
                         <p style={{ fontSize: '18px', fontWeight: 700 }}>Sin compras con estos filtros</p>
                         <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                            Ajuste fecha, proveedor, RIF, montos Bs/USD, artículo o cantidad.
+                            Ajuste entidad, obra/proyecto, proveedor, producto, rango de fechas, RIF o montos Bs/USD.
                         </p>
                     </div>
                 ) : null}
@@ -2383,17 +2558,88 @@ export default function ComprasPage() {
                                         ) : null}
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        <EtiquetaBimonetariaCompra
-                                            usd={
-                                                vesAUsdConTasa(montoVesCompra(c), tasaDisplayCompra(c)) ??
-                                                montoUsdCompra(c)
-                                            }
-                                            bs={montoVesCompra(c)}
-                                            tasa={tasaDisplayCompra(c)}
-                                            tasaEsDelDia={!tasaBcvCompra(c) && !!tasaParaCompra(c)}
-                                            layout="stack"
-                                            style={{ alignItems: 'flex-end', fontSize: 18 }}
-                                        />
+                                        {(() => {
+                                            const tasaDisp = tasaDisplayCompra(c);
+                                            const montos = montosBimonetariosLista(c, tasaDisp);
+                                            return (
+                                                <>
+                                                    <div
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'flex-end',
+                                                            gap: '6px',
+                                                            marginBottom: '6px',
+                                                        }}
+                                                    >
+                                                        <label
+                                                            htmlFor={`moneda-${c.id}`}
+                                                            style={{
+                                                                fontSize: '10px',
+                                                                fontWeight: 700,
+                                                                color: 'rgba(255,255,255,0.4)',
+                                                                textTransform: 'uppercase',
+                                                            }}
+                                                        >
+                                                            Moneda
+                                                        </label>
+                                                        <select
+                                                            id={`moneda-${c.id}`}
+                                                            value={monedaOriginalCompra(c)}
+                                                            disabled={
+                                                                cambiandoMonedaId === c.id ||
+                                                                deletingId !== null ||
+                                                                deletingBulk
+                                                            }
+                                                            onChange={(e) =>
+                                                                void cambiarMonedaCompra(
+                                                                    c,
+                                                                    normalizarMonedaExtracted(
+                                                                        e.target.value,
+                                                                    ),
+                                                                )
+                                                            }
+                                                            style={{
+                                                                borderRadius: '8px',
+                                                                border: '1px solid rgba(255,255,255,0.12)',
+                                                                background: '#0A0A0F',
+                                                                color: '#f4f4f5',
+                                                                fontSize: '11px',
+                                                                fontWeight: 800,
+                                                                padding: '4px 8px',
+                                                                cursor: 'pointer',
+                                                                opacity:
+                                                                    cambiandoMonedaId === c.id
+                                                                        ? 0.55
+                                                                        : 1,
+                                                            }}
+                                                        >
+                                                            <option value="VES">Bs</option>
+                                                            <option value="USD">USD</option>
+                                                        </select>
+                                                        {cambiandoMonedaId === c.id ? (
+                                                            <Loader2
+                                                                size={14}
+                                                                className="animate-spin text-zinc-400"
+                                                            />
+                                                        ) : null}
+                                                    </div>
+                                                    <EtiquetaBimonetariaCompra
+                                                        usd={montos.usd}
+                                                        bs={montos.bs}
+                                                        tasa={tasaDisp}
+                                                        tasaEsDelDia={
+                                                            !tasaBcvCompra(c) && !!tasaParaCompra(c)
+                                                        }
+                                                        layout="stack"
+                                                        style={{
+                                                            alignItems: 'flex-end',
+                                                            fontSize: 18,
+                                                        }}
+                                                    />
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             </div>

@@ -116,6 +116,8 @@ export function extractedDesdeCompraLista(c: {
   supplier_rif: string;
   fecha: string;
   total_amount: number;
+  moneda?: string | null;
+  moneda_original?: string | null;
   contabilidad_compra_lineas?: Array<{
     descripcion: string;
     item_code: string | null;
@@ -130,6 +132,7 @@ export function extractedDesdeCompraLista(c: {
     supplier_name: c.supplier_name,
     supplier_rif: c.supplier_rif,
     date: (c.fecha ?? '').slice(0, 10),
+    moneda: normalizarMonedaExtracted(c.moneda_original ?? c.moneda),
     total_amount: c.total_amount,
     items: lineas.map((l) => {
       const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : 0;

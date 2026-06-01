@@ -1,5 +1,6 @@
 /** Convierte facturas Telegram pendientes al mismo formato que `contabilidad_compras` en la UI. */
 
+import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
 import type {
   EstadoLogisticaCompra,
   LogisticaConteos,
@@ -18,6 +19,7 @@ export type ExtractedCanalHeader = {
   supplier_rif?: string;
   date?: string;
   total_amount?: number | null;
+  moneda?: string | null;
   items?: ExtractedCanalItem[];
 };
 
@@ -80,6 +82,10 @@ export type CompraListaUnificada = {
   ingresado_almacen_at?: string | null;
   cuarentena_rechazo_total?: boolean;
   compra_factura?: { numero_factura?: string | null; estado?: string | null } | null;
+  moneda?: string | null;
+  moneda_original?: string | null;
+  monto_ves?: number | null;
+  monto_usd?: number | null;
 };
 
 export function lineasDesdeExtractedCanal(ex: ExtractedCanalHeader | null): CompraLineaUi[] {
@@ -118,6 +124,8 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
     total_amount: total,
     total_amount_usd: null,
     tasa_bcv_ves_por_usd: null,
+    moneda: normalizarMonedaExtracted(ex?.moneda),
+    moneda_original: normalizarMonedaExtracted(ex?.moneda),
     origen: 'TELEGRAM',
     estado:
       p.estado === 'extraido'
