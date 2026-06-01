@@ -2338,26 +2338,6 @@ export default function ComprasPage() {
                                                 {lineCount(c)} línea(s) extraída(s) por IA
                                             </p>
                                         ) : null}
-                                        {c.pendiente_canal_id &&
-                                        c.canal_estado === 'extraido' &&
-                                        c.estado === 'PENDIENTE_CONFIRMACION' ? (
-                                            <Link
-                                                href={`/contabilidad/compras/telegram/${c.pendiente_canal_id}`}
-                                                style={{
-                                                    display: 'inline-block',
-                                                    marginTop: '10px',
-                                                    padding: '10px 14px',
-                                                    borderRadius: '10px',
-                                                    background: '#34C759',
-                                                    color: '#000',
-                                                    fontSize: '12px',
-                                                    fontWeight: 800,
-                                                    textDecoration: 'none',
-                                                }}
-                                            >
-                                                Confirmar en recepción
-                                            </Link>
-                                        ) : null}
                                         {compraPuedeVerImagen(c) ? (
                                             <CompraFacturaImagen
                                                 compraId={c.id}

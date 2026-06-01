@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -84,7 +84,9 @@ export default function RecepcionCampoClient() {
   const supabase = useMemo(() => createClient(), []);
   const [montado, setMontado] = useState(false);
   const { isSubmitting, runLocked } = useSyncSubmitLock();
+  const pendienteDestacadoRef = useRef<HTMLLIElement | null>(null);
 
+  const pendienteDestacado = searchParams.get('pendiente')?.trim() || '';
   const tabInicial = searchParams.get('tab');
   const [tab, setTab] = useState<TabRecepcion>(
     tabInicial === 'nota' || tabInicial === 'emergencia' ? tabInicial : 'transito',
@@ -138,6 +140,14 @@ export default function RecepcionCampoClient() {
   useEffect(() => {
     if (tab === 'transito') void cargarPendientes();
   }, [tab, cargarPendientes]);
+
+  useEffect(() => {
+    if (!pendienteDestacado || loadingPendientes || tab !== 'transito') return;
+    const t = window.setTimeout(() => {
+      pendienteDestacadoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [pendienteDestacado, loadingPendientes, tab, pendientes.length]);
 
   function agregarMaterial(m: MaterialCampoOpcion) {
     setLineas((prev) => {
@@ -338,10 +348,16 @@ export default function RecepcionCampoClient() {
                   const puedeIngreso =
                     p.estado === 'confirmado' && Boolean(p.purchase_invoice_id) && p.ubicacion_destino_id;
                   const puedeConfirmar = ['extraido', 'aprobado_sistema'].includes(p.estado);
+                  const destacado = pendienteDestacado === p.id;
                   return (
                     <li
                       key={p.id}
-                      className="rounded-xl border border-white/10 bg-[#0A0A0F] p-4"
+                      ref={destacado ? pendienteDestacadoRef : undefined}
+                      className={`rounded-xl border bg-[#0A0A0F] p-4 ${
+                        destacado
+                          ? 'border-[#FF9500]/60 shadow-[0_0_24px_rgba(255,149,0,0.15)]'
+                          : 'border-white/10'
+                      }`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
@@ -366,10 +382,9 @@ export default function RecepcionCampoClient() {
                             href={`/contabilidad/compras/telegram/${p.id}`}
                             className="rounded-xl bg-[#FF9500] px-4 py-2.5 text-xs font-black text-black hover:bg-[#FF9500]/90"
                           >
-                            Confirmar compra
+                            Ingreso
                           </Link>
-                        ) : null}
-                        {puedeIngreso ? (
+                        ) : puedeIngreso ? (
                           <button
                             type="button"
                             disabled={isSubmitting}
@@ -377,9 +392,9 @@ export default function RecepcionCampoClient() {
                               if (isSubmitting) return;
                               void ingresarFacturaAlmacen(p);
                             }}
-                            className="rounded-xl border border-[#FF9500]/50 bg-[#FF9500]/10 px-4 py-2.5 text-xs font-black text-[#FF9500] disabled:opacity-50"
+                            className="rounded-xl bg-[#FF9500] px-4 py-2.5 text-xs font-black text-black hover:bg-[#FF9500]/90 disabled:opacity-50"
                           >
-                            {ingresandoId === p.id ? 'Ingresando…' : 'Ingresar a almacén'}
+                            {ingresandoId === p.id ? 'Ingresando…' : 'Ingreso'}
                           </button>
                         ) : null}
                         {p.estado === 'aprobado_sistema' ? (

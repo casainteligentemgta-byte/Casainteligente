@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/inventory/GlassCard';
@@ -11,7 +11,6 @@ import {
     Search,
     Filter,
     Plus,
-    ChevronRight,
     Truck,
     ShieldCheck,
     History,
@@ -20,6 +19,8 @@ import {
     ArrowUpRight,
     Share2,
     RotateCw,
+    Pencil,
+    Loader2,
 } from 'lucide-react';
 import { InventoryItem } from '@/types/inventory';
 import { apiUrl } from '@/lib/http/apiUrl';
@@ -302,6 +303,9 @@ export default function InventoryMasterPage() {
         quarantineCount: 0
     });
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deletingBulk, setDeletingBulk] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const selectAllRef = useRef<HTMLInputElement>(null);
     /** `products.imagen` por nombre normalizado (fallback si no hay `product_id`). */
     const [catalogImagenByName, setCatalogImagenByName] = useState<Record<string, string>>({});
     /** `products.imagen` por `products.id` cuando el ítem tiene `product_id`. */
@@ -803,6 +807,44 @@ export default function InventoryMasterPage() {
         cuarentenaOperativa,
     ]);
 
+    const todasSeleccionadas = useMemo(
+        () => filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id)),
+        [filteredItems, selectedIds],
+    );
+    const algunaSeleccionada = selectedIds.size > 0;
+    const seleccionIndeterminada = algunaSeleccionada && !todasSeleccionadas;
+
+    useEffect(() => {
+        const el = selectAllRef.current;
+        if (el) el.indeterminate = seleccionIndeterminada;
+    }, [seleccionIndeterminada]);
+
+    useEffect(() => {
+        setSelectedIds((prev) => {
+            const visible = new Set(filteredItems.map((item) => item.id));
+            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [filteredItems]);
+
+    const toggleSelectAll = useCallback(() => {
+        setSelectedIds((prev) => {
+            if (filteredItems.length > 0 && filteredItems.every((item) => prev.has(item.id))) {
+                return new Set();
+            }
+            return new Set(filteredItems.map((item) => item.id));
+        });
+    }, [filteredItems]);
+
+    const toggleSelectItem = useCallback((id: string) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
     const statsFiltrados = useMemo(() => {
         const base = hayFiltrosActivos ? filteredItems : itemsCatalogo;
         const totalVal = base.reduce(
@@ -986,25 +1028,121 @@ export default function InventoryMasterPage() {
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
     };
 
-    /** Elimina un ítem del maestro global_inventory (irreversible). */
+    /** Elimina un ítem del maestro global_inventory y registros vinculados (irreversible). */
+    const eliminarMaterialPorId = async (
+        id: string,
+        label: string,
+        opciones?: { skipConfirm?: boolean },
+    ): Promise<boolean> => {
+        try {
+            const previewRes = await fetch(apiUrl(`/api/almacen/inventario/${encodeURIComponent(id)}`), {
+                cache: 'no-store',
+            });
+            const preview = (await previewRes.json()) as {
+                error?: string;
+                total?: number;
+                vinculos?: Record<string, number>;
+            };
+            if (!previewRes.ok) {
+                alert(preview.error || 'No se pudo consultar el material.');
+                return false;
+            }
+
+            if (!opciones?.skipConfirm) {
+                const totalVinculos = Number(preview.total ?? 0);
+                let mensajeConfirm = `¿Eliminar del inventario?\n\n${label}\n\nEsta acción no se puede deshacer.`;
+                if (totalVinculos > 0) {
+                    const partes: string[] = [];
+                    const v = preview.vinculos ?? {};
+                    if (v.movimientos) partes.push(`${v.movimientos} movimiento(s) de stock`);
+                    if (v.comprasLineas) {
+                        partes.push(
+                            `${v.comprasLineas} línea(s) de compra${v.comprasFacturas ? ` (${v.comprasFacturas} factura(s))` : ''}`,
+                        );
+                    }
+                    if (v.transferenciasLineas) {
+                        partes.push(
+                            `${v.transferenciasLineas} línea(s) de transferencia${v.transferencias ? ` (${v.transferencias} transferencia(s))` : ''}`,
+                        );
+                    }
+                    if (v.egresosLineas) {
+                        partes.push(
+                            `${v.egresosLineas} línea(s) de egreso${v.egresos ? ` (${v.egresos} egreso(s))` : ''}`,
+                        );
+                    }
+                    if (v.recepcionesLineas) {
+                        partes.push(
+                            `${v.recepcionesLineas} línea(s) de recepción${v.recepciones ? ` (${v.recepciones} recepción(es))` : ''}`,
+                        );
+                    }
+                    if (v.stock) partes.push(`${v.stock} registro(s) de stock`);
+                    if (v.series) partes.push(`${v.series} número(s) de serie`);
+                    if (v.purchaseDetails) partes.push(`${v.purchaseDetails} línea(s) de cuarentena`);
+                    if (v.maquinaria) partes.push(`${v.maquinaria} ficha(s) de maquinaria`);
+                    mensajeConfirm =
+                        `Este material tiene registros vinculados:\n\n• ${partes.join('\n• ')}\n\n` +
+                        `¿Eliminar también esos movimientos, compras y demás registros?\n\n` +
+                        `Material: ${label}\n\nEsta acción no se puede deshacer.`;
+                }
+
+                if (!confirm(mensajeConfirm)) return false;
+            }
+
+            const delRes = await fetch(apiUrl(`/api/almacen/inventario/${encodeURIComponent(id)}`), {
+                method: 'DELETE',
+            });
+            const delBody = (await delRes.json()) as { error?: string };
+            if (!delRes.ok) {
+                alert(delBody.error || 'Error al borrar el material.');
+                return false;
+            }
+            return true;
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'Error al borrar');
+            return false;
+        }
+    };
+
     const deleteMaterial = async (id: string, label: string) => {
-        if (!confirm(`¿Eliminar del inventario?\n\n${label}\n\nEsta acción no se puede deshacer.`)) return;
         setDeletingId(id);
         try {
-            const { error } = await supabase.from('global_inventory').delete().eq('id', id);
-            if (error) {
-                if (error.code === '23503' || error.message?.includes('foreign key')) {
-                    alert(
-                        'No se puede borrar: hay movimientos, compras u otros registros vinculados a este material. Elimina o ajusta esos datos primero en la base de datos.'
-                    );
-                } else {
-                    alert(error.message || 'Error al borrar');
-                }
-                return;
-            }
-            await fetchInventory();
+            const ok = await eliminarMaterialPorId(id, label);
+            if (ok) await fetchInventory();
         } finally {
             setDeletingId(null);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        const items = filteredItems.filter((item) => selectedIds.has(item.id));
+        if (!items.length) return;
+        if (
+            !confirm(
+                `¿Eliminar ${items.length} material(es) del inventario?\n\n` +
+                    `Si tienen movimientos, compras u otros registros vinculados, también se eliminarán.\n\n` +
+                    `Esta acción no se puede deshacer.`,
+            )
+        ) {
+            return;
+        }
+        setDeletingBulk(true);
+        let okCount = 0;
+        let failCount = 0;
+        try {
+            for (const item of items) {
+                setDeletingId(item.id);
+                const ok = await eliminarMaterialPorId(item.id, item.name, { skipConfirm: true });
+                if (ok) okCount += 1;
+                else failCount += 1;
+            }
+            setSelectedIds(new Set());
+            await fetchInventory();
+            if (failCount > 0) {
+                alert(`${okCount} eliminado(s). ${failCount} no se pudieron borrar.`);
+            }
+        } finally {
+            setDeletingId(null);
+            setDeletingBulk(false);
         }
     };
 
@@ -1456,10 +1594,73 @@ export default function InventoryMasterPage() {
             </div>
 
             {/* Items Table */}
+            {!loading && filteredItems.length > 0 ? (
+                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-300">
+                        <input
+                            ref={selectAllRef}
+                            type="checkbox"
+                            checked={todasSeleccionadas}
+                            onChange={toggleSelectAll}
+                            className="h-4 w-4 rounded border-zinc-600 accent-sky-500"
+                        />
+                        {todasSeleccionadas
+                            ? 'Quitar selección'
+                            : `Seleccionar todos (${filteredItems.length})`}
+                    </label>
+                    {algunaSeleccionada ? (
+                        <>
+                            <span className="text-xs font-black text-sky-400">
+                                {selectedIds.size} seleccionado(s)
+                            </span>
+                            <button
+                                type="button"
+                                disabled={deletingBulk || deletingId !== null}
+                                onClick={() => void handleBulkDelete()}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                            >
+                                {deletingBulk ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <Trash2 size={14} />
+                                )}
+                                Borrar seleccionados
+                            </button>
+                            <Link
+                                href={
+                                    selectedIds.size === 1
+                                        ? `/almacen/editar/${Array.from(selectedIds)[0]}`
+                                        : '#'
+                                }
+                                onClick={(e) => {
+                                    if (selectedIds.size !== 1) e.preventDefault();
+                                }}
+                                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${
+                                    selectedIds.size === 1
+                                        ? 'border-sky-500/35 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
+                                        : 'border-zinc-700 text-zinc-600 pointer-events-none'
+                                }`}
+                                title={
+                                    selectedIds.size === 1
+                                        ? 'Editar material seleccionado'
+                                        : 'Seleccione un solo material para editar'
+                                }
+                            >
+                                <Pencil size={14} />
+                                Editar
+                            </Link>
+                        </>
+                    ) : null}
+                </div>
+            ) : null}
+
             <GlassCard className="overflow-x-auto">
                 <table className="w-full border-collapse">
                     <thead>
                         <tr className="bg-zinc-900/50 border-b border-zinc-800 text-left">
+                            <th className="p-5 w-10">
+                                <span className="sr-only">Seleccionar</span>
+                            </th>
                             <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Material / Info</th>
                             <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Entidad / Obra / Partida</th>
                             <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Ubicación</th>
@@ -1473,12 +1674,12 @@ export default function InventoryMasterPage() {
                         {loading && items.length === 0 ? (
                             [1, 2, 3].map(i => (
                                 <tr key={i} className="animate-pulse">
-                                    <td colSpan={7} className="p-8 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Loading material data...</td>
+                                    <td colSpan={8} className="p-8 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Loading material data...</td>
                                 </tr>
                             ))
                         ) : filteredItems.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="p-20 text-center">
+                                <td colSpan={8} className="p-20 text-center">
                                     <div className="flex flex-col items-center">
                                         <Package size={48} className="text-zinc-800 mb-4" />
                                         <p className="text-zinc-500 font-black text-xl tracking-tight">No se encontraron materiales</p>
@@ -1512,8 +1713,24 @@ export default function InventoryMasterPage() {
                                             router.push(`/almacen/editar/${item.id}`);
                                         }
                                     }}
-                                    className="group hover:bg-white/[0.04] transition-colors cursor-pointer"
+                                    className={`group transition-colors cursor-pointer ${
+                                        selectedIds.has(item.id)
+                                            ? 'bg-sky-500/10 hover:bg-sky-500/15'
+                                            : 'hover:bg-white/[0.04]'
+                                    }`}
                                 >
+                                    <td
+                                        className="p-5 w-10 align-middle"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedIds.has(item.id)}
+                                            onChange={() => toggleSelectItem(item.id)}
+                                            className="h-4 w-4 rounded border-zinc-600 accent-sky-500"
+                                            aria-label={`Seleccionar ${item.name}`}
+                                        />
+                                    </td>
                                     <td className="p-5">
                                         <div className="flex items-center gap-4">
                                             <InventoryListThumb
@@ -1636,10 +1853,10 @@ export default function InventoryMasterPage() {
                                             <Link href={`/almacen/editar/${item.id}`}>
                                                 <button
                                                     type="button"
-                                                    title="Editar"
-                                                    className="p-2 text-zinc-600 hover:text-white hover:bg-zinc-800 rounded-lg transition-all"
+                                                    title="Editar material"
+                                                    className="p-2 text-zinc-600 hover:text-sky-400 hover:bg-sky-500/10 rounded-lg transition-all"
                                                 >
-                                                    <ChevronRight size={20} />
+                                                    <Pencil size={18} />
                                                 </button>
                                             </Link>
                                             <button

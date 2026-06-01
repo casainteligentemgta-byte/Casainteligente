@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowDownRight,
@@ -9,6 +9,7 @@ import {
   Box,
   Loader2,
   Package,
+  Pencil,
   RefreshCw,
   Search,
   Trash2,
@@ -62,6 +63,9 @@ export default function MovimientosInventarioClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [eliminandoBulk, setEliminandoBulk] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -96,6 +100,56 @@ export default function MovimientosInventarioClient() {
     void cargar();
   }, [cargar]);
 
+  const todasSeleccionadas = useMemo(
+    () => filas.length > 0 && filas.every((f) => selectedIds.has(f.id)),
+    [filas, selectedIds],
+  );
+  const algunaSeleccionada = selectedIds.size > 0;
+  const seleccionIndeterminada = algunaSeleccionada && !todasSeleccionadas;
+
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (el) el.indeterminate = seleccionIndeterminada;
+  }, [seleccionIndeterminada]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const visible = new Set(filas.map((f) => f.id));
+      const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filas]);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (filas.length > 0 && filas.every((f) => prev.has(f.id))) {
+        return new Set();
+      }
+      return new Set(filas.map((f) => f.id));
+    });
+  }, [filas]);
+
+  const toggleSelectFila = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const eliminarMovimientoPorId = async (id: string): Promise<boolean> => {
+    const res = await fetch('/api/almacen/movimientos', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+      cache: 'no-store',
+    });
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
+    return true;
+  };
+
   const eliminarMovimiento = async (f: FilaMovimientoInventario) => {
     if (!f.eliminable) return;
     const etiqueta = `${labelTipo(f.tipo)} · ${f.material_nombre}`.slice(0, 80);
@@ -107,21 +161,13 @@ export default function MovimientosInventarioClient() {
     setEliminandoId(f.id);
     setError(null);
     try {
-      const res = await fetch('/api/almacen/movimientos', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: f.id }),
-        cache: 'no-store',
-      });
-      const json = (await res.json()) as { error?: string; mensaje?: string };
-      if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
+      await eliminarMovimientoPorId(f.id);
       setFilas((prev) => prev.filter((row) => row.id !== f.id));
-      setResumen((prev) => ({
-        ...prev,
-        ingresado: f.tipo === 'ingreso' ? Math.max(0, prev.ingresado - 1) : prev.ingresado,
-        despachado: f.tipo === 'despacho' ? Math.max(0, prev.despachado - 1) : prev.despachado,
-        almacenado: f.tipo === 'almacenado' ? Math.max(0, prev.almacenado - 1) : prev.almacenado,
-      }));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(f.id);
+        return next;
+      });
       await cargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al eliminar');
@@ -129,6 +175,54 @@ export default function MovimientosInventarioClient() {
       setEliminandoId(null);
     }
   };
+
+  const eliminarSeleccionados = async () => {
+    const items = filas.filter((f) => selectedIds.has(f.id));
+    if (!items.length) return;
+    const eliminables = items.filter((f) => f.eliminable);
+    if (!eliminables.length) {
+      setError('Ninguno de los movimientos seleccionados se puede eliminar.');
+      return;
+    }
+    const ok = window.confirm(
+      `¿Eliminar ${eliminables.length} movimiento(s)?\n\nSe ajustará el inventario según corresponda.`,
+    );
+    if (!ok) return;
+
+    setEliminandoBulk(true);
+    setError(null);
+    let okCount = 0;
+    let failCount = 0;
+    try {
+      for (const f of eliminables) {
+        setEliminandoId(f.id);
+        try {
+          await eliminarMovimientoPorId(f.id);
+          okCount += 1;
+        } catch {
+          failCount += 1;
+        }
+      }
+      setSelectedIds(new Set());
+      await cargar();
+      if (failCount > 0) {
+        setError(`${okCount} eliminado(s). ${failCount} no se pudieron borrar.`);
+      } else if (items.length > eliminables.length) {
+        setError(
+          `${okCount} eliminado(s). ${items.length - eliminables.length} no eran eliminables.`,
+        );
+      }
+    } finally {
+      setEliminandoId(null);
+      setEliminandoBulk(false);
+    }
+  };
+
+  const filaSeleccionada = useMemo(() => {
+    if (selectedIds.size !== 1) return null;
+    const id = Array.from(selectedIds)[0];
+    return filas.find((f) => f.id === id) ?? null;
+  }, [selectedIds, filas]);
 
   return (
     <div className="min-h-screen bg-[#050508] text-white p-4 md:p-6 pb-24">
@@ -143,7 +237,7 @@ export default function MovimientosInventarioClient() {
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl md:text-3xl font-black tracking-tight">Movimientos de almacén</h1>
             <p className="text-xs text-zinc-500 mt-1">
-              Material ingresado, despachado y stock actual — filtrable por proveedor, destino y fecha.
+              Compras (ingresos), salidas (despachos) y stock — selección múltiple y borrado.
             </p>
           </div>
           <button
@@ -257,11 +351,56 @@ export default function MovimientosInventarioClient() {
           <p className="text-sm text-red-300 rounded-lg border border-red-500/30 bg-red-950/30 p-3">{error}</p>
         ) : null}
 
+        {!loading && filas.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-300">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={todasSeleccionadas}
+                onChange={toggleSelectAll}
+                className="h-4 w-4 rounded border-zinc-600 accent-sky-500"
+              />
+              {todasSeleccionadas ? 'Quitar selección' : `Seleccionar todos (${filas.length})`}
+            </label>
+            {algunaSeleccionada ? (
+              <>
+                <span className="text-xs font-black text-sky-400">{selectedIds.size} seleccionado(s)</span>
+                <button
+                  type="button"
+                  disabled={eliminandoBulk || eliminandoId !== null}
+                  onClick={() => void eliminarSeleccionados()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-950/30 px-3 py-1.5 text-[10px] font-black uppercase text-red-300 hover:bg-red-950/50 disabled:opacity-40"
+                >
+                  {eliminandoBulk ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  Borrar seleccionados
+                </button>
+                {filaSeleccionada?.material_id ? (
+                  <Link
+                    href={`/almacen/editar/${filaSeleccionada.material_id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-1.5 text-[10px] font-black uppercase text-sky-300 hover:bg-sky-500/20"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Editar material
+                  </Link>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="rounded-xl border border-white/10 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="bg-zinc-900/80 border-b border-white/10 text-left text-[10px] uppercase tracking-widest text-zinc-500">
+                  <th className="p-3 w-10">
+                    <span className="sr-only">Seleccionar</span>
+                  </th>
                   <th className="p-3">Tipo</th>
                   <th className="p-3">Fecha</th>
                   <th className="p-3">Material</th>
@@ -276,20 +415,34 @@ export default function MovimientosInventarioClient() {
               <tbody className="divide-y divide-white/5">
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="p-10 text-center text-zinc-500">
+                    <td colSpan={10} className="p-10 text-center text-zinc-500">
                       <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
                       Cargando movimientos…
                     </td>
                   </tr>
                 ) : filas.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-12 text-center text-zinc-600">
+                    <td colSpan={10} className="p-12 text-center text-zinc-600">
                       Sin registros con estos filtros.
                     </td>
                   </tr>
                 ) : (
                   filas.map((f) => (
-                    <tr key={f.id} className="hover:bg-white/[0.02]">
+                    <tr
+                      key={f.id}
+                      className={
+                        selectedIds.has(f.id) ? 'bg-sky-500/10 hover:bg-sky-500/15' : 'hover:bg-white/[0.02]'
+                      }
+                    >
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(f.id)}
+                          onChange={() => toggleSelectFila(f.id)}
+                          className="h-4 w-4 rounded border-zinc-600 accent-sky-500"
+                          aria-label={`Seleccionar ${f.material_nombre}`}
+                        />
+                      </td>
                       <td className="p-3">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${badgeTipo(f.tipo)}`}
@@ -321,24 +474,34 @@ export default function MovimientosInventarioClient() {
                       </td>
                       <td className="p-3 text-zinc-500 text-xs max-w-[100px] truncate">{f.referencia ?? '—'}</td>
                       <td className="p-3 text-right">
-                        {f.eliminable ? (
-                          <button
-                            type="button"
-                            disabled={eliminandoId === f.id}
-                            onClick={() => void eliminarMovimiento(f)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-950/30 px-2 py-1 text-[10px] font-bold uppercase text-red-300 hover:bg-red-950/50 disabled:opacity-40"
-                            title="Eliminar movimiento"
-                          >
-                            {eliminandoId === f.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                            Borrar
-                          </button>
-                        ) : (
-                          <span className="text-zinc-600 text-xs">—</span>
-                        )}
+                        <div className="inline-flex items-center gap-1">
+                          {f.material_id ? (
+                            <Link
+                              href={`/almacen/editar/${f.material_id}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-950/30 px-2 py-1 text-[10px] font-bold uppercase text-sky-300 hover:bg-sky-950/50"
+                              title="Editar material"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Link>
+                          ) : null}
+                          {f.eliminable ? (
+                            <button
+                              type="button"
+                              disabled={eliminandoId === f.id || eliminandoBulk}
+                              onClick={() => void eliminarMovimiento(f)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-950/30 px-2 py-1 text-[10px] font-bold uppercase text-red-300 hover:bg-red-950/50 disabled:opacity-40"
+                              title="Eliminar movimiento"
+                            >
+                              {eliminandoId === f.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          ) : (
+                            <span className="text-zinc-600 text-xs px-1">—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -347,11 +510,6 @@ export default function MovimientosInventarioClient() {
             </table>
           </div>
         </div>
-
-        <p className="text-[11px] text-zinc-600 text-center">
-          {filas.length} fila(s) mostradas · Ingresos desde compras registradas · Despachos desde transferencias y{' '}
-          <code className="text-zinc-500">/salida</code> Telegram · Borrar revierte stock cuando aplica
-        </p>
       </div>
     </div>
   );
