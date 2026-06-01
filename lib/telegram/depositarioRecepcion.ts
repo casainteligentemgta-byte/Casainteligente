@@ -157,7 +157,7 @@ async function canalAlertasDiscrepancia(): Promise<string | null> {
     if (first) return first;
   }
   const allowed = getTelegramAllowedChatIds();
-  if (allowed.size === 1) return [...allowed][0] ?? null;
+  if (allowed.size === 1) return Array.from(allowed)[0] ?? null;
   return null;
 }
 
