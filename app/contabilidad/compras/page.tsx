@@ -27,8 +27,12 @@ import {
     filtrarLineasComprasConfirmadas,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
+import ComprasFiltrosPanel, {
+    buildComprasFiltrosChips,
+    ComprasFiltrosActivosBar,
+} from '@/components/contabilidad/ComprasFiltrosPanel';
+import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 import {
-    esProyectoSmartRrhhPorNombre,
     loadCatalogoProyectosApp,
     mergeProyectosCatalogo,
     type ProyectoCatalogo,
@@ -237,6 +241,7 @@ export default function ComprasPage() {
     const [busqueda, setBusqueda] = useState('');
     const [busquedaAplicada, setBusquedaAplicada] = useState('');
     const [fuenteFiltro, setFuenteFiltro] = useState<FiltroFuenteCompra>('todos');
+    const [estadoLogisticaFiltro, setEstadoLogisticaFiltro] = useState<EstadoLogisticaCompra | ''>('');
     const [compartidoOk, setCompartidoOk] = useState(false);
     const [sortColumn, setSortColumn] = useState<ColumnaOrdenCompras | null>(null);
     const [sortDir, setSortDir] = useState<DireccionOrden>('asc');
@@ -246,6 +251,7 @@ export default function ComprasPage() {
     const selectAllRef = useRef<HTMLInputElement>(null);
     const proyectosIdsRef = useRef<Set<string>>(new Set());
     const shareParamsAplicados = useRef(false);
+    const autoAbrirFiltrosHecho = useRef(false);
 
     useEffect(() => {
         if (!hydrated || shareParamsAplicados.current) return;
@@ -353,15 +359,6 @@ export default function ComprasPage() {
         if (proyectoFiltro === 'sin_proyecto') return 'Sin proyecto asignado';
         return proyectosMap.get(proyectoFiltro) ?? 'Proyecto';
     }, [proyectoFiltro, proyectosMap]);
-
-    const proyectosPrincipales = useMemo(
-        () => proyectos.filter((p) => esProyectoSmartRrhhPorNombre(p.nombre)),
-        [proyectos]
-    );
-    const proyectosResto = useMemo(
-        () => proyectos.filter((p) => !esProyectoSmartRrhhPorNombre(p.nombre)),
-        [proyectos]
-    );
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -568,6 +565,10 @@ export default function ComprasPage() {
             filas = await enriquecerComprasPuenteInventario(supabase, filas);
             filas = await enriquecerComprasEstadoLogistica(supabase, filas);
 
+            if (estadoLogisticaFiltro) {
+                filas = filas.filter((c) => c.estado_logistica === estadoLogisticaFiltro);
+            }
+
             setCompras(filas);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'No se pudieron cargar las compras.');
@@ -590,6 +591,7 @@ export default function ComprasPage() {
         montoMaxUsd,
         busquedaAplicada,
         fuenteFiltro,
+        estadoLogisticaFiltro,
     ]);
 
     useEffect(() => {
@@ -1069,39 +1071,120 @@ export default function ComprasPage() {
     );
     const periodoLabel = fechaRefActiva ? etiquetaPeriodo(periodo, fechaRefActiva, rangoActivo) : '';
 
-    const filtrosActivos = useMemo(() => {
-        const tags: string[] = [];
-        if (fuenteFiltro !== 'todos') {
-            tags.push(
-                fuenteFiltro === 'telegram' ? 'Telegram' : 'App / recepción',
-            );
+    const filtrosActivos = useMemo(
+        () =>
+            buildComprasFiltrosChips({
+                fuenteFiltro,
+                periodo,
+                periodoLabel,
+                proyectoFiltro,
+                proyectoFiltroEtiqueta,
+                proveedorFiltro,
+                rifFiltro,
+                articuloFiltro,
+                busquedaAplicada,
+                montoMinBs,
+                montoMaxBs,
+                montoMinUsd,
+                montoMaxUsd,
+                cantidadMin,
+                cantidadMax,
+                estadoLogisticaFiltro,
+            }),
+        [
+            fuenteFiltro,
+            periodo,
+            periodoLabel,
+            proyectoFiltro,
+            proyectoFiltroEtiqueta,
+            proveedorFiltro,
+            rifFiltro,
+            articuloFiltro,
+            busquedaAplicada,
+            montoMinBs,
+            montoMaxBs,
+            montoMinUsd,
+            montoMaxUsd,
+            cantidadMin,
+            cantidadMax,
+            estadoLogisticaFiltro,
+        ],
+    );
+
+    const limpiarTodosFiltros = useCallback(() => {
+        setPeriodo('todas');
+        setFechaDesde('');
+        setFechaHasta('');
+        setProyectoFiltro('');
+        setProveedorFiltro('');
+        setRifFiltro('');
+        setArticuloFiltro('');
+        setCantidadMin('');
+        setCantidadMax('');
+        setMontoMinBs('');
+        setMontoMaxBs('');
+        setMontoMinUsd('');
+        setMontoMaxUsd('');
+        setEstadoLogisticaFiltro('');
+        setBusqueda('');
+        setBusquedaAplicada('');
+        setFuenteFiltro('todos');
+        router.replace('/contabilidad/compras');
+    }, [router]);
+
+    const quitarFiltroChip = useCallback(
+        (id: string) => {
+            switch (id) {
+                case 'fuente':
+                    setFuenteFiltro('todos');
+                    router.replace('/contabilidad/compras');
+                    break;
+                case 'periodo':
+                    setPeriodo('todas');
+                    break;
+                case 'proyecto':
+                    setProyectoFiltro('');
+                    break;
+                case 'proveedor':
+                    setProveedorFiltro('');
+                    break;
+                case 'rif':
+                    setRifFiltro('');
+                    break;
+                case 'articulo':
+                    setArticuloFiltro('');
+                    break;
+                case 'busqueda':
+                    setBusqueda('');
+                    setBusquedaAplicada('');
+                    break;
+                case 'monto':
+                    setMontoMinBs('');
+                    setMontoMaxBs('');
+                    setMontoMinUsd('');
+                    setMontoMaxUsd('');
+                    break;
+                case 'cantidad':
+                    setCantidadMin('');
+                    setCantidadMax('');
+                    break;
+                case 'logistica':
+                    setEstadoLogisticaFiltro('');
+                    break;
+                default:
+                    break;
+            }
+        },
+        [router],
+    );
+
+    useEffect(() => {
+        if (!hydrated || autoAbrirFiltrosHecho.current) return;
+        if (filtrosActivos.length > 0) {
+            setFiltrosAbiertos(true);
+            autoAbrirFiltrosHecho.current = true;
         }
-        if (periodo !== 'todas' && periodoLabel) tags.push(periodoLabel);
-        if (proyectoFiltro) tags.push(proyectoFiltroEtiqueta);
-        if (proveedorFiltro) tags.push(proveedorFiltro);
-        if (rifFiltro.trim()) tags.push(`RIF ${rifFiltro.trim()}`);
-        if (articuloFiltro.trim()) tags.push(`Artículo: ${articuloFiltro.trim()}`);
-        if (busquedaAplicada) tags.push(`«${busquedaAplicada}»`);
-        if (montoMinBs || montoMaxBs || montoMinUsd || montoMaxUsd) tags.push('Monto');
-        if (cantidadMin || cantidadMax) tags.push('Cantidad');
-        return tags;
-    }, [
-        fuenteFiltro,
-        periodo,
-        periodoLabel,
-        proyectoFiltro,
-        proyectoFiltroEtiqueta,
-        proveedorFiltro,
-        rifFiltro,
-        articuloFiltro,
-        busquedaAplicada,
-        montoMinBs,
-        montoMaxBs,
-        montoMinUsd,
-        montoMaxUsd,
-        cantidadMin,
-        cantidadMax,
-    ]);
+    }, [hydrated, filtrosActivos.length]);
 
     function tasaDisplayCompra(c: CompraRow): number | null {
         return tasaParaCompra(c);
@@ -1362,395 +1445,61 @@ export default function ComprasPage() {
                 </div>
 
                 {filtrosAbiertos ? (
-                <div className="compras-no-imprimir" style={{ ...glass, padding: '20px', marginBottom: '16px' }}>
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '8px',
-                            marginBottom: '12px',
+                    <ComprasFiltrosPanel
+                        valores={{
+                            fuenteFiltro,
+                            periodo,
+                            fechaRefActiva,
+                            fechaDesde,
+                            fechaHasta,
+                            proyectoFiltro,
+                            proyectoFiltroEtiqueta,
+                            proveedorFiltro,
+                            rifFiltro,
+                            articuloFiltro,
+                            cantidadMin,
+                            cantidadMax,
+                            montoMinBs,
+                            montoMaxBs,
+                            montoMinUsd,
+                            montoMaxUsd,
+                            estadoLogisticaFiltro,
+                            busqueda,
+                            busquedaAplicada,
                         }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Filter size={16} style={{ color: '#5856D6' }} />
-                            <p style={{ color: 'white', fontSize: '13px', fontWeight: 800, margin: 0 }}>FILTROS</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setFiltrosAbiertos(false)}
-                            style={{
-                                padding: '6px 10px',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(88,86,214,0.45)',
-                                background: 'rgba(88,86,214,0.2)',
-                                color: '#c4b5fd',
-                                fontSize: '10px',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                            }}
-                        >
-                            Ocultar
-                        </button>
-                    </div>
-
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
-                        ORIGEN
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
-                        {(
-                            [
-                                ['todos', 'Todas'],
-                                ['app', 'App / recepción'],
-                                ['telegram', 'Telegram'],
-                            ] as const
-                        ).map(([key, label]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => {
-                                    setFuenteFiltro(key);
-                                    router.replace(
-                                        key === 'todos'
-                                            ? '/contabilidad/compras'
-                                            : `/contabilidad/compras?fuente=${key}`,
-                                    );
-                                }}
-                                style={periodBtn(fuenteFiltro === key)}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                        <Link
-                            href="/contabilidad/compras/canal"
-                            style={{
-                                ...periodBtn(false),
-                                textDecoration: 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                            }}
-                        >
-                            Cola
-                        </Link>
-                    </div>
-
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
-                        PERÍODO
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
-                        {(
-                            [
-                                ['todas', 'Todas'],
-                                ['dia', 'Día'],
-                                ['semana', 'Semana'],
-                                ['mes', 'Mes'],
-                                ['rango', 'Rango'],
-                            ] as const
-                        ).map(([key, label]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                style={periodBtn(periodo === key)}
-                                onClick={() => {
-                                    setPeriodo(key);
-                                }}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {periodo === 'dia' || periodo === 'semana' || periodo === 'mes' ? (
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
-                                {periodo === 'dia' ? 'FECHA' : periodo === 'semana' ? 'SEMANA DEL' : 'MES DE'}
-                            </label>
-                            <input
-                                type="date"
-                                value={fechaRefActiva}
-                                onChange={(e) => setFechaRef(e.target.value)}
-                                suppressHydrationWarning
-                                style={{ ...inputStyle, marginTop: '6px' }}
-                            />
-                        </div>
-                    ) : null}
-
-                    {periodo === 'rango' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                            <div>
-                                <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
-                                    DESDE
-                                </label>
-                                <input
-                                    type="date"
-                                    value={fechaDesde}
-                                    onChange={(e) => setFechaDesde(e.target.value)}
-                                    style={{ ...inputStyle, marginTop: '6px' }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
-                                    HASTA
-                                </label>
-                                <input
-                                    type="date"
-                                    value={fechaHasta}
-                                    onChange={(e) => setFechaHasta(e.target.value)}
-                                    style={{ ...inputStyle, marginTop: '6px' }}
-                                />
-                            </div>
-                        </div>
-                    ) : null}
-
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '12px',
-                            marginBottom: '16px',
-                        }}
-                    >
-                        <div>
-                            <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
-                                PROVEEDOR
-                            </label>
-                            <select
-                                value={proveedorFiltro}
-                                onChange={(e) => setProveedorFiltro(e.target.value)}
-                                style={{ ...inputStyle, marginTop: '6px' }}
-                            >
-                                <option value="">Todos</option>
-                                {proveedores.map((p) => (
-                                    <option key={p.nombre} value={p.nombre}>
-                                        {p.nombre}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
-                                RIF
-                            </label>
-                            <input
-                                type="search"
-                                value={rifFiltro}
-                                onChange={(e) => setRifFiltro(e.target.value)}
-                                placeholder="J-12345678-9"
-                                style={{ ...inputStyle, marginTop: '6px' }}
-                            />
-                        </div>
-                    </div>
-
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
-                        MONTO TOTAL (Bs)
-                    </p>
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '10px',
-                            marginBottom: '12px',
-                        }}
-                    >
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="Mín. Bs"
-                            value={montoMinBs}
-                            onChange={(e) => setMontoMinBs(e.target.value)}
-                            style={inputMontoStyle}
-                        />
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="Máx. Bs"
-                            value={montoMaxBs}
-                            onChange={(e) => setMontoMaxBs(e.target.value)}
-                            style={inputMontoStyle}
-                        />
-                    </div>
-
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
-                        MONTO TOTAL (USD)
-                    </p>
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '10px',
-                            marginBottom: '16px',
-                        }}
-                    >
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="Mín. USD"
-                            value={montoMinUsd}
-                            onChange={(e) => setMontoMinUsd(e.target.value)}
-                            style={inputMontoStyle}
-                        />
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="Máx. USD"
-                            value={montoMaxUsd}
-                            onChange={(e) => setMontoMaxUsd(e.target.value)}
-                            style={inputMontoStyle}
-                        />
-                    </div>
-
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
-                        ARTÍCULO Y CANTIDAD (líneas)
-                    </p>
-                    <div style={{ marginBottom: '10px' }}>
-                        <input
-                            type="search"
-                            value={articuloFiltro}
-                            onChange={(e) => setArticuloFiltro(e.target.value)}
-                            placeholder="Descripción o código de artículo"
-                            style={inputStyle}
-                        />
-                    </div>
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '10px',
-                            marginBottom: '16px',
-                        }}
-                    >
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="Cant. mín."
-                            value={cantidadMin}
-                            onChange={(e) => setCantidadMin(e.target.value)}
-                            style={inputMontoStyle}
-                        />
-                        <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="Cant. máx."
-                            value={cantidadMax}
-                            onChange={(e) => setCantidadMax(e.target.value)}
-                            style={inputMontoStyle}
-                        />
-                    </div>
-
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 700 }}>
-                            PROYECTO
-                        </label>
-                        <p
-                            style={{
-                                color: '#5856D6',
-                                fontSize: '12px',
-                                fontWeight: 800,
-                                marginTop: '6px',
-                                marginBottom: '8px',
-                            }}
-                        >
-                            {proyectoFiltroEtiqueta}
-                        </p>
-                        <select
-                            value={proyectoFiltro}
-                            onChange={(e) => setProyectoFiltro(e.target.value)}
-                            style={{ ...inputStyle, marginTop: '0' }}
-                        >
-                            <option value="">Todos los proyectos</option>
-                            <option value="sin_proyecto">Sin proyecto</option>
-                            {proyectosPrincipales.length > 0 ? (
-                                <optgroup label="Obras principales">
-                                    {proyectosPrincipales.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.nombre}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                            ) : null}
-                            {proyectosResto.length > 0 ? (
-                                <optgroup label="Otros proyectos">
-                                    {proyectosResto.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.nombre}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                            ) : null}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label
-                            style={{
-                                color: 'rgba(255,255,255,0.45)',
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                            }}
-                        >
-                            <Search size={12} /> BÚSQUEDA
-                        </label>
-                        <input
-                            type="search"
-                            value={busqueda}
-                            onChange={(e) => setBusqueda(e.target.value)}
-                            placeholder="Proveedor, RIF, monto, artículo, factura…"
-                            style={{ ...inputStyle, marginTop: '6px' }}
-                        />
-                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px', marginTop: '8px', lineHeight: 1.4 }}>
-                            Búsqueda rápida adicional (factura, proveedor, RIF, monto o artículo).
-                        </p>
-                    </div>
-
-                    {periodoLabel ? (
-                        <p style={{ color: '#5856D6', fontSize: '11px', fontWeight: 700, marginTop: '14px' }}>
-                            Mostrando: {periodoLabel}
-                            {busquedaAplicada ? ` · búsqueda: «${busquedaAplicada}»` : ''}
-                        </p>
-                    ) : busquedaAplicada ? (
-                        <p style={{ color: '#5856D6', fontSize: '11px', fontWeight: 700, marginTop: '14px' }}>
-                            Búsqueda: «{busquedaAplicada}»
-                        </p>
-                    ) : null}
-                </div>
-                ) : filtrosActivos.length > 0 ? (
-                    <div
-                        className="compras-no-imprimir"
-                        style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            alignItems: 'center',
-                            gap: '8px',
-                            marginBottom: '16px',
-                            padding: '10px 14px',
-                            borderRadius: '14px',
-                            border: '1px solid rgba(88,86,214,0.25)',
-                            background: 'rgba(88,86,214,0.08)',
-                        }}
-                    >
-                        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 800 }}>
-                            Filtros activos:
-                        </span>
-                        {filtrosActivos.map((tag) => (
-                            <span
-                                key={tag}
-                                style={{
-                                    fontSize: '10px',
-                                    fontWeight: 700,
-                                    padding: '4px 8px',
-                                    borderRadius: '8px',
-                                    background: 'rgba(88,86,214,0.2)',
-                                    color: '#c4b5fd',
-                                }}
-                            >
-                                {tag}
-                            </span>
-                        ))}
-                    </div>
-                ) : null}
+                        proyectos={proyectos}
+                        proveedores={proveedores}
+                        fuenteFiltro={fuenteFiltro}
+                        periodo={periodo}
+                        periodoLabel={periodoLabel}
+                        onClose={() => setFiltrosAbiertos(false)}
+                        onLimpiarTodos={limpiarTodosFiltros}
+                        setFuenteFiltro={setFuenteFiltro}
+                        setPeriodo={setPeriodo}
+                        setFechaRef={setFechaRef}
+                        setFechaDesde={setFechaDesde}
+                        setFechaHasta={setFechaHasta}
+                        setProyectoFiltro={setProyectoFiltro}
+                        setProveedorFiltro={setProveedorFiltro}
+                        setRifFiltro={setRifFiltro}
+                        setArticuloFiltro={setArticuloFiltro}
+                        setCantidadMin={setCantidadMin}
+                        setCantidadMax={setCantidadMax}
+                        setMontoMinBs={setMontoMinBs}
+                        setMontoMaxBs={setMontoMaxBs}
+                        setMontoMinUsd={setMontoMinUsd}
+                        setMontoMaxUsd={setMontoMaxUsd}
+                        setEstadoLogisticaFiltro={setEstadoLogisticaFiltro}
+                        setBusqueda={setBusqueda}
+                    />
+                ) : (
+                    <ComprasFiltrosActivosBar
+                        chips={filtrosActivos}
+                        onAbrirFiltros={() => setFiltrosAbiertos(true)}
+                        onLimpiarTodos={limpiarTodosFiltros}
+                        onQuitarChip={quitarFiltroChip}
+                    />
+                )}
 
                 <div className="compras-cuadro-imprimible" style={{ ...glass, padding: '20px', marginBottom: '20px' }}>
                     <div className="compras-solo-imprimir" style={{ marginBottom: '16px' }}>

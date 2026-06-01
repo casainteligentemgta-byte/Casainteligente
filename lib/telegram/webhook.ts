@@ -96,6 +96,11 @@ import {
   esCallbackSalidaOrigen,
   manejarCallbackSalidaOrigenTelegram,
 } from '@/lib/telegram/salidaOrigenPicker';
+import {
+  esCallbackDepositarioRecepcion,
+  manejarCallbackDepositarioRecepcion,
+  manejarTextoDepositarioRecepcion,
+} from '@/lib/telegram/depositarioRecepcion';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
@@ -381,6 +386,18 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
+    if (esCallbackDepositarioRecepcion(cq.data)) {
+      const handledRecepcion = await manejarCallbackDepositarioRecepcion(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        telegramUserId: userId,
+      });
+      if (handledRecepcion) {
+        return NextResponse.json({ ok: true, callback: 'depositario_recepcion' });
+      }
+    }
+
     if (esCallbackEntradaCompra(cq.data)) {
       const handledEntradaCompra = await manejarCallbackEntradaCompraTelegram(admin.client, {
         chatId,
@@ -553,6 +570,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (texto && !texto.startsWith('/')) {
+      const recepcionFisica = await manejarTextoDepositarioRecepcion(supabase, chatId, texto);
+      if (recepcionFisica.handled) {
+        return NextResponse.json({ ok: true, depositario_recepcion: true });
+      }
+
       const notaProveedor = await manejarTextoProveedorNotaEntrega({
         supabase,
         chatId,
