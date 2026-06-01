@@ -1,0 +1,37 @@
+---
+description: Filtros del cuadro de compras en /contabilidad/compras
+globs: app/contabilidad/compras/**,components/contabilidad/ComprasFiltrosPanel.tsx,lib/contabilidad/filtrosFacturaCanal.ts,lib/contabilidad/comprasCuadroShare.ts
+alwaysApply: false
+---
+
+# Cuadro de compras — filtros (`/contabilidad/compras`)
+
+URL producción: https://casainteligente.company/contabilidad/compras
+
+Panel colapsable **Filtros** (`ComprasFiltrosPanel`). Los filtros activos aparecen como chips; se pueden compartir vía query string (`comprasCuadroShare.ts`).
+
+## Filtros principales (los que el usuario espera)
+
+| Filtro | UI | Query param |
+|--------|-----|-------------|
+| Entidad / patrono | select (`ci_entidades`, incl. `sin_entidad`) | `entidad` |
+| Obra / proyecto | select (agrupado principal/resto, incl. `sin_proyecto`); se acota si hay entidad | `proyecto` |
+| Proveedor | select + RIF | `proveedor`, `rif` |
+| Producto / artículo | descripción o código SAP + cant. min/max | `articulo`, `cmin`, `cmax` |
+| Rango de fechas | Todas / Día / Semana / Mes / Rango | `periodo`, `ref`, `desde`, `hasta` |
+
+## Filtros adicionales
+
+- **Fuente**: todos / App / Telegram (`fuente`)
+- **Búsqueda libre** (`q`)
+- **Montos** Bs y USD min/max (`mminbs`, `mmaxbs`, `mminusd`, `mmaxusd`)
+- **Estado logístico** (post-enriquecimiento, solo cliente)
+- **Vista**: por línea o por factura (`vista`); orden (`sort`, `dir`)
+
+## Lógica de aplicación
+
+1. **SQL** (`page.tsx` → Supabase `contabilidad_compras`): entidad, proyecto, proveedor, fechas, montos, RIF, búsqueda, fuente.
+2. **Post-enriquecimiento** (`compraCumpleFiltrosDestino` en `filtrosFacturaCanal.ts`): entidad, proyecto, proveedor y fechas para filas **Telegram** (destino inferido desde proyecto).
+3. **Líneas** (`compraCumpleFiltrosLineas`): artículo y cantidad sobre líneas de factura.
+
+Al cambiar entidad, si el proyecto seleccionado no pertenece a esa entidad, se limpia el proyecto.
