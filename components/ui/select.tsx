@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +22,8 @@ type SelectContextValue = {
   placeholder: string;
   setPlaceholder: (p: string) => void;
   disabled?: boolean;
+  triggerEl: HTMLButtonElement | null;
+  setTriggerEl: (el: HTMLButtonElement | null) => void;
 };
 
 const SelectContext = React.createContext<SelectContextValue | null>(null);
@@ -42,6 +45,7 @@ function Select({ value, onValueChange, disabled, children }: SelectProps) {
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState<SelectItemData[]>([]);
   const [placeholder, setPlaceholder] = React.useState('Seleccionar…');
+  const [triggerEl, setTriggerEl] = React.useState<HTMLButtonElement | null>(null);
 
   const registerItem = React.useCallback((item: SelectItemData) => {
     setItems((prev) => {
@@ -72,6 +76,8 @@ function Select({ value, onValueChange, disabled, children }: SelectProps) {
         placeholder,
         setPlaceholder,
         disabled,
+        triggerEl,
+        setTriggerEl,
       }}
     >
       <div className="relative w-full">{children}</div>
@@ -83,18 +89,27 @@ const SelectTrigger = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
 >(({ className, children, ...props }, ref) => {
-  const { open, setOpen, value, items, placeholder, disabled } = useSelectContext();
+  const { open, setOpen, value, items, placeholder, disabled, setTriggerEl } = useSelectContext();
   const selected = items.find((i) => i.value === value);
+
+  const mergedRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      setTriggerEl(node);
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref, setTriggerEl],
+  );
 
   return (
     <button
-      ref={ref}
+      ref={mergedRef}
       type="button"
       role="combobox"
       aria-expanded={open}
       disabled={disabled}
       className={cn(
-        'flex h-10 w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100',
+        'flex min-h-10 w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100',
         'ring-offset-[#0A0A0F] focus:outline-none focus:ring-2 focus:ring-[#FF9500]/40 focus:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-50 backdrop-blur-xl',
         className,
@@ -129,64 +144,113 @@ function SelectContent({
   children: React.ReactNode;
   position?: 'popper' | 'item-aligned';
 }) {
-  const { open, setOpen, items, value, onValueChange } = useSelectContext();
+  const { open, setOpen, items, value, onValueChange, triggerEl } = useSelectContext();
   const ref = React.useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = React.useState(false);
+  const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0, maxHeight: 320 });
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const actualizarPosicion = React.useCallback(() => {
+    if (!triggerEl) return;
+    const rect = triggerEl.getBoundingClientRect();
+    const gap = 4;
+    const espacioAbajo = window.innerHeight - rect.bottom - gap - 8;
+    const espacioArriba = rect.top - gap - 8;
+    const abrirArriba = espacioAbajo < 180 && espacioArriba > espacioAbajo;
+    const maxHeight = Math.max(160, Math.min(420, abrirArriba ? espacioArriba : espacioAbajo));
+    const top = abrirArriba ? rect.top - gap - maxHeight : rect.bottom + gap;
+    setCoords({
+      top: Math.max(8, top),
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, [triggerEl]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    actualizarPosicion();
+    const onScroll = () => actualizarPosicion();
+    const onResize = () => actualizarPosicion();
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [open, actualizarPosicion]);
 
   React.useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (triggerEl?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [open, setOpen]);
+  }, [open, setOpen, triggerEl]);
+
+  const lista = (
+    <div
+      ref={ref}
+      role="listbox"
+      style={{
+        position: 'fixed',
+        top: coords.top,
+        left: coords.left,
+        width: coords.width,
+        maxHeight: coords.maxHeight,
+        zIndex: 9999,
+      }}
+      className={cn(
+        'overflow-y-auto overscroll-contain rounded-lg border border-white/10 bg-[#0A0A0F] p-1 shadow-2xl backdrop-blur-xl',
+        className,
+      )}
+    >
+      {items.length === 0 ? (
+        <p className="px-3 py-2 text-xs text-zinc-500">Sin opciones</p>
+      ) : (
+        items.map((item) => {
+          const isSelected = value === item.value;
+          return (
+            <button
+              key={item.value}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              disabled={item.disabled}
+              className={cn(
+                'relative flex w-full cursor-pointer select-none items-start rounded-md py-2 pl-8 pr-2 text-left text-sm outline-none',
+                'text-zinc-200 hover:bg-white/[0.08] focus:bg-white/[0.08]',
+                'disabled:pointer-events-none disabled:opacity-50',
+                isSelected && 'bg-[#FF9500]/15 text-[#FFD60A]',
+              )}
+              onClick={() => {
+                if (item.disabled) return;
+                onValueChange?.(item.value);
+                setOpen(false);
+              }}
+            >
+              <span className="absolute left-2 top-2 flex h-3.5 w-3.5 items-center justify-center">
+                {isSelected ? <Check className="h-4 w-4 text-[#34C759]" /> : null}
+              </span>
+              <span className="min-w-0 break-words">{item.label}</span>
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
 
   return (
     <>
       {children}
-      {open ? (
-        <div
-          ref={ref}
-          role="listbox"
-          className={cn(
-            'absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-white/10 bg-[#0A0A0F] p-1 shadow-2xl backdrop-blur-xl',
-            className,
-          )}
-        >
-          {items.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-zinc-500">Sin opciones</p>
-          ) : (
-            items.map((item) => {
-              const isSelected = value === item.value;
-              return (
-                <button
-                  key={item.value}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  disabled={item.disabled}
-                  className={cn(
-                    'relative flex w-full cursor-pointer select-none items-center rounded-md py-2 pl-8 pr-2 text-sm outline-none',
-                    'text-zinc-200 hover:bg-white/[0.08] focus:bg-white/[0.08]',
-                    'disabled:pointer-events-none disabled:opacity-50',
-                    isSelected && 'bg-[#FF9500]/15 text-[#FFD60A]',
-                  )}
-                  onClick={() => {
-                    if (item.disabled) return;
-                    onValueChange?.(item.value);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                    {isSelected ? <Check className="h-4 w-4 text-[#34C759]" /> : null}
-                  </span>
-                  {item.label}
-                </button>
-              );
-            })
-          )}
-        </div>
-      ) : null}
+      {open && mounted ? createPortal(lista, document.body) : null}
     </>
   );
 }
@@ -202,11 +266,12 @@ function SelectItem({
   className?: string;
 }) {
   const { registerItem, unregisterItem } = useSelectContext();
+  const label = React.useMemo(() => children, [children]);
 
   React.useEffect(() => {
-    registerItem({ value, label: children, disabled });
+    registerItem({ value, label, disabled });
     return () => unregisterItem(value);
-  }, [value, children, disabled, registerItem, unregisterItem]);
+  }, [value, label, disabled, registerItem, unregisterItem]);
 
   return null;
 }

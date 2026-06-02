@@ -4,9 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const selectClass =
-  'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50';
+  'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50 min-h-[46px]';
 
 type Props = {
   proyectoId: string;
@@ -82,40 +89,42 @@ export default function UbicacionInventarioSelect({
     return ubicaciones.some((u) => u.id === value) ? value : '';
   }, [loading, value, ubicaciones]);
 
+  const placeholderActual = loading ? 'Cargando almacenes…' : placeholder;
+
   if (!proyectoId.trim() && !permitirSinProyecto) {
     return (
-      <select id={id} disabled className={className}>
-        <option value="" className="bg-[#0A0A0F] text-zinc-100">
+      <Select disabled value="">
+        <SelectTrigger id={id} className={className}>
           Primero seleccione la obra…
-        </option>
-      </select>
+        </SelectTrigger>
+      </Select>
     );
   }
 
   return (
     <div className="space-y-1">
-      <select
-        id={id}
+      <Select
         value={valorSelect}
+        onValueChange={onChange}
         disabled={disabled || loading}
-        onChange={(e) => onChange(e.target.value)}
-        className={className}
       >
-        <option value="" className="bg-[#0A0A0F] text-zinc-100">
-          {loading ? 'Cargando almacenes…' : placeholder}
-        </option>
-        {ubicaciones.map((u) => (
-          <option key={u.id} value={u.id} className="bg-[#0A0A0F] text-zinc-100">
-            {labelUbicacionOpcion(u)}
-          </option>
-        ))}
-      </select>
-      {loading ? (
-        <p className="text-[10px] text-zinc-500 flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Cargando ubicaciones…
-        </p>
-      ) : null}
+        <SelectValue placeholder={placeholderActual} />
+        <SelectTrigger id={id} className={className} aria-busy={loading}>
+          {loading ? (
+            <span className="flex items-center gap-2 text-zinc-500">
+              <Loader2 className="h-4 w-4 animate-spin text-[#FF9500]" />
+              Cargando almacenes…
+            </span>
+          ) : undefined}
+        </SelectTrigger>
+        <SelectContent>
+          {ubicaciones.map((u) => (
+            <SelectItem key={u.id} value={u.id}>
+              {labelUbicacionOpcion(u)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       {error ? <p className="text-[10px] text-amber-500">{error}</p> : null}
       {!loading && !error && ubicaciones.length === 0 && proyectoId ? (
         <p className="text-[10px] text-amber-500">

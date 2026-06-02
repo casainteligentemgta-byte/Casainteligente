@@ -61,7 +61,9 @@ export async function POST(req: Request, ctx: RouteCtx) {
 
     if (ingresoAutomatico) {
       try {
-        ingresoAlmacen = await ingresoAlmacenDesdePendienteCanal(admin.client, id);
+        ingresoAlmacen = await ingresoAlmacenDesdePendienteCanal(admin.client, id, {
+          purchaseInvoiceId: result.purchaseInvoiceId,
+        });
         if (ingresoAlmacen && !ingresoAlmacen.success) {
           await encolarIngresoAlmacenFallback(
             admin.client,

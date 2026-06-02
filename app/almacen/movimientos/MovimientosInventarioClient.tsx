@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Box,
+  ChevronDown,
+  Filter,
   Loader2,
   Package,
   Pencil,
@@ -53,6 +55,9 @@ function labelTipo(tipo: FilaMovimientoInventario['tipo']) {
 
 export default function MovimientosInventarioClient() {
   const [vista, setVista] = useState<VistaMovimientoInventario>('todos');
+  const [proveedorInput, setProveedorInput] = useState('');
+  const [destinoInput, setDestinoInput] = useState('');
+  const [materialInput, setMaterialInput] = useState('');
   const [proveedor, setProveedor] = useState('');
   const [destino, setDestino] = useState('');
   const [material, setMaterial] = useState('');
@@ -65,7 +70,38 @@ export default function MovimientosInventarioClient() {
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [eliminandoBulk, setEliminandoBulk] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
+
+  const filtrosActivos = useMemo(() => {
+    const activos: string[] = [];
+    if (proveedorInput.trim()) activos.push('proveedor');
+    if (destinoInput.trim()) activos.push('destino');
+    if (materialInput.trim()) activos.push('material');
+    if (fechaDesde) activos.push('desde');
+    if (fechaHasta) activos.push('hasta');
+    return activos;
+  }, [proveedorInput, destinoInput, materialInput, fechaDesde, fechaHasta]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setProveedor(proveedorInput.trim());
+      setDestino(destinoInput.trim());
+      setMaterial(materialInput.trim());
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [proveedorInput, destinoInput, materialInput]);
+
+  const limpiarFiltros = useCallback(() => {
+    setProveedorInput('');
+    setDestinoInput('');
+    setMaterialInput('');
+    setProveedor('');
+    setDestino('');
+    setMaterial('');
+    setFechaDesde('');
+    setFechaHasta('');
+  }, []);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -240,14 +276,38 @@ export default function MovimientosInventarioClient() {
               Compras (ingresos), salidas (despachos) y stock — selección múltiple y borrado.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void cargar()}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFiltrosAbiertos((v) => !v)}
+              aria-expanded={filtrosAbiertos}
+              aria-controls="panel-filtros-movimientos"
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                filtrosAbiertos
+                  ? 'border-sky-500/50 bg-sky-500/15 text-sky-100'
+                  : 'border-white/10 text-zinc-300 hover:bg-white/5'
+              }`}
+            >
+              <Filter className="h-4 w-4" />
+              Filtros
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${filtrosAbiertos ? 'rotate-180' : ''}`}
+              />
+              {filtrosActivos.length > 0 && !filtrosAbiertos ? (
+                <span className="min-w-4 h-4 px-1 rounded-full bg-sky-500 text-[9px] font-black leading-4 text-white">
+                  {filtrosActivos.length}
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => void cargar()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
@@ -290,62 +350,78 @@ export default function MovimientosInventarioClient() {
           })}
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3">
-          <div className="flex items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
-            <Search className="h-3.5 w-3.5" />
-            Filtros
+        {filtrosAbiertos ? (
+          <div
+            id="panel-filtros-movimientos"
+            className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                <Search className="h-3.5 w-3.5" />
+                Filtros
+              </div>
+              {filtrosActivos.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+                >
+                  Limpiar filtros
+                </button>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Proveedor</label>
+                <input
+                  type="search"
+                  value={proveedorInput}
+                  onChange={(e) => setProveedorInput(e.target.value)}
+                  placeholder="Nombre proveedor"
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Destino / obra</label>
+                <input
+                  type="search"
+                  value={destinoInput}
+                  onChange={(e) => setDestinoInput(e.target.value)}
+                  placeholder="Almacén, obra u origen"
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Material</label>
+                <input
+                  type="search"
+                  value={materialInput}
+                  onChange={(e) => setMaterialInput(e.target.value)}
+                  placeholder="Nombre, SAP o N° factura"
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Desde</label>
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Hasta</label>
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <label className="text-[10px] font-bold text-zinc-500 uppercase">Proveedor</label>
-              <input
-                type="search"
-                value={proveedor}
-                onChange={(e) => setProveedor(e.target.value)}
-                placeholder="Nombre proveedor"
-                className={`${inputClass} mt-1`}
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-zinc-500 uppercase">Destino / obra</label>
-              <input
-                type="search"
-                value={destino}
-                onChange={(e) => setDestino(e.target.value)}
-                placeholder="Almacén u obra"
-                className={`${inputClass} mt-1`}
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-zinc-500 uppercase">Material</label>
-              <input
-                type="search"
-                value={material}
-                onChange={(e) => setMaterial(e.target.value)}
-                placeholder="Nombre o código SAP"
-                className={`${inputClass} mt-1`}
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-zinc-500 uppercase">Desde</label>
-              <input
-                type="date"
-                value={fechaDesde}
-                onChange={(e) => setFechaDesde(e.target.value)}
-                className={`${inputClass} mt-1`}
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-zinc-500 uppercase">Hasta</label>
-              <input
-                type="date"
-                value={fechaHasta}
-                onChange={(e) => setFechaHasta(e.target.value)}
-                className={`${inputClass} mt-1`}
-              />
-            </div>
-          </div>
-        </div>
+        ) : null}
 
         {error ? (
           <p className="text-sm text-red-300 rounded-lg border border-red-500/30 bg-red-950/30 p-3">{error}</p>

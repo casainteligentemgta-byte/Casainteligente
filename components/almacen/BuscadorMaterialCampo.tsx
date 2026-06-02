@@ -87,7 +87,7 @@ export default function BuscadorMaterialCampo({
       </div>
 
       {resultados.length > 0 ? (
-        <ul className="max-h-52 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl">
+        <ul className="max-h-[min(50vh,16rem)] overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-2xl">
           {resultados.map((m) => (
             <li key={m.id}>
               <button

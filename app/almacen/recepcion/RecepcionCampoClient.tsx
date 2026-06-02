@@ -2,21 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Camera,
   FileText,
   Loader2,
   Package,
+  Pencil,
+  Plus,
   Trash2,
   Truck,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import BuscadorMaterialCampo, { type MaterialCampoOpcion } from '@/components/almacen/BuscadorMaterialCampo';
+import SelectorMaterialObraRecepcion from '@/components/almacen/SelectorMaterialObraRecepcion';
 import { ProcurementDocumentAttach } from '@/components/almacen/ProcurementDocumentAttach';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
@@ -24,7 +34,8 @@ import type { LineaRecepcionCampoInput, TipoRecepcionCampo } from '@/lib/almacen
 import { createClient } from '@/lib/supabase/client';
 import { uploadRecepcionCampoDocument } from '@/lib/almacen/uploadRecepcionCampoDocument';
 
-type TabRecepcion = 'transito' | 'nota' | 'emergencia';
+type TabRecepcion = 'ingreso' | 'transito';
+type TipoIngresoManual = 'nota_entrega' | 'emergencia';
 
 type ProyectoOpt = { id: string; nombre: string };
 
@@ -50,7 +61,8 @@ type LineaForm = {
 
 const tabBtn =
   'flex-1 min-w-[140px] rounded-2xl border px-4 py-4 text-sm font-black transition backdrop-blur-xl';
-const panelClass = 'rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl';
+const panelClass =
+  'rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl overflow-visible';
 const inputClass =
   'w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-[#FF9500]/50 focus:ring-2 focus:ring-[#FF9500]/20';
 const selectClass = inputClass;
@@ -80,6 +92,7 @@ function RecepcionCargando() {
 }
 
 export default function RecepcionCampoClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
   const [montado, setMontado] = useState(false);
@@ -89,8 +102,19 @@ export default function RecepcionCampoClient() {
   const pendienteDestacado = searchParams.get('pendiente')?.trim() || '';
   const tabInicial = searchParams.get('tab');
   const [tab, setTab] = useState<TabRecepcion>(
-    tabInicial === 'nota' || tabInicial === 'emergencia' ? tabInicial : 'transito',
+    tabInicial === 'transito' || tabInicial === 'nota' || tabInicial === 'emergencia'
+      ? tabInicial === 'transito'
+        ? 'transito'
+        : 'ingreso'
+      : 'ingreso',
   );
+  const [tipoIngreso, setTipoIngreso] = useState<TipoIngresoManual>(
+    tabInicial === 'emergencia' ? 'emergencia' : 'nota_entrega',
+  );
+  const [cantidadNueva, setCantidadNueva] = useState('1');
+  const [materialObraId, setMaterialObraId] = useState('');
+  const [materialObraSel, setMaterialObraSel] = useState<MaterialCampoOpcion | null>(null);
+  const [busquedaGlobalAbierta, setBusquedaGlobalAbierta] = useState(false);
 
   const [proyectos, setProyectos] = useState<ProyectoOpt[]>([]);
   const [proyectoId, setProyectoId] = useState(searchParams.get('proyectoId')?.trim() || '');
@@ -99,6 +123,10 @@ export default function RecepcionCampoClient() {
   const [numDoc, setNumDoc] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [lineas, setLineas] = useState<LineaForm[]>([]);
+  const [lineaEditandoKey, setLineaEditandoKey] = useState<string | null>(null);
+  const [editLineaMaterialId, setEditLineaMaterialId] = useState('');
+  const [editLineaMaterial, setEditLineaMaterial] = useState<MaterialCampoOpcion | null>(null);
+  const [editLineaCantidad, setEditLineaCantidad] = useState('1');
   const [soporteFile, setSoporteFile] = useState<File | null>(null);
   const [ingresandoId, setIngresandoId] = useState<string | null>(null);
 
@@ -109,7 +137,8 @@ export default function RecepcionCampoClient() {
   }, []);
   const [loadingPendientes, setLoadingPendientes] = useState(false);
 
-  const tipoManual: TipoRecepcionCampo = tab === 'emergencia' ? 'emergencia' : 'nota_entrega';
+  const tipoManual: TipoRecepcionCampo =
+    tipoIngreso === 'emergencia' ? 'emergencia' : 'nota_entrega';
 
   useEffect(() => {
     void loadCatalogoProyectosApp(supabase).then(({ proyectos: lista }) => {
@@ -149,11 +178,23 @@ export default function RecepcionCampoClient() {
     return () => window.clearTimeout(t);
   }, [pendienteDestacado, loadingPendientes, tab, pendientes.length]);
 
-  function agregarMaterial(m: MaterialCampoOpcion) {
+  function agregarMaterial(m: MaterialCampoOpcion, cantidadOverride?: string) {
+    const qty = (cantidadOverride ?? cantidadNueva).trim().replace(',', '.');
+    const qtyNum = Number(qty);
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      toast.error('Indique una cantidad mayor a cero.');
+      return;
+    }
+    const qtyStr = String(qtyNum);
+
     setLineas((prev) => {
-      if (prev.some((l) => l.material_id === m.id)) {
-        toast.message('Material ya está en la lista');
-        return prev;
+      const existente = prev.find((l) => l.material_id === m.id);
+      if (existente) {
+        const suma = (Number(existente.cantidad.replace(',', '.')) || 0) + qtyNum;
+        toast.message(`${m.name}: cantidad actualizada a ${suma}`);
+        return prev.map((l) =>
+          l.material_id === m.id ? { ...l, cantidad: String(suma) } : l,
+        );
       }
       return [
         ...prev,
@@ -162,10 +203,102 @@ export default function RecepcionCampoClient() {
           material_id: m.id,
           nombre: m.name,
           unidad: m.unit,
-          cantidad: '',
+          cantidad: qtyStr,
         },
       ];
     });
+    setCantidadNueva('1');
+  }
+
+  function quitarLinea(key: string, nombre: string) {
+    if (!confirm(`¿Quitar «${nombre}» de la nota de ingreso?`)) return;
+    setLineas((prev) => prev.filter((x) => x.key !== key));
+    if (lineaEditandoKey === key) setLineaEditandoKey(null);
+  }
+
+  function iniciarEdicionLinea(l: LineaForm) {
+    setLineaEditandoKey(l.key);
+    setEditLineaMaterialId(l.material_id);
+    setEditLineaMaterial({
+      id: l.material_id,
+      name: l.nombre,
+      unit: l.unidad,
+      sap_code: null,
+    });
+    setEditLineaCantidad(l.cantidad);
+  }
+
+  function cancelarEdicionLinea() {
+    setLineaEditandoKey(null);
+    setEditLineaMaterialId('');
+    setEditLineaMaterial(null);
+    setEditLineaCantidad('1');
+  }
+
+  function guardarEdicionLinea() {
+    if (!lineaEditandoKey || !editLineaMaterial) {
+      toast.error('Seleccione un material válido.');
+      return;
+    }
+    const qtyNum = Number(editLineaCantidad.replace(',', '.'));
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      toast.error('Indique una cantidad mayor a cero.');
+      return;
+    }
+
+    const duplicado = lineas.find(
+      (l) => l.material_id === editLineaMaterial.id && l.key !== lineaEditandoKey,
+    );
+    if (duplicado) {
+      toast.error('Ese material ya está en la nota. Modifique la otra línea o elimínela.');
+      return;
+    }
+
+    setLineas((prev) =>
+      prev.map((l) =>
+        l.key === lineaEditandoKey
+          ? {
+              ...l,
+              material_id: editLineaMaterial.id,
+              nombre: editLineaMaterial.name,
+              unidad: editLineaMaterial.unit,
+              cantidad: String(qtyNum),
+            }
+          : l,
+      ),
+    );
+    cancelarEdicionLinea();
+    toast.success('Artículo actualizado.');
+  }
+
+  function sincronizarMaterialActualizado(m: MaterialCampoOpcion) {
+    setLineas((prev) =>
+      prev.map((l) =>
+        l.material_id === m.id ? { ...l, nombre: m.name, unidad: m.unit } : l,
+      ),
+    );
+    if (materialObraId === m.id) {
+      setMaterialObraSel(m);
+    }
+  }
+
+  function sincronizarMaterialEliminado(materialId: string) {
+    setLineas((prev) => prev.filter((l) => l.material_id !== materialId));
+    if (materialObraId === materialId) {
+      setMaterialObraId('');
+      setMaterialObraSel(null);
+    }
+    if (editLineaMaterialId === materialId) {
+      cancelarEdicionLinea();
+    }
+  }
+
+  function agregarMaterialSeleccionado() {
+    if (!materialObraSel) {
+      toast.error('Seleccione un material de la lista de la obra.');
+      return;
+    }
+    agregarMaterial(materialObraSel);
   }
 
   async function ingresarFacturaAlmacen(p: PendienteCanal) {
@@ -181,7 +314,7 @@ export default function RecepcionCampoClient() {
         toast.success(
           json.yaExistia ? 'Ingreso ya estaba registrado.' : 'Stock ingresado desde factura Telegram.',
         );
-        void cargarPendientes();
+        router.push('/almacen');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error de ingreso');
       } finally {
@@ -236,9 +369,9 @@ export default function RecepcionCampoClient() {
           proyecto_id: proyectoId,
           ubicacion_id: ubicacionId,
           proveedor_id: null,
-          proveedor_nombre: proveedorNombre.trim() || (tab === 'emergencia' ? 'Proveedor no identificado' : ''),
+          proveedor_nombre: proveedorNombre.trim() || (tipoIngreso === 'emergencia' ? 'Proveedor no identificado' : ''),
           tipo: tipoManual,
-          num_doc: numDoc.trim() || (tab === 'emergencia' ? 'EMERGENCIA' : 'NOTA-ENTREGA'),
+          num_doc: numDoc.trim() || (tipoIngreso === 'emergencia' ? 'EMERGENCIA' : 'NOTA-ENTREGA'),
           lineas: lineasPayload,
           observaciones: observaciones.trim() || null,
           soporte_storage_path: soporte?.path ?? null,
@@ -261,18 +394,13 @@ export default function RecepcionCampoClient() {
       toast.success(
         `Recepción registrada (${json.recepcion_id?.slice(0, 8) ?? 'OK'}). Stock actualizado en almacén.`,
       );
-      setLineas([]);
-      setNumDoc('');
-      setProveedorNombre('');
-      setObservaciones('');
-      setSoporteFile(null);
+      router.push('/almacen');
     });
   }
 
   const tabs: { id: TabRecepcion; label: string; icon: typeof FileText }[] = [
+    { id: 'ingreso', label: 'Ingreso manual', icon: Package },
     { id: 'transito', label: 'Facturas en Tránsito', icon: FileText },
-    { id: 'nota', label: 'Cargar Nota de Entrega (Sin Factura)', icon: Truck },
-    { id: 'emergencia', label: 'Ingreso de Emergencia (Sin Papeles)', icon: Zap },
   ];
 
   if (!montado) return <RecepcionCargando />;
@@ -417,9 +545,36 @@ export default function RecepcionCampoClient() {
           </section>
         ) : (
           <section className="space-y-4">
+            <div className={`${panelClass} flex flex-wrap gap-2`}>
+              <button
+                type="button"
+                onClick={() => setTipoIngreso('nota_entrega')}
+                className={`flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-black transition ${
+                  tipoIngreso === 'nota_entrega'
+                    ? 'border-[#FF9500]/60 bg-[#FF9500]/15 text-[#FF9500]'
+                    : 'border-white/10 bg-[#0A0A0F] text-zinc-400 hover:border-white/20'
+                }`}
+              >
+                <Truck className="h-4 w-4" />
+                Nota de entrega
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoIngreso('emergencia')}
+                className={`flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-black transition ${
+                  tipoIngreso === 'emergencia'
+                    ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
+                    : 'border-white/10 bg-[#0A0A0F] text-zinc-400 hover:border-white/20'
+                }`}
+              >
+                <Zap className="h-4 w-4" />
+                Emergencia (sin papeles)
+              </button>
+            </div>
+
             <div className={panelClass}>
               <h2 className="mb-4 text-sm font-black text-white">
-                {tab === 'emergencia'
+                {tipoIngreso === 'emergencia'
                   ? 'Ingreso de emergencia (sin documentos)'
                   : 'Nota de entrega sin factura fiscal'}
               </h2>
@@ -429,22 +584,28 @@ export default function RecepcionCampoClient() {
                   <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                     Proyecto / obra
                   </span>
-                  <select
-                    value={proyectoId}
-                    onChange={(e) => {
-                      setProyectoId(e.target.value);
-                      setUbicacionId('');
-                    }}
-                    disabled={isSubmitting}
-                    className={selectClass}
-                  >
-                    <option value="">Seleccione proyecto…</option>
-                    {proyectos.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mt-1.5">
+                    <Select
+                      value={proyectoId}
+                      onValueChange={(id) => {
+                        setProyectoId(id);
+                        setUbicacionId('');
+                        setMaterialObraId('');
+                        setMaterialObraSel(null);
+                      }}
+                      disabled={isSubmitting}
+                    >
+                      <SelectValue placeholder="Seleccione proyecto…" />
+                      <SelectTrigger className={selectClass} />
+                      <SelectContent>
+                        {proyectos.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </label>
 
                 <label className="block sm:col-span-2">
@@ -467,7 +628,7 @@ export default function RecepcionCampoClient() {
                     value={proveedorNombre}
                     onChange={(e) => setProveedorNombre(e.target.value)}
                     disabled={isSubmitting}
-                    placeholder={tab === 'emergencia' ? 'Opcional' : 'Nombre del proveedor'}
+                    placeholder={tipoIngreso === 'emergencia' ? 'Opcional' : 'Nombre del proveedor'}
                     className={inputClass}
                   />
                 </label>
@@ -488,59 +649,228 @@ export default function RecepcionCampoClient() {
             </div>
 
             <div className={panelClass}>
-              <h3 className="mb-3 text-xs font-black uppercase tracking-widest text-zinc-500">
-                Materiales recibidos
-              </h3>
-              <BuscadorMaterialCampo onSeleccionar={agregarMaterial} disabled={isSubmitting} />
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500">
+                    Artículos a ingresar
+                  </h3>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Elija materiales de la obra en el listado o agregue nuevos a esa lista.
+                  </p>
+                </div>
+                {lineas.length > 0 ? (
+                  <span className="rounded-full border border-[#FF9500]/30 bg-[#FF9500]/10 px-2.5 py-1 text-[10px] font-black text-[#FF9500]">
+                    {lineas.length} artículo{lineas.length === 1 ? '' : 's'}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mb-3 space-y-3">
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    Material de la construcción
+                  </span>
+                  <div className="mt-1.5">
+                    <SelectorMaterialObraRecepcion
+                      proyectoId={proyectoId}
+                      ubicacionId={ubicacionId}
+                      value={materialObraId}
+                      onChange={setMaterialObraId}
+                      onMaterialSeleccionado={setMaterialObraSel}
+                      onMaterialActualizado={sincronizarMaterialActualizado}
+                      onMaterialEliminado={sincronizarMaterialEliminado}
+                      disabled={isSubmitting || !proyectoId}
+                      selectClassName={selectClass}
+                      inputClassName={inputClass}
+                    />
+                  </div>
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+                  <label className="block">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#FF9500]">
+                      Cantidad
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      value={cantidadNueva}
+                      onChange={(e) => setCantidadNueva(e.target.value)}
+                      disabled={isSubmitting}
+                      className={`${inputClass} py-4 text-center text-xl font-black`}
+                      aria-label="Cantidad del artículo"
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={agregarMaterialSeleccionado}
+                      disabled={isSubmitting || !proyectoId || !materialObraSel}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#FF9500]/50 bg-[#FF9500]/15 px-4 py-4 text-sm font-black text-[#FF9500] hover:bg-[#FF9500]/25 disabled:opacity-40"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Agregar artículo
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => setBusquedaGlobalAbierta((v) => !v)}
+                  className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 hover:text-zinc-300"
+                >
+                  {busquedaGlobalAbierta ? '▾ Ocultar catálogo global' : '▸ Buscar en catálogo global'}
+                </button>
+                {busquedaGlobalAbierta ? (
+                  <div className="mt-2">
+                    <BuscadorMaterialCampo
+                      onSeleccionar={(m) => agregarMaterial(m)}
+                      disabled={isSubmitting}
+                      placeholder="Buscar en todo el inventario…"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <p className="text-[11px] font-bold text-zinc-600">
+                Puede agregar varios artículos a la nota. Si el material no está en la lista, use
+                «Agregar material nuevo a la obra».
+              </p>
 
               {lineas.length > 0 ? (
                 <ul className="mt-4 space-y-3">
-                  {lineas.map((l) => (
-                    <li
-                      key={l.key}
-                      className="flex flex-wrap items-end gap-3 rounded-xl border border-white/10 bg-[#0A0A0F] p-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-white">{l.nombre}</p>
-                        <p className="text-xs text-zinc-500">{l.unidad}</p>
-                      </div>
-                      <label className="w-32">
-                        <span className="text-[10px] font-bold text-zinc-500">Cantidad</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
-                          inputMode="decimal"
-                          value={l.cantidad}
-                          onChange={(e) =>
-                            setLineas((prev) =>
-                              prev.map((x) =>
-                                x.key === l.key ? { ...x, cantidad: e.target.value } : x,
-                              ),
-                            )
-                          }
-                          disabled={isSubmitting}
-                          className={`${inputClass} py-4 text-center text-xl font-black`}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setLineas((prev) => prev.filter((x) => x.key !== l.key))}
-                        disabled={isSubmitting}
-                        className="rounded-lg border border-red-500/30 p-2 text-red-400"
-                        aria-label="Quitar línea"
+                  {lineas.map((l, idx) => {
+                    const editando = lineaEditandoKey === l.key;
+                    return (
+                      <li
+                        key={l.key}
+                        className="rounded-xl border border-white/10 bg-[#0A0A0F] p-3"
                       >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    </li>
-                  ))}
+                        {editando ? (
+                          <div className="space-y-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#FF9500]">
+                              Modificar artículo {idx + 1}
+                            </p>
+                            <SelectorMaterialObraRecepcion
+                              proyectoId={proyectoId}
+                              ubicacionId={ubicacionId}
+                              value={editLineaMaterialId}
+                              onChange={setEditLineaMaterialId}
+                              onMaterialSeleccionado={setEditLineaMaterial}
+                              onMaterialActualizado={sincronizarMaterialActualizado}
+                              onMaterialEliminado={sincronizarMaterialEliminado}
+                              disabled={isSubmitting || !proyectoId}
+                              selectClassName={selectClass}
+                              inputClassName={inputClass}
+                            />
+                            <label className="block w-36">
+                              <span className="text-[10px] font-bold uppercase text-[#FF9500]">
+                                Cantidad
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="any"
+                                inputMode="decimal"
+                                value={editLineaCantidad}
+                                onChange={(e) => setEditLineaCantidad(e.target.value)}
+                                disabled={isSubmitting}
+                                className={`${inputClass} py-3 text-center text-lg font-black`}
+                              />
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={guardarEdicionLinea}
+                                disabled={isSubmitting}
+                                className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-2 text-[10px] font-black uppercase text-emerald-200"
+                              >
+                                Guardar cambios
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelarEdicionLinea}
+                                disabled={isSubmitting}
+                                className="rounded-lg border border-zinc-700 px-3 py-2 text-[10px] font-bold uppercase text-zinc-400"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-end gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-xs font-black text-zinc-500">
+                              {idx + 1}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-white">{l.nombre}</p>
+                              <p className="text-xs text-zinc-500">Unidad: {l.unidad}</p>
+                            </div>
+                            <label className="w-36">
+                              <span className="text-[10px] font-bold uppercase text-[#FF9500]">
+                                Cantidad ingresada
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="any"
+                                inputMode="decimal"
+                                value={l.cantidad}
+                                onChange={(e) =>
+                                  setLineas((prev) =>
+                                    prev.map((x) =>
+                                      x.key === l.key ? { ...x, cantidad: e.target.value } : x,
+                                    ),
+                                  )
+                                }
+                                disabled={isSubmitting}
+                                required
+                                className={`${inputClass} py-4 text-center text-xl font-black`}
+                              />
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => iniciarEdicionLinea(l)}
+                                disabled={isSubmitting}
+                                className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-2 text-[10px] font-bold text-zinc-300 hover:border-[#FF9500]/40 hover:text-[#FF9500] disabled:opacity-40"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Modificar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => quitarLinea(l.key, l.nombre)}
+                                disabled={isSubmitting}
+                                className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2.5 py-2 text-[10px] font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Borrar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="mt-3 text-sm text-zinc-500">
-                  Busque y seleccione materiales del catálogo global.
+                  Aún no hay artículos. Seleccione un material de la obra, indique cantidad y pulse
+                  «Agregar artículo».
                 </p>
               )}
 
+              {lineas.length > 0 ? (
+                <p className="mt-3 text-[11px] font-bold text-zinc-500">
+                  Puede modificar cantidad, cambiar material o borrar artículos antes de registrar el
+                  ingreso.
+                </p>
+              ) : null}
             </div>
 
             <div className={panelClass}>

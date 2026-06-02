@@ -8,7 +8,7 @@
     "dev:any": "next dev",
     "dev:reset": "powershell -ExecutionPolicy Bypass -File scripts/reset-dev.ps1",
     "ports:free": "powershell -ExecutionPolicy Bypass -File scripts/kill-dev-ports.ps1",
-    "dev:fresh": "npm run ports:free && npm run clean:next && npm run dev",
+    "dev:fresh": "npm run ports:free && npm run clean:next && npm run dev:tls",
     "clean:next": "node scripts/clean-next.mjs",
     "build": "next build",
     "build:fresh": "node scripts/clean-next.mjs && next build",

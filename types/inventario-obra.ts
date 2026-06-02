@@ -47,6 +47,8 @@ export interface UbicacionInventario {
   deposit_id?: string | null;
   /** Localidad del depósito físico vinculado (solo lectura UI). */
   deposit_locality?: string;
+  /** Nombre del depósito físico vinculado (solo lectura UI). */
+  deposit_name?: string;
   ubicacion_padre_id?: string;
   subsitios?: UbicacionInventario[];
   created_at: string;

@@ -3,7 +3,7 @@ import {
   listarUbicacionesInventario,
   propagarObraIdFlat,
 } from '@/lib/almacen/ubicacionesInventario';
-import { ubicacionPerteneceAProyecto } from '@/lib/almacen/inventarioFiltroUbicacion';
+import { ubicacionPerteneceAProyecto, expandirUbicacionesHermanoObra } from '@/lib/almacen/inventarioFiltroUbicacion';
 import type { StockProyectoItem } from '@/lib/almacen/listarStockProyecto';
 
 type RpcStockRow = {
@@ -35,10 +35,9 @@ export async function getStockRealObra(
     p_solo_con_stock: opts?.soloConStock !== false,
   });
 
-  if (error?.code === '42883' || /get_stock_real_obra/i.test(error?.message ?? '')) {
+  if (error) {
     return listarStockProyectoDesdeTablas(supabase, proyectoId, opts);
   }
-  if (error) throw new Error(error.message);
 
   const rows = (data ?? []) as RpcStockRow[];
   if (!rows.length) {
@@ -80,11 +79,22 @@ async function listarStockProyectoDesdeTablas(
   proyectoId: string,
   opts?: { ubicacionId?: string; soloConStock?: boolean; proyectoNombre?: string },
 ): Promise<StockProyectoItem[]> {
+  let proyectoNombre = opts?.proyectoNombre?.trim();
+  if (!proyectoNombre) {
+    const { data: prRow } = await supabase
+      .from('ci_proyectos')
+      .select('nombre')
+      .eq('id', proyectoId)
+      .maybeSingle();
+    proyectoNombre = String(prRow?.nombre ?? '').trim() || undefined;
+  }
+
   const todas = await listarUbicacionesInventario(supabase, { soloActivas: true });
   propagarObraIdFlat(todas);
   let ubicacionesObra = todas.filter((u) =>
-    ubicacionPerteneceAProyecto(u, proyectoId, opts?.proyectoNombre),
+    ubicacionPerteneceAProyecto(u, proyectoId, proyectoNombre),
   );
+  ubicacionesObra = expandirUbicacionesHermanoObra(todas, ubicacionesObra);
   if (opts?.ubicacionId) {
     ubicacionesObra = ubicacionesObra.filter((u) => u.id === opts.ubicacionId);
   }

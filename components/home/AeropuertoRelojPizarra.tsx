@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 function pad2(n: number): string {
@@ -158,10 +157,7 @@ export default function AeropuertoRelojPizarra({ className, dense = false }: Pro
   const horaLegible = partes.listo ? `${partes.h}:${partes.m}:${partes.s}` : '';
 
   return (
-    <motion.div
-      initial={false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: 0.05 }}
+    <div
       className={cn('min-h-0 flex flex-col justify-center', dense ? 'px-0 mb-0' : 'px-6 mb-6', className)}
     >
       <div
@@ -184,6 +180,6 @@ export default function AeropuertoRelojPizarra({ className, dense = false }: Pro
           </p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

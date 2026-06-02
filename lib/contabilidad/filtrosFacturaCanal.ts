@@ -50,6 +50,8 @@ export type FilaFacturaCanal = {
   /** Bs/USD asignados a la línea (proporcional al total bimonetario de la factura). */
   subtotalBsLinea?: number;
   subtotalUsdLinea?: number | null;
+  /** UUID contabilidad_compra_lineas (solo compras confirmadas en app). */
+  lineaId?: string | null;
 };
 
 export type FiltrosFacturaCanal = {
@@ -196,6 +198,7 @@ export type CompraConfirmadaParaLineas = {
   entidadNombre?: string;
   almacenNombre?: string;
   lineas: Array<{
+    id?: string;
     descripcion: string;
     item_code: string | null;
     cantidad: number;
@@ -287,6 +290,7 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
             ? Number(l.subtotal) / cantidad
             : 0;
       return {
+        id: l.id?.trim() || null,
         descripcion: (l.descripcion ?? '').trim(),
         item_code: (l.item_code ?? '').trim(),
         cantidad,
@@ -302,6 +306,7 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
     lineasParsed.forEach((l, i) => {
       filas.push({
         ...base,
+        lineaId: l.id,
         articulo: l.descripcion,
         codigo: l.item_code,
         cantidad: l.cantidad,

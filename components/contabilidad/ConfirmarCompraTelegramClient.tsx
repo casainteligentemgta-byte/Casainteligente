@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Loader2, Pencil, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
@@ -9,7 +10,6 @@ import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
-import { TarjetaSugerenciaConciliacionField } from '@/components/contabilidad/TarjetaSugerenciaConciliacionField';
 import {
   normalizarMonedaExtracted,
   type ExtractedCanalHeader,
@@ -21,7 +21,6 @@ import {
   ingresoAlmacenCanal,
   type PendienteCanal,
 } from '@/lib/contabilidad/facturaCanalApi';
-import { reubicarCompra } from '@/lib/contabilidad/reubicarCompraApi';
 import { createClient } from '@/lib/supabase/client';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
@@ -30,6 +29,12 @@ const selectClass =
 
 const panelClass =
   'rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl';
+
+const MENSAJE_INGRESO_CONFIRMADA = 'Ingreso Confirmada.';
+
+function esErrorCompraNoConfirmadaContabilidad(msg: string): boolean {
+  return /aún no está confirmada en contabilidad/i.test(msg);
+}
 
 function ConfirmarCompraCargando() {
   return (
@@ -45,9 +50,9 @@ type Props = {
 };
 
 export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
+  const router = useRouter();
   const [montado, setMontado] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [bloquearCompraNueva, setBloquearCompraNueva] = useState(false);
   const [pendiente, setPendiente] = useState<PendienteCanal | null>(null);
   const [proyectos, setProyectos] = useState<{ id: string; nombre: string }[]>([]);
   const [proyectoId, setProyectoId] = useState('');
@@ -56,7 +61,6 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [ubicacionesDisponibles, setUbicacionesDisponibles] = useState<UbicacionInventario[]>([]);
   const [editando, setEditando] = useState(false);
   const { isSubmitting: registrando, runLocked: runRegistro } = useSyncSubmitLock();
-  const { isSubmitting: guardandoUbicacion, runLocked: runUbicacion } = useSyncSubmitLock();
   const { isSubmitting: ingresandoAlmacen, runLocked: runIngreso } = useSyncSubmitLock();
   const [compraRegistrada, setCompraRegistrada] = useState(false);
   const [ingresoAlmacenOk, setIngresoAlmacenOk] = useState(false);
@@ -163,13 +167,24 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     }
   };
 
-  const puedeRegistrar = useMemo(
+  const yaEnContabilidad = useMemo(
+    () =>
+      Boolean(
+        compraRegistrada ||
+          pendiente?.estado === 'confirmado' ||
+          pendiente?.purchase_invoice_id,
+      ),
+    [compraRegistrada, pendiente],
+  );
+
+  const puedeIngresarAlmacen = useMemo(
     () =>
       pendiente &&
-      ['extraido', 'error'].includes(pendiente.estado) &&
-      extracted &&
-      (extracted.supplier_name?.trim() || extracted.invoice_number?.trim()),
-    [pendiente, extracted],
+      (yaEnContabilidad ||
+        (['extraido', 'error'].includes(pendiente.estado) &&
+          extracted &&
+          (extracted.supplier_name?.trim() || extracted.invoice_number?.trim()))),
+    [pendiente, extracted, yaEnContabilidad],
   );
 
   const guardarExtracted = async (next: ExtractedCanalHeader) => {
@@ -178,45 +193,18 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     toast.success('Datos actualizados');
   };
 
-  const guardarUbicacion = async () => {
-    if (!proyectoId.trim() || !ubicacionId.trim()) {
-      toast.error('Seleccione obra y almacén');
-      return;
-    }
-    await runUbicacion(async () => {
-      try {
-        if (pendiente?.purchase_invoice_id) {
-          await reubicarCompra(`canal-${pendingId}`, {
-            proyecto_id: proyectoId,
-            ubicacion_destino_id: ubicacionId,
-          });
-        } else {
-          const actualizado = await actualizarPendienteCanal(pendingId, {
-            proyecto_id: proyectoId,
-            ubicacion_destino_id: ubicacionId,
-          });
-          setPendiente((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  proyecto_id: actualizado.proyecto_id,
-                  ubicacion_destino_id: actualizado.ubicacion_destino_id,
-                }
-              : actualizado,
-          );
-        }
-        toast.success('Obra y almacén guardados');
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
-      }
-    });
-  };
+  const finalizarIngresoYIrAlmacen = useCallback(
+    (mensaje: string) => {
+      setCompraRegistrada(true);
+      setIngresoAlmacenOk(true);
+      setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
+      toast.success(mensaje);
+      router.push('/almacen');
+    },
+    [router],
+  );
 
   const registrar = async () => {
-    if (bloquearCompraNueva) {
-      toast.error('Concilie primero el ingreso de campo (FRM) para no duplicar stock.');
-      return;
-    }
     if (!proyectoId.trim()) {
       toast.error('Seleccione el proyecto');
       return;
@@ -235,12 +223,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           proyecto_id: proyectoId,
           ubicacion_destino_id: ubicacionId,
           extracted,
+          ingreso_almacen_automatico: true,
         });
-        setCompraRegistrada(true);
-        setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
         if (r.ingresoAlmacen?.success) {
-          setIngresoAlmacenOk(true);
-          toast.success(
+          finalizarIngresoYIrAlmacen(
             r.yaExistia
               ? 'Compra ya confirmada · stock liberado'
               : r.ingresoAlmacen.yaExistia
@@ -249,14 +235,35 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                   ? `Compra confirmada · ${r.ingresoAlmacen.aprobadas ?? 0} línea(s) liberadas en almacén`
                   : 'Compra confirmada e ingreso a almacén registrado',
           );
-        } else if (r.ingresoAlmacen && !r.ingresoAlmacen.success) {
+          return;
+        }
+        setCompraRegistrada(true);
+        setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
+        if (r.ingresoAlmacen && !r.ingresoAlmacen.success) {
+          const errIngreso = r.ingresoAlmacen.error ?? '';
+          if (r.purchaseInvoiceId) {
+            try {
+              await ingresoAlmacenCanal(pendingId);
+              finalizarIngresoYIrAlmacen('Ingreso Confirmada.');
+              return;
+            } catch (retryErr) {
+              const retryMsg =
+                retryErr instanceof Error ? retryErr.message : 'No se pudo registrar ingreso';
+              if (!esErrorCompraNoConfirmadaContabilidad(retryMsg)) {
+                toast.error(retryMsg, { duration: 8000 });
+                return;
+              }
+            }
+          }
           toast.warning(
-            r.ingresoAlmacen.error
-              ? `Compra confirmada. Ingreso pendiente: ${r.ingresoAlmacen.error}`
-              : 'Compra confirmada. Pulse «Liberar en almacén» para completar el stock.',
+            errIngreso
+              ? `Compra confirmada. Ingreso pendiente: ${errIngreso}`
+              : 'Compra confirmada. Pulse de nuevo «Ingresar mercancía» para completar el stock.',
             { duration: 10000 },
           );
-        } else if (r.cuarentena && (r.cuarentena.lineasCreadas > 0 || r.cuarentena.yaExistia)) {
+          return;
+        }
+        if (r.cuarentena && (r.cuarentena.lineasCreadas > 0 || r.cuarentena.yaExistia)) {
           toast.success(
             r.yaExistia
               ? 'Compra ya confirmada · material en cuarentena'
@@ -278,17 +285,33 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     await runIngreso(async () => {
       try {
         const r = await ingresoAlmacenCanal(pendingId);
-        setIngresoAlmacenOk(true);
-        toast.success(
+        finalizarIngresoYIrAlmacen(
           r.yaExistia
             ? 'Ingreso a almacén ya registrado'
-            : 'Material liberado en almacén (cuarentena aprobada)',
+            : 'Mercancía ingresada al almacén de la obra',
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'No se pudo registrar ingreso';
         toast.error(msg, { duration: 8000 });
       }
     });
+  };
+
+  /** Un solo paso: confirma en contabilidad (si falta) e ingresa al almacén de la obra. */
+  const ingresarMercanciaAlmacen = async () => {
+    if (!proyectoId.trim()) {
+      toast.error('Seleccione el proyecto / obra');
+      return;
+    }
+    if (!ubicacionId.trim()) {
+      toast.error('Seleccione el almacén de ingreso');
+      return;
+    }
+    if (yaEnContabilidad) {
+      await registrarIngresoAlmacen();
+      return;
+    }
+    await registrar();
   };
 
   const nLineas = extracted?.items?.filter((it) => String(it.description ?? '').trim()).length ?? 0;
@@ -314,64 +337,38 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF9500]">
             Contabilidad · Canal
           </p>
-          <h1 className="text-base font-black text-white">Registrar compra (Telegram)</h1>
-          <p className="text-xs text-zinc-500">Obra y almacén de ingreso (desde Telegram o aquí)</p>
+          <h1 className="text-base font-black text-white">Ingreso de mercancía al almacén</h1>
+          <p className="text-xs text-zinc-500">
+            {yaEnContabilidad
+              ? 'La compra ya está en contabilidad · indique el almacén de la obra'
+              : 'Obra, almacén e ingreso de stock en un solo paso'}
+          </p>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-5">
+      <main className="max-w-lg mx-auto px-4 py-6 pb-28 space-y-5">
         {loading ? (
           <ConfirmarCompraCargando />
         ) : !pendiente ? (
           <div className={`${panelClass} text-center text-sm text-zinc-400`}>
             Factura no encontrada.
           </div>
-        ) : compraRegistrada || pendiente.estado === 'confirmado' ? (
+        ) : ingresoAlmacenOk ? (
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-6 text-center space-y-4 backdrop-blur-xl">
             <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto" />
-            <p className="text-sm font-semibold text-emerald-200">Compra cargada en contabilidad</p>
+            <p className="text-sm font-semibold text-emerald-200">Mercancía ingresada al almacén</p>
             <p className="text-xs text-zinc-400">
               {extracted?.supplier_name ?? 'Proveedor'} · Nº {extracted?.invoice_number ?? '—'}
             </p>
-            <p className="text-xs text-amber-200/80">
-              El material queda en cuarentena hasta inspección en almacén. Use el botón inferior solo
-              para liberar todo sin revisar línea a línea.
-            </p>
-            <Link
-              href="/almacen/procurement/quality"
-              className="block w-full rounded-lg border border-[#FF9500]/40 text-[#FF9500] text-sm font-semibold px-4 py-2.5"
-            >
-              Abrir cuarentena
-            </Link>
-            <button
-              type="button"
-              onClick={() => {
-                if (ingresandoAlmacen) return;
-                void registrarIngresoAlmacen();
-              }}
-              disabled={ingresandoAlmacen || ingresoAlmacenOk}
-              className="w-full rounded-lg bg-[#34C759] text-black text-sm font-semibold px-4 py-2.5 disabled:opacity-50"
-            >
-              {ingresandoAlmacen
-                ? 'Liberando…'
-                : ingresoAlmacenOk
-                  ? 'Stock liberado en almacén'
-                  : 'Liberar en almacén (fast-track)'}
-            </button>
-            <div className="flex flex-col gap-2 pt-2">
-              <Link
-                href="/contabilidad/compras?fuente=telegram"
-                className="rounded-lg bg-[#34C759] text-black text-sm font-semibold px-4 py-2.5"
-              >
+            <p className="text-xs text-zinc-500">
+              <Link href="/contabilidad/compras?fuente=telegram" className="text-[#FF9500] underline">
                 Ver en libro de compras
               </Link>
-              <Link
-                href="/contabilidad/compras/canal"
-                className="rounded-lg border border-white/10 text-sm px-4 py-2.5 text-zinc-300"
-              >
-                Volver a cargas Telegram
+              {' · '}
+              <Link href="/contabilidad/compras/canal" className="text-zinc-400 underline">
+                Cargas Telegram
               </Link>
-            </div>
+            </p>
           </div>
         ) : (
           <>
@@ -414,6 +411,13 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 documentApiPath={`/api/facturas-canal/pendientes/${encodeURIComponent(pendingId)}/document`}
                 expanded
               />
+            ) : null}
+
+            {yaEnContabilidad ? (
+              <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-3 text-xs text-emerald-200/90">
+                Compra registrada en contabilidad. Solo falta el ingreso de mercancía al almacén de la
+                obra.
+              </div>
             ) : null}
 
             <section className={`${panelClass} space-y-3`}>
@@ -538,97 +542,50 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               ) : null}
             </section>
 
-            <TarjetaSugerenciaConciliacionField
-              facturaId={pendingId}
-              proyectoId={proyectoId}
-              proveedorRif={extracted?.supplier_rif}
-              proveedorNombre={extracted?.supplier_name}
-              extracted={extracted}
-              onFrmPendienteChange={setBloquearCompraNueva}
-              onConciliadoExito={() => {
-                setBloquearCompraNueva(false);
-                setCompraRegistrada(true);
-                setIngresoAlmacenOk(true);
-                setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
-                void cargar();
-              }}
-            />
-
-            {!mostrarPanelPrecargado ? (
-              <button
-                type="button"
-                disabled={!proyectoId.trim() || !ubicacionId.trim() || guardandoUbicacion}
-                onClick={() => {
-                  if (guardandoUbicacion) return;
-                  void guardarUbicacion();
-                }}
-                className="w-full rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/10 disabled:opacity-40 text-[#FF9500] text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
-              >
-                {guardandoUbicacion ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Guardando ubicación…
-                  </>
-                ) : (
-                  'Guardar solo obra y almacén'
-                )}
-              </button>
-            ) : null}
-
             <button
               type="button"
+              data-cta="ingreso-almacen-obra"
               disabled={
-                bloquearCompraNueva ||
-                !puedeRegistrar ||
+                !puedeIngresarAlmacen ||
                 !proyectoId.trim() ||
                 !ubicacionId.trim() ||
                 registrando ||
-                guardandoUbicacion
+                ingresandoAlmacen
               }
               onClick={() => {
-                if (registrando || bloquearCompraNueva) return;
-                void registrar();
+                if (registrando || ingresandoAlmacen) return;
+                void ingresarMercanciaAlmacen();
               }}
-              title={
-                bloquearCompraNueva
-                  ? 'Hay recepción FRM pendiente: use Conciliar e inyectar costo'
-                  : undefined
-              }
-              className="w-full rounded-xl bg-[#34C759] disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-bold py-3 flex items-center justify-center gap-2"
+              className="w-full rounded-xl bg-[#34C759] disabled:opacity-50 disabled:cursor-not-allowed text-black text-sm font-bold py-3.5 flex items-center justify-center gap-2 shadow-lg shadow-[#34C759]/25"
             >
-              {registrando ? (
+              {registrando || ingresandoAlmacen ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Confirmando…
+                  {yaEnContabilidad ? 'Ingresando al almacén…' : 'Registrando ingreso…'}
                 </>
-              ) : bloquearCompraNueva ? (
-                'Bloqueado — concilie FRM arriba'
               ) : (
-                'Cargar compra en contabilidad'
+                'Ingresar mercancía al almacén de la obra'
               )}
             </button>
 
-            <p className="text-[11px] text-zinc-500 text-center leading-relaxed">
-              {bloquearCompraNueva ? (
+            <p className="text-[11px] text-zinc-500 text-center leading-relaxed pb-2">
+              {yaEnContabilidad ? (
                 <>
-                  <span className="text-[#FF9500] font-semibold">
-                    Ingreso manual detectado en obra.
-                  </span>{' '}
-                  Use <strong className="text-zinc-300">Conciliar e inyectar costo</strong> en la
-                  tarjeta naranja. No cargue compra nueva ni duplicará inventario.
+                  La factura ya está en el libro de compras. Este paso solo mueve el stock al
+                  almacén de la obra seleccionada. Cada línea debe traer{' '}
+                  <strong className="text-zinc-300">item_code (SKU)</strong>.
                 </>
               ) : mostrarPanelPrecargado ? (
                 <>
-                  Almacén heredado de Telegram. Pulse{' '}
-                  <strong className="text-zinc-300">Cargar compra en contabilidad</strong> para asentar
-                  stock en un solo paso. Cada línea debe traer{' '}
-                  <strong className="text-zinc-300">item_code (SKU)</strong> del catálogo.
+                  Almacén heredado de Telegram. Un solo paso: contabilidad e ingreso al almacén. Cada
+                  línea debe traer <strong className="text-zinc-300">item_code (SKU)</strong>.
                 </>
               ) : (
                 <>
-                  Seleccione obra y almacén, luego{' '}
-                  <strong className="text-zinc-300">Cargar compra en contabilidad</strong>. Cada línea
-                  debe traer <strong className="text-zinc-300">item_code (SKU)</strong> del catálogo.
+                  Seleccione <strong className="text-zinc-300">obra</strong> y{' '}
+                  <strong className="text-zinc-300">almacén</strong> para habilitar el botón verde. Si
+                  la compra aún no está en contabilidad, se registrará automáticamente antes del
+                  ingreso. Cada línea debe traer <strong className="text-zinc-300">item_code (SKU)</strong>.
                 </>
               )}
             </p>

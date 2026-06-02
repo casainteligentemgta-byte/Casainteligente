@@ -22,7 +22,14 @@ export async function cargarCanalParaCompras(): Promise<ResultadoCanalCompras> {
         (res.status === 503
           ? 'Servidor sin SUPABASE_SERVICE_ROLE_KEY (Vercel → Environment Variables).'
           : `Error ${res.status} al cargar canal Telegram.`);
-      return { pendientes: [], error: json.hint ? `${msg} ${json.hint}` : msg };
+      const tlsHint =
+        /unable to verify|certificate|fetch failed/i.test(msg) && !/SUPABASE_DEV_INSECURE_TLS/i.test(msg)
+          ? ' En local: añade SUPABASE_DEV_INSECURE_TLS=1 en .env.local y reinicia (npm run dev:fresh o npm run dev:tls).'
+          : '';
+      return {
+        pendientes: [],
+        error: json.hint ? `${msg} ${json.hint}` : `${msg}${tlsHint}`,
+      };
     }
     return { pendientes: json.pendientes ?? [], error: null };
   } catch (e) {

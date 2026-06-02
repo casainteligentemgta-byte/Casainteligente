@@ -3,16 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { GlassCardMotion } from '@/components/nexus/GlassCard';
+import { GlassCard } from '@/components/nexus/GlassCard';
 import AeropuertoRelojPizarra from '@/components/home/AeropuertoRelojPizarra';
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 type StatTileProps = {
   href?: string;
   actionHref?: string;
   actionColor?: string;
-  delay: number;
   icon: string;
   value: React.ReactNode;
   label: string;
@@ -25,7 +23,6 @@ function StatTile({
   href,
   actionHref,
   actionColor = 'var(--ios-blue)',
-  delay,
   icon,
   value,
   label,
@@ -34,8 +31,7 @@ function StatTile({
   cardClass,
 }: StatTileProps) {
   const card = (
-    <GlassCardMotion
-      delay={delay}
+    <GlassCard
       className={cn(
         'h-full !p-3 sm:!p-3.5 landscape:!p-2.5 active:scale-[0.98] transition-transform',
         cardClass,
@@ -62,7 +58,7 @@ function StatTile({
       <p className="text-[10px] landscape:text-[9px] font-bold uppercase tracking-widest text-[var(--nexus-text-muted)] mt-0.5 opacity-80">
         {label}
       </p>
-    </GlassCardMotion>
+    </GlassCard>
   );
 
   return (
@@ -110,11 +106,7 @@ export default function DashboardPage() {
 
   return (
     <article className="home-inicio flex flex-col overflow-hidden px-4 pt-4 pb-2 sm:pt-5 landscape:pt-3 landscape:px-5 landscape:pb-2">
-      <motion.header
-        initial={false}
-        animate={{ opacity: 1, y: 0 }}
-        className="shrink-0 flex items-center justify-between gap-3 mb-3 landscape:mb-2"
-      >
+      <header className="shrink-0 flex items-center justify-between gap-3 mb-3 landscape:mb-2">
         <div className="min-w-0">
           <p
             suppressHydrationWarning
@@ -137,7 +129,7 @@ export default function DashboardPage() {
             CI
           </div>
         </div>
-      </motion.header>
+      </header>
 
       <div className="flex flex-1 min-h-0 flex-col gap-3 landscape:flex-row landscape:gap-4 landscape:items-stretch">
         <section className="landscape:flex-[1.05] landscape:min-w-0 flex flex-col justify-center min-h-0">
@@ -149,7 +141,6 @@ export default function DashboardPage() {
             href="/clientes"
             actionHref="/clientes/nuevo"
             actionColor="var(--ios-blue)"
-            delay={0.1}
             icon="👥"
             value={clientCount ?? '—'}
             label="Clientes"
@@ -157,7 +148,6 @@ export default function DashboardPage() {
             cardClass="!bg-blue-500/5 border-blue-500/20"
           />
           <StatTile
-            delay={0.2}
             icon="📈"
             value="$48.2K"
             label="Ventas"
@@ -165,7 +155,6 @@ export default function DashboardPage() {
             cardClass="!bg-green-500/5 border-green-500/20"
           />
           <StatTile
-            delay={0.3}
             icon="🏗️"
             value="18"
             label="Proyectos"
@@ -176,7 +165,6 @@ export default function DashboardPage() {
             href="/productos"
             actionHref="/productos/nuevo"
             actionColor="var(--ios-orange)"
-            delay={0.4}
             icon="📦"
             value={productCount ?? '—'}
             label="Productos"

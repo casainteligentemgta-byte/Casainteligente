@@ -20,6 +20,8 @@ import {
 export type AccionesCompraLinea = {
   puedeModificar: boolean;
   etiquetaEliminar: string;
+  /** Si false, no se puede borrar línea (p. ej. pendiente Telegram sin id). */
+  puedeEliminarLinea?: boolean;
 };
 
 type Props = {
@@ -28,7 +30,9 @@ type Props = {
   accionesPorCompra?: (compraId: string) => AccionesCompraLinea | null;
   onModificar?: (compraId: string) => void;
   onEliminar?: (compraId: string) => void;
+  onEliminarLinea?: (compraId: string, lineaId: string) => void;
   deletingId?: string | null;
+  deletingLineaId?: string | null;
   sortColumn?: ColumnaOrdenCompras | null;
   sortDir?: DireccionOrden;
   onSort?: (column: ColumnaOrdenCompras) => void;
@@ -53,7 +57,9 @@ export default function ComprasLineasTable({
   accionesPorCompra,
   onModificar,
   onEliminar,
+  onEliminarLinea,
   deletingId = null,
+  deletingLineaId = null,
   sortColumn = null,
   sortDir = 'asc',
   onSort,
@@ -64,7 +70,8 @@ export default function ComprasLineasTable({
   todasSeleccionadas = false,
   selectAllIndeterminate = false,
 }: Props) {
-  const muestraAcciones = Boolean(onEliminar || onModificar);
+  const muestraAcciones = Boolean(onEliminar || onEliminarLinea || onModificar);
+  const eliminarPorLinea = Boolean(onEliminarLinea);
   const muestraSeleccion = Boolean(onToggleCompra);
 
   const filasPorFactura = useMemo(() => {
@@ -186,14 +193,19 @@ export default function ComprasLineasTable({
           {filas.map((row, i) => {
             const subtotalBs = subtotalBsLineaCompra(row);
             const usd = subtotalUsdLineaCompra(row);
-            const mostrarAcciones = muestraAcciones && esFilaAcciones(filas, row, i);
+            const mostrarAccionesFactura =
+              muestraAcciones && !eliminarPorLinea && esFilaAcciones(filas, row, i);
+            const mostrarAccionesEnFila =
+              mostrarAccionesFactura ||
+              (eliminarPorLinea && row.esLinea && Boolean(row.lineaId)) ||
+              (eliminarPorLinea && onModificar && esFilaAcciones(filas, row, i));
             const acc =
-              mostrarAcciones && accionesPorCompra
+              mostrarAccionesEnFila && accionesPorCompra
                 ? accionesPorCompra(row.pendienteId)
                 : null;
             const rowSpan = ordenPlano
               ? 1
-              : mostrarAcciones
+              : mostrarAccionesFactura
                 ? (filasPorFactura.get(row.pendienteId) ?? 1)
                 : 1;
 
@@ -208,7 +220,7 @@ export default function ComprasLineasTable({
                 }}
               >
                 {muestraSeleccion ? (
-                  mostrarAcciones ? (
+                  muestraAcciones ? (
                     <td style={{ ...td, verticalAlign: 'top' }} rowSpan={rowSpan}>
                       <input
                         type="checkbox"
@@ -294,8 +306,11 @@ export default function ComprasLineasTable({
                   ) : null}
                 </td>
                 {muestraAcciones ? (
-                  mostrarAcciones ? (
-                    <td style={{ ...td, verticalAlign: 'top' }} rowSpan={rowSpan}>
+                  mostrarAccionesEnFila ? (
+                    <td
+                      style={{ ...td, verticalAlign: 'top' }}
+                      rowSpan={mostrarAccionesFactura ? rowSpan : 1}
+                    >
                       <div
                         style={{
                           display: 'flex',
@@ -304,22 +319,44 @@ export default function ComprasLineasTable({
                           minWidth: '108px',
                         }}
                       >
-                        {acc?.puedeModificar && onModificar ? (
+                        {acc?.puedeModificar && onModificar && esFilaAcciones(filas, row, i) ? (
                           <button
                             type="button"
                             onClick={() => onModificar(row.pendienteId)}
-                            disabled={deletingId !== null}
+                            disabled={deletingId !== null || deletingLineaId !== null}
                             style={btnModificar}
                           >
                             <Pencil size={12} />
                             Modificar
                           </button>
                         ) : null}
-                        {onEliminar ? (
+                        {eliminarPorLinea &&
+                        row.esLinea &&
+                        row.lineaId &&
+                        acc?.puedeEliminarLinea !== false ? (
+                          <button
+                            type="button"
+                            onClick={() => onEliminarLinea?.(row.pendienteId, row.lineaId!)}
+                            disabled={deletingId !== null || deletingLineaId !== null}
+                            style={{
+                              ...btnEliminar,
+                              opacity:
+                                deletingLineaId === row.lineaId || deletingId !== null ? 0.6 : 1,
+                            }}
+                          >
+                            {deletingLineaId === row.lineaId ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={12} />
+                            )}
+                            Borrar línea
+                          </button>
+                        ) : null}
+                        {mostrarAccionesFactura && onEliminar ? (
                           <button
                             type="button"
                             onClick={() => onEliminar(row.pendienteId)}
-                            disabled={deletingId !== null}
+                            disabled={deletingId !== null || deletingLineaId !== null}
                             style={{
                               ...btnEliminar,
                               opacity: deletingId === row.pendienteId ? 0.6 : 1,

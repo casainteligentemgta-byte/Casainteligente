@@ -21,12 +21,15 @@ const SELECT_UBICACION = `
   created_at,
   updated_at,
   proyecto:ci_proyectos ( id, nombre ),
-  deposit:inventory_deposits ( id, locality )
+  deposit:inventory_deposits ( id, name, locality )
 `;
 
 type UbicacionDbRow = InvUbicacionRow & {
   proyecto?: { id: string; nombre: string } | Array<{ id: string; nombre: string }> | null;
-  deposit?: { id: string; locality: string | null } | Array<{ id: string; locality: string | null }> | null;
+  deposit?:
+    | { id: string; name: string; locality: string | null }
+    | Array<{ id: string; name: string; locality: string | null }>
+    | null;
 };
 
 function mapRow(row: UbicacionDbRow): UbicacionInventario {
@@ -39,6 +42,9 @@ function mapRow(row: UbicacionDbRow): UbicacionInventario {
   }
   const depRaw = row.deposit;
   const dep = Array.isArray(depRaw) ? depRaw[0] : depRaw;
+  if (dep?.name?.trim()) {
+    base.deposit_name = dep.name.trim();
+  }
   if (dep?.locality?.trim()) {
     base.deposit_locality = dep.locality.trim();
   }

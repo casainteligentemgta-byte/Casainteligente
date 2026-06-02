@@ -124,6 +124,7 @@ export function ubicacionPerteneceAProyecto(
 
   const etiquetas = [
     u.nombre,
+    u.deposit_name ?? '',
     u.deposit_locality ?? '',
     u.proyecto?.nombre ?? '',
   ]
@@ -155,7 +156,11 @@ function incluirAlmacenesCentralesHermanoObra(
       .filter((u) => u.tipo === 'obra' || u.tipo === 'cuarentena' || u.tipo === 'garantias')
       .map((u) => normalizarEtiquetaUbicacion(u.nombre)),
   );
-  if (!nombresObra.size) return candidatas;
+  const nombresCentral = new Set(
+    candidatas
+      .filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
+      .map((u) => normalizarEtiquetaUbicacion(u.nombre)),
+  );
 
   for (const u of flat) {
     if (u.tipo !== 'almacen_central' && u.tipo !== 'almacen_movil') continue;
@@ -165,7 +170,24 @@ function incluirAlmacenesCentralesHermanoObra(
       byId.set(u.id, u);
     }
   }
+
+  for (const u of flat) {
+    if (u.tipo !== 'obra' && u.tipo !== 'cuarentena' && u.tipo !== 'garantias') continue;
+    if (byId.has(u.id)) continue;
+    const nom = normalizarEtiquetaUbicacion(u.nombre);
+    if (nombresCentral.has(nom)) {
+      byId.set(u.id, u);
+    }
+  }
+
   return Array.from(byId.values());
+}
+
+export function expandirUbicacionesHermanoObra(
+  flat: UbicacionInventario[],
+  candidatas: UbicacionInventario[],
+): UbicacionInventario[] {
+  return incluirAlmacenesCentralesHermanoObra(flat, candidatas);
 }
 
 /** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */
@@ -185,9 +207,69 @@ export function resolverUbicacionIdsFiltro(
     candidatas = incluirAlmacenesCentralesHermanoObra(flat, candidatas);
   }
   if (opts.depositId) {
+    const antesDeposito = candidatas;
     candidatas = candidatas.filter((u) => u.deposit_id === opts.depositId);
+    // Obra/subsitios a veces no tienen deposit_id aunque el stock esté en el almacén del proyecto.
+    if (!candidatas.length && opts.proyectoId && antesDeposito.length) {
+      candidatas = antesDeposito;
+    }
   }
   return candidatas.map((u) => u.id);
+}
+
+export type ProyectoFiltroUbicacion = {
+  id: string;
+  nombre: string;
+  entidad_id: string | null;
+};
+
+export function proyectoIdsDeEntidad(
+  proyectos: ProyectoFiltroUbicacion[],
+  entidadId: string,
+): Set<string> {
+  const eid = entidadId.trim();
+  if (!eid) return new Set();
+  return new Set(proyectos.filter((p) => p.entidad_id === eid).map((p) => p.id));
+}
+
+/** Ubicaciones de todos los proyectos/obras de una entidad (y almacenes centrales hermanos). */
+export function resolverUbicacionIdsFiltroEntidad(
+  ubicaciones: UbicacionInventario[],
+  opts: {
+    entidadId: string;
+    proyectos: ProyectoFiltroUbicacion[];
+    proyectoId?: string;
+    depositId?: string;
+  },
+): string[] {
+  const flat = [...ubicaciones];
+  propagarObraIdFlat(flat);
+  propagarDepositIdFlat(flat);
+
+  const eid = opts.entidadId.trim();
+  if (!eid) return [];
+
+  let proys = opts.proyectos.filter((p) => p.entidad_id === eid);
+  if (opts.proyectoId) {
+    proys = proys.filter((p) => p.id === opts.proyectoId);
+  }
+
+  const byId = new Map<string, UbicacionInventario>();
+  for (const pr of proys) {
+    let candidatas = flat.filter((u) =>
+      ubicacionPerteneceAProyecto(u, pr.id, pr.nombre),
+    );
+    candidatas = incluirAlmacenesCentralesHermanoObra(flat, candidatas);
+    for (const u of candidatas) byId.set(u.id, u);
+  }
+
+  let result = Array.from(byId.values());
+  if (opts.depositId) {
+    const filtradas = result.filter((u) => u.deposit_id === opts.depositId);
+    if (filtradas.length) result = filtradas;
+  }
+
+  return result.map((u) => u.id);
 }
 
 /** Coincide asignación de catálogo (global_inventory.proyecto_id / deposit_id). */

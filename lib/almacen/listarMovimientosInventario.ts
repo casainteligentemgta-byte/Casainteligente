@@ -53,6 +53,13 @@ function enRangoFecha(fecha: string, desde?: string, hasta?: string): boolean {
   return true;
 }
 
+function tipoParaVista(vista: VistaMovimientoInventario): FilaMovimientoInventario['tipo'] | null {
+  if (vista === 'ingresado') return 'ingreso';
+  if (vista === 'despachado') return 'despacho';
+  if (vista === 'almacenado') return 'almacenado';
+  return null;
+}
+
 function nombreMat(raw: unknown): { id: string; name: string; unit: string; sap: string | null } {
   const m = Array.isArray(raw) ? raw[0] : raw;
   if (!m || typeof m !== 'object') {
@@ -517,19 +524,30 @@ function aplicarFiltros(
   filas: FilaMovimientoInventario[],
   f: FiltrosMovimientosInventario,
 ): FilaMovimientoInventario[] {
+  const tipoVista = f.vista ? tipoParaVista(f.vista) : null;
+
   return filas.filter((r) => {
-    if (f.vista && f.vista !== 'todos' && r.tipo !== f.vista) return false;
+    if (tipoVista && r.tipo !== tipoVista) return false;
     if (f.proyectoId && r.proyecto_id !== f.proyectoId) return false;
-    if (f.ubicacionId) {
-      /* filtro ubicación solo en almacenado/ingreso por nombre destino — simplificado */
+
+    if (f.proveedor?.trim() && !incluye(r.proveedor ?? '', f.proveedor)) return false;
+
+    if (f.destino?.trim()) {
+      const matchDestino =
+        incluye(r.destino ?? '', f.destino) ||
+        incluye(r.origen ?? '', f.destino) ||
+        incluye(r.proyecto_nombre ?? '', f.destino);
+      if (!matchDestino) return false;
     }
-    if (!incluye(r.proveedor ?? '', f.proveedor)) return false;
-    if (!incluye(r.destino ?? '', f.destino) && !incluye(r.proyecto_nombre ?? '', f.destino)) {
-      if (f.destino?.trim()) return false;
+
+    if (f.material?.trim()) {
+      const matchMaterial =
+        incluye(r.material_nombre, f.material) ||
+        incluye(r.material_codigo ?? '', f.material) ||
+        incluye(r.referencia ?? '', f.material);
+      if (!matchMaterial) return false;
     }
-    if (!incluye(r.material_nombre, f.material) && !incluye(r.material_codigo ?? '', f.material)) {
-      if (f.material?.trim()) return false;
-    }
+
     if (!enRangoFecha(r.fecha, f.fechaDesde, f.fechaHasta)) return false;
     return true;
   });
@@ -558,12 +576,13 @@ export async function listarMovimientosInventario(
 
   const lotes = await Promise.all(tareas);
   const merged = lotes.flat().sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const filas = aplicarFiltros(merged, filtros).slice(0, limite);
+  const filtradas = aplicarFiltros(merged, filtros);
+  const filas = filtradas.slice(0, limite);
 
   const resumen = {
-    ingresado: merged.filter((r) => r.tipo === 'ingreso').length,
-    despachado: merged.filter((r) => r.tipo === 'despacho').length,
-    almacenado: merged.filter((r) => r.tipo === 'almacenado').length,
+    ingresado: filtradas.filter((r) => r.tipo === 'ingreso').length,
+    despachado: filtradas.filter((r) => r.tipo === 'despacho').length,
+    almacenado: filtradas.filter((r) => r.tipo === 'almacenado').length,
   };
 
   return { filas, resumen };

@@ -28,6 +28,7 @@ import {
     filtrarLineasComprasConfirmadas,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
+import ComprasNotaTasaBcv from '@/components/contabilidad/ComprasNotaTasaBcv';
 import ComprasFiltrosPanel, {
     buildComprasFiltrosChips,
     ComprasFiltrosActivosBar,
@@ -127,6 +128,7 @@ import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 type CompraRow = CompraListaUnificada;
 
 type LineaDetalle = {
+    id?: string;
     descripcion: string;
     item_code: string | null;
     subtotal: number;
@@ -227,6 +229,7 @@ export default function ComprasPage() {
     const [error, setError] = useState<string | null>(null);
     const [avisoCanal, setAvisoCanal] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deletingLineaId, setDeletingLineaId] = useState<string | null>(null);
     const [ingresandoAlmacenId, setIngresandoAlmacenId] = useState<string | null>(null);
     const [cambiandoMonedaId, setCambiandoMonedaId] = useState<string | null>(null);
     const [editandoCanal, setEditandoCanal] = useState<{
@@ -491,7 +494,7 @@ export default function ComprasPage() {
             }
 
             const lineasSelect =
-                'contabilidad_compra_lineas(descripcion,item_code,subtotal,cantidad,precio_unitario)';
+                'contabilidad_compra_lineas(id,descripcion,item_code,subtotal,cantidad,precio_unitario)';
 
             let minBs = parseMontoFiltro(montoMinBs);
             let maxBs = parseMontoFiltro(montoMaxBs);
@@ -1147,6 +1150,7 @@ export default function ComprasPage() {
                           ? Number(l.subtotal) / cantidad
                           : 0;
                 return {
+                    id: l.id,
                     descripcion: l.descripcion,
                     item_code: l.item_code,
                     cantidad,
@@ -1240,14 +1244,67 @@ export default function ComprasPage() {
 
     const compraPorId = useMemo(() => new Map(compras.map((c) => [c.id, c])), [compras]);
 
+    const handleDeleteLinea = async (compraId: string, lineaId: string) => {
+        const c = compraPorId.get(compraId);
+        if (!c) return;
+        if (compraId.startsWith('canal-')) {
+            setError('Esta factura aún no está en contabilidad. Elimínela desde el listado de pendientes.');
+            return;
+        }
+
+        const ok = window.confirm(
+            `¿Eliminar esta línea de la compra?\n\n${c.supplier_name} · Factura #${c.invoice_number}\n\nSe ajustará el total de la factura y el inventario si aplica.`,
+        );
+        if (!ok) return;
+
+        setDeletingLineaId(lineaId);
+        setError(null);
+        try {
+            const res = await fetch(
+                `/api/contabilidad/compras/${encodeURIComponent(compraId)}/lineas/${encodeURIComponent(lineaId)}`,
+                { method: 'DELETE' },
+            );
+            const data = (await res.json()) as {
+                compraEliminada?: boolean;
+                materialPermaneceEnStock?: boolean;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(data.error || 'No se pudo eliminar la línea');
+
+            if (data.compraEliminada) {
+                setCompras((prev) => prev.filter((row) => row.id !== compraId));
+                setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(compraId);
+                    return next;
+                });
+            }
+
+            if (data.materialPermaneceEnStock) {
+                setError(
+                    'Línea eliminada. El material permanece en inventario porque ya estaba aprobado en recepción.',
+                );
+            }
+
+            void load();
+        } catch (e) {
+            setError(formatDeleteCompraError(e));
+            void load();
+        } finally {
+            setDeletingLineaId(null);
+        }
+    };
+
     const accionesCompra = useCallback(
         (compraId: string) => {
             const c = compraPorId.get(compraId);
             if (!c) return null;
             const canalId = idCanalTelegram(c);
+            const esApp = c.fuente_lista === 'app' || (!compraId.startsWith('canal-') && c.origen !== 'TELEGRAM');
             return {
                 puedeModificar: Boolean(canalId),
                 etiquetaEliminar: 'Borrar',
+                puedeEliminarLinea: esApp,
             };
         },
         [compraPorId],
@@ -1668,11 +1725,7 @@ export default function ComprasPage() {
                             Sin tasa BCV. Pulse BCV en recepción de mercancía o configure ci_config_nomina.
                         </p>
                     )}
-                    <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '8px', lineHeight: 1.45 }}>
-                        Totales en <strong style={{ color: '#FF3B30' }}>USD</strong> y{' '}
-                        <strong style={{ color: '#FFD60A' }}>Bs</strong> (tasa de la factura o del día).
-                        El P.U. de cada línea se muestra en la moneda original de la factura.
-                    </p>
+                    <ComprasNotaTasaBcv />
                 </div>
 
                 {filtrosAbiertos ? (
@@ -2139,7 +2192,8 @@ export default function ComprasPage() {
                             onScrollToCompra={scrollToCompra}
                             accionesPorCompra={accionesCompra}
                             onModificar={onModificarCompra}
-                            onEliminar={onEliminarCompra}
+                            onEliminarLinea={handleDeleteLinea}
+                            deletingLineaId={deletingLineaId}
                             deletingId={deletingId}
                             sortColumn={sortColumn}
                             sortDir={sortDir}

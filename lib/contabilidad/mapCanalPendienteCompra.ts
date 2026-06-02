@@ -39,6 +39,7 @@ export type CanalPendienteParaLista = {
 };
 
 export type CompraLineaUi = {
+  id?: string;
   descripcion: string;
   item_code: string | null;
   subtotal: number;

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,13 +41,13 @@ export async function GET(req: Request) {
     }
 
     const { data, error } = await q;
-    if (error) throw error;
+    if (error) throw new Error(formatErrorMessage(error));
     return NextResponse.json(
       { pendientes: data ?? [] },
       { headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error al listar';
+    const message = formatErrorMessage(err) || 'Error al listar';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

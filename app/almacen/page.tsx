@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/inventory/GlassCard';
 import {
@@ -21,6 +21,7 @@ import {
     RotateCw,
     Pencil,
     Loader2,
+    Download,
 } from 'lucide-react';
 import { InventoryItem } from '@/types/inventory';
 import { apiUrl } from '@/lib/http/apiUrl';
@@ -48,10 +49,26 @@ import {
     enriquecerMapaStockConProyectoFiltro,
     fusionarFilaEnResumenStock,
     listarUbicacionesParaFiltroInventario,
+    proyectoIdsDeEntidad,
     resolverUbicacionIdsFiltro,
+    resolverUbicacionIdsFiltroEntidad,
     type StockEnUbicacionResumen,
     type ValorInventarioDeposito,
 } from '@/lib/almacen/inventarioFiltroUbicacion';
+import {
+    buildInventarioShareUrl,
+    copiarTextoInventario,
+    descargarTextoComoArchivo,
+    hasInventarioShareParams,
+    inventarioFilasACsv,
+    inventarioFilasATextoResumen,
+    inventarioFilasATsv,
+    nombreArchivoInventarioCsv,
+    parseInventarioShareParams,
+    type InventarioExportScope,
+    type InventarioFilaExport,
+    type InventarioShareState,
+} from '@/lib/almacen/inventarioExportShare';
 
 const INVENTORY_SELECT = `
   *,
@@ -106,14 +123,18 @@ function materialPasaFiltroEntidad(
     opts: {
         filterEntidadId?: string;
         filterProyectoId?: string;
+        proyectoIdsEntidad?: Set<string>;
         stockEnFiltro: number;
-        filtroPorUbicacionActivo: boolean;
+        filtroStockPorUbicacion: boolean;
     },
 ): boolean {
     if (!opts.filterEntidadId) return true;
     if (item.entidad_id === opts.filterEntidadId) return true;
+    if (item.proyecto?.entidad_id === opts.filterEntidadId) return true;
+    const pid = item.proyecto_id?.trim();
+    if (pid && opts.proyectoIdsEntidad?.has(pid)) return true;
     if (opts.filterProyectoId && item.proyecto_id === opts.filterProyectoId) return true;
-    if (opts.filtroPorUbicacionActivo && opts.stockEnFiltro > 0) return true;
+    if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0) return true;
     return false;
 }
 
@@ -145,9 +166,12 @@ function obraMostradaEnTabla(
     if (item.proyecto?.nombre?.trim()) {
         return { nombre: item.proyecto.nombre.trim(), desdeStockFisico: false };
     }
-    const desdeUbicacion = stockUb?.proyecto_nombres?.find((n) => n.trim());
-    if (desdeUbicacion) {
-        return { nombre: desdeUbicacion.trim(), desdeStockFisico: true };
+    const desdeUbicacion = (stockUb?.proyecto_nombres ?? []).filter((n) => n.trim());
+    if (desdeUbicacion.length) {
+        return {
+            nombre: desdeUbicacion.join(' · '),
+            desdeStockFisico: true,
+        };
     }
     if (filtroPorUbicacionActivo && filterProyectoId) {
         const pr = proyectos.find((p) => p.id === filterProyectoId);
@@ -292,6 +316,8 @@ function InventoryListThumb({
 
 export default function InventoryMasterPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const shareParamsApplied = useRef(false);
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -338,6 +364,8 @@ export default function InventoryMasterPage() {
     });
     const [valorRotateIdx, setValorRotateIdx] = useState(0);
     const [kpiVista, setKpiVista] = useState<KpiVista>('ninguno');
+    const [exportScope, setExportScope] = useState<InventarioExportScope>('filtrado');
+    const [compartidoOk, setCompartidoOk] = useState(false);
     const [valorPorDeposito, setValorPorDeposito] = useState<ValorInventarioDeposito[]>([]);
     /** Inspecciones PENDIENTE (fuente operativa de cuarentena). */
     const [cuarentenaOperativa, setCuarentenaOperativa] = useState<InspeccionCuarentenaRow[]>([]);
@@ -375,6 +403,30 @@ export default function InventoryMasterPage() {
     }, [supabase]);
 
     useEffect(() => {
+        if (shareParamsApplied.current) return;
+        if (!hasInventarioShareParams(searchParams)) return;
+        shareParamsApplied.current = true;
+        const parsed = parseInventarioShareParams(searchParams);
+        if (parsed.q) setSearchTerm(parsed.q);
+        if (parsed.cat && (CATEGORIAS_FILTRO as readonly string[]).includes(parsed.cat)) {
+            setActiveCategory(parsed.cat);
+        }
+        if (parsed.entidad) setFilterEntidadId(parsed.entidad);
+        if (parsed.proyecto) setFilterProyectoId(parsed.proyecto);
+        if (parsed.partida) setFilterPartidaId(parsed.partida);
+        if (parsed.deposito) setFilterDepositId(parsed.deposito);
+        if (parsed.sinObra) setSinClasificacionObra(true);
+        if (parsed.sinAlmacen) setSinAlmacenAsignado(true);
+        if (
+            parsed.kpi === 'stock_bajo' ||
+            parsed.kpi === 'cuarentena' ||
+            parsed.kpi === 'sku'
+        ) {
+            setKpiVista(parsed.kpi);
+        }
+    }, [searchParams]);
+
+    useEffect(() => {
         let cancelled = false;
         void (async () => {
             try {
@@ -405,6 +457,14 @@ export default function InventoryMasterPage() {
         () => filtrarProyectosPorEntidad(proyectos, filterEntidadId || null),
         [proyectos, filterEntidadId],
     );
+
+    const proyectoIdsEntidad = useMemo(
+        () => (filterEntidadId ? proyectoIdsDeEntidad(proyectos, filterEntidadId) : new Set<string>()),
+        [filterEntidadId, proyectos],
+    );
+
+    const filtroStockPorUbicacion = Boolean(filterEntidadId || filterProyectoId || filterDepositId);
+    const requiereStockEnUbicacion = Boolean(filterProyectoId || filterDepositId);
 
     const depositsLista = useMemo(() => {
         return Array.from(depositsById.values()).sort((a, b) =>
@@ -439,7 +499,7 @@ export default function InventoryMasterPage() {
     }, [items, itemsDesdeStock]);
 
     useEffect(() => {
-        if (!filterProyectoId && !filterDepositId) {
+        if (!filterEntidadId && !filterProyectoId && !filterDepositId) {
             setStockPorUbicacion(new Map());
             setItemsDesdeStock([]);
             return;
@@ -460,11 +520,25 @@ export default function InventoryMasterPage() {
                         .maybeSingle();
                     nombreProyectoFiltro = String(prRow?.nombre ?? '').trim();
                 }
-                const ids = resolverUbicacionIdsFiltro(ubicaciones, {
-                    proyectoId: filterProyectoId || undefined,
-                    proyectoNombre: nombreProyectoFiltro || undefined,
-                    depositId: filterDepositId || undefined,
-                });
+
+                let ids: string[];
+                if (filterProyectoId) {
+                    ids = resolverUbicacionIdsFiltro(ubicaciones, {
+                        proyectoId: filterProyectoId,
+                        proyectoNombre: nombreProyectoFiltro || undefined,
+                        depositId: filterDepositId || undefined,
+                    });
+                } else if (filterEntidadId) {
+                    ids = resolverUbicacionIdsFiltroEntidad(ubicaciones, {
+                        entidadId: filterEntidadId,
+                        proyectos,
+                        depositId: filterDepositId || undefined,
+                    });
+                } else {
+                    ids = resolverUbicacionIdsFiltro(ubicaciones, {
+                        depositId: filterDepositId || undefined,
+                    });
+                }
                 if (cancelled) return;
 
                 const ubicacionesFiltro = ubicaciones.filter((u) => ids.includes(u.id));
@@ -482,16 +556,16 @@ export default function InventoryMasterPage() {
                     proyectoDesdeUbicaciones?.proyecto?.nombre ??
                     (nombreProyectoFiltro || undefined);
 
-                let stockMap: Map<string, StockEnUbicacionResumen>;
-                if (!ids.length && filterProyectoId) {
+                let stockMap = new Map<string, StockEnUbicacionResumen>();
+                const etiquetaUb =
+                    nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
+
+                if (filterProyectoId) {
                     const agg = await getStockAgregadoPorMaterialObra(
                         supabase,
                         filterProyectoId,
                         nombreProyectoFiltro || undefined,
                     );
-                    stockMap = new Map();
-                    const etiquetaUb =
-                        nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
                     agg.forEach((qty, materialId) => {
                         if (qty > 0) {
                             fusionarFilaEnResumenStock(stockMap, materialId, {
@@ -502,30 +576,81 @@ export default function InventoryMasterPage() {
                             });
                         }
                     });
-                } else if (!ids.length) {
+                } else if (filterEntidadId) {
+                    stockMap = ids.length
+                        ? await cargarStockPorUbicaciones(supabase, ids)
+                        : new Map<string, StockEnUbicacionResumen>();
+                    const proysEntidad = proyectos.filter((p) => p.entidad_id === filterEntidadId);
+                    for (const pr of proysEntidad) {
+                        const agg = await getStockAgregadoPorMaterialObra(
+                            supabase,
+                            pr.id,
+                            pr.nombre,
+                        );
+                        agg.forEach((qty, materialId) => {
+                            if (qty <= 0) return;
+                            const prev = stockMap.get(materialId);
+                            if (!prev) {
+                                fusionarFilaEnResumenStock(stockMap, materialId, {
+                                    cantidad: qty,
+                                    ubicacionNombre: pr.nombre,
+                                    proyectoId: pr.id,
+                                    proyectoNombre: pr.nombre,
+                                });
+                            } else if (prev.cantidad_disponible < qty) {
+                                prev.cantidad_disponible = qty;
+                            }
+                        });
+                    }
+                    if (filterDepositId) {
+                        const stockUbDep = await cargarStockPorUbicaciones(supabase, ids);
+                        for (const mid of Array.from(stockMap.keys())) {
+                            const enUb = stockUbDep.get(mid)?.cantidad_disponible ?? 0;
+                            if (enUb <= 0) stockMap.delete(mid);
+                            else stockMap.get(mid)!.cantidad_disponible = enUb;
+                        }
+                    }
+                }
+
+                if (ids.length && filterProyectoId) {
+                    const stockUb = await cargarStockPorUbicaciones(supabase, ids);
+                    for (const [mid, ubRes] of Array.from(stockUb.entries())) {
+                        const prev = stockMap.get(mid);
+                        if (prev) {
+                            if (ubRes.cantidad_disponible > 0) {
+                                prev.cantidad_disponible = ubRes.cantidad_disponible;
+                            }
+                            prev.ubicacion_nombres = ubRes.ubicacion_nombres;
+                            prev.deposit_ids = ubRes.deposit_ids;
+                            prev.proyecto_ids = ubRes.proyecto_ids.length
+                                ? ubRes.proyecto_ids
+                                : prev.proyecto_ids;
+                            prev.proyecto_nombres = ubRes.proyecto_nombres.length
+                                ? ubRes.proyecto_nombres
+                                : prev.proyecto_nombres;
+                        } else if (ubRes.cantidad_disponible > 0) {
+                            fusionarFilaEnResumenStock(stockMap, mid, {
+                                cantidad: ubRes.cantidad_disponible,
+                                ubicacionNombre: ubRes.ubicacion_nombres[0] ?? etiquetaUb,
+                                proyectoId: proyectoIdStock,
+                                proyectoNombre: proyectoNombreStock,
+                                depositId: ubRes.deposit_ids[0],
+                            });
+                        }
+                    }
+                    if (filterDepositId) {
+                        for (const mid of Array.from(stockMap.keys())) {
+                            const enUb = stockUb.get(mid)?.cantidad_disponible ?? 0;
+                            if (enUb <= 0) stockMap.delete(mid);
+                            else stockMap.get(mid)!.cantidad_disponible = enUb;
+                        }
+                    }
+                } else if (ids.length && !filterProyectoId && !filterEntidadId) {
+                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
+                } else if (!filterProyectoId && !filterEntidadId && filterDepositId) {
                     setStockPorUbicacion(new Map());
                     setItemsDesdeStock([]);
                     return;
-                } else {
-                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
-                    if (filterProyectoId) {
-                        const agg = await getStockAgregadoPorMaterialObra(
-                            supabase,
-                            filterProyectoId,
-                            nombreProyectoFiltro || undefined,
-                        );
-                        const etiquetaUb =
-                            nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
-                        agg.forEach((qty, materialId) => {
-                            if (qty <= 0 || stockMap.has(materialId)) return;
-                            fusionarFilaEnResumenStock(stockMap, materialId, {
-                                cantidad: qty,
-                                ubicacionNombre: etiquetaUb,
-                                proyectoId: proyectoIdStock,
-                                proyectoNombre: proyectoNombreStock,
-                            });
-                        });
-                    }
                 }
                 if (filterProyectoId) {
                     enriquecerMapaStockConProyectoFiltro(stockMap, {
@@ -585,7 +710,7 @@ export default function InventoryMasterPage() {
         return () => {
             cancelled = true;
         };
-    }, [filterProyectoId, filterDepositId, supabase, items, proyectos]);
+    }, [filterEntidadId, filterProyectoId, filterDepositId, supabase, items, proyectos]);
 
     useEffect(() => {
         if (!itemsCatalogo.length || !depositsLista.length) {
@@ -719,18 +844,18 @@ export default function InventoryMasterPage() {
         }
     };
 
-    const filtroPorUbicacionActivo = Boolean(filterProyectoId || filterDepositId);
+    const filtroPorUbicacionActivo = filtroStockPorUbicacion;
 
     const cantidadStockReal = useCallback(
         (item: InventoryItem): number => {
-            if (filtroPorUbicacionActivo) {
+            if (filtroStockPorUbicacion) {
                 return stockPorUbicacion.get(item.id)?.cantidad_disponible ?? 0;
             }
             const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
             if (fromStock != null && fromStock > 0) return fromStock;
             return Number(item.stock_available) || 0;
         },
-        [filtroPorUbicacionActivo, stockPorUbicacion, stockGlobal],
+        [filtroStockPorUbicacion, stockPorUbicacion, stockGlobal],
     );
 
     const filteredItems = useMemo(() => {
@@ -763,8 +888,9 @@ export default function InventoryMasterPage() {
                 !materialPasaFiltroEntidad(item, {
                     filterEntidadId,
                     filterProyectoId,
+                    proyectoIdsEntidad,
                     stockEnFiltro,
-                    filtroPorUbicacionActivo,
+                    filtroStockPorUbicacion,
                 })
             ) {
                 return false;
@@ -773,9 +899,9 @@ export default function InventoryMasterPage() {
             if (sinClasificacionObra && (item.proyecto_id || item.entidad_id)) return false;
             if (sinAlmacenAsignado && item.deposit_id) return false;
 
-            if (filtroPorUbicacionActivo) {
+            if (requiereStockEnUbicacion) {
                 if (stockEnFiltro <= 0) return false;
-            } else {
+            } else if (!filtroStockPorUbicacion) {
                 if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
                 if (filterDepositId && item.deposit_id !== filterDepositId) return false;
             }
@@ -800,7 +926,9 @@ export default function InventoryMasterPage() {
         sinClasificacionObra,
         sinAlmacenAsignado,
         depositsById,
-        filtroPorUbicacionActivo,
+        filtroStockPorUbicacion,
+        requiereStockEnUbicacion,
+        proyectoIdsEntidad,
         stockPorUbicacion,
         cantidadStockReal,
         kpiVista,
@@ -844,6 +972,221 @@ export default function InventoryMasterPage() {
             return next;
         });
     }, []);
+
+    const estadoCompartir = useMemo((): InventarioShareState => {
+        return {
+            q: searchTerm.trim() || undefined,
+            cat: activeCategory !== 'Todos' ? activeCategory : undefined,
+            entidad: filterEntidadId || undefined,
+            proyecto: filterProyectoId || undefined,
+            partida: filterPartidaId || undefined,
+            deposito: filterDepositId || undefined,
+            sinObra: sinClasificacionObra || undefined,
+            sinAlmacen: sinAlmacenAsignado || undefined,
+            kpi: kpiVista !== 'ninguno' ? kpiVista : undefined,
+        };
+    }, [
+        searchTerm,
+        activeCategory,
+        filterEntidadId,
+        filterProyectoId,
+        filterPartidaId,
+        filterDepositId,
+        sinClasificacionObra,
+        sinAlmacenAsignado,
+        kpiVista,
+    ]);
+
+    const stockParaExport = useCallback(
+        (item: InventoryItem, scope: InventarioExportScope): number => {
+            if (scope === 'filtrado') return cantidadStockReal(item);
+            const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
+            if (fromStock != null && fromStock > 0) return fromStock;
+            return Number(item.stock_available) || 0;
+        },
+        [cantidadStockReal, stockGlobal],
+    );
+
+    const construirFilasExport = useCallback(
+        (scope: InventarioExportScope): InventarioFilaExport[] => {
+            const lista = scope === 'filtrado' ? filteredItems : itemsCatalogo;
+            return lista.map((item) => {
+                const stockUb =
+                    scope === 'filtrado' && filtroPorUbicacionActivo
+                        ? stockPorUbicacion.get(item.id)
+                        : undefined;
+                const obraTabla = obraMostradaEnTabla(
+                    item,
+                    stockUb,
+                    scope === 'filtrado' && filtroPorUbicacionActivo,
+                    filterProyectoId,
+                    proyectos,
+                );
+                const stock = stockParaExport(item, scope);
+                const costo = Number(item.average_weighted_cost) || 0;
+                const cat = item.category;
+                const rawCat = Array.isArray(cat) ? cat[0] : cat;
+                return {
+                    codigo: item.sap_code?.trim() || '',
+                    material: item.name,
+                    unidad: item.unit || 'UND',
+                    entidad: item.entidad?.nombre?.trim() || '',
+                    obra: obraTabla?.nombre?.trim() || item.proyecto?.nombre?.trim() || '',
+                    partida: item.partida
+                        ? [item.partida.codigo_partida, item.partida.descripcion]
+                              .filter(Boolean)
+                              .join(' · ')
+                        : '',
+                    ubicacion:
+                        scope === 'filtrado' && filtroPorUbicacionActivo
+                            ? labelUbicacionEnTabla(
+                                  item,
+                                  stockUb,
+                                  true,
+                                  depositsById,
+                                  furnitureById,
+                              )
+                            : formatInventoryLocationLabel(item, depositsById, furnitureById),
+                    stock,
+                    costoPromedio: costo,
+                    valorStock: stock * costo,
+                    ultimaCompraFecha: item.last_purchase_date
+                        ? new Date(item.last_purchase_date).toLocaleDateString('es-VE')
+                        : '',
+                    ultimaCompraPrecio: Number(item.last_purchase_price) || 0,
+                    categoria: String(rawCat?.name ?? '').trim(),
+                };
+            });
+        },
+        [
+            filteredItems,
+            itemsCatalogo,
+            filtroPorUbicacionActivo,
+            stockPorUbicacion,
+            filterProyectoId,
+            proyectos,
+            stockParaExport,
+            depositsById,
+            furnitureById,
+        ],
+    );
+
+    const etiquetaScopeExport = useCallback(
+        (scope: InventarioExportScope) =>
+            scope === 'filtrado'
+                ? `Vista filtrada (${filteredItems.length} ítem(s))`
+                : `Tabla completa (${itemsCatalogo.length} ítem(s))`,
+        [filteredItems.length, itemsCatalogo.length],
+    );
+
+    const exportarInventarioCsv = useCallback(
+        (scope: InventarioExportScope) => {
+            const filas = construirFilasExport(scope);
+            if (!filas.length) {
+                alert('No hay materiales para exportar.');
+                return;
+            }
+            descargarTextoComoArchivo(
+                inventarioFilasACsv(filas),
+                nombreArchivoInventarioCsv(scope),
+            );
+        },
+        [construirFilasExport],
+    );
+
+    const compartirInventario = useCallback(
+        async (scope: InventarioExportScope) => {
+            if (typeof window === 'undefined') return;
+            const filas = construirFilasExport(scope);
+            if (!filas.length) {
+                alert('No hay materiales para compartir.');
+                return;
+            }
+            const url =
+                scope === 'filtrado'
+                    ? buildInventarioShareUrl(window.location.origin, estadoCompartir)
+                    : `${window.location.origin}/almacen`;
+            const totalValor = filas.reduce((s, f) => s + f.valorStock, 0);
+            const titulo = '📦 Inventario de almacenes — Casa Inteligente';
+            const resumen = inventarioFilasATextoResumen(filas, {
+                titulo,
+                scopeLabel: etiquetaScopeExport(scope),
+                totalValor,
+                url,
+            });
+
+            if (typeof navigator.share === 'function') {
+                try {
+                    await navigator.share({
+                        title: 'Inventario de almacenes',
+                        text: resumen,
+                        url,
+                    });
+                    return;
+                } catch (e) {
+                    if (e instanceof Error && e.name === 'AbortError') return;
+                }
+            }
+
+            const tsv = `\n\n${inventarioFilasATsv(filas)}`;
+            const ok = await copiarTextoInventario(`${resumen}${tsv}`);
+            if (ok) {
+                setCompartidoOk(true);
+                window.setTimeout(() => setCompartidoOk(false), 2500);
+            } else {
+                alert('No se pudo copiar al portapapeles.');
+            }
+        },
+        [construirFilasExport, estadoCompartir, etiquetaScopeExport],
+    );
+
+    const compartirInventarioWhatsApp = useCallback(
+        (scope: InventarioExportScope) => {
+            if (typeof window === 'undefined') return;
+            const filas = construirFilasExport(scope);
+            if (!filas.length) {
+                alert('No hay materiales para compartir.');
+                return;
+            }
+            const url =
+                scope === 'filtrado'
+                    ? buildInventarioShareUrl(window.location.origin, estadoCompartir)
+                    : `${window.location.origin}/almacen`;
+            const totalValor = filas.reduce((s, f) => s + f.valorStock, 0);
+            const text = inventarioFilasATextoResumen(filas, {
+                titulo: `📦 *INVENTARIO DE ALMACENES* — ${new Date().toLocaleDateString('es-VE')}`,
+                scopeLabel: etiquetaScopeExport(scope),
+                totalValor,
+                url,
+                maxLineas: 40,
+            });
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+        },
+        [construirFilasExport, estadoCompartir, etiquetaScopeExport],
+    );
+
+    const copiarInventarioPortapapeles = useCallback(
+        async (scope: InventarioExportScope) => {
+            const filas = construirFilasExport(scope);
+            if (!filas.length) {
+                alert('No hay materiales para copiar.');
+                return;
+            }
+            const url =
+                scope === 'filtrado'
+                    ? buildInventarioShareUrl(window.location.origin, estadoCompartir)
+                    : `${window.location.origin}/almacen`;
+            const text = `${etiquetaScopeExport(scope)}\n${url}\n\n${inventarioFilasATsv(filas)}`;
+            const ok = await copiarTextoInventario(text);
+            if (ok) {
+                setCompartidoOk(true);
+                window.setTimeout(() => setCompartidoOk(false), 2500);
+            } else {
+                alert('No se pudo copiar al portapapeles.');
+            }
+        },
+        [construirFilasExport, estadoCompartir, etiquetaScopeExport],
+    );
 
     const statsFiltrados = useMemo(() => {
         const base = hayFiltrosActivos ? filteredItems : itemsCatalogo;
@@ -974,7 +1317,7 @@ export default function InventoryMasterPage() {
         const slots: { label: string; value: number }[] = [
             { label: 'Valor total', value: statsFiltrados.totalValue },
         ];
-        if (filtroPorUbicacionActivo || filterProyectoId || filterDepositId) {
+        if (filtroStockPorUbicacion) {
             for (const d of valorPorAlmacen) {
                 if (d.value > 0) slots.push({ label: d.name, value: d.value });
             }
@@ -1021,11 +1364,7 @@ export default function InventoryMasterPage() {
     };
 
     const shareInventory = () => {
-        const text = `📦 *REPORTE DE INVENTARIO - ${new Date().toLocaleDateString()}*\n\n` +
-            filteredItems.map(item => `- ${item.name}: ${cantidadStockReal(item)} ${item.unit}`).join('\n') +
-            `\n\n*Valor Total:* ${formatCurrency(statsFiltrados.totalValue)}`;
-
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+        void compartirInventarioWhatsApp(exportScope);
     };
 
     /** Elimina un ítem del maestro global_inventory y registros vinculados (irreversible). */
@@ -1239,7 +1578,7 @@ export default function InventoryMasterPage() {
                             <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">
                                 Valor por almacén
                             </p>
-                            {(filtroPorUbicacionActivo || filterProyectoId || filterDepositId
+                            {(filtroStockPorUbicacion
                                 ? valorPorAlmacen.filter((r) => r.value > 0)
                                 : valorPorDeposito.length
                                   ? valorPorDeposito
@@ -1247,7 +1586,7 @@ export default function InventoryMasterPage() {
                             ).length === 0 ? (
                                 <p className="text-xs text-zinc-500">Sin datos de almacén</p>
                             ) : (
-                                (filtroPorUbicacionActivo || filterProyectoId || filterDepositId
+                                (filtroStockPorUbicacion
                                     ? valorPorAlmacen.filter((r) => r.value > 0)
                                     : valorPorDeposito.length
                                       ? valorPorDeposito
@@ -1480,7 +1819,7 @@ export default function InventoryMasterPage() {
                         </div>
                         <span className="text-[10px] font-bold text-zinc-500">
                             Mostrando {filteredItems.length} de {itemsCatalogo.length} ítems
-                            {cargandoStockUbicacion && filtroPorUbicacionActivo
+                            {cargandoStockUbicacion && filtroStockPorUbicacion
                                 ? ' · actualizando stock por almacén…'
                                 : ''}
                         </span>
@@ -1588,6 +1927,59 @@ export default function InventoryMasterPage() {
                             >
                                 Limpiar filtros
                             </button>
+                        ) : null}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-3">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                            Exportar / compartir
+                        </span>
+                        <select
+                            value={exportScope}
+                            onChange={(e) => setExportScope(e.target.value as InventarioExportScope)}
+                            className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-[10px] font-bold text-white"
+                        >
+                            <option value="filtrado">
+                                Vista filtrada ({filteredItems.length})
+                            </option>
+                            <option value="completo">
+                                Tabla completa ({itemsCatalogo.length})
+                            </option>
+                        </select>
+                        <button
+                            type="button"
+                            onClick={() => exportarInventarioCsv(exportScope)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/20"
+                        >
+                            <Download size={14} />
+                            CSV
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void copiarInventarioPortapapeles(exportScope)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-black/40 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-zinc-300 hover:bg-zinc-900"
+                        >
+                            Copiar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void compartirInventario(exportScope)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-300 hover:bg-sky-500/20"
+                        >
+                            <Share2 size={14} />
+                            Compartir
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => compartirInventarioWhatsApp(exportScope)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-green-300 hover:bg-green-500/20"
+                        >
+                            WhatsApp
+                        </button>
+                        {compartidoOk ? (
+                            <span className="text-[10px] font-bold text-emerald-400">
+                                Copiado al portapapeles
+                            </span>
                         ) : null}
                     </div>
                 </div>
