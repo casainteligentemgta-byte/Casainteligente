@@ -31,6 +31,7 @@ import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
 import ComprasFiltrosPanel, {
     buildComprasFiltrosChips,
     ComprasFiltrosActivosBar,
+    ComprasFiltrosSeleccionObra,
     type EntidadOpcion,
 } from '@/components/contabilidad/ComprasFiltrosPanel';
 import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
@@ -98,8 +99,14 @@ import {
 } from '@/lib/contabilidad/formatDetalleLogisticaCompra';
 import {
     buildComprasCuadroShareUrl,
+    borrarComprasCuadroFiltrosGuardados,
+    comprasCuadroPathFromState,
     copiarTextoCuadro,
+    guardarComprasCuadroFiltros,
+    hasComprasCuadroShareParams,
+    leerComprasCuadroFiltrosGuardados,
     parseComprasCuadroShareParams,
+    type ComprasCuadroFiltrosState,
 } from '@/lib/contabilidad/comprasCuadroShare';
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
 import {
@@ -265,12 +272,10 @@ export default function ComprasPage() {
     const selectAllRef = useRef<HTMLInputElement>(null);
     const proyectosIdsRef = useRef<Set<string>>(new Set());
     const shareParamsAplicados = useRef(false);
+    const filtrosPersistenciaLista = useRef(false);
     const autoAbrirFiltrosHecho = useRef(false);
 
-    useEffect(() => {
-        if (!hydrated || shareParamsAplicados.current) return;
-        shareParamsAplicados.current = true;
-        const parsed = parseComprasCuadroShareParams(searchParams);
+    const aplicarFiltrosCuadro = useCallback((parsed: Partial<ComprasCuadroFiltrosState>) => {
         if (parsed.fuenteFiltro) setFuenteFiltro(parsed.fuenteFiltro);
         if (parsed.periodo) setPeriodo(parsed.periodo);
         if (parsed.fechaRef) setFechaRef(parsed.fechaRef);
@@ -288,13 +293,34 @@ export default function ComprasPage() {
         if (parsed.montoMinUsd) setMontoMinUsd(parsed.montoMinUsd);
         if (parsed.montoMaxUsd) setMontoMaxUsd(parsed.montoMaxUsd);
         if (parsed.vistaListado) setVistaListado(parsed.vistaListado);
+        if (parsed.estadoLogisticaFiltro) setEstadoLogisticaFiltro(parsed.estadoLogisticaFiltro);
         if (parsed.busqueda) {
             setBusqueda(parsed.busqueda);
             setBusquedaAplicada(parsed.busqueda);
         }
         if (parsed.sortColumn) setSortColumn(parsed.sortColumn);
         if (parsed.sortDir) setSortDir(parsed.sortDir);
-    }, [hydrated, searchParams]);
+    }, []);
+
+    useEffect(() => {
+        setHydrated(true);
+    }, []);
+
+    useEffect(() => {
+        if (!hydrated || shareParamsAplicados.current) return;
+        shareParamsAplicados.current = true;
+
+        const fromUrl = hasComprasCuadroShareParams(searchParams)
+            ? parseComprasCuadroShareParams(searchParams)
+            : null;
+        const fromStorage = !fromUrl ? leerComprasCuadroFiltrosGuardados() : null;
+        const parsed = fromUrl ?? fromStorage ?? {};
+
+        aplicarFiltrosCuadro(parsed);
+        if (!parsed.fechaRef) setFechaRef(todayIso());
+
+        filtrosPersistenciaLista.current = true;
+    }, [hydrated, searchParams, aplicarFiltrosCuadro]);
 
     const fechaRefActiva = fechaRef || (hydrated ? todayIso() : '');
     const { tasa: tasaBcvHoy, fuente: tasaBcvFuente, loading: cargandoTasaHoy } = useTasaBcvHoy(
@@ -316,11 +342,6 @@ export default function ComprasPage() {
                 : null,
         [periodo, fechaRefActiva, fechaDesde, fechaHasta],
     );
-
-    useEffect(() => {
-        setHydrated(true);
-        setFechaRef(todayIso());
-    }, []);
 
     useEffect(() => {
         const id = window.setTimeout(() => setBusquedaAplicada(busqueda.trim()), 350);
@@ -1158,7 +1179,9 @@ export default function ComprasPage() {
 
     const totalLineasBs = useMemo(
         () =>
-            lineasOrdenadas.reduce((acc, row) => acc + subtotalBsLineaCompra(row), 0),
+            Math.round(
+                lineasOrdenadas.reduce((acc, row) => acc + subtotalBsLineaCompra(row), 0) * 100,
+            ) / 100,
         [lineasOrdenadas],
     );
 
@@ -1292,6 +1315,11 @@ export default function ComprasPage() {
         ],
     );
 
+    const filtrosExtraCount = useMemo(
+        () => filtrosActivos.filter((c) => c.id !== 'entidad' && c.id !== 'proyecto').length,
+        [filtrosActivos],
+    );
+
     const limpiarTodosFiltros = useCallback(() => {
         setPeriodo('todas');
         setFechaDesde('');
@@ -1311,6 +1339,7 @@ export default function ComprasPage() {
         setBusqueda('');
         setBusquedaAplicada('');
         setFuenteFiltro('todos');
+        borrarComprasCuadroFiltrosGuardados();
         router.replace('/contabilidad/compras');
     }, [router]);
 
@@ -1319,7 +1348,6 @@ export default function ComprasPage() {
             switch (id) {
                 case 'fuente':
                     setFuenteFiltro('todos');
-                    router.replace('/contabilidad/compras');
                     break;
                 case 'periodo':
                     setPeriodo('todas');
@@ -1360,7 +1388,7 @@ export default function ComprasPage() {
                     break;
             }
         },
-        [router],
+        [],
     );
 
     useEffect(() => {
@@ -1387,7 +1415,7 @@ export default function ComprasPage() {
     };
 
     const estadoCompartir = useMemo(
-        () => ({
+        (): ComprasCuadroFiltrosState => ({
             fuenteFiltro,
             periodo,
             fechaRef: fechaRefActiva,
@@ -1408,6 +1436,7 @@ export default function ComprasPage() {
             vistaListado,
             sortColumn,
             sortDir,
+            estadoLogisticaFiltro,
         }),
         [
             fuenteFiltro,
@@ -1430,8 +1459,19 @@ export default function ComprasPage() {
             vistaListado,
             sortColumn,
             sortDir,
+            estadoLogisticaFiltro,
         ],
     );
+
+    useEffect(() => {
+        if (!hydrated || !filtrosPersistenciaLista.current) return;
+        guardarComprasCuadroFiltros(estadoCompartir);
+        const path = comprasCuadroPathFromState(estadoCompartir);
+        const actual = `${window.location.pathname}${window.location.search}`;
+        if (path !== actual) {
+            router.replace(path, { scroll: false });
+        }
+    }, [hydrated, estadoCompartir, router]);
 
     const subtituloCuadro = useMemo(() => {
         const partes = [
@@ -1629,8 +1669,9 @@ export default function ComprasPage() {
                         </p>
                     )}
                     <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '8px', lineHeight: 1.45 }}>
-                        Totales y botones en <strong style={{ color: '#FF3B30' }}>USD</strong> (tasa de la factura o del día).
-                        Precio unitario de cada artículo en <strong style={{ color: '#FFD60A' }}>bolívares</strong>.
+                        Totales en <strong style={{ color: '#FF3B30' }}>USD</strong> y{' '}
+                        <strong style={{ color: '#FFD60A' }}>Bs</strong> (tasa de la factura o del día).
+                        El P.U. de cada línea se muestra en la moneda original de la factura.
                     </p>
                 </div>
 

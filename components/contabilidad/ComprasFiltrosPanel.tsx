@@ -163,6 +163,167 @@ type ProyectoOpcion = ProyectoCatalogo;
 
 export type EntidadOpcion = { id: string; nombre: string };
 
+function ProyectoSelectOptions({
+    proyectos,
+    entidadFiltro,
+}: {
+    proyectos: ProyectoOpcion[];
+    entidadFiltro: string;
+}) {
+    const proyectosVisibles = React.useMemo(() => {
+        if (!entidadFiltro || entidadFiltro === 'sin_entidad') return proyectos;
+        return proyectos.filter((p) => p.entidad_id === entidadFiltro);
+    }, [proyectos, entidadFiltro]);
+
+    const proyectosPrincipales = proyectosVisibles.filter((p) => esProyectoSmartRrhhPorNombre(p.nombre));
+    const proyectosResto = proyectosVisibles.filter((p) => !esProyectoSmartRrhhPorNombre(p.nombre));
+
+    return (
+        <>
+            <option value="">Todas las obras</option>
+            <option value="sin_proyecto">Sin proyecto asignado</option>
+            {proyectosPrincipales.length > 0 ? (
+                <optgroup label="Obras principales">
+                    {proyectosPrincipales.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.nombre}
+                        </option>
+                    ))}
+                </optgroup>
+            ) : null}
+            {proyectosResto.length > 0 ? (
+                <optgroup label="Otros proyectos">
+                    {proyectosResto.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.nombre}
+                        </option>
+                    ))}
+                </optgroup>
+            ) : null}
+        </>
+    );
+}
+
+/** Selectores siempre visibles: entidad y obra/proyecto. */
+export function ComprasFiltrosSeleccionObra({
+    entidades,
+    proyectos,
+    entidadFiltro,
+    proyectoFiltro,
+    proyectoFiltroEtiqueta,
+    onEntidadChange,
+    onProyectoChange,
+    onAbrirMasFiltros,
+    filtrosExtraCount = 0,
+}: {
+    entidades: EntidadOpcion[];
+    proyectos: ProyectoOpcion[];
+    entidadFiltro: string;
+    proyectoFiltro: string;
+    proyectoFiltroEtiqueta: string;
+    onEntidadChange: (id: string) => void;
+    onProyectoChange: (id: string) => void;
+    onAbrirMasFiltros: () => void;
+    filtrosExtraCount?: number;
+}) {
+    return (
+        <div
+            className="compras-no-imprimir"
+            style={{
+                ...glass,
+                padding: '16px 18px',
+                marginBottom: '16px',
+                border: '1px solid rgba(88,86,214,0.35)',
+            }}
+        >
+            <div
+                style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'flex-end',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    marginBottom: '12px',
+                }}
+            >
+                <p style={{ color: 'white', fontSize: '13px', fontWeight: 800, margin: 0 }}>
+                    Ver compras de…
+                </p>
+                <button
+                    type="button"
+                    onClick={onAbrirMasFiltros}
+                    style={{
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        color: '#c4b5fd',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(88,86,214,0.45)',
+                        background: 'rgba(88,86,214,0.15)',
+                        cursor: 'pointer',
+                    }}
+                >
+                    Más filtros{filtrosExtraCount > 0 ? ` (${filtrosExtraCount})` : ''}
+                </button>
+            </div>
+            <div
+                style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '12px',
+                }}
+            >
+                <div>
+                    <label htmlFor="compras-filtro-entidad" style={sectionLabel}>
+                        ENTIDAD / PATRONO
+                    </label>
+                    <select
+                        id="compras-filtro-entidad"
+                        value={entidadFiltro}
+                        onChange={(e) => onEntidadChange(e.target.value)}
+                        style={inputStyle}
+                    >
+                        <option value="">Todas las entidades</option>
+                        <option value="sin_entidad">Sin entidad asignada</option>
+                        {entidades.map((e) => (
+                            <option key={e.id} value={e.id}>
+                                {e.nombre}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="compras-filtro-obra" style={sectionLabel}>
+                        OBRA / PROYECTO
+                    </label>
+                    <select
+                        id="compras-filtro-obra"
+                        value={proyectoFiltro}
+                        onChange={(e) => onProyectoChange(e.target.value)}
+                        style={inputStyle}
+                        aria-label="Filtrar compras por obra o proyecto"
+                    >
+                        <ProyectoSelectOptions proyectos={proyectos} entidadFiltro={entidadFiltro} />
+                    </select>
+                </div>
+            </div>
+            {proyectoFiltro ? (
+                <p style={{ color: '#5856D6', fontSize: '11px', fontWeight: 700, marginTop: '10px', marginBottom: 0 }}>
+                    Mostrando compras de: {proyectoFiltroEtiqueta}
+                </p>
+            ) : entidadFiltro ? (
+                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '10px', marginBottom: 0 }}>
+                    Elija una obra para acotar el cuadro (p. ej. Rancho Flamboyant).
+                </p>
+            ) : (
+                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '10px', marginBottom: 0 }}>
+                    Elija entidad y obra para filtrar. Deje «Todas las obras» para ver todo el cuadro.
+                </p>
+            )}
+        </div>
+    );
+}
+
 export function ComprasFiltrosActivosBar({
     chips,
     onAbrirFiltros,
@@ -322,14 +483,6 @@ export default function ComprasFiltrosPanel({
         proyectoFiltroEtiqueta,
     } = valores;
 
-    const proyectosVisibles = React.useMemo(() => {
-        if (!entidadFiltro || entidadFiltro === 'sin_entidad') return proyectos;
-        return proyectos.filter((p) => p.entidad_id === entidadFiltro);
-    }, [proyectos, entidadFiltro]);
-
-    const proyectosPrincipales = proyectosVisibles.filter((p) => esProyectoSmartRrhhPorNombre(p.nombre));
-    const proyectosResto = proyectosVisibles.filter((p) => !esProyectoSmartRrhhPorNombre(p.nombre));
-
     return (
         <div className="compras-no-imprimir" style={{ ...glass, padding: '20px', marginBottom: '16px' }}>
             <div
@@ -414,26 +567,7 @@ export default function ComprasFiltrosPanel({
                     style={inputStyle}
                     aria-label="Filtrar por proyecto u obra"
                 >
-                    <option value="">Todas las obras</option>
-                    <option value="sin_proyecto">Sin proyecto asignado</option>
-                    {proyectosPrincipales.length > 0 ? (
-                        <optgroup label="Obras principales">
-                            {proyectosPrincipales.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.nombre}
-                                </option>
-                            ))}
-                        </optgroup>
-                    ) : null}
-                    {proyectosResto.length > 0 ? (
-                        <optgroup label="Otros proyectos">
-                            {proyectosResto.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.nombre}
-                                </option>
-                            ))}
-                        </optgroup>
-                    ) : null}
+                    <ProyectoSelectOptions proyectos={proyectos} entidadFiltro={entidadFiltro} />
                 </select>
                 {proyectoFiltro ? (
                     <p style={{ color: '#5856D6', fontSize: '11px', fontWeight: 700, marginTop: '8px' }}>

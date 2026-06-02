@@ -1,5 +1,6 @@
 import type { PeriodoCompras } from '@/lib/contabilidad/comprasFiltros';
 import type { FiltroFuenteCompra } from '@/lib/contabilidad/mapCanalPendienteCompra';
+import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 import type { ColumnaOrdenCompras, DireccionOrden } from '@/lib/contabilidad/ordenarLineasCompras';
 import {
   parseColumnaOrdenCompras,
@@ -28,15 +29,56 @@ export type ComprasCuadroShareState = {
   sortColumn?: ColumnaOrdenCompras | null;
   sortDir?: DireccionOrden;
 };
+
+export type ComprasCuadroFiltrosState = ComprasCuadroShareState & {
+  estadoLogisticaFiltro?: EstadoLogisticaCompra | '';
+};
+
+export const COMPRAS_CUADRO_FILTROS_STORAGE_KEY = 'ci-compras-cuadro-filtros-v1';
+
+const SHARE_QUERY_KEYS = [
+  'fuente',
+  'periodo',
+  'ref',
+  'desde',
+  'hasta',
+  'proyecto',
+  'entidad',
+  'proveedor',
+  'rif',
+  'q',
+  'articulo',
+  'cmin',
+  'cmax',
+  'mminbs',
+  'mmaxbs',
+  'mminusd',
+  'mmaxusd',
+  'vista',
+  'sort',
+  'dir',
+  'logistica',
+] as const;
+
+const ESTADOS_LOGISTICA: EstadoLogisticaCompra[] = [
+  'sin_documento',
+  'registrada',
+  'cuarentena',
+  'en_almacen_parcial',
+  'en_almacen',
+  'rechazo_cuarentena',
+];
+
 function setParam(qs: URLSearchParams, key: string, value: string | undefined | null) {
   const v = String(value ?? '').trim();
   if (v) qs.set(key, v);
 }
 
-export function buildComprasCuadroShareUrl(
-  baseOrigin: string,
-  state: ComprasCuadroShareState,
-): string {
+export function hasComprasCuadroShareParams(params: URLSearchParams): boolean {
+  return SHARE_QUERY_KEYS.some((k) => params.has(k));
+}
+
+export function buildComprasCuadroSearchParams(state: ComprasCuadroFiltrosState): URLSearchParams {
   const qs = new URLSearchParams();
   if (state.fuenteFiltro !== 'todos') qs.set('fuente', state.fuenteFiltro);
   if (state.periodo !== 'todas') qs.set('periodo', state.periodo);
@@ -58,18 +100,31 @@ export function buildComprasCuadroShareUrl(
   if (state.vistaListado !== 'lineas') qs.set('vista', state.vistaListado);
   if (state.sortColumn) qs.set('sort', state.sortColumn);
   if (state.sortDir === 'desc') qs.set('dir', 'desc');
-  const query = qs.toString();
+  if (state.estadoLogisticaFiltro) qs.set('logistica', state.estadoLogisticaFiltro);
+  return qs;
+}
+
+export function comprasCuadroPathFromState(state: ComprasCuadroFiltrosState): string {
+  const query = buildComprasCuadroSearchParams(state).toString();
+  return query ? `/contabilidad/compras?${query}` : '/contabilidad/compras';
+}
+
+export function buildComprasCuadroShareUrl(
+  baseOrigin: string,
+  state: ComprasCuadroFiltrosState,
+): string {
+  const query = buildComprasCuadroSearchParams(state).toString();
   const origin = baseOrigin.replace(/\/$/, '');
   return query ? `${origin}/contabilidad/compras?${query}` : `${origin}/contabilidad/compras`;
 }
 
 export function parseComprasCuadroShareParams(
   params: URLSearchParams,
-): Partial<ComprasCuadroShareState> {
+): Partial<ComprasCuadroFiltrosState> {
   const fuente = params.get('fuente');
   const periodo = params.get('periodo');
   const vista = params.get('vista');
-  const out: Partial<ComprasCuadroShareState> = {};
+  const out: Partial<ComprasCuadroFiltrosState> = {};
   if (fuente === 'telegram' || fuente === 'app') out.fuenteFiltro = fuente;
   if (
     periodo === 'todas' ||
@@ -115,7 +170,41 @@ export function parseComprasCuadroShareParams(
   if (sort) out.sortColumn = sort;
   const dir = params.get('dir');
   if (dir === 'asc' || dir === 'desc') out.sortDir = parseDireccionOrden(dir);
+  const logistica = params.get('logistica')?.trim();
+  if (logistica && ESTADOS_LOGISTICA.includes(logistica as EstadoLogisticaCompra)) {
+    out.estadoLogisticaFiltro = logistica as EstadoLogisticaCompra;
+  }
   return out;
+}
+
+export function leerComprasCuadroFiltrosGuardados(): Partial<ComprasCuadroFiltrosState> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(COMPRAS_CUADRO_FILTROS_STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as Partial<ComprasCuadroFiltrosState>;
+    return data && typeof data === 'object' ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+export function guardarComprasCuadroFiltros(state: ComprasCuadroFiltrosState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(COMPRAS_CUADRO_FILTROS_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* quota / modo privado */
+  }
+}
+
+export function borrarComprasCuadroFiltrosGuardados(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(COMPRAS_CUADRO_FILTROS_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function copiarTextoCuadro(text: string): Promise<boolean> {

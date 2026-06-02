@@ -47,6 +47,9 @@ export type FilaFacturaCanal = {
   cantidad: number;
   precioUnitario: number;
   esLinea: boolean;
+  /** Bs/USD asignados a la línea (proporcional al total bimonetario de la factura). */
+  subtotalBsLinea?: number;
+  subtotalUsdLinea?: number | null;
 };
 
 export type FiltrosFacturaCanal = {
@@ -201,6 +204,40 @@ export type CompraConfirmadaParaLineas = {
   }>;
 };
 
+function repartirMontosFacturaEnLineas(
+  montos: { bs: number; usd: number | null },
+  lineas: Array<{ cantidad: number; precioUnitario: number }>,
+): Array<{ bs: number; usd: number | null }> {
+  const pesos = lineas.map((l) => Math.max(0, l.cantidad * l.precioUnitario));
+  const sum = pesos.reduce((a, b) => a + b, 0);
+  if (sum <= 0 || montos.bs <= 0) {
+    return lineas.map(() => ({ bs: 0, usd: montos.usd != null ? 0 : null }));
+  }
+
+  const out: Array<{ bs: number; usd: number | null }> = [];
+  let acBs = 0;
+  let acUsd = 0;
+
+  for (let i = 0; i < lineas.length; i++) {
+    if (i === lineas.length - 1) {
+      out.push({
+        bs: Math.round((montos.bs - acBs) * 100) / 100,
+        usd:
+          montos.usd != null ? Math.round((montos.usd - acUsd) * 100) / 100 : null,
+      });
+      continue;
+    }
+    const ratio = pesos[i] / sum;
+    const bs = Math.round(montos.bs * ratio * 100) / 100;
+    const usd = montos.usd != null ? Math.round(montos.usd * ratio * 100) / 100 : null;
+    acBs += bs;
+    if (usd != null) acUsd += usd;
+    out.push({ bs, usd });
+  }
+
+  return out;
+}
+
 /** Una fila por línea de compra confirmada (o cabecera si no hay detalle). */
 export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[]): FilaFacturaCanal[] {
   const filas: FilaFacturaCanal[] = [];
@@ -235,11 +272,13 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
         cantidad: 0,
         precioUnitario: 0,
         esLinea: false,
+        subtotalBsLinea: montos.bs,
+        subtotalUsdLinea: montos.usd,
       });
       continue;
     }
 
-    for (const l of c.lineas) {
+    const lineasParsed = c.lineas.map((l) => {
       const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : 0;
       const precio =
         Number(l.precio_unitario) >= 0
@@ -247,15 +286,31 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
           : cantidad > 0
             ? Number(l.subtotal) / cantidad
             : 0;
-      filas.push({
-        ...base,
-        articulo: (l.descripcion ?? '').trim(),
-        codigo: (l.item_code ?? '').trim(),
+      return {
+        descripcion: (l.descripcion ?? '').trim(),
+        item_code: (l.item_code ?? '').trim(),
         cantidad,
         precioUnitario: precio,
+      };
+    });
+
+    const reparto = repartirMontosFacturaEnLineas(
+      { bs: montos.bs, usd: montos.usd },
+      lineasParsed,
+    );
+
+    lineasParsed.forEach((l, i) => {
+      filas.push({
+        ...base,
+        articulo: l.descripcion,
+        codigo: l.item_code,
+        cantidad: l.cantidad,
+        precioUnitario: l.precioUnitario,
         esLinea: true,
+        subtotalBsLinea: reparto[i]?.bs ?? 0,
+        subtotalUsdLinea: reparto[i]?.usd ?? null,
       });
-    }
+    });
   }
 
   return filas;

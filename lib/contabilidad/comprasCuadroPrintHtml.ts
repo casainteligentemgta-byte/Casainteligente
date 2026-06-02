@@ -4,7 +4,12 @@ import {
   formatearTasaBcv,
   formatearUsd,
 } from '@/lib/contabilidad/comprasMontos';
-import { subtotalBsLineaCompra, subtotalUsdLineaCompra } from '@/lib/contabilidad/monedaCompra';
+import {
+  esLineaCompraUsd,
+  formatearPrecioUnitarioLineaCompra,
+  subtotalBsLineaCompra,
+  subtotalUsdLineaCompra,
+} from '@/lib/contabilidad/monedaCompra';
 import { etiquetaColumnaOrden, type ColumnaOrdenCompras, type DireccionOrden } from '@/lib/contabilidad/ordenarLineasCompras';
 
 function escapeHtml(s: string): string {
@@ -48,7 +53,7 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
         <td>${escapeHtml(row.rif)}</td>
         <td>${row.esLinea ? escapeHtml(row.articulo) : '<span class="muted">(cabecera)</span>'}</td>
         <td class="num">${row.esLinea ? row.cantidad : '—'}</td>
-        <td class="num">${row.esLinea ? escapeHtml(formatearBs(row.precioUnitario)) : '—'}</td>
+        <td class="num${row.esLinea && esLineaCompraUsd(row) ? ' usd' : ''}">${row.esLinea ? escapeHtml(formatearPrecioUnitarioLineaCompra(row) ?? '—') : '—'}</td>
         <td class="num">${escapeHtml(formatearBs(bs))}</td>
         <td class="num usd">${usd != null ? escapeHtml(formatearUsd(usd)) : '—'}</td>
         <td class="num">${row.tasaBcv != null && row.tasaBcv > 0 ? escapeHtml(formatearTasaBcv(row.tasaBcv)) : '—'}</td>
@@ -122,7 +127,7 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
           <th>RIF</th>
           <th>Artículo</th>
           <th class="num">Cant.</th>
-          <th class="num">P.U. (Bs)</th>
+          <th class="num">P.U.</th>
           <th class="num">Subtotal (Bs)</th>
           <th class="num">USD</th>
           <th class="num">Tasa BCV</th>

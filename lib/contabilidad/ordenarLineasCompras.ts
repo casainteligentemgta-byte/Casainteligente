@@ -1,5 +1,9 @@
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
-import { subtotalBsLineaCompra, subtotalUsdLineaCompra } from '@/lib/contabilidad/monedaCompra';
+import {
+  formatearPrecioUnitarioLineaCompra,
+  subtotalBsLineaCompra,
+  subtotalUsdLineaCompra,
+} from '@/lib/contabilidad/monedaCompra';
 
 export type ColumnaOrdenCompras =
   | 'fecha'
@@ -22,7 +26,7 @@ export const COLUMNAS_ORDEN_COMPRAS: { key: ColumnaOrdenCompras; label: string }
   { key: 'rif', label: 'RIF' },
   { key: 'articulo', label: 'Artículo' },
   { key: 'cantidad', label: 'Cant.' },
-  { key: 'precioUnitario', label: 'P.U. (Bs)' },
+  { key: 'precioUnitario', label: 'P.U.' },
   { key: 'subtotalBs', label: 'Subtotal (Bs)' },
   { key: 'usd', label: 'USD' },
   { key: 'tasaBcv', label: 'Tasa BCV' },
@@ -108,7 +112,7 @@ export function lineasComprasATsv(filas: FilaFacturaCanal[]): string {
     'RIF',
     'Artículo',
     'Cant.',
-    'P.U. (Bs)',
+    'P.U.',
     'Subtotal (Bs)',
     'USD',
     'Tasa BCV',
@@ -123,7 +127,7 @@ export function lineasComprasATsv(filas: FilaFacturaCanal[]): string {
       row.rif,
       row.esLinea ? row.articulo : '(cabecera)',
       row.esLinea ? String(row.cantidad) : '',
-      row.esLinea ? String(row.precioUnitario) : '',
+      row.esLinea ? formatearPrecioUnitarioLineaCompra(row) ?? '' : '',
       String(bs),
       usd != null ? String(usd) : '',
       row.tasaBcv != null ? String(row.tasaBcv) : '',

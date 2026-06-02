@@ -10,7 +10,12 @@ import {
   formatearTasaBcv,
   formatearUsd,
 } from '@/lib/contabilidad/comprasMontos';
-import { subtotalBsLineaCompra, subtotalUsdLineaCompra } from '@/lib/contabilidad/monedaCompra';
+import {
+  esLineaCompraUsd,
+  formatearPrecioUnitarioLineaCompra,
+  subtotalBsLineaCompra,
+  subtotalUsdLineaCompra,
+} from '@/lib/contabilidad/monedaCompra';
 
 export type AccionesCompraLinea = {
   puedeModificar: boolean;
@@ -169,7 +174,7 @@ export default function ComprasLineasTable({
             <th style={th}>Almacén</th>
             <SortTh col="articulo" label="Artículo" />
             <SortTh col="cantidad" label="Cant." align="right" />
-            <SortTh col="precioUnitario" label="P.U. (Bs)" align="right" />
+            <SortTh col="precioUnitario" label="P.U." align="right" />
             <SortTh col="subtotalBs" label="Subtotal (Bs)" align="right" />
             <SortTh col="usd" label="USD" align="right" />
             <SortTh col="tasaBcv" label="Tasa BCV" align="right" />
@@ -240,8 +245,15 @@ export default function ComprasLineasTable({
                   {row.esLinea ? row.articulo : <span style={{ opacity: 0.4 }}>(cabecera)</span>}
                 </td>
                 <td style={{ ...td, textAlign: 'right' }}>{row.esLinea ? row.cantidad : '—'}</td>
-                <td style={{ ...td, textAlign: 'right', color: '#FFD60A', fontWeight: 700 }}>
-                  {row.esLinea ? formatearBs(row.precioUnitario) : '—'}
+                <td
+                  style={{
+                    ...td,
+                    textAlign: 'right',
+                    color: row.esLinea && esLineaCompraUsd(row) ? '#FF3B30' : '#FFD60A',
+                    fontWeight: 700,
+                  }}
+                >
+                  {row.esLinea ? formatearPrecioUnitarioLineaCompra(row) ?? '—' : '—'}
                 </td>
                 <td style={{ ...td, textAlign: 'right', fontWeight: 800 }}>
                   {formatearBs(subtotalBs)}

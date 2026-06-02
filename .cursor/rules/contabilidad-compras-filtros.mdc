@@ -35,3 +35,15 @@ Panel colapsable **Filtros** (`ComprasFiltrosPanel`). Los filtros activos aparec
 3. **Líneas** (`compraCumpleFiltrosLineas`): artículo y cantidad sobre líneas de factura.
 
 Al cambiar entidad, si el proyecto seleccionado no pertenece a esa entidad, se limpia el proyecto.
+
+## Persistencia de la selección
+
+Prioridad al cargar `/contabilidad/compras`:
+
+1. **Query string** (`?entidad=…&proyecto=…`) si la URL trae filtros (enlace compartido).
+2. **`localStorage`** clave `ci-compras-cuadro-filtros-v1` si no hay params en URL.
+3. Valores por defecto (p. ej. período «todas», vista «por línea»).
+
+Al cambiar cualquier filtro, la app **guarda en localStorage** y **actualiza la URL** (`router.replace`, sin scroll) vía `comprasCuadroPathFromState`. «Limpiar filtros» borra storage y deja `/contabilidad/compras` limpio.
+
+Estado logístico también persiste (`logistica` en URL).
