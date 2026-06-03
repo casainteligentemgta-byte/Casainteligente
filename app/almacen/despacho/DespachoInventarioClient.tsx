@@ -115,7 +115,9 @@ function distribucionDesdePartidaKey(
     imputaciones,
     totalImputado: cantidad,
     saldo: 0,
-    valido: true,
+    valido: false,
+    error:
+      'Confirme la imputación en el panel de partidas (techo Lulo). Si supera presupuesto, escriba la justificación.',
   };
 }
 
@@ -390,7 +392,7 @@ export default function DespachoInventarioClient() {
 
   const imputacionCompleta = (l: LineaDespacho): boolean => {
     if (destinoDoc.tipoDestino === 'almacen') return true;
-    if (l.destinoPartidaKey) return l.distribucion.valido || destinoDoc.capituloId.length > 0;
+    if (l.destinoPartidaKey) return l.distribucion.valido;
     if (destinoDoc.imputacionObra === 'actividad') {
       return Boolean(destinoDoc.actividadTexto.trim() || destinoDoc.cronogramaTareaId);
     }
@@ -448,6 +450,12 @@ export default function DespachoInventarioClient() {
               cantidad = l.cantidadSalida;
             } else if (!imputaciones.length) {
               if (partidaKey) {
+                if (!l.distribucion.valido) {
+                  throw new Error(
+                    l.distribucion.error ||
+                      'Complete la imputación por partida y justifique el exceso presupuestario si aplica.',
+                  );
+                }
                 const dist = distribucionDesdePartidaKey(l.cantidadSalida, partidaKey);
                 imputaciones = dist.imputaciones;
                 cantidad = l.cantidadSalida;
@@ -534,7 +542,14 @@ export default function DespachoInventarioClient() {
         setFotos([]);
         void cargarStock(proyectoId, origenId || undefined);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Error al guardar');
+        const msg = e instanceof Error ? e.message : 'Error al guardar';
+        if (/exceso presupuestario/i.test(msg)) {
+          toast.error(
+            'Exceso presupuestario: en el panel de partidas marque la partida, confirme cantidades y escriba la justificación (mín. 8 caracteres), o reduzca la cantidad a salir.',
+          );
+        } else {
+          toast.error(msg);
+        }
       }
     });
   };

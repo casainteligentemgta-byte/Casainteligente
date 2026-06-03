@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sincronizarTechosImputacionDespacho } from '@/lib/almacen/sincronizarTechoObraPartidaMaterial';
 import type { ImputacionPartidaInput, TransferenciaTipoMovimiento } from '@/types/inventario-obra';
 
 export type LineaTransferenciaDespachoInput = {
@@ -115,8 +116,16 @@ export async function crearTransferenciaInventario(
   if (trfErr) throw new Error(trfErr.message);
 
   const transferenciaId = String((trf as { id: string }).id);
+  const proyectoId = input.ci_proyecto_id?.trim() ?? '';
 
   for (const linea of input.lineas) {
+    if (proyectoId && linea.imputaciones.length > 0) {
+      await sincronizarTechosImputacionDespacho(supabase, {
+        proyectoId,
+        materialId: linea.material_id,
+        imputaciones: linea.imputaciones,
+      });
+    }
     const { data: tl, error: tlErr } = await supabase
       .from('transferencias_inventario_lineas')
       .insert({

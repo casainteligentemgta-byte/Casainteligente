@@ -60,6 +60,11 @@ import {
   manejarComandoEntradaComprasTelegram,
 } from '@/lib/telegram/entradaComprasPicker';
 import {
+  esCallbackComprasObra,
+  manejarCallbackComprasObraTelegram,
+  manejarComandoComprasObraTelegram,
+} from '@/lib/telegram/comprasObraTelegram';
+import {
   esCallbackComprasPeriodo,
   manejarCallbackComprasPeriodoTelegram,
   manejarComandoComprasPeriodoTelegram,
@@ -106,6 +111,12 @@ import {
   manejarCallbackDepositarioRecepcion,
   manejarTextoDepositarioRecepcion,
 } from '@/lib/telegram/depositarioRecepcion';
+import {
+  esCallbackTraspasoTelegram,
+  manejarCallbackTraspasoTelegram,
+  manejarComandoTraspasoTelegram,
+  manejarTextoTraspasoTelegram,
+} from '@/lib/telegram/traspasoFlujoTelegram';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
@@ -219,7 +230,22 @@ async function aplicarComando(
   }
 
   if (cmd.comandoComprasPeriodo) {
-    await manejarComandoComprasPeriodoTelegram(supabase, chatId, cmd.comandoComprasPeriodo);
+    try {
+      await manejarComandoComprasPeriodoTelegram(supabase, chatId, cmd.comandoComprasPeriodo);
+    } catch (err) {
+      console.error('[telegram compras periodo]', err);
+      await avisoErrorTelegram(chatId, err);
+    }
+    return;
+  }
+
+  if (cmd.comandoComprasObra !== undefined) {
+    try {
+      await manejarComandoComprasObraTelegram(supabase, chatId, cmd.comandoComprasObra);
+    } catch (err) {
+      console.error('[telegram compras obra]', err);
+      await avisoErrorTelegram(chatId, err);
+    }
     return;
   }
 
@@ -230,6 +256,11 @@ async function aplicarComando(
 
   if (cmd.comandoSalida) {
     await manejarComandoSalidaEgresoTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoTraspaso) {
+    await manejarComandoTraspasoTelegram(supabase, chatId);
     return;
   }
 
@@ -330,6 +361,17 @@ export async function handleTelegramCallbackQuery(
   try {
     const userId = String(cq.from.id);
 
+    if (esCallbackTraspasoTelegram(cq.data)) {
+      const handledTraspaso = await manejarCallbackTraspasoTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledTraspaso) {
+        return NextResponse.json({ ok: true, callback: 'traspaso' });
+      }
+    }
+
     if (esCallbackSalidaEgreso(cq.data)) {
       const handledEgreso = await manejarCallbackSalidaEgreso(admin.client, {
         chatId,
@@ -416,6 +458,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledEntradaCompra) {
         return NextResponse.json({ ok: true, callback: 'entrada_compra' });
+      }
+    }
+
+    if (esCallbackComprasObra(cq.data)) {
+      const handledComprasObra = await manejarCallbackComprasObraTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledComprasObra) {
+        return NextResponse.json({ ok: true, callback: 'compras_obra' });
       }
     }
 
@@ -626,6 +679,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       );
       if (textoSalidaEgreso) {
         return NextResponse.json({ ok: true, salida_egreso_texto: true });
+      }
+
+      const textoTraspaso = await manejarTextoTraspasoTelegram(supabase, chatId, texto);
+      if (textoTraspaso) {
+        return NextResponse.json({ ok: true, traspaso_texto: true });
       }
 
       const obsEntradaSalida = await manejarTextoObservacionEntradaSalida({

@@ -13,8 +13,17 @@ import {
   MapPin,
   Settings2,
   AlertTriangle,
+  Route,
 } from 'lucide-react';
 import InventarioClasificacionFields from '@/components/almacen/InventarioClasificacionFields';
+import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
+
+type StockFilaEdit = {
+  stock_id: string;
+  ubicacion_id: string;
+  ubicacion_nombre: string;
+  cantidad_disponible: number;
+};
 
 type Deposit = { id: string; code: string; name: string; locality: string | null; is_default: boolean };
 type Furniture = {
@@ -89,6 +98,12 @@ export default function EditInventoryItemPage() {
   const [submitting, setSubmitting] = useState(false);
   const [catalogProducts, setCatalogProducts] = useState<CatalogProductRow[]>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [stockFilas, setStockFilas] = useState<StockFilaEdit[]>([]);
+  const [stockTotal, setStockTotal] = useState(0);
+  const [stockUbicacionId, setStockUbicacionId] = useState('');
+  const [stockCantidad, setStockCantidad] = useState('');
+  const [stockCantidadInicial, setStockCantidadInicial] = useState('');
+  const [stockLoading, setStockLoading] = useState(false);
 
   const furnitureForDeposit = useMemo(() => {
     if (!item?.deposit_id) return [];
@@ -192,13 +207,65 @@ export default function EditInventoryItemPage() {
     setLoading(false);
   }, [id, supabase]);
 
+  const cargarStock = useCallback(async () => {
+    if (!id) return;
+    setStockLoading(true);
+    try {
+      const res = await fetch(`/api/almacen/inventario/${encodeURIComponent(id)}/stock`, {
+        cache: 'no-store',
+      });
+      const data = (await res.json()) as {
+        filas?: StockFilaEdit[];
+        total?: number;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || 'No se pudo cargar el stock');
+
+      const filas = data.filas ?? [];
+      setStockFilas(filas);
+      setStockTotal(Number(data.total) || 0);
+
+      const primera = filas[0];
+      if (primera) {
+        setStockUbicacionId(primera.ubicacion_id);
+        const qty = String(primera.cantidad_disponible);
+        setStockCantidad(qty);
+        setStockCantidadInicial(qty);
+      } else {
+        setStockUbicacionId('');
+        setStockCantidad('0');
+        setStockCantidadInicial('0');
+      }
+    } catch {
+      setStockFilas([]);
+      setStockTotal(0);
+      setStockUbicacionId('');
+      setStockCantidad('0');
+      setStockCantidadInicial('0');
+    } finally {
+      setStockLoading(false);
+    }
+  }, [id]);
+
+  const seleccionarUbicacionStock = useCallback(
+    (ubicacionId: string) => {
+      setStockUbicacionId(ubicacionId);
+      const fila = stockFilas.find((f) => f.ubicacion_id === ubicacionId);
+      const qty = fila ? String(fila.cantidad_disponible) : '0';
+      setStockCantidad(qty);
+      setStockCantidadInicial(qty);
+    },
+    [stockFilas],
+  );
+
   useEffect(() => {
     void (async () => {
       await loadMasters();
       await loadCatalogProducts();
       await fetchItem();
+      await cargarStock();
     })();
-  }, [loadMasters, loadCatalogProducts, fetchItem]);
+  }, [loadMasters, loadCatalogProducts, fetchItem, cargarStock]);
 
   // Si el usuario cambia depósito, limpiamos furniture_id si ya no pertenece.
   useEffect(() => {
@@ -250,6 +317,23 @@ export default function EditInventoryItemPage() {
 
     setSubmitting(true);
     try {
+      const cantidadStock = Number.parseFloat(String(stockCantidad).replace(',', '.'));
+      const cantidadCambio = String(stockCantidad).trim() !== stockCantidadInicial.trim();
+      const stockDirty = cantidadCambio;
+
+      if (stockDirty) {
+        if (!stockUbicacionId.trim()) {
+          alert('Seleccione la ubicación donde registrar la cantidad.');
+          setSubmitting(false);
+          return;
+        }
+        if (!Number.isFinite(cantidadStock) || cantidadStock < 0) {
+          alert('Indique una cantidad de stock válida (≥ 0).');
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const payload: Record<string, unknown> = {
         name: item.name.trim(),
         category_id: item.category_id,
@@ -277,6 +361,25 @@ export default function EditInventoryItemPage() {
 
       const { error } = await supabase.from('global_inventory').update(payload).eq('id', item.id);
       if (error) throw error;
+
+      if (stockDirty) {
+        const stockRes = await fetch(
+          `/api/almacen/inventario/${encodeURIComponent(item.id)}/stock`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ubicacion_id: stockUbicacionId.trim(),
+              cantidad: cantidadStock,
+              notas: 'Ajuste desde editar activo',
+            }),
+          },
+        );
+        const stockData = (await stockRes.json()) as { error?: string };
+        if (!stockRes.ok) {
+          throw new Error(stockData.error || 'No se pudo actualizar la cantidad en inventario');
+        }
+      }
 
       router.push('/almacen');
     } catch (err: any) {
@@ -339,6 +442,15 @@ export default function EditInventoryItemPage() {
               Modifica cantidad, serial y ubicación
             </p>
           </div>
+          <Link href={`/almacen/trazabilidad?materialId=${encodeURIComponent(id)}`}>
+            <button
+              type="button"
+              className="flex items-center gap-2 p-3 bg-zinc-900 border border-amber-500/35 rounded-2xl hover:bg-zinc-800 transition-all text-xs font-bold uppercase text-amber-200"
+            >
+              <Route size={18} />
+              Ruta
+            </button>
+          </Link>
           <Link href="/almacen/maestros">
             <button
               type="button"
@@ -476,13 +588,82 @@ export default function EditInventoryItemPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
+                <div className="space-y-2 sm:col-span-2">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
-                    Stock físico (inventario_stock)
+                    Cantidad disponible (inventario_stock)
                   </label>
-                  <p className="w-full rounded-xl border border-white/10 bg-[#0A0A0F] py-4 px-4 text-sm font-bold text-zinc-400">
-                    Se gestiona por ubicación (compras, transferencias y despacho). No editable en el maestro SKU.
-                  </p>
+                  {stockLoading ? (
+                    <p className="text-zinc-500 text-sm font-bold">Cargando stock por ubicación…</p>
+                  ) : (
+                    <div className="space-y-4 rounded-xl border border-zinc-800 bg-black/40 p-4">
+                      {stockFilas.length > 1 ? (
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                            Ubicación a editar
+                          </label>
+                          <select
+                            value={stockUbicacionId}
+                            onChange={(e) => seleccionarUbicacionStock(e.target.value)}
+                            className="w-full bg-black border border-zinc-800 rounded-xl py-3 px-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
+                          >
+                            {stockFilas.map((f) => (
+                              <option key={f.ubicacion_id} value={f.ubicacion_id}>
+                                {f.ubicacion_nombre} — {f.cantidad_disponible} u.
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : stockFilas.length === 1 ? (
+                        <p className="text-sm text-zinc-400">
+                          Ubicación: <span className="text-white font-bold">{stockFilas[0]!.ubicacion_nombre}</span>
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                            Ubicación del stock
+                          </label>
+                          <UbicacionInventarioSelect
+                            proyectoId={item.proyecto_id ?? ''}
+                            value={stockUbicacionId}
+                            onChange={(uid) => {
+                              setStockUbicacionId(uid);
+                              setStockCantidad('0');
+                              setStockCantidadInicial('0');
+                            }}
+                            permitirSinProyecto
+                            soloAlmacenes={false}
+                            placeholder="Seleccione almacén u obra…"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                          Cantidad
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={stockCantidad}
+                          onChange={(e) => setStockCantidad(e.target.value)}
+                          disabled={!stockUbicacionId && stockFilas.length === 0}
+                          className="w-full bg-black border border-zinc-800 rounded-xl py-4 px-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all disabled:opacity-50"
+                        />
+                      </div>
+
+                      {stockTotal > 0 && stockFilas.length > 1 ? (
+                        <p className="text-[11px] text-zinc-500">
+                          Total en todas las ubicaciones:{' '}
+                          <span className="text-zinc-300 font-bold">{stockTotal.toLocaleString('es-VE')} u.</span>
+                        </p>
+                      ) : null}
+
+                      <p className="text-[11px] text-zinc-600">
+                        El ajuste queda registrado en el ledger (tipo ajuste) y en la trazabilidad del material.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">

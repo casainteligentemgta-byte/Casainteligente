@@ -41,6 +41,34 @@ export function todayIso(): string {
   return toIsoDate(new Date());
 }
 
+/** Fecha civil en Venezuela (para /comprasdia en Telegram y reportes locales). */
+export function todayIsoVenezuela(): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(new Date());
+  } catch {
+    return todayIso();
+  }
+}
+
+/** Fecha efectiva de una compra (factura o día de registro). */
+export function fechaEfectivaCompra(row: {
+  fecha?: string | null;
+  created_at?: string | null;
+}): string {
+  const f = String(row.fecha ?? '').trim().slice(0, 10);
+  if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) return f;
+  return String(row.created_at ?? '').slice(0, 10);
+}
+
+export function compraEnRangoFechas(
+  row: { fecha?: string | null; created_at?: string | null },
+  rango: RangoFechas,
+): boolean {
+  const f = fechaEfectivaCompra(row);
+  if (!f) return false;
+  return f >= rango.desde && f <= rango.hasta;
+}
+
 export function rangoFechasPeriodo(
   periodo: PeriodoCompras,
   refDate: string,

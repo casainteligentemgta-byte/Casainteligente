@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/guard-dev-next-cache.mjs",
     "dev": "next dev -H 127.0.0.1 -p 3000",
     "dev:tls": "powershell -ExecutionPolicy Bypass -File scripts/dev-with-insecure-tls.ps1",
     "dev:any": "next dev",

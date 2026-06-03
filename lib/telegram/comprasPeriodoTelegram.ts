@@ -1,42 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  etiquetaPeriodo,
-  rangoFechasPeriodo,
-  todayIso,
-  type PeriodoCompras,
-} from '@/lib/contabilidad/comprasFiltros';
+  cargarMaterialesComprasPeriodo,
+  type LineaMaterialCompraTelegram,
+  type PeriodoComprasTelegram,
+} from '@/lib/contabilidad/cargarComprasPeriodoTelegram';
+import { etiquetaPeriodo, todayIsoVenezuela } from '@/lib/contabilidad/comprasFiltros';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 
-export type PeriodoComprasTelegram = Extract<PeriodoCompras, 'dia' | 'semana' | 'mes'>;
+export type { PeriodoComprasTelegram, LineaMaterialCompraTelegram };
 
 const PREFIX_PAGE = 'cp:';
 const PAGE_SIZE = 14;
-const MAX_COMPRAS = 400;
-
-export type LineaMaterialCompraTelegram = {
-  fecha: string;
-  factura: string;
-  proveedor: string;
-  origen: string;
-  articulo: string;
-  codigo: string;
-  cantidad: number;
-};
-
-type CompraRowDb = {
-  fecha: string | null;
-  invoice_number: string | null;
-  supplier_name: string | null;
-  origen: string | null;
-  contabilidad_compra_lineas?:
-    | Array<{
-        descripcion: string | null;
-        item_code: string | null;
-        cantidad: number | null;
-      }>
-    | { count: number }[]
-    | null;
-};
 
 function truncar(s: string, max = 52): string {
   const t = s.trim();
@@ -47,18 +21,10 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 }
 
-function etiquetaOrigen(origen: string | null | undefined): string {
-  const o = String(origen ?? '').trim().toUpperCase();
-  if (o === 'TELEGRAM') return 'Telegram';
-  if (o === 'RECEPCION_MERCANCIA') return 'Recepción';
-  if (o === 'MANUAL' || o === 'APP') return 'App';
-  return o ? o.charAt(0) + o.slice(1).toLowerCase() : 'App';
-}
-
 function emojiOrigen(origen: string | null | undefined): string {
-  const o = String(origen ?? '').trim().toUpperCase();
-  if (o === 'TELEGRAM') return '📱';
-  if (o === 'RECEPCION_MERCANCIA') return '📦';
+  const o = String(origen ?? '').trim();
+  if (o === 'Telegram') return '📱';
+  if (o === 'Recepción') return '📦';
   return '🖥';
 }
 
@@ -66,81 +32,6 @@ function tituloPeriodo(periodo: PeriodoComprasTelegram, rango: { desde: string; 
   if (periodo === 'dia') return `Compras del día <b>${rango.desde}</b>`;
   if (periodo === 'semana') return `Compras de la semana <b>${rango.desde}</b> → <b>${rango.hasta}</b>`;
   return `Compras del mes <b>${rango.desde}</b> → <b>${rango.hasta}</b>`;
-}
-
-function lineasDesdeCompra(c: CompraRowDb): LineaMaterialCompraTelegram[] {
-  const nested = c.contabilidad_compra_lineas;
-  if (!Array.isArray(nested) || !nested.length) return [];
-  const first = nested[0];
-  if (!first || !('descripcion' in first)) return [];
-
-  const fecha = String(c.fecha ?? '').slice(0, 10);
-  const factura = String(c.invoice_number ?? 'S/N').trim();
-  const proveedor = String(c.supplier_name ?? 'Proveedor').trim();
-  const origen = etiquetaOrigen(c.origen);
-
-  return (nested as Array<{
-    descripcion: string | null;
-    item_code: string | null;
-    cantidad: number | null;
-  }>)
-    .map((l) => {
-      const articulo = String(l.descripcion ?? '').trim();
-      if (!articulo) return null;
-      return {
-        fecha,
-        factura,
-        proveedor,
-        origen,
-        articulo,
-        codigo: String(l.item_code ?? '').trim(),
-        cantidad: Number(l.cantidad) > 0 ? Number(l.cantidad) : 0,
-      };
-    })
-    .filter((x): x is LineaMaterialCompraTelegram => x !== null);
-}
-
-export async function cargarMaterialesComprasPeriodo(
-  supabase: SupabaseClient,
-  periodo: PeriodoComprasTelegram,
-  refDate = todayIso(),
-): Promise<{ lineas: LineaMaterialCompraTelegram[]; rango: { desde: string; hasta: string } }> {
-  const rango = rangoFechasPeriodo(periodo, refDate);
-  if (!rango) return { lineas: [], rango: { desde: refDate, hasta: refDate } };
-
-  const { data, error } = await supabase
-    .from('contabilidad_compras')
-    .select(
-      'fecha,invoice_number,supplier_name,origen,contabilidad_compra_lineas(descripcion,item_code,cantidad)',
-    )
-    .gte('fecha', rango.desde)
-    .lte('fecha', rango.hasta)
-    .order('fecha', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(MAX_COMPRAS);
-
-  if (error) throw new Error(error.message);
-
-  const lineas: LineaMaterialCompraTelegram[] = [];
-  for (const row of (data ?? []) as CompraRowDb[]) {
-    const det = lineasDesdeCompra(row);
-    if (det.length) {
-      lineas.push(...det);
-      continue;
-    }
-    const fecha = String(row.fecha ?? '').slice(0, 10);
-    lineas.push({
-      fecha,
-      factura: String(row.invoice_number ?? 'S/N').trim(),
-      proveedor: String(row.supplier_name ?? 'Proveedor').trim(),
-      origen: etiquetaOrigen(row.origen),
-      articulo: '(factura sin detalle de líneas)',
-      codigo: '',
-      cantidad: 0,
-    });
-  }
-
-  return { lineas, rango };
 }
 
 function resumenLineas(lineas: LineaMaterialCompraTelegram[]): string {
@@ -163,15 +54,12 @@ function formatearLinea(l: LineaMaterialCompraTelegram, idx: number): string {
   const fac = escapeHtml(l.factura);
   const prov = escapeHtml(truncar(l.proveedor, 28));
   const art = escapeHtml(truncar(l.articulo, 40));
-  const ori = emojiOrigen(
-    l.origen === 'Telegram'
-      ? 'TELEGRAM'
-      : l.origen === 'Recepción'
-        ? 'RECEPCION_MERCANCIA'
-        : 'APP',
-  );
+  const pendiente =
+    l.estado && /PENDIENTE|EXTRAIDO|PROCESANDO|ERROR/i.test(l.estado)
+      ? ' · <i>pendiente</i>'
+      : '';
   return (
-    `${idx + 1}. ${ori} <b>${art}</b>${cod}${cant}\n` +
+    `${idx + 1}. ${emojiOrigen(l.origen)} <b>${art}</b>${cod}${cant}${pendiente}\n` +
     `   <i>#${fac}</i> · ${prov} · ${escapeHtml(l.fecha)}`
   );
 }
@@ -214,15 +102,16 @@ export async function manejarComandoComprasPeriodoTelegram(
   periodo: PeriodoComprasTelegram,
   page = 0,
 ): Promise<void> {
-  const { lineas, rango } = await cargarMaterialesComprasPeriodo(supabase, periodo);
-  const periodoLabel = etiquetaPeriodo(periodo, todayIso(), rango);
+  const refDate = todayIsoVenezuela();
+  const { lineas, rango } = await cargarMaterialesComprasPeriodo(supabase, periodo, refDate);
+  const periodoLabel = etiquetaPeriodo(periodo, refDate, rango);
 
   if (!lineas.length) {
     await sendTelegramMessage(
       chatId,
       `🛒 <b>${tituloPeriodo(periodo, rango)}</b>\n\n` +
-        `Sin compras registradas (${escapeHtml(periodoLabel)}).\n` +
-        '<i>Incluye facturas confirmadas en la app y por Telegram.</i>',
+        `Sin compras en el periodo (${escapeHtml(periodoLabel)}).\n` +
+        '<i>Incluye facturas en contabilidad y pendientes de Telegram (fecha de factura o de registro).</i>',
       { parse_mode: 'HTML' },
     );
     return;
@@ -264,7 +153,12 @@ export async function manejarCallbackComprasPeriodoTelegram(
   const parsed = parseCallbackComprasPeriodo(params.data);
   if (!parsed) return false;
 
-  await answerCallbackQuery(params.callbackId);
-  await manejarComandoComprasPeriodoTelegram(supabase, params.chatId, parsed.periodo, parsed.page);
+  try {
+    await answerCallbackQuery(params.callbackId);
+    await manejarComandoComprasPeriodoTelegram(supabase, params.chatId, parsed.periodo, parsed.page);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error al cargar compras';
+    await sendTelegramMessage(params.chatId, `❌ ${escapeHtml(msg)}`, { parse_mode: 'HTML' });
+  }
   return true;
 }

@@ -25,6 +25,10 @@ export type ComandoTelegramResult = {
   comandoComprasPeriodo?: PeriodoComprasTelegram;
   /** Lista material en cuarentena para liberar (depositario). */
   comandoLiberarCuarentena?: boolean;
+  /** Traspaso / préstamo entre ubicaciones de inventario. */
+  comandoTraspaso?: boolean;
+  /** Resumen compras + stock por obra: /compras &lt;nombre obra&gt; */
+  comandoComprasObra?: string;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -52,11 +56,13 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /entrada — nota de entrega: proveedor + productos → cola de compras\n' +
         '• /ingreso — facturas ya cargadas pendientes de ingreso a almacén\n' +
+        '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
         '• /comprassemana — materiales de la semana en curso\n' +
         '• /comprasmes — materiales del mes en curso\n' +
         '• /liberar — material en cuarentena: aprobar y sumar stock\n' +
         '• /salida — foto + detalle de material que egresa\n' +
+        '• /traspaso — mover stock entre almacenes u obras\n' +
         '• /avance — reporte numérico diario de partida\n' +
         '• /memoria — memoria descriptiva: foto de avance por partida\n' +
         '• /estado — ver modo activo\n' +
@@ -78,11 +84,13 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/agua — obra, camión, prueba PPM, litros\n' +
         '/entrada — nota de entrega (depositario → cola de compras)\n' +
         '/ingreso — facturas pendientes de ingreso físico a almacén\n' +
+        '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
         '/comprasdia — lista de materiales comprados hoy\n' +
         '/comprassemana — materiales comprados esta semana\n' +
         '/comprasmes — materiales comprados este mes\n' +
         '/liberar — liberar material de cuarentena (depositario)\n' +
         '/salida — egreso de material (capítulo + foto + almacén origen + stock)\n' +
+        '/traspaso — traspaso o préstamo entre ubicaciones (origen → destino)\n' +
         '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +
@@ -169,12 +177,21 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoComprasPeriodo: 'mes' };
   }
 
+  if (cmd === '/compras') {
+    const obra = parts.slice(1).join(' ').trim();
+    return { handled: true, comandoComprasObra: obra };
+  }
+
   if (cmd === '/liberar' || cmd === '/cuarentena') {
     return { handled: true, comandoLiberarCuarentena: true };
   }
 
   if (cmd === '/salida') {
     return { handled: true, comandoSalida: true };
+  }
+
+  if (cmd === '/traspaso') {
+    return { handled: true, comandoTraspaso: true };
   }
 
   if (cmd === '/memoria') {
