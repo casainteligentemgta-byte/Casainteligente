@@ -120,11 +120,13 @@ export async function confirmarCompraDesdeCanal(
     }
   }
 
-  if (!['extraido', 'error'].includes(row.estado)) {
+  if (!['extraido', 'error', 'aprobado_sistema'].includes(row.estado)) {
     throw new Error(
       row.estado === 'procesando' || row.estado === 'pendiente'
         ? 'La factura aún se está procesando. Espere unos segundos y actualice.'
-        : `Estado no válido para confirmar: ${row.estado}`,
+        : row.estado === 'confirmado'
+          ? 'La compra ya está en contabilidad. Use el botón de ingreso al almacén.'
+          : `Estado no válido para confirmar: ${row.estado}`,
     );
   }
 

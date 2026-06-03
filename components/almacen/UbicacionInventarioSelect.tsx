@@ -79,9 +79,10 @@ export default function UbicacionInventarioSelect({
   }, [cargar]);
 
   useEffect(() => {
+    if (loading) return;
     if (!value || ubicaciones.some((u) => u.id === value)) return;
     onChange('');
-  }, [ubicaciones, value, onChange]);
+  }, [ubicaciones, value, onChange, loading]);
 
   const valorSelect = useMemo(() => {
     if (loading) return '';

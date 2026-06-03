@@ -25,7 +25,6 @@ import {
     compraCumpleFiltrosDestino,
     compraCumpleFiltrosLineas,
     compraCumpleFiltrosMontos,
-    filtrarLineasComprasConfirmadas,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
 import ComprasNotaTasaBcv from '@/components/contabilidad/ComprasNotaTasaBcv';
@@ -42,6 +41,7 @@ import {
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
 import {
+    Download,
     Filter,
     FileText,
     Loader2,
@@ -110,6 +110,11 @@ import {
     type ComprasCuadroFiltrosState,
 } from '@/lib/contabilidad/comprasCuadroShare';
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
+import {
+    buildLineasCuadroDesdeCompras,
+    exportarComprasCuadroCsv,
+    type ComprasExportScope,
+} from '@/lib/contabilidad/comprasExportShare';
 import {
     lineasComprasATsv,
     ordenarLineasCompras,
@@ -222,6 +227,9 @@ export default function ComprasPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [compras, setCompras] = useState<CompraRow[]>([]);
+    /** Compras del periodo/carga sin filtros de obra, proveedor, logística, etc. (exportación «completo»). */
+    const [comprasCuadroBase, setComprasCuadroBase] = useState<CompraRow[]>([]);
+    const [exportScope, setExportScope] = useState<ComprasExportScope>('filtrado');
     const [proyectos, setProyectos] = useState<ProyectoOpcion[]>([]);
     const [entidades, setEntidades] = useState<EntidadOpcion[]>([]);
     const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([]);
@@ -641,6 +649,11 @@ export default function ComprasPage() {
                 canalPendientes,
             );
 
+            filas = await enriquecerComprasConDestino(supabase, filas);
+            filas = await enriquecerComprasPuenteInventario(supabase, filas);
+            filas = await enriquecerComprasEstadoLogistica(supabase, filas);
+            setComprasCuadroBase(filas);
+
             filas = filas.filter((c) => {
                 if (!compraCoincideFuente(c, fuenteFiltro)) return false;
                 if (!compraCumpleFiltroRif(c, rifFiltro)) return false;
@@ -654,8 +667,6 @@ export default function ComprasPage() {
                 return true;
             });
 
-            filas = await enriquecerComprasConDestino(supabase, filas);
-
             const filtrosDestino = {
                 entidadFiltro,
                 proyectoFiltro,
@@ -665,9 +676,6 @@ export default function ComprasPage() {
             };
             filas = filas.filter((c) => compraCumpleFiltrosDestino(c, filtrosDestino));
 
-            filas = await enriquecerComprasPuenteInventario(supabase, filas);
-            filas = await enriquecerComprasEstadoLogistica(supabase, filas);
-
             if (estadoLogisticaFiltro) {
                 filas = filas.filter((c) => c.estado_logistica === estadoLogisticaFiltro);
             }
@@ -676,6 +684,7 @@ export default function ComprasPage() {
         } catch (e) {
             setError(e instanceof Error ? e.message : 'No se pudieron cargar las compras.');
             setCompras([]);
+            setComprasCuadroBase([]);
         } finally {
             setLoading(false);
         }
@@ -1118,49 +1127,23 @@ export default function ComprasPage() {
         ],
     );
 
-    const lineasFiltradas = useMemo(() => {
-        const payload = compras.map((c) => ({
-            id: c.id,
-            fecha: c.fecha,
-            invoice_number: c.invoice_number,
-            supplier_name: c.supplier_name,
-            supplier_rif: c.supplier_rif,
-            total_amount: c.total_amount,
-            total_amount_usd: c.total_amount_usd,
-            tasa_bcv_ves_por_usd: tasaParaCompra(c),
-            moneda: c.moneda,
-            moneda_original: c.moneda_original,
-            monto_ves: c.monto_ves,
-            monto_usd: c.monto_usd,
-            origen: c.origen,
-            estado: c.estado,
-            entidadNombre: c.entidad_nombre ?? undefined,
-            proyectoNombre:
-                c.proyecto_nombre ??
-                (Array.isArray(c.ci_proyectos)
-                    ? c.ci_proyectos[0]?.nombre ?? undefined
-                    : c.ci_proyectos?.nombre ?? undefined),
-            almacenNombre: c.ubicacion_nombre ?? undefined,
-            lineas: lineasDetalle(c).map((l) => {
-                const cantidad = Number(l.cantidad) || 0;
-                const precio =
-                    l.precio_unitario != null && Number(l.precio_unitario) >= 0
-                        ? Number(l.precio_unitario)
-                        : cantidad > 0
-                          ? Number(l.subtotal) / cantidad
-                          : 0;
-                return {
-                    id: l.id,
-                    descripcion: l.descripcion,
-                    item_code: l.item_code,
-                    cantidad,
-                    precio_unitario: precio,
-                    subtotal: Number(l.subtotal) || 0,
-                };
-            }),
-        }));
-        return filtrarLineasComprasConfirmadas(payload, filtrosLineas);
-    }, [compras, filtrosLineas, tasaParaCompra]);
+    const filtrosLineasSoloFecha = useMemo(
+        () => ({
+            fechaDesde: fuenteFiltro === 'telegram' ? '' : (rangoActivo?.desde ?? ''),
+            fechaHasta: fuenteFiltro === 'telegram' ? '' : (rangoActivo?.hasta ?? ''),
+        }),
+        [fuenteFiltro, rangoActivo],
+    );
+
+    const lineasFiltradas = useMemo(
+        () => buildLineasCuadroDesdeCompras(compras, tasaParaCompra, filtrosLineas),
+        [compras, filtrosLineas, tasaParaCompra],
+    );
+
+    const lineasCuadroCompleto = useMemo(
+        () => buildLineasCuadroDesdeCompras(comprasCuadroBase, tasaParaCompra, filtrosLineasSoloFecha),
+        [comprasCuadroBase, filtrosLineasSoloFecha, tasaParaCompra],
+    );
 
     const lineasOrdenadas = useMemo(
         () => ordenarLineasCompras(lineasFiltradas, sortColumn, sortDir),
@@ -1571,10 +1554,56 @@ export default function ComprasPage() {
         }
     };
 
-    const compartirCuadro = async () => {
-        if (typeof window === 'undefined' || (compras.length === 0 && lineasOrdenadas.length === 0)) return;
+    const construirLineasExport = useCallback(
+        (scope: ComprasExportScope) => {
+            const base = scope === 'filtrado' ? lineasFiltradas : lineasCuadroCompleto;
+            return ordenarLineasCompras(base, sortColumn, sortDir);
+        },
+        [lineasFiltradas, lineasCuadroCompleto, sortColumn, sortDir],
+    );
+
+    const etiquetaScopeExport = useCallback(
+        (scope: ComprasExportScope) =>
+            scope === 'filtrado'
+                ? `Vista filtrada (${lineasOrdenadas.length} línea(s) · ${compras.length} factura(s))`
+                : `Cuadro completo (${lineasCuadroCompleto.length} línea(s) · ${comprasCuadroBase.length} factura(s))`,
+        [lineasOrdenadas.length, compras.length, lineasCuadroCompleto.length, comprasCuadroBase.length],
+    );
+
+    const exportarCuadroCsv = useCallback(
+        (scope: ComprasExportScope) => {
+            const filas = construirLineasExport(scope);
+            if (!exportarComprasCuadroCsv(filas, scope)) {
+                setError('No hay líneas para exportar.');
+            }
+        },
+        [construirLineasExport],
+    );
+
+    const copiarCuadroPortapapeles = useCallback(
+        async (scope: ComprasExportScope) => {
+            const filas = construirLineasExport(scope);
+            if (!filas.length) {
+                setError('No hay líneas para copiar.');
+                return;
+            }
+            const ok = await copiarTextoCuadro(lineasComprasATsv(filas));
+            if (ok) {
+                setCompartidoOk(true);
+                window.setTimeout(() => setCompartidoOk(false), 2000);
+            } else {
+                setError('No se pudo copiar al portapapeles.');
+            }
+        },
+        [construirLineasExport],
+    );
+
+    const compartirCuadro = async (scope: ComprasExportScope = 'filtrado') => {
+        if (typeof window === 'undefined') return;
+        const filas = construirLineasExport(scope);
+        if (filas.length === 0 && compras.length === 0 && comprasCuadroBase.length === 0) return;
         const url = buildComprasCuadroShareUrl(window.location.origin, estadoCompartir);
-        const resumen = `${lineasOrdenadas.length} línea(s) · ${compras.length} factura(s) · USD ${formatearUsd(totalFiltrado.totalUsd)} · Bs ${formatearBs(totalFiltrado.totalBs)}`;
+        const resumen = `${etiquetaScopeExport(scope)} · USD ${formatearUsd(totalFiltrado.totalUsd)} · Bs ${formatearBs(totalFiltrado.totalBs)}`;
         const titulo = 'Cuadro de compras — Casa Inteligente';
         if (typeof navigator.share === 'function') {
             try {
@@ -1584,7 +1613,7 @@ export default function ComprasPage() {
                 if (e instanceof Error && e.name === 'AbortError') return;
             }
         }
-        const tsv = lineasOrdenadas.length > 0 ? `\n\n${lineasComprasATsv(lineasOrdenadas)}` : '';
+        const tsv = filas.length > 0 ? `\n\n${lineasComprasATsv(filas)}` : '';
         const ok = await copiarTextoCuadro(`${titulo}\n${resumen}\n${url}${tsv}`);
         if (ok) {
             setCompartidoOk(true);
@@ -1814,14 +1843,76 @@ export default function ComprasPage() {
                         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontWeight: 700, margin: 0 }}>
                             TOTAL FILTRADO ({compras.length} compra{compras.length === 1 ? '' : 's'})
                         </p>
-                        {compras.length > 0 ? (
+                        {compras.length > 0 || comprasCuadroBase.length > 0 ? (
                             <div
                                 className="compras-no-imprimir"
-                                style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+                                style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}
                             >
+                                <select
+                                    value={exportScope}
+                                    onChange={(e) =>
+                                        setExportScope(e.target.value as ComprasExportScope)
+                                    }
+                                    style={{
+                                        padding: '8px 10px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.15)',
+                                        background: 'rgba(0,0,0,0.45)',
+                                        color: 'white',
+                                        fontSize: '10px',
+                                        fontWeight: 800,
+                                    }}
+                                    aria-label="Alcance de exportación"
+                                >
+                                    <option value="filtrado">
+                                        Filtrado ({lineasOrdenadas.length} líneas)
+                                    </option>
+                                    <option value="completo">
+                                        Completo ({lineasCuadroCompleto.length} líneas)
+                                    </option>
+                                </select>
                                 <button
                                     type="button"
-                                    onClick={() => void compartirCuadro()}
+                                    onClick={() => exportarCuadroCsv(exportScope)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(52,199,89,0.45)',
+                                        background: 'rgba(52,199,89,0.14)',
+                                        color: '#86efac',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    <Download size={14} />
+                                    Excel (CSV)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void copiarCuadroPortapapeles(exportScope)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.15)',
+                                        background: 'rgba(255,255,255,0.08)',
+                                        color: 'white',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Copiar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void compartirCuadro(exportScope)}
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
@@ -1837,7 +1928,7 @@ export default function ComprasPage() {
                                     }}
                                 >
                                     <Share2 size={14} />
-                                    {compartidoOk ? 'Copiado' : 'Compartir lista'}
+                                    {compartidoOk ? 'Copiado' : 'Compartir'}
                                 </button>
                                 {lineasOrdenadas.length > 0 ? (
                                     <button

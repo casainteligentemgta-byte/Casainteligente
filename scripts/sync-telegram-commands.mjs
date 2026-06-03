@@ -30,11 +30,21 @@ function parseEnvFile(content) {
   return out;
 }
 
+function loadEnvLocal() {
+  if (!fs.existsSync(envPath)) return {};
+  return parseEnvFile(fs.readFileSync(envPath, 'utf8'));
+}
+
 async function main() {
-  const env = parseEnvFile(fs.readFileSync(envPath, 'utf8'));
-  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  const env = loadEnvLocal();
+  const token = (process.env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN || '').trim();
   if (!token) {
-    console.error('❌ TELEGRAM_BOT_TOKEN no está en .env.local');
+    console.error('❌ Falta TELEGRAM_BOT_TOKEN.');
+    console.error('   Añádelo en .env.local y guarda el archivo (Ctrl+S), por ejemplo:');
+    console.error('   TELEGRAM_BOT_TOKEN=123456789:AA...');
+    if (fs.existsSync(envPath) && !('TELEGRAM_BOT_TOKEN' in env)) {
+      console.error('\n   El .env.local existe pero no contiene esa variable en disco.');
+    }
     process.exit(1);
   }
 

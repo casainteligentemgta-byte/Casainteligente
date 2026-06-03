@@ -103,35 +103,45 @@ export function ordenarLineasCompras(
   });
 }
 
+const TSV_HEADERS = [
+  'Fecha',
+  'Factura',
+  'Proveedor',
+  'RIF',
+  'Entidad',
+  'Obra / Proyecto',
+  'Almacén',
+  'Artículo',
+  'Código',
+  'Cant.',
+  'P.U.',
+  'Subtotal (Bs)',
+  'USD',
+  'Tasa BCV',
+] as const;
+
+function filaComprasATsv(row: FilaFacturaCanal): string {
+  const bs = subtotalBsFila(row);
+  const usd = usdFila(row);
+  return [
+    row.fecha,
+    row.factura,
+    row.proveedor,
+    row.rif,
+    row.entidad ?? '',
+    row.proyecto ?? '',
+    row.almacen ?? '',
+    row.esLinea ? row.articulo : '(cabecera)',
+    row.esLinea ? row.codigo : '',
+    row.esLinea ? String(row.cantidad) : '',
+    row.esLinea ? formatearPrecioUnitarioLineaCompra(row) ?? '' : '',
+    String(bs),
+    usd != null ? String(usd) : '',
+    row.tasaBcv != null ? String(row.tasaBcv) : '',
+  ].join('\t');
+}
+
 /** TSV para copiar / compartir texto tabular. */
 export function lineasComprasATsv(filas: FilaFacturaCanal[]): string {
-  const header = [
-    'Fecha',
-    'Factura',
-    'Proveedor',
-    'RIF',
-    'Artículo',
-    'Cant.',
-    'P.U.',
-    'Subtotal (Bs)',
-    'USD',
-    'Tasa BCV',
-  ].join('\t');
-  const body = filas.map((row) => {
-    const bs = subtotalBsFila(row);
-    const usd = usdFila(row);
-    return [
-      row.fecha,
-      row.factura,
-      row.proveedor,
-      row.rif,
-      row.esLinea ? row.articulo : '(cabecera)',
-      row.esLinea ? String(row.cantidad) : '',
-      row.esLinea ? formatearPrecioUnitarioLineaCompra(row) ?? '' : '',
-      String(bs),
-      usd != null ? String(usd) : '',
-      row.tasaBcv != null ? String(row.tasaBcv) : '',
-    ].join('\t');
-  });
-  return [header, ...body].join('\n');
+  return [TSV_HEADERS.join('\t'), ...filas.map(filaComprasATsv)].join('\n');
 }

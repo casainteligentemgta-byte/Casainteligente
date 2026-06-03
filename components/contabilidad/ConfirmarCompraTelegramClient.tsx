@@ -177,15 +177,41 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     [compraRegistrada, pendiente],
   );
 
+  const estadosListosParaIngreso = useMemo(
+    () => new Set(['extraido', 'error', 'aprobado_sistema', 'confirmado']),
+    [],
+  );
+
   const puedeIngresarAlmacen = useMemo(
     () =>
-      pendiente &&
-      (yaEnContabilidad ||
-        (['extraido', 'error'].includes(pendiente.estado) &&
-          extracted &&
-          (extracted.supplier_name?.trim() || extracted.invoice_number?.trim()))),
-    [pendiente, extracted, yaEnContabilidad],
+      Boolean(
+        pendiente &&
+          !ingresoAlmacenOk &&
+          (yaEnContabilidad ||
+            (estadosListosParaIngreso.has(pendiente.estado) &&
+              extracted &&
+              (extracted.supplier_name?.trim() || extracted.invoice_number?.trim()))),
+      ),
+    [pendiente, extracted, yaEnContabilidad, ingresoAlmacenOk, estadosListosParaIngreso],
   );
+
+  const proyectoEfectivo = useMemo(
+    () => proyectoId.trim() || pendiente?.proyecto_id?.trim() || '',
+    [proyectoId, pendiente?.proyecto_id],
+  );
+
+  const ubicacionEfectiva = useMemo(
+    () => ubicacionId.trim() || pendiente?.ubicacion_destino_id?.trim() || '',
+    [ubicacionId, pendiente?.ubicacion_destino_id],
+  );
+
+  /** Restaura almacén precargado si el select lo vació durante la carga de ubicaciones. */
+  useEffect(() => {
+    const destino = pendiente?.ubicacion_destino_id?.trim();
+    if (!destino || ubicacionId.trim() || !ubicacionesDisponibles.length) return;
+    if (!ubicacionesDisponibles.some((u) => u.id === destino)) return;
+    setUbicacionId(destino);
+  }, [pendiente?.ubicacion_destino_id, ubicacionId, ubicacionesDisponibles]);
 
   const guardarExtracted = async (next: ExtractedCanalHeader) => {
     const actualizado = await actualizarPendienteCanal(pendingId, { extracted: next });
@@ -205,11 +231,11 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   );
 
   const registrar = async () => {
-    if (!proyectoId.trim()) {
+    if (!proyectoEfectivo) {
       toast.error('Seleccione el proyecto');
       return;
     }
-    if (!ubicacionId.trim()) {
+    if (!ubicacionEfectiva) {
       toast.error('Seleccione el almacén de ingreso');
       return;
     }
@@ -220,8 +246,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     await runRegistro(async () => {
       try {
         const r = await confirmarCompraCanal(pendingId, {
-          proyecto_id: proyectoId,
-          ubicacion_destino_id: ubicacionId,
+          proyecto_id: proyectoEfectivo,
+          ubicacion_destino_id: ubicacionEfectiva,
           extracted,
           ingreso_almacen_automatico: true,
         });
@@ -281,9 +307,23 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     });
   };
 
+  const persistirDestinoIngreso = async () => {
+    const pid = proyectoEfectivo;
+    const uid = ubicacionEfectiva;
+    if (!pid || !uid) return;
+    const actualizado = await actualizarPendienteCanal(pendingId, {
+      proyecto_id: pid,
+      ubicacion_destino_id: uid,
+    });
+    setPendiente((prev) => (prev ? { ...prev, ...actualizado } : prev));
+    setProyectoId(pid);
+    setUbicacionId(uid);
+  };
+
   const registrarIngresoAlmacen = async () => {
     await runIngreso(async () => {
       try {
+        await persistirDestinoIngreso();
         const r = await ingresoAlmacenCanal(pendingId);
         finalizarIngresoYIrAlmacen(
           r.yaExistia
@@ -299,11 +339,11 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
 
   /** Un solo paso: confirma en contabilidad (si falta) e ingresa al almacén de la obra. */
   const ingresarMercanciaAlmacen = async () => {
-    if (!proyectoId.trim()) {
+    if (!proyectoEfectivo) {
       toast.error('Seleccione el proyecto / obra');
       return;
     }
-    if (!ubicacionId.trim()) {
+    if (!ubicacionEfectiva) {
       toast.error('Seleccione el almacén de ingreso');
       return;
     }
@@ -547,8 +587,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               data-cta="ingreso-almacen-obra"
               disabled={
                 !puedeIngresarAlmacen ||
-                !proyectoId.trim() ||
-                !ubicacionId.trim() ||
+                !proyectoEfectivo ||
+                !ubicacionEfectiva ||
                 registrando ||
                 ingresandoAlmacen
               }

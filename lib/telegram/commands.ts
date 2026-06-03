@@ -2,6 +2,7 @@ import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import type { TelegramContexto } from '@/lib/telegram/estados';
 import type { ProyectoPickerModo } from '@/lib/telegram/proyectoPicker';
 import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
+import type { PeriodoComprasTelegram } from '@/lib/telegram/comprasPeriodoTelegram';
 import { esComandoAgua, primerTokenComando } from '@/lib/telegram/parseComandoTelegram';
 
 export type ComandoTelegramResult = {
@@ -20,6 +21,8 @@ export type ComandoTelegramResult = {
   comandoSalida?: boolean;
   /** Lista compras ya registradas pendientes de ingreso físico a almacén. */
   comandoIngresoAlmacen?: boolean;
+  /** Lista materiales comprados en el día, semana o mes (app + Telegram). */
+  comandoComprasPeriodo?: PeriodoComprasTelegram;
   /** Lista material en cuarentena para liberar (depositario). */
   comandoLiberarCuarentena?: boolean;
 };
@@ -49,6 +52,9 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /entrada — nota de entrega: proveedor + productos → cola de compras\n' +
         '• /ingreso — facturas ya cargadas pendientes de ingreso a almacén\n' +
+        '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
+        '• /comprassemana — materiales de la semana en curso\n' +
+        '• /comprasmes — materiales del mes en curso\n' +
         '• /liberar — material en cuarentena: aprobar y sumar stock\n' +
         '• /salida — foto + detalle de material que egresa\n' +
         '• /avance — reporte numérico diario de partida\n' +
@@ -72,6 +78,9 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/agua — obra, camión, prueba PPM, litros\n' +
         '/entrada — nota de entrega (depositario → cola de compras)\n' +
         '/ingreso — facturas pendientes de ingreso físico a almacén\n' +
+        '/comprasdia — lista de materiales comprados hoy\n' +
+        '/comprassemana — materiales comprados esta semana\n' +
+        '/comprasmes — materiales comprados este mes\n' +
         '/liberar — liberar material de cuarentena (depositario)\n' +
         '/salida — egreso de material (capítulo + foto + almacén origen + stock)\n' +
         '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +
@@ -148,6 +157,16 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
 
   if (cmd === '/ingreso') {
     return { handled: true, comandoIngresoAlmacen: true };
+  }
+
+  if (cmd === '/comprasdia') {
+    return { handled: true, comandoComprasPeriodo: 'dia' };
+  }
+  if (cmd === '/comprassemana') {
+    return { handled: true, comandoComprasPeriodo: 'semana' };
+  }
+  if (cmd === '/comprasmes') {
+    return { handled: true, comandoComprasPeriodo: 'mes' };
   }
 
   if (cmd === '/liberar' || cmd === '/cuarentena') {

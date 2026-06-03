@@ -60,6 +60,11 @@ import {
   manejarComandoEntradaComprasTelegram,
 } from '@/lib/telegram/entradaComprasPicker';
 import {
+  esCallbackComprasPeriodo,
+  manejarCallbackComprasPeriodoTelegram,
+  manejarComandoComprasPeriodoTelegram,
+} from '@/lib/telegram/comprasPeriodoTelegram';
+import {
   esCallbackLiberarCuarentena,
   manejarCallbackLiberarCuarentenaTelegram,
   manejarComandoLiberarCuarentenaTelegram,
@@ -210,6 +215,11 @@ async function aplicarComando(
 
   if (cmd.comandoIngresoAlmacen) {
     await manejarComandoEntradaComprasTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoComprasPeriodo) {
+    await manejarComandoComprasPeriodoTelegram(supabase, chatId, cmd.comandoComprasPeriodo);
     return;
   }
 
@@ -406,6 +416,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledEntradaCompra) {
         return NextResponse.json({ ok: true, callback: 'entrada_compra' });
+      }
+    }
+
+    if (esCallbackComprasPeriodo(cq.data)) {
+      const handledComprasPeriodo = await manejarCallbackComprasPeriodoTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledComprasPeriodo) {
+        return NextResponse.json({ ok: true, callback: 'compras_periodo' });
       }
     }
 
