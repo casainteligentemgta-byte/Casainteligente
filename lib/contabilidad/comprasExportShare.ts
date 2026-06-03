@@ -1,4 +1,8 @@
-import type { FilaFacturaCanal, FiltrosFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
+import type {
+  CompraConfirmadaParaLineas,
+  FilaFacturaCanal,
+  FiltrosFacturaCanal,
+} from '@/lib/contabilidad/filtrosFacturaCanal';
 import { filtrarLineasComprasConfirmadas } from '@/lib/contabilidad/filtrosFacturaCanal';
 import {
   formatearPrecioUnitarioLineaCompra,
@@ -14,7 +18,7 @@ export type CompraCuadroLineaInput = {
   descripcion: string;
   item_code: string | null;
   cantidad: number;
-  precio_unitario: number;
+  precio_unitario?: number;
   subtotal: number;
 };
 
@@ -78,26 +82,26 @@ function lineasDetalleCompra(c: CompraCuadroInput): CompraCuadroLineaInput[] {
   return [];
 }
 
-export function buildLineasCuadroDesdeCompras(
-  compras: CompraCuadroInput[],
-  tasaResolver: (c: CompraCuadroInput) => number | null,
+export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
+  compras: T[],
+  tasaResolver: (c: T) => number | null,
   filtrosLineas: FiltrosFacturaCanal = {},
 ): FilaFacturaCanal[] {
-  const payload = compras.map((c) => ({
+  const payload: CompraConfirmadaParaLineas[] = compras.map((c) => ({
     id: c.id,
-    fecha: c.fecha,
-    invoice_number: c.invoice_number,
-    supplier_name: c.supplier_name,
-    supplier_rif: c.supplier_rif,
-    total_amount: c.total_amount,
+    fecha: String(c.fecha ?? '').slice(0, 10),
+    invoice_number: String(c.invoice_number ?? 'S/N').trim(),
+    supplier_name: String(c.supplier_name ?? '').trim(),
+    supplier_rif: String(c.supplier_rif ?? '').trim(),
+    total_amount: Number(c.total_amount) || 0,
     total_amount_usd: c.total_amount_usd,
     tasa_bcv_ves_por_usd: tasaResolver(c),
     moneda: c.moneda,
     moneda_original: c.moneda_original,
     monto_ves: c.monto_ves,
     monto_usd: c.monto_usd,
-    origen: c.origen,
-    estado: c.estado,
+    origen: String(c.origen ?? ''),
+    estado: String(c.estado ?? 'REGISTRADA'),
     entidadNombre: c.entidad_nombre ?? undefined,
     proyectoNombre: proyectoNombreCompra(c) || undefined,
     almacenNombre: c.ubicacion_nombre ?? undefined,
