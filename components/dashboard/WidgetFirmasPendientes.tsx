@@ -68,7 +68,7 @@ export default function WidgetFirmasPendientes() {
   const [nombresProyecto, setNombresProyecto] = useState<Map<string, string>>(() => new Map());
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(() => Date.now());
+  const [tick, setTick] = useState(0);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [filaModal, setFilaModal] = useState<FilaFirmaPendiente | null>(null);
   const [finalizando, setFinalizando] = useState(false);
@@ -122,6 +122,7 @@ export default function WidgetFirmasPendientes() {
   }, [cargar]);
 
   useEffect(() => {
+    setTick(Date.now());
     const id = window.setInterval(() => setTick(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, []);

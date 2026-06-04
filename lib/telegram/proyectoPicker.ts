@@ -17,7 +17,8 @@ export type ProyectoPickerModo =
       TelegramContexto,
       'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra' | 'memoria_obra'
     >
-  | 'factura_compra';
+  | 'factura_compra'
+  | 'ingreso_manual';
 
 const PAGE_SIZE = 8;
 
@@ -29,6 +30,7 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   salida_obra: 'l',
   memoria_obra: 'm',
   factura_compra: 'f',
+  ingreso_manual: 'h',
 };
 
 const MODO_LARGO: Record<string, ProyectoPickerModo> = {
@@ -39,6 +41,7 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   l: 'salida_obra',
   m: 'memoria_obra',
   f: 'factura_compra',
+  h: 'ingreso_manual',
 };
 
 function truncarNombre(nombre: string, max = 28): string {
@@ -84,7 +87,9 @@ function tituloPicker(modo: ProyectoPickerModo): string {
     case 'esperando_audio_bitacora':
       return '📋 <b>Elige la obra</b> para la bitácora:';
     case 'entrada_obra':
-      return '📥 <b>Elige la obra</b> (nota de entrega / entrada):';
+      return '📥 <b>Elige la obra</b> (ingreso manual):';
+    case 'ingreso_manual':
+      return '📥 <b>Elige la obra</b> (ingreso manual a almacén):';
     case 'salida_obra':
       return '📤 <b>Elige la obra</b> (salida de material):';
     case 'factura_compra':
@@ -113,6 +118,7 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
         'Envía una <b>nota de voz</b> con el reporte de bitácora de campo.'
       );
     case 'entrada_obra':
+    case 'ingreso_manual':
     case 'salida_obra':
       return '';
     case 'factura_compra':
@@ -251,10 +257,10 @@ export async function manejarCallbackProyectoTelegram(
     return true;
   }
 
-  if (parsed.modo === 'entrada_obra') {
+  if (parsed.modo === 'ingreso_manual') {
     await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { prepararNotaEntregaTrasObra } = await import('@/lib/telegram/notaEntregaRegistro');
-    await prepararNotaEntregaTrasObra(supabase, params.chatId, parsed.proyectoId);
+    const { prepararIngresoManualTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararIngresoManualTrasObra(supabase, params.chatId, parsed.proyectoId);
     return true;
   }
 

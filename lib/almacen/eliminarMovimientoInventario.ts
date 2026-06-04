@@ -3,6 +3,7 @@ import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInve
 
 export type MovimientoInventarioRef =
   | { kind: 'ingreso_linea'; facturaId: string; lineaId: string }
+  | { kind: 'ingreso_recepcion_campo'; recepcionId: string; lineaId: string }
   | { kind: 'ingreso_detalle'; purchaseInvoiceId: string; detailId: string }
   | { kind: 'ingreso_factura'; facturaId: string }
   | { kind: 'despacho_transferencia_linea'; transferenciaId: string; lineaId: string }
@@ -62,6 +63,15 @@ export function parseMovimientoInventarioId(id: string): MovimientoInventarioRef
       kind: 'ingreso_detalle',
       purchaseInvoiceId: par.facturaId,
       detailId: par.lineaId,
+    };
+  }
+  if (s.startsWith('ing-rc-')) {
+    const par = parseIngresoLineaRest(s.slice('ing-rc-'.length));
+    if (!par) return null;
+    return {
+      kind: 'ingreso_recepcion_campo',
+      recepcionId: par.facturaId,
+      lineaId: par.lineaId,
     };
   }
   if (s.startsWith('ing-')) {
@@ -703,6 +713,68 @@ async function eliminarStockUbicacion(
   if (delErr) throw new Error(delErr.message);
 }
 
+async function eliminarLineaRecepcionCampo(
+  supabase: SupabaseClient,
+  recepcionId: string,
+  lineaId: string,
+): Promise<void> {
+  const { data: linea, error: lErr } = await supabase
+    .from('ci_recepciones_campo_lineas')
+    .select(
+      `
+      id,
+      material_id,
+      cantidad,
+      recepcion:ci_recepciones_campo (
+        id,
+        estado,
+        ubicacion_id
+      )
+    `,
+    )
+    .eq('id', lineaId)
+    .eq('recepcion_id', recepcionId)
+    .maybeSingle();
+
+  if (lErr) throw new Error(lErr.message);
+  if (!linea) {
+    const { count } = await supabase
+      .from('ci_recepciones_campo_lineas')
+      .select('id', { count: 'exact', head: true })
+      .eq('id', lineaId);
+    if ((count ?? 0) === 0) return;
+    throw new Error('Línea de recepción en campo no encontrada.');
+  }
+
+  const recRaw = linea.recepcion as
+    | { id?: string; estado?: string; ubicacion_id?: string }
+    | Array<{ id?: string; estado?: string; ubicacion_id?: string }>
+    | null;
+  const rec = Array.isArray(recRaw) ? recRaw[0] : recRaw;
+
+  const ubicacionId = String(rec?.ubicacion_id ?? '').trim();
+  const materialId = String(linea.material_id ?? '').trim();
+  const cantidad = Number(linea.cantidad ?? 0);
+
+  if (rec && String(rec.estado ?? '') !== 'anulado' && ubicacionId && materialId && cantidad > 0) {
+    await aplicarDeltaStock(supabase, ubicacionId, materialId, -cantidad);
+  }
+
+  const { error: delLineaErr } = await supabase
+    .from('ci_recepciones_campo_lineas')
+    .delete()
+    .eq('id', lineaId);
+  if (delLineaErr) throw new Error(delLineaErr.message);
+
+  const { count: restantes } = await supabase
+    .from('ci_recepciones_campo_lineas')
+    .select('id', { count: 'exact', head: true })
+    .eq('recepcion_id', recepcionId);
+  if ((restantes ?? 0) === 0) {
+    await supabase.from('ci_recepciones_campo').delete().eq('id', recepcionId);
+  }
+}
+
 export async function eliminarMovimientoInventario(
   supabase: SupabaseClient,
   movimientoId: string,
@@ -719,6 +791,9 @@ export async function eliminarMovimientoInventario(
     case 'ingreso_detalle':
       await eliminarDetalleIngreso(supabase, ref.purchaseInvoiceId, ref.detailId);
       return { ok: true, mensaje: 'Detalle de ingreso eliminado y stock ajustado.' };
+    case 'ingreso_recepcion_campo':
+      await eliminarLineaRecepcionCampo(supabase, ref.recepcionId, ref.lineaId);
+      return { ok: true, mensaje: 'Recepción en campo eliminada y stock ajustado.' };
     case 'ingreso_factura':
       await eliminarFacturaIngreso(supabase, ref.facturaId);
       return { ok: true, mensaje: 'Factura de ingreso eliminada y stock revertido.' };

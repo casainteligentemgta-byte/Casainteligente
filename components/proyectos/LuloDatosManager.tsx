@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import LuloTablaFiltrable, { type LuloColumnaDef } from '@/components/proyectos/LuloTablaFiltrable';
+import SelectorUnidadMedida from '@/components/almacen/SelectorUnidadMedida';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 
 const COLUMNAS_PARTIDAS: LuloColumnaDef[] = [
@@ -358,12 +359,14 @@ export default function LuloDatosManager({ proyectoId, proyectoNombre }: Props) 
                       />
                     </td>
                     <td className="px-2 py-1">
-                      <input
-                        className="w-14 rounded bg-black/40 border border-white/10 px-2 py-1"
+                      <SelectorUnidadMedida
+                        compact
                         value={editPartidaForm.unidad ?? p.unidad}
-                        onChange={(e) =>
-                          setEditPartidaForm((f) => ({ ...f, unidad: e.target.value }))
+                        onChange={(unidad) =>
+                          setEditPartidaForm((f) => ({ ...f, unidad }))
                         }
+                        className="w-full min-w-[4.5rem] rounded bg-black/40 border border-white/10 px-2 py-1 text-sm"
+                        inputClassName="w-full min-w-[4.5rem] rounded bg-black/40 border border-white/10 px-2 py-1 text-sm uppercase"
                       />
                     </td>
                     <td className="px-2 py-1">

@@ -64,7 +64,8 @@ export async function registrarDespachoWeb(
     if (l.origen_ubicacion_id === l.destino_ubicacion_id) {
       return { ok: false, error: 'Origen y destino no pueden ser el mismo almacén.' };
     }
-    if (l.destino_fisico !== 'otro_almacen' && !l.imputaciones.length) {
+    const imputacionActividad = l.imputacion_tipo === 'actividad';
+    if (l.destino_fisico !== 'otro_almacen' && !l.imputaciones.length && !imputacionActividad) {
       return { ok: false, error: `Falta imputación presupuestaria para ${l.material_nombre}.` };
     }
   }

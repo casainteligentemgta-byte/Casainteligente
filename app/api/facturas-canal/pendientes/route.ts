@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import {
+  cargarIndiceContabilidadIngreso,
+  filtrarCanalPendientesParaIngreso,
+} from '@/lib/almacen/listarFacturasPendientesIngreso';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
@@ -27,23 +31,32 @@ export async function GET(req: Request) {
       const estados =
         para === 'lista_compras'
           ? ['extraido', 'pendiente', 'procesando', 'error', 'confirmado']
-          : para === 'panel_canal'
-            ? [
-                'extraido',
-                'pendiente',
-                'procesando',
-                'error',
-                'confirmado',
-                'rechazado',
-              ]
-            : ['extraido', 'pendiente', 'procesando', 'error'];
+          : para === 'transito_ingreso'
+            ? ['extraido', 'aprobado_sistema', 'confirmado']
+            : para === 'panel_canal'
+              ? [
+                  'extraido',
+                  'pendiente',
+                  'procesando',
+                  'error',
+                  'confirmado',
+                  'rechazado',
+                ]
+              : ['extraido', 'pendiente', 'procesando', 'error'];
       q = q.in('estado', estados);
     }
 
     const { data, error } = await q;
     if (error) throw new Error(formatErrorMessage(error));
+
+    let pendientes = data ?? [];
+    if (searchParams.get('para') === 'transito_ingreso') {
+      const indice = await cargarIndiceContabilidadIngreso(supabase);
+      pendientes = filtrarCanalPendientesParaIngreso(pendientes, indice);
+    }
+
     return NextResponse.json(
-      { pendientes: data ?? [] },
+      { pendientes },
       { headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );
   } catch (err: unknown) {

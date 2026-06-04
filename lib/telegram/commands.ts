@@ -17,10 +17,11 @@ export type ComandoTelegramResult = {
   mostrarPickerProyecto?: ProyectoPickerModo;
   /** Inicia flujo /agua (picker de obras activas). */
   comandoAgua?: boolean;
-  comandoEntrada?: boolean;
+  /** Ingreso manual a almacén (obra → almacén → materiales). */
+  comandoIngresoManual?: boolean;
   comandoSalida?: boolean;
-  /** Lista compras ya registradas pendientes de ingreso físico a almacén. */
-  comandoIngresoAlmacen?: boolean;
+  /** Facturas precargadas (Telegram + app) pendientes de ingreso a almacén. */
+  comandoIngresoFactura?: boolean;
   /** Lista materiales comprados en el día, semana o mes (app + Telegram). */
   comandoComprasPeriodo?: PeriodoComprasTelegram;
   /** Lista material en cuarentena para liberar (depositario). */
@@ -46,16 +47,15 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       mensaje:
         '🏠 <b>Casa Inteligente</b>\n\n' +
         'Elige un modo:\n' +
-        '• /facturas — recibir factura de compra (IA + app)\n' +
-        '• /factura — igual que /facturas\n' +
+        '• /facturas — recibir factura de compra (foto/PDF, IA + app)\n' +
         '• /obra — elegir obra y subir fotos de evidencia\n' +
         '• /proyecto — cambiar obra activa (lista)\n' +
         '• /gasto — comprobante de gasto de obra\n' +
         '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
-        '• /entrada — nota de entrega: proveedor + productos → cola de compras\n' +
-        '• /ingreso — facturas ya cargadas pendientes de ingreso a almacén\n' +
+        '• /ingresomanual — ingreso manual: obra, almacén, proveedor, materiales\n' +
+        '• /ingresofactura — facturas precargadas (Telegram y app) → ingreso a almacén\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
         '• /comprassemana — materiales de la semana en curso\n' +
@@ -75,15 +75,15 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       handled: true,
       mensaje:
         '<b>Comandos</b>\n' +
-        '/factura — modo facturas de compra\n' +
+        '/facturas — modo facturas de compra\n' +
         '/obra — elegir obra (lista) y subir fotos\n' +
         '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +
         '/stock cemento — buscar stock por nombre (parcial)\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
-        '/entrada — nota de entrega (depositario → cola de compras)\n' +
-        '/ingreso — facturas pendientes de ingreso físico a almacén\n' +
+        '/ingresomanual — ingreso manual a almacén (obra → materiales → stock)\n' +
+        '/ingresofactura — facturas precargadas Telegram/app pendientes de ingreso\n' +
         '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
         '/comprasdia — lista de materiales comprados hoy\n' +
         '/comprassemana — materiales comprados esta semana\n' +
@@ -104,19 +104,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       contexto: 'menu',
       proyectoId: null,
       resetProyecto: true,
-      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /entrada, /salida o /agua.',
+      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /ingresomanual, /salida o /agua.',
     };
   }
 
-  if (cmd === '/facturas' || lower === 'facturas') {
-    return {
-      handled: true,
-      contexto: 'factura',
-      mensaje: mensajeModoFacturasActivado(),
-    };
-  }
-
-  if (cmd === '/factura' || lower === 'factura') {
+  if (cmd === '/factura' || cmd === '/facturas' || lower === 'factura' || lower === 'facturas') {
     return {
       handled: true,
       contexto: 'factura',
@@ -159,12 +151,12 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoAgua: true };
   }
 
-  if (cmd === '/entrada' || cmd === '/nota') {
-    return { handled: true, comandoEntrada: true };
+  if (cmd === '/ingresomanual' || cmd === '/entrada') {
+    return { handled: true, comandoIngresoManual: true };
   }
 
-  if (cmd === '/ingreso') {
-    return { handled: true, comandoIngresoAlmacen: true };
+  if (cmd === '/ingresofactura' || cmd === '/ingreso') {
+    return { handled: true, comandoIngresoFactura: true };
   }
 
   if (cmd === '/comprasdia') {

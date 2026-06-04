@@ -50,15 +50,19 @@ import {
   manejarTextoObservacionEntradaSalida,
 } from '@/lib/telegram/entradaSalidaRegistro';
 import {
-  manejarComandoEntradaTelegram,
-  manejarFotoNotaEntregaTelegram,
-  manejarTextoProveedorNotaEntrega,
-} from '@/lib/telegram/notaEntregaRegistro';
+  esCallbackIngresoManual,
+  esFlujoIngresoManual,
+  manejarCallbackIngresoManual,
+  manejarComandoIngresoManualTelegram,
+  manejarFotoIngresoManual,
+  manejarTextoIngresoManual,
+} from '@/lib/telegram/ingresoManualTelegram';
 import {
-  esCallbackEntradaCompra,
-  manejarCallbackEntradaCompraTelegram,
-  manejarComandoEntradaComprasTelegram,
-} from '@/lib/telegram/entradaComprasPicker';
+  esCallbackIngresoFactura,
+  esComandoIngresoFactura,
+  manejarCallbackIngresoFacturaTelegram,
+  manejarComandoIngresoFacturaTelegram,
+} from '@/lib/telegram/ingresoFacturaTelegram';
 import {
   esCallbackComprasObra,
   manejarCallbackComprasObraTelegram,
@@ -219,13 +223,13 @@ async function aplicarComando(
     return;
   }
 
-  if (cmd.comandoEntrada) {
-    await manejarComandoEntradaTelegram(supabase, chatId);
+  if (cmd.comandoIngresoManual) {
+    await manejarComandoIngresoManualTelegram(supabase, chatId);
     return;
   }
 
-  if (cmd.comandoIngresoAlmacen) {
-    await manejarComandoEntradaComprasTelegram(supabase, chatId);
+  if (cmd.comandoIngresoFactura) {
+    await manejarComandoIngresoFacturaTelegram(supabase, chatId);
     return;
   }
 
@@ -317,7 +321,7 @@ async function avisoErrorTelegram(chatId: string, err: unknown): Promise<void> {
   }
 }
 
-/** /facturas y /factura: responde siempre por Telegram aunque falle Supabase. */
+/** /facturas (alias /factura): responde siempre por Telegram aunque falle Supabase. */
 async function manejarComandoFacturasDirecto(chatId: string): Promise<{
   ok: boolean;
   warn?: string;
@@ -427,6 +431,17 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
+    if (esCallbackIngresoManual(cq.data)) {
+      const handledIngresoManual = await manejarCallbackIngresoManual(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledIngresoManual) {
+        return NextResponse.json({ ok: true, callback: 'ingreso_manual' });
+      }
+    }
+
     if (esCallbackUbicacion(cq.data)) {
       const handledUb = await manejarCallbackUbicacionTelegram(admin.client, {
         chatId,
@@ -450,14 +465,14 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
-    if (esCallbackEntradaCompra(cq.data)) {
-      const handledEntradaCompra = await manejarCallbackEntradaCompraTelegram(admin.client, {
+    if (esCallbackIngresoFactura(cq.data)) {
+      const handledIngresoFactura = await manejarCallbackIngresoFacturaTelegram(admin.client, {
         chatId,
         callbackId: cq.id,
         data: cq.data,
       });
-      if (handledEntradaCompra) {
-        return NextResponse.json({ ok: true, callback: 'entrada_compra' });
+      if (handledIngresoFactura) {
+        return NextResponse.json({ ok: true, callback: 'ingreso_factura' });
       }
     }
 
@@ -649,16 +664,15 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, depositario_recepcion: true });
       }
 
-      const notaProveedor = await manejarTextoProveedorNotaEntrega({
+      const textoIngresoManual = await manejarTextoIngresoManual(
         supabase,
         chatId,
         texto,
-      });
-      if (notaProveedor.handled) {
-        return NextResponse.json({
-          ok: true,
-          nota_entrega: notaProveedor.motivo ?? true,
-        });
+        userId,
+        msg.from?.username ?? null,
+      );
+      if (textoIngresoManual) {
+        return NextResponse.json({ ok: true, ingreso_manual_texto: true });
       }
 
       const nuevoCapSalida = await manejarTextoNuevoCapituloSalida({
@@ -724,7 +738,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       if (texto.startsWith('/')) {
         await sendTelegramMessage(
           chatId,
-          '❌ Comando no reconocido.\n<code>/entrada</code> · <code>/salida</code> · <code>/agua</code>\n<code>/ayuda</code>',
+          '❌ Comando no reconocido.\n<code>/ingresomanual</code> · <code>/salida</code> · <code>/agua</code>\n<code>/ayuda</code>',
           { parse_mode: 'HTML' },
         );
         return NextResponse.json({ ok: true, unknown_command: true });
@@ -787,18 +801,38 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         }
       }
 
-      const fotoNotaEntrega = await manejarFotoNotaEntregaTelegram({
-        supabase,
-        chatId,
-        chatLabel: label,
-        photo: msg.photo,
-        telegramMessageId: String(msg.message_id),
-      });
-      if (fotoNotaEntrega.handled) {
-        return NextResponse.json({
-          ok: true,
-          nota_entrega: fotoNotaEntrega.motivo ?? true,
-        });
+      const fotoIngresoManual = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoIngreso = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoIngresoManual(estadoIngreso)) return false;
+        const paso = (estadoIngreso.metadata as { paso?: string })?.paso;
+        if (paso !== 'foto' && paso !== 'observacion') return false;
+        const fileId = photos[photos.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          await manejarFotoIngresoManual({
+            supabase,
+            chatId,
+            userId,
+            username: msg.from?.username ?? null,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+            caption: msg.caption,
+          });
+          return true;
+        } catch (err) {
+          console.error('[telegram ingreso manual foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoIngresoManual) {
+        return NextResponse.json({ ok: true, ingreso_manual_foto: true });
       }
 
       const fotoSalidaEgreso = await (async () => {

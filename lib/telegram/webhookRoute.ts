@@ -10,7 +10,9 @@ import {
 } from '@/lib/telegram/stockCommand';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import { manejarComandoAguaTelegram } from '@/lib/telegram/aguaRegistro';
-import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
+import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFacturaTelegram';
+import { manejarComandoIngresoManualTelegram } from '@/lib/telegram/ingresoManualTelegram';
+import { esComandoAgua, primerTokenComando } from '@/lib/telegram/parseComandoTelegram';
 import {
   handleTelegramWebhookPost,
   handleTelegramCallbackQuery,
@@ -93,6 +95,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
   }
 
   const text = msg.text?.trim() ?? '';
+  const cmd = primerTokenComando(text);
 
   if (esComandoAgua(text)) {
     const admin = telegramSupabaseAdmin();
@@ -118,6 +121,58 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
       });
     }
     return respuestaWebhook({ ok: true, command: 'agua' });
+  }
+
+  if (cmd === '/ingresomanual' || cmd === '/entrada') {
+    const admin = telegramSupabaseAdmin();
+    if (!admin.ok) {
+      try {
+        await sendTelegramMessage(
+          chatId,
+          '⚠️ Servidor sin <b>SUPABASE_SERVICE_ROLE_KEY</b>. Contacte al administrador.',
+          { parse_mode: 'HTML' },
+        );
+      } catch (err) {
+        console.error('[telegram webhook] /ingresomanual sin supabase admin', err);
+      }
+      return respuestaWebhook({ ok: true, error: 'supabase_admin' });
+    }
+    try {
+      await manejarComandoIngresoManualTelegram(admin.client, chatId);
+    } catch (err) {
+      console.error('[telegram webhook] /ingresomanual', err);
+      return respuestaWebhook({
+        ok: true,
+        error: err instanceof Error ? err.message : 'ingreso_manual_command_failed',
+      });
+    }
+    return respuestaWebhook({ ok: true, command: 'ingresomanual' });
+  }
+
+  if (cmd === '/ingresofactura' || cmd === '/ingreso') {
+    const admin = telegramSupabaseAdmin();
+    if (!admin.ok) {
+      try {
+        await sendTelegramMessage(
+          chatId,
+          '⚠️ Servidor sin <b>SUPABASE_SERVICE_ROLE_KEY</b>. Contacte al administrador.',
+          { parse_mode: 'HTML' },
+        );
+      } catch (err) {
+        console.error('[telegram webhook] /ingresofactura sin supabase admin', err);
+      }
+      return respuestaWebhook({ ok: true, error: 'supabase_admin' });
+    }
+    try {
+      await manejarComandoIngresoFacturaTelegram(admin.client, chatId);
+    } catch (err) {
+      console.error('[telegram webhook] /ingresofactura', err);
+      return respuestaWebhook({
+        ok: true,
+        error: err instanceof Error ? err.message : 'ingreso_factura_command_failed',
+      });
+    }
+    return respuestaWebhook({ ok: true, command: 'ingresofactura' });
   }
 
   if (text.toLowerCase().startsWith('/stock')) {

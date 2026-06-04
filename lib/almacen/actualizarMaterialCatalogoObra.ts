@@ -22,11 +22,13 @@ export async function actualizarMaterialCatalogoObra(
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('global_inventory')
-    .update(patch)
-    .eq('id', materialId)
-    .eq('proyecto_id', opts.proyectoId.trim());
+    .update({
+      ...patch,
+      proyecto_id: opts.proyectoId.trim(),
+    })
+    .eq('id', materialId);
 
   if (error) throw new Error(error.message);
 }

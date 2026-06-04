@@ -10,6 +10,7 @@ import {
 } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { calcularGastoBimonetario } from '@/lib/finanzas/currency-converter';
 import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
+import SelectorUnidadMedida from '@/components/almacen/SelectorUnidadMedida';
 import { formatearBs, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import {
@@ -1496,18 +1497,13 @@ export default function ProcurementClient() {
                                                     <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">
                                                         Unidad
                                                     </label>
-                                                    <input
-                                                        type="text"
+                                                    <SelectorUnidadMedida
                                                         value={item.unit}
-                                                        onChange={(e) =>
-                                                            updateItem(
-                                                                index,
-                                                                'unit',
-                                                                e.target.value.toUpperCase()
-                                                            )
+                                                        onChange={(unit) =>
+                                                            updateItem(index, 'unit', unit)
                                                         }
-                                                        placeholder="UND"
                                                         className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 font-bold text-sm outline-none focus:bg-white focus:text-black transition-all"
+                                                        inputClassName="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 font-bold text-sm outline-none focus:bg-white focus:text-black transition-all uppercase"
                                                     />
                                                 </div>
                                             </div>

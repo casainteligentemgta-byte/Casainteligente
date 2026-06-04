@@ -23,6 +23,7 @@ import { buildResumenPresupuestoCapitulos } from '@/lib/proyectos/buildResumenPr
 import { buildObraDataPresupuesto } from '@/lib/proyectos/mapObraDataPresupuesto';
 import LuloVolcadoPorCapitulos from '@/components/proyectos/LuloVolcadoPorCapitulos';
 import LuloTablaFiltrable, { type LuloColumnaDef } from '@/components/proyectos/LuloTablaFiltrable';
+import SelectorUnidadMedida from '@/components/almacen/SelectorUnidadMedida';
 import { getCapituloKeyPartida, ordenarPartidasPorCapitulos } from '@/lib/proyectos/luloCapitulos';
 import type { LuloMdbFullDump } from '@/lib/proyectos/extractLuloFull';
 import {
@@ -652,7 +653,13 @@ export default function ControlObraClient({ proyectoId, proyectoNombre }: Props)
               <input className={inputCls('w-full min-w-[140px]')} value={editPartidaForm.descripcion ?? p.descripcion} onChange={(e) => setEditPartidaForm((f) => ({ ...f, descripcion: e.target.value }))} />
             </td>
             <td className="px-2 py-1">
-              <input className={inputCls('w-14')} value={editPartidaForm.unidad ?? p.unidad} onChange={(e) => setEditPartidaForm((f) => ({ ...f, unidad: e.target.value }))} />
+              <SelectorUnidadMedida
+                compact
+                value={editPartidaForm.unidad ?? p.unidad}
+                onChange={(unidad) => setEditPartidaForm((f) => ({ ...f, unidad }))}
+                className="w-full min-w-[4.5rem] rounded bg-black/40 border border-white/10 px-2 py-1 text-sm"
+                inputClassName="w-full min-w-[4.5rem] rounded bg-black/40 border border-white/10 px-2 py-1 text-sm uppercase"
+              />
             </td>
             <td className="px-2 py-1">
               <input type="number" className={inputCls('w-20 text-right')} value={editPartidaForm.cantidad_presupuestada ?? p.cantidad_presupuestada} onChange={(e) => setEditPartidaForm((f) => ({ ...f, cantidad_presupuestada: Number(e.target.value) }))} />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { DespachoAlertasConfigPanel } from '@/components/almacen/DespachoAlertasConfigPanel';
 import {
   DESPACHO_ALERTAS_DEFAULT,
@@ -150,7 +150,7 @@ function aplicarDestinoDocALinea(
     destinoProyectoId: doc.destinoProyectoId,
     destinoId: doc.destinoId,
     destinoEtiqueta: etiquetaPartes.filter(Boolean).join(' · '),
-    imputacionTipo: esActividad && doc.cronogramaTareaId ? 'actividad' : 'partida_lulo',
+    imputacionTipo: esActividad ? 'actividad' : 'partida_lulo',
     destinoPartidaKey: partidaKey,
     partidaLabel: doc.partidaLabel,
     cronogramaTareaId: doc.cronogramaTareaId,
@@ -170,6 +170,16 @@ function destinoDocCompleto(doc: DespachoDestinoDocumentoValue): boolean {
   return true;
 }
 
+/** Imputación por actividad (manual o Gantt) sin partida Lulo → no validar techo presupuestario. */
+function despachoPorActividadSinPartida(doc: DespachoDestinoDocumentoValue): boolean {
+  return (
+    doc.tipoDestino === 'obra' &&
+    doc.imputacionObra === 'actividad' &&
+    !doc.partidaKey.trim() &&
+    Boolean(doc.actividadTexto.trim() || doc.cronogramaTareaId)
+  );
+}
+
 function DespachoCargando() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0A0A0F] text-sm text-zinc-500">
@@ -180,6 +190,7 @@ function DespachoCargando() {
 
 export default function DespachoInventarioClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const proyectoIdParam = searchParams.get('proyectoId')?.trim() || '';
   const [montado, setMontado] = useState(false);
   const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
@@ -448,6 +459,9 @@ export default function DespachoInventarioClient() {
 
             if (!imputaciones.length && destinoDoc.tipoDestino === 'almacen') {
               cantidad = l.cantidadSalida;
+            } else if (!imputaciones.length && despachoPorActividadSinPartida(destinoDoc)) {
+              cantidad = l.cantidadSalida;
+              imputaciones = [];
             } else if (!imputaciones.length) {
               if (partidaKey) {
                 if (!l.distribucion.valido) {
@@ -494,14 +508,18 @@ export default function DespachoInventarioClient() {
               origen_ubicacion_id: l.origen_ubicacion_id,
               destino_ubicacion_id: l.destinoId,
               destino_fisico: l.destinoFisico,
-              imputacion_tipo: l.imputacionTipo,
+              imputacion_tipo: despachoPorActividadSinPartida(destinoDoc)
+                ? 'actividad'
+                : l.imputacionTipo,
               imputaciones,
               ci_presupuesto_partida_id:
                 imp?.ci_presupuesto_partida_id ??
                 (partidaKey.startsWith('pp:') ? partidaKey.slice(3) : null),
               partida_id:
                 imp?.partida_id ?? (partidaKey.startsWith('pd:') ? partidaKey.slice(3) : null),
-              partida_label: partidaLabel || destinoDoc.capituloLabel || null,
+              partida_label: despachoPorActividadSinPartida(destinoDoc)
+                ? null
+                : partidaLabel || destinoDoc.capituloLabel || null,
               cronograma_tarea_id: l.cronogramaTareaId || destinoDoc.cronogramaTareaId || null,
               tarea_label: l.tareaEtiqueta || destinoDoc.tareaEtiqueta || destinoDoc.actividadTexto.trim() || null,
             };
@@ -534,13 +552,7 @@ export default function DespachoInventarioClient() {
             ? `Despachos ${codigos.join(', ')} registrados`
             : `Despacho ${codigos[0] ?? ''} registrado`,
         );
-        setLineas([]);
-        setObservaciones('');
-        setReceptor({ modo: 'nomina', empleadoId: '', nombre: '', oficio: '' });
-        setDestinoDoc(emptyDestinoDoc());
-        fotos.forEach((f) => URL.revokeObjectURL(f.previewUrl));
-        setFotos([]);
-        void cargarStock(proyectoId, origenId || undefined);
+        router.push('/almacen/movimientos?vista=despachado');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error al guardar';
         if (/exceso presupuestario/i.test(msg)) {

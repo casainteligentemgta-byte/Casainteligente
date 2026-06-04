@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import SelectorUnidadMedida from '@/components/almacen/SelectorUnidadMedida';
 
 const NUEVO_MATERIAL = '__nuevo_material__';
 
@@ -56,7 +57,6 @@ export default function SelectorMaterialObraRecepcion({
   const [skuNuevo, setSkuNuevo] = useState('');
   const [creando, setCreando] = useState(false);
   const [errorNuevo, setErrorNuevo] = useState<string | null>(null);
-  const [listaGestionAbierta, setListaGestionAbierta] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editNombre, setEditNombre] = useState('');
   const [editUnidad, setEditUnidad] = useState('');
@@ -108,7 +108,6 @@ export default function SelectorMaterialObraRecepcion({
     setUnidadNuevo('UND');
     setSkuNuevo('');
     setErrorNuevo(null);
-    setListaGestionAbierta(false);
     setEditandoId(null);
     onChange('');
     onMaterialSeleccionado?.(null);
@@ -120,7 +119,6 @@ export default function SelectorMaterialObraRecepcion({
     setEditNombre(m.name);
     setEditUnidad(m.unit);
     setEditSku(m.sap_code ?? '');
-    setListaGestionAbierta(true);
   };
 
   const cancelarEdicion = () => {
@@ -333,13 +331,12 @@ export default function SelectorMaterialObraRecepcion({
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block">
               <span className="text-[10px] font-bold text-zinc-500">Unidad</span>
-              <input
-                type="text"
+              <SelectorUnidadMedida
                 value={unidadNuevo}
-                onChange={(e) => setUnidadNuevo(e.target.value)}
+                onChange={setUnidadNuevo}
                 disabled={creando || disabled}
-                placeholder="UND, KG, M…"
                 className={inputClassName}
+                inputClassName={inputClassName}
               />
             </label>
             <label className="block">
@@ -387,117 +384,114 @@ export default function SelectorMaterialObraRecepcion({
       {errorNuevo ? <p className="text-[10px] font-bold text-red-400">{errorNuevo}</p> : null}
       {!modoNuevo && materiales.length > 0 ? (
         <div className="space-y-2">
-          <p className="text-[10px] text-zinc-600">
-            {materiales.length} material(es) de la obra. Despliegue la lista para ver todos con scroll.
-          </p>
-          <button
-            type="button"
-            disabled={disabled || cargando}
-            onClick={() => setListaGestionAbierta((v) => !v)}
-            className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
-          >
-            {listaGestionAbierta ? '▾ Ocultar lista de la obra' : '▸ Ver y gestionar lista de la obra'}
-          </button>
-          {listaGestionAbierta ? (
-            <ul className="max-h-72 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-[#0A0A0F] p-2">
-              {materiales.map((m) => {
-                const editando = editandoId === m.id;
-                return (
-                  <li
-                    key={m.id}
-                    className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5"
-                  >
-                    {editando ? (
-                      <div className="space-y-2">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              Lista de materiales de la obra
+            </p>
+            <p className="mt-0.5 text-[10px] text-zinc-600">
+              {materiales.length} material(es). Puede modificar el nombre o borrar un elemento completo.
+            </p>
+          </div>
+          <ul className="max-h-72 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-[#0A0A0F] p-2">
+            {materiales.map((m) => {
+              const editando = editandoId === m.id;
+              return (
+                <li
+                  key={m.id}
+                  className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5"
+                >
+                  {editando ? (
+                    <div className="space-y-2">
+                      <label className="block">
+                        <span className="text-[10px] font-bold text-zinc-500">Nombre</span>
+                        <input
+                          type="text"
+                          value={editNombre}
+                          onChange={(e) => setEditNombre(e.target.value)}
+                          disabled={guardandoEdicion || disabled}
+                          className={inputClassName}
+                        />
+                      </label>
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <label className="block">
-                          <span className="text-[10px] font-bold text-zinc-500">Nombre</span>
+                          <span className="text-[10px] font-bold text-zinc-500">Unidad</span>
+                          <SelectorUnidadMedida
+                            value={editUnidad}
+                            onChange={setEditUnidad}
+                            disabled={guardandoEdicion || disabled}
+                            className={inputClassName}
+                            inputClassName={inputClassName}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] font-bold text-zinc-500">SKU / código</span>
                           <input
                             type="text"
-                            value={editNombre}
-                            onChange={(e) => setEditNombre(e.target.value)}
+                            value={editSku}
+                            onChange={(e) => setEditSku(e.target.value)}
                             disabled={guardandoEdicion || disabled}
                             className={inputClassName}
                           />
                         </label>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <label className="block">
-                            <span className="text-[10px] font-bold text-zinc-500">Unidad</span>
-                            <input
-                              type="text"
-                              value={editUnidad}
-                              onChange={(e) => setEditUnidad(e.target.value)}
-                              disabled={guardandoEdicion || disabled}
-                              className={inputClassName}
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="text-[10px] font-bold text-zinc-500">SKU / código</span>
-                            <input
-                              type="text"
-                              value={editSku}
-                              onChange={(e) => setEditSku(e.target.value)}
-                              disabled={guardandoEdicion || disabled}
-                              className={inputClassName}
-                            />
-                          </label>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={guardandoEdicion || disabled}
-                            onClick={() => void guardarEdicion(m.id)}
-                            className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-1.5 text-[10px] font-black uppercase text-emerald-200 disabled:opacity-50"
-                          >
-                            {guardandoEdicion ? 'Guardando…' : 'Guardar'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={guardandoEdicion}
-                            onClick={cancelarEdicion}
-                            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[10px] font-bold uppercase text-zinc-400"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
                       </div>
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold text-white">{m.name}</p>
-                          <p className="text-[10px] text-zinc-500">
-                            {m.unit}
-                            {m.sap_code ? ` · ${m.sap_code}` : ''}
-                          </p>
-                        </div>
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          disabled={disabled || eliminandoId === m.id}
-                          onClick={() => iniciarEdicion(m)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-[10px] font-bold text-zinc-300 hover:border-[#FF9500]/40 hover:text-[#FF9500] disabled:opacity-40"
+                          disabled={guardandoEdicion || disabled}
+                          onClick={() => void guardarEdicion(m.id)}
+                          className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-1.5 text-[10px] font-black uppercase text-emerald-200 disabled:opacity-50"
                         >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Modificar
+                          {guardandoEdicion ? 'Guardando…' : 'Guardar'}
                         </button>
                         <button
                           type="button"
-                          disabled={disabled || eliminandoId === m.id}
-                          onClick={() => void eliminarMaterial(m)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2 py-1.5 text-[10px] font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                          disabled={guardandoEdicion}
+                          onClick={cancelarEdicion}
+                          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[10px] font-bold uppercase text-zinc-400"
                         >
-                          {eliminandoId === m.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                          Borrar
+                          Cancelar
                         </button>
                       </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-white">{m.name}</p>
+                        <p className="text-[10px] text-zinc-500">
+                          {m.unit}
+                          {m.sap_code ? ` · ${m.sap_code}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={disabled || eliminandoId === m.id}
+                        onClick={() => iniciarEdicion(m)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-[10px] font-bold text-zinc-300 hover:border-[#FF9500]/40 hover:text-[#FF9500] disabled:opacity-40"
+                        title="Modificar nombre"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Modificar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={disabled || eliminandoId === m.id}
+                        onClick={() => void eliminarMaterial(m)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2 py-1.5 text-[10px] font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                        title="Borrar material"
+                      >
+                        {eliminandoId === m.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        Borrar
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
     </div>

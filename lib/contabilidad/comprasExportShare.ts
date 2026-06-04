@@ -127,6 +127,15 @@ export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
 }
 
 function filaComprasACeldas(row: FilaFacturaCanal): string[] {
+  return filaComprasAValores(row).map((v) => String(v ?? ''));
+}
+
+/** Filas del cuadro como matriz (cabecera + datos) para Excel. */
+export function lineasComprasAoa(filas: FilaFacturaCanal[]): (string | number)[][] {
+  return [[...CSV_HEADERS], ...filas.map(filaComprasAValores)];
+}
+
+function filaComprasAValores(row: FilaFacturaCanal): (string | number)[] {
   const bs = subtotalBsLineaCompra(row);
   const usd = subtotalUsdLineaCompra(row);
   return [
@@ -139,11 +148,11 @@ function filaComprasACeldas(row: FilaFacturaCanal): string[] {
     row.almacen ?? '',
     row.esLinea ? row.articulo : '(cabecera)',
     row.esLinea ? row.codigo : '',
-    row.esLinea ? String(row.cantidad) : '',
+    row.esLinea ? row.cantidad : '',
     row.esLinea ? formatearPrecioUnitarioLineaCompra(row) ?? '' : '',
-    String(bs),
-    usd != null ? String(usd) : '',
-    row.tasaBcv != null ? String(row.tasaBcv) : '',
+    bs,
+    usd ?? '',
+    row.tasaBcv ?? '',
   ];
 }
 
@@ -160,6 +169,67 @@ export function nombreArchivoComprasCsv(scope: ComprasExportScope): string {
   return scope === 'filtrado'
     ? `cuadro-compras-filtrado-${fecha}.csv`
     : `cuadro-compras-completo-${fecha}.csv`;
+}
+
+export function nombreArchivoComprasExcel(scope: ComprasExportScope): string {
+  const fecha = new Date().toISOString().slice(0, 10);
+  return scope === 'filtrado'
+    ? `cuadro-compras-filtrado-${fecha}.xls`
+    : `cuadro-compras-completo-${fecha}.xls`;
+}
+
+function escapeXmlExcel(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function celdaSpreadsheetMl(value: string | number, header = false): string {
+  const tag = header ? 'Cell ss:StyleID="Header"' : 'Cell';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `<${tag}><Data ss:Type="Number">${value}</Data></Cell>`;
+  }
+  return `<${tag}><Data ss:Type="String">${escapeXmlExcel(String(value ?? ''))}</Data></Cell>`;
+}
+
+/** XML Spreadsheet (Excel 2003+) — abre en Microsoft Excel y LibreOffice. */
+export function comprasCuadroSpreadsheetMl(filas: FilaFacturaCanal[]): string {
+  const rows = lineasComprasAoa(filas);
+  const filasXml = rows
+    .map(
+      (row, idx) =>
+        `<Row>${row.map((cell) => celdaSpreadsheetMl(cell, idx === 0)).join('')}</Row>`,
+    )
+    .join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Header"><Font ss:Bold="1"/></Style>
+ </Styles>
+ <Worksheet ss:Name="Compras">
+  <Table>${filasXml}</Table>
+ </Worksheet>
+</Workbook>`;
+}
+
+export function exportarComprasCuadroExcel(
+  filas: FilaFacturaCanal[],
+  scope: ComprasExportScope,
+): boolean {
+  if (!filas.length) return false;
+  descargarTextoComoArchivo(
+    `\uFEFF${comprasCuadroSpreadsheetMl(filas)}`,
+    nombreArchivoComprasExcel(scope),
+    'application/vnd.ms-excel;charset=utf-8',
+  );
+  return true;
 }
 
 export function exportarComprasCuadroCsv(

@@ -87,6 +87,110 @@ function nombreProy(raw: unknown): { id: string; nombre: string } {
   return { id: String(o.id ?? ''), nombre: String(o.nombre ?? '') };
 }
 
+function etiquetaTipoRecepcionCampo(tipo: string, observaciones?: string | null): string {
+  const obs = String(observaciones ?? '');
+  if (obs.includes('Origen: ingreso manual')) return 'Ingreso manual';
+  if (obs.includes('Origen: nota de entrega')) return 'Nota de entrega';
+  if (obs.includes('Origen: emergencia')) return 'Emergencia (sin papeles)';
+
+  switch (String(tipo ?? '').trim().toLowerCase()) {
+    case 'emergencia':
+      return 'Emergencia (sin papeles)';
+    case 'factura_canal':
+      return 'Factura en tránsito';
+    case 'nota_entrega':
+    default:
+      return 'Ingreso manual / nota de entrega';
+  }
+}
+
+async function cargarIngresosRecepcionCampo(
+  supabase: SupabaseClient,
+  limite: number,
+): Promise<FilaMovimientoInventario[]> {
+  const { data, error } = await supabase
+    .from('ci_recepciones_campo')
+    .select(
+      `
+      id,
+      tipo,
+      num_doc,
+      proveedor_nombre,
+      observaciones,
+      created_at,
+      proyecto_id,
+      ubicacion_id,
+      proyecto:ci_proyectos ( id, nombre ),
+      ubicacion:inv_ubicaciones ( id, nombre ),
+      lineas:ci_recepciones_campo_lineas (
+        id,
+        cantidad,
+        unidad,
+        descripcion,
+        material:global_inventory ( id, name, unit, sap_code )
+      )
+    `,
+    )
+    .eq('estado', 'registrado')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(limite, 150));
+
+  if (error?.code === '42P01') return [];
+  if (error) throw new Error(error.message);
+
+  const filas: FilaMovimientoInventario[] = [];
+  for (const rec of data ?? []) {
+    const proy = nombreProy(rec.proyecto);
+    const proyId = proy.id || String(rec.proyecto_id ?? '') || null;
+    const proyNombre = proy.nombre || null;
+    const dest = nombreUbi(rec.ubicacion);
+    const ubicacionId = String(rec.ubicacion_id ?? '') || null;
+    const fecha = String(rec.created_at ?? '').slice(0, 10);
+    const tipoLabel = etiquetaTipoRecepcionCampo(String(rec.tipo ?? ''), rec.observaciones);
+    const obs = String(rec.observaciones ?? '').trim();
+    const notasBase = tipoLabel + (obs ? ` · ${obs.slice(0, 200)}` : '');
+
+    const lineas = (rec.lineas ?? []) as Array<{
+      id: string;
+      cantidad: number;
+      unidad: string;
+      descripcion: string;
+      material: unknown;
+    }>;
+
+    for (const ln of lineas) {
+      const lineaId = String(ln.id ?? '').trim();
+      if (!/^[0-9a-f-]{36}$/i.test(lineaId)) continue;
+
+      const mat = nombreMat(ln.material);
+      const recepcionId = String(rec.id ?? '').trim();
+      const filaId = `ing-rc-${recepcionId}_${lineaId}`;
+
+      filas.push({
+        id: filaId,
+        tipo: 'ingreso',
+        fecha,
+        material_id: mat.id || null,
+        material_nombre: mat.name || ln.descripcion || 'Material',
+        material_codigo: mat.sap,
+        unidad: String(ln.unidad ?? mat.unit ?? 'UND'),
+        cantidad: Number(ln.cantidad ?? 0),
+        proveedor: String(rec.proveedor_nombre ?? '').trim() || null,
+        origen: null,
+        destino: dest || null,
+        proyecto_id: proyId,
+        proyecto_nombre: proyNombre,
+        referencia: String(rec.num_doc ?? '').trim() || null,
+        capitulo: null,
+        notas: notasBase,
+        ubicacion_id: ubicacionId,
+        eliminable: movimientoInventarioEsEliminable(filaId),
+      });
+    }
+  }
+  return filas;
+}
+
 async function cargarIngresos(
   supabase: SupabaseClient,
   limite: number,
@@ -102,6 +206,7 @@ async function cargarIngresos(
       fecha_emision,
       created_at,
       ubicacion_destino_id,
+      purchase_invoice_id,
       ubicacion:inv_ubicaciones ( id, nombre, ci_proyecto_id, proyecto:ci_proyectos ( id, nombre ) ),
       lineas:compras_factura_lineas (
         id,
@@ -128,6 +233,7 @@ async function cargarIngresos(
         : null,
     );
     const fecha = String(fac.fecha_emision ?? fac.created_at ?? '').slice(0, 10);
+    const esFacturaTransito = Boolean(fac.purchase_invoice_id);
     const lineas = (fac.lineas ?? []) as Array<{
       id: string;
       cantidad: number;
@@ -182,8 +288,8 @@ async function cargarIngresos(
         proyecto_nombre: proy.nombre || null,
         referencia: String(fac.numero_factura ?? ''),
         capitulo: null,
-        notas: null,
-        ubicacion_id: null,
+        notas: esFacturaTransito ? 'Factura en tránsito / compra registrada' : null,
+        ubicacion_id: String(fac.ubicacion_destino_id ?? '') || null,
         eliminable: movimientoInventarioEsEliminable(filaId),
       });
     }
@@ -270,7 +376,7 @@ async function cargarIngresosCuarentena(
       proyecto_nombre: proy.nombre || null,
       referencia: String(inv?.invoice_number ?? ''),
       capitulo: null,
-      notas: 'Ingreso vía cuarentena / detalle de factura',
+      notas: 'Factura en tránsito (cuarentena / pendiente de liberación)',
       ubicacion_id: String(inv?.ubicacion_destino_id ?? ubi?.id ?? '') || null,
       eliminable: movimientoInventarioEsEliminable(filaId),
     });
@@ -294,8 +400,9 @@ async function cargarDespachosTransferencia(
       despachado_at,
       observaciones,
       ci_proyecto_id,
+      origen_ubicacion_id,
       proyecto:ci_proyectos ( id, nombre ),
-      origen:inv_ubicaciones!transferencias_inventario_origen_ubicacion_id_fkey ( nombre ),
+      origen:inv_ubicaciones!transferencias_inventario_origen_ubicacion_id_fkey ( id, nombre ),
       destino:inv_ubicaciones!transferencias_inventario_destino_ubicacion_id_fkey ( nombre ),
       lineas:transferencias_inventario_lineas (
         id,
@@ -366,7 +473,7 @@ async function cargarDespachosTransferencia(
         referencia: String(tr.codigo ?? ''),
         capitulo,
         notas: String(tr.observaciones ?? '') || null,
-        ubicacion_id: null,
+        ubicacion_id: String(tr.origen_ubicacion_id ?? '') || null,
         eliminable: movimientoInventarioEsEliminable(filaId),
       });
     }
@@ -435,89 +542,101 @@ async function cargarDespachosTelegram(
   });
 }
 
-async function cargarAlmacenado(
-  supabase: SupabaseClient,
-  limite: number,
-): Promise<FilaMovimientoInventario[]> {
-  const { data, error } = await supabase
-    .from('inventario_stock')
-    .select(
-      `
-      stock_id:id,
-      ubicacion_id,
-      material_id,
-      cantidad_disponible,
-      updated_at,
-      material:global_inventory ( id, name, unit, sap_code ),
-      ubicacion:inv_ubicaciones (
-        id,
-        nombre,
-        ci_proyecto_id,
-        proyecto:ci_proyectos ( id, nombre )
-      )
-    `,
-    )
-    .gt('cantidad_disponible', 0)
-    .order('updated_at', { ascending: false })
-    .limit(Math.min(limite, 300));
+type AcumuladoStock = {
+  material_id: string;
+  material_nombre: string;
+  material_codigo: string | null;
+  unidad: string;
+  ubicacion_id: string;
+  destino: string | null;
+  proyecto_id: string | null;
+  proyecto_nombre: string | null;
+  ingresado: number;
+  salido: number;
+};
 
-  if (error?.code === '42P01') return [];
-  if (error) throw new Error(error.message);
+function claveStock(materialId: string, ubicacionId: string): string {
+  return `${materialId}|${ubicacionId}`;
+}
 
-  return (data ?? []).flatMap((row) => {
-    const r = row as {
-      stock_id?: string;
-      id?: string;
-      ubicacion_id?: string;
-      material_id?: string;
-      cantidad_disponible?: number;
-      updated_at?: string;
-      material?: unknown;
-      ubicacion?: unknown;
-    };
-    const mat = nombreMat(r.material);
-    const ubiRaw = r.ubicacion;
-    const ubi = Array.isArray(ubiRaw) ? ubiRaw[0] : ubiRaw;
-    const dest = ubi && typeof ubi === 'object' ? String((ubi as { nombre?: string }).nombre ?? '') : '';
-    const proy = nombreProy(
-      ubi && typeof ubi === 'object' ? (ubi as { proyecto?: unknown }).proyecto : null,
-    );
+/** Stock = Σ ingresos − Σ salidas por material y ubicación. */
+function calcularFilasStock(
+  ingresos: FilaMovimientoInventario[],
+  despachos: FilaMovimientoInventario[],
+): FilaMovimientoInventario[] {
+  const map = new Map<string, AcumuladoStock>();
 
-    const stockId = String(r.stock_id ?? r.id ?? '').trim();
-    const ubicacionId = String(r.ubicacion_id ?? '').trim();
-    const materialId = String(r.material_id ?? mat.id ?? '').trim();
-    const filaId =
-      stockId && /^[0-9a-f-]{36}$/i.test(stockId)
-        ? `stk-${stockId}`
-        : ubicacionId && materialId
-          ? `stk-pair-${ubicacionId}_${materialId}`
-          : '';
+  for (const r of ingresos) {
+    if (!r.material_id || r.cantidad <= 0 || !r.ubicacion_id) continue;
+    const k = claveStock(r.material_id, r.ubicacion_id);
+    const prev = map.get(k);
+    if (prev) {
+      prev.ingresado += r.cantidad;
+    } else {
+      map.set(k, {
+        material_id: r.material_id,
+        material_nombre: r.material_nombre,
+        material_codigo: r.material_codigo,
+        unidad: r.unidad,
+        ubicacion_id: r.ubicacion_id,
+        destino: r.destino,
+        proyecto_id: r.proyecto_id,
+        proyecto_nombre: r.proyecto_nombre,
+        ingresado: r.cantidad,
+        salido: 0,
+      });
+    }
+  }
 
-    if (!filaId || !movimientoInventarioEsEliminable(filaId)) return [];
+  for (const r of despachos) {
+    if (!r.material_id || r.cantidad <= 0 || !r.ubicacion_id) continue;
+    const k = claveStock(r.material_id, r.ubicacion_id);
+    const prev = map.get(k);
+    if (prev) {
+      prev.salido += r.cantidad;
+    } else {
+      map.set(k, {
+        material_id: r.material_id,
+        material_nombre: r.material_nombre,
+        material_codigo: r.material_codigo,
+        unidad: r.unidad,
+        ubicacion_id: r.ubicacion_id,
+        destino: r.destino ?? r.origen,
+        proyecto_id: r.proyecto_id,
+        proyecto_nombre: r.proyecto_nombre,
+        ingresado: 0,
+        salido: r.cantidad,
+      });
+    }
+  }
 
-    return [
-      {
-        id: filaId,
+  const hoy = new Date().toISOString().slice(0, 10);
+  return Array.from(map.values())
+    .filter((agg) => agg.ingresado - agg.salido > 0)
+    .map((agg) => {
+      const stock = agg.ingresado - agg.salido;
+      return {
+        id: `stk-calc-${agg.ubicacion_id}_${agg.material_id}`,
         tipo: 'almacenado' as const,
-        fecha: String(r.updated_at ?? '').slice(0, 10),
-        material_id: materialId || null,
-        material_nombre: mat.name,
-        material_codigo: mat.sap,
-        unidad: mat.unit,
-        cantidad: Number(r.cantidad_disponible ?? 0),
+        fecha: hoy,
+        material_id: agg.material_id,
+        material_nombre: agg.material_nombre,
+        material_codigo: agg.material_codigo,
+        unidad: agg.unidad,
+        cantidad: stock,
         proveedor: null,
         origen: null,
-        destino: dest || null,
-        proyecto_id: proy.id || null,
-        proyecto_nombre: proy.nombre || null,
+        destino: agg.destino,
+        proyecto_id: agg.proyecto_id,
+        proyecto_nombre: agg.proyecto_nombre,
         referencia: null,
         capitulo: null,
-        notas: null,
-        ubicacion_id: ubicacionId || null,
-        eliminable: true,
-      },
-    ];
-  });
+        notas: `Ingresado ${agg.ingresado} − Salido ${agg.salido}`,
+        ubicacion_id: agg.ubicacion_id,
+        eliminable: false,
+      } satisfies FilaMovimientoInventario;
+    })
+    .sort((a, b) => b.cantidad - a.cantidad);
 }
 
 function aplicarFiltros(
@@ -563,26 +682,50 @@ export async function listarMovimientosInventario(
   const limite = Math.min(Math.max(filtros.limite ?? 200, 20), 400);
   const vista = filtros.vista ?? 'todos';
 
-  const tareas: Promise<FilaMovimientoInventario[]>[] = [];
-  if (vista === 'todos' || vista === 'ingresado') {
-    tareas.push(cargarIngresos(supabase, limite));
-    tareas.push(cargarIngresosCuarentena(supabase, limite));
-  }
-  if (vista === 'todos' || vista === 'despachado') {
-    tareas.push(cargarDespachosTransferencia(supabase, limite));
-    tareas.push(cargarDespachosTelegram(supabase, limite));
-  }
-  if (vista === 'todos' || vista === 'almacenado') tareas.push(cargarAlmacenado(supabase, limite));
+  const [
+    ingresosFacturas,
+    ingresosCuarentena,
+    ingresosRecepcionCampo,
+    despachosTransferencia,
+    despachosTelegram,
+  ] = await Promise.all([
+    cargarIngresos(supabase, limite),
+    cargarIngresosCuarentena(supabase, limite),
+    cargarIngresosRecepcionCampo(supabase, limite),
+    cargarDespachosTransferencia(supabase, limite),
+    cargarDespachosTelegram(supabase, limite),
+  ]);
 
-  const lotes = await Promise.all(tareas);
-  const merged = lotes.flat().sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const todosIngresos = [
+    ...ingresosFacturas,
+    ...ingresosCuarentena,
+    ...ingresosRecepcionCampo,
+  ].sort((a, b) =>
+    b.fecha.localeCompare(a.fecha),
+  );
+  const todosDespachos = [...despachosTransferencia, ...despachosTelegram].sort((a, b) =>
+    b.fecha.localeCompare(a.fecha),
+  );
+  const filasStock = calcularFilasStock(todosIngresos, todosDespachos);
+
+  let merged: FilaMovimientoInventario[];
+  if (vista === 'ingresado') merged = todosIngresos;
+  else if (vista === 'despachado') merged = todosDespachos;
+  else if (vista === 'almacenado') merged = filasStock;
+  else merged = [...todosIngresos, ...todosDespachos];
+
   const filtradas = aplicarFiltros(merged, filtros);
   const filas = filtradas.slice(0, limite);
 
+  const filtrosResumen = { ...filtros, vista: undefined as VistaMovimientoInventario | undefined };
+  const ingresosResumen = aplicarFiltros(todosIngresos, filtrosResumen);
+  const despachosResumen = aplicarFiltros(todosDespachos, filtrosResumen);
+  const stockResumen = aplicarFiltros(filasStock, filtrosResumen);
+
   const resumen = {
-    ingresado: filtradas.filter((r) => r.tipo === 'ingreso').length,
-    despachado: filtradas.filter((r) => r.tipo === 'despacho').length,
-    almacenado: filtradas.filter((r) => r.tipo === 'almacenado').length,
+    ingresado: ingresosResumen.length,
+    despachado: despachosResumen.length,
+    almacenado: stockResumen.length,
   };
 
   return { filas, resumen };

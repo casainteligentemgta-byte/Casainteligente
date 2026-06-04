@@ -1,10 +1,9 @@
 /** Comandos publicados en el menú de Telegram (setMyCommands). */
 export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'facturas', description: 'Recibir factura de compra (foto/PDF)' },
-  { command: 'factura', description: 'Igual que /facturas' },
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
-  { command: 'entrada', description: 'Nota de entrega: proveedor + productos → cola compras' },
-  { command: 'ingreso', description: 'Facturas cargadas pendientes de ingreso a almacén' },
+  { command: 'ingresomanual', description: 'Ingreso manual: obra, almacén, proveedor, materiales' },
+  { command: 'ingresofactura', description: 'Facturas precargadas (Telegram y app) → almacén' },
   { command: 'compras', description: 'Total compras e inventario por obra (ej. /compras Flamboyant)' },
   { command: 'comprasdia', description: 'Materiales comprados hoy (app y Telegram)' },
   { command: 'comprassemana', description: 'Materiales comprados esta semana' },

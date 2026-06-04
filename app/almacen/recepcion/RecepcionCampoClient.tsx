@@ -34,7 +34,7 @@ import type { LineaRecepcionCampoInput, TipoRecepcionCampo } from '@/lib/almacen
 import { createClient } from '@/lib/supabase/client';
 import { uploadRecepcionCampoDocument } from '@/lib/almacen/uploadRecepcionCampoDocument';
 
-type TabRecepcion = 'ingreso' | 'transito';
+type VistaRecepcion = 'ingreso_manual' | 'transito' | 'nota_entrega' | 'emergencia';
 type TipoIngresoManual = 'nota_entrega' | 'emergencia';
 
 type ProyectoOpt = { id: string; nombre: string };
@@ -59,8 +59,8 @@ type LineaForm = {
   cantidad: string;
 };
 
-const tabBtn =
-  'flex-1 min-w-[140px] rounded-2xl border px-4 py-4 text-sm font-black transition backdrop-blur-xl';
+const modoBtn =
+  'flex min-h-[84px] min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border px-1.5 py-3 text-center text-[10px] font-black leading-tight transition backdrop-blur-xl sm:gap-2 sm:px-2 sm:py-4 sm:text-xs';
 const panelClass =
   'rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl overflow-visible';
 const inputClass =
@@ -77,9 +77,39 @@ function extraerProveedor(extracted: Record<string, unknown> | null): string {
   return String(n ?? '—').trim() || '—';
 }
 
+function parseVistaInicial(tab: string | null): VistaRecepcion {
+  if (tab === 'transito') return 'transito';
+  if (tab === 'emergencia') return 'emergencia';
+  if (tab === 'nota') return 'nota_entrega';
+  return 'ingreso_manual';
+}
+
+function modoBtnClass(active: boolean, emergencia?: boolean): string {
+  if (!active) {
+    return 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:text-zinc-200';
+  }
+  if (emergencia) {
+    return 'border-amber-500/60 bg-amber-500/15 text-amber-300 shadow-[0_0_24px_rgba(245,158,11,0.12)]';
+  }
+  return 'border-[#FF9500]/60 bg-[#FF9500]/15 text-[#FF9500] shadow-[0_0_24px_rgba(255,149,0,0.12)]';
+}
+
 function extraerNumero(extracted: Record<string, unknown> | null): string {
   if (!extracted) return '—';
   return String(extracted.invoice_number ?? extracted.numero ?? '—').trim() || '—';
+}
+
+function tituloFormularioIngreso(vista: VistaRecepcion): string {
+  if (vista === 'emergencia') return 'Ingreso de emergencia (sin documentos)';
+  if (vista === 'nota_entrega') return 'Nota de entrega sin factura fiscal';
+  return 'Ingreso manual de materiales';
+}
+
+function etiquetaOrigenRecepcion(vista: VistaRecepcion): string {
+  if (vista === 'emergencia') return 'Origen: emergencia';
+  if (vista === 'nota_entrega') return 'Origen: nota de entrega';
+  if (vista === 'ingreso_manual') return 'Origen: ingreso manual';
+  return '';
 }
 
 function RecepcionCargando() {
@@ -101,16 +131,8 @@ export default function RecepcionCampoClient() {
 
   const pendienteDestacado = searchParams.get('pendiente')?.trim() || '';
   const tabInicial = searchParams.get('tab');
-  const [tab, setTab] = useState<TabRecepcion>(
-    tabInicial === 'transito' || tabInicial === 'nota' || tabInicial === 'emergencia'
-      ? tabInicial === 'transito'
-        ? 'transito'
-        : 'ingreso'
-      : 'ingreso',
-  );
-  const [tipoIngreso, setTipoIngreso] = useState<TipoIngresoManual>(
-    tabInicial === 'emergencia' ? 'emergencia' : 'nota_entrega',
-  );
+  const [vista, setVista] = useState<VistaRecepcion>(() => parseVistaInicial(tabInicial));
+  const tipoIngreso: TipoIngresoManual = vista === 'emergencia' ? 'emergencia' : 'nota_entrega';
   const [cantidadNueva, setCantidadNueva] = useState('1');
   const [materialObraId, setMaterialObraId] = useState('');
   const [materialObraSel, setMaterialObraSel] = useState<MaterialCampoOpcion | null>(null);
@@ -149,15 +171,12 @@ export default function RecepcionCampoClient() {
   const cargarPendientes = useCallback(async () => {
     setLoadingPendientes(true);
     try {
-      const res = await fetch(apiUrl('/api/facturas-canal/pendientes?para=panel_canal'), {
+      const res = await fetch(apiUrl('/api/facturas-canal/pendientes?para=transito_ingreso'), {
         cache: 'no-store',
       });
       const json = (await res.json()) as { pendientes?: PendienteCanal[]; error?: string };
       if (!res.ok) throw new Error(json.error ?? 'No se pudieron cargar facturas');
-      const lista = (json.pendientes ?? []).filter((p) =>
-        ['extraido', 'aprobado_sistema', 'confirmado', 'pendiente', 'procesando'].includes(p.estado),
-      );
-      setPendientes(lista);
+      setPendientes(json.pendientes ?? []);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al cargar facturas en tránsito');
       setPendientes([]);
@@ -167,16 +186,16 @@ export default function RecepcionCampoClient() {
   }, []);
 
   useEffect(() => {
-    if (tab === 'transito') void cargarPendientes();
-  }, [tab, cargarPendientes]);
+    if (vista === 'transito') void cargarPendientes();
+  }, [vista, cargarPendientes]);
 
   useEffect(() => {
-    if (!pendienteDestacado || loadingPendientes || tab !== 'transito') return;
+    if (!pendienteDestacado || loadingPendientes || vista !== 'transito') return;
     const t = window.setTimeout(() => {
       pendienteDestacadoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 120);
     return () => window.clearTimeout(t);
-  }, [pendienteDestacado, loadingPendientes, tab, pendientes.length]);
+  }, [pendienteDestacado, loadingPendientes, vista, pendientes.length]);
 
   function agregarMaterial(m: MaterialCampoOpcion, cantidadOverride?: string) {
     const qty = (cantidadOverride ?? cantidadNueva).trim().replace(',', '.');
@@ -362,6 +381,11 @@ export default function RecepcionCampoClient() {
         }
       }
 
+      const origenObs = etiquetaOrigenRecepcion(vista);
+      const obsUsuario = observaciones.trim();
+      const observacionesPayload =
+        [origenObs, obsUsuario].filter(Boolean).join(' · ') || null;
+
       const res = await fetch(apiUrl('/api/almacen/recepcion/manual'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -373,7 +397,7 @@ export default function RecepcionCampoClient() {
           tipo: tipoManual,
           num_doc: numDoc.trim() || (tipoIngreso === 'emergencia' ? 'EMERGENCIA' : 'NOTA-ENTREGA'),
           lineas: lineasPayload,
-          observaciones: observaciones.trim() || null,
+          observaciones: observacionesPayload,
           soporte_storage_path: soporte?.path ?? null,
           soporte_file_name: soporte?.fileName ?? null,
           soporte_mime_type: soporte?.mimeType ?? null,
@@ -398,9 +422,11 @@ export default function RecepcionCampoClient() {
     });
   }
 
-  const tabs: { id: TabRecepcion; label: string; icon: typeof FileText }[] = [
-    { id: 'ingreso', label: 'Ingreso manual', icon: Package },
-    { id: 'transito', label: 'Facturas en Tránsito', icon: FileText },
+  const modos: { id: VistaRecepcion; label: string; icon: typeof FileText }[] = [
+    { id: 'ingreso_manual', label: 'Ingreso manual', icon: Package },
+    { id: 'transito', label: 'Facturas en tránsito', icon: FileText },
+    { id: 'nota_entrega', label: 'Nota de entrega', icon: Truck },
+    { id: 'emergencia', label: 'Emergencia (sin papeles)', icon: Zap },
   ];
 
   if (!montado) return <RecepcionCargando />;
@@ -417,39 +443,31 @@ export default function RecepcionCampoClient() {
             Almacén
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF9500]">
-              Recepción de materiales
-            </p>
-            <h1 className="text-lg font-black text-white">FRM · Campo Margarita</h1>
+            <h1 className="text-lg font-black text-white">Recepción de materiales</h1>
           </div>
           <Package className="h-8 w-8 text-[#FF9500]/80" aria-hidden />
-        </div>
-
-        <div className="mx-auto flex max-w-4xl flex-wrap gap-2 px-4 pb-4">
-          {tabs.map((t) => {
-            const active = tab === t.id;
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`${tabBtn} ${
-                  active
-                    ? 'border-[#FF9500]/60 bg-[#FF9500]/15 text-[#FF9500] shadow-[0_0_24px_rgba(255,149,0,0.12)]'
-                    : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:text-zinc-200'
-                }`}
-              >
-                <Icon className="mx-auto mb-1.5 h-5 w-5" />
-                <span className="block leading-tight">{t.label}</span>
-              </button>
-            );
-          })}
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl space-y-5 px-4 py-6 pb-24">
-        {tab === 'transito' ? (
+        <div className="flex gap-1.5 sm:gap-2">
+          {modos.map((m) => {
+            const active = vista === m.id;
+            const Icon = m.icon;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setVista(m.id)}
+                className={`${modoBtn} ${modoBtnClass(active, m.id === 'emergencia')}`}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                <span className="block px-1">{m.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {vista === 'transito' ? (
           <section className={panelClass}>
             <div className="mb-4 flex items-center justify-between gap-2">
               <h2 className="text-sm font-black text-white">Facturas precargadas (Telegram)</h2>
@@ -530,12 +548,6 @@ export default function RecepcionCampoClient() {
                             Fast-Track aplicado
                           </span>
                         ) : null}
-                        <Link
-                          href={`/almacen/procurement?fromTelegram=${p.id}`}
-                          className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-bold text-zinc-300"
-                        >
-                          Abrir recepción IA
-                        </Link>
                       </div>
                     </li>
                   );
@@ -545,39 +557,8 @@ export default function RecepcionCampoClient() {
           </section>
         ) : (
           <section className="space-y-4">
-            <div className={`${panelClass} flex flex-wrap gap-2`}>
-              <button
-                type="button"
-                onClick={() => setTipoIngreso('nota_entrega')}
-                className={`flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-black transition ${
-                  tipoIngreso === 'nota_entrega'
-                    ? 'border-[#FF9500]/60 bg-[#FF9500]/15 text-[#FF9500]'
-                    : 'border-white/10 bg-[#0A0A0F] text-zinc-400 hover:border-white/20'
-                }`}
-              >
-                <Truck className="h-4 w-4" />
-                Nota de entrega
-              </button>
-              <button
-                type="button"
-                onClick={() => setTipoIngreso('emergencia')}
-                className={`flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-black transition ${
-                  tipoIngreso === 'emergencia'
-                    ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
-                    : 'border-white/10 bg-[#0A0A0F] text-zinc-400 hover:border-white/20'
-                }`}
-              >
-                <Zap className="h-4 w-4" />
-                Emergencia (sin papeles)
-              </button>
-            </div>
-
             <div className={panelClass}>
-              <h2 className="mb-4 text-sm font-black text-white">
-                {tipoIngreso === 'emergencia'
-                  ? 'Ingreso de emergencia (sin documentos)'
-                  : 'Nota de entrega sin factura fiscal'}
-              </h2>
+              <h2 className="mb-4 text-sm font-black text-white">{tituloFormularioIngreso(vista)}</h2>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
@@ -655,7 +636,7 @@ export default function RecepcionCampoClient() {
                     Artículos a ingresar
                   </h3>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Elija materiales de la obra en el listado o agregue nuevos a esa lista.
+                    Elija materiales de la obra, modifique nombres, borre ítems de la lista o agregue nuevos.
                   </p>
                 </div>
                 {lineas.length > 0 ? (
@@ -742,122 +723,139 @@ export default function RecepcionCampoClient() {
               </p>
 
               {lineas.length > 0 ? (
-                <ul className="mt-4 space-y-3">
-                  {lineas.map((l, idx) => {
-                    const editando = lineaEditandoKey === l.key;
-                    return (
-                      <li
-                        key={l.key}
-                        className="rounded-xl border border-white/10 bg-[#0A0A0F] p-3"
-                      >
-                        {editando ? (
-                          <div className="space-y-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#FF9500]">
-                              Modificar artículo {idx + 1}
-                            </p>
-                            <SelectorMaterialObraRecepcion
-                              proyectoId={proyectoId}
-                              ubicacionId={ubicacionId}
-                              value={editLineaMaterialId}
-                              onChange={setEditLineaMaterialId}
-                              onMaterialSeleccionado={setEditLineaMaterial}
-                              onMaterialActualizado={sincronizarMaterialActualizado}
-                              onMaterialEliminado={sincronizarMaterialEliminado}
-                              disabled={isSubmitting || !proyectoId}
-                              selectClassName={selectClass}
-                              inputClassName={inputClass}
-                            />
-                            <label className="block w-36">
-                              <span className="text-[10px] font-bold uppercase text-[#FF9500]">
-                                Cantidad
-                              </span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="any"
-                                inputMode="decimal"
-                                value={editLineaCantidad}
-                                onChange={(e) => setEditLineaCantidad(e.target.value)}
-                                disabled={isSubmitting}
-                                className={`${inputClass} py-3 text-center text-lg font-black`}
+                <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-[#0A0A0F]">
+                  <div className="hidden border-b border-white/10 bg-white/[0.03] px-3 py-2 sm:grid sm:grid-cols-[2.5rem_minmax(0,1fr)_9rem_auto] sm:gap-3 sm:px-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">#</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      Material
+                    </span>
+                    <span className="text-center text-[10px] font-bold uppercase tracking-widest text-[#FF9500]">
+                      Cantidad
+                    </span>
+                    <span className="text-right text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      Acciones
+                    </span>
+                  </div>
+                  <ul className="divide-y divide-white/10">
+                    {lineas.map((l, idx) => {
+                      const editando = lineaEditandoKey === l.key;
+                      return (
+                        <li key={l.key} className="p-3 sm:px-4">
+                          {editando ? (
+                            <div className="space-y-3">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-[#FF9500]">
+                                Modificar artículo {idx + 1}
+                              </p>
+                              <SelectorMaterialObraRecepcion
+                                proyectoId={proyectoId}
+                                ubicacionId={ubicacionId}
+                                value={editLineaMaterialId}
+                                onChange={setEditLineaMaterialId}
+                                onMaterialSeleccionado={setEditLineaMaterial}
+                                onMaterialActualizado={sincronizarMaterialActualizado}
+                                onMaterialEliminado={sincronizarMaterialEliminado}
+                                disabled={isSubmitting || !proyectoId}
+                                selectClassName={selectClass}
+                                inputClassName={inputClass}
                               />
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={guardarEdicionLinea}
-                                disabled={isSubmitting}
-                                className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-2 text-[10px] font-black uppercase text-emerald-200"
-                              >
-                                Guardar cambios
-                              </button>
-                              <button
-                                type="button"
-                                onClick={cancelarEdicionLinea}
-                                disabled={isSubmitting}
-                                className="rounded-lg border border-zinc-700 px-3 py-2 text-[10px] font-bold uppercase text-zinc-400"
-                              >
-                                Cancelar
-                              </button>
+                              <label className="block max-w-xs">
+                                <span className="text-[10px] font-bold uppercase text-[#FF9500]">
+                                  Cantidad
+                                </span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  inputMode="decimal"
+                                  value={editLineaCantidad}
+                                  onChange={(e) => setEditLineaCantidad(e.target.value)}
+                                  disabled={isSubmitting}
+                                  className={`${inputClass} mt-1.5 py-3 text-center text-lg font-black`}
+                                />
+                              </label>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={guardarEdicionLinea}
+                                  disabled={isSubmitting}
+                                  className="rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-2 text-[10px] font-black uppercase text-emerald-200"
+                                >
+                                  Guardar cambios
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelarEdicionLinea}
+                                  disabled={isSubmitting}
+                                  className="rounded-lg border border-zinc-700 px-3 py-2 text-[10px] font-bold uppercase text-zinc-400"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap items-end gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-xs font-black text-zinc-500">
-                              {idx + 1}
+                          ) : (
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_9rem_auto] sm:items-center sm:gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-xs font-black text-zinc-500">
+                                {idx + 1}
+                              </div>
+                              <div className="min-w-0">
+                                <p
+                                  className="break-words text-sm font-bold leading-snug text-white"
+                                  title={l.nombre}
+                                >
+                                  {l.nombre}
+                                </p>
+                                <p className="mt-0.5 text-xs text-zinc-500">Unidad: {l.unidad}</p>
+                              </div>
+                              <label className="block w-full sm:w-auto">
+                                <span className="mb-1.5 block text-[10px] font-bold uppercase text-[#FF9500] sm:sr-only">
+                                  Cantidad ingresada
+                                </span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  inputMode="decimal"
+                                  value={l.cantidad}
+                                  onChange={(e) =>
+                                    setLineas((prev) =>
+                                      prev.map((x) =>
+                                        x.key === l.key ? { ...x, cantidad: e.target.value } : x,
+                                      ),
+                                    )
+                                  }
+                                  disabled={isSubmitting}
+                                  required
+                                  aria-label={`Cantidad de ${l.nombre}`}
+                                  className={`${inputClass} w-full py-3 text-center text-lg font-black sm:py-3 sm:text-xl`}
+                                />
+                              </label>
+                              <div className="flex flex-wrap gap-2 sm:justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => iniciarEdicionLinea(l)}
+                                  disabled={isSubmitting}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-2 text-[10px] font-bold text-zinc-300 hover:border-[#FF9500]/40 hover:text-[#FF9500] disabled:opacity-40"
+                                >
+                                  <Pencil className="h-4 w-4 shrink-0" />
+                                  Modificar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => quitarLinea(l.key, l.nombre)}
+                                  disabled={isSubmitting}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2.5 py-2 text-[10px] font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                                >
+                                  <Trash2 className="h-4 w-4 shrink-0" />
+                                  Borrar
+                                </button>
+                              </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-bold text-white">{l.nombre}</p>
-                              <p className="text-xs text-zinc-500">Unidad: {l.unidad}</p>
-                            </div>
-                            <label className="w-36">
-                              <span className="text-[10px] font-bold uppercase text-[#FF9500]">
-                                Cantidad ingresada
-                              </span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="any"
-                                inputMode="decimal"
-                                value={l.cantidad}
-                                onChange={(e) =>
-                                  setLineas((prev) =>
-                                    prev.map((x) =>
-                                      x.key === l.key ? { ...x, cantidad: e.target.value } : x,
-                                    ),
-                                  )
-                                }
-                                disabled={isSubmitting}
-                                required
-                                className={`${inputClass} py-4 text-center text-xl font-black`}
-                              />
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => iniciarEdicionLinea(l)}
-                                disabled={isSubmitting}
-                                className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-2 text-[10px] font-bold text-zinc-300 hover:border-[#FF9500]/40 hover:text-[#FF9500] disabled:opacity-40"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Modificar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => quitarLinea(l.key, l.nombre)}
-                                disabled={isSubmitting}
-                                className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2.5 py-2 text-[10px] font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Borrar
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               ) : (
                 <p className="mt-3 text-sm text-zinc-500">
                   Aún no hay artículos. Seleccione un material de la obra, indique cantidad y pulse

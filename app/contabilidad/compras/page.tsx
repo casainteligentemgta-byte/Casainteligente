@@ -27,7 +27,6 @@ import {
     compraCumpleFiltrosMontos,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
-import ComprasNotaTasaBcv from '@/components/contabilidad/ComprasNotaTasaBcv';
 import ComprasFiltrosPanel, {
     buildComprasFiltrosChips,
     ComprasFiltrosActivosBar,
@@ -68,7 +67,6 @@ import {
     tasaBcvCompra,
     vesAUsdConTasa,
 } from '@/lib/contabilidad/comprasMontos';
-import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
 import { useTasasBcvPorFechas } from '@/lib/contabilidad/useTasasBcvPorFechas';
 import { tasaBcvPorFechaCompra } from '@/lib/contabilidad/tasaBcvPorFechaCompra';
 import { cargarCanalParaCompras } from '@/lib/contabilidad/cargarCanalParaCompras';
@@ -113,6 +111,7 @@ import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrint
 import {
     buildLineasCuadroDesdeCompras,
     exportarComprasCuadroCsv,
+    exportarComprasCuadroExcel,
     type ComprasExportScope,
 } from '@/lib/contabilidad/comprasExportShare';
 import {
@@ -334,9 +333,6 @@ export default function ComprasPage() {
     }, [hydrated, searchParams, aplicarFiltrosCuadro]);
 
     const fechaRefActiva = fechaRef || (hydrated ? todayIso() : '');
-    const { tasa: tasaBcvHoy, fuente: tasaBcvFuente, loading: cargandoTasaHoy } = useTasaBcvHoy(
-        fechaRefActiva || undefined,
-    );
 
     const { getTasa: tasaBcvDelDiaFactura, loading: cargandoTasasFacturas } =
         useTasasBcvPorFechas(compras);
@@ -1580,6 +1576,16 @@ export default function ComprasPage() {
         [construirLineasExport],
     );
 
+    const exportarCuadroExcel = useCallback(
+        (scope: ComprasExportScope) => {
+            const filas = construirLineasExport(scope);
+            if (!exportarComprasCuadroExcel(filas, scope)) {
+                setError('No hay líneas para exportar.');
+            }
+        },
+        [construirLineasExport],
+    );
+
     const copiarCuadroPortapapeles = useCallback(
         async (scope: ComprasExportScope) => {
             const filas = construirLineasExport(scope);
@@ -1728,35 +1734,6 @@ export default function ComprasPage() {
             </div>
 
             <div style={{ padding: '20px' }}>
-                <div
-                    className="compras-no-imprimir"
-                    style={{
-                        ...glass,
-                        padding: '14px 18px',
-                        marginBottom: '16px',
-                        border: '1px solid rgba(88,86,214,0.35)',
-                    }}
-                >
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', fontWeight: 800, marginBottom: '6px' }}>
-                        TASA BCV DEL DÍA · REFERENCIA EN DÓLARES
-                    </p>
-                    {cargandoTasaHoy ? (
-                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>Consultando tasa…</p>
-                    ) : tasaBcvHoy ? (
-                        <p style={{ color: 'white', fontSize: '14px', fontWeight: 800 }}>
-                            {tasaBcvHoy.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Bs / USD
-                            <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginLeft: '8px' }}>
-                                ({tasaBcvFuente ?? 'bcv'})
-                            </span>
-                        </p>
-                    ) : (
-                        <p style={{ color: '#FF6B6B', fontSize: '12px', fontWeight: 700 }}>
-                            Sin tasa BCV. Pulse BCV en recepción de mercancía o configure ci_config_nomina.
-                        </p>
-                    )}
-                    <ComprasNotaTasaBcv />
-                </div>
-
                 {filtrosAbiertos ? (
                     <ComprasFiltrosPanel
                         valores={{
@@ -1873,6 +1850,26 @@ export default function ComprasPage() {
                                 </select>
                                 <button
                                     type="button"
+                                    onClick={() => exportarCuadroExcel(exportScope)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(52,199,89,0.55)',
+                                        background: 'rgba(52,199,89,0.22)',
+                                        color: '#bbf7d0',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    <Download size={14} />
+                                    Excel
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={() => exportarCuadroCsv(exportScope)}
                                     style={{
                                         display: 'inline-flex',
@@ -1880,16 +1877,15 @@ export default function ComprasPage() {
                                         gap: '6px',
                                         padding: '8px 12px',
                                         borderRadius: '10px',
-                                        border: '1px solid rgba(52,199,89,0.45)',
-                                        background: 'rgba(52,199,89,0.14)',
-                                        color: '#86efac',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        background: 'rgba(255,255,255,0.06)',
+                                        color: 'rgba(255,255,255,0.75)',
                                         fontSize: '11px',
                                         fontWeight: 700,
                                         cursor: 'pointer',
                                     }}
                                 >
-                                    <Download size={14} />
-                                    Excel (CSV)
+                                    CSV
                                 </button>
                                 <button
                                     type="button"
@@ -2071,20 +2067,6 @@ export default function ComprasPage() {
                             calculado con BCV del día de referencia del filtro.
                         </p>
                     ) : null}
-                    <Link
-                        className="compras-no-imprimir"
-                        href="/almacen/procurement"
-                        style={{
-                            display: 'inline-block',
-                            marginTop: '12px',
-                            color: '#5856D6',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            textDecoration: 'none',
-                        }}
-                    >
-                        Ir a recepción de mercancía →
-                    </Link>
 
                 {loading ? (
                     <div className="compras-no-imprimir" style={{ textAlign: 'center', marginTop: '60px', color: 'rgba(255,255,255,0.4)' }}>

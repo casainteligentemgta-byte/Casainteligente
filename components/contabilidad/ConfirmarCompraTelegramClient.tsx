@@ -182,17 +182,34 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     [],
   );
 
+  const lineasConDescripcion = useMemo(
+    () =>
+      (extracted?.items ?? []).filter((it) => String(it.description ?? '').trim()).length,
+    [extracted?.items],
+  );
+
   const puedeIngresarAlmacen = useMemo(
     () =>
       Boolean(
         pendiente &&
           !ingresoAlmacenOk &&
+          !loading &&
           (yaEnContabilidad ||
             (estadosListosParaIngreso.has(pendiente.estado) &&
               extracted &&
-              (extracted.supplier_name?.trim() || extracted.invoice_number?.trim()))),
+              (lineasConDescripcion > 0 ||
+                extracted.supplier_name?.trim() ||
+                extracted.invoice_number?.trim()))),
       ),
-    [pendiente, extracted, yaEnContabilidad, ingresoAlmacenOk, estadosListosParaIngreso],
+    [
+      pendiente,
+      extracted,
+      yaEnContabilidad,
+      ingresoAlmacenOk,
+      loading,
+      estadosListosParaIngreso,
+      lineasConDescripcion,
+    ],
   );
 
   const proyectoEfectivo = useMemo(
@@ -208,10 +225,20 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   /** Restaura almacén precargado si el select lo vació durante la carga de ubicaciones. */
   useEffect(() => {
     const destino = pendiente?.ubicacion_destino_id?.trim();
-    if (!destino || ubicacionId.trim() || !ubicacionesDisponibles.length) return;
-    if (!ubicacionesDisponibles.some((u) => u.id === destino)) return;
+    if (!destino || editandoUbicacion) return;
+    if (ubicacionId.trim() === destino) return;
+    if (ubicacionesDisponibles.length && !ubicacionesDisponibles.some((u) => u.id === destino)) {
+      return;
+    }
     setUbicacionId(destino);
-  }, [pendiente?.ubicacion_destino_id, ubicacionId, ubicacionesDisponibles]);
+  }, [pendiente?.ubicacion_destino_id, ubicacionId, ubicacionesDisponibles, editandoUbicacion]);
+
+  /** Asegura proyecto heredado del pendiente Telegram. */
+  useEffect(() => {
+    const pid = pendiente?.proyecto_id?.trim();
+    if (!pid || proyectoId.trim() === pid) return;
+    if (!proyectoId.trim()) setProyectoId(pid);
+  }, [pendiente?.proyecto_id, proyectoId]);
 
   const guardarExtracted = async (next: ExtractedCanalHeader) => {
     const actualizado = await actualizarPendienteCanal(pendingId, { extracted: next });
@@ -354,7 +381,39 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     await registrar();
   };
 
-  const nLineas = extracted?.items?.filter((it) => String(it.description ?? '').trim()).length ?? 0;
+  const nLineas = lineasConDescripcion;
+
+  const botonIngresoListo = Boolean(
+    puedeIngresarAlmacen &&
+      proyectoEfectivo &&
+      ubicacionEfectiva &&
+      !registrando &&
+      !ingresandoAlmacen,
+  );
+
+  const motivoBotonInactivo = useMemo(() => {
+    if (loading || !pendiente) return null;
+    if (botonIngresoListo) return null;
+    if (registrando || ingresandoAlmacen) return null;
+    if (!proyectoEfectivo) return 'Seleccione la obra (proyecto).';
+    if (!ubicacionEfectiva) return 'Seleccione el almacén de ingreso.';
+    if (pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') {
+      return 'Espere el procesamiento IA o pulse Actualizar arriba.';
+    }
+    if (!puedeIngresarAlmacen) {
+      return 'Revise los datos de la factura (al menos una línea con descripción).';
+    }
+    return null;
+  }, [
+    loading,
+    pendiente,
+    botonIngresoListo,
+    registrando,
+    ingresandoAlmacen,
+    proyectoEfectivo,
+    ubicacionEfectiva,
+    puedeIngresarAlmacen,
+  ]);
 
   if (!montado) {
     return (
@@ -583,17 +642,12 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             </section>
 
             <button
+              key={`${pendiente.id}-${proyectoEfectivo}-${ubicacionEfectiva}`}
               type="button"
               data-cta="ingreso-almacen-obra"
-              disabled={
-                !puedeIngresarAlmacen ||
-                !proyectoEfectivo ||
-                !ubicacionEfectiva ||
-                registrando ||
-                ingresandoAlmacen
-              }
+              disabled={!botonIngresoListo}
               onClick={() => {
-                if (registrando || ingresandoAlmacen) return;
+                if (!botonIngresoListo) return;
                 void ingresarMercanciaAlmacen();
               }}
               className="w-full rounded-xl bg-[#34C759] disabled:opacity-50 disabled:cursor-not-allowed text-black text-sm font-bold py-3.5 flex items-center justify-center gap-2 shadow-lg shadow-[#34C759]/25"
@@ -603,29 +657,38 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {yaEnContabilidad ? 'Ingresando al almacén…' : 'Registrando ingreso…'}
                 </>
+              ) : loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cargando datos…
+                </>
               ) : (
                 'Ingresar mercancía al almacén de la obra'
               )}
             </button>
 
+            {motivoBotonInactivo ? (
+              <p className="text-center text-xs text-amber-300/90">{motivoBotonInactivo}</p>
+            ) : null}
+
             <p className="text-[11px] text-zinc-500 text-center leading-relaxed pb-2">
               {yaEnContabilidad ? (
                 <>
                   La factura ya está en el libro de compras. Este paso solo mueve el stock al
-                  almacén de la obra seleccionada. Cada línea debe traer{' '}
-                  <strong className="text-zinc-300">item_code (SKU)</strong>.
+                  almacén de la obra seleccionada. Las líneas se vinculan por SKU o por nombre en el
+                  catálogo de la obra.
                 </>
               ) : mostrarPanelPrecargado ? (
                 <>
-                  Almacén heredado de Telegram. Un solo paso: contabilidad e ingreso al almacén. Cada
-                  línea debe traer <strong className="text-zinc-300">item_code (SKU)</strong>.
+                  Almacén heredado de Telegram. Un solo paso: contabilidad e ingreso al almacén. Las
+                  líneas se vinculan por SKU o por nombre en el catálogo de la obra.
                 </>
               ) : (
                 <>
                   Seleccione <strong className="text-zinc-300">obra</strong> y{' '}
                   <strong className="text-zinc-300">almacén</strong> para habilitar el botón verde. Si
                   la compra aún no está en contabilidad, se registrará automáticamente antes del
-                  ingreso. Cada línea debe traer <strong className="text-zinc-300">item_code (SKU)</strong>.
+                  ingreso. Las líneas se vinculan por SKU o por nombre en el catálogo de la obra.
                 </>
               )}
             </p>

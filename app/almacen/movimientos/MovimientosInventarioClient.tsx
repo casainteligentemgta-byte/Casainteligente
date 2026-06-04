@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   ArrowDownRight,
   ArrowLeft,
@@ -25,18 +26,39 @@ const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
 
 const VISTAS: { id: VistaMovimientoInventario; label: string; icon: typeof Package }[] = [
+  { id: 'ingresado', label: 'Ingresos', icon: ArrowDownRight },
+  { id: 'almacenado', label: 'Stock', icon: Package },
+  { id: 'despachado', label: 'Salidas', icon: ArrowUpRight },
   { id: 'todos', label: 'Todos', icon: Box },
-  { id: 'ingresado', label: 'Ingresado', icon: ArrowDownRight },
-  { id: 'despachado', label: 'Despachado', icon: ArrowUpRight },
-  { id: 'almacenado', label: 'Almacenado', icon: Package },
 ];
+
+function clasesBotonVista(id: VistaMovimientoInventario, active: boolean): string {
+  const base =
+    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors';
+  if (!active) {
+    if (id === 'despachado') {
+      return `${base} border-red-500/25 text-red-400/80 hover:border-red-500/45 hover:text-red-300`;
+    }
+    return `${base} border-white/10 text-zinc-400 hover:text-zinc-200`;
+  }
+  switch (id) {
+    case 'ingresado':
+      return `${base} border-emerald-500/50 bg-emerald-500/15 text-emerald-100`;
+    case 'almacenado':
+      return `${base} border-sky-500/50 bg-sky-500/15 text-sky-100`;
+    case 'despachado':
+      return `${base} border-red-500/55 bg-red-500/15 text-red-100`;
+    default:
+      return `${base} border-sky-500/50 bg-sky-500/15 text-sky-100`;
+  }
+}
 
 function badgeTipo(tipo: FilaMovimientoInventario['tipo']) {
   switch (tipo) {
     case 'ingreso':
       return 'bg-emerald-500/15 text-emerald-300';
     case 'despacho':
-      return 'bg-orange-500/15 text-orange-200';
+      return 'bg-red-500/15 text-red-300';
     default:
       return 'bg-sky-500/15 text-sky-200';
   }
@@ -47,14 +69,24 @@ function labelTipo(tipo: FilaMovimientoInventario['tipo']) {
     case 'ingreso':
       return 'Ingreso';
     case 'despacho':
-      return 'Despacho';
+      return 'Salida';
     default:
       return 'Stock';
   }
 }
 
+function parseVistaInicial(raw: string | null): VistaMovimientoInventario {
+  if (raw === 'ingresado' || raw === 'despachado' || raw === 'almacenado' || raw === 'todos') {
+    return raw;
+  }
+  return 'todos';
+}
+
 export default function MovimientosInventarioClient() {
-  const [vista, setVista] = useState<VistaMovimientoInventario>('todos');
+  const searchParams = useSearchParams();
+  const [vista, setVista] = useState<VistaMovimientoInventario>(() =>
+    parseVistaInicial(searchParams.get('vista')),
+  );
   const [proveedorInput, setProveedorInput] = useState('');
   const [destinoInput, setDestinoInput] = useState('');
   const [materialInput, setMaterialInput] = useState('');
@@ -273,7 +305,7 @@ export default function MovimientosInventarioClient() {
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl md:text-3xl font-black tracking-tight">Movimientos de almacén</h1>
             <p className="text-xs text-zinc-500 mt-1">
-              Compras (ingresos), salidas (despachos) y stock — selección múltiple y borrado.
+              Ingresos: compras, cuarentena y recepción en campo (manual, nota, emergencia, tránsito). Salidas: egresos. Stock: ingresado − salido.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -314,17 +346,17 @@ export default function MovimientosInventarioClient() {
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/80">Ingresos</p>
             <p className="text-2xl font-black text-emerald-200">{resumen.ingresado}</p>
-            <p className="text-[11px] text-zinc-500">líneas de compra registradas</p>
-          </div>
-          <div className="rounded-xl border border-orange-500/25 bg-orange-950/20 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-300/80">Despachos</p>
-            <p className="text-2xl font-black text-orange-100">{resumen.despachado}</p>
-            <p className="text-[11px] text-zinc-500">transferencias y egresos Telegram</p>
+            <p className="text-[11px] text-zinc-500">compras, cuarentena y recepción en campo</p>
           </div>
           <div className="rounded-xl border border-sky-500/25 bg-sky-950/20 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/80">Almacenado</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/80">Stock</p>
             <p className="text-2xl font-black text-sky-100">{resumen.almacenado}</p>
-            <p className="text-[11px] text-zinc-500">SKUs con stock &gt; 0</p>
+            <p className="text-[11px] text-zinc-500">materiales con saldo ingresado − salido</p>
+          </div>
+          <div className="rounded-xl border border-red-500/30 bg-red-950/25 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/90">Salidas</p>
+            <p className="text-2xl font-black text-red-100">{resumen.despachado}</p>
+            <p className="text-[11px] text-zinc-500">egresos del almacén (transferencias y Telegram)</p>
           </div>
         </div>
 
@@ -337,11 +369,7 @@ export default function MovimientosInventarioClient() {
                 key={v.id}
                 type="button"
                 onClick={() => setVista(v.id)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${
-                  active
-                    ? 'border-sky-500/50 bg-sky-500/15 text-sky-100'
-                    : 'border-white/10 text-zinc-400 hover:text-zinc-200'
-                }`}
+                className={clasesBotonVista(v.id, active)}
               >
                 <Icon className="h-3.5 w-3.5" />
                 {v.label}
@@ -538,6 +566,9 @@ export default function MovimientosInventarioClient() {
                       </td>
                       <td className="p-3 text-right font-mono text-zinc-200">
                         {f.cantidad > 0 ? `${f.cantidad} ${f.unidad}` : '—'}
+                        {f.tipo === 'almacenado' && f.notas ? (
+                          <p className="text-[10px] text-zinc-500 font-sans mt-0.5">{f.notas}</p>
+                        ) : null}
                       </td>
                       <td className="p-3 text-zinc-400 max-w-[140px] truncate">{f.proveedor ?? '—'}</td>
                       <td className="p-3 text-zinc-400 text-xs max-w-[180px]">

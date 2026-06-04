@@ -1,11 +1,26 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/nexus/GlassCard';
-import AeropuertoRelojPizarra from '@/components/home/AeropuertoRelojPizarra';
 import { cn } from '@/lib/utils';
+
+const AeropuertoRelojPizarra = dynamic(
+  () => import('@/components/home/AeropuertoRelojPizarra'),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="flex flex-1 min-h-0 max-h-full flex-col justify-center px-0 mb-0"
+        aria-hidden
+      >
+        <div className="split-flap-board split-flap-board--dense w-full min-h-[7.5rem] rounded-xl sm:rounded-2xl landscape:min-h-[5.5rem]" />
+      </div>
+    ),
+  },
+);
 
 type StatTileProps = {
   href?: string;
@@ -48,6 +63,7 @@ function StatTile({
         )}
       </div>
       <p
+        suppressHydrationWarning
         className={cn(
           'text-2xl sm:text-3xl landscape:text-xl font-bold tracking-tighter leading-none',
           valueClass,
@@ -88,10 +104,12 @@ function formatDayLabel(now: Date): string {
 export default function DashboardPage() {
   const [productCount, setProductCount] = useState<number | null>(null);
   const [clientCount, setClientCount] = useState<number | null>(null);
-  /** Solo en cliente: evita mismatch Node vs navegador en toLocaleDateString. */
+  /** Solo en cliente: evita mismatch SSR vs navegador (fecha, conteos). */
   const [dayLabel, setDayLabel] = useState('');
+  const [clientReady, setClientReady] = useState(false);
 
   useEffect(() => {
+    setClientReady(true);
     setDayLabel(formatDayLabel(new Date()));
     const supabase = createClient();
     supabase
@@ -103,6 +121,10 @@ export default function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .then(({ count }) => setClientCount(count ?? 0));
   }, []);
+
+  const dash = '\u2014';
+  const clientesValue = clientReady ? (clientCount ?? dash) : dash;
+  const productosValue = clientReady ? (productCount ?? dash) : dash;
 
   return (
     <article className="home-inicio flex flex-col overflow-hidden px-4 pt-4 pb-2 sm:pt-5 landscape:pt-3 landscape:px-5 landscape:pb-2">
@@ -142,7 +164,7 @@ export default function DashboardPage() {
             actionHref="/clientes/nuevo"
             actionColor="var(--ios-blue)"
             icon="👥"
-            value={clientCount ?? '—'}
+            value={clientesValue}
             label="Clientes"
             valueClass="text-[var(--ios-blue)]"
             cardClass="!bg-blue-500/5 border-blue-500/20"
@@ -166,7 +188,7 @@ export default function DashboardPage() {
             actionHref="/productos/nuevo"
             actionColor="var(--ios-orange)"
             icon="📦"
-            value={productCount ?? '—'}
+            value={productosValue}
             label="Productos"
             valueClass="text-[var(--ios-orange)]"
             cardClass="!bg-orange-500/5 border-orange-500/20"

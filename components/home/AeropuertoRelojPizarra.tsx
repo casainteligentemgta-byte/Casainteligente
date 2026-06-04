@@ -126,9 +126,11 @@ type Props = {
 };
 
 export default function AeropuertoRelojPizarra({ className, dense = false }: Props) {
+  const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
+    setMounted(true);
     setNow(new Date());
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
@@ -155,6 +157,22 @@ export default function AeropuertoRelojPizarra({ className, dense = false }: Pro
   }, [now]);
 
   const horaLegible = partes.listo ? `${partes.h}:${partes.m}:${partes.s}` : '';
+
+  if (!mounted) {
+    return (
+      <div
+        className={cn('min-h-0 flex flex-col justify-center', dense ? 'px-0 mb-0' : 'px-6 mb-6', className)}
+        aria-hidden
+      >
+        <div
+          className={cn(
+            'split-flap-board w-full rounded-xl sm:rounded-2xl',
+            dense ? 'split-flap-board--dense min-h-[7.5rem] landscape:min-h-[5.5rem]' : 'px-4 py-5 sm:px-8 sm:py-7',
+          )}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

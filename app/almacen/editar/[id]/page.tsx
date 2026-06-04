@@ -16,6 +16,7 @@ import {
   Route,
 } from 'lucide-react';
 import InventarioClasificacionFields from '@/components/almacen/InventarioClasificacionFields';
+import SelectorUnidadMedida from '@/components/almacen/SelectorUnidadMedida';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 
 type StockFilaEdit = {
@@ -573,17 +574,13 @@ export default function EditInventoryItemPage() {
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Unidad</label>
-                  <select
+                  <SelectorUnidadMedida
                     value={item.unit}
-                    onChange={(e) => setItem((prev) => (prev ? { ...prev, unit: e.target.value } : prev))}
+                    onChange={(unit) => setItem((prev) => (prev ? { ...prev, unit } : prev))}
+                    units={units.map((u) => ({ code: u.code, name: u.name }))}
                     className="w-full bg-black border border-zinc-800 rounded-xl py-4 px-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all"
-                  >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.code}>
-                        {u.code} - {u.name}
-                      </option>
-                    ))}
-                  </select>
+                    inputClassName="w-full bg-black border border-zinc-800 rounded-xl py-4 px-4 font-bold outline-none focus:bg-white focus:text-black focus:border-white transition-all uppercase"
+                  />
                 </div>
               </div>
 

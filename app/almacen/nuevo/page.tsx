@@ -19,6 +19,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import InventarioClasificacionFields from '@/components/almacen/InventarioClasificacionFields';
+import SelectorUnidadMedida from '@/components/almacen/SelectorUnidadMedida';
 
 type Deposit = { id: string; code: string; name: string; locality: string | null; is_default: boolean };
 type Furniture = {
@@ -105,13 +106,12 @@ export default function NewInventoryItemPage() {
       return def?.id ?? depList[0]?.id ?? '';
     });
     const unitRows = (u.data ?? []) as UnitRow[];
-    const unitCodes = new Set(unitRows.map((x) => x.code));
     const unitFallback = unitRows.find((x) => x.code === 'UND')?.code ?? unitRows[0]?.code ?? 'UND';
 
     setItem((prev) => ({
       ...prev,
       category_id: prev.category_id || (c.data as Category[] | undefined)?.[0]?.id || '',
-      unit: prev.unit && unitCodes.has(prev.unit) ? prev.unit : unitFallback,
+      unit: prev.unit || unitFallback,
     }));
 
     const { data: prodData, error: prodErr } = await supabase
@@ -389,17 +389,13 @@ export default function NewInventoryItemPage() {
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
                     Unidad
                   </label>
-                  <select
+                  <SelectorUnidadMedida
                     value={item.unit}
-                    onChange={(e) => setItem({ ...item, unit: e.target.value })}
+                    onChange={(unit) => setItem({ ...item, unit })}
+                    units={units.map((u) => ({ code: u.code, name: u.name }))}
                     className="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black"
-                  >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.code} className="text-black">
-                        {u.code} — {u.name}
-                      </option>
-                    ))}
-                  </select>
+                    inputClassName="w-full bg-black border border-zinc-800 rounded-xl p-4 font-bold outline-none focus:bg-white focus:text-black uppercase"
+                  />
                 </div>
               </div>
 
