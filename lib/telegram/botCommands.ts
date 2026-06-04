@@ -4,7 +4,11 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
   { command: 'ingresonotas', description: 'Nota de entrega: proyecto, almacén, proveedor, stock' },
   { command: 'nota', description: 'Alias de /ingresonotas (nota de entrega)' },
-  { command: 'emergencia', description: 'Ingreso urgente: obra, almacén, artículos, stock' },
+  {
+    command: 'ingresoemergencia',
+    description: 'Emergencia sin papeles: proyecto, almacén, stock',
+  },
+  { command: 'emergencia', description: 'Alias de /ingresoemergencia (sin factura)' },
   { command: 'ingresomanual', description: 'Ingreso manual (mismo flujo que /nota)' },
   { command: 'ingresofactura', description: 'Proveedor → factura → cantidades → fotos → almacén' },
   { command: 'compras', description: 'Total compras e inventario por obra (ej. /compras Flamboyant)' },

@@ -163,7 +163,12 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     });
   }
 
-  if (cmd === '/emergencia' || cmd === '/urgente') {
+  if (
+    cmd === '/emergencia' ||
+    cmd === '/urgente' ||
+    cmd === '/ingresoemergencia' ||
+    cmd === '/emergencias'
+  ) {
     const admin = telegramSupabaseAdmin();
     if (!admin.ok) {
       try {
@@ -186,7 +191,13 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
         error: err instanceof Error ? err.message : 'emergencia_command_failed',
       });
     }
-    return respuestaWebhook({ ok: true, command: 'emergencia' });
+    return respuestaWebhook({
+      ok: true,
+      command:
+        cmd === '/ingresoemergencia' || cmd === '/emergencias'
+          ? 'ingresoemergencia'
+          : 'emergencia',
+    });
   }
 
   if (cmd === '/ingresomanual') {

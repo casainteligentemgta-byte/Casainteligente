@@ -108,7 +108,7 @@ function tituloPicker(modo: ProyectoPickerModo): string {
     case 'nota_entrega':
       return '📥 <b>Elige la obra</b> (nota de entrega → almacén):';
     case 'emergencia':
-      return '🚨 <b>Elige la obra</b> (ingreso en emergencia → almacén):';
+      return '🚨 <b>Elige el proyecto</b> (emergencia sin papeles → almacén):';
     case 'salida_obra':
       return '📤 <b>Elige la obra</b> (salida de material):';
     case 'salida_almacen':

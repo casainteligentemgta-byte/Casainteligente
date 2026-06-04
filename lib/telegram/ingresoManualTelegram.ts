@@ -173,14 +173,15 @@ const MENSAJE_INICIO_NOTA =
   '<code>/cancelar</code> para abortar.';
 
 const MENSAJE_INICIO_EMERGENCIA =
-  '🚨 <b>Ingreso en emergencia</b> (sin factura)\n\n' +
-  '1️⃣ Elige la <b>obra</b>.\n' +
+  '🚨 <b>Emergencia (sin papeles)</b> (<code>/ingresoemergencia</code>)\n\n' +
+  'Ingreso urgente <b>sin factura ni nota fiscal</b> — solo para material recibido de inmediato.\n\n' +
+  '1️⃣ Elige el <b>proyecto</b> (obra).\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Nombre del <b>proveedor</b>.\n' +
-  '4️⃣ <b>Número de nota</b> o referencia del documento.\n' +
-  '5️⃣ <b>Artículo</b> del catálogo (o crea uno nuevo) y <b>cantidad</b>; repite si hay más líneas.\n' +
-  '6️⃣ <b>Fotos</b> de soporte (varias permitidas).\n' +
-  '7️⃣ Observaciones y confirmar — se registra el ingreso y <b>actualiza el stock</b>.\n\n' +
+  '3️⃣ Escribe el <b>proveedor</b> (o quien entrega; use <code>No identificado</code> si aplica).\n' +
+  '4️⃣ <b>Referencia</b> del movimiento (guía, vale, ticket; <code>S/N</code> si no hay).\n' +
+  '5️⃣ <b>Artículo</b>: catálogo o <b>material nuevo</b>, cantidad; repite si hay más líneas.\n' +
+  '6️⃣ <b>Memoria fotográfica</b> opcional (material, vehículo, comprobante informal).\n' +
+  '7️⃣ <b>Observaciones</b> y pulsa <b>Registrar ingreso y actualizar stock</b>.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
 function mensajeInicioFlujo(flujo: FlujoRecepcionCampoTelegram): string {
@@ -220,7 +221,7 @@ export async function manejarComandoNotaEntregaTelegram(
   await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_NOTA_ENTREGA, 'nota_entrega');
 }
 
-/** Ingreso urgente sin factura fiscal (tipo emergencia en recepción de campo). */
+/** Emergencia sin papeles: mismo flujo guiado, tipo emergencia en recepción de campo. */
 export async function manejarComandoEmergenciaTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -516,7 +517,7 @@ async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): 
   await patchMeta(supabase, chatId, estado, { paso: 'foto' });
   const f = flujoActivo(estado);
   const tituloFoto =
-    f === FLUJO_EMERGENCIA ? '📷 <b>Fotos de soporte (emergencia)</b>'
+    f === FLUJO_EMERGENCIA ? '📷 <b>Memoria fotográfica (emergencia)</b>'
     : f === FLUJO_NOTA_ENTREGA ? '📷 <b>Fotos de la nota de entrega</b>'
     : '📷 <b>Soporte fotográfico</b> (opcional)';
   await sendTelegramMessage(
@@ -553,7 +554,7 @@ async function enviarConfirmacion(
 
   const f = m.flujo;
   const tituloConfirm =
-    f === FLUJO_EMERGENCIA ? '📋 <b>Confirmar ingreso en emergencia</b>\n'
+    f === FLUJO_EMERGENCIA ? '📋 <b>Confirmar emergencia (sin papeles)</b>\n'
     : f === FLUJO_NOTA_ENTREGA ? '📋 <b>Confirmar nota de entrega</b>\n'
     : '📋 <b>Confirmar ingreso manual</b>\n';
   const etiquetaDoc =
@@ -894,7 +895,7 @@ export async function manejarCallbackIngresoManual(
     const link = `${baseUrlApp()}/almacen/movimientos?vista=ingresos`;
     const tituloExito =
       fm.flujo === FLUJO_EMERGENCIA ?
-        `✅ <b>Ingreso en emergencia registrado</b>\nStock actualizado en almacén.\n\n`
+        `✅ <b>Emergencia registrada (sin papeles)</b>\nStock actualizado en almacén.\n\n`
       : fm.flujo === FLUJO_NOTA_ENTREGA ?
         `✅ <b>Nota de entrega registrada</b>\nStock actualizado en almacén.\n\n`
       : `✅ <b>Ingreso manual registrado</b>\n\n`;
@@ -945,7 +946,7 @@ export async function manejarTextoIngresoManual(
     });
     const promptNum =
       esEmergenciaIngreso(estado)
-        ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe el <b>número de nota</b> o referencia (use <code>S/N</code> si no aplica):`
+        ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe la <b>referencia</b> del movimiento (guía, vale, ticket; <code>S/N</code> si no hay):`
         : guiado
           ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe el <b>número de la nota de entrega</b> (use <code>S/N</code> si no tiene):`
           : `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escriba el <b>Nº de nota</b> o referencia (use <code>S/N</code> si no aplica):`;
@@ -957,8 +958,9 @@ export async function manejarTextoIngresoManual(
     const numDoc = trimmed || 'S/N';
     const guiado = esIngresoGuiadoObra(estado);
     await patchMeta(supabase, chatId, estado, { paso: 'material', num_doc: numDoc });
-    const promptMat =
-      guiado
+    const promptMat = esEmergenciaIngreso(estado)
+      ? `📄 Referencia: <b>${numDoc}</b>\n\nElige el <b>primer artículo</b> del catálogo o crea uno nuevo:`
+      : guiado
         ? `📄 Nota: <b>${numDoc}</b>\n\nElige el <b>primer artículo</b> del catálogo o crea uno nuevo:`
         : `📄 Referencia: <b>${numDoc}</b>\n\nElige el primer material:`;
     await sendTelegramMessage(chatId, promptMat, { parse_mode: 'HTML' });
@@ -1126,7 +1128,13 @@ export function esComandoNotaEntregaIngreso(texto: string): boolean {
   );
 }
 
+/** Comandos que inician ingreso urgente sin documentos fiscales. */
 export function esComandoEmergenciaIngreso(texto: string): boolean {
   const t = texto.trim().toLowerCase().split(/\s+/)[0]?.split('@')[0] ?? '';
-  return t === '/emergencia' || t === '/urgente';
+  return (
+    t === '/emergencia' ||
+    t === '/urgente' ||
+    t === '/ingresoemergencia' ||
+    t === '/emergencias'
+  );
 }

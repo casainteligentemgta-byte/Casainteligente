@@ -65,7 +65,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /ingresonotas — nota de entrega: proyecto, almacén, proveedor, artículos, fotos, stock\n' +
         '• /nota — mismo flujo que /ingresonotas\n' +
-        '• /emergencia — ingreso urgente (mismo flujo, tipo emergencia)\n' +
+        '• /ingresoemergencia — emergencia sin papeles: proyecto, almacén, artículos, stock\n' +
+        '• /emergencia — alias de /ingresoemergencia\n' +
         '• /ingresomanual — alias ingreso manual (mismo flujo que /nota)\n' +
         '• /ingresofactura — proveedor → factura → verificar cantidades → fotos → almacén\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
@@ -98,7 +99,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/agua — obra, camión, prueba PPM, litros\n' +
         '/ingresonotas — nota de entrega (proyecto → almacén → proveedor → artículos → stock)\n' +
         '/nota — alias de /ingresonotas\n' +
-        '/emergencia — ingreso en emergencia (mismo flujo, actualiza stock)\n' +
+        '/ingresoemergencia — emergencia sin papeles (proyecto → almacén → stock)\n' +
+        '/emergencia — alias de /ingresoemergencia\n' +
         '/ingresomanual — ingreso manual (mismo flujo estructurado)\n' +
         '/ingresofactura — proveedor, factura, conteo físico, fotos e ingreso a almacén\n' +
         '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
@@ -179,7 +181,12 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoNotaEntrega: true };
   }
 
-  if (cmd === '/emergencia' || cmd === '/urgente') {
+  if (
+    cmd === '/emergencia' ||
+    cmd === '/urgente' ||
+    cmd === '/ingresoemergencia' ||
+    cmd === '/emergencias'
+  ) {
     return { handled: true, comandoEmergencia: true };
   }
 
