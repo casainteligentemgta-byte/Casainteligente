@@ -2,7 +2,8 @@
 export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'facturas', description: 'Recibir factura de compra (foto/PDF)' },
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
-  { command: 'nota', description: 'Nota de entrega: obra, almacén, artículos, stock' },
+  { command: 'ingresonotas', description: 'Nota de entrega: proyecto, almacén, proveedor, stock' },
+  { command: 'nota', description: 'Alias de /ingresonotas (nota de entrega)' },
   { command: 'emergencia', description: 'Ingreso urgente: obra, almacén, artículos, stock' },
   { command: 'ingresomanual', description: 'Ingreso manual (mismo flujo que /nota)' },
   { command: 'ingresofactura', description: 'Proveedor → factura → cantidades → fotos → almacén' },

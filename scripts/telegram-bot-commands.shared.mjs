@@ -5,6 +5,7 @@
 export const TELEGRAM_BOT_COMMANDS = [
   { command: 'facturas', description: 'Recibir factura de compra (foto/PDF)' },
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
+  { command: 'ingresonotas', description: 'Nota de entrega: proyecto, almacén, proveedor, stock' },
   { command: 'ingresomanual', description: 'Ingreso manual: obra, almacén, proveedor, materiales' },
   { command: 'ingresofactura', description: 'Facturas precargadas (Telegram y app) → almacén' },
   { command: 'compras', description: 'Total compras e inventario por obra (ej. /compras Flamboyant)' },

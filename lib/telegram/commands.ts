@@ -60,10 +60,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /proyecto — cambiar obra activa (lista)\n' +
         '• /gasto — comprobante de gasto de obra\n' +
         '• /stock — inventario por entidad, obra y almacén\n' +
-        '• /stock &lt;producto&gt; — búsqueda rápida por nombre\n' +
+        '• /stock &lt;obra o material&gt; — ej. rancho flamboyant, cemento\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
-        '• /nota — nota de entrega: obra, almacén, proveedor, artículos, fotos, stock\n' +
+        '• /ingresonotas — nota de entrega: proyecto, almacén, proveedor, artículos, fotos, stock\n' +
+        '• /nota — mismo flujo que /ingresonotas\n' +
         '• /emergencia — ingreso urgente (mismo flujo, tipo emergencia)\n' +
         '• /ingresomanual — alias ingreso manual (mismo flujo que /nota)\n' +
         '• /ingresofactura — proveedor → factura → verificar cantidades → fotos → almacén\n' +
@@ -92,10 +93,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +
         '/stock — listar stock (entidad → obra → almacén)\n' +
-        '/stock cemento — búsqueda rápida por nombre\n' +
+        '/stock rancho flamboyant — stock de la obra · /stock cemento — por material\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
-        '/nota — nota de entrega (obra → almacén → proveedor → artículos → stock)\n' +
+        '/ingresonotas — nota de entrega (proyecto → almacén → proveedor → artículos → stock)\n' +
+        '/nota — alias de /ingresonotas\n' +
         '/emergencia — ingreso en emergencia (mismo flujo, actualiza stock)\n' +
         '/ingresomanual — ingreso manual (mismo flujo estructurado)\n' +
         '/ingresofactura — proveedor, factura, conteo físico, fotos e ingreso a almacén\n' +
@@ -167,7 +169,13 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoAgua: true };
   }
 
-  if (cmd === '/nota' || cmd === '/notaentrega' || cmd === '/entrada') {
+  if (
+    cmd === '/nota' ||
+    cmd === '/notaentrega' ||
+    cmd === '/entrada' ||
+    cmd === '/ingresonotas' ||
+    cmd === '/ingresonota'
+  ) {
     return { handled: true, comandoNotaEntrega: true };
   }
 

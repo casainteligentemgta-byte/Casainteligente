@@ -162,14 +162,14 @@ const MENSAJE_INICIO_MANUAL =
   '<code>/cancelar</code> para abortar.';
 
 const MENSAJE_INICIO_NOTA =
-  '📥 <b>Nota de entrega</b> (ingreso a almacén)\n\n' +
-  '1️⃣ Elige la <b>obra</b>.\n' +
+  '📥 <b>Ingreso por nota de entrega</b> (<code>/ingresonotas</code>)\n\n' +
+  '1️⃣ Elige el <b>proyecto</b> (obra).\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Nombre del <b>proveedor</b>.\n' +
-  '4️⃣ <b>Número de nota</b> de entrega.\n' +
-  '5️⃣ <b>Artículo</b> del catálogo (o crea uno nuevo) y <b>cantidad</b>; repite si hay más líneas.\n' +
-  '6️⃣ <b>Fotos</b> de la nota o del material (varias permitidas).\n' +
-  '7️⃣ Observaciones y confirmar — se registra el ingreso y <b>actualiza el stock</b>.\n\n' +
+  '3️⃣ Escribe el <b>nombre del proveedor</b>.\n' +
+  '4️⃣ <b>Número de nota</b> o referencia del documento.\n' +
+  '5️⃣ <b>Artículo</b>: elige del catálogo o <b>agrega material nuevo</b>, indica cantidad; repite si hay más líneas.\n' +
+  '6️⃣ <b>Memoria fotográfica</b> opcional (varias fotos).\n' +
+  '7️⃣ <b>Observaciones</b> y pulsa <b>Registrar ingreso y actualizar stock</b>.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
 const MENSAJE_INICIO_EMERGENCIA =
@@ -574,10 +574,15 @@ async function enviarConfirmacion(
     (nFotos > 0 ? `\n\n📷 ${nFotos} foto(s) de soporte` : '') +
     stockHint;
 
+  const textoBotonConfirmar =
+    f === FLUJO_NOTA_ENTREGA || f === FLUJO_EMERGENCIA
+      ? '✅ Registrar ingreso y actualizar stock'
+      : '✅ Registrar ingreso';
+
   await sendTelegramMessage(chatId, texto, {
     parse_mode: 'HTML',
     reply_markup: {
-      inline_keyboard: [[{ text: '✅ Registrar ingreso', callback_data: `${PREFIX}conf:ok` }]],
+      inline_keyboard: [[{ text: textoBotonConfirmar, callback_data: `${PREFIX}conf:ok` }]],
     },
   });
 }
@@ -1109,9 +1114,16 @@ export function esComandoIngresoManual(texto: string): boolean {
   return t === '/ingresomanual';
 }
 
+/** Comandos que inician el flujo nota de entrega → stock (depositario). */
 export function esComandoNotaEntregaIngreso(texto: string): boolean {
   const t = texto.trim().toLowerCase().split(/\s+/)[0]?.split('@')[0] ?? '';
-  return t === '/nota' || t === '/notaentrega' || t === '/entrada';
+  return (
+    t === '/nota' ||
+    t === '/notaentrega' ||
+    t === '/entrada' ||
+    t === '/ingresonotas' ||
+    t === '/ingresonota'
+  );
 }
 
 export function esComandoEmergenciaIngreso(texto: string): boolean {

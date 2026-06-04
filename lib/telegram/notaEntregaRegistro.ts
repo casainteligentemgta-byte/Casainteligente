@@ -109,7 +109,7 @@ export async function manejarComandoEntradaOcrTelegram(
       '1️⃣ Elige la obra.\n' +
       '2️⃣ Envía foto de la nota (IA extrae productos).\n' +
       '3️⃣ Proveedor y almacén → cola de contabilidad.\n\n' +
-      'Para ingreso directo con conteo y stock use <code>/nota</code> o <code>/entrada</code>.\n' +
+      'Para ingreso directo con conteo y stock use <code>/ingresonotas</code> o <code>/nota</code>.\n' +
       '<code>/cancelar</code> para abortar.',
     { parse_mode: 'HTML' },
   );

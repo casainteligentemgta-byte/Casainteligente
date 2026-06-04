@@ -128,7 +128,13 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     return respuestaWebhook({ ok: true, command: 'agua' });
   }
 
-  if (cmd === '/nota' || cmd === '/notaentrega' || cmd === '/entrada') {
+  if (
+    cmd === '/nota' ||
+    cmd === '/notaentrega' ||
+    cmd === '/entrada' ||
+    cmd === '/ingresonotas' ||
+    cmd === '/ingresonota'
+  ) {
     const admin = telegramSupabaseAdmin();
     if (!admin.ok) {
       try {
@@ -151,7 +157,10 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
         error: err instanceof Error ? err.message : 'nota_entrega_command_failed',
       });
     }
-    return respuestaWebhook({ ok: true, command: 'nota_entrega' });
+    return respuestaWebhook({
+      ok: true,
+      command: cmd === '/ingresonotas' || cmd === '/ingresonota' ? 'ingresonotas' : 'nota_entrega',
+    });
   }
 
   if (cmd === '/emergencia' || cmd === '/urgente') {
