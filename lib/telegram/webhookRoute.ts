@@ -206,7 +206,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     return respuestaWebhook({ ok: true, command: 'ingresomanual' });
   }
 
-  if (cmd === '/ingresofactura' || cmd === '/ingreso') {
+  if (cmd === '/ingresofactura' || cmd === '/ingresofacturas' || cmd === '/ingreso') {
     const admin = telegramSupabaseAdmin();
     if (!admin.ok) {
       try {

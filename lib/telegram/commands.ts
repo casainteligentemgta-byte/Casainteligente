@@ -179,7 +179,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoIngresoManual: true };
   }
 
-  if (cmd === '/ingresofactura' || cmd === '/ingreso') {
+  if (cmd === '/ingresofactura' || cmd === '/ingresofacturas' || cmd === '/ingreso') {
     return { handled: true, comandoIngresoFactura: true };
   }
 

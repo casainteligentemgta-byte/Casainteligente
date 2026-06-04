@@ -278,13 +278,21 @@ function buildKeyboardProveedores(
   return { inline_keyboard: buttons };
 }
 
+function etiquetaFacturaBoton(f: FacturaPendienteIngreso): string {
+  const icon = f.accion === 'ingreso_almacen' ? '📥' : '⏳';
+  const accion = f.accion === 'ingreso_almacen' ? 'ingreso' : 'confirmar';
+  return truncar(
+    `${icon} #${f.invoice_number ?? 'S/N'} · ${accion} · ${f.origenLabel.replace(/[^\w\s]/g, '').trim()}`,
+  );
+}
+
 function buildKeyboardFacturas(facturas: FacturaPendienteIngreso[], page: number) {
   const totalPages = Math.max(1, Math.ceil(facturas.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
   const slice = facturas.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
   const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((f) => [
     {
-      text: truncar(`📄 #${f.invoice_number ?? 'S/N'} · ${f.origenLabel.replace(/[^\w\s]/g, '').trim()}`),
+      text: etiquetaFacturaBoton(f),
       callback_data: `${PREFIX_FACT}${f.key}`,
     },
   ]);
@@ -305,33 +313,43 @@ async function enviarListaProveedores(
   page = 0,
 ): Promise<void> {
   const todas = await listarFacturasPendientesIngreso(supabase);
-  const facturas = facturasIngresoAlmacen(todas);
 
-  if (!facturas.length) {
+  if (!todas.length) {
     await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
     await sendTelegramMessage(
       chatId,
-      '✅ No hay facturas precargadas pendientes de ingreso a almacén.',
+      '✅ No hay facturas precargadas pendientes (ni ingreso ni confirmación de compra).',
       { parse_mode: 'HTML' },
     );
     return;
   }
 
-  const proveedores = agruparProveedores(facturas);
+  const proveedores = agruparProveedores(todas);
+  const nIngreso = facturasIngresoAlmacen(todas).length;
+  const nConfirmar = todas.filter((f) => f.accion === 'confirmar').length;
   await setTelegramContexto(supabase, chatId, {
     contexto: 'entrada_obra',
     metadata: { flujo: FLUJO_INGRESO_FACTURA, paso: 'proveedor' },
   });
 
+  const pasosIngreso =
+    nIngreso > 0
+      ? '3️⃣ Si la factura es <b>ingreso</b>: verifica cantidades → fotos → confirma.\n'
+      : '';
+  const notaConfirmar =
+    nConfirmar > 0
+      ? `\n⏳ <b>${nConfirmar}</b> factura(s) requieren <b>confirmar compra</b> en la app antes del ingreso.\n` +
+        '📥 Las marcadas como <b>ingreso</b> siguen el flujo completo aquí.\n'
+      : '';
+
   await sendTelegramMessage(
     chatId,
     '📥 <b>Ingreso desde factura precargada</b>\n\n' +
       '1️⃣ Elige el <b>proveedor</b>.\n' +
-      '2️⃣ Elige la factura.\n' +
-      '3️⃣ Verifica cantidades de cada producto.\n' +
-      '4️⃣ Fotos de soporte (varias permitidas).\n' +
-      '5️⃣ Confirma el ingreso a almacén.\n\n' +
-      `<code>/cancelar</code> para abortar.`,
+      '2️⃣ Elige la factura (⏳ confirmar · 📥 ingreso a almacén).\n' +
+      pasosIngreso +
+      notaConfirmar +
+      `\n<code>/cancelar</code> para abortar.`,
     { parse_mode: 'HTML', reply_markup: buildKeyboardProveedores(proveedores, page) },
   );
 }
@@ -343,7 +361,7 @@ async function enviarListaFacturasProveedor(
   page = 0,
 ): Promise<void> {
   const todas = await listarFacturasPendientesIngreso(supabase);
-  const facturas = facturasIngresoAlmacen(todas).filter((f) => proveedorKey(f.supplier_name) === provKey);
+  const facturas = todas.filter((f) => proveedorKey(f.supplier_name) === provKey);
 
   if (!facturas.length) {
     await enviarListaProveedores(supabase, chatId);
@@ -557,8 +575,8 @@ export async function manejarCallbackIngresoFacturaTelegram(
   }
 
   if (parsed.type === 'fact') {
-    const facturas = facturasIngresoAlmacen(await listarFacturasPendientesIngreso(supabase));
-    const hit = facturas.find((f) => f.key === parsed.key);
+    const todas = await listarFacturasPendientesIngreso(supabase);
+    const hit = todas.find((f) => f.key === parsed.key);
     if (!hit) {
       await answerCallbackQuery(params.callbackId, 'Factura no encontrada', true);
       return true;
@@ -569,10 +587,13 @@ export async function manejarCallbackIngresoFacturaTelegram(
       const link = linkConfirmarCompraTelegram(hit.pendienteId);
       await sendTelegramMessage(
         params.chatId,
-        `⏳ <b>Confirmar compra</b>\n` +
+        `⏳ <b>Confirmar compra primero</b>\n` +
           `${hit.supplier_name ?? 'Proveedor'} · #${hit.invoice_number ?? 'S/N'}\n` +
           `${hit.origenLabel}\n\n` +
-          `<a href="${link}">Abrir factura en la app</a>`,
+          'Esta factura está en tránsito: debe registrarse la compra en contabilidad y quedar ' +
+          'lista para ingreso a almacén.\n\n' +
+          `<a href="${link}">Abrir y confirmar en la app</a>\n\n` +
+          'Luego vuelva a usar <code>/ingresofactura</code> — aparecerá como 📥 ingreso.',
         { parse_mode: 'HTML' },
       );
       return true;
@@ -777,5 +798,5 @@ export function esCallbackEntradaCompra(data: string): boolean {
 
 export function esComandoIngresoFactura(texto: string): boolean {
   const t = texto.trim().toLowerCase().split(/\s+/)[0]?.split('@')[0] ?? '';
-  return t === '/ingresofactura' || t === '/ingreso';
+  return t === '/ingresofactura' || t === '/ingresofacturas' || t === '/ingreso';
 }
