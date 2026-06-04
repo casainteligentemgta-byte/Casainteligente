@@ -330,7 +330,7 @@ export async function manejarComandoStockConsultaTelegram(
     '📦 <b>Consulta de inventario por almacén</b>\n\n' +
       'Entidad → obra → almacén → listado completo de stock.\n\n' +
       '<code>/cancelar</code> para salir.\n' +
-      '<i>Búsqueda rápida por nombre:</i> <code>/stock cemento</code>',
+      '<i>Búsqueda rápida:</i> <code>/stock rancho flamboyant</code> (obra) · <code>/stock cemento</code> (material)',
     { parse_mode: 'HTML' },
   );
   await enviarPickerEntidades(supabase, chatId);

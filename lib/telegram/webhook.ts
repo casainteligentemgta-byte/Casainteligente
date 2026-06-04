@@ -139,6 +139,10 @@ import {
   manejarCallbackStockConsultaTelegram,
   manejarComandoStockConsultaTelegram,
 } from '@/lib/telegram/stockConsultaTelegram';
+import {
+  esCallbackStockObra,
+  manejarCallbackStockObraTelegram,
+} from '@/lib/telegram/stockCommand';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
@@ -411,6 +415,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledStock) {
         return NextResponse.json({ ok: true, callback: 'stock_consulta' });
+      }
+    }
+
+    if (esCallbackStockObra(cq.data)) {
+      const handledStockObra = await manejarCallbackStockObraTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledStockObra) {
+        return NextResponse.json({ ok: true, callback: 'stock_obra' });
       }
     }
 

@@ -11,7 +11,7 @@ export type ComandoTelegramResult = {
   proyectoId?: string | null;
   mensaje?: string;
   resetProyecto?: boolean;
-  /** Palabra clave tras /stock (búsqueda rápida por nombre de material). */
+  /** Palabra clave tras /stock (obra o material). */
   stockKeyword?: string;
   /** Consulta guiada: entidad → obra → almacén → stock. */
   comandoStockConsulta?: boolean;
