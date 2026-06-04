@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import IOSNavBar from '@/components/IOSNavBar';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 /** Sonner rompe el SSR en dev si se renderiza en servidor (componente interno undefined). */
 const Toaster = dynamic(() => import('sonner').then((m) => ({ default: m.Toaster })), { ssr: false });
@@ -20,8 +19,6 @@ function useResolvedPathname(): string {
  */
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const path = useResolvedPathname();
-  const [navMounted, setNavMounted] = useState(false);
-  useEffect(() => setNavMounted(true), []);
 
   const isNexus = path.startsWith('/nexus');
   /** Vista previa del presupuesto: pantalla completa sin dock ni distracciones (y sin caché de miniaturas en otros módulos). */
@@ -39,7 +36,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
       <ReactQueryProvider>
         <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-28 sm:pb-24'}>{children}</div>
       </ReactQueryProvider>
-      {!chromeMinimal && navMounted ? <IOSNavBar /> : null}
+      {!chromeMinimal ? <IOSNavBar /> : null}
       <Toaster
         theme="dark"
         position="top-center"

@@ -161,13 +161,20 @@ export default function AeropuertoRelojPizarra({ className, dense = false }: Pro
   if (!mounted) {
     return (
       <div
-        className={cn('min-h-0 flex flex-col justify-center', dense ? 'px-0 mb-0' : 'px-6 mb-6', className)}
+        suppressHydrationWarning
+        className={cn(
+          'flex flex-col justify-center min-h-0',
+          dense ? 'px-0 mb-0' : 'px-6 mb-6',
+          className,
+        )}
         aria-hidden
       >
         <div
           className={cn(
             'split-flap-board w-full rounded-xl sm:rounded-2xl',
-            dense ? 'split-flap-board--dense min-h-[7.5rem] landscape:min-h-[5.5rem]' : 'px-4 py-5 sm:px-8 sm:py-7',
+            dense
+              ? 'split-flap-board--dense min-h-[7.5rem] landscape:min-h-[5.5rem]'
+              : 'px-4 py-5 sm:px-8 sm:py-7',
           )}
         />
       </div>
@@ -176,7 +183,12 @@ export default function AeropuertoRelojPizarra({ className, dense = false }: Pro
 
   return (
     <div
-      className={cn('min-h-0 flex flex-col justify-center', dense ? 'px-0 mb-0' : 'px-6 mb-6', className)}
+      suppressHydrationWarning
+      className={cn(
+        'flex flex-col justify-center min-h-0',
+        dense ? 'px-0 mb-0' : 'px-6 mb-6',
+        className,
+      )}
     >
       <div
         className={cn(

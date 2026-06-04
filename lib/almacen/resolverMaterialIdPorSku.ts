@@ -129,16 +129,117 @@ type LineaCompraDb = {
   precio_unitario: number | null;
 };
 
+export type ResolverMaterialCompraOpts = {
+  proyectoIdFallback?: string | null;
+  ubicacionDestinoId?: string | null;
+  purchaseInvoiceId?: string | null;
+  /** Líneas OCR / Telegram si contabilidad_compra_lineas está vacía. */
+  lineasExtracted?: LineaCompraContabilidadInput[];
+};
+
+/** Proyecto para catálogo: compra → ubicación → purchase_invoice → pendiente canal. */
+export async function resolverProyectoIdParaCompra(
+  supabase: SupabaseClient,
+  opts: {
+    proyectoIdCompra?: string | null;
+    proyectoIdFallback?: string | null;
+    ubicacionDestinoId?: string | null;
+    purchaseInvoiceId?: string | null;
+  },
+): Promise<string> {
+  const directo =
+    String(opts.proyectoIdCompra ?? '').trim() ||
+    String(opts.proyectoIdFallback ?? '').trim();
+  if (directo) return directo;
+
+  const ubi = String(opts.ubicacionDestinoId ?? '').trim();
+  if (ubi) {
+    const { data: ub } = await supabase
+      .from('inv_ubicaciones')
+      .select('ci_proyecto_id')
+      .eq('id', ubi)
+      .maybeSingle();
+    const pid = String(ub?.ci_proyecto_id ?? '').trim();
+    if (pid) return pid;
+  }
+
+  const pi = String(opts.purchaseInvoiceId ?? '').trim();
+  if (pi) {
+    const { data: inv } = await supabase
+      .from('purchase_invoices')
+      .select('proyecto_id')
+      .eq('id', pi)
+      .maybeSingle();
+    const pid = String(inv?.proyecto_id ?? '').trim();
+    if (pid) return pid;
+  }
+
+  return '';
+}
+
+async function insertarLineasCompraSiVacias(
+  supabase: SupabaseClient,
+  compraId: string,
+  lineas: LineaCompraContabilidadInput[],
+): Promise<LineaCompraDb[]> {
+  const { count, error: cErr } = await supabase
+    .from('contabilidad_compra_lineas')
+    .select('id', { count: 'exact', head: true })
+    .eq('compra_id', compraId);
+
+  if (cErr) throw new Error(cErr.message);
+  if ((count ?? 0) > 0 || !lineas.length) {
+    const { data: raw } = await supabase
+      .from('contabilidad_compra_lineas')
+      .select('id,material_id,item_code,descripcion,cantidad,precio_unitario')
+      .eq('compra_id', compraId);
+    return (raw ?? []) as LineaCompraDb[];
+  }
+
+  const lineRows = lineas
+    .filter((l) => String(l.descripcion ?? '').trim())
+    .map((l) => {
+      const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : 1;
+      const precio = Number(l.precio_unitario) >= 0 ? Number(l.precio_unitario) : 0;
+      return {
+        compra_id: compraId,
+        material_id: l.material_id?.trim() || null,
+        descripcion: String(l.descripcion).trim(),
+        item_code: l.item_code?.trim() || null,
+        unidad: (l.unidad || 'UND').trim() || 'UND',
+        cantidad,
+        precio_unitario: precio,
+        subtotal: cantidad * precio,
+      };
+    });
+
+  if (!lineRows.length) return [];
+
+  const { error: insErr } = await supabase.from('contabilidad_compra_lineas').insert(lineRows);
+  if (insErr) throw new Error(insErr.message);
+
+  const { data: raw, error } = await supabase
+    .from('contabilidad_compra_lineas')
+    .select('id,material_id,item_code,descripcion,cantidad,precio_unitario')
+    .eq('compra_id', compraId);
+
+  if (error) throw new Error(error.message);
+  return (raw ?? []) as LineaCompraDb[];
+}
+
 /**
  * Rellena material_id en contabilidad_compra_lineas por item_code (facturas Telegram ya confirmadas).
+ * Crea materiales faltantes en catálogo cuando hay proyecto/ubicación (no bloquea el ingreso).
  */
 export async function resolverMaterialIdLineasCompra(
   supabase: SupabaseClient,
   compraId: string,
+  opts?: ResolverMaterialCompraOpts,
 ): Promise<{
   total: number;
   vinculadas: number;
   sinMatch: string[];
+  materialesCreados: number;
   lineas: Array<{
     material_id: string;
     descripcion: string;
@@ -146,25 +247,42 @@ export async function resolverMaterialIdLineasCompra(
     precio_unitario: number;
   }>;
 }> {
-  const { data: raw, error } = await supabase
-    .from('contabilidad_compra_lineas')
-    .select('id,material_id,item_code,descripcion,cantidad,precio_unitario')
-    .eq('compra_id', compraId);
+  let lineas = await insertarLineasCompraSiVacias(
+    supabase,
+    compraId,
+    opts?.lineasExtracted ?? [],
+  );
 
-  if (error) throw new Error(error.message);
-
-  const lineas = (raw ?? []) as LineaCompraDb[];
   const { data: compraRow } = await supabase
     .from('contabilidad_compras')
-    .select('proyecto_id, fecha, ubicacion_destino_id')
+    .select('proyecto_id, fecha, ubicacion_destino_id, purchase_invoice_id')
     .eq('id', compraId)
     .maybeSingle();
   const compraMeta = compraRow as {
     proyecto_id?: string;
     fecha?: string;
     ubicacion_destino_id?: string | null;
+    purchase_invoice_id?: string | null;
   } | null;
-  const proyectoId = String(compraMeta?.proyecto_id ?? '').trim();
+
+  const ubicacionDestino =
+    String(compraMeta?.ubicacion_destino_id ?? opts?.ubicacionDestinoId ?? '').trim() || null;
+
+  const proyectoId = await resolverProyectoIdParaCompra(supabase, {
+    proyectoIdCompra: compraMeta?.proyecto_id,
+    proyectoIdFallback: opts?.proyectoIdFallback,
+    ubicacionDestinoId: ubicacionDestino,
+    purchaseInvoiceId:
+      compraMeta?.purchase_invoice_id ?? opts?.purchaseInvoiceId ?? null,
+  });
+
+  if (proyectoId && !String(compraMeta?.proyecto_id ?? '').trim()) {
+    await supabase
+      .from('contabilidad_compras')
+      .update({ proyecto_id: proyectoId })
+      .eq('id', compraId);
+  }
+
   const fecha =
     (compraMeta?.fecha ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
 
@@ -177,13 +295,25 @@ export async function resolverMaterialIdLineasCompra(
     precio_unitario: Number(l.precio_unitario ?? 0),
   }));
 
-  const { lineas: enriquecidas, sinMatch } = proyectoId
-    ? await asegurarMaterialesLineasCompra(supabase, inputs, {
-        proyectoId,
-        fecha,
-        ubicacionDestinoId: compraMeta?.ubicacion_destino_id,
-      })
-    : await enriquecerLineasConMaterial(supabase, inputs);
+  let enriquecidas: LineaCompraContabilidadInput[];
+  let sinMatch: string[];
+  let materialesCreados = 0;
+
+  if (proyectoId) {
+    const r = await asegurarMaterialesLineasCompra(supabase, inputs, {
+      proyectoId,
+      fecha,
+      ubicacionDestinoId: ubicacionDestino,
+    });
+    enriquecidas = r.lineas;
+    sinMatch = r.sinMatch;
+    materialesCreados = r.creados;
+  } else {
+    const r = await enriquecerLineasConMaterial(supabase, inputs);
+    enriquecidas = r.lineas;
+    sinMatch = r.sinMatch;
+  }
+
   let vinculadas = 0;
 
   const paraInventario: Array<{
@@ -205,13 +335,13 @@ export async function resolverMaterialIdLineasCompra(
     }
     if (matId) {
       vinculadas += 1;
-      const cantidad = Number(l.cantidad ?? 0);
+      const cantidad = Number(l.cantidad ?? enr?.cantidad ?? 0);
       if (cantidad > 0) {
         paraInventario.push({
           material_id: matId,
-          descripcion: String(l.descripcion ?? '').trim() || 'Ítem',
+          descripcion: String(l.descripcion ?? enr?.descripcion ?? '').trim() || 'Ítem',
           cantidad,
-          precio_unitario: Number(l.precio_unitario ?? 0),
+          precio_unitario: Number(l.precio_unitario ?? enr?.precio_unitario ?? 0),
         });
       }
     }
@@ -221,6 +351,7 @@ export async function resolverMaterialIdLineasCompra(
     total: lineas.length,
     vinculadas,
     sinMatch,
+    materialesCreados,
     lineas: paraInventario,
   };
 }

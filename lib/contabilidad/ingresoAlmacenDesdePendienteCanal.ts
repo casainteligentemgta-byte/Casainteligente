@@ -3,6 +3,8 @@ import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInve
 import { approveAllQualityInspectionsForInvoice } from '@/lib/almacen/approveQualityInspection';
 import { crearCuarentenaDesdeFactura } from '@/lib/almacen/crearCuarentenaDesdeFactura';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
+import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import {
   mensajeLineasSinMaterialSku,
   resolverMaterialIdLineasCompra,
@@ -17,11 +19,36 @@ export type ResultadoIngresoAlmacenCanal = {
   viaCuarentena?: boolean;
   aprobadas?: number;
   error?: string;
+  /** Avisos no bloqueantes (p. ej. líneas sin SKU que se crearon en catálogo). */
+  avisos?: string[];
+  materialesCreados?: number;
+  sinMatch?: string[];
 };
+
+function lineasDesdeExtractedCanal(ex: ExtractedCanalHeader | null): LineaCompraContabilidadInput[] {
+  if (!ex?.items?.length) return [];
+  return ex.items
+    .filter((it) => String(it.description ?? '').trim())
+    .map((it) => {
+      const cantidad = Number(it.quantity) > 0 ? Number(it.quantity) : 1;
+      const precio = Number(it.unit_price) >= 0 ? Number(it.unit_price) : 0;
+      return {
+        descripcion: String(it.description ?? '').trim(),
+        item_code: String(it.item_code ?? '').trim() || null,
+        unidad: String(it.unit ?? 'UND').trim() || 'UND',
+        cantidad,
+        precio_unitario: precio,
+      };
+    });
+}
 
 export type OpcionesIngresoAlmacenCanal = {
   /** Evita releer purchase_invoice_id del pendiente (p. ej. justo tras confirmar). */
   purchaseInvoiceId?: string;
+  /** Cantidades físicas verificadas en Telegram (/ingresofactura). */
+  cantidadesRecibidas?: Array<{ material_id: string; cantidad: number }>;
+  /** Primera foto de soporte (recepción). */
+  documentoStoragePath?: string | null;
 };
 
 type LineaStock = { material_id: string; cantidad: number };
@@ -193,7 +220,7 @@ export async function ingresoAlmacenDesdePendienteCanal(
 ): Promise<ResultadoIngresoAlmacenCanal> {
   const { data: pendiente, error: pErr } = await supabase
     .from('ci_facturas_canal_pendientes')
-    .select('id,purchase_invoice_id,ubicacion_destino_id')
+    .select('id,purchase_invoice_id,ubicacion_destino_id,proyecto_id,extracted')
     .eq('id', pendingId)
     .maybeSingle();
 
@@ -241,16 +268,48 @@ export async function ingresoAlmacenDesdePendienteCanal(
       };
     }
 
-    const resuelto = await resolverMaterialIdLineasCompra(supabase, String(compra.id));
-    const lineasInventario = resuelto.lineas;
+    const lineasExtracted = lineasDesdeExtractedCanal(
+      (pendiente?.extracted ?? null) as ExtractedCanalHeader | null,
+    );
+
+    const resuelto = await resolverMaterialIdLineasCompra(supabase, String(compra.id), {
+      proyectoIdFallback: String(pendiente?.proyecto_id ?? '').trim() || null,
+      ubicacionDestinoId: destino || ubicacionPendiente || null,
+      purchaseInvoiceId,
+      lineasExtracted,
+    });
+    const overrideCant = new Map(
+      (opts?.cantidadesRecibidas ?? [])
+        .filter((c) => c.material_id?.trim() && Number(c.cantidad) > 0)
+        .map((c) => [c.material_id.trim(), Number(c.cantidad)]),
+    );
+    const lineasInventario = resuelto.lineas.map((l) => {
+      const id = String(l.material_id ?? '').trim();
+      const override = id ? overrideCant.get(id) : undefined;
+      if (override == null || !Number.isFinite(override)) return l;
+      return { ...l, cantidad: override };
+    });
+
+    const avisos: string[] = [];
+    if (resuelto.materialesCreados > 0) {
+      avisos.push(
+        `Se crearon ${resuelto.materialesCreados} material(es) nuevo(s) en el catálogo de la obra.`,
+      );
+    }
+    const detalleSinMatch = mensajeLineasSinMaterialSku(resuelto.sinMatch);
+    if (detalleSinMatch) {
+      avisos.push(detalleSinMatch);
+    }
 
     if (!lineasInventario.length) {
-      const detalle = mensajeLineasSinMaterialSku(resuelto.sinMatch);
       return {
         success: false,
-        error: detalle
-          ? `${detalle} Asigne item_code (SKU) en las líneas.`
-          : 'La compra no tiene materiales vinculados para inventario.',
+        error: detalleSinMatch
+          ? `${detalleSinMatch} Revise las líneas en la app.`
+          : lineasExtracted.length
+            ? 'No se pudieron vincular los productos de la factura. Confirme la compra con proyecto y almacén.'
+            : 'La compra no tiene líneas de detalle. Agregue productos en la app y reintente.',
+        sinMatch: resuelto.sinMatch,
       };
     }
 
@@ -295,6 +354,9 @@ export async function ingresoAlmacenDesdePendienteCanal(
         viaCuarentena: true,
         aprobadas,
         compraFacturaId: cf?.id ? String(cf.id) : undefined,
+        avisos: avisos.length ? avisos : undefined,
+        materialesCreados: resuelto.materialesCreados || undefined,
+        sinMatch: resuelto.sinMatch.length ? resuelto.sinMatch : undefined,
       };
     }
 
@@ -306,6 +368,7 @@ export async function ingresoAlmacenDesdePendienteCanal(
       fechaEmision: String(compra.fecha ?? new Date().toISOString().slice(0, 10)),
       total: Number(compra.total_amount ?? 0),
       purchaseInvoiceId,
+      documentoStoragePath: opts?.documentoStoragePath?.trim() || null,
       lineas: lineasInventario,
     });
 
@@ -316,6 +379,9 @@ export async function ingresoAlmacenDesdePendienteCanal(
       yaExistia: false,
       viaCuarentena: false,
       compraFacturaId: result.compraFacturaId,
+      avisos: avisos.length ? avisos : undefined,
+      materialesCreados: resuelto.materialesCreados || undefined,
+      sinMatch: resuelto.sinMatch.length ? resuelto.sinMatch : undefined,
     };
   } catch (e) {
     return {

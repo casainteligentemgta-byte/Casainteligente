@@ -280,7 +280,6 @@ function InventoryListThumb({
     catalogUrlFromName?: string | null;
 }) {
     const [failed, setFailed] = useState(false);
-    const [mounted, setMounted] = useState(false);
     const resolved =
         (imageUrl?.trim() ||
             catalogUrlFromProduct?.trim() ||
@@ -289,17 +288,16 @@ function InventoryListThumb({
         '';
 
     useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    useEffect(() => {
         setFailed(false);
     }, [resolved]);
 
-    const showImage = mounted && Boolean(resolved) && !failed;
+    const showImage = Boolean(resolved) && !failed;
 
     return (
-        <div className="w-12 h-12 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center shrink-0">
+        <div
+            suppressHydrationWarning
+            className="w-12 h-12 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center shrink-0"
+        >
             {showImage ? (
                 <img
                     src={resolved}

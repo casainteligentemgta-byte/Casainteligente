@@ -18,7 +18,12 @@ export type ProyectoPickerModo =
       'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra' | 'memoria_obra'
     >
   | 'factura_compra'
-  | 'ingreso_manual';
+  | 'ingreso_manual'
+  | 'nota_entrega'
+  | 'emergencia'
+  | 'salida_almacen'
+  | 'salida_almacen_dest'
+  | 'salida_obra_despacho';
 
 const PAGE_SIZE = 8;
 
@@ -28,9 +33,14 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   esperando_audio_bitacora: 'b',
   entrada_obra: 'n',
   salida_obra: 'l',
+  salida_almacen: 'w',
+  salida_almacen_dest: 'x',
+  salida_obra_despacho: 'd',
   memoria_obra: 'm',
   factura_compra: 'f',
   ingreso_manual: 'h',
+  nota_entrega: 't',
+  emergencia: 'e',
 };
 
 const MODO_LARGO: Record<string, ProyectoPickerModo> = {
@@ -39,9 +49,14 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   b: 'esperando_audio_bitacora',
   n: 'entrada_obra',
   l: 'salida_obra',
+  w: 'salida_almacen',
+  x: 'salida_almacen_dest',
+  d: 'salida_obra_despacho',
   m: 'memoria_obra',
   f: 'factura_compra',
   h: 'ingreso_manual',
+  t: 'nota_entrega',
+  e: 'emergencia',
 };
 
 function truncarNombre(nombre: string, max = 28): string {
@@ -90,8 +105,17 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '📥 <b>Elige la obra</b> (ingreso manual):';
     case 'ingreso_manual':
       return '📥 <b>Elige la obra</b> (ingreso manual a almacén):';
+    case 'nota_entrega':
+      return '📥 <b>Elige la obra</b> (nota de entrega → almacén):';
+    case 'emergencia':
+      return '🚨 <b>Elige la obra</b> (ingreso en emergencia → almacén):';
     case 'salida_obra':
       return '📤 <b>Elige la obra</b> (salida de material):';
+    case 'salida_almacen':
+    case 'salida_obra_despacho':
+      return '📤 <b>Elige la obra de origen</b> (salida desde almacén):';
+    case 'salida_almacen_dest':
+      return '🏗 <b>Elige la obra de destino</b>:';
     case 'factura_compra':
       return '🏗 <b>Elige la obra</b> de esta compra:';
     case 'memoria_obra':
@@ -119,7 +143,12 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
       );
     case 'entrada_obra':
     case 'ingreso_manual':
+    case 'nota_entrega':
+    case 'emergencia':
     case 'salida_obra':
+    case 'salida_almacen':
+    case 'salida_almacen_dest':
+    case 'salida_obra_despacho':
       return '';
     case 'factura_compra':
       return '';
@@ -264,10 +293,38 @@ export async function manejarCallbackProyectoTelegram(
     return true;
   }
 
+  if (parsed.modo === 'nota_entrega') {
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { prepararNotaEntregaIngresoTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararNotaEntregaIngresoTrasObra(supabase, params.chatId, parsed.proyectoId);
+    return true;
+  }
+
+  if (parsed.modo === 'emergencia') {
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { prepararEmergenciaIngresoTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararEmergenciaIngresoTrasObra(supabase, params.chatId, parsed.proyectoId);
+    return true;
+  }
+
   if (parsed.modo === 'salida_obra') {
     await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
     const { iniciarSalidaEgresoTrasObra } = await import('@/lib/telegram/salidaEgresoFlujo');
     await iniciarSalidaEgresoTrasObra(supabase, params.chatId, parsed.proyectoId);
+    return true;
+  }
+
+  if (parsed.modo === 'salida_almacen' || parsed.modo === 'salida_obra_despacho') {
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { prepararSalidaObraTrasProyecto } = await import('@/lib/telegram/salidaObraTelegram');
+    await prepararSalidaObraTrasProyecto(supabase, params.chatId, parsed.proyectoId);
+    return true;
+  }
+
+  if (parsed.modo === 'salida_almacen_dest') {
+    await answerCallbackQuery(params.callbackId, `Destino: ${hit.nombre}`);
+    const { prepararObraDestinoSalidaAlmacen } = await import('@/lib/telegram/salidaObraTelegram');
+    await prepararObraDestinoSalidaAlmacen(supabase, params.chatId, parsed.proyectoId);
     return true;
   }
 

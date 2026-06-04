@@ -89,17 +89,11 @@ function extractedNotaEntrega(
   };
 }
 
-const MENSAJE_INICIO_ENTRADA =
-  '📥 <b>Entrada / nota de entrega</b> (depositario)\n\n' +
-  '1️⃣ Elige la obra.\n' +
-  '2️⃣ Envía foto de la <b>nota de entrega</b>.\n' +
-  '3️⃣ Escribe el <b>proveedor</b> (obligatorio).\n' +
-  '4️⃣ Elige el almacén de ingreso.\n\n' +
-  'Los productos quedarán en la cola de compras para que contabilidad complete la factura y suba su foto.\n\n' +
-  '<code>/cancelar</code> para abortar.';
-
-/** Comando unificado: /entrada (y alias /nota). */
-export async function manejarComandoEntradaTelegram(
+/**
+ * @deprecated Usar manejarComandoNotaEntregaTelegram en ingresoManualTelegram.ts (/nota, /entrada).
+ * Este módulo conserva el flujo OCR → cola contabilidad para integraciones legacy.
+ */
+export async function manejarComandoEntradaOcrTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
@@ -109,12 +103,27 @@ export async function manejarComandoEntradaTelegram(
     pending_factura_id: null,
     metadata: { paso: 'foto', flujo: 'nota_entrega' },
   });
-  await sendTelegramMessage(chatId, MENSAJE_INICIO_ENTRADA, { parse_mode: 'HTML' });
+  await sendTelegramMessage(
+    chatId,
+    '📥 <b>Nota de entrega (solo foto + OCR)</b>\n\n' +
+      '1️⃣ Elige la obra.\n' +
+      '2️⃣ Envía foto de la nota (IA extrae productos).\n' +
+      '3️⃣ Proveedor y almacén → cola de contabilidad.\n\n' +
+      'Para ingreso directo con conteo y stock use <code>/nota</code> o <code>/entrada</code>.\n' +
+      '<code>/cancelar</code> para abortar.',
+    { parse_mode: 'HTML' },
+  );
   await enviarPickerProyectosTelegram(supabase, chatId, 'entrada_obra');
 }
 
-/** @deprecated Alias de manejarComandoEntradaTelegram */
-export const manejarComandoNotaEntregaTelegram = manejarComandoEntradaTelegram;
+/** @deprecated Usar ingresoManualTelegram.manejarComandoNotaEntregaTelegram */
+export async function manejarComandoEntradaTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  const { manejarComandoNotaEntregaTelegram } = await import('@/lib/telegram/ingresoManualTelegram');
+  await manejarComandoNotaEntregaTelegram(supabase, chatId);
+}
 
 export async function prepararNotaEntregaTrasObra(
   supabase: SupabaseClient,

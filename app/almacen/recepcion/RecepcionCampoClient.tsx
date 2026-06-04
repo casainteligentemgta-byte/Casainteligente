@@ -328,11 +328,19 @@ export default function RecepcionCampoClient() {
         const res = await fetch(apiUrl(`/api/facturas-canal/pendientes/${p.id}/ingreso-almacen`), {
           method: 'POST',
         });
-        const json = (await res.json()) as { error?: string; success?: boolean; yaExistia?: boolean };
+        const json = (await res.json()) as {
+          error?: string;
+          success?: boolean;
+          yaExistia?: boolean;
+          avisos?: string[];
+        };
         if (!res.ok) throw new Error(json.error ?? 'No se pudo registrar ingreso');
         toast.success(
           json.yaExistia ? 'Ingreso ya estaba registrado.' : 'Stock ingresado desde factura Telegram.',
         );
+        for (const aviso of json.avisos ?? []) {
+          toast.warning(aviso, { duration: 8000 });
+        }
         router.push('/almacen');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error de ingreso');

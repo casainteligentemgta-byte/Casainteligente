@@ -11,8 +11,10 @@ export type ComandoTelegramResult = {
   proyectoId?: string | null;
   mensaje?: string;
   resetProyecto?: boolean;
-  /** Palabra clave tras /stock (consulta inventario). */
+  /** Palabra clave tras /stock (búsqueda rápida por nombre de material). */
   stockKeyword?: string;
+  /** Consulta guiada: entidad → obra → almacén → stock. */
+  comandoStockConsulta?: boolean;
   /** Muestra lista desplegable (inline keyboard) de proyectos. */
   mostrarPickerProyecto?: ProyectoPickerModo;
   /** Inicia flujo /agua (picker de obras activas). */
@@ -22,6 +24,12 @@ export type ComandoTelegramResult = {
   comandoSalida?: boolean;
   /** Facturas precargadas (Telegram + app) pendientes de ingreso a almacén. */
   comandoIngresoFactura?: boolean;
+  /** Nota de entrega: obra → almacén → proveedor → materiales → stock. */
+  comandoNotaEntrega?: boolean;
+  /** Ingreso emergencia: mismo flujo, tipo emergencia en recepción de campo. */
+  comandoEmergencia?: boolean;
+  /** Despacho desde almacén: obra → almacén → observaciones → stock → cantidades. */
+  comandoSalidaObra?: boolean;
   /** Lista materiales comprados en el día, semana o mes (app + Telegram). */
   comandoComprasPeriodo?: PeriodoComprasTelegram;
   /** Lista material en cuarentena para liberar (depositario). */
@@ -51,17 +59,21 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /obra — elegir obra y subir fotos de evidencia\n' +
         '• /proyecto — cambiar obra activa (lista)\n' +
         '• /gasto — comprobante de gasto de obra\n' +
-        '• /stock &lt;producto&gt; — consultar inventario por nombre\n' +
+        '• /stock — inventario por entidad, obra y almacén\n' +
+        '• /stock &lt;producto&gt; — búsqueda rápida por nombre\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
-        '• /ingresomanual — ingreso manual: obra, almacén, proveedor, materiales\n' +
-        '• /ingresofactura — facturas precargadas (Telegram y app) → ingreso a almacén\n' +
+        '• /nota — nota de entrega: obra, almacén, proveedor, artículos, fotos, stock\n' +
+        '• /emergencia — ingreso urgente (mismo flujo, tipo emergencia)\n' +
+        '• /ingresomanual — alias ingreso manual (mismo flujo que /nota)\n' +
+        '• /ingresofactura — proveedor → factura → verificar cantidades → fotos → almacén\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
         '• /comprassemana — materiales de la semana en curso\n' +
         '• /comprasmes — materiales del mes en curso\n' +
         '• /liberar — material en cuarentena: aprobar y sumar stock\n' +
-        '• /salida — foto + detalle de material que egresa\n' +
+        '• /salidaalmacen — salida: obra, almacén, obrero, destino, stock, foto\n' +
+        '• /salida — egreso con obrero, partida y foto (flujo completo)\n' +
         '• /traspaso — mover stock entre almacenes u obras\n' +
         '• /avance — reporte numérico diario de partida\n' +
         '• /memoria — memoria descriptiva: foto de avance por partida\n' +
@@ -79,17 +91,21 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/obra — elegir obra (lista) y subir fotos\n' +
         '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +
-        '/stock cemento — buscar stock por nombre (parcial)\n' +
+        '/stock — listar stock (entidad → obra → almacén)\n' +
+        '/stock cemento — búsqueda rápida por nombre\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
-        '/ingresomanual — ingreso manual a almacén (obra → materiales → stock)\n' +
-        '/ingresofactura — facturas precargadas Telegram/app pendientes de ingreso\n' +
+        '/nota — nota de entrega (obra → almacén → proveedor → artículos → stock)\n' +
+        '/emergencia — ingreso en emergencia (mismo flujo, actualiza stock)\n' +
+        '/ingresomanual — ingreso manual (mismo flujo estructurado)\n' +
+        '/ingresofactura — proveedor, factura, conteo físico, fotos e ingreso a almacén\n' +
         '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
         '/comprasdia — lista de materiales comprados hoy\n' +
         '/comprassemana — materiales comprados esta semana\n' +
         '/comprasmes — materiales comprados este mes\n' +
         '/liberar — liberar material de cuarentena (depositario)\n' +
-        '/salida — egreso de material (capítulo + foto + almacén origen + stock)\n' +
+        '/salidaalmacen — salida almacén (obrero, obra/almacén destino, stock, foto)\n' +
+        '/salida — egreso con obrero, partida presupuestaria y foto\n' +
         '/traspaso — traspaso o préstamo entre ubicaciones (origen → destino)\n' +
         '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +
         '/menu — menú principal\n' +
@@ -151,7 +167,15 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoAgua: true };
   }
 
-  if (cmd === '/ingresomanual' || cmd === '/entrada') {
+  if (cmd === '/nota' || cmd === '/notaentrega' || cmd === '/entrada') {
+    return { handled: true, comandoNotaEntrega: true };
+  }
+
+  if (cmd === '/emergencia' || cmd === '/urgente') {
+    return { handled: true, comandoEmergencia: true };
+  }
+
+  if (cmd === '/ingresomanual') {
     return { handled: true, comandoIngresoManual: true };
   }
 
@@ -176,6 +200,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
 
   if (cmd === '/liberar' || cmd === '/cuarentena') {
     return { handled: true, comandoLiberarCuarentena: true };
+  }
+
+  if (cmd === '/salidaalmacen' || cmd === '/salidaobra' || cmd === '/despacho') {
+    return { handled: true, comandoSalidaObra: true };
   }
 
   if (cmd === '/salida') {
@@ -217,14 +245,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
   if (cmd === '/stock') {
     const keyword = parts.slice(1).join(' ').trim();
     if (!keyword) {
-      return {
-        handled: true,
-        mensaje:
-          '🔎 <b>Consulta de inventario</b>\n\n' +
-          'Escribe el producto después del comando:\n' +
-          '<code>/stock cemento</code>\n' +
-          '<code>/stock cable THW</code>',
-      };
+      return { handled: true, comandoStockConsulta: true };
     }
     return { handled: true, stockKeyword: keyword };
   }

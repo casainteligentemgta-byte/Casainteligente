@@ -111,16 +111,26 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       });
     }
 
-    const resuelto = await resolverMaterialIdLineasCompra(supabase, compraId);
+    const resuelto = await resolverMaterialIdLineasCompra(supabase, compraId, {
+      ubicacionDestinoId: compra.ubicacion_destino_id,
+      purchaseInvoiceId,
+    });
     const lineasInventario = resuelto.lineas;
+    const avisos: string[] = [];
+    if (resuelto.materialesCreados > 0) {
+      avisos.push(
+        `Se crearon ${resuelto.materialesCreados} material(es) nuevo(s) en el catálogo.`,
+      );
+    }
+    const detalleSinMatch = mensajeLineasSinMaterialSku(resuelto.sinMatch);
+    if (detalleSinMatch) avisos.push(detalleSinMatch);
 
     if (!lineasInventario.length) {
-      const detalle = mensajeLineasSinMaterialSku(resuelto.sinMatch);
       return NextResponse.json(
         {
-          error: detalle
-            ? `${detalle} Luego pulse de nuevo Ingreso a almacén.`
-            : 'La compra no tiene materiales vinculados para inventario. Asigne item_code (SKU) en las líneas.',
+          error: detalleSinMatch
+            ? `${detalleSinMatch} Revise las líneas en la compra.`
+            : 'La compra no tiene líneas con cantidad para inventario.',
           sinMatch: resuelto.sinMatch,
           vinculadas: resuelto.vinculadas,
           total: resuelto.total,
@@ -148,6 +158,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       yaExistia: false,
       viaCuarentena: false,
       compraFacturaId: r.compraFacturaId,
+      avisos: avisos.length ? avisos : undefined,
+      materialesCreados: resuelto.materialesCreados || undefined,
       estadoLogistica: 'en_almacen',
     });
   } catch (err) {

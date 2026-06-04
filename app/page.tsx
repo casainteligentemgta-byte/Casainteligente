@@ -1,26 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import AeropuertoRelojPizarra from '@/components/home/AeropuertoRelojPizarra';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/nexus/GlassCard';
 import { cn } from '@/lib/utils';
-
-const AeropuertoRelojPizarra = dynamic(
-  () => import('@/components/home/AeropuertoRelojPizarra'),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="flex flex-1 min-h-0 max-h-full flex-col justify-center px-0 mb-0"
-        aria-hidden
-      >
-        <div className="split-flap-board split-flap-board--dense w-full min-h-[7.5rem] rounded-xl sm:rounded-2xl landscape:min-h-[5.5rem]" />
-      </div>
-    ),
-  },
-);
 
 type StatTileProps = {
   href?: string;

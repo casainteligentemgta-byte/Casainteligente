@@ -54,6 +54,8 @@ import {
   esFlujoIngresoManual,
   manejarCallbackIngresoManual,
   manejarComandoIngresoManualTelegram,
+  manejarComandoNotaEntregaTelegram,
+  manejarComandoEmergenciaTelegram,
   manejarFotoIngresoManual,
   manejarTextoIngresoManual,
 } from '@/lib/telegram/ingresoManualTelegram';
@@ -62,6 +64,9 @@ import {
   esComandoIngresoFactura,
   manejarCallbackIngresoFacturaTelegram,
   manejarComandoIngresoFacturaTelegram,
+  esFlujoIngresoFactura,
+  manejarFotoIngresoFactura,
+  manejarTextoIngresoFactura,
 } from '@/lib/telegram/ingresoFacturaTelegram';
 import {
   esCallbackComprasObra,
@@ -111,6 +116,14 @@ import {
   manejarCallbackSalidaOrigenTelegram,
 } from '@/lib/telegram/salidaOrigenPicker';
 import {
+  esCallbackSalidaObraTelegram,
+  manejarCallbackSalidaObraTelegram,
+  esFlujoSalidaObraTelegram,
+  manejarComandoSalidaObraTelegram,
+  manejarFotoSalidaAlmacenTelegram,
+  manejarTextoSalidaObraTelegram,
+} from '@/lib/telegram/salidaObraTelegram';
+import {
   esCallbackDepositarioRecepcion,
   manejarCallbackDepositarioRecepcion,
   manejarTextoDepositarioRecepcion,
@@ -121,6 +134,11 @@ import {
   manejarComandoTraspasoTelegram,
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
+import {
+  esCallbackStockConsultaTelegram,
+  manejarCallbackStockConsultaTelegram,
+  manejarComandoStockConsultaTelegram,
+} from '@/lib/telegram/stockConsultaTelegram';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
@@ -223,6 +241,16 @@ async function aplicarComando(
     return;
   }
 
+  if (cmd.comandoNotaEntrega) {
+    await manejarComandoNotaEntregaTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoEmergencia) {
+    await manejarComandoEmergenciaTelegram(supabase, chatId);
+    return;
+  }
+
   if (cmd.comandoIngresoManual) {
     await manejarComandoIngresoManualTelegram(supabase, chatId);
     return;
@@ -258,6 +286,11 @@ async function aplicarComando(
     return;
   }
 
+  if (cmd.comandoSalidaObra) {
+    await manejarComandoSalidaObraTelegram(supabase, chatId);
+    return;
+  }
+
   if (cmd.comandoSalida) {
     await manejarComandoSalidaEgresoTelegram(supabase, chatId);
     return;
@@ -265,6 +298,11 @@ async function aplicarComando(
 
   if (cmd.comandoTraspaso) {
     await manejarComandoTraspasoTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoStockConsulta) {
+    await manejarComandoStockConsultaTelegram(supabase, chatId);
     return;
   }
 
@@ -365,6 +403,17 @@ export async function handleTelegramCallbackQuery(
   try {
     const userId = String(cq.from.id);
 
+    if (esCallbackStockConsultaTelegram(cq.data)) {
+      const handledStock = await manejarCallbackStockConsultaTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledStock) {
+        return NextResponse.json({ ok: true, callback: 'stock_consulta' });
+      }
+    }
+
     if (esCallbackTraspasoTelegram(cq.data)) {
       const handledTraspaso = await manejarCallbackTraspasoTelegram(admin.client, {
         chatId,
@@ -373,6 +422,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledTraspaso) {
         return NextResponse.json({ ok: true, callback: 'traspaso' });
+      }
+    }
+
+    if (esCallbackSalidaObraTelegram(cq.data)) {
+      const handledSalidaObra = await manejarCallbackSalidaObraTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledSalidaObra) {
+        return NextResponse.json({ ok: true, callback: 'salida_obra_despacho' });
       }
     }
 
@@ -664,6 +724,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, depositario_recepcion: true });
       }
 
+      const textoIngresoFactura = await manejarTextoIngresoFactura(supabase, chatId, texto);
+      if (textoIngresoFactura) {
+        return NextResponse.json({ ok: true, ingreso_factura_texto: true });
+      }
+
       const textoIngresoManual = await manejarTextoIngresoManual(
         supabase,
         chatId,
@@ -682,6 +747,17 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       });
       if (nuevoCapSalida) {
         return NextResponse.json({ ok: true, salida_capitulo_nuevo: true });
+      }
+
+      const textoSalidaObra = await manejarTextoSalidaObraTelegram(
+        supabase,
+        chatId,
+        texto,
+        userId,
+        msg.from?.username ?? null,
+      );
+      if (textoSalidaObra) {
+        return NextResponse.json({ ok: true, salida_obra_texto: true });
       }
 
       const textoSalidaEgreso = await manejarTextoSalidaEgreso(
@@ -833,6 +909,69 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       })();
       if (fotoIngresoManual) {
         return NextResponse.json({ ok: true, ingreso_manual_foto: true });
+      }
+
+      const fotoIngresoFactura = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoFactura = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoIngresoFactura(estadoFactura)) return false;
+        if ((estadoFactura.metadata as { paso?: string })?.paso !== 'foto') return false;
+        const fileId = photos[photos.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          await manejarFotoIngresoFactura({
+            supabase,
+            chatId,
+            userId,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+          });
+          return true;
+        } catch (err) {
+          console.error('[telegram ingreso factura foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoIngresoFactura) {
+        return NextResponse.json({ ok: true, ingreso_factura_foto: true });
+      }
+
+      const fotoSalidaAlmacen = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoSa = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoSalidaObraTelegram(estadoSa)) return false;
+        if ((estadoSa.metadata as { paso?: string })?.paso !== 'foto') return false;
+        const fileId = photos[photos.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          await manejarFotoSalidaAlmacenTelegram({
+            supabase,
+            chatId,
+            userId,
+            username: msg.from?.username ?? null,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+          });
+          return true;
+        } catch (err) {
+          console.error('[telegram salida almacen foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoSalidaAlmacen) {
+        return NextResponse.json({ ok: true, salida_almacen_foto: true });
       }
 
       const fotoSalidaEgreso = await (async () => {

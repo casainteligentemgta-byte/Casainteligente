@@ -36,6 +36,9 @@ export async function POST(_req: Request, ctx: RouteCtx) {
       success: true,
       yaExistia: ingreso.yaExistia ?? false,
       compraFacturaId: ingreso.compraFacturaId,
+      avisos: ingreso.avisos,
+      materialesCreados: ingreso.materialesCreados,
+      sinMatch: ingreso.sinMatch,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al registrar ingreso';
