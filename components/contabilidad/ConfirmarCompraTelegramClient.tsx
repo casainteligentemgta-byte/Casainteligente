@@ -8,13 +8,8 @@ import { toast } from 'sonner';
 import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
 import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 import type { UbicacionInventario } from '@/types/inventario-obra';
-import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
-import {
-  normalizarMonedaExtracted,
-  type ExtractedCanalHeader,
-} from '@/lib/contabilidad/extractedCanal';
-import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
+import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import {
   actualizarPendienteCanal,
   confirmarCompraCanal,
@@ -153,19 +148,6 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   }, [factura?.ubicacion_destino_id]);
 
   const extracted = pendiente?.extracted ?? null;
-  const monedaFactura = normalizarMonedaExtracted(extracted?.moneda);
-  const etiquetaMoneda = monedaFactura === 'USD' ? 'USD' : 'Bs';
-
-  const actualizarMoneda = async (moneda: MonedaOrigen) => {
-    if (!extracted) return;
-    const next: ExtractedCanalHeader = { ...extracted, moneda };
-    try {
-      const actualizado = await actualizarPendienteCanal(pendingId, { extracted: next });
-      setPendiente((prev) => (prev ? { ...prev, extracted: actualizado.extracted } : prev));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo guardar la moneda');
-    }
-  };
 
   const yaEnContabilidad = useMemo(
     () =>
@@ -383,6 +365,12 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
 
   const nLineas = lineasConDescripcion;
 
+  const lineasParaConteo = useMemo(
+    () =>
+      (extracted?.items ?? []).filter((it) => String(it.description ?? '').trim()),
+    [extracted?.items],
+  );
+
   const botonIngresoListo = Boolean(
     puedeIngresarAlmacen &&
       proyectoEfectivo &&
@@ -503,15 +491,6 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </div>
             )}
 
-            {pendiente.document_storage_path ? (
-              <CompraFacturaImagen
-                compraId={pendingId}
-                tieneDocumento
-                documentApiPath={`/api/facturas-canal/pendientes/${encodeURIComponent(pendingId)}/document`}
-                expanded
-              />
-            ) : null}
-
             {yaEnContabilidad ? (
               <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-3 text-xs text-emerald-200/90">
                 Compra registrada en contabilidad. Solo falta el ingreso de mercancía al almacén de la
@@ -540,32 +519,61 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 <dd>{extracted?.supplier_rif ?? '—'}</dd>
                 <dt className="text-zinc-500">Fecha</dt>
                 <dd>{extracted?.date ?? '—'}</dd>
-                <dt className="text-zinc-500">Total</dt>
-                <dd className="flex flex-wrap items-center gap-2">
-                  {extracted?.total_amount != null ? (
-                    <span>
-                      {extracted.total_amount} {etiquetaMoneda}
-                    </span>
-                  ) : (
-                    <span>—</span>
-                  )}
-                  {extracted && !(compraRegistrada || pendiente?.estado === 'confirmado') ? (
-                    <select
-                      value={monedaFactura}
-                      onChange={(e) => void actualizarMoneda(normalizarMonedaExtracted(e.target.value))}
-                      className="rounded-md border border-white/10 bg-[#0A0A0F] px-2 py-0.5 text-[11px] font-bold text-zinc-200 outline-none focus:border-[#FF9500]/50"
-                      aria-label="Moneda del total"
-                    >
-                      <option value="VES">VES</option>
-                      <option value="USD">USD</option>
-                    </select>
-                  ) : (
-                    <span className="text-[10px] text-zinc-500">{monedaFactura}</span>
-                  )}
-                </dd>
-                <dt className="text-zinc-500">Líneas</dt>
+                <dt className="text-zinc-500">Ítems</dt>
                 <dd>{nLineas}</dd>
               </dl>
+            </section>
+
+            <section className={`${panelClass} space-y-3`}>
+              <h2 className="text-sm font-bold">Detalle para conteo físico</h2>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                Verifique cantidad y producto recibidos. Los precios no se muestran en esta vista.
+              </p>
+              {lineasParaConteo.length === 0 ? (
+                <p className="text-xs text-amber-300/90">
+                  Sin líneas con descripción. Pulse <strong>Editar</strong> arriba para cargar los
+                  productos.
+                </p>
+              ) : (
+                <ol className="space-y-2.5">
+                  {lineasParaConteo.map((it, idx) => {
+                    const cantidad = Number(it.quantity) > 0 ? Number(it.quantity) : 1;
+                    const unidad = String(it.unit ?? 'UND').trim() || 'UND';
+                    const codigo = String(it.item_code ?? '').trim();
+                    return (
+                      <li
+                        key={`${idx}-${String(it.description ?? '').slice(0, 24)}`}
+                        className="rounded-xl border border-white/10 bg-[#0A0A0F]/80 px-3 py-2.5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                              Ítem {idx + 1}
+                            </p>
+                            <p className="text-sm font-semibold text-zinc-100 leading-snug">
+                              {String(it.description ?? '').trim()}
+                            </p>
+                            {codigo ? (
+                              <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
+                                Código: {codigo}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#FF9500]">
+                              Cantidad
+                            </p>
+                            <p className="text-lg font-black tabular-nums text-white">
+                              {cantidad}
+                            </p>
+                            <p className="text-[10px] text-zinc-500">{unidad}</p>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
             </section>
 
             <section className="space-y-2">
