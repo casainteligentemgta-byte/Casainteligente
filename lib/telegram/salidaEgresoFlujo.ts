@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { cargarOpcionesPartidaDespacho } from '@/lib/almacen/cargarPartidasDespacho';
+import { cargarOpcionesPartidaDespachoFlexible } from '@/lib/almacen/cargarPartidasDespacho';
+import type { PartidaDespachoFila } from '@/types/inventario-obra';
 import { listarEmpleadosProyectoEgreso } from '@/lib/almacen/listarEmpleadosProyectoEgreso';
 import { listarTareasCronogramaPartida } from '@/lib/almacen/listarTareasCronogramaPartida';
 import {
@@ -33,7 +34,8 @@ export type LineaEgresoDraft = {
   material_nombre: string;
   unidad: string;
   cantidad: number;
-  ci_presupuesto_partida_id: string;
+  ci_presupuesto_partida_id?: string | null;
+  partida_id?: string | null;
   partida_label: string;
   cronograma_tarea_id?: string | null;
   tarea_label?: string | null;
@@ -53,6 +55,8 @@ export type MetadataSalidaEgreso = {
   draft_unidad?: string;
   draft_cantidad?: number;
   draft_partida_id?: string;
+  /** Partida cascada (`partidas.id`) cuando no hay fila en ci_presupuesto_partidas. */
+  draft_partida_legacy_id?: string;
   draft_partida_label?: string;
   foto_storage_path?: string;
   foto_url?: string;
@@ -238,17 +242,25 @@ async function enviarPickerPartida(
   materialId: string,
   page = 0,
 ): Promise<void> {
-  const partidas = await cargarOpcionesPartidaDespacho(supabase, {
+  const { partidas, modo } = await cargarOpcionesPartidaDespachoFlexible(supabase, {
     proyectoId,
     materialId,
-    soloRelacionadas: true,
   });
 
   if (!partidas.length) {
     await sendTelegramMessage(
       chatId,
-      '⚠️ Este material no tiene partidas en el APU. Use despacho web o vincule insumos en presupuesto.',
-      { parse_mode: 'HTML' },
+      '📂 <b>Imputación a partida</b>\n\n' +
+        'No hay partidas de presupuesto en esta obra (aún puede egresar material).\n\n' +
+        'Pulse <b>Continuar sin partida</b> para descontar stock. Más adelante podrá vincular el APU en control de obra.',
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '⏭ Continuar sin partida', callback_data: `${PREFIX}par:skip` }],
+          ],
+        },
+      },
     );
     return;
   }
@@ -260,9 +272,11 @@ async function enviarPickerPartida(
   const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((p) => [
     {
       text: truncar(p.nombre_partida),
-      callback_data: `${PREFIX}par:${p.ci_presupuesto_partida_id}`,
+      callback_data: callbackDataPartida(p),
     },
   ]);
+
+  buttons.push([{ text: '⏭ Sin partida (solo stock)', callback_data: `${PREFIX}par:skip` }]);
 
   if (totalPages > 1) {
     const nav: Array<{ text: string; callback_data: string }> = [];
@@ -272,9 +286,14 @@ async function enviarPickerPartida(
     buttons.push(nav);
   }
 
+  const hintApu =
+    modo === 'todo_presupuesto'
+      ? '\n\n<i>Sin vínculo APU para este material: se listan todas las partidas del presupuesto.</i>'
+      : '';
+
   await sendTelegramMessage(
     chatId,
-    '📂 <b>Partida presupuestaria</b> a la que va este material:',
+    '📂 <b>Partida presupuestaria</b> a la que va este material (opcional):' + hintApu,
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
 }
@@ -368,6 +387,32 @@ async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): 
   );
 }
 
+function callbackDataPartida(p: PartidaDespachoFila): string {
+  if (p.ci_presupuesto_partida_id) {
+    return `${PREFIX}par:cpp:${p.ci_presupuesto_partida_id}`;
+  }
+  if (p.partida_id) {
+    return `${PREFIX}par:pd:${p.partida_id}`;
+  }
+  return `${PREFIX}par:skip`;
+}
+
+function partidaDesdeCallback(
+  partidas: PartidaDespachoFila[],
+  data: string,
+): PartidaDespachoFila | 'skip' | null {
+  if (data === 'par:skip') return 'skip';
+  if (data.startsWith('par:cpp:')) {
+    const id = data.slice(8);
+    return partidas.find((p) => p.ci_presupuesto_partida_id === id) ?? null;
+  }
+  if (data.startsWith('par:pd:')) {
+    const id = data.slice(7);
+    return partidas.find((p) => p.partida_id === id) ?? null;
+  }
+  return null;
+}
+
 function resumenLineas(lineas: LineaEgresoDraft[]): string {
   return lineas
     .map(
@@ -410,29 +455,30 @@ async function finalizarLineaDraft(
   estado: TelegramEstado,
   tareaId: string | null,
   tareaLabel: string | null,
+  opts?: { sinPartida?: boolean },
 ): Promise<void> {
   const m = meta(estado);
-  if (
-    !m.draft_material_id ||
-    !m.draft_cantidad ||
-    !m.draft_partida_id ||
-    !m.draft_material_nombre
-  ) {
+  if (!m.draft_material_id || !m.draft_cantidad || !m.draft_material_nombre) {
     await sendTelegramMessage(chatId, '❌ Datos incompletos. Reinicie con <code>/salida</code>.', {
       parse_mode: 'HTML',
     });
     return;
   }
 
+  const sinPartida = opts?.sinPartida ?? false;
+
   const nueva: LineaEgresoDraft = {
     material_id: m.draft_material_id,
     material_nombre: m.draft_material_nombre,
     unidad: m.draft_unidad ?? 'UND',
     cantidad: m.draft_cantidad,
-    ci_presupuesto_partida_id: m.draft_partida_id,
-    partida_label: m.draft_partida_label ?? 'Partida',
-    cronograma_tarea_id: tareaId,
-    tarea_label: tareaLabel,
+    ci_presupuesto_partida_id: sinPartida ? null : (m.draft_partida_id ?? null),
+    partida_id: sinPartida ? null : (m.draft_partida_legacy_id ?? null),
+    partida_label: sinPartida
+      ? 'Sin imputación a partida'
+      : (m.draft_partida_label ?? 'Partida'),
+    cronograma_tarea_id: sinPartida ? null : tareaId,
+    tarea_label: sinPartida ? null : tareaLabel,
   };
 
   const lineas = [...(m.lineas ?? []), nueva];
@@ -443,6 +489,7 @@ async function finalizarLineaDraft(
     draft_unidad: undefined,
     draft_cantidad: undefined,
     draft_partida_id: undefined,
+    draft_partida_legacy_id: undefined,
     draft_partida_label: undefined,
     paso: 'mas_lineas',
   });
@@ -568,26 +615,38 @@ export async function manejarCallbackSalidaEgreso(
   }
 
   if (data.startsWith('par:')) {
-    const partidaId = data.slice(4);
+    if (data === 'par:skip') {
+      await answerCallbackQuery(params.callbackId, 'Sin partida');
+      await finalizarLineaDraft(supabase, params.chatId, estado, null, null, { sinPartida: true });
+      return true;
+    }
+
     const partidas = m.draft_material_id
-      ? await cargarOpcionesPartidaDespacho(supabase, {
-          proyectoId,
-          materialId: m.draft_material_id,
-          soloRelacionadas: true,
-        })
+      ? (
+          await cargarOpcionesPartidaDespachoFlexible(supabase, {
+            proyectoId,
+            materialId: m.draft_material_id,
+          })
+        ).partidas
       : [];
-    const hit = partidas.find((p) => p.ci_presupuesto_partida_id === partidaId);
-    if (!hit) {
+    const hit = partidaDesdeCallback(partidas, data);
+    if (!hit || hit === 'skip') {
       await answerCallbackQuery(params.callbackId, 'Partida no encontrada', true);
       return true;
     }
     await answerCallbackQuery(params.callbackId, truncar(hit.nombre_partida, 40));
+    const partidaPresupuestoId = hit.ci_presupuesto_partida_id ?? undefined;
     await patchMeta(supabase, params.chatId, estado, {
-      paso: 'tarea',
-      draft_partida_id: partidaId,
+      paso: partidaPresupuestoId ? 'tarea' : 'mas_lineas',
+      draft_partida_id: partidaPresupuestoId,
+      draft_partida_legacy_id: hit.partida_id ?? undefined,
       draft_partida_label: hit.nombre_partida,
     });
-    await enviarPickerTarea(supabase, params.chatId, proyectoId, partidaId);
+    if (partidaPresupuestoId) {
+      await enviarPickerTarea(supabase, params.chatId, proyectoId, partidaPresupuestoId);
+    } else {
+      await finalizarLineaDraft(supabase, params.chatId, await getTelegramEstado(supabase, params.chatId), null, null);
+    }
     return true;
   }
 
@@ -668,7 +727,8 @@ export async function manejarCallbackSalidaEgreso(
       material_nombre: l.material_nombre,
       cantidad: l.cantidad,
       unidad: l.unidad,
-      ci_presupuesto_partida_id: l.ci_presupuesto_partida_id,
+      ci_presupuesto_partida_id: l.ci_presupuesto_partida_id ?? null,
+      partida_id: l.partida_id ?? null,
       partida_label: l.partida_label,
       cronograma_tarea_id: l.cronograma_tarea_id,
       tarea_label: l.tarea_label,

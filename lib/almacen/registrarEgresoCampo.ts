@@ -11,7 +11,9 @@ export type LineaEgresoCampoInput = {
   material_nombre?: string | null;
   cantidad: number;
   unidad?: string;
-  ci_presupuesto_partida_id: string;
+  /** Opcional mientras se configura presupuesto/APU (solo descuento de stock). */
+  ci_presupuesto_partida_id?: string | null;
+  partida_id?: string | null;
   partida_label?: string | null;
   cronograma_tarea_id?: string | null;
   tarea_label?: string | null;
@@ -82,10 +84,10 @@ export async function registrarEgresoCampo(
   input: RegistrarEgresoCampoInput,
 ): Promise<ResultadoEgresoCampo> {
   const lineasValidas = input.lineas.filter(
-    (l) => l.material_id?.trim() && l.ci_presupuesto_partida_id?.trim() && Number(l.cantidad) > 0,
+    (l) => l.material_id?.trim() && Number(l.cantidad) > 0,
   );
   if (!lineasValidas.length) {
-    return { ok: false, error: 'Agregue al menos una línea con material, cantidad y partida.' };
+    return { ok: false, error: 'Agregue al menos una línea con material y cantidad.' };
   }
 
   const obreroNombre = input.obreroNombre.trim();
@@ -122,17 +124,26 @@ export async function registrarEgresoCampo(
     (input.obreroOficio?.trim() ? ` (${input.obreroOficio.trim()})` : '') +
     (obsBase ? ` · ${obsBase}` : '');
 
-  const lineasTransferencia: LineaTransferenciaDespachoInput[] = lineasValidas.map((l) => ({
-    material_id: l.material_id,
-    cantidad: l.cantidad,
-    imputaciones: [
-      {
-        ci_presupuesto_partida_id: l.ci_presupuesto_partida_id,
-        cantidad_imputada: l.cantidad,
-        justificacion_exceso: 'Egreso depositario vía Telegram (/salida)',
-      },
-    ],
-  }));
+  const lineasTransferencia: LineaTransferenciaDespachoInput[] = lineasValidas.map((l) => {
+    const cppId = l.ci_presupuesto_partida_id?.trim() || null;
+    const partidaId = l.partida_id?.trim() || null;
+    const imputaciones =
+      cppId || partidaId
+        ? [
+            {
+              ci_presupuesto_partida_id: cppId,
+              partida_id: partidaId,
+              cantidad_imputada: l.cantidad,
+              justificacion_exceso: 'Egreso depositario vía Telegram (/salida)',
+            },
+          ]
+        : [];
+    return {
+      material_id: l.material_id,
+      cantidad: l.cantidad,
+      imputaciones,
+    };
+  });
 
   let transferenciaId: string;
   let codigo: string;
@@ -241,7 +252,8 @@ export async function registrarEgresoCampo(
     material_id: l.material_id,
     cantidad: l.cantidad,
     unidad: (l.unidad ?? 'UND').trim() || 'UND',
-    ci_presupuesto_partida_id: l.ci_presupuesto_partida_id,
+    ci_presupuesto_partida_id: l.ci_presupuesto_partida_id?.trim() || null,
+    partida_id: l.partida_id?.trim() || null,
     cronograma_tarea_id: l.cronograma_tarea_id?.trim() || null,
     partida_label: l.partida_label?.trim() || null,
     tarea_label: l.tarea_label?.trim() || null,

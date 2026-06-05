@@ -30,6 +30,7 @@ import {
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
+import type { BorradorRecepcionTelegramPayload } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { LineaRecepcionCampoInput, TipoRecepcionCampo } from '@/lib/almacen/recepcionCampoTypes';
 import { createClient } from '@/lib/supabase/client';
 import { uploadRecepcionCampoDocument } from '@/lib/almacen/uploadRecepcionCampoDocument';
@@ -131,7 +132,11 @@ export default function RecepcionCampoClient() {
 
   const pendienteDestacado = searchParams.get('pendiente')?.trim() || '';
   const tabInicial = searchParams.get('tab');
+  const borradorTokenInicial = searchParams.get('borrador')?.trim() || '';
   const [vista, setVista] = useState<VistaRecepcion>(() => parseVistaInicial(tabInicial));
+  const [borradorToken, setBorradorToken] = useState(borradorTokenInicial);
+  const [cargandoBorrador, setCargandoBorrador] = useState(Boolean(borradorTokenInicial));
+  const [borradorTelegram, setBorradorTelegram] = useState(false);
   const tipoIngreso: TipoIngresoManual = vista === 'emergencia' ? 'emergencia' : 'nota_entrega';
   const [cantidadNueva, setCantidadNueva] = useState('1');
   const [materialObraId, setMaterialObraId] = useState('');
@@ -167,6 +172,67 @@ export default function RecepcionCampoClient() {
       if (lista.length) setProyectos(lista.map((r) => ({ id: r.id, nombre: r.nombre })));
     });
   }, [supabase]);
+
+  useEffect(() => {
+    const token = borradorTokenInicial;
+    if (!token) return;
+
+    let cancelado = false;
+    setCargandoBorrador(true);
+
+    void (async () => {
+      try {
+        const res = await fetch(
+          apiUrl(`/api/almacen/recepcion/telegram-borrador?token=${encodeURIComponent(token)}`),
+          { cache: 'no-store' },
+        );
+        const json = (await res.json()) as {
+          borrador?: BorradorRecepcionTelegramPayload;
+          error?: string;
+        };
+        if (cancelado) return;
+        if (!res.ok || !json.borrador) {
+          toast.error(json.error ?? 'No se pudo cargar el borrador de Telegram');
+          setBorradorToken('');
+          return;
+        }
+
+        const b = json.borrador;
+        setBorradorToken(b.token);
+        setBorradorTelegram(true);
+        const vistaBorrador =
+          b.vista ??
+          (b.tipo === 'emergencia' ? 'emergencia' : b.tipo === 'nota_entrega' ? 'nota_entrega' : 'ingreso_manual');
+        setVista(vistaBorrador);
+        if (b.proyecto_id) setProyectoId(b.proyecto_id);
+        if (b.ubicacion_id) setUbicacionId(b.ubicacion_id);
+        setProveedorNombre(b.proveedor_nombre);
+        setNumDoc(b.num_doc);
+        setObservaciones(b.observaciones);
+        setLineas(
+          b.lineas.map((l) => ({
+            key: lineKey(),
+            material_id: l.material_id,
+            nombre: l.nombre,
+            unidad: l.unidad,
+            cantidad: String(l.cantidad),
+          })),
+        );
+        toast.success('Datos cargados desde Telegram. Revise y registre aquí o confirme en el bot.');
+      } catch (e) {
+        if (!cancelado) {
+          toast.error(e instanceof Error ? e.message : 'Error al cargar borrador');
+          setBorradorToken('');
+        }
+      } finally {
+        if (!cancelado) setCargandoBorrador(false);
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [borradorTokenInicial]);
 
   const cargarPendientes = useCallback(async () => {
     setLoadingPendientes(true);
@@ -409,6 +475,7 @@ export default function RecepcionCampoClient() {
           soporte_storage_path: soporte?.path ?? null,
           soporte_file_name: soporte?.fileName ?? null,
           soporte_mime_type: soporte?.mimeType ?? null,
+          borrador_token: borradorToken.trim() || null,
         }),
       });
 
@@ -426,6 +493,8 @@ export default function RecepcionCampoClient() {
       toast.success(
         `Recepción registrada (${json.recepcion_id?.slice(0, 8) ?? 'OK'}). Stock actualizado en almacén.`,
       );
+      if (borradorToken) setBorradorToken('');
+      setBorradorTelegram(false);
       router.push('/almacen');
     });
   }
@@ -437,7 +506,7 @@ export default function RecepcionCampoClient() {
     { id: 'emergencia', label: 'Emergencia (sin papeles)', icon: Zap },
   ];
 
-  if (!montado) return <RecepcionCargando />;
+  if (!montado || cargandoBorrador) return <RecepcionCargando />;
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-zinc-100">
@@ -475,6 +544,12 @@ export default function RecepcionCampoClient() {
             );
           })}
         </div>
+        {borradorTelegram ? (
+          <p className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-200">
+            Borrador sincronizado desde Telegram. Puede completar aquí o confirmar en el bot; si ya
+            registró en un canal, no repita el ingreso en el otro.
+          </p>
+        ) : null}
         {vista === 'transito' ? (
           <section className={panelClass}>
             <div className="mb-4 flex items-center justify-between gap-2">

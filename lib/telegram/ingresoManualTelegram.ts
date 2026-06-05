@@ -11,6 +11,12 @@ import {
   resolverMaterialParaLineaCompra,
 } from '@/lib/almacen/resolverMaterialParaCompra';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
+import {
+  baseUrlApp,
+  nuevoTokenRecepcionCampo,
+  urlRecepcionCampoBorrador,
+  vistaDesdeFlujoTelegram,
+} from '@/lib/almacen/recepcionBorradorTelegram';
 import type { LineaRecepcionCampoInput } from '@/lib/almacen/recepcionCampoTypes';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
@@ -76,6 +82,8 @@ export type MetadataIngresoManual = {
   observaciones?: string;
   telegram_user_id?: string;
   telegram_username?: string | null;
+  /** Enlace web `/almacen/recepcion?borrador=…` para nota/emergencia. */
+  recepcion_campo_token?: string;
 };
 
 const PREFIX = 'im:';
@@ -129,14 +137,48 @@ export function esCallbackIngresoManual(data: string): boolean {
   return data.startsWith(PREFIX);
 }
 
-function baseUrlApp(): string {
+function flujoUsaBorradorWeb(flujo: string | undefined): boolean {
   return (
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    'https://casainteligente.company'
-  )
-    .trim()
-    .replace(/\/$/, '');
+    flujo === FLUJO_INGRESO_MANUAL ||
+    flujo === FLUJO_NOTA_ENTREGA ||
+    flujo === FLUJO_EMERGENCIA
+  );
+}
+
+function tokenBorradorRecepcion(
+  flujo: FlujoRecepcionCampoTelegram,
+  estadoPrev?: TelegramEstado,
+): string | undefined {
+  if (!flujoUsaBorradorWeb(flujo)) return undefined;
+  const prev = estadoPrev ? meta(estadoPrev) : undefined;
+  if (prev?.flujo === flujo && prev.recepcion_campo_token?.trim()) {
+    return prev.recepcion_campo_token.trim();
+  }
+  return nuevoTokenRecepcionCampo();
+}
+
+async function enviarEnlaceRecepcionWeb(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  const m = meta(estado);
+  const flujo = m.flujo;
+  if (!flujoUsaBorradorWeb(flujo)) return;
+  const token = m.recepcion_campo_token?.trim();
+  if (!token) return;
+
+  const vista = vistaDesdeFlujoTelegram(flujo);
+  if (!vista) return;
+
+  const url = urlRecepcionCampoBorrador(token, vista);
+  await sendTelegramMessage(
+    chatId,
+    '🌐 <b>Continuar o revisar en la app</b>\n\n' +
+      `<a href="${url}">Abrir pantalla de recepción</a>\n\n` +
+      '<i>Los datos que vaya cargando aquí se rellenan en ese enlace (proveedor, nota, artículos, observaciones).</i>',
+    { parse_mode: 'HTML' },
+  );
 }
 
 async function patchMeta(
@@ -151,12 +193,13 @@ async function patchMeta(
 }
 
 const MENSAJE_INICIO_MANUAL =
-  '📥 <b>Ingreso manual a almacén</b>\n\n' +
+  '📥 <b>Ingreso sin nota / manual</b> (<code>/ingresosinnota</code> · <code>/ingresomanual</code>)\n\n' +
+  'Pantalla: <b>Recepción de materiales</b> (pestaña Ingreso manual).\n\n' +
   '1️⃣ Elige la obra.\n' +
   '2️⃣ Elige el almacén de ingreso.\n' +
   '3️⃣ Escribe el <b>proveedor</b>.\n' +
-  '4️⃣ Nº de nota o referencia.\n' +
-  '5️⃣ Material (elige del catálogo o <b>agrega uno nuevo</b>), cantidad y agregar más si hace falta.\n' +
+  '4️⃣ Referencia del movimiento (vale, guía; <code>S/N</code> si no hay).\n' +
+  '5️⃣ Material (catálogo o <b>nuevo</b>), cantidad; repite si hay más líneas.\n' +
   '6️⃣ Soporte fotográfico (opcional).\n' +
   '7️⃣ Observaciones y confirmar.\n\n' +
   '<code>/cancelar</code> para abortar.';
@@ -196,17 +239,32 @@ async function iniciarFlujoRecepcionCampo(
   flujo: FlujoRecepcionCampoTelegram,
   pickerModo: PickerModoRecepcionCampo,
 ): Promise<void> {
+  const token = tokenBorradorRecepcion(flujo);
   await setTelegramContexto(supabase, chatId, {
     contexto: 'entrada_obra',
     proyecto_id: null,
     pending_factura_id: null,
-    metadata: { flujo, paso: 'almacen', lineas: [], fotos_storage_paths: [] },
+    metadata: {
+      flujo,
+      paso: 'almacen',
+      lineas: [],
+      fotos_storage_paths: [],
+      ...(token ? { recepcion_campo_token: token } : {}),
+    },
   });
   await sendTelegramMessage(chatId, mensajeInicioFlujo(flujo), { parse_mode: 'HTML' });
   await enviarPickerProyectosTelegram(supabase, chatId, pickerModo);
 }
 
 export async function manejarComandoIngresoManualTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_INGRESO_MANUAL, 'ingreso_manual');
+}
+
+/** Ingreso sin nota fiscal → pestaña «Ingreso manual» en /almacen/recepcion. */
+export async function manejarComandoIngresoSinNotaTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
@@ -237,11 +295,19 @@ export async function prepararIngresoManualTrasObra(
 ): Promise<void> {
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
   await asegurarUbicacionObra(supabase, proyectoId, nombre);
+  const estadoPrev = await getTelegramEstado(supabase, chatId);
+  const token = tokenBorradorRecepcion(flujo, estadoPrev);
   await setTelegramContexto(supabase, chatId, {
     contexto: 'entrada_obra',
     proyecto_id: proyectoId,
     pending_factura_id: null,
-    metadata: { flujo, paso: 'almacen', lineas: [], fotos_storage_paths: [] },
+    metadata: {
+      flujo,
+      paso: 'almacen',
+      lineas: [],
+      fotos_storage_paths: [],
+      ...(token ? { recepcion_campo_token: token } : {}),
+    },
   });
   await enviarPickerAlmacenIngresoManual(supabase, chatId, proyectoId, nombre);
 }
@@ -586,6 +652,9 @@ async function enviarConfirmacion(
       inline_keyboard: [[{ text: textoBotonConfirmar, callback_data: `${PREFIX}conf:ok` }]],
     },
   });
+
+  const estadoConfirm = await getTelegramEstado(supabase, chatId);
+  await enviarEnlaceRecepcionWeb(supabase, chatId, estadoConfirm);
 }
 
 async function finalizarLineaDraft(
@@ -728,11 +797,13 @@ export async function manejarCallbackIngresoManual(
       ubicacion_id: ubicacionId,
       ubicacion_nombre: String(ubi.nombre),
     });
+    const estadoTrasUb = await getTelegramEstado(supabase, params.chatId);
     await sendTelegramMessage(
       params.chatId,
       `✅ Almacén: <b>${ubi.nombre}</b>\n\n✏️ Escribe el <b>nombre del proveedor</b>:`,
       { parse_mode: 'HTML' },
     );
+    await enviarEnlaceRecepcionWeb(supabase, params.chatId, estadoTrasUb);
     return true;
   }
 
@@ -1113,7 +1184,12 @@ export async function manejarFotoIngresoManual(params: {
 
 export function esComandoIngresoManual(texto: string): boolean {
   const t = texto.trim().toLowerCase().split(/\s+/)[0]?.split('@')[0] ?? '';
-  return t === '/ingresomanual';
+  return (
+    t === '/ingresomanual' ||
+    t === '/ingresosinnota' ||
+    t === '/ingresosinnotas' ||
+    t === '/sinnota'
+  );
 }
 
 /** Comandos que inician el flujo nota de entrega → stock (depositario). */

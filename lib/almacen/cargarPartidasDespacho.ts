@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { labelPartida } from '@/lib/almacen/inventoryClasificacion';
+import { listarPartidasProyectoDespacho } from '@/lib/almacen/listarPartidasProyectoDespacho';
 import { resolverInsumoIdsParaMaterial } from '@/lib/almacen/resolverInsumosMaterial';
 import {
   calcularTechoCantidadInsumoPartida,
@@ -288,4 +289,61 @@ export async function cargarOpcionesPartidaDespacho(
 
   filas.sort((a, b) => a.nombre_partida.localeCompare(b.nombre_partida, 'es'));
   return filas;
+}
+
+export type ModoOpcionesPartidaDespacho = 'apu_material' | 'todo_presupuesto' | 'sin_partidas';
+
+function partidasDesdeListadoProyecto(
+  listado: Awaited<ReturnType<typeof listarPartidasProyectoDespacho>>,
+): PartidaDespachoFila[] {
+  return listado.map((p) => ({
+    obra_partida_material_id: p.key,
+    partida_id: p.partida_id,
+    ci_presupuesto_partida_id: p.ci_presupuesto_partida_id,
+    nombre_partida: p.nombre,
+    cantidad_presupuestada: 0,
+    cantidad_asignada_real: 0,
+    unidad: 'UND',
+  }));
+}
+
+/**
+ * Igual que despacho web: primero partidas ligadas al material (APU/techo),
+ * si no hay ninguna, todas las del presupuesto de la obra.
+ */
+export async function cargarOpcionesPartidaDespachoFlexible(
+  supabase: SupabaseClient,
+  params: { proyectoId: string; materialId: string },
+): Promise<{ partidas: PartidaDespachoFila[]; modo: ModoOpcionesPartidaDespacho }> {
+  const materialId = params.materialId.trim();
+  const proyectoId = params.proyectoId.trim();
+  if (!proyectoId || !materialId) {
+    return { partidas: [], modo: 'sin_partidas' };
+  }
+
+  const relacionadas = await cargarOpcionesPartidaDespacho(supabase, {
+    proyectoId,
+    materialId,
+    soloRelacionadas: true,
+  });
+  if (relacionadas.length) {
+    return { partidas: relacionadas, modo: 'apu_material' };
+  }
+
+  const todasPresupuesto = await cargarOpcionesPartidaDespacho(supabase, {
+    proyectoId,
+    materialId,
+    soloRelacionadas: false,
+  });
+  if (todasPresupuesto.length) {
+    return { partidas: todasPresupuesto, modo: 'todo_presupuesto' };
+  }
+
+  const listado = await listarPartidasProyectoDespacho(supabase, proyectoId);
+  const filas = partidasDesdeListadoProyecto(listado);
+  if (filas.length) {
+    return { partidas: filas, modo: 'todo_presupuesto' };
+  }
+
+  return { partidas: [], modo: 'sin_partidas' };
 }

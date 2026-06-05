@@ -14,6 +14,7 @@ import { manejarComandoAguaTelegram } from '@/lib/telegram/aguaRegistro';
 import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFacturaTelegram';
 import {
   manejarComandoIngresoManualTelegram,
+  manejarComandoIngresoSinNotaTelegram,
   manejarComandoNotaEntregaTelegram,
   manejarComandoEmergenciaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
@@ -200,7 +201,12 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     });
   }
 
-  if (cmd === '/ingresomanual') {
+  if (
+    cmd === '/ingresosinnota' ||
+    cmd === '/sinnota' ||
+    cmd === '/ingresosinnotas' ||
+    cmd === '/ingresomanual'
+  ) {
     const admin = telegramSupabaseAdmin();
     if (!admin.ok) {
       try {
@@ -210,20 +216,27 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
           { parse_mode: 'HTML' },
         );
       } catch (err) {
-        console.error('[telegram webhook] /ingresomanual sin supabase admin', err);
+        console.error('[telegram webhook] ingreso sin nota sin supabase admin', err);
       }
       return respuestaWebhook({ ok: true, error: 'supabase_admin' });
     }
     try {
-      await manejarComandoIngresoManualTelegram(admin.client, chatId);
+      if (cmd === '/ingresomanual') {
+        await manejarComandoIngresoManualTelegram(admin.client, chatId);
+      } else {
+        await manejarComandoIngresoSinNotaTelegram(admin.client, chatId);
+      }
     } catch (err) {
-      console.error('[telegram webhook] /ingresomanual', err);
+      console.error('[telegram webhook] ingreso sin nota', err);
       return respuestaWebhook({
         ok: true,
         error: err instanceof Error ? err.message : 'ingreso_manual_command_failed',
       });
     }
-    return respuestaWebhook({ ok: true, command: 'ingresomanual' });
+    return respuestaWebhook({
+      ok: true,
+      command: cmd === '/ingresomanual' ? 'ingresomanual' : 'ingresosinnota',
+    });
   }
 
   if (cmd === '/ingresofactura' || cmd === '/ingresofacturas' || cmd === '/ingreso') {

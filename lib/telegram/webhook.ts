@@ -829,7 +829,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       if (texto.startsWith('/')) {
         await sendTelegramMessage(
           chatId,
-          '❌ Comando no reconocido.\n<code>/ingresomanual</code> · <code>/salida</code> · <code>/agua</code>\n<code>/ayuda</code>',
+          '❌ Comando no reconocido.\n<code>/ingresosinnota</code> · <code>/salida</code> · <code>/agua</code>\n<code>/ayuda</code>',
           { parse_mode: 'HTML' },
         );
         return NextResponse.json({ ok: true, unknown_command: true });

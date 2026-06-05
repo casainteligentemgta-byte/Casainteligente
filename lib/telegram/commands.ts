@@ -67,7 +67,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /nota — mismo flujo que /ingresonotas\n' +
         '• /ingresoemergencia — emergencia sin papeles: proyecto, almacén, artículos, stock\n' +
         '• /emergencia — alias de /ingresoemergencia\n' +
-        '• /ingresomanual — alias ingreso manual (mismo flujo que /nota)\n' +
+        '• /ingresosinnota — ingreso sin nota: rellena Recepción (pestaña Ingreso manual)\n' +
+        '• /ingresomanual — alias de /ingresosinnota\n' +
         '• /ingresofactura — proveedor → factura → verificar cantidades → fotos → almacén\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
@@ -101,7 +102,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/nota — alias de /ingresonotas\n' +
         '/ingresoemergencia — emergencia sin papeles (proyecto → almacén → stock)\n' +
         '/emergencia — alias de /ingresoemergencia\n' +
-        '/ingresomanual — ingreso manual (mismo flujo estructurado)\n' +
+        '/ingresosinnota — ingreso sin nota → pantalla Recepción (Ingreso manual)\n' +
+        '/ingresomanual — alias de /ingresosinnota\n' +
         '/ingresofactura — proveedor, factura, conteo físico, fotos e ingreso a almacén\n' +
         '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
         '/comprasdia — lista de materiales comprados hoy\n' +
@@ -124,7 +126,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       contexto: 'menu',
       proyectoId: null,
       resetProyecto: true,
-      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /ingresomanual, /salida o /agua.',
+      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /ingresosinnota, /salida o /agua.',
     };
   }
 
@@ -190,7 +192,12 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoEmergencia: true };
   }
 
-  if (cmd === '/ingresomanual') {
+  if (
+    cmd === '/ingresosinnota' ||
+    cmd === '/sinnota' ||
+    cmd === '/ingresosinnotas' ||
+    cmd === '/ingresomanual'
+  ) {
     return { handled: true, comandoIngresoManual: true };
   }
 

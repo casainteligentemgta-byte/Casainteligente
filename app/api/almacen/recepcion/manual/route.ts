@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { limpiarBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { PayloadRecepcionManualApi } from '@/lib/almacen/recepcionCampoTypes';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
@@ -100,6 +101,15 @@ export async function POST(req: Request) {
 
   if (Object.keys(patch).length > 0) {
     await supabase.from('ci_recepciones_campo').update(patch as never).eq('id', id);
+  }
+
+  const borradorToken = body.borrador_token?.trim();
+  if (borradorToken) {
+    try {
+      await limpiarBorradorRecepcionPorToken(supabase, borradorToken);
+    } catch {
+      /* no bloquear registro si falla limpieza del estado Telegram */
+    }
   }
 
   return NextResponse.json({

@@ -20,4 +20,6 @@ export type PayloadRecepcionManualApi = {
   soporte_file_name?: string | null;
   soporte_mime_type?: string | null;
   observaciones?: string | null;
+  /** Tras registrar en web, limpia el borrador Telegram asociado. */
+  borrador_token?: string | null;
 };
