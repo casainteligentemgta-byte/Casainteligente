@@ -190,6 +190,38 @@ export function expandirUbicacionesHermanoObra(
   return incluirAlmacenesCentralesHermanoObra(flat, candidatas);
 }
 
+/** Incluye bodegas/subsitios hijos de almacenes ya seleccionados (ahí suele estar el stock físico). */
+export function expandirDescendientesUbicacion(
+  flat: UbicacionInventario[],
+  raices: UbicacionInventario[],
+): UbicacionInventario[] {
+  const byPadre = new Map<string, UbicacionInventario[]>();
+  for (const u of flat) {
+    const padre = u.ubicacion_padre_id?.trim();
+    if (!padre) continue;
+    const arr = byPadre.get(padre) ?? [];
+    arr.push(u);
+    byPadre.set(padre, arr);
+  }
+
+  const out = new Map(raices.map((u) => [u.id, u]));
+  const queue = raices.map((u) => u.id);
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const hijo of byPadre.get(id) ?? []) {
+      if (!out.has(hijo.id)) {
+        out.set(hijo.id, hijo);
+        queue.push(hijo.id);
+      }
+    }
+  }
+  return Array.from(out.values());
+}
+
+export function esUbicacionAlmacenFisico(tipo: string | undefined | null): boolean {
+  return tipo === 'almacen_central' || tipo === 'almacen_movil' || !tipo || tipo === 'cuarentena';
+}
+
 /** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */
 export function resolverUbicacionIdsFiltro(
   ubicaciones: UbicacionInventario[],
@@ -205,6 +237,7 @@ export function resolverUbicacionIdsFiltro(
       ubicacionPerteneceAProyecto(u, opts.proyectoId!, opts.proyectoNombre),
     );
     candidatas = incluirAlmacenesCentralesHermanoObra(flat, candidatas);
+    candidatas = expandirDescendientesUbicacion(flat, candidatas);
   }
   if (opts.depositId) {
     const antesDeposito = candidatas;

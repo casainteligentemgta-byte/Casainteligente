@@ -42,8 +42,12 @@ import {
     type PartidaRow,
     type ProyectoRow,
 } from '@/lib/almacen/inventoryClasificacion';
-import { getStockAgregadoPorMaterialObra } from '@/lib/almacen/getStockRealObra';
 import {
+  getStockAgregadoAlmacenPorMaterialObra,
+  getStockAgregadoPorMaterialObra,
+} from '@/lib/almacen/getStockRealObra';
+import {
+    esUbicacionAlmacenFisico,
     cargarStockPorUbicaciones,
     cargarValorInventarioPorDeposito,
     enriquecerMapaStockConProyectoFiltro,
@@ -558,8 +562,12 @@ export default function InventoryMasterPage() {
                 const etiquetaUb =
                     nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
 
+                const idsSoloAlmacen = ubicacionesFiltro
+                    .filter((u) => esUbicacionAlmacenFisico(u.tipo))
+                    .map((u) => u.id);
+
                 if (filterProyectoId) {
-                    const agg = await getStockAgregadoPorMaterialObra(
+                    const agg = await getStockAgregadoAlmacenPorMaterialObra(
                         supabase,
                         filterProyectoId,
                         nombreProyectoFiltro || undefined,
@@ -610,38 +618,35 @@ export default function InventoryMasterPage() {
                     }
                 }
 
-                if (ids.length && filterProyectoId) {
-                    const stockUb = await cargarStockPorUbicaciones(supabase, ids);
-                    for (const [mid, ubRes] of Array.from(stockUb.entries())) {
-                        const prev = stockMap.get(mid);
-                        if (prev) {
-                            if (ubRes.cantidad_disponible > 0) {
-                                prev.cantidad_disponible = ubRes.cantidad_disponible;
-                            }
+                if (idsSoloAlmacen.length && filterProyectoId) {
+                    const stockUb = await cargarStockPorUbicaciones(supabase, idsSoloAlmacen);
+                    for (const mid of Array.from(stockMap.keys())) {
+                        const ubRes = stockUb.get(mid);
+                        const enUb = ubRes?.cantidad_disponible ?? 0;
+                        if (enUb <= 0) {
+                            stockMap.delete(mid);
+                            continue;
+                        }
+                        const prev = stockMap.get(mid)!;
+                        prev.cantidad_disponible = enUb;
+                        if (ubRes) {
                             prev.ubicacion_nombres = ubRes.ubicacion_nombres;
                             prev.deposit_ids = ubRes.deposit_ids;
-                            prev.proyecto_ids = ubRes.proyecto_ids.length
-                                ? ubRes.proyecto_ids
-                                : prev.proyecto_ids;
-                            prev.proyecto_nombres = ubRes.proyecto_nombres.length
-                                ? ubRes.proyecto_nombres
-                                : prev.proyecto_nombres;
-                        } else if (ubRes.cantidad_disponible > 0) {
-                            fusionarFilaEnResumenStock(stockMap, mid, {
-                                cantidad: ubRes.cantidad_disponible,
-                                ubicacionNombre: ubRes.ubicacion_nombres[0] ?? etiquetaUb,
-                                proyectoId: proyectoIdStock,
-                                proyectoNombre: proyectoNombreStock,
-                                depositId: ubRes.deposit_ids[0],
-                            });
+                            if (ubRes.proyecto_ids.length) prev.proyecto_ids = ubRes.proyecto_ids;
+                            if (ubRes.proyecto_nombres.length) {
+                                prev.proyecto_nombres = ubRes.proyecto_nombres;
+                            }
                         }
                     }
-                    if (filterDepositId) {
-                        for (const mid of Array.from(stockMap.keys())) {
-                            const enUb = stockUb.get(mid)?.cantidad_disponible ?? 0;
-                            if (enUb <= 0) stockMap.delete(mid);
-                            else stockMap.get(mid)!.cantidad_disponible = enUb;
-                        }
+                    for (const [mid, ubRes] of Array.from(stockUb.entries())) {
+                        if (stockMap.has(mid) || ubRes.cantidad_disponible <= 0) continue;
+                        fusionarFilaEnResumenStock(stockMap, mid, {
+                            cantidad: ubRes.cantidad_disponible,
+                            ubicacionNombre: ubRes.ubicacion_nombres[0] ?? etiquetaUb,
+                            proyectoId: proyectoIdStock,
+                            proyectoNombre: proyectoNombreStock,
+                            depositId: ubRes.deposit_ids[0],
+                        });
                     }
                 } else if (ids.length && !filterProyectoId && !filterEntidadId) {
                     stockMap = await cargarStockPorUbicaciones(supabase, ids);

@@ -3,7 +3,12 @@ import {
   listarUbicacionesInventario,
   propagarObraIdFlat,
 } from '@/lib/almacen/ubicacionesInventario';
-import { ubicacionPerteneceAProyecto, expandirUbicacionesHermanoObra } from '@/lib/almacen/inventarioFiltroUbicacion';
+import {
+  esUbicacionAlmacenFisico,
+  expandirDescendientesUbicacion,
+  expandirUbicacionesHermanoObra,
+  ubicacionPerteneceAProyecto,
+} from '@/lib/almacen/inventarioFiltroUbicacion';
 import type { StockProyectoItem } from '@/lib/almacen/listarStockProyecto';
 
 type RpcStockRow = {
@@ -74,6 +79,24 @@ export async function getStockAgregadoPorMaterialObra(
   return map;
 }
 
+/** Stock disponible solo en almacenes (excluye ubicación tipo obra donde va el material egresado). */
+export async function getStockAgregadoAlmacenPorMaterialObra(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  proyectoNombre?: string,
+): Promise<Map<string, number>> {
+  const filas = await getStockRealObra(supabase, proyectoId, {
+    soloConStock: false,
+    proyectoNombre,
+  });
+  const map = new Map<string, number>();
+  for (const f of filas) {
+    if (!esUbicacionAlmacenFisico(f.ubicacion_tipo)) continue;
+    map.set(f.material_id, (map.get(f.material_id) ?? 0) + f.cantidad_disponible);
+  }
+  return map;
+}
+
 /** Fallback si la RPC aún no está en Supabase (migr. 187). */
 async function listarStockProyectoDesdeTablas(
   supabase: SupabaseClient,
@@ -96,6 +119,7 @@ async function listarStockProyectoDesdeTablas(
     ubicacionPerteneceAProyecto(u, proyectoId, proyectoNombre),
   );
   ubicacionesObra = expandirUbicacionesHermanoObra(todas, ubicacionesObra);
+  ubicacionesObra = expandirDescendientesUbicacion(todas, ubicacionesObra);
   if (opts?.ubicacionId) {
     ubicacionesObra = ubicacionesObra.filter((u) => u.id === opts.ubicacionId);
   }

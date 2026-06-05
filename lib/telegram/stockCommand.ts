@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { patronIlike } from '@/lib/contabilidad/comprasQueryFiltros';
 import { getStockRealObra } from '@/lib/almacen/getStockRealObra';
+import { esUbicacionAlmacenFisico } from '@/lib/almacen/inventarioFiltroUbicacion';
 import type { StockProyectoItem } from '@/lib/almacen/listarStockProyecto';
 import {
   answerCallbackQuery,
@@ -136,27 +137,24 @@ function construirMensajeConsolidadoMaterial(
   return lineas.join('\n');
 }
 
-function esUbicacionTipoObra(tipo: string | null | undefined): boolean {
-  return tipo === 'obra';
-}
-
 function agregarStockPorMaterial(filas: StockProyectoItem[]): LineaStockAgregada[] {
   const map = new Map<string, LineaStockAgregada>();
   for (const f of filas) {
     const qty = Number(f.cantidad_disponible) || 0;
     if (qty <= 0) continue;
     const prev = map.get(f.material_id);
-    const enObra = esUbicacionTipoObra(f.ubicacion_tipo);
+    const enObra = f.ubicacion_tipo === 'obra';
+    const enAlmacenQty = !enObra && (esUbicacionAlmacenFisico(f.ubicacion_tipo) || !f.ubicacion_tipo);
     if (prev) {
       prev.cantidad += qty;
       if (enObra) prev.enObra += qty;
-      else prev.enAlmacen += qty;
+      else if (enAlmacenQty) prev.enAlmacen += qty;
     } else {
       map.set(f.material_id, {
         nombre: f.nombre.trim() || 'Material',
         unidad: f.unidad.trim() || 'UND',
         cantidad: qty,
-        enAlmacen: enObra ? 0 : qty,
+        enAlmacen: enAlmacenQty ? qty : 0,
         enObra: enObra ? qty : 0,
       });
     }
@@ -165,18 +163,20 @@ function agregarStockPorMaterial(filas: StockProyectoItem[]): LineaStockAgregada
 }
 
 function formatearLineaStock(l: LineaStockAgregada, indice: number): string {
-  const qty = l.cantidad.toLocaleString('es-VE');
   const u = escapeHtml(l.unidad);
-  if (l.enObra > 0 && l.enAlmacen > 0) {
+  if (l.enAlmacen > 0 && l.enObra > 0) {
     return (
-      `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u}\n` +
-      `   └ almacén: ${l.enAlmacen.toLocaleString('es-VE')} · en obra: ${l.enObra.toLocaleString('es-VE')}`
+      `${indice}. ${escapeHtml(l.nombre)} — <b>${l.enAlmacen.toLocaleString('es-VE')}</b> ${u} en almacén` +
+      ` <i>(+ ${l.enObra.toLocaleString('es-VE')} ya en obra)</i>`
     );
   }
-  if (l.enObra > 0 && l.enAlmacen <= 0) {
-    return `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u} <i>(en obra)</i>`;
+  if (l.enAlmacen > 0) {
+    return `${indice}. ${escapeHtml(l.nombre)} — <b>${l.enAlmacen.toLocaleString('es-VE')}</b> ${u}`;
   }
-  return `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u}`;
+  if (l.enObra > 0) {
+    return `${indice}. ${escapeHtml(l.nombre)} — <b>${l.enObra.toLocaleString('es-VE')}</b> ${u} <i>(solo en obra)</i>`;
+  }
+  return `${indice}. ${escapeHtml(l.nombre)} — <b>${l.cantidad.toLocaleString('es-VE')}</b> ${u}`;
 }
 
 function callbackStockObraPage(proyectoId: string, page: number): string {
@@ -261,7 +261,8 @@ async function enviarListadoStockObra(
     proyectoNombre: proyecto.nombre,
   });
   const lineasAgregadas = agregarStockPorMaterial(filas);
-  const totalUnidades = lineasAgregadas.reduce((a, l) => a + l.cantidad, 0);
+  const totalAlmacen = lineasAgregadas.reduce((a, l) => a + l.enAlmacen, 0);
+  const totalEnObra = lineasAgregadas.reduce((a, l) => a + l.enObra, 0);
 
   if (!lineasAgregadas.length) {
     await sendTelegramMessage(
@@ -287,8 +288,9 @@ async function enviarListadoStockObra(
 
   let texto =
     `📦 <b>Stock — ${escapeHtml(proyecto.nombre)}</b>\n` +
-    `${lineasAgregadas.length} material(es) · ${totalUnidades.toLocaleString('es-VE')} unidades\n` +
-    `<i>Tras una salida (/salida), baja el stock en almacén y sube «en obra».</i>\n\n` +
+    `${lineasAgregadas.length} material(es) · <b>${totalAlmacen.toLocaleString('es-VE')}</b> uds en almacén` +
+    (totalEnObra > 0 ? ` · ${totalEnObra.toLocaleString('es-VE')} en obra` : '') +
+    '\n<i>Tras /salida, baja la cifra «en almacén».</i>\n\n' +
     detalle;
 
   if (texto.length > MAX_MSG) {
