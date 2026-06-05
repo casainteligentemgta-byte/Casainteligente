@@ -28,6 +28,10 @@ export async function getStockRealObra(
     proyectoNombre?: string;
   },
 ): Promise<StockProyectoItem[]> {
+  /** inventario_stock + filtro por obra (incl. almacén central homónimo) es la fuente más fiable tras movimientos. */
+  const desdeTablas = await listarStockProyectoDesdeTablas(supabase, proyectoId, opts);
+  if (desdeTablas.length) return desdeTablas;
+
   const { data, error } = await supabase.rpc('get_stock_real_obra', {
     p_proyecto_id: proyectoId,
     p_ubicacion_id: opts?.ubicacionId ?? null,
@@ -36,18 +40,15 @@ export async function getStockRealObra(
   });
 
   if (error) {
-    return listarStockProyectoDesdeTablas(supabase, proyectoId, opts);
+    return [];
   }
 
   const rows = (data ?? []) as RpcStockRow[];
-  if (!rows.length) {
-    return listarStockProyectoDesdeTablas(supabase, proyectoId, opts);
-  }
-
   return rows.map((row) => ({
     material_id: String(row.material_id),
     ubicacion_id: String(row.ubicacion_id),
     ubicacion_nombre: String(row.ubicacion_nombre ?? 'Almacén'),
+    ubicacion_tipo: null,
     nombre: String(row.material_name ?? 'Material'),
     unidad: String(row.material_unit ?? 'UND'),
     sap_code: row.material_sap_code ?? null,
@@ -101,6 +102,7 @@ async function listarStockProyectoDesdeTablas(
   if (!ubicacionesObra.length) return [];
 
   const nombrePorId = new Map(ubicacionesObra.map((u) => [u.id, u.nombre]));
+  const tipoPorId = new Map(ubicacionesObra.map((u) => [u.id, u.tipo]));
   const ids = ubicacionesObra.map((u) => u.id);
   const items: StockProyectoItem[] = [];
   const BATCH = 40;
@@ -125,6 +127,7 @@ async function listarStockProyectoDesdeTablas(
     if (error) throw new Error(error.message);
 
     for (const row of data ?? []) {
+      const ubId = String(row.ubicacion_id);
       const raw = row.material as
         | {
             id: string;
@@ -150,7 +153,8 @@ async function listarStockProyectoDesdeTablas(
       items.push({
         material_id: mat.id,
         ubicacion_id: String(row.ubicacion_id),
-        ubicacion_nombre: nombrePorId.get(String(row.ubicacion_id)) ?? 'Almacén',
+        ubicacion_nombre: nombrePorId.get(ubId) ?? 'Almacén',
+        ubicacion_tipo: tipoPorId.get(ubId) ?? null,
         nombre: mat.name ?? 'Material',
         unidad: mat.unit ?? 'UND',
         sap_code: mat.sap_code ?? null,

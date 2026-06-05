@@ -5,6 +5,8 @@ export type StockProyectoItem = {
   material_id: string;
   ubicacion_id: string;
   ubicacion_nombre: string;
+  /** Tipo de ubicación (obra, almacen_central, …) para desglose en /stock. */
+  ubicacion_tipo?: string | null;
   nombre: string;
   unidad: string;
   sap_code: string | null;

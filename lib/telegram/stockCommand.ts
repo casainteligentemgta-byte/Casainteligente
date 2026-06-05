@@ -41,6 +41,10 @@ type StockRow = {
 type LineaStockAgregada = {
   nombre: string;
   unidad: string;
+  /** Suma en almacenes / depósito (no tipo obra). */
+  enAlmacen: number;
+  /** Ubicación tipo obra (material ya egresado a frente). */
+  enObra: number;
   cantidad: number;
 };
 
@@ -132,23 +136,47 @@ function construirMensajeConsolidadoMaterial(
   return lineas.join('\n');
 }
 
+function esUbicacionTipoObra(tipo: string | null | undefined): boolean {
+  return tipo === 'obra';
+}
+
 function agregarStockPorMaterial(filas: StockProyectoItem[]): LineaStockAgregada[] {
   const map = new Map<string, LineaStockAgregada>();
   for (const f of filas) {
     const qty = Number(f.cantidad_disponible) || 0;
     if (qty <= 0) continue;
     const prev = map.get(f.material_id);
+    const enObra = esUbicacionTipoObra(f.ubicacion_tipo);
     if (prev) {
       prev.cantidad += qty;
+      if (enObra) prev.enObra += qty;
+      else prev.enAlmacen += qty;
     } else {
       map.set(f.material_id, {
         nombre: f.nombre.trim() || 'Material',
         unidad: f.unidad.trim() || 'UND',
         cantidad: qty,
+        enAlmacen: enObra ? 0 : qty,
+        enObra: enObra ? qty : 0,
       });
     }
   }
   return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+function formatearLineaStock(l: LineaStockAgregada, indice: number): string {
+  const qty = l.cantidad.toLocaleString('es-VE');
+  const u = escapeHtml(l.unidad);
+  if (l.enObra > 0 && l.enAlmacen > 0) {
+    return (
+      `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u}\n` +
+      `   └ almacén: ${l.enAlmacen.toLocaleString('es-VE')} · en obra: ${l.enObra.toLocaleString('es-VE')}`
+    );
+  }
+  if (l.enObra > 0 && l.enAlmacen <= 0) {
+    return `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u} <i>(en obra)</i>`;
+  }
+  return `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u}`;
 }
 
 function callbackStockObraPage(proyectoId: string, page: number): string {
@@ -254,15 +282,13 @@ async function enviarListadoStockObra(
   );
 
   const detalle = slice
-    .map(
-      (l, i) =>
-        `${safePage * STOCK_LINES_PAGE + i + 1}. ${escapeHtml(l.nombre)} — <b>${l.cantidad.toLocaleString('es-VE')}</b> ${escapeHtml(l.unidad)}`,
-    )
+    .map((l, i) => formatearLineaStock(l, safePage * STOCK_LINES_PAGE + i + 1))
     .join('\n');
 
   let texto =
     `📦 <b>Stock — ${escapeHtml(proyecto.nombre)}</b>\n` +
-    `${lineasAgregadas.length} material(es) · ${totalUnidades.toLocaleString('es-VE')} unidades\n\n` +
+    `${lineasAgregadas.length} material(es) · ${totalUnidades.toLocaleString('es-VE')} unidades\n` +
+    `<i>Tras una salida (/salida), baja el stock en almacén y sube «en obra».</i>\n\n` +
     detalle;
 
   if (texto.length > MAX_MSG) {
