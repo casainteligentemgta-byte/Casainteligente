@@ -10,6 +10,10 @@ import {
 } from '@/lib/almacen/ubicacionesInventario';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import {
+  confirmarCompraDesdeCanal,
+  linkConfirmarCompraTelegram,
+} from '@/lib/contabilidad/confirmarCompraDesdeCanal';
+import {
   esNotaEntregaExtracted,
   mensajeNotaEntregaFinalizada,
 } from '@/lib/telegram/notaEntregaRegistro';
@@ -216,13 +220,40 @@ export async function manejarCallbackUbicacionTelegram(
     return true;
   }
 
-  await sendTelegramMessage(
-    params.chatId,
-    `✅ <b>Factura cargada en almacén</b>\n` +
-      `Obra: <b>${nombreObra}</b>\n` +
-      `Almacén: <b>${ubi.nombre}</b>`,
-    { parse_mode: 'HTML' },
-  );
+  const linkAudi = linkConfirmarCompraTelegram(pendingId);
+  let textoFinal =
+    `✅ <b>Factura registrada en Contabilidad</b>\n` +
+    `Obra: <b>${nombreObra}</b>\n` +
+    `Almacén destino (precarga): <b>${ubi.nombre}</b>\n\n` +
+    `📋 <b>Auditoría</b> puede corregir líneas o montos en:\n<a href="${linkAudi}">${linkAudi}</a>\n\n` +
+    `📥 Cuando llegue la mercancía, el depositario usa <code>/ingresofactura</code> para ingresar al stock.`;
+
+  if (!proyectoId) {
+    await sendTelegramMessage(params.chatId, textoFinal, { parse_mode: 'HTML' });
+    return true;
+  }
+
+  try {
+    await confirmarCompraDesdeCanal(supabase, {
+      pendingId,
+      proyectoId,
+      ubicacionDestinoId: parsed.ubicacionId,
+    });
+    await setTelegramContexto(supabase, params.chatId, {
+      contexto: 'menu',
+      pending_factura_id: null,
+      metadata: {},
+    });
+  } catch (e) {
+    const det = e instanceof Error ? e.message : 'Error al registrar en Contabilidad';
+    textoFinal =
+      `⚠️ <b>Factura precargada</b> (obra y almacén asignados).\n\n` +
+      `No se pudo completar el registro contable automático:\n<i>${det.slice(0, 280)}</i>\n\n` +
+      `📋 <b>Auditoría</b> debe revisar y confirmar en:\n<a href="${linkAudi}">${linkAudi}</a>\n\n` +
+      `📥 Luego el depositario ingresa con <code>/ingresofactura</code>.`;
+  }
+
+  await sendTelegramMessage(params.chatId, textoFinal, { parse_mode: 'HTML' });
   return true;
 }
 

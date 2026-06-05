@@ -59,7 +59,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       mensaje:
         '🏠 <b>Casa Inteligente</b>\n\n' +
         'Elige un modo:\n' +
-        '• /facturas — recibir factura de compra (foto/PDF, IA + app)\n' +
+        '• /facturas — comprador: foto/PDF → Contabilidad + precarga almacén\n' +
+        '• /ingresofactura — depositario: ingreso físico cuando llega la mercancía\n' +
         '• /obra — elegir obra y subir fotos de evidencia\n' +
         '• /proyecto — cambiar obra activa (lista)\n' +
         '• /gasto — comprobante de gasto de obra\n' +
@@ -90,7 +91,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       handled: true,
       mensaje:
         '<b>Comandos</b>\n' +
-        '/facturas — modo facturas de compra\n' +
+        '/facturas — comprador: cargar factura → Contabilidad (Auditoría corrige en app)\n' +
+        '/ingresofactura — depositario: ingreso físico al almacén\n' +
         '/obra — elegir obra (lista) y subir fotos\n' +
         '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +

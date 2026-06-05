@@ -149,14 +149,17 @@ export async function processInvoiceFromCanal(params: {
     })
     .eq('id', params.pendingId);
 
-  // Fast-Track: umbral USD por proyecto (ci_proyectos.limite_fast_track_usd; fallback $100).
+  // Fast-Track con ingreso a stock: solo app/WhatsApp. En Telegram el comprador registra
+  // contabilidad; el depositario ingresa físicamente con /ingresofactura.
   let fastTrackMsg = '';
-  const ft = await evaluarYProcesarFastTrack(supabase, params.pendingId, datosOcr);
-  if (ft.estado === 'aprobado_sistema') {
-    fastTrackMsg =
-      `\n⚡ <b>Fast-Track</b> (${ft.confidenceScore?.toFixed(0) ?? '—'}% confianza): aprobado_sistema e ingreso a inventario.`;
-  } else if (ft.error) {
-    console.warn('[processInvoiceFromCanal] fast-track degradado:', ft.error);
+  if (params.canal !== 'telegram') {
+    const ft = await evaluarYProcesarFastTrack(supabase, params.pendingId, datosOcr);
+    if (ft.estado === 'aprobado_sistema') {
+      fastTrackMsg =
+        `\n⚡ <b>Fast-Track</b> (${ft.confidenceScore?.toFixed(0) ?? '—'}% confianza): aprobado_sistema e ingreso a inventario.`;
+    } else if (ft.error) {
+      console.warn('[processInvoiceFromCanal] fast-track degradado:', ft.error);
+    }
   }
 
   await prog?.reportar(100, 'Completado');
@@ -173,13 +176,15 @@ export async function processInvoiceFromCanal(params: {
 
   const html =
     params.canal === 'telegram'
-      ? `✅ <b>Factura recibida</b>\n\n` +
+      ? `✅ <b>Factura leída</b>\n\n` +
         `📄 Nº: <code>${inv.invoice_number ?? '—'}</code>\n` +
         `🏢 ${inv.supplier_name ?? 'Proveedor'}\n` +
         `🆔 RIF: ${inv.supplier_rif ?? '—'}\n` +
         `💰 Total: ${inv.total_amount != null ? `${inv.total_amount} Bs` : '—'}\n` +
         `📦 Líneas: ${nItems}\n\n` +
-        `Confirma en:\n<a href="${link}">${link}</a>`
+        `Elige <b>obra</b> y <b>almacén destino</b> abajo.\n` +
+        `Contabilidad (Auditoría) puede corregir en:\n<a href="${link}">${link}</a>\n\n` +
+        `<i>El stock se ingresa después con</i> <code>/ingresofactura</code> <i>cuando llegue la mercancía.</i>`
       : null;
 
   const plain =

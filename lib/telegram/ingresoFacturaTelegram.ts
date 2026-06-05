@@ -344,9 +344,11 @@ async function enviarListaProveedores(
 
   await sendTelegramMessage(
     chatId,
-    '📥 <b>Ingreso desde factura precargada</b>\n\n' +
+    '📥 <b>Ingreso físico — depositario</b>\n\n' +
+      'Facturas ya registradas en Contabilidad por el comprador (<code>/facturas</code>).\n' +
+      'Verifica cantidades recibidas y confirma ingreso al almacén.\n\n' +
       '1️⃣ Elige el <b>proveedor</b>.\n' +
-      '2️⃣ Elige la factura (⏳ confirmar · 📥 ingreso a almacén).\n' +
+      '2️⃣ Elige la factura (📥 ingreso a almacén).\n' +
       pasosIngreso +
       notaConfirmar +
       `\n<code>/cancelar</code> para abortar.`,
