@@ -18,9 +18,18 @@ import {
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 
 const DEPOSITO_GENERAL = 'Depósito Principal / General';
-const PREFIX_STOCK_OBRA = 'sk:p:';
+const PREFIX_STOCK = 'sk:';
 const STOCK_LINES_PAGE = 22;
 const MAX_MSG = 3800;
+
+/** Vista del listado tras elegir obra en /stock. */
+export type StockVistaModo = 'almacen' | 'obra' | 'proyecto';
+
+const ETIQUETA_VISTA: Record<StockVistaModo, string> = {
+  almacen: 'Almacén / bodega',
+  obra: 'En obra (egresado)',
+  proyecto: 'Proyecto (total)',
+};
 
 type MaterialMatch = {
   id: string;
@@ -47,6 +56,8 @@ type LineaStockAgregada = {
   /** Ubicación tipo obra (material ya egresado a frente). */
   enObra: number;
   cantidad: number;
+  /** Cantidad mostrada según vista activa. */
+  cantidadVista?: number;
 };
 
 function normTexto(s: string): string {
@@ -162,42 +173,94 @@ function agregarStockPorMaterial(filas: StockProyectoItem[]): LineaStockAgregada
   return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 
-function formatearLineaStock(l: LineaStockAgregada, indice: number): string {
-  const u = escapeHtml(l.unidad);
-  if (l.enAlmacen > 0 && l.enObra > 0) {
-    return (
-      `${indice}. ${escapeHtml(l.nombre)} — <b>${l.enAlmacen.toLocaleString('es-VE')}</b> ${u} en almacén` +
-      ` <i>(+ ${l.enObra.toLocaleString('es-VE')} ya en obra)</i>`
-    );
-  }
-  if (l.enAlmacen > 0) {
-    return `${indice}. ${escapeHtml(l.nombre)} — <b>${l.enAlmacen.toLocaleString('es-VE')}</b> ${u}`;
-  }
-  if (l.enObra > 0) {
-    return `${indice}. ${escapeHtml(l.nombre)} — <b>${l.enObra.toLocaleString('es-VE')}</b> ${u} <i>(solo en obra)</i>`;
-  }
-  return `${indice}. ${escapeHtml(l.nombre)} — <b>${l.cantidad.toLocaleString('es-VE')}</b> ${u}`;
+function cantidadPorVista(l: LineaStockAgregada, modo: StockVistaModo): number {
+  if (modo === 'almacen') return l.enAlmacen;
+  if (modo === 'obra') return l.enObra;
+  return l.cantidad;
 }
 
-function callbackStockObraPage(proyectoId: string, page: number): string {
-  return `${PREFIX_STOCK_OBRA}${proyectoId}:${page}`;
+function filtrarLineasPorVista(
+  lineas: LineaStockAgregada[],
+  modo: StockVistaModo,
+): LineaStockAgregada[] {
+  return lineas
+    .map((l) => ({ ...l, cantidadVista: cantidadPorVista(l, modo) }))
+    .filter((l) => l.cantidadVista > 0)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+function formatearLineaStock(
+  l: LineaStockAgregada & { cantidadVista?: number },
+  indice: number,
+  modo: StockVistaModo,
+): string {
+  const u = escapeHtml(l.unidad);
+  const qty = (l.cantidadVista ?? cantidadPorVista(l, modo)).toLocaleString('es-VE');
+  if (modo === 'proyecto' && l.enAlmacen > 0 && l.enObra > 0) {
+    return (
+      `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u}` +
+      ` <i>(alm ${l.enAlmacen.toLocaleString('es-VE')} + obra ${l.enObra.toLocaleString('es-VE')})</i>`
+    );
+  }
+  return `${indice}. ${escapeHtml(l.nombre)} — <b>${qty}</b> ${u}`;
+}
+
+function letraVista(modo: StockVistaModo): string {
+  return modo === 'almacen' ? 'a' : modo === 'obra' ? 'o' : 't';
+}
+
+function vistaDesdeLetra(c: string): StockVistaModo | null {
+  if (c === 'a') return 'almacen';
+  if (c === 'o') return 'obra';
+  if (c === 't') return 'proyecto';
+  return null;
+}
+
+function callbackStockModoPicker(proyectoId: string): string {
+  return `${PREFIX_STOCK}m:${proyectoId}`;
+}
+
+function callbackStockList(modo: StockVistaModo, proyectoId: string, page: number): string {
+  return `${PREFIX_STOCK}${letraVista(modo)}:${proyectoId}:${page}`;
 }
 
 export function esCallbackStockObra(data: string): boolean {
-  return data.startsWith(PREFIX_STOCK_OBRA);
+  return data.startsWith(PREFIX_STOCK);
 }
 
+export type StockCallbackParsed =
+  | { type: 'modo'; proyectoId: string }
+  | { type: 'list'; proyectoId: string; modo: StockVistaModo; page: number };
+
+export function parseCallbackStock(data: string): StockCallbackParsed | null {
+  const m = data.match(/^sk:([amotp]):([0-9a-f-]{36})(?::(\d+))?$/i);
+  if (!m) return null;
+  const tag = m[1]!.toLowerCase();
+  const proyectoId = m[2]!;
+  if (!isValidProyectoUuid(proyectoId)) return null;
+
+  if (tag === 'm') return { type: 'modo', proyectoId };
+
+  if (tag === 'p') {
+    const page = m[3] != null ? Math.floor(Number(m[3])) : 0;
+    if (!Number.isFinite(page) || page < 0) return null;
+    return { type: 'modo', proyectoId };
+  }
+
+  const modo = vistaDesdeLetra(tag);
+  if (!modo) return null;
+  const page = m[3] != null ? Math.floor(Number(m[3])) : 0;
+  if (!Number.isFinite(page) || page < 0) return null;
+  return { type: 'list', proyectoId, modo, page };
+}
+
+/** @deprecated Use parseCallbackStock */
 export function parseCallbackStockObra(
   data: string,
 ): { proyectoId: string; page: number } | null {
-  if (!data.startsWith(PREFIX_STOCK_OBRA)) return null;
-  const rest = data.slice(PREFIX_STOCK_OBRA.length);
-  const lastColon = rest.lastIndexOf(':');
-  if (lastColon <= 0) return null;
-  const proyectoId = rest.slice(0, lastColon);
-  const page = Number(rest.slice(lastColon + 1));
-  if (!isValidProyectoUuid(proyectoId) || !Number.isFinite(page) || page < 0) return null;
-  return { proyectoId, page: Math.floor(page) };
+  const p = parseCallbackStock(data);
+  if (!p || p.type !== 'list') return null;
+  return { proyectoId: p.proyectoId, page: p.page };
 }
 
 async function resolverProyectosPorTexto(
@@ -239,7 +302,7 @@ async function enviarPickerObraStock(
   const rows = coincidencias.slice(0, 8).map((p) => [
     {
       text: truncar(p.nombre),
-      callback_data: callbackStockObraPage(p.id, 0),
+      callback_data: callbackStockModoPicker(p.id),
     },
   ]);
 
@@ -250,10 +313,40 @@ async function enviarPickerObraStock(
   );
 }
 
+function tecladoVistaStock(proyectoId: string, modoActivo?: StockVistaModo) {
+  const btn = (modo: StockVistaModo, emoji: string, label: string) => ({
+    text: modoActivo === modo ? `✓ ${emoji} ${label}` : `${emoji} ${label}`,
+    callback_data: callbackStockList(modo, proyectoId, 0),
+  });
+  return [
+    [btn('almacen', '🏭', 'Almacén'), btn('obra', '🏗', 'Obra')],
+    [btn('proyecto', '📊', 'Proyecto')],
+  ];
+}
+
+async function enviarPickerVistaStock(
+  chatId: string,
+  proyecto: ProyectoCatalogo,
+): Promise<void> {
+  await sendTelegramMessage(
+    chatId,
+    `📦 <b>${escapeHtml(proyecto.nombre)}</b>\n\n` +
+      '¿Qué stock deseas consultar?\n\n' +
+      '🏭 <b>Almacén</b> — bodega / depósito (disponible para salida)\n' +
+      '🏗 <b>Obra</b> — ya egresado al frente\n' +
+      '📊 <b>Proyecto</b> — suma almacén + obra',
+    {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: tecladoVistaStock(proyecto.id) },
+    },
+  );
+}
+
 async function enviarListadoStockObra(
   supabase: SupabaseClient,
   chatId: string,
   proyecto: ProyectoCatalogo,
+  modo: StockVistaModo,
   page = 0,
 ): Promise<void> {
   const filas = await getStockRealObra(supabase, proyecto.id, {
@@ -261,59 +354,69 @@ async function enviarListadoStockObra(
     proyectoNombre: proyecto.nombre,
   });
   const lineasAgregadas = agregarStockPorMaterial(filas);
-  const totalAlmacen = lineasAgregadas.reduce((a, l) => a + l.enAlmacen, 0);
-  const totalEnObra = lineasAgregadas.reduce((a, l) => a + l.enObra, 0);
+  const lineasVista = filtrarLineasPorVista(lineasAgregadas, modo);
+  const totalVista = lineasVista.reduce((a, l) => a + (l.cantidadVista ?? 0), 0);
 
-  if (!lineasAgregadas.length) {
+  if (!lineasVista.length) {
+    const vacio =
+      modo === 'almacen'
+        ? 'Sin existencias en almacén/bodega de esta obra.'
+        : modo === 'obra'
+          ? 'Sin material registrado «en obra» (aún no hay egresos a frente).'
+          : 'Sin existencias en este proyecto.';
     await sendTelegramMessage(
       chatId,
-      `📦 <b>Stock — ${escapeHtml(proyecto.nombre)}</b>\n\n` +
-        '<i>Sin existencias disponibles en almacenes de esta obra.</i>\n\n' +
-        'Consulta guiada: <code>/stock</code>',
-      { parse_mode: 'HTML' },
+      `📦 <b>Stock ${escapeHtml(ETIQUETA_VISTA[modo])}</b>\n` +
+        `<b>${escapeHtml(proyecto.nombre)}</b>\n\n` +
+        `<i>${vacio}</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: tecladoVistaStock(proyecto.id, modo) },
+      },
     );
     return;
   }
 
-  const totalPages = Math.max(1, Math.ceil(lineasAgregadas.length / STOCK_LINES_PAGE));
+  const totalPages = Math.max(1, Math.ceil(lineasVista.length / STOCK_LINES_PAGE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
-  const slice = lineasAgregadas.slice(
+  const slice = lineasVista.slice(
     safePage * STOCK_LINES_PAGE,
     safePage * STOCK_LINES_PAGE + STOCK_LINES_PAGE,
   );
 
   const detalle = slice
-    .map((l, i) => formatearLineaStock(l, safePage * STOCK_LINES_PAGE + i + 1))
+    .map((l, i) => formatearLineaStock(l, safePage * STOCK_LINES_PAGE + i + 1, modo))
     .join('\n');
 
   let texto =
-    `📦 <b>Stock — ${escapeHtml(proyecto.nombre)}</b>\n` +
-    `${lineasAgregadas.length} material(es) · <b>${totalAlmacen.toLocaleString('es-VE')}</b> uds en almacén` +
-    (totalEnObra > 0 ? ` · ${totalEnObra.toLocaleString('es-VE')} en obra` : '') +
-    '\n<i>Tras /salida, baja la cifra «en almacén».</i>\n\n' +
+    `📦 <b>Stock ${escapeHtml(ETIQUETA_VISTA[modo])}</b>\n` +
+    `<b>${escapeHtml(proyecto.nombre)}</b>\n` +
+    `${lineasVista.length} material(es) · <b>${totalVista.toLocaleString('es-VE')}</b> uds\n\n` +
     detalle;
 
   if (texto.length > MAX_MSG) {
     texto = texto.slice(0, MAX_MSG - 20) + '\n…';
   }
 
-  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [
+    ...tecladoVistaStock(proyecto.id, modo),
+  ];
   if (totalPages > 1) {
     const nav: Array<{ text: string; callback_data: string }> = [];
     if (safePage > 0) {
       nav.push({
         text: '◀',
-        callback_data: callbackStockObraPage(proyecto.id, safePage - 1),
+        callback_data: callbackStockList(modo, proyecto.id, safePage - 1),
       });
     }
     nav.push({
       text: `${safePage + 1}/${totalPages}`,
-      callback_data: callbackStockObraPage(proyecto.id, safePage),
+      callback_data: callbackStockList(modo, proyecto.id, safePage),
     });
     if (safePage < totalPages - 1) {
       nav.push({
         text: '▶',
-        callback_data: callbackStockObraPage(proyecto.id, safePage + 1),
+        callback_data: callbackStockList(modo, proyecto.id, safePage + 1),
       });
     }
     keyboard.push(nav);
@@ -321,7 +424,7 @@ async function enviarListadoStockObra(
 
   await sendTelegramMessage(chatId, texto, {
     parse_mode: 'HTML',
-    ...(keyboard.length ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+    reply_markup: { inline_keyboard: keyboard },
   });
 }
 
@@ -347,7 +450,7 @@ async function buscarStockPorObra(
   );
 
   if (coincidencias.length === 1) {
-    await enviarListadoStockObra(supabase, chatId, coincidencias[0]!, 0);
+    await enviarPickerVistaStock(chatId, coincidencias[0]!);
     return true;
   }
 
@@ -449,7 +552,7 @@ export async function manejarComandoStockTelegram(opts: {
     await enviarMensajeTelegram(
       opts.chatId,
       '⚠️ Indica la <b>obra</b> o el <b>material</b>:\n' +
-        '· <code>/stock rancho flamboyant</code>\n' +
+        '· <code>/stock rancho flamboyant</code> → elige almacén, obra o total\n' +
         '· <code>/stock cemento</code>\n' +
         '· <code>/stock</code> (entidad → obra → almacén)',
       { parse_mode: 'HTML' },
@@ -472,7 +575,7 @@ export async function manejarCallbackStockObraTelegram(
   supabase: SupabaseClient,
   params: { chatId: string; callbackId: string; data: string },
 ): Promise<boolean> {
-  const parsed = parseCallbackStockObra(params.data);
+  const parsed = parseCallbackStock(params.data);
   if (!parsed) return false;
 
   const { data, error } = await supabase
@@ -486,15 +589,25 @@ export async function manejarCallbackStockObraTelegram(
     return true;
   }
 
-  await answerCallbackQuery(params.callbackId, truncar(String(data.nombre ?? 'Obra'), 40));
+  const proyecto: ProyectoCatalogo = {
+    id: String(data.id),
+    nombre: String(data.nombre ?? 'Obra').trim(),
+    entidad_id: data.entidad_id ? String(data.entidad_id) : null,
+  };
+
+  if (parsed.type === 'modo') {
+    await answerCallbackQuery(params.callbackId, truncar(proyecto.nombre, 40));
+    await enviarPickerVistaStock(params.chatId, proyecto);
+    return true;
+  }
+
+  const etiqueta = ETIQUETA_VISTA[parsed.modo].slice(0, 30);
+  await answerCallbackQuery(params.callbackId, etiqueta);
   await enviarListadoStockObra(
     supabase,
     params.chatId,
-    {
-      id: String(data.id),
-      nombre: String(data.nombre ?? 'Obra').trim(),
-      entidad_id: data.entidad_id ? String(data.entidad_id) : null,
-    },
+    proyecto,
+    parsed.modo,
     parsed.page,
   );
   return true;

@@ -59,8 +59,9 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /obra — elegir obra y subir fotos de evidencia\n' +
         '• /proyecto — cambiar obra activa (lista)\n' +
         '• /gasto — comprobante de gasto de obra\n' +
-        '• /stock — inventario por entidad, obra y almacén\n' +
-        '• /stock &lt;obra o material&gt; — ej. rancho flamboyant, cemento\n' +
+        '• /stock — inventario guiado (entidad → obra → almacén)\n' +
+        '• /stock &lt;obra&gt; — elige vista: almacén, obra o total proyecto\n' +
+        '• /stock &lt;material&gt; — ej. cemento\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /ingresonotas — nota de entrega: proyecto, almacén, proveedor, artículos, fotos, stock\n' +
@@ -94,8 +95,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/obra — elegir obra (lista) y subir fotos\n' +
         '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +
-        '/stock — listar stock (entidad → obra → almacén)\n' +
-        '/stock rancho flamboyant — stock de la obra · /stock cemento — por material\n' +
+        '/stock — consulta guiada (entidad → obra → almacén)\n' +
+        '/stock rancho flamboyant — almacén, en obra o total · /stock cemento — por material\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
         '/ingresonotas — nota de entrega (proyecto → almacén → proveedor → artículos → stock)\n' +
