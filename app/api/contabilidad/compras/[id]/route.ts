@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { deleteCompraRegistro } from '@/lib/contabilidad/deleteCompraRegistro';
-import {
-  payloadCompraBimonetario,
-  resolverMontosCompraBimonetario,
-} from '@/lib/contabilidad/comprasBimonetario';
 import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
-import { monedaOriginalCompra, montoNominalMonedaOriginal } from '@/lib/contabilidad/monedaCompra';
+import {
+  monedaOriginalCompra,
+  recalcularMontosCompraCambioMoneda,
+} from '@/lib/contabilidad/monedaCompra';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
@@ -58,17 +57,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return NextResponse.json({ ok: true, compra: row });
     }
 
-    const montoNominal = montoNominalMonedaOriginal(fila);
-    const montos = await resolverMontosCompraBimonetario({
-      montoTotal: montoNominal,
-      moneda: monedaNueva,
-      fecha: fila.fecha,
-      tasaBcvDigitada: fila.tasa_bcv_ves_por_usd,
-    });
+    const { nominalFactura: _nominal, ...payloadMoneda } = await recalcularMontosCompraCambioMoneda(
+      fila,
+      monedaNueva,
+    );
 
     const { data: updated, error: upErr } = await admin.client
       .from('contabilidad_compras')
-      .update(payloadCompraBimonetario(montos) as never)
+      .update(payloadMoneda as never)
       .eq('id', params.id)
       .select(
         'id,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd',

@@ -4,10 +4,15 @@ import {
 } from '@/lib/finanzas/currency-converter';
 import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
 import {
+  payloadCompraBimonetario,
+  resolverMontosCompraBimonetario,
+} from '@/lib/contabilidad/comprasBimonetario';
+import {
   formatearBs,
   formatearUsd,
   montoUsdCompra,
   montoVesCompra,
+  tasaBcvCompra,
   vesAUsdConTasa,
 } from '@/lib/contabilidad/comprasMontos';
 
@@ -113,4 +118,77 @@ export function subtotalUsdLineaCompra(row: FilaMontoLineaCompra): number | null
     return Math.round(((bs / row.montoBs) * row.montoUsd) * 100) / 100;
   }
   return null;
+}
+
+export type FilaMonedaCompraConFecha = FilaMonedaCompra & { fecha: string };
+
+export type MontosCompraCambioMoneda = ReturnType<typeof payloadCompraBimonetario> & {
+  /** Monto impreso en la factura en la moneda nueva (total_amount del OCR / cabecera). */
+  nominalFactura: number;
+};
+
+/**
+ * Recalcula VES/USD al cambiar moneda original preservando el valor económico
+ * (no reinterpreta 65.774 Bs como 65.774 USD).
+ */
+export async function recalcularMontosCompraCambioMoneda(
+  fila: FilaMonedaCompraConFecha,
+  monedaNueva: MonedaOrigen,
+): Promise<MontosCompraCambioMoneda> {
+  const monedaAnterior = monedaOriginalCompra(fila);
+  const fecha = String(fila.fecha ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const tasaDigitada = fila.tasa_bcv_ves_por_usd;
+
+  if (monedaAnterior === monedaNueva) {
+    const nominal = montoNominalMonedaOriginal(fila);
+    const montos = await resolverMontosCompraBimonetario({
+      montoTotal: nominal,
+      moneda: monedaAnterior,
+      fecha,
+      tasaBcvDigitada: tasaDigitada,
+    });
+    return { ...payloadCompraBimonetario(montos), nominalFactura: nominal };
+  }
+
+  const tasaLista = tasaBcvCompra(fila);
+  const { bs, usd } = montosBimonetariosLista(fila, tasaLista);
+
+  let montoTotal: number;
+  if (monedaNueva === 'USD') {
+    if (usd != null && usd > 0) {
+      montoTotal = usd;
+    } else {
+      const ves = bs > 0 ? bs : montoVesCompra(fila);
+      const inter = await resolverMontosCompraBimonetario({
+        montoTotal: ves,
+        moneda: 'VES',
+        fecha,
+        tasaBcvDigitada: tasaDigitada,
+      });
+      montoTotal = inter.montoUsd;
+    }
+  } else {
+    if (bs > 0) {
+      montoTotal = bs;
+    } else {
+      const usdNom =
+        usd != null && usd > 0 ? usd : montoUsdCompra({ ...fila, total_amount: fila.total_amount });
+      const inter = await resolverMontosCompraBimonetario({
+        montoTotal: usdNom,
+        moneda: 'USD',
+        fecha,
+        tasaBcvDigitada: tasaDigitada,
+      });
+      montoTotal = inter.montoVes;
+    }
+  }
+
+  const montos = await resolverMontosCompraBimonetario({
+    montoTotal,
+    moneda: monedaNueva,
+    fecha,
+    tasaBcvDigitada: tasaDigitada,
+  });
+
+  return { ...payloadCompraBimonetario(montos), nominalFactura: montoTotal };
 }

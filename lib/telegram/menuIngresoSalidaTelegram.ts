@@ -6,6 +6,7 @@ import {
   manejarComandoIngresoSinNotaTelegram,
   manejarComandoNotaEntregaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
+import { iniciarModoCargaFacturasTelegram } from '@/lib/telegram/mensajesFactura';
 import { manejarComandoSalidaEgresoTelegram } from '@/lib/telegram/salidaEgresoFlujo';
 import { manejarComandoSalidaObraTelegram } from '@/lib/telegram/salidaObraTelegram';
 import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTelegram';
@@ -13,7 +14,12 @@ import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTele
 const PREFIX_INGRESO = 'ig:';
 const PREFIX_SALIDA = 'sg:';
 
-export type OpcionMenuIngreso = 'manual' | 'factura' | 'notas' | 'sinnota';
+export type OpcionMenuIngreso =
+  | 'manual'
+  | 'factura'
+  | 'factauto'
+  | 'nota'
+  | 'sinnota';
 export type OpcionMenuSalida = 'obra' | 'almacen' | 'prestamo';
 
 function escapeHtml(s: string): string {
@@ -42,15 +48,29 @@ export function callbackMenuSalida(opcion: OpcionMenuSalida): string {
 export async function enviarMenuIngresoTelegram(chatId: string): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    '📥 <b>Ingreso a almacén</b>\n\n' + 'Elige el tipo de ingreso:',
+    '📥 <b>Ingreso a almacén</b>\n\n' +
+      'Elige el tipo de ingreso:\n\n' +
+      '<i>Atajos:</i> <code>/ingresomanual</code> · <code>/ingresofactura</code> · ' +
+      '<code>/facturas</code> · <code>/ingresonotas</code> · <code>/ingresosinnota</code>',
     {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
           [{ text: '📋 Ingreso manual', callback_data: callbackMenuIngreso('manual') }],
-          [{ text: '🧾 Ingreso facturas', callback_data: callbackMenuIngreso('factura') }],
-          [{ text: '📄 Ingreso notas', callback_data: callbackMenuIngreso('notas') }],
-          [{ text: '📝 Ingreso sin notas', callback_data: callbackMenuIngreso('sinnota') }],
+          [
+            {
+              text: '🧾 Ingreso factura (precargada)',
+              callback_data: callbackMenuIngreso('factura'),
+            },
+          ],
+          [
+            {
+              text: '🤖 Factura automática (foto/PDF)',
+              callback_data: callbackMenuIngreso('factauto'),
+            },
+          ],
+          [{ text: '📄 Nota de entrega', callback_data: callbackMenuIngreso('nota') }],
+          [{ text: '📝 Sin nota de entrega', callback_data: callbackMenuIngreso('sinnota') }],
         ],
       },
     },
@@ -86,7 +106,10 @@ async function iniciarIngresoPorOpcion(
     case 'factura':
       await manejarComandoIngresoFacturaTelegram(supabase, chatId);
       break;
-    case 'notas':
+    case 'factauto':
+      await iniciarModoCargaFacturasTelegram(supabase, chatId);
+      break;
+    case 'nota':
       await manejarComandoNotaEntregaTelegram(supabase, chatId);
       break;
     case 'sinnota':
@@ -123,9 +146,10 @@ async function iniciarSalidaPorOpcion(
 
 const ETIQUETA_INGRESO: Record<OpcionMenuIngreso, string> = {
   manual: 'Ingreso manual',
-  factura: 'Ingreso facturas',
-  notas: 'Ingreso notas',
-  sinnota: 'Ingreso sin notas',
+  factura: 'Ingreso factura',
+  factauto: 'Factura automática',
+  nota: 'Nota de entrega',
+  sinnota: 'Sin nota de entrega',
 };
 
 const ETIQUETA_SALIDA: Record<OpcionMenuSalida, string> = {

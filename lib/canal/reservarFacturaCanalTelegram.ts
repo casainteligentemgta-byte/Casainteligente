@@ -92,3 +92,68 @@ export async function reclamarProcesamientoFacturaCanal(
   if (updErr) return 'already_processing';
   return claimed?.id ? 'claimed' : 'already_processing';
 }
+
+export type ReclamoConfirmacionCompra =
+  | { status: 'claimed'; estadoPrevio: string }
+  | { status: 'already_done'; purchaseInvoiceId: string | null }
+  | { status: 'busy' }
+  | { status: 'invalid'; estado: string }
+  | { status: 'not_found' };
+
+const ESTADOS_CONFIRMAR = ['extraido', 'error', 'aprobado_sistema'] as const;
+
+/** Bloqueo optimista: una sola confirmación contable por pendingId. */
+export async function reclamarConfirmacionCompraCanal(
+  supabase: SupabaseClient,
+  pendingId: string,
+): Promise<ReclamoConfirmacionCompra> {
+  const { data: row, error: selErr } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('estado, purchase_invoice_id')
+    .eq('id', pendingId)
+    .maybeSingle();
+
+  if (selErr || !row) return { status: 'not_found' };
+
+  const estado = String(row.estado ?? '');
+  if (estado === 'confirmado') {
+    return {
+      status: 'already_done',
+      purchaseInvoiceId: String(row.purchase_invoice_id ?? '').trim() || null,
+    };
+  }
+  if (estado === 'procesando') return { status: 'busy' };
+  if (!ESTADOS_CONFIRMAR.includes(estado as (typeof ESTADOS_CONFIRMAR)[number])) {
+    return { status: 'invalid', estado };
+  }
+
+  const { data: claimed, error: updErr } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .update({
+      estado: 'procesando',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', pendingId)
+    .in('estado', [...ESTADOS_CONFIRMAR])
+    .select('estado')
+    .maybeSingle();
+
+  if (updErr || !claimed) return { status: 'busy' };
+  return { status: 'claimed', estadoPrevio: estado };
+}
+
+export async function liberarConfirmacionCompraCanal(
+  supabase: SupabaseClient,
+  pendingId: string,
+  estadoPrevio: string,
+): Promise<void> {
+  if (!ESTADOS_CONFIRMAR.includes(estadoPrevio as (typeof ESTADOS_CONFIRMAR)[number])) return;
+  await supabase
+    .from('ci_facturas_canal_pendientes')
+    .update({
+      estado: estadoPrevio,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', pendingId)
+    .eq('estado', 'procesando');
+}

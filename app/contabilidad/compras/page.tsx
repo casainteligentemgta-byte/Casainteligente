@@ -123,7 +123,7 @@ import {
 import {
     monedaOriginalCompra,
     montosBimonetariosLista,
-    montoNominalMonedaOriginal,
+    recalcularMontosCompraCambioMoneda,
     subtotalBsLineaCompra,
     subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
@@ -767,6 +767,21 @@ export default function ComprasPage() {
         try {
             const canalId = idCanalTelegram(c);
             const esSoloCanal = c.id.startsWith('canal-');
+            const fechaCompra = String(c.fecha ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+            const montosNuevos = await recalcularMontosCompraCambioMoneda(
+                {
+                    total_amount: Number(c.total_amount) || 0,
+                    total_amount_usd: c.total_amount_usd,
+                    tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
+                    moneda: c.moneda,
+                    moneda_original: c.moneda_original,
+                    monto_ves: c.monto_ves,
+                    monto_usd: c.monto_usd,
+                    fecha: fechaCompra,
+                },
+                moneda,
+            );
+            const { nominalFactura, ...payloadMoneda } = montosNuevos;
 
             if (esSoloCanal && canalId) {
                 let extracted: ExtractedCanalHeader | null = null;
@@ -797,7 +812,7 @@ export default function ComprasPage() {
                     extracted: {
                         ...base,
                         moneda,
-                        total_amount: montoNominalMonedaOriginal(c),
+                        total_amount: nominalFactura,
                     },
                 });
                 setCompras((prev) =>
@@ -805,8 +820,7 @@ export default function ComprasPage() {
                         row.id === c.id
                             ? {
                                   ...row,
-                                  moneda,
-                                  moneda_original: moneda,
+                                  ...payloadMoneda,
                               }
                             : row,
                     ),
@@ -843,7 +857,7 @@ export default function ComprasPage() {
                                 extracted: {
                                     ...canalData.extracted,
                                     moneda,
-                                    total_amount: montoNominalMonedaOriginal(c),
+                                    total_amount: nominalFactura,
                                 },
                             });
                         }

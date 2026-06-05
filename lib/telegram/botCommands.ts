@@ -2,7 +2,7 @@
 export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'facturas', description: 'Comprador: foto/PDF → Contabilidad + precarga' },
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
-  { command: 'ingreso', description: 'Menú ingresos: manual, facturas, notas, sin notas' },
+  { command: 'ingreso', description: 'Antesala ingresos: manual, factura, auto, nota' },
   { command: 'ingresonotas', description: 'Nota de entrega: proyecto, almacén, proveedor, stock' },
   { command: 'nota', description: 'Alias de /ingresonotas (nota de entrega)' },
   {

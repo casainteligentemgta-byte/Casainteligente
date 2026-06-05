@@ -800,5 +800,5 @@ export function esCallbackEntradaCompra(data: string): boolean {
 
 export function esComandoIngresoFactura(texto: string): boolean {
   const t = texto.trim().toLowerCase().split(/\s+/)[0]?.split('@')[0] ?? '';
-  return t === '/ingresofactura' || t === '/ingresofacturas' || t === '/ingreso';
+  return t === '/ingresofactura' || t === '/ingresofacturas';
 }

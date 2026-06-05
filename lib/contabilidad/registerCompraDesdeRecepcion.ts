@@ -9,6 +9,7 @@ import {
   sincronizarDocumentoEnCompra,
 } from '@/lib/contabilidad/syncDocumentoCompraRecepcion';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
+import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id?: string | null;
@@ -44,7 +45,7 @@ export type RegistrarCompraContabilidadInput = {
 export async function registerCompraDesdeRecepcion(
   supabase: SupabaseClient,
   input: RegistrarCompraContabilidadInput
-): Promise<{ compraId: string }> {
+): Promise<{ compraId: string; yaExistia: boolean }> {
   const doc = await resolverDocumentoCompra(supabase, {
     purchaseInvoiceId: input.purchase_invoice_id,
     documentStoragePath: input.document_storage_path,
@@ -61,7 +62,25 @@ export async function registerCompraDesdeRecepcion(
     if (doc.storagePath && !existente.document_storage_path?.trim()) {
       await sincronizarDocumentoEnCompra(supabase, existente.id, doc);
     }
-    return { compraId: existente.id };
+    return { compraId: existente.id, yaExistia: true };
+  }
+
+  const duplicada = await buscarCompraContablePorFactura(supabase, {
+    invoice_number: input.invoice_number,
+    supplier_rif: input.supplier_rif,
+    supplier_name: input.supplier_name,
+    proyecto_id: input.proyecto_id,
+  });
+  if (duplicada?.id) {
+    const { data: compraDoc } = await supabase
+      .from('contabilidad_compras')
+      .select('document_storage_path')
+      .eq('id', duplicada.id)
+      .maybeSingle();
+    if (doc.storagePath && !compraDoc?.document_storage_path?.trim()) {
+      await sincronizarDocumentoEnCompra(supabase, duplicada.id, doc);
+    }
+    return { compraId: duplicada.id, yaExistia: true };
   }
 
   const montos = await resolverMontosCompraBimonetario({
@@ -136,5 +155,5 @@ export async function registerCompraDesdeRecepcion(
     );
   }
 
-  return { compraId: compra.id };
+  return { compraId: compra.id, yaExistia: false };
 }

@@ -1,3 +1,7 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { sendTelegramMessage } from '@/lib/telegram/botApi';
+import { setTelegramContexto } from '@/lib/telegram/estados';
+
 /** URL base de la app (misma lógica que mediaHandlers). */
 export function baseUrlAppTelegram(): string {
   return (
@@ -19,4 +23,13 @@ export function mensajeModoFacturasActivado(): string {
     '<code>/ingresofactura</code> cuando llegue al almacén.\n\n' +
     '<code>/cancelar</code> para salir de este modo.'
   );
+}
+
+/** Modo comprador: enviar foto/PDF de factura (OCR → Contabilidad). */
+export async function iniciarModoCargaFacturasTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), { parse_mode: 'HTML' });
+  await setTelegramContexto(supabase, chatId, { contexto: 'factura' });
 }
