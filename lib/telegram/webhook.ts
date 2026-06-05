@@ -135,6 +135,14 @@ import {
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
 import {
+  enviarMenuIngresoTelegram,
+  enviarMenuSalidaTelegram,
+  esCallbackMenuIngresoTelegram,
+  esCallbackMenuSalidaTelegram,
+  manejarCallbackMenuIngresoTelegram,
+  manejarCallbackMenuSalidaTelegram,
+} from '@/lib/telegram/menuIngresoSalidaTelegram';
+import {
   esCallbackStockConsultaTelegram,
   manejarCallbackStockConsultaTelegram,
   manejarComandoStockConsultaTelegram,
@@ -260,6 +268,11 @@ async function aplicarComando(
     return;
   }
 
+  if (cmd.comandoMenuIngreso) {
+    await enviarMenuIngresoTelegram(chatId);
+    return;
+  }
+
   if (cmd.comandoIngresoFactura) {
     await manejarComandoIngresoFacturaTelegram(supabase, chatId);
     return;
@@ -287,6 +300,11 @@ async function aplicarComando(
 
   if (cmd.comandoLiberarCuarentena) {
     await manejarComandoLiberarCuarentenaTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoMenuSalida) {
+    await enviarMenuSalidaTelegram(chatId);
     return;
   }
 
@@ -406,6 +424,28 @@ export async function handleTelegramCallbackQuery(
 
   try {
     const userId = String(cq.from.id);
+
+    if (esCallbackMenuIngresoTelegram(cq.data)) {
+      const handled = await manejarCallbackMenuIngresoTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handled) {
+        return NextResponse.json({ ok: true, callback: 'menu_ingreso' });
+      }
+    }
+
+    if (esCallbackMenuSalidaTelegram(cq.data)) {
+      const handled = await manejarCallbackMenuSalidaTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handled) {
+        return NextResponse.json({ ok: true, callback: 'menu_salida' });
+      }
+    }
 
     if (esCallbackStockConsultaTelegram(cq.data)) {
       const handledStock = await manejarCallbackStockConsultaTelegram(admin.client, {

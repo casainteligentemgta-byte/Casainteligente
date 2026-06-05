@@ -2,6 +2,7 @@
 export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'facturas', description: 'Recibir factura de compra (foto/PDF)' },
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
+  { command: 'ingreso', description: 'Menú ingresos: manual, facturas, notas, sin notas' },
   { command: 'ingresonotas', description: 'Nota de entrega: proyecto, almacén, proveedor, stock' },
   { command: 'nota', description: 'Alias de /ingresonotas (nota de entrega)' },
   {
@@ -17,8 +18,8 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'comprassemana', description: 'Materiales comprados esta semana' },
   { command: 'comprasmes', description: 'Materiales comprados este mes' },
   { command: 'liberar', description: 'Liberar material de cuarentena (depositario)' },
+  { command: 'salida', description: 'Menú salidas: obra, almacén o préstamo' },
   { command: 'salidaalmacen', description: 'Salida almacén: obrero, destino, stock, foto' },
-  { command: 'salida', description: 'Egreso completo (obrero, partida, foto)' },
   { command: 'traspaso', description: 'Traspaso o préstamo entre almacenes u obras' },
   { command: 'memoria', description: 'Memoria descriptiva: foto de avance por partida' },
   { command: 'obra', description: 'Elegir obra y subir fotos de evidencia' },

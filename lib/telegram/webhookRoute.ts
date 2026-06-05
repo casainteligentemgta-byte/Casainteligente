@@ -12,6 +12,7 @@ import { manejarComandoStockConsultaTelegram } from '@/lib/telegram/stockConsult
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import { manejarComandoAguaTelegram } from '@/lib/telegram/aguaRegistro';
 import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFacturaTelegram';
+import { enviarMenuIngresoTelegram } from '@/lib/telegram/menuIngresoSalidaTelegram';
 import {
   manejarComandoIngresoManualTelegram,
   manejarComandoIngresoSinNotaTelegram,
@@ -239,7 +240,20 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     });
   }
 
-  if (cmd === '/ingresofactura' || cmd === '/ingresofacturas' || cmd === '/ingreso') {
+  if (cmd === '/ingreso') {
+    try {
+      await enviarMenuIngresoTelegram(chatId);
+    } catch (err) {
+      console.error('[telegram webhook] /ingreso menu', err);
+      return respuestaWebhook({
+        ok: true,
+        error: err instanceof Error ? err.message : 'ingreso_menu_failed',
+      });
+    }
+    return respuestaWebhook({ ok: true, command: 'ingreso_menu' });
+  }
+
+  if (cmd === '/ingresofactura' || cmd === '/ingresofacturas') {
     const admin = telegramSupabaseAdmin();
     if (!admin.ok) {
       try {

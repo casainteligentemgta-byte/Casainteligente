@@ -22,8 +22,12 @@ export type ComandoTelegramResult = {
   /** Ingreso manual a almacén (obra → almacén → materiales). */
   comandoIngresoManual?: boolean;
   comandoSalida?: boolean;
+  /** Submenú /ingreso (manual, facturas, notas, sin notas). */
+  comandoMenuIngreso?: boolean;
   /** Facturas precargadas (Telegram + app) pendientes de ingreso a almacén. */
   comandoIngresoFactura?: boolean;
+  /** Submenú /salida (obra, almacén, préstamo). */
+  comandoMenuSalida?: boolean;
   /** Nota de entrega: obra → almacén → proveedor → materiales → stock. */
   comandoNotaEntrega?: boolean;
   /** Ingreso emergencia: mismo flujo, tipo emergencia en recepción de campo. */
@@ -64,21 +68,16 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /stock &lt;material&gt; — ej. cemento\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
-        '• /ingresonotas — nota de entrega: proyecto, almacén, proveedor, artículos, fotos, stock\n' +
-        '• /nota — mismo flujo que /ingresonotas\n' +
-        '• /ingresoemergencia — emergencia sin papeles: proyecto, almacén, artículos, stock\n' +
-        '• /emergencia — alias de /ingresoemergencia\n' +
-        '• /ingresosinnota — ingreso sin nota: rellena Recepción (pestaña Ingreso manual)\n' +
-        '• /ingresomanual — alias de /ingresosinnota\n' +
-        '• /ingresofactura — proveedor → factura → verificar cantidades → fotos → almacén\n' +
+        '• /ingreso — menú: manual, facturas, notas o sin notas\n' +
+        '• /ingresonotas · /ingresofactura · /ingresosinnota — acceso directo\n' +
+        '• /ingresoemergencia — emergencia sin papeles\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
         '• /comprassemana — materiales de la semana en curso\n' +
         '• /comprasmes — materiales del mes en curso\n' +
         '• /liberar — material en cuarentena: aprobar y sumar stock\n' +
-        '• /salidaalmacen — salida: obra, almacén, obrero, destino, stock, foto\n' +
-        '• /salida — egreso con obrero, partida y foto (flujo completo)\n' +
-        '• /traspaso — mover stock entre almacenes u obras\n' +
+        '• /salida — menú: salida a obra, a almacén o préstamo\n' +
+        '• /salidaalmacen · /traspaso — acceso directo\n' +
         '• /avance — reporte numérico diario de partida\n' +
         '• /memoria — memoria descriptiva: foto de avance por partida\n' +
         '• /estado — ver modo activo\n' +
@@ -99,21 +98,16 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/stock rancho flamboyant — almacén, en obra o total · /stock cemento — por material\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
-        '/ingresonotas — nota de entrega (proyecto → almacén → proveedor → artículos → stock)\n' +
-        '/nota — alias de /ingresonotas\n' +
-        '/ingresoemergencia — emergencia sin papeles (proyecto → almacén → stock)\n' +
-        '/emergencia — alias de /ingresoemergencia\n' +
-        '/ingresosinnota — ingreso sin nota → pantalla Recepción (Ingreso manual)\n' +
-        '/ingresomanual — alias de /ingresosinnota\n' +
-        '/ingresofactura — proveedor, factura, conteo físico, fotos e ingreso a almacén\n' +
+        '/ingreso — menú de ingresos (manual · facturas · notas · sin notas)\n' +
+        '/ingresonotas · /ingresofactura · /ingresosinnota — atajos directos\n' +
+        '/ingresoemergencia — emergencia sin papeles\n' +
         '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
         '/comprasdia — lista de materiales comprados hoy\n' +
         '/comprassemana — materiales comprados esta semana\n' +
         '/comprasmes — materiales comprados este mes\n' +
         '/liberar — liberar material de cuarentena (depositario)\n' +
-        '/salidaalmacen — salida almacén (obrero, obra/almacén destino, stock, foto)\n' +
-        '/salida — egreso con obrero, partida presupuestaria y foto\n' +
-        '/traspaso — traspaso o préstamo entre ubicaciones (origen → destino)\n' +
+        '/salida — menú (obra · almacén · préstamo/traspaso)\n' +
+        '/salidaalmacen · /traspaso — atajos directos\n' +
         '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +
         '/menu — menú principal\n' +
         '/cancelar — cancelar y limpiar proyecto\n' +
@@ -202,7 +196,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoIngresoManual: true };
   }
 
-  if (cmd === '/ingresofactura' || cmd === '/ingresofacturas' || cmd === '/ingreso') {
+  if (cmd === '/ingreso') {
+    return { handled: true, comandoMenuIngreso: true };
+  }
+
+  if (cmd === '/ingresofactura' || cmd === '/ingresofacturas') {
     return { handled: true, comandoIngresoFactura: true };
   }
 
@@ -229,7 +227,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoSalidaObra: true };
   }
 
-  if (cmd === '/salida') {
+  if (cmd === '/salida' || cmd === '/salid') {
+    return { handled: true, comandoMenuSalida: true };
+  }
+
+  if (cmd === '/egreso') {
     return { handled: true, comandoSalida: true };
   }
 
