@@ -291,12 +291,9 @@ export async function manejarComandoRecepcionTelegram(
   }
 
   if (m.recepcion_campo_registrada_id?.trim()) {
-    const linkMov = `${baseUrlApp()}/almacen/movimientos?vista=ingresos`;
     await sendTelegramMessage(
       chatId,
-      '✅ <b>Recepción ya registrada</b>\n\n' +
-        `ID: <code>${m.recepcion_campo_registrada_id.slice(0, 8)}…</code>\n\n` +
-        `<a href="${linkMov}">Ver movimientos de ingreso</a>`,
+      '✅ <b>Recepción ya registrada</b>',
       { parse_mode: 'HTML' },
     );
     return;
@@ -1241,25 +1238,14 @@ export async function manejarCallbackIngresoManual(
       metadata: {},
     });
 
-    const link = `${baseUrlApp()}/almacen/movimientos?vista=ingresos`;
     const tituloExito =
-      fm.flujo === FLUJO_EMERGENCIA ?
-        `✅ <b>Emergencia registrada (sin papeles)</b>\nStock actualizado en almacén.\n\n`
-      : fm.flujo === FLUJO_NOTA_ENTREGA ?
-        `✅ <b>Nota de entrega registrada</b>\nStock actualizado en almacén.\n\n`
-      : fm.flujo === FLUJO_INGRESO_FACTURA_MANUAL ?
-        `✅ <b>Ingreso de factura registrado</b>\nStock actualizado en almacén.\n\n`
-      : fm.flujo === FLUJO_INGRESO_MANUAL ?
-        `✅ <b>Ingreso sin nota registrado</b>\nStock actualizado en almacén.\n\n`
-      : `✅ <b>Ingreso manual registrado</b>\nStock actualizado en almacén.\n\n`;
+      fm.flujo === FLUJO_EMERGENCIA ? `✅ <b>Emergencia registrada</b>\n\n`
+      : fm.flujo === FLUJO_NOTA_ENTREGA ? `✅ <b>Nota de entrega registrada</b>\n\n`
+      : `✅ <b>Ingreso a almacén registrado</b>\n\n`;
     await sendTelegramMessage(
       params.chatId,
       tituloExito +
-        `🏭 ${fm.ubicacion_nombre ?? 'Almacén'}\n` +
-        `🏢 ${fm.proveedor_nombre}\n` +
-        `📄 ${fm.num_doc ?? 'S/N'}\n` +
-        `📦 ${lineas.length} material(es)\n\n` +
-        `<a href="${link}">Ver movimientos</a>`,
+        `${fm.proveedor_nombre ?? 'Proveedor'} · #${fm.num_doc ?? 'S/N'}`,
       { parse_mode: 'HTML' },
     );
     return true;

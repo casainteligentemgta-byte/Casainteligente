@@ -741,20 +741,10 @@ export async function manejarCallbackIngresoFacturaTelegram(
       return true;
     }
 
-    const linkMov = `${baseUrlApp()}/almacen/movimientos?vista=ingresos`;
-    const avisos =
-      resultado.avisos?.length ?
-        `\n\n⚠️ <b>Aviso</b>\n${resultado.avisos.map((a) => `• ${a}`).join('\n')}`
-      : '';
-    const huboDiff = items.some((i) => i.cantidad_facturada !== i.cantidad_real);
     await sendTelegramMessage(
       params.chatId,
       `✅ <b>Ingreso a almacén registrado</b>\n\n` +
-        `${m.proveedor_nombre ?? 'Proveedor'} · #${m.invoice_number ?? 'S/N'}\n` +
-        (resultado.yaExistia ? '\n<i>El stock ya estaba registrado.</i>\n' : '') +
-        (huboDiff ? '\n⚠️ Hubo diferencias entre facturado y recibido.\n' : '') +
-        avisos +
-        `\n<a href="${linkMov}">Ver movimientos</a>`,
+        `${m.proveedor_nombre ?? 'Proveedor'} · #${m.invoice_number ?? 'S/N'}`,
       { parse_mode: 'HTML' },
     );
     return true;
