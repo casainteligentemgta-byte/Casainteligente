@@ -21,6 +21,16 @@ const PREFIX_PAGE_PROV = `${PREFIX}pp:`;
 const PREFIX_PAGE_FACT = `${PREFIX}fp:`;
 const PAGE_SIZE = 8;
 
+const MENSAJE_PASOS_INGRESO_FISICO =
+  '1️⃣ Elige la <b>Obra</b>.\n' +
+  '2️⃣ Elige el <b>almacén</b>.\n' +
+  '3️⃣ Escribe el <b>proveedor</b> y <b>número de factura</b>.\n' +
+  '4️⃣ <b>Nº o referencia</b> de factura o nota (<code>S/N</code> si no hay).\n' +
+  '5️⃣ <b>Material</b> (catálogo o nuevo), <b>cantidad</b>, <b>foto</b>.\n' +
+  '6️⃣ <b>Observaciones</b> (opcional).\n' +
+  '7️⃣ <b>Confirmar</b> ingreso.\n\n' +
+  '<code>/cancelar</code> para abortar.';
+
 export type PasoIngresoFactura =
   | 'proveedor'
   | 'factura'
@@ -325,17 +335,12 @@ async function enviarListaProveedores(
   }
 
   const proveedores = agruparProveedores(todas);
-  const nIngreso = facturasIngresoAlmacen(todas).length;
   const nConfirmar = todas.filter((f) => f.accion === 'confirmar').length;
   await setTelegramContexto(supabase, chatId, {
     contexto: 'entrada_obra',
     metadata: { flujo: FLUJO_INGRESO_FACTURA, paso: 'proveedor' },
   });
 
-  const pasosIngreso =
-    nIngreso > 0
-      ? '3️⃣ Si la factura es <b>ingreso</b>: verifica cantidades → fotos → confirma.\n'
-      : '';
   const notaConfirmar =
     nConfirmar > 0
       ? `\n⏳ <b>${nConfirmar}</b> factura(s) requieren <b>confirmar compra</b> en la app antes del ingreso.\n` +
@@ -344,14 +349,7 @@ async function enviarListaProveedores(
 
   await sendTelegramMessage(
     chatId,
-    '📥 <b>Ingreso físico — depositario</b>\n\n' +
-      'Facturas ya registradas en Contabilidad por el comprador (<code>/facturas</code>).\n' +
-      'Verifica cantidades recibidas y confirma ingreso al almacén.\n\n' +
-      '1️⃣ Elige el <b>proveedor</b>.\n' +
-      '2️⃣ Elige la factura (📥 ingreso a almacén).\n' +
-      pasosIngreso +
-      notaConfirmar +
-      `\n<code>/cancelar</code> para abortar.`,
+    '📥 <b>INGRESO FÍSICO — DEPOSITARIO</b>\n\n' + MENSAJE_PASOS_INGRESO_FISICO + notaConfirmar,
     { parse_mode: 'HTML', reply_markup: buildKeyboardProveedores(proveedores, page) },
   );
 }
