@@ -110,7 +110,6 @@ import {
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
 import {
     buildLineasCuadroDesdeCompras,
-    exportarComprasCuadroCsv,
     exportarComprasCuadroExcel,
     type ComprasExportScope,
 } from '@/lib/contabilidad/comprasExportShare';
@@ -1580,39 +1579,11 @@ export default function ComprasPage() {
         [lineasOrdenadas.length, compras.length, lineasCuadroCompleto.length, comprasCuadroBase.length],
     );
 
-    const exportarCuadroCsv = useCallback(
-        (scope: ComprasExportScope) => {
-            const filas = construirLineasExport(scope);
-            if (!exportarComprasCuadroCsv(filas, scope)) {
-                setError('No hay líneas para exportar.');
-            }
-        },
-        [construirLineasExport],
-    );
-
     const exportarCuadroExcel = useCallback(
         (scope: ComprasExportScope) => {
             const filas = construirLineasExport(scope);
             if (!exportarComprasCuadroExcel(filas, scope)) {
                 setError('No hay líneas para exportar.');
-            }
-        },
-        [construirLineasExport],
-    );
-
-    const copiarCuadroPortapapeles = useCallback(
-        async (scope: ComprasExportScope) => {
-            const filas = construirLineasExport(scope);
-            if (!filas.length) {
-                setError('No hay líneas para copiar.');
-                return;
-            }
-            const ok = await copiarTextoCuadro(lineasComprasATsv(filas));
-            if (ok) {
-                setCompartidoOk(true);
-                window.setTimeout(() => setCompartidoOk(false), 2000);
-            } else {
-                setError('No se pudo copiar al portapapeles.');
             }
         },
         [construirLineasExport],
@@ -1646,9 +1617,12 @@ export default function ComprasPage() {
     };
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
+        <div
+            className="compras-page"
+            style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}
+        >
             <div
-                className="compras-no-imprimir"
+                className="compras-no-imprimir compras-page-header"
                 style={{
                     position: 'sticky',
                     top: 0,
@@ -1747,7 +1721,7 @@ export default function ComprasPage() {
                 </button>
             </div>
 
-            <div style={{ padding: '20px' }}>
+            <div className="compras-page-body">
                 {filtrosAbiertos ? (
                     <ComprasFiltrosPanel
                         valores={{
@@ -1822,23 +1796,12 @@ export default function ComprasPage() {
                             {fuenteFiltro !== 'todos' ? ` · ${fuenteFiltro}` : ''}
                         </p>
                     </div>
-                    <div
-                        style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: '12px',
-                        }}
-                    >
+                    <div className="compras-cuadro-header-row">
                         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontWeight: 700, margin: 0 }}>
                             TOTAL FILTRADO ({compras.length} compra{compras.length === 1 ? '' : 's'})
                         </p>
                         {compras.length > 0 || comprasCuadroBase.length > 0 ? (
-                            <div
-                                className="compras-no-imprimir"
-                                style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}
-                            >
+                            <div className="compras-no-imprimir compras-cuadro-toolbar">
                                 <select
                                     value={exportScope}
                                     onChange={(e) =>
@@ -1881,44 +1844,6 @@ export default function ComprasPage() {
                                 >
                                     <Download size={14} />
                                     Excel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => exportarCuadroCsv(exportScope)}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        padding: '8px 12px',
-                                        borderRadius: '10px',
-                                        border: '1px solid rgba(255,255,255,0.12)',
-                                        background: 'rgba(255,255,255,0.06)',
-                                        color: 'rgba(255,255,255,0.75)',
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    CSV
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => void copiarCuadroPortapapeles(exportScope)}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        padding: '8px 12px',
-                                        borderRadius: '10px',
-                                        border: '1px solid rgba(255,255,255,0.15)',
-                                        background: 'rgba(255,255,255,0.08)',
-                                        color: 'white',
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    Copiar
                                 </button>
                                 <button
                                     type="button"
@@ -1985,14 +1910,7 @@ export default function ComprasPage() {
                             </div>
                         ) : null}
                     </div>
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '16px',
-                            marginTop: '14px',
-                        }}
-                    >
+                    <div className="compras-cuadro-totales">
                         <div>
                             <p
                                 style={{
@@ -2005,7 +1923,7 @@ export default function ComprasPage() {
                             >
                                 TOTAL USD
                             </p>
-                            <p style={{ color: '#FF3B30', fontSize: '26px', fontWeight: 800, margin: 0 }}>
+                            <p className="compras-cuadro-total-monto" style={{ color: '#FF3B30', margin: 0 }}>
                                 {formatearUsd(totalFiltrado.totalUsd)}
                             </p>
                             <p
@@ -2031,7 +1949,7 @@ export default function ComprasPage() {
                             >
                                 TOTAL BOLÍVARES
                             </p>
-                            <p style={{ color: '#FFD60A', fontSize: '26px', fontWeight: 800, margin: 0 }}>
+                            <p className="compras-cuadro-total-monto" style={{ color: '#FFD60A', margin: 0 }}>
                                 {formatearBs(totalFiltrado.totalBs)}
                             </p>
                             <p
@@ -2133,7 +2051,7 @@ export default function ComprasPage() {
                 ) : null}
 
                 {!loading && compras.length > 0 ? (
-                    <div className="compras-no-imprimir" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                    <div className="compras-no-imprimir compras-vista-toggle" style={{ marginBottom: '16px' }}>
                         <button
                             type="button"
                             onClick={() => setVistaListado('lineas')}
@@ -2314,11 +2232,12 @@ export default function ComprasPage() {
                 ) : null}
 
                 {showList && vistaListado === 'facturas' ? (
-                    <div style={{ display: 'grid', gap: '12px' }}>
+                    <div className="compras-facturas-grid">
                         {compras.map((c) => (
                             <div
                                 id={`compra-card-${c.id}`}
                                 key={c.id}
+                                className="compras-factura-card"
                                 style={{
                                     ...glass,
                                     padding: '18px',
@@ -2330,14 +2249,7 @@ export default function ComprasPage() {
                                         : glass.background,
                                 }}
                             >
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'flex-start',
-                                        gap: '12px',
-                                    }}
-                                >
+                                <div className="compras-factura-card-header">
                                     <label
                                         style={{
                                             display: 'flex',
@@ -2759,7 +2671,7 @@ export default function ComprasPage() {
                                             </p>
                                         ) : null}
                                     </div>
-                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                    <div className="compras-factura-card-montos" style={{ textAlign: 'right', flexShrink: 0 }}>
                                         {(() => {
                                             const tasaDisp = tasaDisplayCompra(c);
                                             const montos = montosBimonetariosLista(c, tasaDisp);

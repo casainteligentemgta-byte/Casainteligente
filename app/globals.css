@@ -755,3 +755,171 @@
 .compras-cuadro-print-tabla {
   display: none;
 }
+
+/* Compras — móvil vertical e iPad horizontal */
+.compras-page {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.compras-page-body {
+  padding: 20px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.compras-page-header {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compras-cuadro-imprimible {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.compras-cuadro-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.compras-cuadro-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.compras-cuadro-totales {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.compras-cuadro-total-monto {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.compras-vista-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compras-facturas-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.compras-factura-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.compras-lineas-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(28, 28, 30, 0.5);
+  max-width: 100%;
+}
+
+.compras-lineas-table-wrap table {
+  min-width: 720px;
+}
+
+@media (max-width: 639px) {
+  .compras-page-body {
+    padding: 12px;
+  }
+
+  .compras-page-header {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .compras-cuadro-imprimible {
+    padding: 14px !important;
+    border-radius: 16px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .compras-cuadro-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .compras-cuadro-toolbar {
+    width: 100%;
+  }
+
+  .compras-cuadro-toolbar select,
+  .compras-cuadro-toolbar button {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .compras-cuadro-totales {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .compras-cuadro-total-monto {
+    font-size: 22px;
+  }
+
+  .compras-vista-toggle {
+    flex-direction: column;
+  }
+
+  .compras-vista-toggle button {
+    width: 100%;
+  }
+
+  .compras-factura-card-header {
+    flex-direction: column;
+  }
+
+  .compras-factura-card-montos {
+    width: 100%;
+    text-align: left !important;
+    margin-top: 8px;
+  }
+
+  .compras-lineas-table-wrap {
+    border-radius: 14px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1180px) and (orientation: landscape) {
+  .compras-page-body {
+    padding: 16px 20px;
+  }
+
+  .compras-cuadro-imprimible {
+    padding: 18px !important;
+  }
+
+  .compras-cuadro-toolbar {
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+
+  .compras-facturas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .compras-lineas-table-wrap table {
+    min-width: 960px;
+  }
+}
