@@ -220,15 +220,13 @@ const FLUJO_PASOS_UNIFICADO =
   '<code>/cancelar</code> para abortar.';
 
 const MENSAJE_INICIO_MANUAL =
-  '📥 <b>Ingreso sin nota</b> (<code>/ingresosinnota</code> · <code>/ingreso</code>)\n\n' +
-  FLUJO_PASOS_UNIFICADO;
+  '📥 <b>Ingreso sin nota</b> (<code>/ingreso</code>)\n\n' + FLUJO_PASOS_UNIFICADO;
 
 const MENSAJE_INICIO_NOTA =
-  '📥 <b>Ingreso con nota de entrega</b> (<code>/ingresonotas</code> · <code>/ingreso</code>)\n\n' +
-  FLUJO_PASOS_UNIFICADO;
+  '📥 <b>Ingreso con nota de entrega</b> (<code>/ingreso</code>)\n\n' + FLUJO_PASOS_UNIFICADO;
 
 const MENSAJE_INICIO_EMERGENCIA =
-  '🚨 <b>Ingreso de emergencia</b> (<code>/ingresoemergencia</code>)\n\n' +
+  '🚨 <b>Ingreso de emergencia</b> (<code>/ingreso</code>)\n\n' +
   'Material recibido sin papeles completos.\n\n' +
   FLUJO_PASOS_UNIFICADO;
 

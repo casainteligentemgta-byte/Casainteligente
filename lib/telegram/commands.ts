@@ -60,7 +60,6 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '🏠 <b>Casa Inteligente</b>\n\n' +
         'Elige un modo:\n' +
         '• /facturas — comprador: foto/PDF → Contabilidad + precarga almacén\n' +
-        '• /ingresofactura — depositario: ingreso físico cuando llega la mercancía\n' +
         '• /obra — elegir obra y subir fotos de evidencia\n' +
         '• /proyecto — cambiar obra activa (lista)\n' +
         '• /gasto — comprobante de gasto de obra\n' +
@@ -70,8 +69,6 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /ingreso — manual de factura · automático · con nota · sin nota\n' +
-        '• /ingresofactura · /facturas · /ingresonotas · /ingresosinnota — atajos\n' +
-        '• /ingresoemergencia — emergencia sin papeles\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
         '• /comprassemana — materiales de la semana en curso\n' +
@@ -92,7 +89,6 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       mensaje:
         '<b>Comandos</b>\n' +
         '/facturas — comprador: cargar factura → Contabilidad (Auditoría corrige en app)\n' +
-        '/ingresofactura — depositario: ingreso físico al almacén\n' +
         '/obra — elegir obra (lista) y subir fotos\n' +
         '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +
@@ -101,8 +97,6 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
         '/ingreso — manual de factura · automático · con nota · sin nota\n' +
-        '/ingresofactura · /facturas · /ingresonotas · /ingresosinnota — atajos\n' +
-        '/ingresoemergencia — emergencia sin papeles\n' +
         '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
         '/comprasdia — lista de materiales comprados hoy\n' +
         '/comprassemana — materiales comprados esta semana\n' +
