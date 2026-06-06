@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import {
+  buscarCompraContablePorFactura,
+  buscarPendienteCanalDuplicado,
+} from '@/lib/contabilidad/buscarCompraContablePorFactura';
+import {
   evaluarYProcesarFastTrack,
   type DatosOcrFastTrack,
 } from '@/lib/canal/evaluarYProcesarFastTrack';
@@ -148,6 +152,57 @@ export async function processInvoiceFromCanal(params: {
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.pendingId);
+
+  const facturaNum = String(datosOcr.invoice_number ?? 'S/N').trim();
+  const dupParams = {
+    invoice_number: facturaNum,
+    supplier_rif: datosOcr.supplier_rif,
+    supplier_name: datosOcr.supplier_name,
+  };
+
+  const dupCompra = await buscarCompraContablePorFactura(supabase, {
+    ...dupParams,
+    ignorar_proyecto: true,
+  });
+  const dupPendiente = await buscarPendienteCanalDuplicado(supabase, {
+    ...dupParams,
+    excluirId: params.pendingId,
+  });
+
+  const purchaseInvoiceIdExistente =
+    dupCompra?.purchase_invoice_id?.trim() ||
+    dupPendiente?.purchase_invoice_id?.trim() ||
+    null;
+
+  if (purchaseInvoiceIdExistente) {
+    await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update({
+        estado: 'confirmado',
+        purchase_invoice_id: purchaseInvoiceIdExistente,
+        mensaje_error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.pendingId);
+
+    await prog?.reportar(100, 'Completado');
+
+    const msgDuplicada =
+      `ℹ️ <b>Factura ya registrada en Contabilidad</b>\n\n` +
+      `Nº: ${facturaNum}\n` +
+      `Proveedor: ${datosOcr.supplier_name ?? '—'}\n` +
+      `RIF: ${datosOcr.supplier_rif ?? '—'}\n\n` +
+      `No se creó un registro duplicado.\n` +
+      `El depositario puede ingresar físicamente con <code>/ingreso</code> → ingreso manual de factura.`;
+
+    if (prog) {
+      await prog.ok('');
+      await params.sendReply(msgDuplicada, true);
+    } else {
+      await params.sendReply(msgDuplicada, false);
+    }
+    return;
+  }
 
   // Fast-Track con ingreso a stock: solo app/WhatsApp. En Telegram el comprador registra
   // contabilidad; el depositario ingresa físicamente con /ingresofactura.

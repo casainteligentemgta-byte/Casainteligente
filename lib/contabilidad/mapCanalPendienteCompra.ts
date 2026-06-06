@@ -1,5 +1,6 @@
 /** Convierte facturas Telegram pendientes al mismo formato que `contabilidad_compras` en la UI. */
 
+import { claveFacturaProveedorCompra, claveFacturaProveedorParams } from '@/lib/contabilidad/buscarCompraContablePorFactura';
 import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
 import type {
   EstadoLogisticaCompra,
@@ -160,6 +161,58 @@ export function compraCoincideFuente(c: CompraListaUnificada, fuente: FiltroFuen
 
 const ESTADOS_CANAL_EN_COLA = new Set(['extraido', 'error', 'procesando', 'pendiente']);
 
+function clavePendienteCanal(p: CanalPendienteParaLista): string | null {
+  return claveFacturaProveedorParams({
+    invoice_number: p.extracted?.invoice_number,
+    supplier_rif: p.extracted?.supplier_rif,
+    supplier_name: p.extracted?.supplier_name,
+  });
+}
+
+/** Mayor puntaje = fila preferida cuando hay duplicados de la misma factura/proveedor. */
+export function puntajePreferenciaCompraLista(c: CompraListaUnificada): number {
+  let score = 0;
+  if (c.pendiente_canal_id) score += 100;
+  if (c.origen === 'TELEGRAM') score += 50;
+  if (c.purchase_invoice_id) score += 20;
+  if (c.document_storage_path?.trim()) score += 10;
+  if (Array.isArray(c.contabilidad_compra_lineas) && c.contabilidad_compra_lineas.length > 0) {
+    const first = c.contabilidad_compra_lineas[0];
+    if (first && 'descripcion' in first) score += 5;
+  }
+  if (!c.id.startsWith('canal-')) score += 15;
+  else score -= 40;
+  return score;
+}
+
+/**
+ * Una sola fila por factura+proveedor en el listado (evita doble tarjeta Telegram + recepción).
+ */
+export function deduplicarComprasLista(compras: CompraListaUnificada[]): CompraListaUnificada[] {
+  const sinClave: CompraListaUnificada[] = [];
+  const mejorPorClave = new Map<string, CompraListaUnificada>();
+
+  for (const c of compras) {
+    const clave = claveFacturaProveedorCompra(c);
+    if (!clave) {
+      sinClave.push(c);
+      continue;
+    }
+    const prev = mejorPorClave.get(clave);
+    if (!prev || puntajePreferenciaCompraLista(c) > puntajePreferenciaCompraLista(prev)) {
+      mejorPorClave.set(clave, c);
+    }
+  }
+
+  const unicas = [...sinClave, ...Array.from(mejorPorClave.values())];
+  return unicas.sort((a, b) => {
+    const fa = String(a.fecha ?? '').slice(0, 10);
+    const fb = String(b.fecha ?? '').slice(0, 10);
+    if (fa !== fb) return fb.localeCompare(fa);
+    return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
+  });
+}
+
 /**
  * Une compras de contabilidad con el canal Telegram: pendientes en cola + etiqueta en confirmadas.
  */
@@ -193,16 +246,20 @@ export function unificarComprasConCanal(
 ): CompraListaUnificada[] {
   const porInvoice = new Map<string, CanalPendienteParaLista>();
   const porCanalId = new Map<string, CanalPendienteParaLista>();
+  const porClave = new Map<string, CanalPendienteParaLista>();
   for (const p of pendientes) {
     porCanalId.set(p.id, p);
     if (p.purchase_invoice_id) porInvoice.set(p.purchase_invoice_id, p);
+    const clave = clavePendienteCanal(p);
+    if (clave && !porClave.has(clave)) porClave.set(clave, p);
   }
 
   const filas = compras.map((c) => {
+    const claveCompra = claveFacturaProveedorCompra(c);
     const canal =
       (c.purchase_invoice_id && porInvoice.get(c.purchase_invoice_id)) ||
       (c.pendiente_canal_id && porCanalId.get(c.pendiente_canal_id)) ||
-      undefined;
+      (claveCompra ? porClave.get(claveCompra) : undefined);
     if (!canal) {
       return { ...c, fuente_lista: c.fuente_lista ?? 'app' };
     }
@@ -215,18 +272,27 @@ export function unificarComprasConCanal(
   const canalIdsEnFilas = new Set(
     filas.map((c) => c.pendiente_canal_id).filter((id): id is string => Boolean(id)),
   );
+  const clavesFacturaEnFilas = new Set(
+    filas
+      .map((c) => claveFacturaProveedorCompra(c))
+      .filter((k): k is string => Boolean(k)),
+  );
 
   const extras = pendientes
     .filter((p) => {
       if (canalIdsEnFilas.has(p.id)) return false;
       if (p.purchase_invoice_id && invoiceEnFilas.has(p.purchase_invoice_id)) return false;
+
+      const clave = clavePendienteCanal(p);
+      if (clave && clavesFacturaEnFilas.has(clave)) return false;
+
       if (ESTADOS_CANAL_EN_COLA.has(p.estado)) return true;
       if (p.estado === 'confirmado') return true;
       return false;
     })
     .map(mapCanalPendienteACompraLista);
 
-  return [...extras, ...filas];
+  return deduplicarComprasLista([...extras, ...filas]);
 }
 
 export function etiquetaOrigenCompra(c: CompraListaUnificada): string {

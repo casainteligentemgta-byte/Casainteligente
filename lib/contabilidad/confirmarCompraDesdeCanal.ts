@@ -261,22 +261,37 @@ async function confirmarCompraDesdeCanalInterno(
     throw new Error('Seleccione el almacén de ingreso del material.');
   }
 
-  const compraDuplicada = await buscarCompraContablePorFactura(supabase, {
+  const facturaParams = {
     invoice_number: (extracted.invoice_number ?? 'S/N').trim(),
     supplier_rif: extracted.supplier_rif,
     supplier_name: extracted.supplier_name,
+  };
+
+  const compraDuplicada = await buscarCompraContablePorFactura(supabase, {
+    ...facturaParams,
     proyecto_id: proyectoId,
+    ignorar_proyecto: true,
   });
-  if (compraDuplicada?.purchase_invoice_id) {
-    return retornarDesdeCompraExistente(supabase, {
-      pendingId: params.pendingId,
-      purchaseInvoiceId: compraDuplicada.purchase_invoice_id,
-      compraId: compraDuplicada.id,
-      proyectoId,
-      ubicacionDestinoId,
-      entidadId,
-      extracted,
-    });
+  if (compraDuplicada?.id) {
+    let purchaseInvoiceId =
+      compraDuplicada.purchase_invoice_id?.trim() || row.purchase_invoice_id?.trim() || '';
+    if (purchaseInvoiceId) {
+      if (!compraDuplicada.purchase_invoice_id?.trim()) {
+        await supabase
+          .from('contabilidad_compras')
+          .update({ purchase_invoice_id: purchaseInvoiceId } as never)
+          .eq('id', compraDuplicada.id);
+      }
+      return retornarDesdeCompraExistente(supabase, {
+        pendingId: params.pendingId,
+        purchaseInvoiceId,
+        compraId: compraDuplicada.id,
+        proyectoId,
+        ubicacionDestinoId,
+        entidadId,
+        extracted,
+      });
+    }
   }
 
   const fecha = (extracted.date ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
@@ -321,10 +336,8 @@ async function confirmarCompraDesdeCanalInterno(
 
   if (!purchaseInvoiceId) {
     const duplicadaRace = await buscarCompraContablePorFactura(supabase, {
-      invoice_number: (extracted.invoice_number ?? 'S/N').trim(),
-      supplier_rif: extracted.supplier_rif,
-      supplier_name: extracted.supplier_name,
-      proyecto_id: proyectoId,
+      ...facturaParams,
+      ignorar_proyecto: true,
     });
     if (duplicadaRace?.purchase_invoice_id) {
       purchaseInvoiceId = duplicadaRace.purchase_invoice_id;

@@ -120,6 +120,35 @@ export function subtotalUsdLineaCompra(row: FilaMontoLineaCompra): number | null
   return null;
 }
 
+/** P.U. coherente con el reparto bimonetario de cabecera (tras cambio VES ↔ USD). */
+export function precioUnitarioDesdeRepartoLinea(
+  moneda: MonedaOrigen,
+  cantidad: number,
+  repartoLinea: { bs: number; usd: number | null },
+): number {
+  if (cantidad <= 0) return 0;
+  if (moneda === 'USD') {
+    const usd = repartoLinea.usd;
+    if (usd != null && usd > 0) {
+      return Math.round((usd / cantidad) * 100) / 100;
+    }
+  }
+  if (repartoLinea.bs > 0) {
+    return Math.round((repartoLinea.bs / cantidad) * 100) / 100;
+  }
+  return 0;
+}
+
+export function subtotalLineaEnMonedaOriginal(
+  moneda: MonedaOrigen,
+  cantidad: number,
+  repartoLinea: { bs: number; usd: number | null },
+): number {
+  if (cantidad <= 0) return 0;
+  const pu = precioUnitarioDesdeRepartoLinea(moneda, cantidad, repartoLinea);
+  return Math.round(pu * cantidad * 100) / 100;
+}
+
 export type FilaMonedaCompraConFecha = FilaMonedaCompra & { fecha: string };
 
 export type MontosCompraCambioMoneda = ReturnType<typeof payloadCompraBimonetario> & {

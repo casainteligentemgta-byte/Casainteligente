@@ -70,8 +70,24 @@ export async function registerCompraDesdeRecepcion(
     supplier_rif: input.supplier_rif,
     supplier_name: input.supplier_name,
     proyecto_id: input.proyecto_id,
+    ignorar_proyecto: true,
   });
   if (duplicada?.id) {
+    const piId = input.purchase_invoice_id?.trim();
+    if (piId) {
+      await supabase
+        .from('contabilidad_compras')
+        .update({ purchase_invoice_id: piId } as never)
+        .eq('id', duplicada.id)
+        .is('purchase_invoice_id', null);
+    }
+    if (input.origen === 'TELEGRAM') {
+      await supabase
+        .from('contabilidad_compras')
+        .update({ origen: 'TELEGRAM' } as never)
+        .eq('id', duplicada.id)
+        .eq('origen', 'RECEPCION_MERCANCIA');
+    }
     const { data: compraDoc } = await supabase
       .from('contabilidad_compras')
       .select('document_storage_path')

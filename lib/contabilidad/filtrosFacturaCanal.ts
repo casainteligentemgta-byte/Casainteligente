@@ -3,7 +3,9 @@ import { montoUsdCompra, tasaBcvCompra, vesAUsdConTasa } from '@/lib/contabilida
 import {
   monedaOriginalCompra,
   montosBimonetariosLista,
+  precioUnitarioDesdeRepartoLinea,
   subtotalBsLineaCompra,
+  subtotalLineaEnMonedaOriginal,
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
@@ -207,7 +209,7 @@ export type CompraConfirmadaParaLineas = {
   }>;
 };
 
-function repartirMontosFacturaEnLineas(
+export function repartirMontosFacturaEnLineas(
   montos: { bs: number; usd: number | null },
   lineas: Array<{ cantidad: number; precioUnitario: number }>,
 ): Array<{ bs: number; usd: number | null }> {
@@ -239,6 +241,61 @@ function repartirMontosFacturaEnLineas(
   }
 
   return out;
+}
+
+export type LineaPrecioCompraInput = {
+  cantidad: number;
+  precio_unitario?: number | null;
+  subtotal?: number | null;
+};
+
+export type LineaPrecioCompraRecalculada = {
+  precio_unitario: number;
+  subtotal: number;
+  subtotalBs: number;
+  subtotalUsd: number | null;
+};
+
+/** Recalcula P.U. y subtotales de líneas según moneda original y totales bimonetarios de cabecera. */
+export function recalcularPreciosLineasCompra(
+  fila: {
+    total_amount: number;
+    total_amount_usd?: number | null;
+    tasa_bcv_ves_por_usd?: number | null;
+    moneda?: string | null;
+    moneda_original?: string | null;
+    monto_ves?: number | null;
+    monto_usd?: number | null;
+  },
+  lineas: LineaPrecioCompraInput[],
+  tasa: number | null | undefined,
+): LineaPrecioCompraRecalculada[] {
+  if (!lineas.length) return [];
+
+  const moneda = monedaOriginalCompra(fila);
+  const montos = montosBimonetariosLista(fila, tasa ?? null);
+  const parsed = lineas.map((l) => {
+    const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : 0;
+    const precio =
+      l.precio_unitario != null && Number(l.precio_unitario) >= 0
+        ? Number(l.precio_unitario)
+        : cantidad > 0 && l.subtotal != null
+          ? Number(l.subtotal) / cantidad
+          : 0;
+    return { cantidad, precioUnitario: precio };
+  });
+  const reparto = repartirMontosFacturaEnLineas({ bs: montos.bs, usd: montos.usd }, parsed);
+
+  return lineas.map((l, i) => {
+    const cantidad = parsed[i]?.cantidad ?? 0;
+    const repartoLinea = reparto[i] ?? { bs: 0, usd: null };
+    return {
+      precio_unitario: precioUnitarioDesdeRepartoLinea(moneda, cantidad, repartoLinea),
+      subtotal: subtotalLineaEnMonedaOriginal(moneda, cantidad, repartoLinea),
+      subtotalBs: repartoLinea.bs,
+      subtotalUsd: repartoLinea.usd,
+    };
+  });
 }
 
 /** Una fila por línea de compra confirmada (o cabecera si no hay detalle). */
@@ -304,16 +361,17 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
     );
 
     lineasParsed.forEach((l, i) => {
+      const repartoLinea = reparto[i] ?? { bs: 0, usd: null };
       filas.push({
         ...base,
         lineaId: l.id,
         articulo: l.descripcion,
         codigo: l.item_code,
         cantidad: l.cantidad,
-        precioUnitario: l.precioUnitario,
+        precioUnitario: precioUnitarioDesdeRepartoLinea(moneda, l.cantidad, repartoLinea),
         esLinea: true,
-        subtotalBsLinea: reparto[i]?.bs ?? 0,
-        subtotalUsdLinea: reparto[i]?.usd ?? null,
+        subtotalBsLinea: repartoLinea.bs,
+        subtotalUsdLinea: repartoLinea.usd,
       });
     });
   }

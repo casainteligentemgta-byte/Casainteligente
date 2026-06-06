@@ -1,10 +1,17 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Loader2, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
-import { formatearBs, formatearUsd, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
+import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
+import { recalcularPreciosLineasCompra } from '@/lib/contabilidad/filtrosFacturaCanal';
+import {
+  esLineaCompraUsd,
+  formatearPrecioUnitarioLineaCompra,
+} from '@/lib/contabilidad/monedaCompra';
+import { formatearBs, formatearUsd } from '@/lib/contabilidad/comprasMontos';
+import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
 export type LineaProductoCompra = {
   descripcion: string;
@@ -15,16 +22,33 @@ export type LineaProductoCompra = {
   precio_unitario: number | null;
 };
 
+type FilaMonedaCompra = {
+  total_amount: number;
+  total_amount_usd?: number | null;
+  tasa_bcv_ves_por_usd?: number | null;
+  moneda?: string | null;
+  moneda_original?: string | null;
+  monto_ves?: number | null;
+  monto_usd?: number | null;
+};
+
+type LineaProductoVista = LineaProductoCompra & {
+  subtotalBs: number;
+  subtotalUsd: number | null;
+};
+
 type Props = {
   compraId: string;
   lineasIniciales?: LineaProductoCompra[];
   lineCountHint?: number;
   /** Tasa BCV de la factura (Bs por 1 USD) para mostrar equivalentes en dólares. */
   tasaBcv?: number | null;
-  /** Totales de encabezado cuando aún no hay líneas cargadas. */
+  /** Totales bimonetarios de cabecera (coherentes con moneda original). */
   montoBsFactura?: number;
   montoUsdFactura?: number | null;
   tasaEsDelDia?: boolean;
+  monedaOriginal?: MonedaOrigen | string | null;
+  filaMoneda?: FilaMonedaCompra;
 };
 
 function mapLinea(raw: Record<string, unknown>): LineaProductoCompra {
@@ -50,6 +74,32 @@ export function lineasFromNested(
   return [];
 }
 
+function lineasConMontosCoherentes(
+  src: LineaProductoCompra[],
+  filaMoneda: FilaMonedaCompra | undefined,
+  tasaBcv: number | null | undefined,
+): LineaProductoVista[] {
+  if (!src.length) return [];
+  if (!filaMoneda) {
+    return src.map((l) => ({
+      ...l,
+      subtotalBs: Number(l.subtotal) || 0,
+      subtotalUsd: null,
+    }));
+  }
+  const recalc = recalcularPreciosLineasCompra(filaMoneda, src, tasaBcv);
+  return src.map((l, i) => {
+    const r = recalc[i];
+    return {
+      ...l,
+      precio_unitario: r?.precio_unitario ?? l.precio_unitario,
+      subtotal: r?.subtotal ?? l.subtotal,
+      subtotalBs: r?.subtotalBs ?? (Number(l.subtotal) || 0),
+      subtotalUsd: r?.subtotalUsd ?? null,
+    };
+  });
+}
+
 export default function CompraProductosToggle({
   compraId,
   lineasIniciales,
@@ -58,36 +108,41 @@ export default function CompraProductosToggle({
   montoBsFactura = 0,
   montoUsdFactura = null,
   tasaEsDelDia = false,
+  monedaOriginal,
+  filaMoneda,
 }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [lineas, setLineas] = useState<LineaProductoCompra[]>(lineasIniciales ?? []);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const moneda = normalizarMonedaExtracted(monedaOriginal ?? filaMoneda?.moneda_original ?? filaMoneda?.moneda);
+  const esUsd = moneda === 'USD';
+
+  useEffect(() => {
+    setLineas(lineasIniciales ?? []);
+    setAbierto(false);
+    setError(null);
+  }, [compraId, moneda]);
+
+  useEffect(() => {
+    if (!abierto) setLineas(lineasIniciales ?? []);
+  }, [lineasIniciales, abierto]);
+
   const totalLineas = lineas.length || lineCountHint;
 
-  const montosBoton = useMemo(() => {
-    const src = lineas.length > 0 ? lineas : (lineasIniciales ?? []);
-    let sumBs = 0;
-    let sumUsd = 0;
-    let tieneUsd = false;
-    for (const l of src) {
-      const sub = Number(l.subtotal) || 0;
-      sumBs += sub;
-      const usd = vesAUsdConTasa(sub, tasaBcv);
-      if (usd != null) {
-        sumUsd += usd;
-        tieneUsd = true;
-      }
-    }
-    if (src.length > 0) {
-      return {
-        usd: tieneUsd ? Math.round(sumUsd * 100) / 100 : null,
-        bs: sumBs,
-      };
-    }
-    return { usd: montoUsdFactura, bs: montoBsFactura };
-  }, [lineas, lineasIniciales, tasaBcv, montoBsFactura, montoUsdFactura]);
+  const montosBoton = useMemo(
+    () => ({
+      usd: montoUsdFactura,
+      bs: montoBsFactura,
+    }),
+    [montoBsFactura, montoUsdFactura],
+  );
+
+  const lineasVista = useMemo(
+    () => lineasConMontosCoherentes(lineas.length > 0 ? lineas : (lineasIniciales ?? []), filaMoneda, tasaBcv),
+    [lineas, lineasIniciales, filaMoneda, tasaBcv],
+  );
 
   const cargarLineas = useCallback(async () => {
     if (lineas.length > 0) return;
@@ -195,7 +250,7 @@ export default function CompraProductosToggle({
             </p>
           ) : error ? (
             <p style={{ padding: '14px', color: '#FF6B6B', fontSize: '12px', fontWeight: 600 }}>{error}</p>
-          ) : lineas.length === 0 ? (
+          ) : lineasVista.length === 0 ? (
             <p style={{ padding: '14px', color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
               Esta factura no tiene líneas de detalle registradas.
             </p>
@@ -218,7 +273,7 @@ export default function CompraProductosToggle({
                         textAlign: 'right',
                       }}
                     >
-                      P. unit. (Bs)
+                      {esUsd ? 'P. unit. (USD)' : 'P. unit. (Bs)'}
                     </th>
                     <th
                       style={{
@@ -233,10 +288,15 @@ export default function CompraProductosToggle({
                   </tr>
                 </thead>
                 <tbody>
-                  {lineas.map((l, i) => {
-                    const precioBs = l.precio_unitario ?? 0;
-                    const subtotalBs = Number(l.subtotal) || 0;
-                    const subtotalUsd = vesAUsdConTasa(subtotalBs, tasaBcv);
+                  {lineasVista.map((l, i) => {
+                    const precioFmt =
+                      formatearPrecioUnitarioLineaCompra({
+                        esLinea: true,
+                        cantidad: l.cantidad,
+                        precioUnitario: l.precio_unitario ?? 0,
+                        montoBs: 0,
+                        monedaOriginal: moneda,
+                      }) ?? '—';
 
                     return (
                       <tr
@@ -260,26 +320,46 @@ export default function CompraProductosToggle({
                           style={{
                             padding: '10px 8px',
                             textAlign: 'right',
-                            color: '#FFD60A',
+                            color: esLineaCompraUsd({ monedaOriginal: moneda }) ? '#FF3B30' : '#FFD60A',
                             fontWeight: 700,
                           }}
                         >
-                          {formatearBs(precioBs)}
+                          {precioFmt}
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <span style={{ display: 'block', fontWeight: 800, color: '#FF3B30' }}>
-                            {subtotalUsd != null ? formatearUsd(subtotalUsd) : '—'}
-                          </span>
-                          <span
-                            style={{
-                              display: 'block',
-                              fontSize: '10px',
-                              color: 'rgba(255,255,255,0.45)',
-                              marginTop: '2px',
-                            }}
-                          >
-                            {formatearBs(subtotalBs)}
-                          </span>
+                          {esUsd ? (
+                            <>
+                              <span style={{ display: 'block', fontWeight: 800, color: '#FF3B30' }}>
+                                {l.subtotalUsd != null ? formatearUsd(l.subtotalUsd) : formatearUsd(l.subtotal)}
+                              </span>
+                              <span
+                                style={{
+                                  display: 'block',
+                                  fontSize: '10px',
+                                  color: 'rgba(255,255,255,0.45)',
+                                  marginTop: '2px',
+                                }}
+                              >
+                                {formatearBs(l.subtotalBs)}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ display: 'block', fontWeight: 800, color: '#FF3B30' }}>
+                                {l.subtotalUsd != null ? formatearUsd(l.subtotalUsd) : '—'}
+                              </span>
+                              <span
+                                style={{
+                                  display: 'block',
+                                  fontSize: '10px',
+                                  color: 'rgba(255,255,255,0.45)',
+                                  marginTop: '2px',
+                                }}
+                              >
+                                {formatearBs(l.subtotalBs)}
+                              </span>
+                            </>
+                          )}
                         </td>
                       </tr>
                     );

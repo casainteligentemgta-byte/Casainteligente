@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { deleteCompraRegistro } from '@/lib/contabilidad/deleteCompraRegistro';
 import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
+import { repartirMontosFacturaEnLineas } from '@/lib/contabilidad/filtrosFacturaCanal';
 import {
   monedaOriginalCompra,
+  montosBimonetariosLista,
+  precioUnitarioDesdeRepartoLinea,
   recalcularMontosCompraCambioMoneda,
+  subtotalLineaEnMonedaOriginal,
 } from '@/lib/contabilidad/monedaCompra';
+import { tasaBcvCompra } from '@/lib/contabilidad/comprasMontos';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
@@ -73,6 +78,66 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     if (upErr) {
       return NextResponse.json({ error: upErr.message }, { status: 500 });
+    }
+
+    const filaActualizada = {
+      ...fila,
+      ...(updated as typeof fila),
+    };
+
+    const { data: lineasDb, error: lineasErr } = await admin.client
+      .from('contabilidad_compra_lineas')
+      .select('id, cantidad, precio_unitario, subtotal')
+      .eq('compra_id', params.id);
+
+    if (lineasErr) {
+      return NextResponse.json({ error: lineasErr.message }, { status: 500 });
+    }
+
+    if (lineasDb?.length) {
+      type LineaDbRow = {
+        id: string;
+        cantidad: number;
+        precio_unitario: number;
+        subtotal: number;
+      };
+      const lineas = lineasDb as LineaDbRow[];
+      const tasa =
+        filaActualizada.tasa_bcv_ves_por_usd ?? tasaBcvCompra(filaActualizada) ?? null;
+      const montos = montosBimonetariosLista(filaActualizada, tasa);
+      const parsed = lineas.map((l) => {
+        const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : 0;
+        const precio =
+          Number(l.precio_unitario) >= 0
+            ? Number(l.precio_unitario)
+            : cantidad > 0
+              ? Number(l.subtotal) / cantidad
+              : 0;
+        return { cantidad, precioUnitario: precio };
+      });
+      const reparto = repartirMontosFacturaEnLineas(
+        { bs: montos.bs, usd: montos.usd },
+        parsed,
+      );
+
+      for (let i = 0; i < lineas.length; i++) {
+        const linea = lineas[i]!;
+        const cantidad = parsed[i]?.cantidad ?? 0;
+        const repartoLinea = reparto[i] ?? { bs: 0, usd: null };
+        const precio_unitario = precioUnitarioDesdeRepartoLinea(
+          monedaNueva,
+          cantidad,
+          repartoLinea,
+        );
+        const subtotal = subtotalLineaEnMonedaOriginal(monedaNueva, cantidad, repartoLinea);
+        const { error: lineUpErr } = await admin.client
+          .from('contabilidad_compra_lineas')
+          .update({ precio_unitario, subtotal } as never)
+          .eq('id', linea.id);
+        if (lineUpErr) {
+          return NextResponse.json({ error: lineUpErr.message }, { status: 500 });
+        }
+      }
     }
 
     return NextResponse.json({ ok: true, compra: updated });

@@ -108,6 +108,7 @@ import {
     type ComprasCuadroFiltrosState,
 } from '@/lib/contabilidad/comprasCuadroShare';
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
+import { recalcularPreciosLineasCompra } from '@/lib/contabilidad/filtrosFacturaCanal';
 import {
     buildLineasCuadroDesdeCompras,
     exportarComprasCuadroExcel,
@@ -781,6 +782,45 @@ export default function ComprasPage() {
                 moneda,
             );
             const { nominalFactura, ...payloadMoneda } = montosNuevos;
+            const filaTrasMoneda = { ...c, ...payloadMoneda };
+            const tasaTrasMoneda =
+                payloadMoneda.tasa_bcv_ves_por_usd ??
+                tasaBcvCompra(filaTrasMoneda) ??
+                tasaParaCompra(c);
+            const detalleActual = lineasDetalle(c);
+            const lineasRecalculadas =
+                detalleActual.length > 0
+                    ? detalleActual.map((l, i) => {
+                          const r = recalcularPreciosLineasCompra(
+                              filaTrasMoneda,
+                              detalleActual,
+                              tasaTrasMoneda,
+                          )[i];
+                          return {
+                              ...l,
+                              precio_unitario: r?.precio_unitario ?? l.precio_unitario,
+                              subtotal: r?.subtotal ?? l.subtotal,
+                          };
+                      })
+                    : [];
+
+            const itemsExtractedActualizados = (
+                items: ExtractedCanalHeader['items'],
+            ): ExtractedCanalHeader['items'] => {
+                if (!items?.length || !lineasRecalculadas.length) return items;
+                return items.map((it, i) => ({
+                    ...it,
+                    unit_price: lineasRecalculadas[i]?.precio_unitario ?? it.unit_price,
+                }));
+            };
+
+            const mergeCompraTrasMoneda = (row: CompraRow): CompraRow => ({
+                ...row,
+                ...payloadMoneda,
+                contabilidad_compra_lineas: lineasRecalculadas.length
+                    ? lineasRecalculadas
+                    : row.contabilidad_compra_lineas,
+            });
 
             if (esSoloCanal && canalId) {
                 let extracted: ExtractedCanalHeader | null = null;
@@ -812,17 +852,11 @@ export default function ComprasPage() {
                         ...base,
                         moneda,
                         total_amount: nominalFactura,
+                        items: itemsExtractedActualizados(base.items),
                     },
                 });
                 setCompras((prev) =>
-                    prev.map((row) =>
-                        row.id === c.id
-                            ? {
-                                  ...row,
-                                  ...payloadMoneda,
-                              }
-                            : row,
-                    ),
+                    prev.map((row) => (row.id === c.id ? mergeCompraTrasMoneda(row) : row)),
                 );
             } else {
                 const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(c.id)}`, {
@@ -838,7 +872,9 @@ export default function ComprasPage() {
                 if (data.compra) {
                     setCompras((prev) =>
                         prev.map((row) =>
-                            row.id === c.id ? { ...row, ...data.compra } : row,
+                            row.id === c.id
+                                ? mergeCompraTrasMoneda({ ...row, ...data.compra })
+                                : row,
                         ),
                     );
                 }
@@ -857,6 +893,7 @@ export default function ComprasPage() {
                                     ...canalData.extracted,
                                     moneda,
                                     total_amount: nominalFactura,
+                                    items: itemsExtractedActualizados(canalData.extracted.items),
                                 },
                             });
                         }
@@ -2596,26 +2633,47 @@ export default function ComprasPage() {
                                             · {lineCount(c)} producto(s)
                                         </p>
                                         {!c.pendiente_canal_id ? (
-                                            <CompraProductosToggle
-                                                compraId={c.id}
-                                                tasaBcv={tasaDisplayCompra(c)}
-                                                tasaEsDelDia={!tasaBcvCompra(c) && !!tasaParaCompra(c)}
-                                                montoBsFactura={montoVesCompra(c)}
-                                                montoUsdFactura={
-                                                    vesAUsdConTasa(montoVesCompra(c), tasaDisplayCompra(c)) ??
-                                                    montoUsdCompra(c)
-                                                }
-                                                lineCountHint={lineCount(c)}
-                                                lineasIniciales={lineasDetalle(c).map((l) => ({
-                                                    descripcion: l.descripcion,
-                                                    item_code: l.item_code,
-                                                    subtotal: l.subtotal,
-                                                    cantidad: l.cantidad,
-                                                    unidad: null,
-                                                    precio_unitario:
-                                                        l.cantidad > 0 ? l.subtotal / l.cantidad : null,
-                                                }))}
-                                            />
+                                            (() => {
+                                                const tasaProductos = tasaDisplayCompra(c);
+                                                const montosProductos = montosBimonetariosLista(
+                                                    c,
+                                                    tasaProductos,
+                                                );
+                                                return (
+                                                    <CompraProductosToggle
+                                                        compraId={c.id}
+                                                        tasaBcv={tasaProductos}
+                                                        tasaEsDelDia={
+                                                            !tasaBcvCompra(c) && !!tasaParaCompra(c)
+                                                        }
+                                                        montoBsFactura={montosProductos.bs}
+                                                        montoUsdFactura={montosProductos.usd}
+                                                        monedaOriginal={montosProductos.moneda}
+                                                        filaMoneda={{
+                                                            total_amount: Number(c.total_amount) || 0,
+                                                            total_amount_usd: c.total_amount_usd,
+                                                            tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
+                                                            moneda: c.moneda,
+                                                            moneda_original: c.moneda_original,
+                                                            monto_ves: c.monto_ves,
+                                                            monto_usd: c.monto_usd,
+                                                        }}
+                                                        lineCountHint={lineCount(c)}
+                                                        lineasIniciales={lineasDetalle(c).map((l) => ({
+                                                            descripcion: l.descripcion,
+                                                            item_code: l.item_code,
+                                                            subtotal: l.subtotal,
+                                                            cantidad: l.cantidad,
+                                                            unidad: null,
+                                                            precio_unitario:
+                                                                l.precio_unitario ??
+                                                                (l.cantidad > 0
+                                                                    ? l.subtotal / l.cantidad
+                                                                    : null),
+                                                        }))}
+                                                    />
+                                                );
+                                            })()
                                         ) : lineCount(c) > 0 ? (
                                             <p
                                                 style={{
