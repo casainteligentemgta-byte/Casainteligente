@@ -21,7 +21,8 @@ export function formatDeleteCompraError(error: unknown): string {
 export function normalizeInvoiceNumber(n: string): string {
   return String(n ?? '')
     .trim()
-    .replace(/^#+/, '');
+    .replace(/^#+/, '')
+    .toUpperCase();
 }
 
 function invoiceNumberVariants(n: string): string[] {

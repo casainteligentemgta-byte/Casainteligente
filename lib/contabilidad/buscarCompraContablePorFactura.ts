@@ -74,6 +74,22 @@ export function claveFacturaProveedorCompra(
   return claveFacturaProveedorParams(c);
 }
 
+/** Misma factura y proveedor aunque RIF/nombre estén en distinto campo entre filas duplicadas. */
+export function mismaFacturaProveedorCompra(
+  a: Pick<CompraContablePorFactura, 'invoice_number' | 'supplier_rif' | 'supplier_name'>,
+  b: Pick<CompraContablePorFactura, 'invoice_number' | 'supplier_rif' | 'supplier_name'>,
+): boolean {
+  const invA = normalizeInvoiceNumber(a.invoice_number);
+  const invB = normalizeInvoiceNumber(b.invoice_number);
+  if (!invA || !invB || invA !== invB) return false;
+  const invUpper = invA.toUpperCase();
+  if (invUpper === 'S/N' || invUpper === 'SN') return false;
+  return (
+    proveedorCoincide(a, b.supplier_rif, b.supplier_name) ||
+    proveedorCoincide(b, a.supplier_rif, a.supplier_name)
+  );
+}
+
 export function extractedCoincideFacturaProveedor(
   extracted: Record<string, unknown> | null | undefined,
   params: {

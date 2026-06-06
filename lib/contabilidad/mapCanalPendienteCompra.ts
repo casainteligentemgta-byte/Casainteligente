@@ -1,6 +1,10 @@
 /** Convierte facturas Telegram pendientes al mismo formato que `contabilidad_compras` en la UI. */
 
-import { claveFacturaProveedorCompra, claveFacturaProveedorParams } from '@/lib/contabilidad/buscarCompraContablePorFactura';
+import {
+  claveFacturaProveedorCompra,
+  claveFacturaProveedorParams,
+  mismaFacturaProveedorCompra,
+} from '@/lib/contabilidad/buscarCompraContablePorFactura';
 import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
 import type {
   EstadoLogisticaCompra,
@@ -182,29 +186,43 @@ export function puntajePreferenciaCompraLista(c: CompraListaUnificada): number {
   }
   if (!c.id.startsWith('canal-')) score += 15;
   else score -= 40;
+  if (c.origen === 'RECEPCION_MERCANCIA' && !c.pendiente_canal_id) score -= 80;
   return score;
+}
+
+function fusionarMetadataCompraPreferida(
+  preferida: CompraListaUnificada,
+  descartada: CompraListaUnificada,
+): CompraListaUnificada {
+  return {
+    ...preferida,
+    estado_logistica: preferida.estado_logistica ?? descartada.estado_logistica ?? null,
+    logistica_conteos: preferida.logistica_conteos ?? descartada.logistica_conteos ?? null,
+    compra_factura_id: preferida.compra_factura_id ?? descartada.compra_factura_id ?? null,
+    ingresado_almacen_at: preferida.ingresado_almacen_at ?? descartada.ingresado_almacen_at ?? null,
+  };
 }
 
 /**
  * Una sola fila por factura+proveedor en el listado (evita doble tarjeta Telegram + recepción).
  */
 export function deduplicarComprasLista(compras: CompraListaUnificada[]): CompraListaUnificada[] {
-  const sinClave: CompraListaUnificada[] = [];
-  const mejorPorClave = new Map<string, CompraListaUnificada>();
+  const unicas: CompraListaUnificada[] = [];
 
   for (const c of compras) {
-    const clave = claveFacturaProveedorCompra(c);
-    if (!clave) {
-      sinClave.push(c);
+    const idx = unicas.findIndex((u) => mismaFacturaProveedorCompra(u, c));
+    if (idx === -1) {
+      unicas.push(c);
       continue;
     }
-    const prev = mejorPorClave.get(clave);
-    if (!prev || puntajePreferenciaCompraLista(c) > puntajePreferenciaCompraLista(prev)) {
-      mejorPorClave.set(clave, c);
+    const prev = unicas[idx]!;
+    if (puntajePreferenciaCompraLista(c) > puntajePreferenciaCompraLista(prev)) {
+      unicas[idx] = fusionarMetadataCompraPreferida(c, prev);
+    } else {
+      unicas[idx] = fusionarMetadataCompraPreferida(prev, c);
     }
   }
 
-  const unicas = [...sinClave, ...Array.from(mejorPorClave.values())];
   return unicas.sort((a, b) => {
     const fa = String(a.fecha ?? '').slice(0, 10);
     const fb = String(b.fecha ?? '').slice(0, 10);
@@ -285,6 +303,13 @@ export function unificarComprasConCanal(
 
       const clave = clavePendienteCanal(p);
       if (clave && clavesFacturaEnFilas.has(clave)) return false;
+
+      const refPendiente = {
+        invoice_number: p.extracted?.invoice_number ?? '',
+        supplier_rif: p.extracted?.supplier_rif ?? '',
+        supplier_name: p.extracted?.supplier_name ?? '',
+      };
+      if (filas.some((f) => mismaFacturaProveedorCompra(f, refPendiente))) return false;
 
       if (ESTADOS_CANAL_EN_COLA.has(p.estado)) return true;
       if (p.estado === 'confirmado') return true;
