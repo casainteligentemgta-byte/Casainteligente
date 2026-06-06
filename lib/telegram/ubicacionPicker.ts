@@ -9,10 +9,11 @@ import {
   listarUbicacionesParaSelector,
 } from '@/lib/almacen/ubicacionesInventario';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import {
-  confirmarCompraDesdeCanal,
-  linkConfirmarCompraTelegram,
-} from '@/lib/contabilidad/confirmarCompraDesdeCanal';
+  resumenFacturaCompradorHtml,
+  tecladoFacturaRegistradaOk,
+} from '@/lib/telegram/mensajesFactura';
 import {
   esNotaEntregaExtracted,
   mensajeNotaEntregaFinalizada,
@@ -129,7 +130,7 @@ export async function enviarPickerUbicacionesTelegram(
 
   await sendTelegramMessage(
     chatId,
-    `📦 <b>Elige el almacén de ingreso</b>\nObra: <b>${params.nombreObra}</b>\n<i>Almacén central o móvil</i>`,
+    `📦 <b>Elige el almacén</b> de esta compra\nObra: <b>${params.nombreObra}</b>`,
     { parse_mode: 'HTML', reply_markup: keyboard },
   );
 }
@@ -220,40 +221,32 @@ export async function manejarCallbackUbicacionTelegram(
     return true;
   }
 
-  const linkAudi = linkConfirmarCompraTelegram(pendingId);
-  let textoFinal =
-    `✅ <b>Factura registrada en Contabilidad</b>\n` +
-    `Obra: <b>${nombreObra}</b>\n` +
-    `Almacén destino (precarga): <b>${ubi.nombre}</b>\n\n` +
-    `📋 <b>Auditoría</b> puede corregir líneas o montos en:\n<a href="${linkAudi}">${linkAudi}</a>\n\n` +
-    `📥 Cuando llegue la mercancía, el depositario usa <code>/ingresofactura</code> para ingresar al stock.`;
+  let textoFinal = resumenFacturaCompradorHtml(extracted);
 
-  if (!proyectoId) {
-    await sendTelegramMessage(params.chatId, textoFinal, { parse_mode: 'HTML' });
-    return true;
+  if (proyectoId) {
+    try {
+      await confirmarCompraDesdeCanal(supabase, {
+        pendingId,
+        proyectoId,
+        ubicacionDestinoId: parsed.ubicacionId,
+      });
+      await setTelegramContexto(supabase, params.chatId, {
+        contexto: 'menu',
+        pending_factura_id: null,
+        metadata: {},
+      });
+    } catch (e) {
+      const det = e instanceof Error ? e.message : 'Error al registrar en Contabilidad';
+      textoFinal =
+        `⚠️ <b>No se pudo registrar en Contabilidad</b>\n<i>${det.slice(0, 280)}</i>\n\n` +
+        resumenFacturaCompradorHtml(extracted);
+    }
   }
 
-  try {
-    await confirmarCompraDesdeCanal(supabase, {
-      pendingId,
-      proyectoId,
-      ubicacionDestinoId: parsed.ubicacionId,
-    });
-    await setTelegramContexto(supabase, params.chatId, {
-      contexto: 'menu',
-      pending_factura_id: null,
-      metadata: {},
-    });
-  } catch (e) {
-    const det = e instanceof Error ? e.message : 'Error al registrar en Contabilidad';
-    textoFinal =
-      `⚠️ <b>Factura precargada</b> (obra y almacén asignados).\n\n` +
-      `No se pudo completar el registro contable automático:\n<i>${det.slice(0, 280)}</i>\n\n` +
-      `📋 <b>Auditoría</b> debe revisar y confirmar en:\n<a href="${linkAudi}">${linkAudi}</a>\n\n` +
-      `📥 Luego el depositario ingresa con <code>/ingresofactura</code>.`;
-  }
-
-  await sendTelegramMessage(params.chatId, textoFinal, { parse_mode: 'HTML' });
+  await sendTelegramMessage(params.chatId, textoFinal, {
+    parse_mode: 'HTML',
+    reply_markup: tecladoFacturaRegistradaOk(),
+  });
   return true;
 }
 

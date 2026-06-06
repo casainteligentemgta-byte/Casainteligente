@@ -166,43 +166,22 @@ export async function processInvoiceFromCanal(params: {
 
   const inv = datosOcr;
   const nItems = Array.isArray(inv.items) ? inv.items.length : 0;
-  const detalleOk =
-    `📄 Nº: <code>${inv.invoice_number ?? '—'}</code>\n` +
-    `🏢 ${inv.supplier_name ?? 'Proveedor'}\n` +
-    `🆔 RIF: ${inv.supplier_rif ?? '—'}\n` +
-    `💰 Total: ${inv.total_amount != null ? `${inv.total_amount} Bs` : '—'}\n` +
-    `📦 Líneas: ${nItems}` +
-    fastTrackMsg;
-
-  const html =
-    params.canal === 'telegram'
-      ? `✅ <b>Factura leída</b>\n\n` +
-        `📄 Nº: <code>${inv.invoice_number ?? '—'}</code>\n` +
-        `🏢 ${inv.supplier_name ?? 'Proveedor'}\n` +
-        `🆔 RIF: ${inv.supplier_rif ?? '—'}\n` +
-        `💰 Total: ${inv.total_amount != null ? `${inv.total_amount} Bs` : '—'}\n` +
-        `📦 Líneas: ${nItems}\n\n` +
-        `Elige <b>obra</b> y <b>almacén destino</b> abajo.\n` +
-        `Contabilidad (Auditoría) puede corregir en:\n<a href="${link}">${link}</a>\n\n` +
-        `<i>El stock se ingresa después con</i> <code>/ingresofactura</code> <i>cuando llegue la mercancía.</i>`
-      : null;
-
   const plain =
     `✅ Factura recibida\n\n` +
     `Nº: ${inv.invoice_number ?? '—'}\n` +
     `Proveedor: ${inv.supplier_name ?? '—'}\n` +
     `RIF: ${inv.supplier_rif ?? '—'}\n` +
     `Total: ${inv.total_amount != null ? `${inv.total_amount} Bs` : '—'}\n` +
-    `Líneas: ${nItems}\n\n` +
+    `Líneas: ${nItems}${fastTrackMsg ? `\n${fastTrackMsg}` : ''}\n\n` +
     `Confirma en: ${link}`;
 
   if (prog) {
-    await prog.ok(detalleOk);
+    await prog.ok('');
     if (params.canal === 'telegram' && !fastTrackMsg) {
       const { enviarPickerProyectosTelegram } = await import('@/lib/telegram/proyectoPicker');
       await enviarPickerProyectosTelegram(supabase, params.chatId, 'factura_compra');
     }
   } else {
-    await params.sendReply(html ?? plain, Boolean(html));
+    await params.sendReply(plain, false);
   }
 }

@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFacturaTelegram';
 import {
-  manejarComandoIngresoManualTelegram,
   manejarComandoIngresoSinNotaTelegram,
   manejarComandoNotaEntregaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
@@ -14,12 +13,8 @@ import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTele
 const PREFIX_INGRESO = 'ig:';
 const PREFIX_SALIDA = 'sg:';
 
-export type OpcionMenuIngreso =
-  | 'manual'
-  | 'factura'
-  | 'factauto'
-  | 'nota'
-  | 'sinnota';
+/** Opciones del submenú /ingreso (4 flujos unificados). */
+export type OpcionMenuIngreso = 'factura' | 'factauto' | 'nota' | 'sinnota';
 export type OpcionMenuSalida = 'obra' | 'almacen' | 'prestamo';
 
 function escapeHtml(s: string): string {
@@ -45,32 +40,37 @@ export function callbackMenuSalida(opcion: OpcionMenuSalida): string {
   return `${PREFIX_SALIDA}${opcion}`;
 }
 
+export async function manejarComandoIngresoTelegram(chatId: string): Promise<void> {
+  await enviarMenuIngresoTelegram(chatId);
+}
+
 export async function enviarMenuIngresoTelegram(chatId: string): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    '📥 <b>Ingreso a almacén</b>\n\n' +
-      'Elige el tipo de ingreso:\n\n' +
-      '<i>Atajos:</i> <code>/ingresomanual</code> · <code>/ingresofactura</code> · ' +
-      '<code>/facturas</code> · <code>/ingresonotas</code> · <code>/ingresosinnota</code>',
+    '📥 <b>Ingreso a almacén</b>\n\n' + 'Elige el tipo de ingreso:',
     {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '📋 Ingreso manual', callback_data: callbackMenuIngreso('manual') }],
           [
             {
-              text: '🧾 Ingreso factura (precargada)',
+              text: '🧾 Ingreso manual de factura',
               callback_data: callbackMenuIngreso('factura'),
             },
           ],
           [
             {
-              text: '🤖 Factura automática (foto/PDF)',
+              text: '🤖 Ingreso automático de factura',
               callback_data: callbackMenuIngreso('factauto'),
             },
           ],
-          [{ text: '📄 Nota de entrega', callback_data: callbackMenuIngreso('nota') }],
-          [{ text: '📝 Sin nota de entrega', callback_data: callbackMenuIngreso('sinnota') }],
+          [
+            {
+              text: '📄 Ingreso con nota de voz',
+              callback_data: callbackMenuIngreso('nota'),
+            },
+          ],
+          [{ text: '📝 Ingreso sin nota', callback_data: callbackMenuIngreso('sinnota') }],
         ],
       },
     },
@@ -94,15 +94,20 @@ export async function enviarMenuSalidaTelegram(chatId: string): Promise<void> {
   );
 }
 
+function normalizarOpcionMenuIngreso(raw: string): OpcionMenuIngreso | null {
+  if (raw === 'manual') return 'sinnota';
+  if (raw === 'factura' || raw === 'factauto' || raw === 'nota' || raw === 'sinnota') {
+    return raw;
+  }
+  return null;
+}
+
 async function iniciarIngresoPorOpcion(
   supabase: SupabaseClient,
   chatId: string,
   opcion: OpcionMenuIngreso,
 ): Promise<void> {
   switch (opcion) {
-    case 'manual':
-      await manejarComandoIngresoManualTelegram(supabase, chatId);
-      break;
     case 'factura':
       await manejarComandoIngresoFacturaTelegram(supabase, chatId);
       break;
@@ -145,11 +150,10 @@ async function iniciarSalidaPorOpcion(
 }
 
 const ETIQUETA_INGRESO: Record<OpcionMenuIngreso, string> = {
-  manual: 'Ingreso manual',
-  factura: 'Ingreso factura',
-  factauto: 'Factura automática',
-  nota: 'Nota de entrega',
-  sinnota: 'Sin nota de entrega',
+  factura: 'Ingreso manual de factura',
+  factauto: 'Ingreso automático de factura',
+  nota: 'Ingreso con nota de voz',
+  sinnota: 'Ingreso sin nota',
 };
 
 const ETIQUETA_SALIDA: Record<OpcionMenuSalida, string> = {
@@ -163,8 +167,8 @@ export async function manejarCallbackMenuIngresoTelegram(
   params: { chatId: string; callbackId: string; data: string },
 ): Promise<boolean> {
   if (!esCallbackMenuIngresoTelegram(params.data)) return false;
-  const opcion = params.data.slice(PREFIX_INGRESO.length) as OpcionMenuIngreso;
-  if (!(opcion in ETIQUETA_INGRESO)) return false;
+  const opcion = normalizarOpcionMenuIngreso(params.data.slice(PREFIX_INGRESO.length));
+  if (!opcion) return false;
 
   await answerCallbackQuery(params.callbackId, ETIQUETA_INGRESO[opcion].slice(0, 40));
   try {

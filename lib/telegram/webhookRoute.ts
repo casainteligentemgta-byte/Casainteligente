@@ -12,7 +12,7 @@ import { manejarComandoStockConsultaTelegram } from '@/lib/telegram/stockConsult
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import { manejarComandoAguaTelegram } from '@/lib/telegram/aguaRegistro';
 import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFacturaTelegram';
-import { enviarMenuIngresoTelegram } from '@/lib/telegram/menuIngresoSalidaTelegram';
+import { manejarComandoIngresoTelegram } from '@/lib/telegram/menuIngresoSalidaTelegram';
 import {
   manejarComandoIngresoManualTelegram,
   manejarComandoIngresoSinNotaTelegram,
@@ -242,7 +242,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
 
   if (cmd === '/ingreso') {
     try {
-      await enviarMenuIngresoTelegram(chatId);
+      await manejarComandoIngresoTelegram(chatId);
     } catch (err) {
       console.error('[telegram webhook] /ingreso menu', err);
       return respuestaWebhook({

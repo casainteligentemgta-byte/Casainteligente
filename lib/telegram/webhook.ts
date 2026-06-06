@@ -24,7 +24,11 @@ import {
   manejarCallbackMemoriaObra,
   manejarFotoMemoriaObraTelegram,
 } from '@/lib/telegram/memoriaObra';
-import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
+import {
+  esCallbackFacturaOk,
+  manejarCallbackFacturaOkTelegram,
+  mensajeModoFacturasActivado,
+} from '@/lib/telegram/mensajesFactura';
 import {
   enviarPickerAsignarObraTelegram,
   manejarCallbackAsignarObraTelegram,
@@ -135,12 +139,12 @@ import {
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
 import {
-  enviarMenuIngresoTelegram,
   enviarMenuSalidaTelegram,
   esCallbackMenuIngresoTelegram,
   esCallbackMenuSalidaTelegram,
   manejarCallbackMenuIngresoTelegram,
   manejarCallbackMenuSalidaTelegram,
+  manejarComandoIngresoTelegram,
 } from '@/lib/telegram/menuIngresoSalidaTelegram';
 import {
   esCallbackStockConsultaTelegram,
@@ -269,7 +273,7 @@ async function aplicarComando(
   }
 
   if (cmd.comandoMenuIngreso) {
-    await enviarMenuIngresoTelegram(chatId);
+    await manejarComandoIngresoTelegram(chatId);
     return;
   }
 
@@ -555,6 +559,11 @@ export async function handleTelegramCallbackQuery(
       if (handledIngresoManual) {
         return NextResponse.json({ ok: true, callback: 'ingreso_manual' });
       }
+    }
+
+    if (esCallbackFacturaOk(cq.data)) {
+      await manejarCallbackFacturaOkTelegram({ callbackId: cq.id });
+      return NextResponse.json({ ok: true, callback: 'factura_ok' });
     }
 
     if (esCallbackUbicacion(cq.data)) {

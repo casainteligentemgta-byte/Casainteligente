@@ -50,9 +50,11 @@ export function crearNotificadorProgresoFacturaTelegram(
     await editTelegramMessage(chatId, messageId, text, { parse_mode: 'HTML' });
   }
 
-  async function ok(detalleHtml: string): Promise<void> {
+  async function ok(_detalleHtml: string): Promise<void> {
     const text =
-      `✅ <b>OK</b> — Factura registrada en Contabilidad (precarga almacén).\n\n${detalleHtml}`;
+      `✅ <b>Análisis completado</b>\n` +
+      `<code>${barraProgreso(100)}</code>\n` +
+      `<i>Elige la obra de esta compra…</i>`;
     if (messageId != null) {
       await editTelegramMessage(chatId, messageId, text, { parse_mode: 'HTML' });
     } else {

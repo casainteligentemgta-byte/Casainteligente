@@ -69,8 +69,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /stock &lt;material&gt; — ej. cemento\n' +
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
-        '• /ingreso — antesala: manual · factura · factura auto · nota · sin nota\n' +
-        '• /facturas · /ingresofactura · /ingresonotas · /ingresosinnota — atajos\n' +
+        '• /ingreso — manual de factura · automático · con nota · sin nota\n' +
+        '• /ingresofactura · /facturas · /ingresonotas · /ingresosinnota — atajos\n' +
         '• /ingresoemergencia — emergencia sin papeles\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
@@ -100,8 +100,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/stock rancho flamboyant — almacén, en obra o total · /stock cemento — por material\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
         '/agua — obra, camión, prueba PPM, litros\n' +
-        '/ingreso — manual · ingreso factura · factura automática · nota · sin nota\n' +
-        '/facturas · /ingresofactura · /ingresonotas · /ingresosinnota — atajos\n' +
+        '/ingreso — manual de factura · automático · con nota · sin nota\n' +
+        '/ingresofactura · /facturas · /ingresonotas · /ingresosinnota — atajos\n' +
         '/ingresoemergencia — emergencia sin papeles\n' +
         '/compras Flamboyant — total compras e stock en almacenes de la obra\n' +
         '/comprasdia — lista de materiales comprados hoy\n' +
@@ -123,7 +123,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       contexto: 'menu',
       proyectoId: null,
       resetProyecto: true,
-      mensaje: '↩️ Volviste al menú. Usa /facturas, /obra, /ingresosinnota, /salida o /agua.',
+      mensaje: '↩️ Volviste al menú. Usa /ingreso, /facturas, /obra, /salida o /agua.',
     };
   }
 

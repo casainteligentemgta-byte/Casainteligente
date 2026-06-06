@@ -60,7 +60,7 @@ export default function AlmacenMaestrosPage() {
       supabase.from('inventory_deposits').select('*').order('is_default', { ascending: false }).order('name'),
       supabase.from('inventory_furniture').select('*').order('sort_order').order('name'),
       supabase.from('material_categories').select('*').order('name'),
-      supabase.from('inventory_units').select('*').order('sort_order').order('code'),
+      supabase.from('inventory_units').select('*').eq('active', true).order('sort_order').order('code'),
     ]);
     if (d.error) setErr(d.error.message);
     else if (f.error) setErr(f.error.message);
@@ -193,6 +193,7 @@ export default function AlmacenMaestrosPage() {
       code: unitForm.code.trim().toUpperCase(),
       name: unitForm.name.trim(),
       sort_order: 99,
+      active: true,
     });
     if (error) {
       alert(error.message);
