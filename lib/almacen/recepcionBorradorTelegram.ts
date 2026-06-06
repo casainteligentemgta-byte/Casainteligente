@@ -49,11 +49,12 @@ export function baseUrlApp(): string {
 export function vistaDesdeFlujoTelegram(flujo: string | undefined): VistaRecepcionBorrador | null {
   if (flujo === 'emergencia_ingreso') return 'emergencia';
   if (flujo === 'nota_entrega_ingreso') return 'nota_entrega';
-  if (flujo === 'ingreso_manual') return 'ingreso_manual';
+  if (flujo === 'ingreso_manual' || flujo === 'ingreso_factura_manual') return 'ingreso_manual';
   return null;
 }
 
 export function tipoRpcDesdeFlujoTelegram(flujo: string | undefined): TipoRecepcionCampo | null {
+  if (flujo === 'ingreso_factura_manual') return 'factura_canal';
   const vista = vistaDesdeFlujoTelegram(flujo);
   if (!vista) return null;
   return vista === 'emergencia' ? 'emergencia' : 'nota_entrega';

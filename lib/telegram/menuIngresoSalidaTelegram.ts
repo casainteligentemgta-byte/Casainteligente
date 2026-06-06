@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
-import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFacturaTelegram';
 import {
+  manejarComandoIngresoFacturaManualTelegram,
   manejarComandoIngresoSinNotaTelegram,
   manejarComandoNotaEntregaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
@@ -109,7 +109,7 @@ async function iniciarIngresoPorOpcion(
 ): Promise<void> {
   switch (opcion) {
     case 'factura':
-      await manejarComandoIngresoFacturaTelegram(supabase, chatId);
+      await manejarComandoIngresoFacturaManualTelegram(supabase, chatId);
       break;
     case 'factauto':
       await iniciarModoCargaFacturasTelegram(supabase, chatId);

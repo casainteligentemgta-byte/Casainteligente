@@ -19,6 +19,7 @@ export type ProyectoPickerModo =
     >
   | 'factura_compra'
   | 'ingreso_manual'
+  | 'ingreso_factura_manual'
   | 'nota_entrega'
   | 'emergencia'
   | 'salida_almacen'
@@ -39,6 +40,7 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   memoria_obra: 'm',
   factura_compra: 'f',
   ingreso_manual: 'h',
+  ingreso_factura_manual: 'v',
   nota_entrega: 't',
   emergencia: 'e',
 };
@@ -55,6 +57,7 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   m: 'memoria_obra',
   f: 'factura_compra',
   h: 'ingreso_manual',
+  v: 'ingreso_factura_manual',
   t: 'nota_entrega',
   e: 'emergencia',
 };
@@ -105,6 +108,8 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '📥 <b>Elige la obra</b> (ingreso manual):';
     case 'ingreso_manual':
       return '📥 <b>Elige la obra</b> (ingreso manual a almacén):';
+    case 'ingreso_factura_manual':
+      return '🧾 <b>Elige la obra</b> (ingreso manual de factura):';
     case 'nota_entrega':
       return '📥 <b>Elige la obra</b> (nota de entrega → almacén):';
     case 'emergencia':
@@ -143,6 +148,7 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
       );
     case 'entrada_obra':
     case 'ingreso_manual':
+    case 'ingreso_factura_manual':
     case 'nota_entrega':
     case 'emergencia':
     case 'salida_obra':
@@ -290,6 +296,13 @@ export async function manejarCallbackProyectoTelegram(
     await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
     const { prepararIngresoManualTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
     await prepararIngresoManualTrasObra(supabase, params.chatId, parsed.proyectoId);
+    return true;
+  }
+
+  if (parsed.modo === 'ingreso_factura_manual') {
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { prepararIngresoFacturaManualTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararIngresoFacturaManualTrasObra(supabase, params.chatId, parsed.proyectoId);
     return true;
   }
 

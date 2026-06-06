@@ -7,7 +7,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 
-const TIPOS_VALIDOS = new Set(['nota_entrega', 'emergencia']);
+const TIPOS_VALIDOS = new Set(['nota_entrega', 'emergencia', 'factura_canal']);
 
 function isUuid(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);

@@ -32,6 +32,7 @@ export function formaIngresoDefaultDesdeVista(
 }
 
 export function formaIngresoDefaultDesdeFlujoTelegram(flujo: string | undefined): FormaIngresoRecepcion {
+  if (flujo === 'ingreso_factura_manual') return 'con_factura';
   if (flujo === 'nota_entrega_ingreso') return 'con_nota';
   if (flujo === 'emergencia_ingreso') return 'sin_nota';
   return 'sin_nota';

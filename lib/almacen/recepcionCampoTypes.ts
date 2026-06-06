@@ -1,6 +1,6 @@
 import type { FormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
 
-export type TipoRecepcionCampo = 'nota_entrega' | 'emergencia';
+export type TipoRecepcionCampo = 'nota_entrega' | 'emergencia' | 'factura_canal';
 
 export type LineaRecepcionCampoInput = {
   material_id: string;
