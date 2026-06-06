@@ -38,24 +38,45 @@ function parsePgUrl(url) {
 async function connect() {
   const env = parseEnvFile(fs.readFileSync(path.join(root, '.env.local'), 'utf8'));
   const url = (env.DATABASE_URL || env.SUPABASE_DB_URL)?.trim();
-  if (!url) throw new Error('Falta DATABASE_URL o SUPABASE_DB_URL en .env.local');
   const ref = env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] ?? '';
   const parsed = parsePgUrl(url);
-  let sql = postgres({ ...parsed, max: 1, prepare: false });
-  try {
-    await sql`select 1`;
-  } catch {
-    await sql.end({ timeout: 1 }).catch(() => {});
-    sql = postgres({
+  const opts = { max: 1, prepare: false };
+  const candidates = [
+    {
       ...parsed,
+      ...opts,
       host: 'aws-1-us-east-1.pooler.supabase.com',
       port: 6543,
-      user: parsed.user.includes('.') ? parsed.user : `postgres.${ref}`,
-      max: 1,
-      prepare: false,
-    });
+      user: `postgres.${ref}`,
+    },
+    {
+      ...parsed,
+      ...opts,
+      host: 'aws-0-us-east-1.pooler.supabase.com',
+      port: 6543,
+      user: `postgres.${ref}`,
+    },
+    {
+      ...parsed,
+      ...opts,
+      host: 'aws-1-eu-central-1.pooler.supabase.com',
+      port: 6543,
+      user: `postgres.${ref}`,
+    },
+    { ...parsed, ...opts },
+  ];
+  let lastErr;
+  for (const cfg of candidates) {
+    const sql = postgres(cfg);
+    try {
+      await sql`select 1`;
+      return sql;
+    } catch (e) {
+      lastErr = e;
+      await sql.end({ timeout: 1 }).catch(() => {});
+    }
   }
-  return sql;
+  throw lastErr;
 }
 
 const sql = await connect();
