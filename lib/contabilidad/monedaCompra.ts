@@ -7,6 +7,7 @@ import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
+import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import {
   formatearBs,
   formatearUsd,
@@ -71,8 +72,14 @@ export function montosBimonetariosLista(
   }
 
   const bs = montoVesCompra(row);
-  const usd = montoUsdCompra(row);
-  return { bs, usd: Number.isFinite(usd) && usd > 0 ? usd : null, moneda };
+  const usdDirect = row.monto_usd ?? row.total_amount_usd;
+  let usd: number | null = null;
+  if (usdDirect != null && Number.isFinite(Number(usdDirect)) && Number(usdDirect) > 0) {
+    usd = Number(usdDirect);
+  } else if (moneda === 'USD' && nominal > 0) {
+    usd = nominal;
+  }
+  return { bs, usd, moneda };
 }
 
 /** Subtotal nominal de una fila (línea o cabecera) en la moneda original (cant × P.U.). */
@@ -179,7 +186,12 @@ export async function recalcularMontosCompraCambioMoneda(
     return { ...payloadCompraBimonetario(montos), nominalFactura: nominal };
   }
 
-  const tasaLista = tasaBcvCompra(fila);
+  let tasaLista = tasaBcvCompra(fila);
+  if (!tasaLista) {
+    const tasaRes = await resolverTasaBcvVesPorUsd(fecha, tasaDigitada);
+    tasaLista = tasaRes.tasa_bcv_ves_por_usd;
+  }
+
   const { bs, usd } = montosBimonetariosLista(fila, tasaLista);
 
   let montoTotal: number;

@@ -768,61 +768,44 @@ export default function ComprasPage() {
             const canalId = idCanalTelegram(c);
             const esSoloCanal = c.id.startsWith('canal-');
             const fechaCompra = String(c.fecha ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
-            const montosNuevos = await recalcularMontosCompraCambioMoneda(
-                {
-                    total_amount: Number(c.total_amount) || 0,
-                    total_amount_usd: c.total_amount_usd,
-                    tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
-                    moneda: c.moneda,
-                    moneda_original: c.moneda_original,
-                    monto_ves: c.monto_ves,
-                    monto_usd: c.monto_usd,
-                    fecha: fechaCompra,
-                },
-                moneda,
-            );
-            const { nominalFactura, ...payloadMoneda } = montosNuevos;
-            const filaTrasMoneda = { ...c, ...payloadMoneda };
-            const tasaTrasMoneda =
-                payloadMoneda.tasa_bcv_ves_por_usd ??
-                tasaBcvCompra(filaTrasMoneda) ??
-                tasaParaCompra(c);
-            const detalleActual = lineasDetalle(c);
-            const lineasRecalculadas =
-                detalleActual.length > 0
-                    ? detalleActual.map((l, i) => {
-                          const r = recalcularPreciosLineasCompra(
-                              filaTrasMoneda,
-                              detalleActual,
-                              tasaTrasMoneda,
-                          )[i];
-                          return {
-                              ...l,
-                              precio_unitario: r?.precio_unitario ?? l.precio_unitario,
-                              subtotal: r?.subtotal ?? l.subtotal,
-                          };
-                      })
-                    : [];
-
-            const itemsExtractedActualizados = (
-                items: ExtractedCanalHeader['items'],
-            ): ExtractedCanalHeader['items'] => {
-                if (!items?.length || !lineasRecalculadas.length) return items;
-                return items.map((it, i) => ({
-                    ...it,
-                    unit_price: lineasRecalculadas[i]?.precio_unitario ?? it.unit_price,
-                }));
-            };
-
-            const mergeCompraTrasMoneda = (row: CompraRow): CompraRow => ({
-                ...row,
-                ...payloadMoneda,
-                contabilidad_compra_lineas: lineasRecalculadas.length
-                    ? lineasRecalculadas
-                    : row.contabilidad_compra_lineas,
-            });
 
             if (esSoloCanal && canalId) {
+                const montosNuevos = await recalcularMontosCompraCambioMoneda(
+                    {
+                        total_amount: Number(c.total_amount) || 0,
+                        total_amount_usd: c.total_amount_usd,
+                        tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
+                        moneda: c.moneda,
+                        moneda_original: c.moneda_original,
+                        monto_ves: c.monto_ves,
+                        monto_usd: c.monto_usd,
+                        fecha: fechaCompra,
+                    },
+                    moneda,
+                );
+                const { nominalFactura, ...payloadMoneda } = montosNuevos;
+                const filaTrasMoneda = { ...c, ...payloadMoneda };
+                const tasaTrasMoneda =
+                    payloadMoneda.tasa_bcv_ves_por_usd ??
+                    tasaBcvCompra(filaTrasMoneda) ??
+                    tasaParaCompra(c);
+                const detalleActual = lineasDetalle(c);
+                const lineasRecalculadas =
+                    detalleActual.length > 0
+                        ? detalleActual.map((l, i) => {
+                              const r = recalcularPreciosLineasCompra(
+                                  filaTrasMoneda,
+                                  detalleActual,
+                                  tasaTrasMoneda,
+                              )[i];
+                              return {
+                                  ...l,
+                                  precio_unitario: r?.precio_unitario ?? l.precio_unitario,
+                                  subtotal: r?.subtotal ?? l.subtotal,
+                              };
+                          })
+                        : [];
+
                 let extracted: ExtractedCanalHeader | null = null;
                 try {
                     const res = await fetch(`/api/facturas-canal/pendientes/${canalId}`, {
@@ -839,24 +822,31 @@ export default function ComprasPage() {
                     extracted ??
                     extractedDesdeCompraLista({
                         ...c,
-                        contabilidad_compra_lineas: lineasDetalle(c).map((l) => ({
-                            descripcion: l.descripcion,
-                            item_code: l.item_code,
-                            cantidad: l.cantidad,
-                            precio_unitario: l.precio_unitario,
-                            subtotal: l.subtotal,
-                        })),
+                        contabilidad_compra_lineas: lineasRecalculadas,
                     });
                 await actualizarPendienteCanal(canalId, {
                     extracted: {
                         ...base,
                         moneda,
                         total_amount: nominalFactura,
-                        items: itemsExtractedActualizados(base.items),
+                        items: base.items?.map((it, i) => ({
+                            ...it,
+                            unit_price: lineasRecalculadas[i]?.precio_unitario ?? it.unit_price,
+                        })),
                     },
                 });
                 setCompras((prev) =>
-                    prev.map((row) => (row.id === c.id ? mergeCompraTrasMoneda(row) : row)),
+                    prev.map((row) =>
+                        row.id === c.id
+                            ? {
+                                  ...row,
+                                  ...payloadMoneda,
+                                  contabilidad_compra_lineas: lineasRecalculadas.length
+                                      ? lineasRecalculadas
+                                      : row.contabilidad_compra_lineas,
+                              }
+                            : row,
+                    ),
                 );
             } else {
                 const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(c.id)}`, {
@@ -869,38 +859,6 @@ export default function ComprasPage() {
                     compra?: Partial<CompraRow>;
                 };
                 if (!res.ok) throw new Error(data.error || 'No se pudo cambiar la moneda');
-                if (data.compra) {
-                    setCompras((prev) =>
-                        prev.map((row) =>
-                            row.id === c.id
-                                ? mergeCompraTrasMoneda({ ...row, ...data.compra })
-                                : row,
-                        ),
-                    );
-                }
-
-                if (canalId) {
-                    try {
-                        const resCanal = await fetch(`/api/facturas-canal/pendientes/${canalId}`, {
-                            cache: 'no-store',
-                        });
-                        const canalData = (await resCanal.json()) as {
-                            extracted?: ExtractedCanalHeader | null;
-                        };
-                        if (resCanal.ok && canalData.extracted) {
-                            await actualizarPendienteCanal(canalId, {
-                                extracted: {
-                                    ...canalData.extracted,
-                                    moneda,
-                                    total_amount: nominalFactura,
-                                    items: itemsExtractedActualizados(canalData.extracted.items),
-                                },
-                            });
-                        }
-                    } catch {
-                        /* canal opcional */
-                    }
-                }
             }
             await load();
         } catch (e) {
