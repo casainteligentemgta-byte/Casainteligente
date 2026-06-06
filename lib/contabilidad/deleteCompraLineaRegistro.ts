@@ -1,11 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInventario';
-import {
-  payloadCompraBimonetario,
-  resolverMontosCompraBimonetario,
-} from '@/lib/contabilidad/comprasBimonetario';
 import { deleteCompraRegistro } from '@/lib/contabilidad/deleteCompraRegistro';
-import { monedaOriginalCompra } from '@/lib/contabilidad/monedaCompra';
+import { recalcularTotalesCompraContable } from '@/lib/contabilidad/recalcularTotalesCompraContable';
 
 export type DeleteCompraLineaResult = {
   deletedLineaId: string;
@@ -159,31 +155,6 @@ async function eliminarLineaInventarioContable(
   }
 }
 
-async function recalcularTotalesCompra(
-  supabase: SupabaseClient,
-  compra: CompraRow,
-): Promise<void> {
-  const { data: lineas, error: lnErr } = await supabase
-    .from('contabilidad_compra_lineas')
-    .select('subtotal')
-    .eq('compra_id', compra.id);
-  if (lnErr) throw lnErr;
-
-  const sumSubtotal = (lineas ?? []).reduce((acc, l) => acc + Number(l.subtotal ?? 0), 0);
-  const montos = await resolverMontosCompraBimonetario({
-    montoTotal: sumSubtotal,
-    moneda: monedaOriginalCompra(compra),
-    fecha: compra.fecha,
-    tasaBcvDigitada: compra.tasa_bcv_ves_por_usd,
-  });
-
-  const { error: upErr } = await supabase
-    .from('contabilidad_compras')
-    .update(payloadCompraBimonetario(montos) as never)
-    .eq('id', compra.id);
-  if (upErr) throw upErr;
-}
-
 /**
  * Elimina una línea de contabilidad_compra_lineas y ajusta recepción/stock/totales.
  * Si era la única línea, elimina la compra completa.
@@ -253,7 +224,7 @@ export async function deleteCompraLineaRegistro(
     .eq('id', lineaId);
   if (delLineaErr) throw delLineaErr;
 
-  await recalcularTotalesCompra(supabase, compraRow);
+  await recalcularTotalesCompraContable(supabase, compraRow);
 
   return {
     deletedLineaId: lineaId,

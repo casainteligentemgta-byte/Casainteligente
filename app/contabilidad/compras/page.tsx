@@ -55,6 +55,9 @@ import {
 } from 'lucide-react';
 import ReubicarCompraModal from '@/components/contabilidad/ReubicarCompraModal';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
+import EditarLineaCompraModal, {
+    type LineaCompraEditable,
+} from '@/components/contabilidad/EditarLineaCompraModal';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
 import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
@@ -109,6 +112,7 @@ import {
 } from '@/lib/contabilidad/comprasCuadroShare';
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
 import { recalcularPreciosLineasCompra } from '@/lib/contabilidad/filtrosFacturaCanal';
+import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
 import {
     buildLineasCuadroDesdeCompras,
     exportarComprasCuadroExcel,
@@ -237,6 +241,9 @@ export default function ComprasPage() {
     const [avisoCanal, setAvisoCanal] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [deletingLineaId, setDeletingLineaId] = useState<string | null>(null);
+    const [deletingLineasBulk, setDeletingLineasBulk] = useState(false);
+    const [selectedLineaIds, setSelectedLineaIds] = useState<Set<string>>(new Set());
+    const [editandoLinea, setEditandoLinea] = useState<LineaCompraEditable | null>(null);
     const [ingresandoAlmacenId, setIngresandoAlmacenId] = useState<string | null>(null);
     const [cambiandoMonedaId, setCambiandoMonedaId] = useState<string | null>(null);
     const [editandoCanal, setEditandoCanal] = useState<{
@@ -1229,6 +1236,54 @@ export default function ComprasPage() {
         });
     }, []);
 
+    const lineasSeleccionablesIds = useMemo(
+        () =>
+            lineasOrdenadas
+                .filter((r) => r.esLinea && r.lineaId)
+                .map((r) => r.lineaId as string),
+        [lineasOrdenadas],
+    );
+
+    const todasLineasSeleccionadas = useMemo(
+        () =>
+            lineasSeleccionablesIds.length > 0 &&
+            lineasSeleccionablesIds.every((id) => selectedLineaIds.has(id)),
+        [lineasSeleccionablesIds, selectedLineaIds],
+    );
+
+    const algunaLineaSeleccionada = selectedLineaIds.size > 0;
+    const lineasSelectIndeterminada =
+        algunaLineaSeleccionada && !todasLineasSeleccionadas;
+
+    useEffect(() => {
+        setSelectedLineaIds((prev) => {
+            const visible = new Set(lineasSeleccionablesIds);
+            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [lineasSeleccionablesIds]);
+
+    const toggleSelectLinea = useCallback((lineaId: string) => {
+        setSelectedLineaIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(lineaId)) next.delete(lineaId);
+            else next.add(lineaId);
+            return next;
+        });
+    }, []);
+
+    const toggleSelectAllLineas = useCallback(() => {
+        setSelectedLineaIds((prev) => {
+            if (
+                lineasSeleccionablesIds.length > 0 &&
+                lineasSeleccionablesIds.every((id) => prev.has(id))
+            ) {
+                return new Set();
+            }
+            return new Set(lineasSeleccionablesIds);
+        });
+    }, [lineasSeleccionablesIds]);
+
     const compraPorId = useMemo(() => new Map(compras.map((c) => [c.id, c])), [compras]);
 
     const handleDeleteLinea = async (compraId: string, lineaId: string) => {
@@ -1267,6 +1322,12 @@ export default function ComprasPage() {
                 });
             }
 
+            setSelectedLineaIds((prev) => {
+                const next = new Set(prev);
+                next.delete(lineaId);
+                return next;
+            });
+
             if (data.materialPermaneceEnStock) {
                 setError(
                     'Línea eliminada. El material permanece en inventario porque ya estaba aprobado en recepción.',
@@ -1287,15 +1348,94 @@ export default function ComprasPage() {
             const c = compraPorId.get(compraId);
             if (!c) return null;
             const canalId = idCanalTelegram(c);
-            const esApp = c.fuente_lista === 'app' || (!compraId.startsWith('canal-') && c.origen !== 'TELEGRAM');
+            const esApp =
+                c.fuente_lista === 'app' ||
+                (!compraId.startsWith('canal-') && c.origen !== 'TELEGRAM');
             return {
                 puedeModificar: Boolean(canalId),
+                puedeModificarLinea: esApp && !compraId.startsWith('canal-'),
                 etiquetaEliminar: 'Borrar',
-                puedeEliminarLinea: esApp,
+                puedeEliminarLinea: esApp && !compraId.startsWith('canal-'),
             };
         },
         [compraPorId],
     );
+
+    const onModificarLinea = useCallback(
+        (row: FilaFacturaCanal) => {
+            if (!row.lineaId) return;
+            const c = compraPorId.get(row.pendienteId);
+            setEditandoLinea({
+                compraId: row.pendienteId,
+                lineaId: row.lineaId,
+                descripcion: row.articulo,
+                item_code: row.codigo || null,
+                cantidad: Number(row.cantidad) || 0,
+                precio_unitario: Number(row.precioUnitario) || 0,
+                moneda: c ? monedaOriginalCompra(c) : row.monedaOriginal,
+            });
+        },
+        [compraPorId],
+    );
+
+    const guardarLineaCompra = async (
+        payload: Omit<LineaCompraEditable, 'compraId' | 'lineaId' | 'moneda'>,
+    ) => {
+        if (!editandoLinea) return;
+        const res = await fetch(
+            `/api/contabilidad/compras/${encodeURIComponent(editandoLinea.compraId)}/lineas/${encodeURIComponent(editandoLinea.lineaId)}`,
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            },
+        );
+        const data = (await res.json()) as { error?: string };
+        if (!res.ok) throw new Error(data.error || 'No se pudo modificar la línea');
+        setEditandoLinea(null);
+        await load();
+    };
+
+    const handleBulkDeleteLineas = async () => {
+        if (selectedLineaIds.size === 0) return;
+        const n = selectedLineaIds.size;
+        if (
+            !window.confirm(
+                `¿Eliminar ${n} línea(s) seleccionada(s)?\n\nSe ajustarán los totales de cada factura.`,
+            )
+        ) {
+            return;
+        }
+        setDeletingLineasBulk(true);
+        setError(null);
+        const ids = Array.from(selectedLineaIds);
+        let ok = 0;
+        let fail = 0;
+        for (const lineaId of ids) {
+            const row = lineasOrdenadas.find((r) => r.lineaId === lineaId);
+            if (!row?.lineaId) continue;
+            try {
+                const res = await fetch(
+                    `/api/contabilidad/compras/${encodeURIComponent(row.pendienteId)}/lineas/${encodeURIComponent(lineaId)}`,
+                    { method: 'DELETE' },
+                );
+                const data = (await res.json()) as { error?: string; compraEliminada?: boolean };
+                if (!res.ok) throw new Error(data.error || 'Error');
+                if (data.compraEliminada) {
+                    setCompras((prev) => prev.filter((r) => r.id !== row.pendienteId));
+                }
+                ok += 1;
+            } catch {
+                fail += 1;
+            }
+        }
+        setSelectedLineaIds(new Set());
+        await load();
+        setDeletingLineasBulk(false);
+        if (fail > 0) {
+            setError(`${fail} línea(s) no se pudieron eliminar. ${ok} eliminada(s).`);
+        }
+    };
 
     const onModificarCompra = useCallback(
         (compraId: string) => {
@@ -2082,7 +2222,7 @@ export default function ComprasPage() {
                     </div>
                 ) : null}
 
-                {showList ? (
+                {showList && vistaListado === 'facturas' ? (
                     <div
                         className="compras-no-imprimir"
                         style={{
@@ -2159,6 +2299,94 @@ export default function ComprasPage() {
                     </div>
                 ) : null}
 
+                {!loading && vistaListado === 'lineas' && showLineas ? (
+                    <div
+                        className="compras-no-imprimir"
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginBottom: '16px',
+                            padding: '12px 14px',
+                            borderRadius: '14px',
+                            border: algunaLineaSeleccionada
+                                ? '1px solid rgba(88,86,214,0.45)'
+                                : '1px solid rgba(255,255,255,0.08)',
+                            background: algunaLineaSeleccionada
+                                ? 'rgba(88,86,214,0.12)'
+                                : 'rgba(255,255,255,0.03)',
+                        }}
+                    >
+                        <label
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                cursor: 'pointer',
+                                color: 'white',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                            }}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={todasLineasSeleccionadas}
+                                ref={(el) => {
+                                    if (el) el.indeterminate = lineasSelectIndeterminada;
+                                }}
+                                onChange={toggleSelectAllLineas}
+                                disabled={lineasSeleccionablesIds.length === 0}
+                                style={{ width: 16, height: 16, accentColor: '#5856D6' }}
+                            />
+                            {todasLineasSeleccionadas
+                                ? 'Quitar selección de líneas'
+                                : `Seleccionar todas las líneas (${lineasSeleccionablesIds.length})`}
+                        </label>
+                        {algunaLineaSeleccionada ? (
+                            <>
+                                <span style={{ color: '#a5a3ff', fontSize: '12px', fontWeight: 800 }}>
+                                    {selectedLineaIds.size} línea(s) seleccionada(s)
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleBulkDeleteLineas()}
+                                    disabled={
+                                        deletingLineasBulk ||
+                                        deletingId !== null ||
+                                        deletingLineaId !== null
+                                    }
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,59,48,0.35)',
+                                        background: 'rgba(255,59,48,0.12)',
+                                        color: '#FF6B6B',
+                                        fontSize: '11px',
+                                        fontWeight: 800,
+                                        cursor: deletingLineasBulk ? 'not-allowed' : 'pointer',
+                                        opacity: deletingLineasBulk ? 0.6 : 1,
+                                    }}
+                                >
+                                    {deletingLineasBulk ? (
+                                        <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                        <Trash2 size={14} />
+                                    )}
+                                    Borrar líneas seleccionadas
+                                </button>
+                            </>
+                        ) : (
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>
+                                Marque líneas para borrar en lote, o use Modificar / Borrar línea en cada fila.
+                            </span>
+                        )}
+                    </div>
+                ) : null}
+
                 <div className="compras-cuadro-pantalla">
                 {!loading && vistaListado === 'lineas' && lineasOrdenadas.length > 0 ? (
                     <p
@@ -2192,6 +2420,7 @@ export default function ComprasPage() {
                             onScrollToCompra={scrollToCompra}
                             accionesPorCompra={accionesCompra}
                             onModificar={onModificarCompra}
+                            onModificarLinea={onModificarLinea}
                             onEliminarLinea={handleDeleteLinea}
                             deletingLineaId={deletingLineaId}
                             deletingId={deletingId}
@@ -2199,11 +2428,12 @@ export default function ComprasPage() {
                             sortDir={sortDir}
                             onSort={onSortColumna}
                             ordenPlano={ordenPlanoTabla}
-                            selectedIds={selectedIds}
-                            onToggleCompra={toggleSelectCompra}
-                            onToggleSelectAll={toggleSelectAll}
-                            todasSeleccionadas={todasSeleccionadas}
-                            selectAllIndeterminate={seleccionIndeterminada}
+                            modoSeleccionLinea
+                            selectedLineaIds={selectedLineaIds}
+                            onToggleLinea={toggleSelectLinea}
+                            onToggleSelectAllLineas={toggleSelectAllLineas}
+                            todasLineasSeleccionadas={todasLineasSeleccionadas}
+                            lineasSelectIndeterminate={lineasSelectIndeterminada}
                         />
                     ) : (
                         <div style={{ textAlign: 'center', marginTop: '24px', color: 'rgba(255,255,255,0.35)' }}>
@@ -2801,6 +3031,13 @@ export default function ComprasPage() {
                 extracted={editandoCanal?.extracted ?? null}
                 onClose={() => setEditandoCanal(null)}
                 onGuardar={guardarEdicionTelegram}
+            />
+
+            <EditarLineaCompraModal
+                open={editandoLinea != null}
+                linea={editandoLinea}
+                onClose={() => setEditandoLinea(null)}
+                onGuardar={guardarLineaCompra}
             />
 
             <ReubicarCompraModal

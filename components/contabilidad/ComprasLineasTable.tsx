@@ -19,6 +19,8 @@ import {
 
 export type AccionesCompraLinea = {
   puedeModificar: boolean;
+  /** Editar una línea concreta en contabilidad (UUID). */
+  puedeModificarLinea?: boolean;
   etiquetaEliminar: string;
   /** Si false, no se puede borrar línea (p. ej. pendiente Telegram sin id). */
   puedeEliminarLinea?: boolean;
@@ -29,6 +31,7 @@ type Props = {
   onScrollToCompra?: (compraId: string) => void;
   accionesPorCompra?: (compraId: string) => AccionesCompraLinea | null;
   onModificar?: (compraId: string) => void;
+  onModificarLinea?: (row: FilaFacturaCanal) => void;
   onEliminar?: (compraId: string) => void;
   onEliminarLinea?: (compraId: string, lineaId: string) => void;
   deletingId?: string | null;
@@ -38,11 +41,19 @@ type Props = {
   onSort?: (column: ColumnaOrdenCompras) => void;
   /** Sin rowSpan cuando el orden no agrupa por factura. */
   ordenPlano?: boolean;
+  /** Selección por factura (vista agrupada). */
   selectedIds?: Set<string>;
   onToggleCompra?: (compraId: string) => void;
   onToggleSelectAll?: () => void;
   todasSeleccionadas?: boolean;
   selectAllIndeterminate?: boolean;
+  /** Selección línea a línea (vista por artículo). */
+  modoSeleccionLinea?: boolean;
+  selectedLineaIds?: Set<string>;
+  onToggleLinea?: (lineaId: string) => void;
+  onToggleSelectAllLineas?: () => void;
+  todasLineasSeleccionadas?: boolean;
+  lineasSelectIndeterminate?: boolean;
 };
 
 function esFilaAcciones(filas: FilaFacturaCanal[], row: FilaFacturaCanal, index: number): boolean {
@@ -56,6 +67,7 @@ export default function ComprasLineasTable({
   onScrollToCompra,
   accionesPorCompra,
   onModificar,
+  onModificarLinea,
   onEliminar,
   onEliminarLinea,
   deletingId = null,
@@ -69,10 +81,22 @@ export default function ComprasLineasTable({
   onToggleSelectAll,
   todasSeleccionadas = false,
   selectAllIndeterminate = false,
+  modoSeleccionLinea = false,
+  selectedLineaIds,
+  onToggleLinea,
+  onToggleSelectAllLineas,
+  todasLineasSeleccionadas = false,
+  lineasSelectIndeterminate = false,
 }: Props) {
-  const muestraAcciones = Boolean(onEliminar || onEliminarLinea || onModificar);
+  const muestraAcciones = Boolean(onEliminar || onEliminarLinea || onModificar || onModificarLinea);
   const eliminarPorLinea = Boolean(onEliminarLinea);
-  const muestraSeleccion = Boolean(onToggleCompra);
+  const muestraSeleccionFactura = Boolean(onToggleCompra) && !modoSeleccionLinea;
+  const muestraSeleccionLinea = Boolean(modoSeleccionLinea && onToggleLinea);
+
+  const lineasSeleccionables = useMemo(
+    () => filas.filter((f) => f.esLinea && f.lineaId).map((f) => f.lineaId!),
+    [filas],
+  );
 
   const filasPorFactura = useMemo(() => {
     const m = new Map<string, number>();
@@ -151,18 +175,32 @@ export default function ComprasLineasTable({
       <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}>
-            {muestraSeleccion ? (
+            {muestraSeleccionFactura || muestraSeleccionLinea ? (
               <th style={{ ...th, width: 36, padding: '10px 8px' }}>
-                <input
-                  type="checkbox"
-                  checked={todasSeleccionadas}
-                  ref={(el) => {
-                    if (el) el.indeterminate = selectAllIndeterminate;
-                  }}
-                  onChange={() => onToggleSelectAll?.()}
-                  aria-label="Seleccionar todas las facturas"
-                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
-                />
+                {muestraSeleccionLinea ? (
+                  <input
+                    type="checkbox"
+                    checked={todasLineasSeleccionadas}
+                    ref={(el) => {
+                      if (el) el.indeterminate = lineasSelectIndeterminate;
+                    }}
+                    onChange={() => onToggleSelectAllLineas?.()}
+                    disabled={lineasSeleccionables.length === 0}
+                    aria-label="Seleccionar todas las líneas"
+                    style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
+                  />
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={todasSeleccionadas}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectAllIndeterminate;
+                    }}
+                    onChange={() => onToggleSelectAll?.()}
+                    aria-label="Seleccionar todas las facturas"
+                    style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
+                  />
+                )}
               </th>
             ) : null}
             <SortTh col="fecha" label="Fecha" />
@@ -191,6 +229,7 @@ export default function ComprasLineasTable({
             const mostrarAccionesEnFila =
               mostrarAccionesFactura ||
               (eliminarPorLinea && row.esLinea && Boolean(row.lineaId)) ||
+              (onModificarLinea && row.esLinea && Boolean(row.lineaId)) ||
               (eliminarPorLinea && onModificar && esFilaAcciones(filas, row, i));
             const acc =
               mostrarAccionesEnFila && accionesPorCompra
@@ -202,22 +241,26 @@ export default function ComprasLineasTable({
                 ? (filasPorFactura.get(row.pendienteId) ?? 1)
                 : 1;
 
-            const seleccionada = selectedIds?.has(row.pendienteId) ?? false;
+            const seleccionadaFactura = selectedIds?.has(row.pendienteId) ?? false;
+            const seleccionadaLinea = row.lineaId
+              ? (selectedLineaIds?.has(row.lineaId) ?? false)
+              : false;
+            const filaResaltada = modoSeleccionLinea ? seleccionadaLinea : seleccionadaFactura;
 
             return (
               <tr
                 key={`${row.pendienteId}-${i}`}
                 style={{
                   borderTop: '1px solid rgba(255,255,255,0.06)',
-                  background: seleccionada ? 'rgba(88,86,214,0.08)' : undefined,
+                  background: filaResaltada ? 'rgba(88,86,214,0.08)' : undefined,
                 }}
               >
-                {muestraSeleccion ? (
+                {muestraSeleccionFactura ? (
                   muestraAcciones ? (
                     <td style={{ ...td, verticalAlign: 'top' }} rowSpan={rowSpan}>
                       <input
                         type="checkbox"
-                        checked={seleccionada}
+                        checked={seleccionadaFactura}
                         onChange={() => onToggleCompra?.(row.pendienteId)}
                         aria-label={`Seleccionar factura ${row.factura || row.proveedor}`}
                         style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
@@ -227,13 +270,26 @@ export default function ComprasLineasTable({
                     <td style={td}>
                       <input
                         type="checkbox"
-                        checked={seleccionada}
+                        checked={seleccionadaFactura}
                         onChange={() => onToggleCompra?.(row.pendienteId)}
                         aria-label={`Seleccionar factura ${row.factura || row.proveedor}`}
                         style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
                       />
                     </td>
                   ) : null
+                ) : null}
+                {muestraSeleccionLinea ? (
+                  <td style={td}>
+                    {row.esLinea && row.lineaId ? (
+                      <input
+                        type="checkbox"
+                        checked={seleccionadaLinea}
+                        onChange={() => onToggleLinea?.(row.lineaId!)}
+                        aria-label={`Seleccionar línea ${row.articulo}`}
+                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
+                      />
+                    ) : null}
+                  </td>
                 ) : null}
                 <td style={td}>{row.fecha || '—'}</td>
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
@@ -320,7 +376,21 @@ export default function ComprasLineasTable({
                             style={btnModificar}
                           >
                             <Pencil size={12} />
-                            Modificar
+                            Modificar factura
+                          </button>
+                        ) : null}
+                        {acc?.puedeModificarLinea &&
+                        onModificarLinea &&
+                        row.esLinea &&
+                        row.lineaId ? (
+                          <button
+                            type="button"
+                            onClick={() => onModificarLinea(row)}
+                            disabled={deletingId !== null || deletingLineaId !== null}
+                            style={btnModificar}
+                          >
+                            <Pencil size={12} />
+                            Modificar línea
                           </button>
                         ) : null}
                         {eliminarPorLinea &&
