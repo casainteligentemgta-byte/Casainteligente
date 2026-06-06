@@ -13,6 +13,7 @@ import {
   mensajeAmigableErrorStorage,
   PROCUREMENT_DOCUMENTS_BUCKET,
 } from '@/lib/almacen/procurementDocumentStorage';
+import { formatTotalExtracted } from '@/lib/contabilidad/extractedCanal';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 
 export type CanalFactura = 'telegram' | 'whatsapp';
@@ -142,12 +143,14 @@ export async function processInvoiceFromCanal(params: {
   await prog?.reportar(95, 'Guardando en la aplicación…');
 
   const datosOcr = extracted as DatosOcrFastTrack;
+  /** El comprador confirma Bs/USD tras el OCR; no asumir bolívares por defecto. */
+  const datosSinMoneda = { ...datosOcr, moneda: undefined };
 
   await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
       estado: 'extraido',
-      extracted: datosOcr,
+      extracted: datosSinMoneda,
       mensaje_error: null,
       updated_at: new Date().toISOString(),
     })
@@ -219,22 +222,22 @@ export async function processInvoiceFromCanal(params: {
 
   await prog?.reportar(100, 'Completado');
 
-  const inv = datosOcr;
+  const inv = datosSinMoneda;
   const nItems = Array.isArray(inv.items) ? inv.items.length : 0;
   const plain =
     `✅ Factura recibida\n\n` +
     `Nº: ${inv.invoice_number ?? '—'}\n` +
     `Proveedor: ${inv.supplier_name ?? '—'}\n` +
     `RIF: ${inv.supplier_rif ?? '—'}\n` +
-    `Total: ${inv.total_amount != null ? `${inv.total_amount} Bs` : '—'}\n` +
+    `Total: ${formatTotalExtracted(inv, { sinMoneda: true })}\n` +
     `Líneas: ${nItems}${fastTrackMsg ? `\n${fastTrackMsg}` : ''}\n\n` +
-    `Confirma en: ${link}`;
+    `Indique moneda (Bs o USD) y confirme en: ${link}`;
 
   if (prog) {
     await prog.ok('');
     if (params.canal === 'telegram' && !fastTrackMsg) {
-      const { enviarPickerProyectosTelegram } = await import('@/lib/telegram/proyectoPicker');
-      await enviarPickerProyectosTelegram(supabase, params.chatId, 'factura_compra');
+      const { enviarPickerMonedaFacturaTelegram } = await import('@/lib/telegram/monedaFacturaPicker');
+      await enviarPickerMonedaFacturaTelegram(supabase, params.chatId, params.pendingId);
     }
   } else {
     await params.sendReply(plain, false);

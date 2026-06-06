@@ -90,6 +90,28 @@ export default function EditarFacturaCanalModal({
         </div>
 
         <div className="p-4 space-y-4">
+          <div className="rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/5 p-3 space-y-2">
+            <p className="text-[10px] font-bold text-[#FF9500] uppercase tracking-wider">
+              Moneda de la factura
+            </p>
+            <p className="text-[11px] text-zinc-400">
+              Total y precios unitarios están en la moneda que elija.
+            </p>
+            <select
+              className={`${inputClass} mt-0`}
+              value={form.moneda}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  moneda: normalizarMonedaExtracted(e.target.value),
+                }))
+              }
+            >
+              <option value="VES">Bolívares (Bs)</option>
+              <option value="USD">Dólares (USD)</option>
+            </select>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="text-[10px] font-bold text-zinc-500">Nº FACTURA</label>
@@ -123,22 +145,6 @@ export default function EditarFacturaCanalModal({
                 value={form.supplier_rif}
                 onChange={(e) => setForm((f) => ({ ...f, supplier_rif: e.target.value }))}
               />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-zinc-500">MONEDA</label>
-              <select
-                className={`${inputClass} mt-1`}
-                value={form.moneda}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    moneda: normalizarMonedaExtracted(e.target.value),
-                  }))
-                }
-              >
-                <option value="VES">Bs (VES)</option>
-                <option value="USD">USD</option>
-              </select>
             </div>
             <div>
               <label className="text-[10px] font-bold text-zinc-500">

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { formatTotalExtracted } from '@/lib/contabilidad/extractedCanal';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 import { setTelegramContexto } from '@/lib/telegram/estados';
 
@@ -18,18 +19,26 @@ export function mensajeModoFacturasActivado(): string {
   return (
     '✅ <b>COMPRADOR: cargar factura.</b>\n\n' +
     'Envía una <b>foto</b> de la factura de compra.\n' +
+    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, elija obra y almacén.\n' +
     'El sistema la enviará a <b>Contabilidad</b> y la <b>precargará en Almacén</b>.\n\n' +
     '<code>/cancelar</code> para salir de este modo.'
   );
 }
 
 /** Resumen mínimo post-registro (nº, proveedor, RIF, total, líneas). */
-export function resumenFacturaCompradorHtml(extracted: Record<string, unknown>): string {
+export function resumenFacturaCompradorHtml(
+  extracted: Record<string, unknown>,
+  opts?: { sinMoneda?: boolean },
+): string {
   const nItems = Array.isArray(extracted.items) ? extracted.items.length : 0;
-  const total =
-    extracted.total_amount != null
-      ? `${extracted.total_amount} Bs`
-      : '—';
+  const total = formatTotalExtracted(
+    {
+      total_amount:
+        extracted.total_amount != null ? Number(extracted.total_amount) : null,
+      moneda: extracted.moneda as string | null | undefined,
+    },
+    { sinMoneda: opts?.sinMoneda },
+  );
   return (
     `📄 Nº: <code>${extracted.invoice_number ?? '—'}</code>\n` +
     `🏢 ${extracted.supplier_name ?? 'Proveedor'}\n` +

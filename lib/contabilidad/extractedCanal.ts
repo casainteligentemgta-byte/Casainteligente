@@ -15,6 +15,31 @@ export function normalizarMonedaExtracted(moneda?: string | null): MonedaOrigen 
   return m === 'USD' ? 'USD' : 'VES';
 }
 
+/** true si el comprador ya indicó Bs o USD (no usar el default VES implícito). */
+export function monedaExtractedConfirmada(moneda?: string | null): boolean {
+  const m = String(moneda ?? '')
+    .trim()
+    .toUpperCase();
+  return m === 'USD' || m === 'VES' || m === 'BS';
+}
+
+export function simboloMonedaExtracted(moneda?: string | null): string {
+  return normalizarMonedaExtracted(moneda) === 'USD' ? 'USD' : 'Bs';
+}
+
+export function formatTotalExtracted(
+  extracted: Pick<ExtractedCanalHeader, 'total_amount' | 'moneda'>,
+  opts?: { sinMoneda?: boolean },
+): string {
+  if (extracted.total_amount == null || !Number.isFinite(Number(extracted.total_amount))) {
+    return '—';
+  }
+  const monto = String(extracted.total_amount);
+  if (opts?.sinMoneda) return monto;
+  if (!monedaExtractedConfirmada(extracted.moneda)) return `${monto} (indique moneda)`;
+  return `${monto} ${simboloMonedaExtracted(extracted.moneda)}`;
+}
+
 export type ExtractedCanalHeader = {
   invoice_number?: string;
   supplier_name?: string;

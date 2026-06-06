@@ -17,7 +17,12 @@ import {
 import { toast } from 'sonner';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
-import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import {
+  formatTotalExtracted,
+  monedaExtractedConfirmada,
+  normalizarMonedaExtracted,
+  type ExtractedCanalHeader,
+} from '@/lib/contabilidad/extractedCanal';
 import {
   actualizarPendienteCanal,
   eliminarPendienteCanal,
@@ -240,6 +245,24 @@ export default function FacturasCanalClient() {
     window.setTimeout(() => {
       setLinkCopiadoId((prev) => (prev === pendienteId ? null : prev));
     }, 2000);
+  };
+
+  const cambiarMonedaPendiente = async (pendienteId: string, moneda: 'VES' | 'USD') => {
+    const p = pendientes.find((x) => x.id === pendienteId);
+    if (!p?.extracted) return;
+    try {
+      const next = {
+        ...p.extracted,
+        moneda: normalizarMonedaExtracted(moneda),
+      };
+      const actualizado = await actualizarPendienteCanal(pendienteId, { extracted: next });
+      setPendientes((prev) =>
+        prev.map((x) => (x.id === pendienteId ? { ...x, extracted: actualizado.extracted } : x)),
+      );
+      toast.success(`Moneda: ${moneda === 'USD' ? 'USD' : 'Bs'}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar moneda');
+    }
   };
 
   const rechazar = async (facturaId: string) => {
@@ -607,8 +630,35 @@ export default function FacturasCanalClient() {
                     <span className="text-violet-300/90 uppercase">{p.estado}</span>
                     {' · '}
                     {p.extracted?.date ?? '—'} · RIF {p.extracted?.supplier_rif ?? '—'} ·{' '}
-                    {p.extracted?.total_amount != null ? `${p.extracted.total_amount} Bs` : '—'} · {p.canal}
+                    {p.extracted
+                      ? formatTotalExtracted(p.extracted, {
+                          sinMoneda: !monedaExtractedConfirmada(p.extracted.moneda),
+                        })
+                      : '—'}{' '}
+                    · {p.canal}
                   </p>
+                  {(p.estado === 'extraido' || p.estado === 'error') &&
+                  !monedaExtractedConfirmada(p.extracted?.moneda) ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase text-amber-300/90">
+                        Indique moneda:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void cambiarMonedaPendiente(p.id, 'VES')}
+                        className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-bold text-zinc-200 hover:bg-white/5"
+                      >
+                        Bs
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void cambiarMonedaPendiente(p.id, 'USD')}
+                        className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-bold text-zinc-200 hover:bg-white/5"
+                      >
+                        USD
+                      </button>
+                    </div>
+                  ) : null}
                   {p.estado === 'error' && p.mensaje_error ? (
                     <p className="text-xs text-red-400/90 mt-1">{p.mensaje_error}</p>
                   ) : null}

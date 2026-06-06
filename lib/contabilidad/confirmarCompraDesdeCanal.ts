@@ -5,6 +5,7 @@ import {
 } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
 import {
+  monedaExtractedConfirmada,
   normalizarMonedaExtracted,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
@@ -242,6 +243,9 @@ async function confirmarCompraDesdeCanalInterno(
   const extracted = params.extractedOverride ?? row.extracted;
   if (!extracted?.supplier_name?.trim() && !extracted?.invoice_number?.trim()) {
     throw new Error('Sin datos extraídos. Edite la factura o reenvíe la imagen.');
+  }
+  if (!monedaExtractedConfirmada(extracted.moneda)) {
+    throw new Error('Indique si la factura está en bolívares (Bs) o dólares (USD).');
   }
 
   const proyectoId = params.proyectoId.trim() || row.proyecto_id?.trim() || '';

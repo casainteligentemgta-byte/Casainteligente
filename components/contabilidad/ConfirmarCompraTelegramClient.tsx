@@ -11,6 +11,11 @@ import type { UbicacionInventario } from '@/types/inventario-obra';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import {
+  formatTotalExtracted,
+  monedaExtractedConfirmada,
+  normalizarMonedaExtracted,
+} from '@/lib/contabilidad/extractedCanal';
+import {
   actualizarPendienteCanal,
   confirmarCompraCanal,
   ingresoAlmacenCanal,
@@ -228,6 +233,18 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     toast.success('Datos actualizados');
   };
 
+  const elegirMoneda = async (moneda: 'VES' | 'USD') => {
+    if (!extracted) return;
+    const next: ExtractedCanalHeader = {
+      ...extracted,
+      moneda: normalizarMonedaExtracted(moneda),
+    };
+    await guardarExtracted(next);
+  };
+
+  const monedaConfirmada = monedaExtractedConfirmada(extracted?.moneda);
+  const monedaActual = normalizarMonedaExtracted(extracted?.moneda);
+
   const finalizarIngresoYIrAlmacen = useCallback(
     (mensaje: string) => {
       setCompraRegistrada(true);
@@ -373,6 +390,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
 
   const botonIngresoListo = Boolean(
     puedeIngresarAlmacen &&
+      monedaConfirmada &&
       proyectoEfectivo &&
       ubicacionEfectiva &&
       !registrando &&
@@ -385,6 +403,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     if (registrando || ingresandoAlmacen) return null;
     if (!proyectoEfectivo) return 'Seleccione la obra (proyecto).';
     if (!ubicacionEfectiva) return 'Seleccione el almacén de ingreso.';
+    if (!monedaConfirmada) return 'Indique si la factura está en bolívares o dólares.';
     if (pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') {
       return 'Espere el procesamiento IA o pulse Actualizar arriba.';
     }
@@ -401,6 +420,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     proyectoEfectivo,
     ubicacionEfectiva,
     puedeIngresarAlmacen,
+    monedaConfirmada,
   ]);
 
   if (!montado) {
@@ -498,6 +518,45 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </div>
             ) : null}
 
+            <section className={`${panelClass} space-y-3 border-[#FF9500]/30`}>
+              <h2 className="text-sm font-bold text-[#FF9500]">Moneda de la factura</h2>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                Indique en qué moneda están el total y los precios unitarios extraídos por la IA.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void elegirMoneda('VES')}
+                  className={`rounded-xl border py-3 text-sm font-bold transition ${
+                    monedaConfirmada && monedaActual === 'VES'
+                      ? 'border-[#FF9500] bg-[#FF9500]/15 text-white'
+                      : 'border-white/10 bg-black/30 text-zinc-300 hover:border-white/20'
+                  }`}
+                >
+                  Bolívares (Bs)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void elegirMoneda('USD')}
+                  className={`rounded-xl border py-3 text-sm font-bold transition ${
+                    monedaConfirmada && monedaActual === 'USD'
+                      ? 'border-[#FF9500] bg-[#FF9500]/15 text-white'
+                      : 'border-white/10 bg-black/30 text-zinc-300 hover:border-white/20'
+                  }`}
+                >
+                  Dólares (USD)
+                </button>
+              </div>
+              {extracted?.total_amount != null ? (
+                <p className="text-xs text-zinc-400">
+                  Total detectado:{' '}
+                  <span className="font-semibold text-zinc-200">
+                    {formatTotalExtracted(extracted, { sinMoneda: !monedaConfirmada })}
+                  </span>
+                </p>
+              ) : null}
+            </section>
+
             <section className={`${panelClass} space-y-3`}>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold">Datos de la factura</h2>
@@ -519,6 +578,12 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 <dd>{extracted?.supplier_rif ?? '—'}</dd>
                 <dt className="text-zinc-500">Fecha</dt>
                 <dd>{extracted?.date ?? '—'}</dd>
+                <dt className="text-zinc-500">Total</dt>
+                <dd>
+                  {extracted
+                    ? formatTotalExtracted(extracted, { sinMoneda: !monedaConfirmada })
+                    : '—'}
+                </dd>
                 <dt className="text-zinc-500">Ítems</dt>
                 <dd>{nLineas}</dd>
               </dl>
