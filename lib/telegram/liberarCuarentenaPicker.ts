@@ -76,7 +76,7 @@ export async function manejarComandoLiberarCuarentenaTelegram(
   if (!inspecciones.length) {
     await sendTelegramMessage(
       chatId,
-      '✅ No hay material pendiente en cuarentena.',
+      '✅ No hay material pendiente en tránsito.',
       { parse_mode: 'HTML' },
     );
     return;
@@ -84,8 +84,8 @@ export async function manejarComandoLiberarCuarentenaTelegram(
 
   await sendTelegramMessage(
     chatId,
-    '📦 <b>Liberar material de cuarentena</b>\n' +
-      `<i>${inspecciones.length} ítem(s) pendiente(s). Toca ✅ para sumar stock al almacén asignado.</i>`,
+    '📦 <b>Confirmar recepción física</b>\n' +
+      `<i>${inspecciones.length} ítem(s) en tránsito. Toca ✅ para ingresar al almacén asignado.</i>`,
     { parse_mode: 'HTML', reply_markup: buildKeyboard(inspecciones, page) },
   );
 }
@@ -171,7 +171,7 @@ export async function manejarCallbackLiberarCuarentenaTelegram(
     } else {
       await sendTelegramMessage(
         params.chatId,
-        '❌ Ítem rechazado en cuarentena (no suma stock).',
+        '❌ Ítem rechazado en tránsito (no suma stock).',
         { parse_mode: 'HTML' },
       );
       await manejarComandoLiberarCuarentenaTelegram(supabase, params.chatId, 0);

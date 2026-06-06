@@ -111,7 +111,7 @@ const ETIQUETA_TIPO: Record<TipoUbicacion, string> = {
   almacen_movil: 'Almacén móvil',
   obra: 'Obra',
   garantias: 'Garantías',
-  cuarentena: 'Cuarentena',
+  cuarentena: 'Tránsito',
 };
 
 export function etiquetaUbicacionSelector(u: UbicacionInventario, indent = 0): string {

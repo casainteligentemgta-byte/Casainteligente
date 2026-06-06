@@ -73,7 +73,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
         '• /comprassemana — materiales de la semana en curso\n' +
         '• /comprasmes — materiales del mes en curso\n' +
-        '• /liberar — material en cuarentena: aprobar y sumar stock\n' +
+        '• /liberar — confirmar recepción física (tránsito → almacén)\n' +
         '• /salida — menú: salida a obra, a almacén o préstamo\n' +
         '• /salidaalmacen · /traspaso — acceso directo\n' +
         '• /avance — reporte numérico diario de partida\n' +
@@ -101,7 +101,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/comprasdia — lista de materiales comprados hoy\n' +
         '/comprassemana — materiales comprados esta semana\n' +
         '/comprasmes — materiales comprados este mes\n' +
-        '/liberar — liberar material de cuarentena (depositario)\n' +
+        '/liberar — confirmar recepción física (tránsito → almacén)\n' +
         '/salida — menú (obra · almacén · préstamo/traspaso)\n' +
         '/salidaalmacen · /traspaso — atajos directos\n' +
         '/memoria — foto de avance vinculada a partida (memoria descriptiva)\n' +

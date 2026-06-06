@@ -318,8 +318,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         if (r.cuarentena && (r.cuarentena.lineasCreadas > 0 || r.cuarentena.yaExistia)) {
           toast.success(
             r.yaExistia
-              ? 'Compra ya confirmada · material en cuarentena'
-              : `Compra confirmada · ${r.cuarentena.lineasCreadas} línea(s) en cuarentena${
+              ? 'Compra ya confirmada · material en tránsito'
+              : `Compra confirmada · ${r.cuarentena.lineasCreadas} línea(s) en tránsito${
                   r.cuarentena.notificado ? ' (Telegram enviado)' : ''
                 }`,
             { duration: 8000 },

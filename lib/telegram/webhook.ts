@@ -277,7 +277,7 @@ async function aplicarComando(
   }
 
   if (cmd.comandoMenuIngreso) {
-    await manejarComandoIngresoTelegram(chatId);
+    await manejarComandoIngresoTelegram(supabase, chatId);
     return;
   }
 

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProcurementDocument } from '@/lib/almacen/procurementDocumentStorage';
 import { prepareInvoiceDocument } from '@/lib/almacen/cropInvoiceImage';
+import { aplicarStockTransitoDesdeLineasCuarentena } from '@/lib/almacen/stockTransitoCompra';
 import {
     registerCompraDesdeRecepcion,
     type LineaCompraContabilidadInput,
@@ -195,7 +196,7 @@ export default function ProcurementClient() {
                 'Fast-Track: factura aprobada e ingresada al almacén. Stock disponible en inventario.',
             );
         } else if (resultadoGuardado === 'cuarentena') {
-            setSaveNotice('Factura guardada. Revise y apruebe las líneas en cuarentena.');
+            setSaveNotice('Factura guardada. Revise y apruebe las líneas en tránsito.');
         }
     }, [resultadoGuardado]);
 
@@ -788,7 +789,18 @@ export default function ProcurementClient() {
 
             }
 
-            /* Stock físico: se aplica al aprobar calidad (inventario_stock), no en global_inventory. */
+            /* Stock físico disponible: al liberar tránsito (inventario_stock), no en global_inventory. */
+
+            await aplicarStockTransitoDesdeLineasCuarentena(supabase, {
+                ubicacionDestinoId,
+                purchaseInvoiceId: invData.id,
+                lineas: lineasContabilidad
+                    .filter((l) => l.material_id)
+                    .map((l) => ({
+                        material_id: l.material_id!,
+                        cantidad: l.cantidad,
+                    })),
+            });
 
             const fromTelegram = searchParams.get('fromTelegram');
 
@@ -1011,7 +1023,7 @@ export default function ProcurementClient() {
                                     href="/almacen/procurement/quality"
                                     className="px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
                                 >
-                                    Cuarentena
+                                    Tránsito
                                 </Link>
                             ) : null}
                         </div>
@@ -1141,7 +1153,7 @@ export default function ProcurementClient() {
                                         />
                                     ) : (
                                         <p className="text-xs text-zinc-500 mt-2">
-                                            PDF adjunto (vista previa al guardar en cuarentena)
+                                            PDF adjunto (vista previa al guardar en tránsito)
                                         </p>
                                     )}
                                 </div>

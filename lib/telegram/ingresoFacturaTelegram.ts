@@ -288,12 +288,45 @@ function buildKeyboardProveedores(
   return { inline_keyboard: buttons };
 }
 
-function etiquetaFacturaBoton(f: FacturaPendienteIngreso): string {
+export function callbackFacturaPrecargada(key: string): string {
+  return `${PREFIX_FACT}${key}`;
+}
+
+export function etiquetaFacturaBoton(f: FacturaPendienteIngreso): string {
+  const prov = truncar(f.supplier_name?.trim() || 'Proveedor', 18);
   const icon = f.accion === 'ingreso_almacen' ? '📥' : '⏳';
   const accion = f.accion === 'ingreso_almacen' ? 'ingreso' : 'confirmar';
-  return truncar(
-    `${icon} #${f.invoice_number ?? 'S/N'} · ${accion} · ${f.origenLabel.replace(/[^\w\s]/g, '').trim()}`,
-  );
+  return truncar(`${icon} #${f.invoice_number ?? 'S/N'} · ${prov} · ${accion}`, 58);
+}
+
+/** Selecciona una factura precargada (menú /ingreso o flujo depositario). */
+export async function seleccionarFacturaPrecargadaTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+  key: string,
+): Promise<'ok' | 'confirmar' | 'not_found'> {
+  const todas = await listarFacturasPendientesIngreso(supabase);
+  const hit = todas.find((f) => f.key === key);
+  if (!hit) return 'not_found';
+
+  if (hit.accion === 'confirmar') {
+    const link = linkConfirmarCompraTelegram(hit.pendienteId);
+    await sendTelegramMessage(
+      chatId,
+      `⏳ <b>Confirmar compra primero</b>\n` +
+        `${hit.supplier_name ?? 'Proveedor'} · #${hit.invoice_number ?? 'S/N'}\n` +
+        `${hit.origenLabel}\n\n` +
+        'Esta factura está en tránsito: debe registrarse la compra en contabilidad y quedar ' +
+        'lista para ingreso a almacén.\n\n' +
+        `<a href="${link}">Abrir y confirmar en la app</a>\n\n` +
+        'Luego vuelva a usar <code>/ingreso</code> — aparecerá como 📥 ingreso.',
+      { parse_mode: 'HTML' },
+    );
+    return 'confirmar';
+  }
+
+  await iniciarVerificacionFactura(supabase, chatId, hit);
+  return 'ok';
 }
 
 function buildKeyboardFacturas(facturas: FacturaPendienteIngreso[], page: number) {
@@ -581,26 +614,17 @@ export async function manejarCallbackIngresoFacturaTelegram(
       await answerCallbackQuery(params.callbackId, 'Factura no encontrada', true);
       return true;
     }
-
     if (hit.accion === 'confirmar') {
       await answerCallbackQuery(params.callbackId);
-      const link = linkConfirmarCompraTelegram(hit.pendienteId);
-      await sendTelegramMessage(
-        params.chatId,
-        `⏳ <b>Confirmar compra primero</b>\n` +
-          `${hit.supplier_name ?? 'Proveedor'} · #${hit.invoice_number ?? 'S/N'}\n` +
-          `${hit.origenLabel}\n\n` +
-          'Esta factura está en tránsito: debe registrarse la compra en contabilidad y quedar ' +
-          'lista para ingreso a almacén.\n\n' +
-          `<a href="${link}">Abrir y confirmar en la app</a>\n\n` +
-          'Luego vuelva a usar <code>/ingresofactura</code> — aparecerá como 📥 ingreso.',
-        { parse_mode: 'HTML' },
-      );
-      return true;
+    } else {
+      await answerCallbackQuery(params.callbackId, 'Cargando productos…');
     }
-
-    await answerCallbackQuery(params.callbackId, 'Cargando productos…');
-    await iniciarVerificacionFactura(supabase, params.chatId, hit);
+    const resultado = await seleccionarFacturaPrecargadaTelegram(supabase, params.chatId, parsed.key);
+    if (resultado === 'not_found') {
+      await sendTelegramMessage(params.chatId, '⚠️ Factura no encontrada o ya ingresada.', {
+        parse_mode: 'HTML',
+      });
+    }
     return true;
   }
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
-import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInventario';
+import { aplicarLiberacionTransitoADisponible } from '@/lib/almacen/stockTransitoCompra';
 import {
   registrarCompraInventario,
   type LineaCompraInventarioInput,
@@ -63,12 +63,11 @@ async function aplicarDeltaStock(
     referenciaTipo?: string;
   },
 ): Promise<void> {
-  await aplicarDeltaStockInventario(supabase, {
-    ubicacionId: ubicacionDestinoId,
+  await aplicarLiberacionTransitoADisponible(supabase, {
+    ubicacionDestinoId,
     materialId,
-    deltaDisponible: cantidad,
-    tipoMovimiento: 'ingreso_compra',
-    documentoId: meta?.invoiceId ?? null,
+    cantidad,
+    purchaseInvoiceId: meta?.invoiceId ?? null,
     referenciaId: meta?.referenciaId ?? null,
     referenciaTipo: meta?.referenciaTipo ?? 'quality_inspection',
   });

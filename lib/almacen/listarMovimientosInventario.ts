@@ -376,7 +376,7 @@ async function cargarIngresosCuarentena(
       proyecto_nombre: proy.nombre || null,
       referencia: String(inv?.invoice_number ?? ''),
       capitulo: null,
-      notas: 'Factura en tránsito (cuarentena / pendiente de liberación)',
+      notas: 'Factura en tránsito (pendiente de recepción física)',
       ubicacion_id: String(inv?.ubicacion_destino_id ?? ubi?.id ?? '') || null,
       eliminable: movimientoInventarioEsEliminable(filaId),
     });

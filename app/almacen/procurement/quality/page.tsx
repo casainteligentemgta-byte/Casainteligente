@@ -89,7 +89,7 @@ export default function QualityDashboard() {
                 }>;
                 error?: string;
             };
-            if (!res.ok) throw new Error(json.error ?? 'No se pudo cargar la cuarentena.');
+            if (!res.ok) throw new Error(json.error ?? 'No se pudo cargar el tránsito.');
 
             setInspections(
                 (json.items ?? []).map((row) => ({
@@ -230,7 +230,7 @@ export default function QualityDashboard() {
                             </button>
                         </Link>
                         <div>
-                            <h1 className="text-4xl font-black tracking-tighter">CUARENTENA</h1>
+                            <h1 className="text-4xl font-black tracking-tighter">TRÁNSITO</h1>
                             <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
                                 <ShieldCheck size={14} className="text-amber-500" />
                                 Stage 2: Quality Gate & Inspection
@@ -278,7 +278,7 @@ export default function QualityDashboard() {
                         <div className="w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-6">
                             <ShieldCheck size={48} className="text-zinc-800" />
                         </div>
-                        <h2 className="text-2xl font-black text-zinc-500 tracking-tight">Zona de Cuarentena Vacía</h2>
+                        <h2 className="text-2xl font-black text-zinc-500 tracking-tight">Sin mercancía en tránsito</h2>
                         <p className="text-zinc-700 font-bold uppercase text-xs tracking-widest mt-2">Todo el material recibido ha sido procesado</p>
                     </div>
                 ) : (
@@ -293,7 +293,7 @@ export default function QualityDashboard() {
                                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-6 pb-6 border-b border-zinc-800/60">
                                         <div>
                                             <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-1">
-                                                Factura en cuarentena
+                                                Factura en tránsito
                                             </p>
                                             <h2 className="text-2xl font-black tracking-tight">
                                                 #{grupo.invoice_number ?? 'S/N'}

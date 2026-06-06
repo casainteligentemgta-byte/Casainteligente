@@ -855,8 +855,8 @@ export default function InventoryMasterPage() {
                 return stockPorUbicacion.get(item.id)?.cantidad_disponible ?? 0;
             }
             const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
-            if (fromStock != null && fromStock > 0) return fromStock;
-            return Number(item.stock_available) || 0;
+            if (fromStock != null) return fromStock;
+            return 0;
         },
         [filtroStockPorUbicacion, stockPorUbicacion, stockGlobal],
     );
@@ -1004,8 +1004,8 @@ export default function InventoryMasterPage() {
         (item: InventoryItem, scope: InventarioExportScope): number => {
             if (scope === 'filtrado') return cantidadStockReal(item);
             const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
-            if (fromStock != null && fromStock > 0) return fromStock;
-            return Number(item.stock_available) || 0;
+            if (fromStock != null) return fromStock;
+            return 0;
         },
         [cantidadStockReal, stockGlobal],
     );
@@ -1419,7 +1419,7 @@ export default function InventoryMasterPage() {
                     }
                     if (v.stock) partes.push(`${v.stock} registro(s) de stock`);
                     if (v.series) partes.push(`${v.series} número(s) de serie`);
-                    if (v.purchaseDetails) partes.push(`${v.purchaseDetails} línea(s) de cuarentena`);
+                    if (v.purchaseDetails) partes.push(`${v.purchaseDetails} línea(s) en tránsito`);
                     if (v.maquinaria) partes.push(`${v.maquinaria} ficha(s) de maquinaria`);
                     mensajeConfirm =
                         `Este material tiene registros vinculados:\n\n• ${partes.join('\n• ')}\n\n` +
@@ -1677,7 +1677,7 @@ export default function InventoryMasterPage() {
                                 </div>
                             </div>
                             <p className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-0.5">
-                                En Cuarentena
+                                En Tránsito
                             </p>
                             <h2 className="text-2xl font-black tracking-tight text-amber-500">
                                 {statsFiltrados.quarantineCount}{' '}
@@ -1694,7 +1694,7 @@ export default function InventoryMasterPage() {
                                 Inspecciones pendientes ({cuarentenaOperativa.length})
                             </p>
                             {itemsCuarentenaResumen.length === 0 ? (
-                                <p className="text-xs text-zinc-500">Sin cuarentena activa</p>
+                                <p className="text-xs text-zinc-500">Sin mercancía en tránsito</p>
                             ) : (
                                 itemsCuarentenaResumen.map((item) => (
                                     <button
@@ -1718,7 +1718,7 @@ export default function InventoryMasterPage() {
                                 onClick={(e) => e.stopPropagation()}
                                 className="mt-2 inline-flex text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
                             >
-                                Liberar cuarentena →
+                                Liberar tránsito →
                             </Link>
                         </div>
                     }
@@ -2218,7 +2218,7 @@ export default function InventoryMasterPage() {
                                             ) : null}
                                             {!filtroPorUbicacionActivo && Number(item.stock_quarantine) > 0 && (
                                                 <span className="text-[10px] font-black text-amber-500 uppercase">
-                                                    + {item.stock_quarantine} Cuarentena
+                                                    + {item.stock_quarantine} Tránsito
                                                 </span>
                                             )}
                                         </div>

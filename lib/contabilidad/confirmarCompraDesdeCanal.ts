@@ -100,6 +100,7 @@ async function retornarDesdeCompraExistente(
   const resuelto = await resolverMaterialIdLineasCompra(supabase, params.compraId);
   const cuarentena = await crearCuarentenaDesdeFactura(supabase, {
     purchaseInvoiceId: params.purchaseInvoiceId,
+    ubicacionDestinoId: params.ubicacionDestinoId,
     lineas: resuelto.lineas.map((l) => ({
       material_id: l.material_id,
       descripcion: l.descripcion,
@@ -448,6 +449,7 @@ async function confirmarCompraDesdeCanalInterno(
 
   const cuarentena = await crearCuarentenaDesdeFactura(supabase, {
     purchaseInvoiceId,
+    ubicacionDestinoId,
     lineas: lineasConMaterial.map((l) => ({
       material_id: l.material_id!,
       descripcion: l.descripcion,

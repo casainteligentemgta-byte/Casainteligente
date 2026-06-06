@@ -58,9 +58,9 @@ export function etiquetaEstadoLogistica(
 
       return conteos?.pendiente
 
-        ? `En cuarentena (${conteos.pendiente}/${conteos.total})`
+        ? `En tránsito (${conteos.pendiente}/${conteos.total})`
 
-        : 'En cuarentena';
+        : 'En tránsito';
 
     case 'en_almacen_parcial':
 
@@ -76,7 +76,7 @@ export function etiquetaEstadoLogistica(
 
     case 'rechazo_cuarentena':
 
-      return 'Rechazado en cuarentena';
+      return 'Rechazado en tránsito';
 
   }
 

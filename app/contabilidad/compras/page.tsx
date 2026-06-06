@@ -1039,7 +1039,7 @@ export default function ComprasPage() {
             return;
         }
         if (c.estado_logistica === 'rechazo_cuarentena') {
-            setError('Todas las líneas fueron rechazadas en cuarentena. Revise la compra contable.');
+            setError('Todas las líneas fueron rechazadas en tránsito. Revise la compra contable.');
             return;
         }
         setIngresandoAlmacenId(c.id);
@@ -1061,8 +1061,8 @@ export default function ComprasPage() {
             } else if (data.viaCuarentena) {
                 setError(
                     data.aprobadas
-                        ? `Cuarentena liberada: ${data.aprobadas} línea(s) ingresadas al almacén.`
-                        : 'Material liberado desde cuarentena.',
+                        ? `Tránsito liberado: ${data.aprobadas} línea(s) ingresadas al almacén.`
+                        : 'Material recibido en almacén (tránsito liberado).',
                 );
             }
             void load();
@@ -2741,7 +2741,7 @@ export default function ComprasPage() {
                                                     {c.estado_logistica === 'en_almacen_parcial'
                                                         ? 'Liberar pendiente'
                                                         : c.estado_logistica === 'cuarentena'
-                                                          ? 'Liberar cuarentena'
+                                                          ? 'Confirmar recepción'
                                                           : 'Ingreso a almacén'}
                                                 </button>
                                             ) : null}

@@ -128,7 +128,7 @@ const sectionLabel: React.CSSProperties = {
 const ESTADOS_LOGISTICA: { key: EstadoLogisticaCompra | ''; label: string }[] = [
     { key: '', label: 'Todos' },
     { key: 'registrada', label: 'Registrada' },
-    { key: 'cuarentena', label: 'Cuarentena' },
+    { key: 'cuarentena', label: 'Tránsito' },
     { key: 'en_almacen_parcial', label: 'Almacén parcial' },
     { key: 'en_almacen', label: 'En almacén' },
     { key: 'rechazo_cuarentena', label: 'Rechazada' },

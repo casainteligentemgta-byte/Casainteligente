@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInventario';
+import { aplicarLiberacionTransitoADisponible } from '@/lib/almacen/stockTransitoCompra';
 import { approveAllQualityInspectionsForInvoice } from '@/lib/almacen/approveQualityInspection';
 import { crearCuarentenaDesdeFactura } from '@/lib/almacen/crearCuarentenaDesdeFactura';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
@@ -122,12 +122,11 @@ async function reaplicarStockCompraFactura(
   lineas: LineaStock[],
 ): Promise<void> {
   for (const l of lineas) {
-    await aplicarDeltaStockInventario(supabase, {
-      ubicacionId,
+    await aplicarLiberacionTransitoADisponible(supabase, {
+      ubicacionDestinoId: ubicacionId,
       materialId: l.material_id,
-      deltaDisponible: l.cantidad,
-      tipoMovimiento: 'ingreso_compra',
-      documentoId: compraFacturaId,
+      cantidad: l.cantidad,
+      purchaseInvoiceId: compraFacturaId,
       referenciaTipo: 'compras_facturas',
     });
   }
@@ -322,6 +321,7 @@ export async function ingresoAlmacenDesdePendienteCanal(
     if (pendientes === 0) {
       await crearCuarentenaDesdeFactura(supabase, {
         purchaseInvoiceId,
+        ubicacionDestinoId: destino,
         lineas: lineasInventario.map((l) => ({
           material_id: l.material_id,
           descripcion: l.descripcion,

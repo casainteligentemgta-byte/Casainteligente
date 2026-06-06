@@ -11,7 +11,7 @@ export const TELEGRAM_BOT_COMMANDS = [
   { command: 'comprasdia', description: 'Materiales comprados hoy (app y Telegram)' },
   { command: 'comprassemana', description: 'Materiales comprados esta semana' },
   { command: 'comprasmes', description: 'Materiales comprados este mes' },
-  { command: 'liberar', description: 'Liberar material de cuarentena (depositario)' },
+  { command: 'liberar', description: 'Confirmar recepción física (tránsito → almacén)' },
   { command: 'salida', description: 'Menú salidas: obra, almacén o préstamo' },
   { command: 'salidaalmacen', description: 'Salida almacén: obrero, destino, stock, foto' },
   { command: 'traspaso', description: 'Traspaso o préstamo entre almacenes u obras' },

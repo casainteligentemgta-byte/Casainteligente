@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { aplicarEntradaTransitoCompra } from '@/lib/almacen/stockTransitoCompra';
 
 export type LineaCuarentenaInput = {
   material_id: string;
@@ -22,12 +23,23 @@ export async function crearCuarentenaDesdeFactura(
   supabase: SupabaseClient,
   params: {
     purchaseInvoiceId: string;
+    ubicacionDestinoId?: string | null;
     lineas: LineaCuarentenaInput[];
   },
 ): Promise<ResultadoCuarentenaFactura> {
   const invoiceId = params.purchaseInvoiceId.trim();
   if (!invoiceId) {
     throw new Error('purchaseInvoiceId requerido.');
+  }
+
+  let ubicacionDestinoId = params.ubicacionDestinoId?.trim() || '';
+  if (!ubicacionDestinoId) {
+    const { data: inv } = await supabase
+      .from('purchase_invoices')
+      .select('ubicacion_destino_id')
+      .eq('id', invoiceId)
+      .maybeSingle();
+    ubicacionDestinoId = String(inv?.ubicacion_destino_id ?? '').trim();
   }
 
   const lineasValidas = params.lineas.filter(
@@ -84,6 +96,17 @@ export async function crearCuarentenaDesdeFactura(
     });
 
     if (qualityError) throw new Error(qualityError.message);
+
+    if (ubicacionDestinoId) {
+      await aplicarEntradaTransitoCompra(supabase, {
+        ubicacionDestinoId,
+        materialId: linea.material_id.trim(),
+        cantidad: qty,
+        purchaseInvoiceId: invoiceId,
+        referenciaId: detailId,
+      });
+    }
+
     creadas += 1;
   }
 

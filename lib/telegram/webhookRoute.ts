@@ -241,8 +241,21 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
   }
 
   if (cmd === '/ingreso') {
+    const admin = telegramSupabaseAdmin();
+    if (!admin.ok) {
+      try {
+        await sendTelegramMessage(
+          chatId,
+          '⚠️ Servidor sin <b>SUPABASE_SERVICE_ROLE_KEY</b>. Contacte al administrador.',
+          { parse_mode: 'HTML' },
+        );
+      } catch (err) {
+        console.error('[telegram webhook] /ingreso sin supabase admin', err);
+      }
+      return respuestaWebhook({ ok: true, error: 'supabase_admin' });
+    }
     try {
-      await manejarComandoIngresoTelegram(chatId);
+      await manejarComandoIngresoTelegram(admin.client, chatId);
     } catch (err) {
       console.error('[telegram webhook] /ingreso menu', err);
       return respuestaWebhook({
