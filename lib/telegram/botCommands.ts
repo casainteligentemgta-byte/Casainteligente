@@ -3,7 +3,7 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'facturas', description: 'Comprador: foto/PDF → Contabilidad + precarga' },
   { command: 'agua', description: 'Foto camión (placa) + prueba de agua' },
   { command: 'ingreso', description: 'Ingreso almacén: manual/auto factura, nota, sin nota' },
-  { command: 'ingresosinnota', description: 'Ingreso sin nota → Recepción (Ingreso manual)' },
+  { command: 'ingresosinnota', description: 'Ingreso sin nota: obra, almacén, materiales' },
   { command: 'compras', description: 'Total compras e inventario por obra (ej. /compras Flamboyant)' },
   { command: 'comprasdia', description: 'Materiales comprados hoy (app y Telegram)' },
   { command: 'comprassemana', description: 'Materiales comprados esta semana' },
