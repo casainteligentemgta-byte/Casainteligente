@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { limpiarBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
+import { limpiarBorradorRecepcionPorToken, obtenerBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { PayloadRecepcionManualApi } from '@/lib/almacen/recepcionCampoTypes';
 import { esFormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -72,6 +72,25 @@ export async function POST(req: Request) {
   if (!admin.ok) return admin.response;
   const supabase = admin.client;
 
+  const borradorToken = body.borrador_token?.trim();
+  if (borradorToken) {
+    try {
+      const borrador = await obtenerBorradorRecepcionPorToken(supabase, borradorToken);
+      if (borrador?.recepcion_registrada_id) {
+        return NextResponse.json(
+          {
+            error: 'Esta recepción ya fue registrada desde Telegram o la app. No repita el ingreso.',
+            recepcion_id: borrador.recepcion_registrada_id,
+            ya_existia: true,
+          },
+          { status: 409 },
+        );
+      }
+    } catch {
+      /* continuar si no se puede leer borrador */
+    }
+  }
+
   const { data: recepcionId, error: rpcErr } = await supabase.rpc('ci_registrar_ingreso_manual_campo', {
     p_proyecto_id: proyectoId,
     p_ubicacion_id: ubicacionId,
@@ -112,10 +131,9 @@ export async function POST(req: Request) {
     await supabase.from('ci_recepciones_campo').update(patch as never).eq('id', id);
   }
 
-  const borradorToken = body.borrador_token?.trim();
   if (borradorToken) {
     try {
-      await limpiarBorradorRecepcionPorToken(supabase, borradorToken);
+      await limpiarBorradorRecepcionPorToken(supabase, borradorToken, id);
     } catch {
       /* no bloquear registro si falla limpieza del estado Telegram */
     }

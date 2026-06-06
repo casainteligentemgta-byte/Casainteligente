@@ -107,6 +107,23 @@ function normalizarEtiquetaUbicacion(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+/** Misma heurística que get_stock_real_obra (migr. 207): obra vs almacén con nombres distintos. */
+export function nombresCompatiblesObraAlmacen(a: string, b: string): boolean {
+  const na = normalizarEtiquetaUbicacion(a);
+  const nb = normalizarEtiquetaUbicacion(b);
+  if (!na || !nb) return false;
+  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
+
+  const quitarPrefijo = (s: string) =>
+    s.replace(/^(obra|rancho|proyecto|frente|deposito|almacen|bodega)\s+/g, '').trim() || s;
+  const ta = quitarPrefijo(na);
+  const tb = quitarPrefijo(nb);
+  if (ta.length >= 4 && tb.length >= 4) {
+    return ta === tb || ta.includes(tb) || tb.includes(ta);
+  }
+  return false;
+}
+
 /**
  * Misma lógica operativa que el selector de ingreso (Telegram/compras):
  * obra del proyecto + almacén central/móvil cuyo nombre coincide con la obra
@@ -131,12 +148,14 @@ export function ubicacionPerteneceAProyecto(
     .map(normalizarEtiquetaUbicacion)
     .filter(Boolean);
 
+  const coincideNombre = etiquetas.some((e) => nombresCompatiblesObraAlmacen(e, pn));
+
   if (u.tipo === 'obra' || u.tipo === 'cuarentena' || u.tipo === 'garantias') {
-    return etiquetas.some((e) => e === pn || e.includes(pn) || pn.includes(e));
+    return coincideNombre;
   }
 
   if (u.tipo === 'almacen_central' || u.tipo === 'almacen_movil') {
-    return etiquetas.some((e) => e === pn || e.includes(pn) || pn.includes(e));
+    return coincideNombre;
   }
 
   return false;
@@ -161,12 +180,24 @@ function incluirAlmacenesCentralesHermanoObra(
       .filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
       .map((u) => normalizarEtiquetaUbicacion(u.nombre)),
   );
+  const depositIds = new Set(
+    candidatas.map((u) => u.deposit_id?.trim()).filter(Boolean) as string[],
+  );
+  const nombresCandidatas = candidatas.map((u) => u.nombre);
 
   for (const u of flat) {
     if (u.tipo !== 'almacen_central' && u.tipo !== 'almacen_movil') continue;
     if (byId.has(u.id)) continue;
     const nom = normalizarEtiquetaUbicacion(u.nombre);
-    if (nombresObra.has(nom)) {
+    if (nombresObra.has(nom) || nombresCentral.has(nom)) {
+      byId.set(u.id, u);
+      continue;
+    }
+    if (u.deposit_id && depositIds.has(u.deposit_id)) {
+      byId.set(u.id, u);
+      continue;
+    }
+    if (nombresCandidatas.some((cn) => nombresCompatiblesObraAlmacen(u.nombre, cn))) {
       byId.set(u.id, u);
     }
   }
@@ -176,6 +207,16 @@ function incluirAlmacenesCentralesHermanoObra(
     if (byId.has(u.id)) continue;
     const nom = normalizarEtiquetaUbicacion(u.nombre);
     if (nombresCentral.has(nom)) {
+      byId.set(u.id, u);
+      continue;
+    }
+    if (
+      candidatas.some(
+        (c) =>
+          (c.tipo === 'almacen_central' || c.tipo === 'almacen_movil') &&
+          nombresCompatiblesObraAlmacen(u.nombre, c.nombre),
+      )
+    ) {
       byId.set(u.id, u);
     }
   }

@@ -64,6 +64,7 @@ import {
   manejarComandoIngresoManualTelegram,
   manejarComandoNotaEntregaTelegram,
   manejarComandoEmergenciaTelegram,
+  manejarComandoRecepcionTelegram,
   manejarFotoIngresoManual,
   manejarTextoIngresoManual,
 } from '@/lib/telegram/ingresoManualTelegram';
@@ -268,6 +269,11 @@ async function aplicarComando(
 
   if (cmd.comandoEmergencia) {
     await manejarComandoEmergenciaTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoRecepcion) {
+    await manejarComandoRecepcionTelegram(supabase, chatId);
     return;
   }
 

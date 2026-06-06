@@ -244,6 +244,64 @@ export function facturaCanalYaIngresada(
   return Boolean(clave && indice.ingresadasClaves.has(clave));
 }
 
+type FilaCompraContabilidad = {
+  id: string;
+  purchase_invoice_id?: string | null;
+  invoice_number?: string | null;
+  supplier_name?: string | null;
+  fecha?: string | null;
+  ubicacion_destino_id?: string | null;
+  origen?: string | null;
+  created_at?: string | null;
+  proyecto_id?: string | null;
+};
+
+function labelOrigenContabilidad(
+  origen: string | null | undefined,
+): { origen: OrigenFacturaPendiente; label: string } {
+  const o = String(origen ?? '').toUpperCase();
+  if (o === 'TELEGRAM') return { origen: 'telegram', label: '📱 Telegram' };
+  if (o === 'WHATSAPP') return { origen: 'whatsapp', label: '💬 WhatsApp' };
+  return { origen: 'app', label: '📊 Contabilidad' };
+}
+
+function mapCompraContabilidadAFactura(
+  row: FilaCompraContabilidad,
+  indice: IndiceContabilidadIngreso,
+  pisEnLista: Set<string>,
+): FacturaPendienteIngreso | null {
+  const pi = String(row.purchase_invoice_id ?? '').trim();
+  if (!pi) return null;
+  if (indice.ingresadasPi.has(pi)) return null;
+  if (pisEnLista.has(pi)) return null;
+
+  const clave = claveFacturaCompra(row.supplier_name, row.invoice_number);
+  if (clave && indice.ingresadasClaves.has(clave)) return null;
+
+  const proveedor = String(row.supplier_name ?? '').trim() || null;
+  const numero = String(row.invoice_number ?? '').trim() || null;
+  if (!proveedor && !numero) return null;
+
+  const ubi = String(row.ubicacion_destino_id ?? '').trim() || null;
+  const accion: AccionFacturaPendiente = ubi ? 'ingreso_almacen' : 'confirmar';
+  const { origen, label } = labelOrigenContabilidad(row.origen);
+
+  return {
+    key: `cc:${row.id}`,
+    origen,
+    origenLabel: label,
+    invoice_number: numero,
+    supplier_name: proveedor,
+    fecha:
+      (row.fecha ? String(row.fecha).slice(0, 10) : null) ??
+      (String(row.created_at ?? '').slice(0, 10) || null),
+    estado: 'confirmado',
+    accion,
+    pendienteId: String(row.id),
+    purchase_invoice_id: pi,
+  };
+}
+
 function mapFilaCanalAFactura(
   row: FilaCanalPendiente,
   indice: IndiceContabilidadIngreso,
@@ -286,8 +344,8 @@ function mapFilaCanalAFactura(
 }
 
 /**
- * Facturas precargadas visibles en Recepción → tránsito y /ingresofactura (Telegram).
- * Excluye facturas ya ingresadas a almacén y registros huérfanos sin compra contable.
+ * Facturas precargadas visibles en Recepción → tránsito, /ingreso y /ingresofactura (Telegram).
+ * Incluye canal (Telegram/WhatsApp) y compras abiertas en contabilidad sin ingreso a almacén.
  */
 export async function listarFacturasPendientesIngreso(
   supabase: SupabaseClient,
@@ -307,9 +365,40 @@ export async function listarFacturasPendientesIngreso(
 
   const items: FacturaPendienteIngreso[] = [];
 
+  const pisEnLista = new Set<string>();
+
   for (const row of canalRows ?? []) {
     const mapped = mapFilaCanalAFactura(row as FilaCanalPendiente, indice);
-    if (mapped) items.push(mapped);
+    if (mapped) {
+      items.push(mapped);
+      const pi = mapped.purchase_invoice_id?.trim();
+      if (pi) pisEnLista.add(pi);
+    }
+  }
+
+  const { data: comprasAbiertas, error: comprasErr } = await supabase
+    .from('contabilidad_compras')
+    .select(
+      'id, purchase_invoice_id, invoice_number, supplier_name, fecha, ubicacion_destino_id, origen, created_at, proyecto_id',
+    )
+    .not('purchase_invoice_id', 'is', null)
+    .is('ingresado_almacen_at', null)
+    .order('fecha', { ascending: false })
+    .limit(200);
+
+  if (comprasErr && comprasErr.code !== '42P01') {
+    if (!/ingresado_almacen_at|42703|does not exist/i.test(comprasErr.message ?? '')) {
+      throw new Error(comprasErr.message);
+    }
+  }
+
+  for (const row of comprasAbiertas ?? []) {
+    const mapped = mapCompraContabilidadAFactura(row as FilaCompraContabilidad, indice, pisEnLista);
+    if (mapped) {
+      items.push(mapped);
+      const pi = mapped.purchase_invoice_id?.trim();
+      if (pi) pisEnLista.add(pi);
+    }
   }
 
   return items.sort((a, b) => {
@@ -325,4 +414,73 @@ export function filtrarCanalPendientesParaIngreso<T extends FilaCanalPendiente>(
   indice: IndiceContabilidadIngreso,
 ): T[] {
   return rows.filter((row) => mapFilaCanalAFactura(row, indice) !== null);
+}
+
+export type PendienteCanalRecepcion = {
+  id: string;
+  canal?: string | null;
+  estado: string;
+  chat_label: string | null;
+  proyecto_id: string | null;
+  ubicacion_destino_id: string | null;
+  purchase_invoice_id: string | null;
+  document_file_name: string | null;
+  extracted: Record<string, unknown> | null;
+  created_at: string;
+};
+
+/** Añade compras registradas solo en contabilidad al panel Recepción → tránsito. */
+export async function ampliarPendientesCanalConContabilidad(
+  supabase: SupabaseClient,
+  pendientesCanal: PendienteCanalRecepcion[],
+): Promise<PendienteCanalRecepcion[]> {
+  const indice = await cargarIndiceContabilidadIngreso(supabase);
+  const pisEnLista = new Set(
+    pendientesCanal.map((p) => String(p.purchase_invoice_id ?? '').trim()).filter(Boolean),
+  );
+
+  const { data: comprasAbiertas, error } = await supabase
+    .from('contabilidad_compras')
+    .select(
+      'id, purchase_invoice_id, invoice_number, supplier_name, fecha, ubicacion_destino_id, origen, created_at, proyecto_id',
+    )
+    .not('purchase_invoice_id', 'is', null)
+    .is('ingresado_almacen_at', null)
+    .order('fecha', { ascending: false })
+    .limit(200);
+
+  if (error && error.code !== '42P01') {
+    if (!/ingresado_almacen_at|42703|does not exist/i.test(error.message ?? '')) {
+      throw new Error(error.message);
+    }
+  }
+
+  const extra: PendienteCanalRecepcion[] = [];
+
+  for (const row of comprasAbiertas ?? []) {
+    const mapped = mapCompraContabilidadAFactura(row as FilaCompraContabilidad, indice, pisEnLista);
+    if (!mapped || mapped.accion !== 'ingreso_almacen') continue;
+
+    extra.push({
+      id: mapped.pendienteId,
+      canal: 'app',
+      estado: 'confirmado',
+      chat_label: mapped.origenLabel,
+      proyecto_id: String(row.proyecto_id ?? '').trim() || null,
+      ubicacion_destino_id: String(row.ubicacion_destino_id ?? '').trim() || null,
+      purchase_invoice_id: mapped.purchase_invoice_id,
+      document_file_name: null,
+      extracted: {
+        supplier_name: mapped.supplier_name,
+        invoice_number: mapped.invoice_number,
+        date: mapped.fecha,
+      },
+      created_at: String(row.fecha ?? new Date().toISOString()),
+    });
+
+    const pi = mapped.purchase_invoice_id?.trim();
+    if (pi) pisEnLista.add(pi);
+  }
+
+  return [...pendientesCanal, ...extra];
 }

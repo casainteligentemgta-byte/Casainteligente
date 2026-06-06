@@ -217,13 +217,43 @@ export async function ingresoAlmacenDesdePendienteCanal(
   pendingId: string,
   opts?: OpcionesIngresoAlmacenCanal,
 ): Promise<ResultadoIngresoAlmacenCanal> {
-  const { data: pendiente, error: pErr } = await supabase
+  const { data: pendienteCanal, error: pErr } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select('id,purchase_invoice_id,ubicacion_destino_id,proyecto_id,extracted')
     .eq('id', pendingId)
     .maybeSingle();
 
   if (pErr) return { success: false, error: pErr.message };
+
+  type PendienteIngreso = {
+    id: string;
+    purchase_invoice_id: string | null;
+    ubicacion_destino_id: string | null;
+    proyecto_id: string | null;
+    extracted: unknown;
+  };
+
+  let pendiente: PendienteIngreso | null = (pendienteCanal as PendienteIngreso | null) ?? null;
+
+  if (!pendiente) {
+    const { data: compraDirecta, error: cdErr } = await supabase
+      .from('contabilidad_compras')
+      .select('id, purchase_invoice_id, ubicacion_destino_id, proyecto_id')
+      .eq('id', pendingId)
+      .maybeSingle();
+
+    if (cdErr) return { success: false, error: cdErr.message };
+
+    if (compraDirecta?.purchase_invoice_id) {
+      pendiente = {
+        id: String(compraDirecta.id),
+        purchase_invoice_id: String(compraDirecta.purchase_invoice_id),
+        ubicacion_destino_id: compraDirecta.ubicacion_destino_id ?? null,
+        proyecto_id: compraDirecta.proyecto_id ?? null,
+        extracted: null,
+      };
+    }
+  }
 
   const purchaseInvoiceId = String(
     opts?.purchaseInvoiceId?.trim() || pendiente?.purchase_invoice_id || '',

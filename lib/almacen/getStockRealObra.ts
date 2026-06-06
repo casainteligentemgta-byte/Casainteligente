@@ -15,6 +15,7 @@ type RpcStockRow = {
   material_id: string;
   ubicacion_id: string;
   ubicacion_nombre: string | null;
+  ubicacion_tipo?: string | null;
   cantidad_disponible: number | null;
   material_name: string | null;
   material_unit: string | null;
@@ -33,10 +34,6 @@ export async function getStockRealObra(
     proyectoNombre?: string;
   },
 ): Promise<StockProyectoItem[]> {
-  /** inventario_stock + filtro por obra (incl. almacén central homónimo) es la fuente más fiable tras movimientos. */
-  const desdeTablas = await listarStockProyectoDesdeTablas(supabase, proyectoId, opts);
-  if (desdeTablas.length) return desdeTablas;
-
   const { data, error } = await supabase.rpc('get_stock_real_obra', {
     p_proyecto_id: proyectoId,
     p_ubicacion_id: opts?.ubicacionId ?? null,
@@ -44,22 +41,23 @@ export async function getStockRealObra(
     p_solo_con_stock: opts?.soloConStock !== false,
   });
 
-  if (error) {
-    return [];
+  if (!error && (data ?? []).length) {
+    const rows = (data ?? []) as RpcStockRow[];
+    return rows.map((row) => ({
+      material_id: String(row.material_id),
+      ubicacion_id: String(row.ubicacion_id),
+      ubicacion_nombre: String(row.ubicacion_nombre ?? 'Almacén'),
+      ubicacion_tipo: row.ubicacion_tipo ?? null,
+      nombre: String(row.material_name ?? 'Material'),
+      unidad: String(row.material_unit ?? 'UND'),
+      sap_code: row.material_sap_code ?? null,
+      categoria: row.categoria_nombre ?? null,
+      cantidad_disponible: Number(row.cantidad_disponible ?? 0),
+    }));
   }
 
-  const rows = (data ?? []) as RpcStockRow[];
-  return rows.map((row) => ({
-    material_id: String(row.material_id),
-    ubicacion_id: String(row.ubicacion_id),
-    ubicacion_nombre: String(row.ubicacion_nombre ?? 'Almacén'),
-    ubicacion_tipo: null,
-    nombre: String(row.material_name ?? 'Material'),
-    unidad: String(row.material_unit ?? 'UND'),
-    sap_code: row.material_sap_code ?? null,
-    categoria: row.categoria_nombre ?? null,
-    cantidad_disponible: Number(row.cantidad_disponible ?? 0),
-  }));
+  /** inventario_stock + filtro por obra (incl. almacén central homónimo) si la RPC no está o no devuelve filas. */
+  return listarStockProyectoDesdeTablas(supabase, proyectoId, opts);
 }
 
 /** Suma de cantidad_disponible por material en toda la obra. */

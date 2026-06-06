@@ -11,7 +11,14 @@ import {
   resolverMaterialParaLineaCompra,
 } from '@/lib/almacen/resolverMaterialParaCompra';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
-import { baseUrlApp, nuevoTokenRecepcionCampo } from '@/lib/almacen/recepcionBorradorTelegram';
+import {
+  baseUrlApp,
+  marcarBorradorRecepcionConsumido,
+  nuevoTokenRecepcionCampo,
+  urlRecepcionCampoBorrador,
+  urlRecepcionCampoDesdeMetadata,
+  vistaDesdeFlujoTelegram,
+} from '@/lib/almacen/recepcionBorradorTelegram';
 import type { LineaRecepcionCampoInput } from '@/lib/almacen/recepcionCampoTypes';
 import {
   ETIQUETA_FORMA_INGRESO,
@@ -99,7 +106,9 @@ export type MetadataIngresoManual = {
   telegram_user_id?: string;
   telegram_username?: string | null;
   /** Token opcional para sincronizar borrador con la app (sin redirigir al usuario). */
+  /** UUID para precargar /almacen/recepcion?borrador=… */
   recepcion_campo_token?: string;
+  recepcion_campo_registrada_id?: string;
 };
 
 const PREFIX = 'im:';
@@ -186,6 +195,71 @@ async function patchMeta(
   await setTelegramContexto(supabase, chatId, {
     metadata: { ...meta(estado), ...patch },
   });
+}
+
+function enlaceRecepcionWebHtml(flujo: string | undefined, token: string | undefined): string {
+  const t = token?.trim();
+  if (!t) return '';
+  const vista = vistaDesdeFlujoTelegram(flujo);
+  if (!vista) return '';
+  const link = urlRecepcionCampoBorrador(t, vista);
+  return (
+    `\n\n🌐 <a href="${link}">Abrir recepción en la app</a>` +
+    '\n<i>Los datos del bot se sincronizan con la pantalla web.</i>'
+  );
+}
+
+export async function manejarComandoRecepcionTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  const estado = await getTelegramEstado(supabase, chatId);
+  const m = meta(estado);
+  const linkActivo = urlRecepcionCampoDesdeMetadata(m as Record<string, unknown>);
+
+  if (linkActivo) {
+    await sendTelegramMessage(
+      chatId,
+      '📦 <b>Recepción en curso</b>\n\n' +
+        'Tiene un borrador activo desde Telegram. Abra la pantalla web para revisar materiales, ' +
+        'fotos y registrar en <code>ci_recepciones_campo</code>.\n\n' +
+        `<a href="${linkActivo}">Abrir /almacen/recepcion</a>\n\n` +
+        'También puede confirmar el ingreso aquí en el bot cuando termine el flujo.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  if (m.recepcion_campo_registrada_id?.trim()) {
+    const linkMov = `${baseUrlApp()}/almacen/movimientos?vista=ingresos`;
+    await sendTelegramMessage(
+      chatId,
+      '✅ <b>Recepción ya registrada</b>\n\n' +
+        `ID: <code>${m.recepcion_campo_registrada_id.slice(0, 8)}…</code>\n\n` +
+        `<a href="${linkMov}">Ver movimientos de ingreso</a>`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  const linkBase = `${baseUrlApp()}/almacen/recepcion`;
+  await sendTelegramMessage(
+    chatId,
+    '📦 <b>Recepción en campo</b>\n\n' +
+      'Registre ingresos manuales, notas de entrega, emergencias o facturas en tránsito.\n\n' +
+      `<a href="${linkBase}">Abrir pantalla de recepción</a>\n\n` +
+      'Para iniciar desde Telegram con sincronización web, use:\n' +
+      '• <code>/ingreso</code> — menú de ingresos\n' +
+      '• <code>/nota</code> — nota de entrega\n' +
+      '• <code>/emergencia</code> — sin papeles\n' +
+      '• <code>/ingresomanual</code> — ingreso sin nota',
+    {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🌐 Abrir recepción web', url: linkBase }]],
+      },
+    },
+  );
 }
 
 const FLUJO_PASOS_FACTURA_MANUAL =
@@ -732,12 +806,20 @@ async function enviarConfirmacion(
     stockHint;
 
   const textoBotonConfirmar = '✅ Confirmar ingreso';
+  const token = m.recepcion_campo_token?.trim();
+  const vista = vistaDesdeFlujoTelegram(f);
+  const keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [
+    [{ text: textoBotonConfirmar, callback_data: `${PREFIX}conf:ok` }],
+  ];
+  if (token && vista) {
+    keyboard.push([
+      { text: '🌐 Completar en app', url: urlRecepcionCampoBorrador(token, vista) },
+    ]);
+  }
 
   await sendTelegramMessage(chatId, texto, {
     parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [[{ text: textoBotonConfirmar, callback_data: `${PREFIX}conf:ok` }]],
-    },
+    reply_markup: { inline_keyboard: keyboard },
   });
 }
 
@@ -899,7 +981,8 @@ export async function manejarCallbackIngresoManual(
     });
     await sendTelegramMessage(
       params.chatId,
-      `✅ Almacén: <b>${ubi.nombre}</b>\n\n✏️ Escribe el <b>nombre del proveedor</b>:`,
+      `✅ Almacén: <b>${ubi.nombre}</b>\n\n✏️ Escribe el <b>nombre del proveedor</b>:` +
+        enlaceRecepcionWebHtml(m.flujo, m.recepcion_campo_token),
       { parse_mode: 'HTML' },
     );
     return true;
@@ -1050,6 +1133,17 @@ export async function manejarCallbackIngresoManual(
     await answerCallbackQuery(params.callbackId, 'Procesando…');
     const fresh = await getTelegramEstado(supabase, params.chatId);
     const fm = meta(fresh);
+
+    if (fm.recepcion_campo_registrada_id?.trim()) {
+      await sendTelegramMessage(
+        params.chatId,
+        '✅ Este ingreso ya fue registrado. No repita la operación.\n\n' +
+          `ID: <code>${fm.recepcion_campo_registrada_id.slice(0, 8)}…</code>`,
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+
     const lineas = fm.lineas ?? [];
     if (!lineas.length || !fm.ubicacion_id || !fm.proveedor_nombre) {
       await sendTelegramMessage(params.chatId, '❌ Ingreso incompleto.', { parse_mode: 'HTML' });
@@ -1073,16 +1167,25 @@ export async function manejarCallbackIngresoManual(
       telegramUserId: fm.telegram_user_id,
     });
 
+    if (!resultado.ok) {
+      await sendTelegramMessage(params.chatId, `❌ ${resultado.error}`, { parse_mode: 'HTML' });
+      return true;
+    }
+
+    const borradorToken = fm.recepcion_campo_token?.trim();
+    if (borradorToken) {
+      try {
+        await marcarBorradorRecepcionConsumido(supabase, borradorToken, resultado.recepcionId);
+      } catch {
+        /* no bloquear éxito */
+      }
+    }
+
     await setTelegramContexto(supabase, params.chatId, {
       contexto: 'menu',
       pending_factura_id: null,
       metadata: {},
     });
-
-    if (!resultado.ok) {
-      await sendTelegramMessage(params.chatId, `❌ ${resultado.error}`, { parse_mode: 'HTML' });
-      return true;
-    }
 
     const link = `${baseUrlApp()}/almacen/movimientos?vista=ingresos`;
     const tituloExito =

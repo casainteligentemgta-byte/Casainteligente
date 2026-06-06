@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     const borrador = await obtenerBorradorRecepcionPorToken(admin.client, token);
     if (!borrador) {
       return NextResponse.json(
-        { error: 'Borrador no encontrado o expirado. Reinicie /ingresonotas en Telegram.' },
+        { error: 'Borrador no encontrado o ya registrado. Use /recepcion o /ingreso en Telegram.' },
         { status: 404 },
       );
     }

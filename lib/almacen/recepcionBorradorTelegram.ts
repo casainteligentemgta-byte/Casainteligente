@@ -3,6 +3,7 @@ import type { TipoRecepcionCampo } from '@/lib/almacen/recepcionCampoTypes';
 import type { FormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
 
 export const METADATA_TOKEN_KEY = 'recepcion_campo_token';
+export const METADATA_RECEPCION_ID_KEY = 'recepcion_campo_registrada_id';
 
 export type LineaBorradorRecepcionTelegram = {
   material_id: string;
@@ -34,6 +35,8 @@ export type BorradorRecepcionTelegramPayload = {
   soporte_file_name: string | null;
   soporte_mime_type: string | null;
   updated_at: string;
+  /** Si ya se registró en Telegram o web, no volver a ingresar. */
+  recepcion_registrada_id?: string | null;
 };
 
 export function baseUrlApp(): string {
@@ -96,6 +99,7 @@ type MetadataIngresoLike = {
   soporte_file_name?: string;
   soporte_mime_type?: string;
   recepcion_campo_token?: string;
+  recepcion_campo_registrada_id?: string;
 };
 
 export function borradorDesdeEstadoTelegram(
@@ -107,7 +111,9 @@ export function borradorDesdeEstadoTelegram(
   const vista = vistaDesdeFlujoTelegram(m.flujo);
   const tipo = tipoRpcDesdeFlujoTelegram(m.flujo);
   const token = String(m.recepcion_campo_token ?? '').trim();
-  if (!vista || !tipo || !token) return null;
+  const recepcionRegistradaId = String(m.recepcion_campo_registrada_id ?? '').trim() || null;
+  if (!vista || !tipo) return null;
+  if (!token && !recepcionRegistradaId) return null;
 
   const lineas = (m.lineas ?? []).map((l) => ({
     material_id: String(l.material_id ?? '').trim(),
@@ -121,7 +127,7 @@ export function borradorDesdeEstadoTelegram(
   }));
 
   return {
-    token,
+    token: token || recepcionRegistradaId || '',
     vista,
     tipo,
     proyecto_id: proyectoId?.trim() || null,
@@ -134,7 +140,19 @@ export function borradorDesdeEstadoTelegram(
     soporte_file_name: m.soporte_file_name?.trim() || null,
     soporte_mime_type: m.soporte_mime_type?.trim() || null,
     updated_at: new Date().toISOString(),
+    recepcion_registrada_id: recepcionRegistradaId,
   };
+}
+
+export function urlRecepcionCampoDesdeMetadata(
+  metadata: Record<string, unknown>,
+): string | null {
+  const m = metadata as MetadataIngresoLike;
+  const token = String(m.recepcion_campo_token ?? '').trim();
+  if (!token) return null;
+  const vista = vistaDesdeFlujoTelegram(m.flujo);
+  if (!vista) return null;
+  return urlRecepcionCampoBorrador(token, vista);
 }
 
 export async function buscarEstadoPorTokenRecepcion(
@@ -170,10 +188,37 @@ export async function obtenerBorradorRecepcionPorToken(
   return borradorDesdeEstadoTelegram(row.chat_id, row.proyecto_id, row.metadata);
 }
 
+export async function marcarBorradorRecepcionConsumido(
+  supabase: SupabaseClient,
+  token: string,
+  recepcionId: string,
+): Promise<void> {
+  const row = await buscarEstadoPorTokenRecepcion(supabase, token);
+  if (!row) return;
+
+  const meta = { ...row.metadata };
+  delete meta[METADATA_TOKEN_KEY];
+  delete meta.recepcion_campo_borrador;
+  meta[METADATA_RECEPCION_ID_KEY] = recepcionId.trim();
+  meta.paso = 'completado';
+
+  await supabase
+    .from('ci_telegram_estados')
+    .update({ metadata: meta, updated_at: new Date().toISOString() })
+    .eq('chat_id', row.chat_id);
+}
+
+/** @deprecated Use marcarBorradorRecepcionConsumido */
 export async function limpiarBorradorRecepcionPorToken(
   supabase: SupabaseClient,
   token: string,
+  recepcionId?: string,
 ): Promise<void> {
+  if (recepcionId?.trim()) {
+    await marcarBorradorRecepcionConsumido(supabase, token, recepcionId);
+    return;
+  }
+
   const row = await buscarEstadoPorTokenRecepcion(supabase, token);
   if (!row) return;
 

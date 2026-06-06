@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import {
+  ampliarPendientesCanalConContabilidad,
   cargarIndiceContabilidadIngreso,
   filtrarCanalPendientesParaIngreso,
+  type PendienteCanalRecepcion,
 } from '@/lib/almacen/listarFacturasPendientesIngreso';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
@@ -49,10 +51,11 @@ export async function GET(req: Request) {
     const { data, error } = await q;
     if (error) throw new Error(formatErrorMessage(error));
 
-    let pendientes = data ?? [];
+    let pendientes = (data ?? []) as PendienteCanalRecepcion[];
     if (searchParams.get('para') === 'transito_ingreso') {
       const indice = await cargarIndiceContabilidadIngreso(supabase);
       pendientes = filtrarCanalPendientesParaIngreso(pendientes, indice);
+      pendientes = await ampliarPendientesCanalConContabilidad(supabase, pendientes);
     }
 
     return NextResponse.json(

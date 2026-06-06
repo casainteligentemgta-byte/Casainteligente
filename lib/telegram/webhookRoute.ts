@@ -18,6 +18,7 @@ import {
   manejarComandoIngresoSinNotaTelegram,
   manejarComandoNotaEntregaTelegram,
   manejarComandoEmergenciaTelegram,
+  manejarComandoRecepcionTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
 import { esComandoAgua, primerTokenComando } from '@/lib/telegram/parseComandoTelegram';
 import {
@@ -289,7 +290,33 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
         error: err instanceof Error ? err.message : 'ingreso_factura_command_failed',
       });
     }
-    return respuestaWebhook({ ok: true, command: 'ingresofactura' });
+    return respuestaWebhook({ ok: true, command: 'ingreso_factura' });
+  }
+
+  if (cmd === '/recepcion' || cmd === '/recepcioncampo') {
+    const admin = telegramSupabaseAdmin();
+    if (!admin.ok) {
+      try {
+        await sendTelegramMessage(
+          chatId,
+          '⚠️ Servidor sin <b>SUPABASE_SERVICE_ROLE_KEY</b>. Contacte al administrador.',
+          { parse_mode: 'HTML' },
+        );
+      } catch (err) {
+        console.error('[telegram webhook] /recepcion sin supabase admin', err);
+      }
+      return respuestaWebhook({ ok: true, error: 'supabase_admin' });
+    }
+    try {
+      await manejarComandoRecepcionTelegram(admin.client, chatId);
+    } catch (err) {
+      console.error('[telegram webhook] /recepcion', err);
+      return respuestaWebhook({
+        ok: true,
+        error: err instanceof Error ? err.message : 'recepcion_command_failed',
+      });
+    }
+    return respuestaWebhook({ ok: true, command: 'recepcion' });
   }
 
   if (text.toLowerCase().startsWith('/stock')) {

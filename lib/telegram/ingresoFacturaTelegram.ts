@@ -212,6 +212,31 @@ async function cargarLineasFacturaPendiente(
     }
   }
 
+  if (hit.key.startsWith('cc:')) {
+    const { data: compraCc } = await supabase
+      .from('contabilidad_compras')
+      .select('id, proyecto_id, ubicacion_destino_id')
+      .eq('id', hit.pendienteId)
+      .maybeSingle();
+
+    if (compraCc?.id) {
+      const resuelto = await resolverMaterialIdLineasCompra(supabase, String(compraCc.id), {
+        proyectoIdFallback: String(compraCc.proyecto_id ?? '').trim() || null,
+        ubicacionDestinoId: String(compraCc.ubicacion_destino_id ?? '').trim() || null,
+        purchaseInvoiceId: pi ?? null,
+      });
+      if (resuelto.lineas.length) {
+        return resuelto.lineas.map((l, i) => ({
+          linea_id: `cc:${i}`,
+          material_id: String(l.material_id ?? ''),
+          material_nombre: l.descripcion?.trim() || 'Material',
+          material_codigo: '',
+          cantidad_facturada: Number(l.cantidad) || 0,
+        }));
+      }
+    }
+  }
+
   const { data: pendiente } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select('id, proyecto_id, extracted')
@@ -310,6 +335,21 @@ export async function seleccionarFacturaPrecargadaTelegram(
   if (!hit) return 'not_found';
 
   if (hit.accion === 'confirmar') {
+    if (hit.key.startsWith('cc:')) {
+      const link = `${baseUrlApp()}/contabilidad/compras`;
+      await sendTelegramMessage(
+        chatId,
+        `⏳ <b>Asignar almacén en contabilidad</b>\n` +
+          `${hit.supplier_name ?? 'Proveedor'} · #${hit.invoice_number ?? 'S/N'}\n` +
+          `${hit.origenLabel}\n\n` +
+          'Esta compra está registrada en contabilidad pero aún no tiene almacén de destino. ' +
+          'Asigne obra y almacén en la app y vuelva a usar <code>/ingreso</code> — aparecerá como 📥 ingreso.\n\n' +
+          `<a href="${link}">Abrir contabilidad → compras</a>`,
+        { parse_mode: 'HTML' },
+      );
+      return 'confirmar';
+    }
+
     const link = linkConfirmarCompraTelegram(hit.pendienteId);
     await sendTelegramMessage(
       chatId,

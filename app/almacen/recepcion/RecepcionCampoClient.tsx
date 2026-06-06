@@ -148,6 +148,10 @@ export default function RecepcionCampoClient() {
   const [borradorToken, setBorradorToken] = useState(borradorTokenInicial);
   const [cargandoBorrador, setCargandoBorrador] = useState(Boolean(borradorTokenInicial));
   const [borradorTelegram, setBorradorTelegram] = useState(false);
+  const [borradorTipo, setBorradorTipo] = useState<TipoRecepcionCampo | null>(null);
+  const [recepcionYaRegistrada, setRecepcionYaRegistrada] = useState<string | null>(null);
+  const [soporteTelegramPath, setSoporteTelegramPath] = useState<string | null>(null);
+  const [soporteTelegramNombre, setSoporteTelegramNombre] = useState<string | null>(null);
   const tipoIngreso: TipoIngresoManual = vista === 'emergencia' ? 'emergencia' : 'nota_entrega';
   const [cantidadNueva, setCantidadNueva] = useState('1');
   const [materialObraId, setMaterialObraId] = useState('');
@@ -214,8 +218,16 @@ export default function RecepcionCampoClient() {
         }
 
         const b = json.borrador;
+        if (b.recepcion_registrada_id) {
+          setRecepcionYaRegistrada(b.recepcion_registrada_id);
+          setBorradorTelegram(true);
+          toast.message('Esta recepción ya fue registrada. No repita el ingreso.');
+          return;
+        }
+
         setBorradorToken(b.token);
         setBorradorTelegram(true);
+        setBorradorTipo(b.tipo);
         const vistaBorrador =
           b.vista ??
           (b.tipo === 'emergencia' ? 'emergencia' : b.tipo === 'nota_entrega' ? 'nota_entrega' : 'ingreso_manual');
@@ -225,6 +237,10 @@ export default function RecepcionCampoClient() {
         setProveedorNombre(b.proveedor_nombre);
         setNumDoc(b.num_doc);
         setObservaciones(b.observaciones);
+        if (b.soporte_storage_path) {
+          setSoporteTelegramPath(b.soporte_storage_path);
+          setSoporteTelegramNombre(b.soporte_file_name ?? 'Soporte Telegram');
+        }
         setLineas(
           b.lineas.map((l) => ({
             key: lineKey(),
@@ -440,6 +456,10 @@ export default function RecepcionCampoClient() {
   }
 
   async function guardarManual() {
+    if (recepcionYaRegistrada) {
+      toast.error('Esta recepción ya fue registrada desde Telegram o la app.');
+      return;
+    }
     if (!proyectoId.trim()) {
       toast.error('Seleccione el proyecto de obra.');
       return;
@@ -509,6 +529,8 @@ export default function RecepcionCampoClient() {
       const observacionesPayload =
         [origenObs, obsUsuario].filter(Boolean).join(' · ') || null;
 
+      const tipoPayload = borradorTipo ?? tipoManual;
+
       const res = await fetch(apiUrl('/api/almacen/recepcion/manual'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -517,12 +539,12 @@ export default function RecepcionCampoClient() {
           ubicacion_id: ubicacionId,
           proveedor_id: null,
           proveedor_nombre: proveedorNombre.trim() || (tipoIngreso === 'emergencia' ? 'Proveedor no identificado' : ''),
-          tipo: tipoManual,
+          tipo: tipoPayload,
           num_doc: numDoc.trim() || (tipoIngreso === 'emergencia' ? 'EMERGENCIA' : 'NOTA-ENTREGA'),
           lineas: lineasPayload,
           observaciones: observacionesPayload,
-          soporte_storage_path: soporte?.path ?? null,
-          soporte_file_name: soporte?.fileName ?? null,
+          soporte_storage_path: soporte?.path ?? soporteTelegramPath ?? null,
+          soporte_file_name: soporte?.fileName ?? soporteTelegramNombre ?? null,
           soporte_mime_type: soporte?.mimeType ?? null,
           borrador_token: borradorToken.trim() || null,
         }),
@@ -532,9 +554,13 @@ export default function RecepcionCampoClient() {
         error?: string;
         recepcion_id?: string;
         ok?: boolean;
+        ya_existia?: boolean;
       };
 
       if (!res.ok) {
+        if (res.status === 409 && json.recepcion_id) {
+          setRecepcionYaRegistrada(json.recepcion_id);
+        }
         toast.error(json.error ?? 'No se pudo registrar la recepción');
         return;
       }
@@ -594,9 +620,16 @@ export default function RecepcionCampoClient() {
           })}
         </div>
         {borradorTelegram ? (
-          <p className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-200">
-            Borrador sincronizado desde Telegram. Puede completar aquí o confirmar en el bot; si ya
-            registró en un canal, no repita el ingreso en el otro.
+          <p
+            className={`rounded-xl border px-4 py-3 text-xs ${
+              recepcionYaRegistrada
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                : 'border-sky-500/30 bg-sky-500/10 text-sky-200'
+            }`}
+          >
+            {recepcionYaRegistrada
+              ? `Recepción ya registrada (${recepcionYaRegistrada.slice(0, 8)}…). No repita el ingreso.`
+              : 'Borrador sincronizado desde Telegram. Complete aquí o confirme en el bot; al registrar se guarda en recepciones de campo y actualiza stock.'}
           </p>
         ) : null}
         {vista === 'transito' ? (
@@ -1085,6 +1118,10 @@ export default function RecepcionCampoClient() {
               />
               {soporteFile ? (
                 <p className="mt-2 text-xs font-bold text-[#FF9500]">{soporteFile.name}</p>
+              ) : soporteTelegramPath ? (
+                <p className="mt-2 text-xs font-bold text-sky-300">
+                  📷 {soporteTelegramNombre ?? 'Soporte desde Telegram'}
+                </p>
               ) : null}
 
               <label className="mt-4 block">
@@ -1104,10 +1141,14 @@ export default function RecepcionCampoClient() {
             <button
               type="button"
               onClick={() => void guardarManual()}
-              disabled={isSubmitting}
+              disabled={isSubmitting || Boolean(recepcionYaRegistrada)}
               className="w-full rounded-2xl bg-[#FF9500] py-4 text-base font-black text-black shadow-lg shadow-[#FF9500]/20 hover:bg-[#FF9500]/90 disabled:opacity-50"
             >
-              {isSubmitting ? 'Registrando ingreso…' : 'Registrar ingreso y actualizar stock'}
+              {recepcionYaRegistrada
+                ? 'Recepción ya registrada'
+                : isSubmitting
+                  ? 'Registrando ingreso…'
+                  : 'Registrar ingreso y actualizar stock'}
             </button>
           </section>
         )}

@@ -32,6 +32,8 @@ export type ComandoTelegramResult = {
   comandoNotaEntrega?: boolean;
   /** Ingreso emergencia: mismo flujo, tipo emergencia en recepción de campo. */
   comandoEmergencia?: boolean;
+  /** Pantalla /almacen/recepcion (borrador Telegram ↔ web). */
+  comandoRecepcion?: boolean;
   /** Despacho desde almacén: obra → almacén → observaciones → stock → cantidades. */
   comandoSalidaObra?: boolean;
   /** Lista materiales comprados en el día, semana o mes (app + Telegram). */
@@ -69,6 +71,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /bitacora — reporte de obra por nota de voz\n' +
         '• /agua — obra → camión → PPM (azul) → litros\n' +
         '• /ingreso — manual de factura · automático · con nota · sin nota\n' +
+        '• /recepcion — pantalla web de recepción (sincronizada con Telegram)\n' +
         '• /compras &lt;obra&gt; — total gastado e inventario en almacenes de la obra\n' +
         '• /comprasdia — materiales comprados hoy (app y Telegram)\n' +
         '• /comprassemana — materiales de la semana en curso\n' +
@@ -190,6 +193,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     cmd === '/ingresomanual'
   ) {
     return { handled: true, comandoIngresoManual: true };
+  }
+
+  if (cmd === '/recepcion' || cmd === '/recepcioncampo') {
+    return { handled: true, comandoRecepcion: true };
   }
 
   if (cmd === '/ingreso') {
