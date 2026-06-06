@@ -56,6 +56,7 @@ const FLUJOS_RECEPCION_CAMPO = new Set<string>([
 
 export type PasoIngresoManual =
   | 'almacen'
+  | 'web'
   | 'proveedor'
   | 'num_doc'
   | 'material'
@@ -209,6 +210,66 @@ function enlaceRecepcionWebHtml(flujo: string | undefined, token: string | undef
   );
 }
 
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function urlRecepcionDesdeMetadata(m: MetadataIngresoManual): string | null {
+  const linkMeta = urlRecepcionCampoDesdeMetadata(m as Record<string, unknown>);
+  if (linkMeta) return linkMeta;
+  const token = m.recepcion_campo_token?.trim();
+  const vista = vistaDesdeFlujoTelegram(m.flujo);
+  if (!token || !vista) return null;
+  return urlRecepcionCampoBorrador(token, vista);
+}
+
+/** Tras elegir almacén: obra/ubicación en borrador web; el resto se completa en /almacen/recepcion. */
+async function enviarHandoffRecepcionWebTrasAlmacen(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  ubicacionId: string,
+  ubicacionNombre: string,
+): Promise<void> {
+  const m = meta(estado);
+  const flujo = m.flujo as FlujoRecepcionCampoTelegram | undefined;
+  const token =
+    m.recepcion_campo_token?.trim() ||
+    (flujo ? tokenBorradorRecepcion(flujo, estado) : undefined) ||
+    nuevoTokenRecepcionCampo();
+
+  await patchMeta(supabase, chatId, estado, {
+    paso: 'web',
+    ubicacion_id: ubicacionId,
+    ubicacion_nombre: ubicacionNombre,
+    recepcion_campo_token: token,
+  });
+
+  const vista = vistaDesdeFlujoTelegram(flujo);
+  const link = vista
+    ? urlRecepcionCampoBorrador(token, vista)
+    : `${baseUrlApp()}/almacen/recepcion?borrador=${encodeURIComponent(token)}`;
+
+  const etiquetaFlujo =
+    flujo === FLUJO_INGRESO_FACTURA_MANUAL ? 'ingreso de factura'
+    : flujo === FLUJO_NOTA_ENTREGA ? 'nota de entrega'
+    : flujo === FLUJO_EMERGENCIA ? 'ingreso de emergencia'
+    : 'ingreso manual';
+
+  await sendTelegramMessage(
+    chatId,
+    `✅ Almacén: <b>${escHtml(ubicacionNombre)}</b>\n\n` +
+      `🌐 Complete el <b>${etiquetaFlujo}</b> en la app: proveedor, documento, materiales y confirmación.\n` +
+      'Obra y almacén ya están precargados desde Telegram.',
+    {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🌐 Abrir recepción en la app', url: link }]],
+      },
+    },
+  );
+}
+
 export async function manejarComandoRecepcionTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -221,10 +282,9 @@ export async function manejarComandoRecepcionTelegram(
     await sendTelegramMessage(
       chatId,
       '📦 <b>Recepción en curso</b>\n\n' +
-        'Tiene un borrador activo desde Telegram. Abra la pantalla web para revisar materiales, ' +
-        'fotos y registrar en <code>ci_recepciones_campo</code>.\n\n' +
-        `<a href="${linkActivo}">Abrir /almacen/recepcion</a>\n\n` +
-        'También puede confirmar el ingreso aquí en el bot cuando termine el flujo.',
+        'Tiene un borrador activo desde Telegram. Abra la pantalla web para completar proveedor, ' +
+        'materiales y registrar en <code>ci_recepciones_campo</code>.\n\n' +
+        `<a href="${linkActivo}">Abrir /almacen/recepcion</a>`,
       { parse_mode: 'HTML' },
     );
     return;
@@ -262,45 +322,29 @@ export async function manejarComandoRecepcionTelegram(
   );
 }
 
+const PASOS_RECEPCION_WEB =
+  '3️⃣ Al elegir almacén, abra la <b>recepción en la app</b> y complete proveedor, documento, materiales y confirmación.\n\n' +
+  '<code>/cancelar</code> para abortar.';
+
 const FLUJO_PASOS_FACTURA_MANUAL =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b>.\n' +
-  '4️⃣ Escribe el <b>número de factura</b> (<code>S/N</code> si no hay).\n' +
-  '5️⃣ <b>Material</b> (catálogo o nuevo), <b>cantidad</b> y <b>foto</b> opcional por línea.\n' +
-  '6️⃣ <b>Observaciones</b> (opcional).\n' +
-  '7️⃣ <b>Confirmar</b> ingreso.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  PASOS_RECEPCION_WEB;
 
 const FLUJO_PASOS_NOTA_ENTREGA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b>.\n' +
-  '4️⃣ Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay).\n' +
-  '5️⃣ <b>Material</b> (catálogo o nuevo), <b>cantidad</b> y <b>foto</b> opcional por línea.\n' +
-  '6️⃣ <b>Observaciones</b> (opcional).\n' +
-  '7️⃣ <b>Confirmar</b> ingreso.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  PASOS_RECEPCION_WEB;
 
 const FLUJO_PASOS_SIN_NOTA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b>.\n' +
-  '4️⃣ Escribe una <b>referencia</b> (<code>S/N</code> si no hay documento).\n' +
-  '5️⃣ <b>Material</b> (catálogo o nuevo), <b>cantidad</b> y <b>foto</b> opcional por línea.\n' +
-  '6️⃣ <b>Observaciones</b> (opcional).\n' +
-  '7️⃣ <b>Confirmar</b> ingreso.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  PASOS_RECEPCION_WEB;
 
 const FLUJO_PASOS_EMERGENCIA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b> (o quien entregó).\n' +
-  '4️⃣ Escribe una <b>referencia</b> (<code>S/N</code> si no hay).\n' +
-  '5️⃣ <b>Material</b> (catálogo o nuevo), <b>cantidad</b> y <b>foto</b> opcional por línea.\n' +
-  '6️⃣ <b>Observaciones</b> (opcional).\n' +
-  '7️⃣ <b>Confirmar</b> ingreso.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  PASOS_RECEPCION_WEB;
 
 const MENSAJE_INICIO_FACTURA_MANUAL =
   '🧾 <b>Ingreso manual de factura</b> (<code>/ingreso</code>)\n\n' + FLUJO_PASOS_FACTURA_MANUAL;
@@ -974,17 +1018,27 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
     await answerCallbackQuery(params.callbackId, String(ubi.nombre));
-    await patchMeta(supabase, params.chatId, estado, {
-      paso: 'proveedor',
-      ubicacion_id: ubicacionId,
-      ubicacion_nombre: String(ubi.nombre),
-    });
-    await sendTelegramMessage(
-      params.chatId,
-      `✅ Almacén: <b>${ubi.nombre}</b>\n\n✏️ Escribe el <b>nombre del proveedor</b>:` +
-        enlaceRecepcionWebHtml(m.flujo, m.recepcion_campo_token),
-      { parse_mode: 'HTML' },
-    );
+    if (flujoUsaBorradorWeb(m.flujo)) {
+      await enviarHandoffRecepcionWebTrasAlmacen(
+        supabase,
+        params.chatId,
+        estado,
+        ubicacionId,
+        String(ubi.nombre),
+      );
+    } else {
+      await patchMeta(supabase, params.chatId, estado, {
+        paso: 'proveedor',
+        ubicacion_id: ubicacionId,
+        ubicacion_nombre: String(ubi.nombre),
+      });
+      await sendTelegramMessage(
+        params.chatId,
+        `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n✏️ Escribe el <b>nombre del proveedor</b>:` +
+          enlaceRecepcionWebHtml(m.flujo, m.recepcion_campo_token),
+        { parse_mode: 'HTML' },
+      );
+    }
     return true;
   }
 
@@ -1224,8 +1278,24 @@ export async function manejarTextoIngresoManual(
   const estado = await getTelegramEstado(supabase, chatId);
   if (!esFlujoIngresoManual(estado)) return false;
 
-  const paso = meta(estado).paso;
+  const m = meta(estado);
+  const paso = m.paso;
   const trimmed = texto.trim();
+
+  if (paso === 'web') {
+    const link = urlRecepcionDesdeMetadata(m);
+    await sendTelegramMessage(
+      chatId,
+      '🌐 Complete el ingreso en la app web. Obra y almacén ya están precargados.',
+      {
+        parse_mode: 'HTML',
+        ...(link
+          ? { reply_markup: { inline_keyboard: [[{ text: '🌐 Abrir recepción', url: link }]] } }
+          : {}),
+      },
+    );
+    return true;
+  }
 
   if (paso === 'proveedor') {
     if (trimmed.length < MIN_PROVEEDOR) {
@@ -1399,6 +1469,20 @@ export async function manejarFotoIngresoManual(params: {
   if (!esFlujoIngresoManual(estado)) return false;
 
   const paso = meta(estado).paso;
+  if (paso === 'web') {
+    const link = urlRecepcionDesdeMetadata(meta(estado));
+    await sendTelegramMessage(
+      params.chatId,
+      '🌐 Suba las fotos y complete el ingreso en la app web.',
+      {
+        parse_mode: 'HTML',
+        ...(link
+          ? { reply_markup: { inline_keyboard: [[{ text: '🌐 Abrir recepción', url: link }]] } }
+          : {}),
+      },
+    );
+    return true;
+  }
   if (paso === 'foto_linea') {
     if (!estado.proyecto_id) return false;
 

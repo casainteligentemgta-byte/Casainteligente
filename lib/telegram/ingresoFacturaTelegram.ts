@@ -90,6 +90,11 @@ function meta(estado: TelegramEstado): MetadataIngresoFactura {
   return (estado.metadata ?? {}) as MetadataIngresoFactura;
 }
 
+/** FK ci_telegram_estados.pending_factura_id → ci_facturas_canal_pendientes (no contabilidad_compras). */
+function pendingFacturaIdTelegram(hit: FacturaPendienteIngreso): string | null {
+  return hit.key.startsWith('cc:') ? null : hit.pendienteId;
+}
+
 export function esFlujoIngresoFactura(estado: TelegramEstado): boolean {
   return meta(estado).flujo === FLUJO_INGRESO_FACTURA && estado.contexto === 'entrada_obra';
 }
@@ -568,7 +573,7 @@ async function iniciarVerificacionFactura(
 
   await setTelegramContexto(supabase, chatId, {
     contexto: 'entrada_obra',
-    pending_factura_id: hit.pendienteId,
+    pending_factura_id: pendingFacturaIdTelegram(hit),
     metadata: {
       flujo: FLUJO_INGRESO_FACTURA,
       paso: 'preview',
