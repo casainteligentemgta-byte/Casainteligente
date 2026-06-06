@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TipoRecepcionCampo } from '@/lib/almacen/recepcionCampoTypes';
+import type { FormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
 
 export const METADATA_TOKEN_KEY = 'recepcion_campo_token';
 
@@ -8,6 +9,10 @@ export type LineaBorradorRecepcionTelegram = {
   nombre: string;
   unidad: string;
   cantidad: number;
+  forma_ingreso: FormaIngresoRecepcion;
+  soporte_storage_path?: string | null;
+  soporte_file_name?: string | null;
+  soporte_mime_type?: string | null;
 };
 
 /** Pestaña de /almacen/recepcion que debe abrirse. */
@@ -81,6 +86,10 @@ type MetadataIngresoLike = {
     material_nombre: string;
     unidad: string;
     cantidad: number;
+    forma_ingreso?: FormaIngresoRecepcion;
+    soporte_storage_path?: string;
+    soporte_file_name?: string;
+    soporte_mime_type?: string;
   }>;
   soporte_storage_path?: string;
   soporte_file_name?: string;
@@ -104,6 +113,10 @@ export function borradorDesdeEstadoTelegram(
     nombre: String(l.material_nombre ?? '').trim() || 'Material',
     unidad: String(l.unidad ?? 'UND').trim() || 'UND',
     cantidad: Number(l.cantidad) || 0,
+    forma_ingreso: (l.forma_ingreso ?? 'sin_nota') as FormaIngresoRecepcion,
+    soporte_storage_path: l.soporte_storage_path?.trim() || null,
+    soporte_file_name: l.soporte_file_name?.trim() || null,
+    soporte_mime_type: l.soporte_mime_type?.trim() || null,
   }));
 
   return {

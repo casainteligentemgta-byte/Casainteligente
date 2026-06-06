@@ -18,6 +18,13 @@ import {
   vistaDesdeFlujoTelegram,
 } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { LineaRecepcionCampoInput } from '@/lib/almacen/recepcionCampoTypes';
+import {
+  ETIQUETA_FORMA_INGRESO,
+  FORMAS_INGRESO_RECEPCION,
+  esFormaIngresoRecepcion,
+  formaIngresoDefaultDesdeFlujoTelegram,
+  type FormaIngresoRecepcion,
+} from '@/lib/almacen/formaIngresoRecepcion';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
@@ -49,6 +56,8 @@ export type PasoIngresoManual =
   | 'material_nuevo'
   | 'material_nuevo_unidad'
   | 'cantidad'
+  | 'forma_ingreso'
+  | 'foto_linea'
   | 'mas_lineas'
   | 'foto'
   | 'observacion'
@@ -59,6 +68,10 @@ export type LineaIngresoManualDraft = {
   material_nombre: string;
   unidad: string;
   cantidad: number;
+  forma_ingreso: FormaIngresoRecepcion;
+  soporte_storage_path?: string;
+  soporte_file_name?: string;
+  soporte_mime_type?: string;
 };
 
 export type MetadataIngresoManual = {
@@ -73,6 +86,10 @@ export type MetadataIngresoManual = {
   draft_material_nombre?: string;
   draft_unidad?: string;
   draft_cantidad?: number;
+  draft_forma_ingreso?: FormaIngresoRecepcion;
+  draft_soporte_storage_path?: string;
+  draft_soporte_file_name?: string;
+  draft_soporte_mime_type?: string;
   /** Nombre tecleado antes de elegir unidad (material nuevo). */
   draft_nombre_nuevo?: string;
   soporte_storage_path?: string;
@@ -192,40 +209,28 @@ async function patchMeta(
   });
 }
 
-const MENSAJE_INICIO_MANUAL =
-  '📥 <b>Ingreso sin nota / manual</b> (<code>/ingresosinnota</code> · <code>/ingresomanual</code>)\n\n' +
-  'Pantalla: <b>Recepción de materiales</b> (pestaña Ingreso manual).\n\n' +
-  '1️⃣ Elige la obra.\n' +
-  '2️⃣ Elige el almacén de ingreso.\n' +
+const FLUJO_PASOS_UNIFICADO =
+  '1️⃣ Elige la <b>obra</b>.\n' +
+  '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
   '3️⃣ Escribe el <b>proveedor</b>.\n' +
-  '4️⃣ Referencia del movimiento (vale, guía; <code>S/N</code> si no hay).\n' +
-  '5️⃣ Material (catálogo o <b>nuevo</b>), cantidad; repite si hay más líneas.\n' +
-  '6️⃣ Soporte fotográfico (opcional).\n' +
-  '7️⃣ Observaciones y confirmar.\n\n' +
+  '4️⃣ <b>Nº o referencia</b> de factura o nota (<code>S/N</code> si no hay).\n' +
+  '5️⃣ <b>Material</b> (catálogo o nuevo), <b>cantidad</b>, <b>forma de ingreso</b> y <b>foto</b> por línea; repite si hay más.\n' +
+  '6️⃣ <b>Observaciones</b> (opcional).\n' +
+  '7️⃣ <b>Confirmar</b> ingreso.\n\n' +
   '<code>/cancelar</code> para abortar.';
+
+const MENSAJE_INICIO_MANUAL =
+  '📥 <b>Ingreso sin nota</b> (<code>/ingresosinnota</code> · <code>/ingreso</code>)\n\n' +
+  FLUJO_PASOS_UNIFICADO;
 
 const MENSAJE_INICIO_NOTA =
-  '📥 <b>Ingreso por nota de entrega</b> (<code>/ingresonotas</code>)\n\n' +
-  '1️⃣ Elige el <b>proyecto</b> (obra).\n' +
-  '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>nombre del proveedor</b>.\n' +
-  '4️⃣ <b>Número de nota</b> o referencia del documento.\n' +
-  '5️⃣ <b>Artículo</b>: elige del catálogo o <b>agrega material nuevo</b>, indica cantidad; repite si hay más líneas.\n' +
-  '6️⃣ <b>Memoria fotográfica</b> opcional (varias fotos).\n' +
-  '7️⃣ <b>Observaciones</b> y pulsa <b>Registrar ingreso y actualizar stock</b>.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  '📥 <b>Ingreso con nota de entrega</b> (<code>/ingresonotas</code> · <code>/ingreso</code>)\n\n' +
+  FLUJO_PASOS_UNIFICADO;
 
 const MENSAJE_INICIO_EMERGENCIA =
-  '🚨 <b>Emergencia (sin papeles)</b> (<code>/ingresoemergencia</code>)\n\n' +
-  'Ingreso urgente <b>sin factura ni nota fiscal</b> — solo para material recibido de inmediato.\n\n' +
-  '1️⃣ Elige el <b>proyecto</b> (obra).\n' +
-  '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b> (o quien entrega; use <code>No identificado</code> si aplica).\n' +
-  '4️⃣ <b>Referencia</b> del movimiento (guía, vale, ticket; <code>S/N</code> si no hay).\n' +
-  '5️⃣ <b>Artículo</b>: catálogo o <b>material nuevo</b>, cantidad; repite si hay más líneas.\n' +
-  '6️⃣ <b>Memoria fotográfica</b> opcional (material, vehículo, comprobante informal).\n' +
-  '7️⃣ <b>Observaciones</b> y pulsa <b>Registrar ingreso y actualizar stock</b>.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  '🚨 <b>Ingreso de emergencia</b> (<code>/ingresoemergencia</code>)\n\n' +
+  'Material recibido sin papeles completos.\n\n' +
+  FLUJO_PASOS_UNIFICADO;
 
 function mensajeInicioFlujo(flujo: FlujoRecepcionCampoTelegram): string {
   if (flujo === FLUJO_NOTA_ENTREGA) return MENSAJE_INICIO_NOTA;
@@ -554,6 +559,55 @@ async function enviarPickerMaterialIngresoManual(
   );
 }
 
+async function preguntarFormaIngresoLinea(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  const def = formaIngresoDefaultDesdeFlujoTelegram(meta(estado).flujo);
+  await patchMeta(supabase, chatId, estado, { paso: 'forma_ingreso', draft_forma_ingreso: def });
+
+  const fila1 = FORMAS_INGRESO_RECEPCION.slice(0, 2).map((f) => ({
+    text: `${f === def ? '✓ ' : ''}${ETIQUETA_FORMA_INGRESO[f]}`,
+    callback_data: `${PREFIX}forma:${f}`,
+  }));
+  const fila2 = FORMAS_INGRESO_RECEPCION.slice(2).map((f) => ({
+    text: `${f === def ? '✓ ' : ''}${ETIQUETA_FORMA_INGRESO[f]}`,
+    callback_data: `${PREFIX}forma:${f}`,
+  }));
+
+  await sendTelegramMessage(
+    chatId,
+    `📋 <b>Forma de ingreso</b> de esta línea\n<i>(auditoría puede pedir factura o conciliar después)</i>`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [fila1, fila2] } },
+  );
+}
+
+async function preguntarFotoLinea(
+  supabase: SupabaseClient,
+  chatId: string,
+  materialNombre: string,
+): Promise<void> {
+  const estado = await getTelegramEstado(supabase, chatId);
+  await patchMeta(supabase, chatId, estado, { paso: 'foto_linea' });
+  await sendTelegramMessage(
+    chatId,
+    `📷 <b>Foto de soporte</b> — «${truncar(materialNombre, 40)}»\n\n` +
+      'Envía una foto de la nota parcial, etiqueta o material recibido.',
+    {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '⏭ Omitir foto', callback_data: `${PREFIX}fotoln:skip` },
+            { text: '✔ Continuar sin más fotos', callback_data: `${PREFIX}fotoln:done` },
+          ],
+        ],
+      },
+    },
+  );
+}
+
 async function preguntarMasLineas(supabase: SupabaseClient, chatId: string, nLineas: number): Promise<void> {
   await patchMeta(
     supabase,
@@ -605,7 +659,11 @@ async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): 
 
 function resumenLineas(lineas: LineaIngresoManualDraft[]): string {
   return lineas
-    .map((l, i) => `${i + 1}. ${l.material_nombre} × ${l.cantidad} ${l.unidad}`)
+    .map(
+      (l, i) =>
+        `${i + 1}. ${l.material_nombre} × ${l.cantidad} ${l.unidad} · ${ETIQUETA_FORMA_INGRESO[l.forma_ingreso]}` +
+        (l.soporte_storage_path ? ' 📷' : ''),
+    )
     .join('\n');
 }
 
@@ -623,9 +681,8 @@ async function enviarConfirmacion(
     f === FLUJO_EMERGENCIA ? '📋 <b>Confirmar emergencia (sin papeles)</b>\n'
     : f === FLUJO_NOTA_ENTREGA ? '📋 <b>Confirmar nota de entrega</b>\n'
     : '📋 <b>Confirmar ingreso manual</b>\n';
-  const etiquetaDoc =
-    f === FLUJO_EMERGENCIA || f === FLUJO_NOTA_ENTREGA ? 'Nota' : 'Nota/ref.';
-  const nFotos = m.fotos_storage_paths?.length ?? (m.soporte_storage_path ? 1 : 0);
+  const etiquetaDoc = 'Factura/nota';
+  const nFotosLinea = lineas.filter((l) => l.soporte_storage_path).length;
   const stockHint =
     f === FLUJO_NOTA_ENTREGA || f === FLUJO_EMERGENCIA
       ? '\n\n<i>Al confirmar se suma el stock en el almacén elegido.</i>'
@@ -638,7 +695,7 @@ async function enviarConfirmacion(
     `📄 ${etiquetaDoc}: ${m.num_doc ?? 'S/N'}\n\n` +
     resumenLineas(lineas) +
     (m.observaciones?.trim() ? `\n\n📝 ${m.observaciones.trim()}` : '') +
-    (nFotos > 0 ? `\n\n📷 ${nFotos} foto(s) de soporte` : '') +
+    (nFotosLinea > 0 ? `\n\n📷 ${nFotosLinea} línea(s) con foto de soporte` : '') +
     stockHint;
 
   const textoBotonConfirmar =
@@ -673,6 +730,14 @@ async function finalizarLineaDraft(
     material_nombre: m.draft_material_nombre,
     unidad: m.draft_unidad ?? 'UND',
     cantidad: m.draft_cantidad,
+    forma_ingreso: m.draft_forma_ingreso ?? formaIngresoDefaultDesdeFlujoTelegram(m.flujo),
+    ...(m.draft_soporte_storage_path
+      ? {
+          soporte_storage_path: m.draft_soporte_storage_path,
+          soporte_file_name: m.draft_soporte_file_name,
+          soporte_mime_type: m.draft_soporte_mime_type,
+        }
+      : {}),
   };
 
   const lineas = [...(m.lineas ?? []), linea];
@@ -683,6 +748,10 @@ async function finalizarLineaDraft(
     draft_material_nombre: undefined,
     draft_unidad: undefined,
     draft_cantidad: undefined,
+    draft_forma_ingreso: undefined,
+    draft_soporte_storage_path: undefined,
+    draft_soporte_file_name: undefined,
+    draft_soporte_mime_type: undefined,
   });
   await preguntarMasLineas(supabase, chatId, lineas.length);
 }
@@ -711,6 +780,10 @@ async function registrarIngresoManual(
     unidad: l.unidad,
     descripcion: l.material_nombre,
     observaciones: `Origen: ${params.origenLabel}`,
+    forma_ingreso: l.forma_ingreso,
+    soporte_storage_path: l.soporte_storage_path ?? null,
+    soporte_file_name: l.soporte_file_name ?? null,
+    soporte_mime_type: l.soporte_mime_type ?? null,
   }));
 
   const { data: recepcionId, error: rpcErr } = await supabase.rpc('ci_registrar_ingreso_manual_campo', {
@@ -910,7 +983,31 @@ export async function manejarCallbackIngresoManual(
       );
       return true;
     }
-    await preguntarFotoOpcional(supabase, params.chatId);
+    await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
+    await sendTelegramMessage(
+      params.chatId,
+      '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):',
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
+
+  if (data.startsWith('forma:')) {
+    const formaRaw = data.slice(6);
+    if (!esFormaIngresoRecepcion(formaRaw)) {
+      await answerCallbackQuery(params.callbackId, 'Forma no válida', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, ETIQUETA_FORMA_INGRESO[formaRaw].slice(0, 40));
+    await patchMeta(supabase, params.chatId, estado, { draft_forma_ingreso: formaRaw });
+    const nombreMat = m.draft_material_nombre ?? 'Material';
+    await preguntarFotoLinea(supabase, params.chatId, nombreMat);
+    return true;
+  }
+
+  if (data === 'fotoln:skip' || data === 'fotoln:done') {
+    await answerCallbackQuery(params.callbackId);
+    await finalizarLineaDraft(supabase, params.chatId, await getTelegramEstado(supabase, params.chatId));
     return true;
   }
 
@@ -1008,7 +1105,6 @@ export async function manejarTextoIngresoManual(
       );
       return true;
     }
-    const guiado = esIngresoGuiadoObra(estado);
     await patchMeta(supabase, chatId, estado, {
       paso: 'num_doc',
       proveedor_nombre: trimmed,
@@ -1016,24 +1112,17 @@ export async function manejarTextoIngresoManual(
       telegram_username: username ?? null,
     });
     const promptNum =
-      esEmergenciaIngreso(estado)
-        ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe la <b>referencia</b> del movimiento (guía, vale, ticket; <code>S/N</code> si no hay):`
-        : guiado
-          ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe el <b>número de la nota de entrega</b> (use <code>S/N</code> si no tiene):`
-          : `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escriba el <b>Nº de nota</b> o referencia (use <code>S/N</code> si no aplica):`;
+      `🏢 Proveedor: <b>${trimmed}</b>\n\n` +
+      `📄 Escribe el <b>número o referencia de factura o nota</b> (<code>S/N</code> si no hay):`;
     await sendTelegramMessage(chatId, promptNum, { parse_mode: 'HTML' });
     return true;
   }
 
   if (paso === 'num_doc') {
     const numDoc = trimmed || 'S/N';
-    const guiado = esIngresoGuiadoObra(estado);
     await patchMeta(supabase, chatId, estado, { paso: 'material', num_doc: numDoc });
-    const promptMat = esEmergenciaIngreso(estado)
-      ? `📄 Referencia: <b>${numDoc}</b>\n\nElige el <b>primer artículo</b> del catálogo o crea uno nuevo:`
-      : guiado
-        ? `📄 Nota: <b>${numDoc}</b>\n\nElige el <b>primer artículo</b> del catálogo o crea uno nuevo:`
-        : `📄 Referencia: <b>${numDoc}</b>\n\nElige el primer material:`;
+    const promptMat =
+      `📄 Ref.: <b>${numDoc}</b>\n\nElige el <b>material</b> del catálogo o crea uno nuevo:`;
     await sendTelegramMessage(chatId, promptMat, { parse_mode: 'HTML' });
     if (estado.proyecto_id) {
       await enviarPickerMaterialIngresoManual(supabase, chatId, estado.proyecto_id);
@@ -1096,7 +1185,7 @@ export async function manejarTextoIngresoManual(
       return true;
     }
     await patchMeta(supabase, chatId, estado, { draft_cantidad: qty });
-    await finalizarLineaDraft(supabase, chatId, await getTelegramEstado(supabase, chatId));
+    await preguntarFormaIngresoLinea(supabase, chatId, await getTelegramEstado(supabase, chatId));
     return true;
   }
 
@@ -1109,6 +1198,22 @@ export async function manejarTextoIngresoManual(
       telegram_username: username ?? meta(estado).telegram_username,
     });
     await enviarConfirmacion(supabase, chatId, await getTelegramEstado(supabase, chatId));
+    return true;
+  }
+
+  if (paso === 'foto_linea') {
+    await sendTelegramMessage(
+      chatId,
+      'Envíe la foto de esta línea o pulse <b>Omitir foto</b> en el mensaje anterior.',
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
+
+  if (paso === 'forma_ingreso') {
+    await sendTelegramMessage(chatId, 'Elija la <b>forma de ingreso</b> con los botones de arriba.', {
+      parse_mode: 'HTML',
+    });
     return true;
   }
 
@@ -1139,6 +1244,36 @@ export async function manejarFotoIngresoManual(params: {
   if (!esFlujoIngresoManual(estado)) return false;
 
   const paso = meta(estado).paso;
+  if (paso === 'foto_linea') {
+    if (!estado.proyecto_id) return false;
+
+    const storagePath = `recepciones-campo/telegram-${params.chatId}/${Date.now()}.${params.ext}`;
+    const { error } = await params.supabase.storage
+      .from(PROCUREMENT_DOCUMENTS_BUCKET)
+      .upload(storagePath, params.buffer, { contentType: params.mimeType, upsert: false });
+
+    if (error) {
+      await sendTelegramMessage(params.chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+      return true;
+    }
+
+    await patchMeta(params.supabase, params.chatId, estado, {
+      draft_soporte_storage_path: storagePath,
+      draft_soporte_file_name: params.fileName ?? `telegram-linea.${params.ext}`,
+      draft_soporte_mime_type: params.mimeType,
+      telegram_user_id: params.userId,
+      telegram_username: params.username ?? null,
+    });
+
+    await sendTelegramMessage(params.chatId, '✅ Foto guardada para esta línea.', { parse_mode: 'HTML' });
+    await finalizarLineaDraft(
+      params.supabase,
+      params.chatId,
+      await getTelegramEstado(params.supabase, params.chatId),
+    );
+    return true;
+  }
+
   if (paso !== 'foto' && paso !== 'observacion') return false;
   if (!estado.proyecto_id) return false;
 

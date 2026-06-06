@@ -1,3 +1,5 @@
+import type { FormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
+
 export type TipoRecepcionCampo = 'nota_entrega' | 'emergencia';
 
 export type LineaRecepcionCampoInput = {
@@ -6,6 +8,10 @@ export type LineaRecepcionCampoInput = {
   unidad?: string;
   descripcion?: string;
   observaciones?: string;
+  forma_ingreso?: FormaIngresoRecepcion;
+  soporte_storage_path?: string | null;
+  soporte_file_name?: string | null;
+  soporte_mime_type?: string | null;
 };
 
 export type PayloadRecepcionManualApi = {

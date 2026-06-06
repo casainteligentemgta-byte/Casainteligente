@@ -32,6 +32,12 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
 import type { BorradorRecepcionTelegramPayload } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { LineaRecepcionCampoInput, TipoRecepcionCampo } from '@/lib/almacen/recepcionCampoTypes';
+import {
+  ETIQUETA_FORMA_INGRESO,
+  FORMAS_INGRESO_RECEPCION,
+  formaIngresoDefaultDesdeVista,
+  type FormaIngresoRecepcion,
+} from '@/lib/almacen/formaIngresoRecepcion';
 import { createClient } from '@/lib/supabase/client';
 import { uploadRecepcionCampoDocument } from '@/lib/almacen/uploadRecepcionCampoDocument';
 
@@ -58,6 +64,11 @@ type LineaForm = {
   nombre: string;
   unidad: string;
   cantidad: string;
+  forma_ingreso: FormaIngresoRecepcion;
+  soporteFile: File | null;
+  soporte_storage_path?: string | null;
+  soporte_file_name?: string | null;
+  soporte_mime_type?: string | null;
 };
 
 const modoBtn =
@@ -167,6 +178,11 @@ export default function RecepcionCampoClient() {
   const tipoManual: TipoRecepcionCampo =
     tipoIngreso === 'emergencia' ? 'emergencia' : 'nota_entrega';
 
+  const formaIngresoDefault = useMemo(
+    () => formaIngresoDefaultDesdeVista(vista === 'emergencia' ? 'emergencia' : vista === 'nota_entrega' ? 'nota_entrega' : 'ingreso_manual'),
+    [vista],
+  );
+
   useEffect(() => {
     void loadCatalogoProyectosApp(supabase).then(({ proyectos: lista }) => {
       if (lista.length) setProyectos(lista.map((r) => ({ id: r.id, nombre: r.nombre })));
@@ -216,6 +232,11 @@ export default function RecepcionCampoClient() {
             nombre: l.nombre,
             unidad: l.unidad,
             cantidad: String(l.cantidad),
+            forma_ingreso: l.forma_ingreso ?? formaIngresoDefault,
+            soporteFile: null,
+            soporte_storage_path: l.soporte_storage_path ?? null,
+            soporte_file_name: l.soporte_file_name ?? null,
+            soporte_mime_type: l.soporte_mime_type ?? null,
           })),
         );
         toast.success('Datos cargados desde Telegram. Revise y registre aquí o confirme en el bot.');
@@ -289,6 +310,8 @@ export default function RecepcionCampoClient() {
           nombre: m.name,
           unidad: m.unit,
           cantidad: qtyStr,
+          forma_ingreso: formaIngresoDefault,
+          soporteFile: null,
         },
       ];
     });
@@ -426,20 +449,6 @@ export default function RecepcionCampoClient() {
       return;
     }
 
-    const lineasPayload: LineaRecepcionCampoInput[] = lineas
-      .map((l) => ({
-        material_id: l.material_id,
-        cantidad: Number(l.cantidad.replace(',', '.')),
-        unidad: l.unidad,
-        descripcion: l.nombre,
-      }))
-      .filter((l) => Number.isFinite(l.cantidad) && l.cantidad > 0);
-
-    if (!lineasPayload.length) {
-      toast.error('Agregue materiales con cantidad válida.');
-      return;
-    }
-
     await runLocked(async () => {
       const draftId = crypto.randomUUID();
       let soporte:
@@ -453,6 +462,46 @@ export default function RecepcionCampoClient() {
           toast.error(e instanceof Error ? e.message : 'No se pudo subir el soporte fotográfico');
           return;
         }
+      }
+
+      const lineasPayload: LineaRecepcionCampoInput[] = [];
+      for (const l of lineas) {
+        const cantidad = Number(l.cantidad.replace(',', '.'));
+        if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
+
+        let soportePath = l.soporte_storage_path ?? null;
+        let soporteName = l.soporte_file_name ?? null;
+        let soporteMime = l.soporte_mime_type ?? null;
+
+        if (l.soporteFile) {
+          try {
+            const up = await uploadRecepcionCampoDocument(supabase, `${draftId}-${l.key}`, l.soporteFile);
+            soportePath = up.path;
+            soporteName = up.fileName;
+            soporteMime = up.mimeType;
+          } catch (e) {
+            toast.error(
+              e instanceof Error ? e.message : `No se pudo subir foto de «${l.nombre}»`,
+            );
+            return;
+          }
+        }
+
+        lineasPayload.push({
+          material_id: l.material_id,
+          cantidad,
+          unidad: l.unidad,
+          descripcion: l.nombre,
+          forma_ingreso: l.forma_ingreso,
+          soporte_storage_path: soportePath,
+          soporte_file_name: soporteName,
+          soporte_mime_type: soporteMime,
+        });
+      }
+
+      if (!lineasPayload.length) {
+        toast.error('Agregue materiales con cantidad válida.');
+        return;
       }
 
       const origenObs = etiquetaOrigenRecepcion(vista);
@@ -699,7 +748,7 @@ export default function RecepcionCampoClient() {
 
                 <label className="block">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                    Nº nota / referencia
+                    Nº factura o nota / referencia
                   </span>
                   <input
                     value={numDoc}
@@ -801,19 +850,25 @@ export default function RecepcionCampoClient() {
               </div>
 
               <p className="text-[11px] font-bold text-zinc-600">
-                Puede agregar varios artículos a la nota. Si el material no está en la lista, use
-                «Agregar material nuevo a la obra».
+                Obra → almacén → proveedor → referencia → material, cantidad, forma de ingreso y foto por
+                línea. Repita si hay más artículos.
               </p>
 
               {lineas.length > 0 ? (
                 <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-[#0A0A0F]">
-                  <div className="hidden border-b border-white/10 bg-white/[0.03] px-3 py-2 sm:grid sm:grid-cols-[2.5rem_minmax(0,1fr)_9rem_auto] sm:gap-3 sm:px-4">
+                  <div className="hidden border-b border-white/10 bg-white/[0.03] px-3 py-2 sm:grid sm:grid-cols-[2.5rem_minmax(0,1fr)_9rem_10rem_8rem_auto] sm:gap-3 sm:px-4">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">#</span>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                       Material
                     </span>
                     <span className="text-center text-[10px] font-bold uppercase tracking-widest text-[#FF9500]">
                       Cantidad
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      Forma ingreso
+                    </span>
+                    <span className="text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      Foto
                     </span>
                     <span className="text-right text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                       Acciones
@@ -876,7 +931,7 @@ export default function RecepcionCampoClient() {
                               </div>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_9rem_auto] sm:items-center sm:gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_9rem_10rem_8rem_auto] sm:items-center sm:gap-3">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-xs font-black text-zinc-500">
                                 {idx + 1}
                               </div>
@@ -912,6 +967,66 @@ export default function RecepcionCampoClient() {
                                   className={`${inputClass} w-full py-3 text-center text-lg font-black sm:py-3 sm:text-xl`}
                                 />
                               </label>
+                              <div className="min-w-0">
+                                <span className="mb-1.5 block text-[10px] font-bold uppercase text-zinc-500 sm:sr-only">
+                                  Forma de ingreso
+                                </span>
+                                <Select
+                                  value={l.forma_ingreso}
+                                  onValueChange={(v) =>
+                                    setLineas((prev) =>
+                                      prev.map((x) =>
+                                        x.key === l.key
+                                          ? { ...x, forma_ingreso: v as FormaIngresoRecepcion }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                  disabled={isSubmitting}
+                                >
+                                  <SelectTrigger className={`${selectClass} h-11 text-xs`} />
+                                  <SelectContent>
+                                    {FORMAS_INGRESO_RECEPCION.map((f) => (
+                                      <SelectItem key={f} value={f}>
+                                        {ETIQUETA_FORMA_INGRESO[f]}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex flex-col items-start gap-1 sm:items-center">
+                                <label className="cursor-pointer rounded-lg border border-white/10 px-2 py-1.5 text-[10px] font-bold text-zinc-300 hover:border-[#FF9500]/40">
+                                  <Camera className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+                                  {l.soporteFile || l.soporte_storage_path ? 'Cambiar' : 'Adjuntar'}
+                                  <input
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    className="sr-only"
+                                    disabled={isSubmitting}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0] ?? null;
+                                      setLineas((prev) =>
+                                        prev.map((x) =>
+                                          x.key === l.key
+                                            ? {
+                                                ...x,
+                                                soporteFile: file,
+                                                soporte_storage_path: file ? null : x.soporte_storage_path,
+                                              }
+                                            : x,
+                                        ),
+                                      );
+                                    }}
+                                  />
+                                </label>
+                                {l.soporteFile ? (
+                                  <span className="max-w-[7rem] truncate text-[10px] text-[#FF9500]">
+                                    {l.soporteFile.name}
+                                  </span>
+                                ) : l.soporte_storage_path ? (
+                                  <span className="text-[10px] text-emerald-400/90">📷 Telegram</span>
+                                ) : null}
+                              </div>
                               <div className="flex flex-wrap gap-2 sm:justify-end">
                                 <button
                                   type="button"
@@ -957,8 +1072,12 @@ export default function RecepcionCampoClient() {
             <div className={panelClass}>
               <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500">
                 <Camera className="h-4 w-4 text-[#FF9500]" />
-                Soporte fotográfico
+                Soporte fotográfico general (opcional)
               </h3>
+              <p className="mb-3 text-[11px] text-zinc-500">
+                Cada línea puede llevar su propia foto arriba. Use este adjunto solo si hay un documento
+                único para todo el ingreso.
+              </p>
               <ProcurementDocumentAttach
                 variant="primary"
                 disabled={isSubmitting}

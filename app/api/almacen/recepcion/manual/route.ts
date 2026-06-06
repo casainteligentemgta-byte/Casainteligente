@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { limpiarBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { PayloadRecepcionManualApi } from '@/lib/almacen/recepcionCampoTypes';
+import { esFormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -33,13 +34,21 @@ export async function POST(req: Request) {
 
   const lineasRaw = Array.isArray(body.lineas) ? body.lineas : [];
   const lineas = lineasRaw
-    .map((l) => ({
-      material_id: String(l.material_id ?? '').trim(),
-      cantidad: Number(l.cantidad),
-      unidad: String(l.unidad ?? 'UND').trim() || 'UND',
-      descripcion: String(l.descripcion ?? '').trim(),
-      observaciones: String(l.observaciones ?? '').trim() || null,
-    }))
+    .map((l) => {
+      const formaRaw = String(l.forma_ingreso ?? 'sin_nota').trim();
+      const forma = esFormaIngresoRecepcion(formaRaw) ? formaRaw : 'sin_nota';
+      return {
+        material_id: String(l.material_id ?? '').trim(),
+        cantidad: Number(l.cantidad),
+        unidad: String(l.unidad ?? 'UND').trim() || 'UND',
+        descripcion: String(l.descripcion ?? '').trim(),
+        observaciones: String(l.observaciones ?? '').trim() || null,
+        forma_ingreso: forma,
+        soporte_storage_path: String(l.soporte_storage_path ?? '').trim() || null,
+        soporte_file_name: String(l.soporte_file_name ?? '').trim() || null,
+        soporte_mime_type: String(l.soporte_mime_type ?? '').trim() || null,
+      };
+    })
     .filter((l) => isUuid(l.material_id) && Number.isFinite(l.cantidad) && l.cantidad > 0);
 
   if (!lineas.length) {

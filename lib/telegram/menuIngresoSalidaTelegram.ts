@@ -66,7 +66,7 @@ export async function enviarMenuIngresoTelegram(chatId: string): Promise<void> {
           ],
           [
             {
-              text: '📄 Ingreso con nota de voz',
+              text: '📄 Ingreso con nota de entrega',
               callback_data: callbackMenuIngreso('nota'),
             },
           ],
@@ -152,7 +152,7 @@ async function iniciarSalidaPorOpcion(
 const ETIQUETA_INGRESO: Record<OpcionMenuIngreso, string> = {
   factura: 'Ingreso manual de factura',
   factauto: 'Ingreso automático de factura',
-  nota: 'Ingreso con nota de voz',
+  nota: 'Ingreso con nota de entrega',
   sinnota: 'Ingreso sin nota',
 };
 
