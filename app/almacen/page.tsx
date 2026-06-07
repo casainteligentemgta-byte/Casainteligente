@@ -71,6 +71,8 @@ import {
     type InventarioFilaExport,
     type InventarioShareState,
 } from '@/lib/almacen/inventarioExportShare';
+import CeldaStockEditable from '@/components/almacen/CeldaStockEditable';
+import { resolverUbicacionAjusteStock } from '@/lib/almacen/resolverUbicacionAjusteStock';
 
 const INVENTORY_SELECT = `
   *,
@@ -354,6 +356,8 @@ export default function InventoryMasterPage() {
     >(new Map());
     const [itemsDesdeStock, setItemsDesdeStock] = useState<InventoryItem[]>([]);
     const [cargandoStockUbicacion, setCargandoStockUbicacion] = useState(false);
+    const [ubicacionIdsFiltro, setUbicacionIdsFiltro] = useState<string[]>([]);
+    const [savingStockId, setSavingStockId] = useState<string | null>(null);
     /** Stock agregado de todas las ubicaciones (KPIs sin filtro de almacén). */
     const [stockGlobal, setStockGlobal] = useState<Map<string, StockEnUbicacionResumen>>(new Map());
     const [statFlips, setStatFlips] = useState<Record<StatFlipKey, boolean>>({
@@ -502,6 +506,7 @@ export default function InventoryMasterPage() {
         if (!filterEntidadId && !filterProyectoId && !filterDepositId) {
             setStockPorUbicacion(new Map());
             setItemsDesdeStock([]);
+            setUbicacionIdsFiltro([]);
             return;
         }
 
@@ -540,6 +545,7 @@ export default function InventoryMasterPage() {
                     });
                 }
                 if (cancelled) return;
+                setUbicacionIdsFiltro(ids);
 
                 const ubicacionesFiltro = ubicaciones.filter((u) => ids.includes(u.id));
                 const nombresUbicacionFiltro = ubicacionesFiltro
@@ -818,6 +824,66 @@ export default function InventoryMasterPage() {
             return 0;
         },
         [filtroStockPorUbicacion, stockPorUbicacion, stockGlobal],
+    );
+
+    const actualizarStockLocal = useCallback(
+        (materialId: string, cantidadNueva: number) => {
+            setStockPorUbicacion((prev) => {
+                if (!prev.has(materialId)) return prev;
+                const next = new Map(prev);
+                const row = next.get(materialId);
+                if (row) next.set(materialId, { ...row, cantidad_disponible: cantidadNueva });
+                return next;
+            });
+            setStockGlobal((prev) => {
+                if (!prev.has(materialId)) return prev;
+                const next = new Map(prev);
+                const row = next.get(materialId);
+                if (row) next.set(materialId, { ...row, cantidad_disponible: cantidadNueva });
+                return next;
+            });
+        },
+        [],
+    );
+
+    const guardarStockCuadro = useCallback(
+        async (materialId: string, cantidadNueva: number) => {
+            setSavingStockId(materialId);
+            try {
+                const stockUb = stockPorUbicacion.get(materialId) ?? stockGlobal.get(materialId);
+                const ubicacionId = await resolverUbicacionAjusteStock({
+                    materialId,
+                    stockUb,
+                    ubicacionIdsFiltro,
+                });
+                if (!ubicacionId) {
+                    throw new Error(
+                        'Indique proyecto o almacén en los filtros, o edite el material en detalle.',
+                    );
+                }
+
+                const res = await fetch(
+                    `/api/almacen/inventario/${encodeURIComponent(materialId)}/stock`,
+                    {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ubicacion_id: ubicacionId,
+                            cantidad: cantidadNueva,
+                            notas: 'Ajuste manual desde cuadro de almacén',
+                        }),
+                    },
+                );
+                const data = (await res.json()) as { error?: string; cantidadNueva?: number };
+                if (!res.ok) throw new Error(data.error || 'No se pudo ajustar el stock');
+
+                const qty = Number(data.cantidadNueva ?? cantidadNueva);
+                actualizarStockLocal(materialId, qty);
+            } finally {
+                setSavingStockId(null);
+            }
+        },
+        [actualizarStockLocal, stockPorUbicacion, stockGlobal, ubicacionIdsFiltro],
     );
 
     const filteredItems = useMemo(() => {
@@ -1783,7 +1849,7 @@ export default function InventoryMasterPage() {
                             Mostrando {filteredItems.length} de {itemsCatalogo.length} ítems
                             {cargandoStockUbicacion && filtroStockPorUbicacion
                                 ? ' · actualizando stock por almacén…'
-                                : ''}
+                                : ' · edite la columna Stock y pulse Enter para guardar'}
                         </span>
                     </div>
 
@@ -2163,24 +2229,23 @@ export default function InventoryMasterPage() {
                                         </div>
                                     </td>
                                     <td className="p-5 text-right md:text-left">
-                                        <div className="flex flex-col">
-                                            <span className={`text-xl font-black ${stockMostrar <= Number(item.reorder_point)
-                                                ? 'text-red-500'
-                                                : 'text-zinc-100'
-                                                }`}>
-                                                {stockMostrar}
+                                        <CeldaStockEditable
+                                            cantidad={stockMostrar}
+                                            reorderPoint={Number(item.reorder_point)}
+                                            unidad={item.unit}
+                                            saving={savingStockId === item.id}
+                                            onSave={(qty) => guardarStockCuadro(item.id, qty)}
+                                        />
+                                        {filtroPorUbicacionActivo && stockUb ? (
+                                            <span className="text-[10px] font-black text-emerald-500/90 uppercase mt-1 block">
+                                                En almacén filtrado
                                             </span>
-                                            {filtroPorUbicacionActivo && stockUb ? (
-                                                <span className="text-[10px] font-black text-emerald-500/90 uppercase">
-                                                    En almacén filtrado
-                                                </span>
-                                            ) : null}
-                                            {!filtroPorUbicacionActivo && Number(item.stock_quarantine) > 0 && (
-                                                <span className="text-[10px] font-black text-amber-500 uppercase">
-                                                    + {item.stock_quarantine} Tránsito
-                                                </span>
-                                            )}
-                                        </div>
+                                        ) : null}
+                                        {!filtroPorUbicacionActivo && Number(item.stock_quarantine) > 0 ? (
+                                            <span className="text-[10px] font-black text-amber-500 uppercase mt-1 block">
+                                                + {item.stock_quarantine} Tránsito
+                                            </span>
+                                        ) : null}
                                     </td>
                                     <td className="p-5">
                                         <div className="font-bold text-zinc-300">

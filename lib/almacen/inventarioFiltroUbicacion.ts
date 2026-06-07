@@ -8,6 +8,8 @@ import type { UbicacionInventario } from '@/types/inventario-obra';
 export type StockEnUbicacionResumen = {
   cantidad_disponible: number;
   ubicacion_nombres: string[];
+  /** Ubicaciones inv_ubicaciones donde hay stock de este material. */
+  ubicacion_ids: string[];
   /** Proyecto(s) de obra según inv_ubicaciones / stock físico (no solo catálogo). */
   proyecto_ids: string[];
   proyecto_nombres: string[];
@@ -19,6 +21,7 @@ export function crearStockResumenVacio(): StockEnUbicacionResumen {
   return {
     cantidad_disponible: 0,
     ubicacion_nombres: [],
+    ubicacion_ids: [],
     proyecto_ids: [],
     proyecto_nombres: [],
     deposit_ids: [],
@@ -57,6 +60,7 @@ export function fusionarFilaEnResumenStock(
   opts: {
     cantidad: number;
     ubicacionNombre: string;
+    ubicacionId?: string | null;
     proyectoId?: string | null;
     proyectoNombre?: string | null;
     depositId?: string | null;
@@ -65,6 +69,10 @@ export function fusionarFilaEnResumenStock(
   const nombreUb = opts.ubicacionNombre.trim() || 'Almacén';
   const prev = map.get(materialId) ?? crearStockResumenVacio();
   prev.cantidad_disponible += opts.cantidad;
+  const ubId = opts.ubicacionId?.trim();
+  if (ubId && !prev.ubicacion_ids.includes(ubId)) {
+    prev.ubicacion_ids.push(ubId);
+  }
   if (!prev.ubicacion_nombres.includes(nombreUb)) {
     prev.ubicacion_nombres.push(nombreUb);
   }
@@ -369,6 +377,7 @@ const SELECT_STOCK_FILTRO = `
 `;
 
 type UbicacionStockRow = {
+  id?: string;
   nombre?: string;
   deposit_id?: string | null;
   ci_proyecto_id?: string | null;
@@ -377,14 +386,22 @@ type UbicacionStockRow = {
 
 function parseUbicacionStockRow(
   raw: UbicacionStockRow | UbicacionStockRow[] | null | undefined,
-): { nombre: string; proyectoId?: string; proyectoNombre?: string; depositId?: string } {
+): {
+  ubicacionId?: string;
+  nombre: string;
+  proyectoId?: string;
+  proyectoNombre?: string;
+  depositId?: string;
+} {
   const ub = Array.isArray(raw) ? raw[0] : raw;
   const proyRaw = ub?.proyecto;
   const proy = Array.isArray(proyRaw) ? proyRaw[0] : proyRaw;
   const proyectoId = String(proy?.id ?? ub?.ci_proyecto_id ?? '').trim() || undefined;
   const proyectoNombre = String(proy?.nombre ?? '').trim() || undefined;
   const depositId = String(ub?.deposit_id ?? '').trim() || undefined;
+  const ubicacionId = String(ub?.id ?? '').trim() || undefined;
   return {
+    ubicacionId,
     nombre: String(ub?.nombre ?? 'Almacén').trim() || 'Almacén',
     proyectoId,
     proyectoNombre,
@@ -430,6 +447,7 @@ export async function cargarStockPorUbicaciones(
         fusionarFilaEnResumenStock(map, materialId, {
           cantidad: qty,
           ubicacionNombre: 'Almacén',
+          ubicacionId: String(row.ubicacion_id ?? '').trim() || null,
         });
       }
       continue;
@@ -447,6 +465,7 @@ export async function cargarStockPorUbicaciones(
       fusionarFilaEnResumenStock(map, materialId, {
         cantidad: qty,
         ubicacionNombre: ub.nombre,
+        ubicacionId: ub.ubicacionId,
         proyectoId: ub.proyectoId,
         proyectoNombre: ub.proyectoNombre,
         depositId: ub.depositId,
