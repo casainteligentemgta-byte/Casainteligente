@@ -8,8 +8,14 @@ import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObr
 import { normalizarCodigoUnidad, UNIDADES_MEDIDA_DEFAULT } from '@/lib/almacen/unidadesMedidaDefault';
 import {
   crearMaterialParaLineaCompra,
+  actualizarMaterialExistenteCompra,
   resolverMaterialParaLineaCompra,
 } from '@/lib/almacen/resolverMaterialParaCompra';
+import {
+  asegurarCategoriasCompraSugeridas,
+  buscarCategoriaPorId,
+} from '@/lib/almacen/categoriasMaterialCompra';
+import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import {
   baseUrlApp,
@@ -62,6 +68,7 @@ export type PasoIngresoManual =
   | 'material'
   | 'material_nuevo'
   | 'material_nuevo_unidad'
+  | 'categoria'
   | 'cantidad'
   | 'forma_ingreso'
   | 'foto_linea'
@@ -76,6 +83,8 @@ export type LineaIngresoManualDraft = {
   unidad: string;
   cantidad: number;
   forma_ingreso: FormaIngresoRecepcion;
+  category_id?: string;
+  category_nombre?: string;
   soporte_storage_path?: string;
   soporte_file_name?: string;
   soporte_mime_type?: string;
@@ -84,6 +93,8 @@ export type LineaIngresoManualDraft = {
 export type MetadataIngresoManual = {
   flujo?: string;
   paso?: PasoIngresoManual;
+  entidad_id?: string;
+  entidad_nombre?: string;
   ubicacion_id?: string;
   ubicacion_nombre?: string;
   proveedor_nombre?: string;
@@ -92,6 +103,8 @@ export type MetadataIngresoManual = {
   draft_material_id?: string;
   draft_material_nombre?: string;
   draft_unidad?: string;
+  draft_category_id?: string;
+  draft_category_nombre?: string;
   draft_cantidad?: number;
   draft_forma_ingreso?: FormaIngresoRecepcion;
   draft_soporte_storage_path?: string;
@@ -183,6 +196,28 @@ function flujoFacturaManualTelegramCompleto(flujo: string | undefined): boolean 
 function flujoUsaHandoffWebTrasAlmacen(flujo: string | undefined): boolean {
   if (flujoFacturaManualTelegramCompleto(flujo)) return false;
   return flujoUsaBorradorWeb(flujo);
+}
+
+function ingresoFacturaPideCategoriaPorLinea(flujo: string | undefined): boolean {
+  return flujoFacturaManualTelegramCompleto(flujo);
+}
+
+async function resolverEntidadMetadataProyecto(
+  supabase: SupabaseClient,
+  proyectoId: string,
+): Promise<{ entidad_id: string | null; entidad_nombre: string | null }> {
+  const entidad_id = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
+  if (!entidad_id) return { entidad_id: null, entidad_nombre: null };
+
+  const { data: ent } = await supabase
+    .from('ci_entidades')
+    .select('nombre, nombre_abreviado')
+    .eq('id', entidad_id)
+    .maybeSingle();
+
+  const entidad_nombre =
+    String(ent?.nombre_abreviado ?? ent?.nombre ?? '').trim() || null;
+  return { entidad_id, entidad_nombre };
 }
 
 function tokenBorradorRecepcion(
@@ -326,7 +361,7 @@ const FLUJO_PASOS_FACTURA_MANUAL =
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
   '3️⃣ Escribe el <b>proveedor</b>.\n' +
   '4️⃣ Escribe el <b>número de factura</b> (<code>S/N</code> si no hay).\n' +
-  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o agregar material nuevo.\n' +
+  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
   '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
   '7️⃣ <b>Agregar más artículos</b> si hace falta.\n' +
   '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
@@ -446,6 +481,7 @@ export async function prepararIngresoManualTrasObra(
   await asegurarUbicacionObra(supabase, proyectoId, nombre);
   const estadoPrev = await getTelegramEstado(supabase, chatId);
   const token = tokenBorradorRecepcion(flujo, estadoPrev);
+  const { entidad_id, entidad_nombre } = await resolverEntidadMetadataProyecto(supabase, proyectoId);
   await setTelegramContexto(supabase, chatId, {
     contexto: 'entrada_obra',
     proyecto_id: proyectoId,
@@ -455,10 +491,11 @@ export async function prepararIngresoManualTrasObra(
       paso: 'almacen',
       lineas: [],
       fotos_storage_paths: [],
+      ...(entidad_id ? { entidad_id, entidad_nombre: entidad_nombre ?? undefined } : {}),
       ...(token ? { recepcion_campo_token: token } : {}),
     },
   });
-  await enviarPickerAlmacenIngresoManual(supabase, chatId, proyectoId, nombre);
+  await enviarPickerAlmacenIngresoManual(supabase, chatId, proyectoId, nombre, 0, entidad_nombre);
 }
 
 export async function prepararNotaEntregaIngresoTrasObra(
@@ -491,6 +528,7 @@ async function enviarPickerAlmacenIngresoManual(
   proyectoId: string,
   nombreObra: string,
   page = 0,
+  entidadNombre?: string | null,
 ): Promise<void> {
   const ubicaciones = await listarUbicacionesParaSelector(supabase, {
     proyectoId,
@@ -534,9 +572,13 @@ async function enviarPickerAlmacenIngresoManual(
     buttons.push(nav);
   }
 
+  const entidadLine = entidadNombre?.trim()
+    ? `\n🏢 Entidad: <b>${escHtml(entidadNombre.trim())}</b>`
+    : '';
+
   await sendTelegramMessage(
     chatId,
-    `🏭 <b>Elige el almacén de ingreso</b>\nObra: <b>${nombreObra}</b>`,
+    `🏭 <b>Elige el almacén de ingreso</b>\nObra: <b>${escHtml(nombreObra)}</b>${entidadLine}`,
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
 }
@@ -555,35 +597,143 @@ async function resolverDepositIdDesdeUbicacion(
   return data?.deposit_id ? String(data.deposit_id) : null;
 }
 
-async function usarMaterialEnDraft(
+async function enviarPickerCategoriaMaterialIngreso(
   supabase: SupabaseClient,
   chatId: string,
-  params: {
-    materialId: string;
-    nombre: string;
-    unidad: string;
-    creado?: boolean;
-  },
+  materialNombre: string,
 ): Promise<void> {
-  await patchMeta(supabase, chatId, await getTelegramEstado(supabase, chatId), {
-    paso: 'cantidad',
-    draft_material_id: params.materialId,
-    draft_material_nombre: params.nombre,
-    draft_unidad: params.unidad,
-    draft_nombre_nuevo: undefined,
-  });
-
   const estado = await getTelegramEstado(supabase, chatId);
-  const esFactura = meta(estado).flujo === FLUJO_INGRESO_FACTURA_MANUAL;
+  await patchMeta(supabase, chatId, estado, { paso: 'categoria' });
+
+  const categorias = await asegurarCategoriasCompraSugeridas(supabase);
+  if (!categorias.length) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ No hay categorías de material configuradas. Créelas en la app web.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = categorias.map((c) => [
+    {
+      text: truncar(c.name, 40),
+      callback_data: `${PREFIX}cat:${c.id}`,
+    },
+  ]);
+
+  await sendTelegramMessage(
+    chatId,
+    `5️⃣ 📂 <b>Categoría del material</b>\n«${escHtml(truncar(materialNombre, 40))}»\n\nElige la categoría:`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
+  );
+}
+
+async function promptCantidadMaterialDraft(
+  supabase: SupabaseClient,
+  chatId: string,
+  params: { nombre: string; unidad: string; creado?: boolean },
+): Promise<void> {
+  const estado = await getTelegramEstado(supabase, chatId);
+  await patchMeta(supabase, chatId, estado, { paso: 'cantidad' });
+
+  const esFactura = ingresoFacturaPideCategoriaPorLinea(meta(estado).flujo);
   const extra = params.creado
     ? '\n\nℹ️ Material nuevo agregado al catálogo de la obra.'
     : '';
 
   await sendTelegramMessage(
     chatId,
-    `${esFactura ? '6️⃣ ' : ''}🔢 Indique la <b>cantidad</b> de «${params.nombre}» (${params.unidad}):${extra}`,
+    `${esFactura ? '6️⃣ ' : ''}🔢 Indique la <b>cantidad</b> de «${escHtml(params.nombre)}» (${escHtml(params.unidad)}):${extra}`,
     { parse_mode: 'HTML' },
   );
+}
+
+async function usarMaterialEnDraft(
+  supabase: SupabaseClient,
+  chatId: string,
+  params: {
+    materialId?: string;
+    nombre: string;
+    unidad: string;
+    creado?: boolean;
+  },
+): Promise<void> {
+  const estado = await getTelegramEstado(supabase, chatId);
+  await patchMeta(supabase, chatId, estado, {
+    draft_material_id: params.materialId,
+    draft_material_nombre: params.nombre,
+    draft_unidad: params.unidad,
+    draft_nombre_nuevo: undefined,
+    draft_category_id: undefined,
+    draft_category_nombre: undefined,
+  });
+
+  if (ingresoFacturaPideCategoriaPorLinea(meta(estado).flujo)) {
+    await enviarPickerCategoriaMaterialIngreso(supabase, chatId, params.nombre);
+    return;
+  }
+
+  await promptCantidadMaterialDraft(supabase, chatId, params);
+}
+
+async function aplicarCategoriaMaterialDraft(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  categoryId: string,
+  categoryNombre: string,
+): Promise<void> {
+  const m = meta(estado);
+  await patchMeta(supabase, chatId, estado, {
+    draft_category_id: categoryId,
+    draft_category_nombre: categoryNombre,
+  });
+
+  const materialId = m.draft_material_id?.trim();
+  if (materialId && m.flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const depositId = await resolverDepositIdDesdeUbicacion(supabase, m.ubicacion_id);
+    await actualizarMaterialExistenteCompra(supabase, materialId, {
+      unitPrice: 0,
+      purchaseDate: hoy,
+      proyectoId: estado.proyecto_id ?? undefined,
+      depositId,
+      categoryId,
+      entidadId: m.entidad_id,
+    });
+  }
+
+  const nombre = m.draft_material_nombre ?? m.draft_nombre_nuevo ?? 'Material';
+  const unidad = m.draft_unidad ?? 'UND';
+  await promptCantidadMaterialDraft(supabase, chatId, { nombre, unidad });
+}
+
+async function asegurarMaterialDraftIdParaCantidad(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<TelegramEstado> {
+  const m = meta(estado);
+  if (m.draft_material_id?.trim()) return estado;
+  if (!m.draft_nombre_nuevo?.trim() || !estado.proyecto_id) return estado;
+
+  const material = await crearOResolverMaterialObra(supabase, {
+    proyectoId: estado.proyecto_id,
+    nombre: m.draft_nombre_nuevo,
+    unidad: m.draft_unidad ?? 'UND',
+    ubicacionId: m.ubicacion_id,
+    entidadId: m.entidad_id,
+    categoryId: m.draft_category_id,
+  });
+
+  await patchMeta(supabase, chatId, estado, {
+    draft_material_id: material.id,
+    draft_material_nombre: material.nombre,
+    draft_unidad: material.unidad,
+    draft_nombre_nuevo: undefined,
+  });
+  return getTelegramEstado(supabase, chatId);
 }
 
 async function crearOResolverMaterialObra(
@@ -593,16 +743,28 @@ async function crearOResolverMaterialObra(
     nombre: string;
     unidad: string;
     ubicacionId?: string;
+    entidadId?: string | null;
+    categoryId?: string | null;
   },
 ): Promise<{ id: string; nombre: string; unidad: string; creado: boolean }> {
   const nombre = params.nombre.trim();
   const unidad = normalizarCodigoUnidad(params.unidad);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const depositId = await resolverDepositIdDesdeUbicacion(supabase, params.ubicacionId);
 
   const existente = await resolverMaterialParaLineaCompra(supabase, {
     description: nombre,
     proyectoId: params.proyectoId,
   });
   if (existente) {
+    await actualizarMaterialExistenteCompra(supabase, existente.id, {
+      unitPrice: 0,
+      purchaseDate: hoy,
+      proyectoId: params.proyectoId,
+      depositId,
+      categoryId: params.categoryId ?? existente.category_id,
+      entidadId: params.entidadId,
+    });
     const { data: row } = await supabase
       .from('global_inventory')
       .select('unit')
@@ -616,8 +778,6 @@ async function crearOResolverMaterialObra(
     };
   }
 
-  const depositId = await resolverDepositIdDesdeUbicacion(supabase, params.ubicacionId);
-  const hoy = new Date().toISOString().slice(0, 10);
   const id = await crearMaterialParaLineaCompra(supabase, {
     descripcion: nombre,
     unidad,
@@ -625,6 +785,8 @@ async function crearOResolverMaterialObra(
     fecha: hoy,
     proyectoId: params.proyectoId,
     depositId,
+    categoryId: params.categoryId,
+    entidadId: params.entidadId,
   });
 
   return { id, nombre, unidad, creado: true };
@@ -816,7 +978,9 @@ function resumenLineas(lineas: LineaIngresoManualDraft[]): string {
   return lineas
     .map(
       (l, i) =>
-        `${i + 1}. ${l.material_nombre} × ${l.cantidad} ${l.unidad} · ${ETIQUETA_FORMA_INGRESO[l.forma_ingreso]}` +
+        `${i + 1}. ${l.material_nombre}` +
+        (l.category_nombre ? ` [${l.category_nombre}]` : '') +
+        ` × ${l.cantidad} ${l.unidad} · ${ETIQUETA_FORMA_INGRESO[l.forma_ingreso]}` +
         (l.soporte_storage_path ? ' 📷' : ''),
     )
     .join('\n');
@@ -848,6 +1012,7 @@ async function enviarConfirmacion(
   const texto =
     tituloConfirm +
     '\n' +
+    (m.entidad_nombre ? `🏢 Entidad: ${m.entidad_nombre}\n` : '') +
     `🏭 Almacén: ${m.ubicacion_nombre ?? '—'}\n` +
     `🏢 Proveedor: ${m.proveedor_nombre ?? '—'}\n` +
     `📄 ${etiquetaDoc}: ${m.num_doc ?? 'S/N'}\n\n` +
@@ -892,6 +1057,12 @@ async function finalizarLineaDraft(
     unidad: m.draft_unidad ?? 'UND',
     cantidad: m.draft_cantidad,
     forma_ingreso: m.draft_forma_ingreso ?? formaIngresoDefaultDesdeFlujoTelegram(m.flujo),
+    ...(m.draft_category_id
+      ? {
+          category_id: m.draft_category_id,
+          category_nombre: m.draft_category_nombre,
+        }
+      : {}),
     ...(m.draft_soporte_storage_path
       ? {
           soporte_storage_path: m.draft_soporte_storage_path,
@@ -910,6 +1081,8 @@ async function finalizarLineaDraft(
     draft_unidad: undefined,
     draft_cantidad: undefined,
     draft_forma_ingreso: undefined,
+    draft_category_id: undefined,
+    draft_category_nombre: undefined,
     draft_soporte_storage_path: undefined,
     draft_soporte_file_name: undefined,
     draft_soporte_mime_type: undefined,
@@ -1010,7 +1183,14 @@ export async function manejarCallbackIngresoManual(
   if (data.startsWith('ubp:')) {
     const page = Number(data.slice(4));
     await answerCallbackQuery(params.callbackId);
-    await enviarPickerAlmacenIngresoManual(supabase, params.chatId, proyectoId, nombreObra, page);
+    await enviarPickerAlmacenIngresoManual(
+      supabase,
+      params.chatId,
+      proyectoId,
+      nombreObra,
+      page,
+      m.entidad_nombre,
+    );
     return true;
   }
 
@@ -1065,9 +1245,24 @@ export async function manejarCallbackIngresoManual(
     await patchMeta(supabase, params.chatId, estado, { paso: 'material_nuevo' });
     await sendTelegramMessage(
       params.chatId,
-      '✏️ Escribe el <b>nombre del material</b> (mín. 2 caracteres).',
+      ingresoFacturaPideCategoriaPorLinea(m.flujo)
+        ? '5️⃣ ✏️ Escribe el <b>nombre del material nuevo</b> (mín. 2 caracteres).'
+        : '✏️ Escribe el <b>nombre del material</b> (mín. 2 caracteres).',
       { parse_mode: 'HTML' },
     );
+    return true;
+  }
+
+  if (data.startsWith('cat:')) {
+    const categoryId = data.slice(4);
+    const categorias = await asegurarCategoriasCompraSugeridas(supabase);
+    const hitCat = buscarCategoriaPorId(categorias, categoryId);
+    if (!hitCat) {
+      await answerCallbackQuery(params.callbackId, 'Categoría no válida', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, truncar(hitCat.name, 40));
+    await aplicarCategoriaMaterialDraft(supabase, params.chatId, estado, hitCat.id, hitCat.name);
     return true;
   }
 
@@ -1091,12 +1286,18 @@ export async function manejarCallbackIngresoManual(
     }
 
     await answerCallbackQuery(params.callbackId, codigoUnidad);
+    if (ingresoFacturaPideCategoriaPorLinea(m.flujo)) {
+      await patchMeta(supabase, params.chatId, estado, { draft_unidad: codigoUnidad });
+      await enviarPickerCategoriaMaterialIngreso(supabase, params.chatId, nombreNuevo);
+      return true;
+    }
     try {
       const material = await crearOResolverMaterialObra(supabase, {
         proyectoId,
         nombre: nombreNuevo,
         unidad: codigoUnidad,
         ubicacionId: m.ubicacion_id,
+        entidadId: m.entidad_id,
       });
       await usarMaterialEnDraft(supabase, params.chatId, {
         materialId: material.id,
@@ -1360,12 +1561,18 @@ export async function manejarTextoIngresoManual(
       });
       return true;
     }
+    if (ingresoFacturaPideCategoriaPorLinea(meta(estado).flujo)) {
+      await patchMeta(supabase, chatId, estado, { draft_unidad: unidad });
+      await enviarPickerCategoriaMaterialIngreso(supabase, chatId, nombreNuevo);
+      return true;
+    }
     try {
       const material = await crearOResolverMaterialObra(supabase, {
         proyectoId: estado.proyecto_id,
         nombre: nombreNuevo,
         unidad,
         ubicacionId: meta(estado).ubicacion_id,
+        entidadId: meta(estado).entidad_id,
       });
       await usarMaterialEnDraft(supabase, chatId, {
         materialId: material.id,
@@ -1383,6 +1590,15 @@ export async function manejarTextoIngresoManual(
     return true;
   }
 
+  if (paso === 'categoria') {
+    await sendTelegramMessage(
+      chatId,
+      'Elige la <b>categoría del material</b> con los botones del mensaje anterior.',
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
+
   if (paso === 'cantidad') {
     const qty = Number(trimmed.replace(',', '.'));
     if (!Number.isFinite(qty) || qty <= 0) {
@@ -1392,10 +1608,12 @@ export async function manejarTextoIngresoManual(
       return true;
     }
     await patchMeta(supabase, chatId, estado, { draft_cantidad: qty });
-    const estadoQty = await getTelegramEstado(supabase, chatId);
+    let estadoQty = await getTelegramEstado(supabase, chatId);
     const flujoQty = flujoActivo(estadoQty);
     if (flujoQty === FLUJO_INGRESO_FACTURA_MANUAL) {
+      estadoQty = await asegurarMaterialDraftIdParaCantidad(supabase, chatId, estadoQty);
       await patchMeta(supabase, chatId, estadoQty, {
+        draft_cantidad: qty,
         draft_forma_ingreso: formaIngresoDefaultDesdeFlujoTelegram(flujoQty),
       });
       await finalizarLineaDraft(

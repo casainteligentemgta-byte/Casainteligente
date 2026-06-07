@@ -96,6 +96,7 @@ export async function actualizarMaterialExistenteCompra(
     depositId?: string | null;
     sapCode?: string;
     categoryId?: string | null;
+    entidadId?: string | null;
   },
 ): Promise<void> {
   const patch: Record<string, unknown> = {
@@ -111,6 +112,7 @@ export async function actualizarMaterialExistenteCompra(
   const sap = opts.sapCode?.trim();
   if (sap) patch.sap_code = sap;
   if (opts.categoryId) patch.category_id = opts.categoryId;
+  if (opts.entidadId) patch.entidad_id = opts.entidadId;
 
   const { error } = await supabase.from('global_inventory').update(patch).eq('id', materialId);
   if (error) throw error;
@@ -128,6 +130,7 @@ export async function crearMaterialParaLineaCompra(
     proyectoId: string;
     depositId?: string | null;
     categoryId?: string | null;
+    entidadId?: string | null;
   },
 ): Promise<string> {
   const desc = opts.descripcion.trim();
@@ -150,6 +153,7 @@ export async function crearMaterialParaLineaCompra(
   if (sap) materialBase.sap_code = sap;
   if (opts.depositId) materialBase.deposit_id = opts.depositId;
   if (opts.categoryId) materialBase.category_id = opts.categoryId;
+  if (opts.entidadId) materialBase.entidad_id = opts.entidadId;
 
   let res = await supabase.from('global_inventory').insert(materialBase).select('id').single();
   if (res.error && /deposit_id/i.test(res.error.message)) {
