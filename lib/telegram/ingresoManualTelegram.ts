@@ -38,7 +38,7 @@ import {
 } from '@/lib/almacen/formaIngresoRecepcion';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
-import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import { getTelegramEstado, setTelegramContexto, upsertTelegramEstado } from '@/lib/telegram/estados';
 import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
 
 export const FLUJO_INGRESO_MANUAL = 'ingreso_manual';
@@ -130,6 +130,16 @@ export type MetadataIngresoManual = {
   recepcion_campo_registrada_id?: string;
   /** /ingreso → ingreso automático: OCR de factura tras elegir almacén. */
   ingreso_ocr_auto?: boolean;
+  /** Líneas detectadas por OCR pendientes de categoría/cantidad en bot. */
+  ocr_lineas_pendientes?: OcrLineaPendienteIngreso[];
+  ocr_aviso_sin_resolver?: string;
+};
+
+type OcrLineaPendienteIngreso = {
+  material_id: string;
+  material_nombre: string;
+  unidad: string;
+  cantidad: number;
 };
 
 const PREFIX = 'im:';
@@ -141,8 +151,56 @@ function truncar(s: string, max = 54): string {
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
 }
 
+/** Normaliza nombres legacy (`nota_entrega`) al flujo unificado en bot. */
+function normalizarFlujoRecepcionCampo(
+  flujo: string | undefined,
+): FlujoRecepcionCampoTelegram | undefined {
+  if (!flujo?.trim()) return undefined;
+  if (flujo === 'nota_entrega') return FLUJO_NOTA_ENTREGA;
+  if (FLUJOS_RECEPCION_CAMPO.has(flujo)) return flujo as FlujoRecepcionCampoTelegram;
+  return undefined;
+}
+
 function meta(estado: TelegramEstado): MetadataIngresoManual {
-  return (estado.metadata ?? {}) as MetadataIngresoManual;
+  const raw = (estado.metadata ?? {}) as MetadataIngresoManual;
+  const flujoNorm = normalizarFlujoRecepcionCampo(raw.flujo);
+  if (flujoNorm && flujoNorm !== raw.flujo) {
+    return { ...raw, flujo: flujoNorm };
+  }
+  return raw;
+}
+
+async function aplicarMetadataFlujoRecepcionCampo(
+  supabase: SupabaseClient,
+  chatId: string,
+  params: {
+    flujo: FlujoRecepcionCampoTelegram;
+    proyectoId: string | null;
+    entidad_id?: string | null;
+    entidad_nombre?: string | null;
+    extra?: Partial<MetadataIngresoManual>;
+  },
+): Promise<void> {
+  const estadoPrev = await getTelegramEstado(supabase, chatId);
+  const token = tokenBorradorRecepcion(params.flujo, estadoPrev) ?? undefined;
+  const metadata: MetadataIngresoManual = {
+    flujo: params.flujo,
+    paso: 'almacen',
+    lineas: [],
+    fotos_storage_paths: [],
+    ...(params.entidad_id
+      ? { entidad_id: params.entidad_id, entidad_nombre: params.entidad_nombre ?? undefined }
+      : {}),
+    ...(token ? { recepcion_campo_token: token } : {}),
+    ...params.extra,
+  };
+  await upsertTelegramEstado(supabase, {
+    chat_id: chatId,
+    contexto: 'entrada_obra',
+    proyecto_id: params.proyectoId,
+    pending_factura_id: null,
+    metadata: metadata as Record<string, unknown>,
+  });
 }
 
 export function esFlujoIngresoManual(estado: TelegramEstado): boolean {
@@ -205,8 +263,7 @@ function flujoTelegramCompletoEnBot(flujo: string | undefined): boolean {
 }
 
 function flujoUsaHandoffWebTrasAlmacen(flujo: string | undefined): boolean {
-  if (flujoTelegramCompletoEnBot(flujo)) return false;
-  return flujoUsaBorradorWeb(flujo);
+  return normalizarFlujoRecepcionCampo(flujo) === FLUJO_INGRESO_MANUAL;
 }
 
 function ingresoFacturaPideCategoriaPorLinea(flujo: string | undefined): boolean {
@@ -367,41 +424,41 @@ const PASOS_RECEPCION_WEB =
   '3️⃣ Al elegir almacén, abra la <b>recepción en la app</b> y complete proveedor, documento, materiales y confirmación.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
+const FLUJO_PASOS_ARTICULOS_REGISTRO =
+  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
+  '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
+  '7️⃣ <b>¿Agregar más artículos?</b>\n' +
+  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
+  '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b> (stock + contabilidad provisional).\n\n' +
+  '<code>/cancelar</code> para abortar.';
+
 const FLUJO_PASOS_FACTURA_MANUAL =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b>.\n' +
+  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b> (lista o nombre nuevo).\n' +
   '4️⃣ Escribe el <b>número de factura</b> (<code>S/N</code> si no hay).\n' +
-  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
-  '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
-  '7️⃣ <b>Agregar más artículos</b> si hace falta.\n' +
-  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
-  '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b>.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  FLUJO_PASOS_ARTICULOS_REGISTRO;
+
+const FLUJO_PASOS_FACTURA_AUTO =
+  '1️⃣ Elige la <b>obra</b>.\n' +
+  '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
+  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b> (lista o nombre nuevo).\n' +
+  '4️⃣ Envíe <b>foto o PDF</b> de la factura (IA) o escriba el <b>número de factura</b> (<code>S/N</code> si no hay).\n' +
+  FLUJO_PASOS_ARTICULOS_REGISTRO;
 
 const FLUJO_PASOS_NOTA_ENTREGA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b>.\n' +
+  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b> (lista o nombre nuevo).\n' +
   '4️⃣ Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay).\n' +
-  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
-  '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
-  '7️⃣ <b>Agregar más artículos</b> si hace falta.\n' +
-  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
-  '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b>.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  FLUJO_PASOS_ARTICULOS_REGISTRO;
 
 const FLUJO_PASOS_SIN_NOTA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b>.\n' +
+  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b> (lista o nombre nuevo).\n' +
   '4️⃣ Escribe una <b>referencia</b> del ingreso (<code>S/N</code> si no hay documento).\n' +
-  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
-  '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
-  '7️⃣ <b>Agregar más artículos</b> si hace falta.\n' +
-  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
-  '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b>.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  FLUJO_PASOS_ARTICULOS_REGISTRO;
 
 const FLUJO_PASOS_EMERGENCIA = FLUJO_PASOS_SIN_NOTA;
 
@@ -431,28 +488,14 @@ async function iniciarFlujoRecepcionCampo(
   pickerModo: PickerModoRecepcionCampo,
   extraMeta?: Partial<MetadataIngresoManual>,
 ): Promise<void> {
-  const token = tokenBorradorRecepcion(flujo);
-  await setTelegramContexto(supabase, chatId, {
-    contexto: 'entrada_obra',
-    proyecto_id: null,
-    pending_factura_id: null,
-    metadata: {
-      flujo,
-      paso: 'almacen',
-      lineas: [],
-      fotos_storage_paths: [],
-      ...(token ? { recepcion_campo_token: token } : {}),
-      ...extraMeta,
-    },
+  await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
+    flujo,
+    proyectoId: null,
+    extra: extraMeta,
   });
   const intro =
     extraMeta?.ingreso_ocr_auto && flujo === FLUJO_INGRESO_FACTURA_MANUAL
-      ? '🤖 <b>Ingreso automático de factura</b> (<code>/ingreso</code>)\n\n' +
-        '1️⃣ Elija la <b>obra</b>.\n' +
-        '2️⃣ Elija el <b>almacén</b> de ingreso.\n' +
-        '3️⃣ Envíe la <b>foto o PDF</b> de la factura (IA).\n' +
-        '4️⃣ Verifique materiales y confirme → stock + contabilidad.\n\n' +
-        '<code>/cancelar</code> para abortar.'
+      ? '🤖 <b>Ingreso automático de factura</b> (<code>/ingreso</code>)\n\n' + FLUJO_PASOS_FACTURA_AUTO
       : mensajeInicioFlujo(flujo);
   await sendTelegramMessage(chatId, intro, { parse_mode: 'HTML' });
   await enviarPickerProyectosTelegram(supabase, chatId, pickerModo);
@@ -525,20 +568,19 @@ export async function prepararIngresoManualTrasObra(
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
   await asegurarUbicacionObra(supabase, proyectoId, nombre);
   const estadoPrev = await getTelegramEstado(supabase, chatId);
-  const token = tokenBorradorRecepcion(flujo, estadoPrev);
+  const prevMeta = meta(estadoPrev);
   const { entidad_id, entidad_nombre } = await resolverEntidadMetadataProyecto(supabase, proyectoId);
-  await setTelegramContexto(supabase, chatId, {
-    contexto: 'entrada_obra',
-    proyecto_id: proyectoId,
-    pending_factura_id: null,
-    metadata: {
-      flujo,
-      paso: 'almacen',
-      lineas: [],
-      fotos_storage_paths: [],
-      ...(entidad_id ? { entidad_id, entidad_nombre: entidad_nombre ?? undefined } : {}),
-      ...(token ? { recepcion_campo_token: token } : {}),
-    },
+  await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
+    flujo,
+    proyectoId,
+    entidad_id,
+    entidad_nombre,
+    extra:
+      flujo === FLUJO_INGRESO_FACTURA_MANUAL &&
+      prevMeta.flujo === FLUJO_INGRESO_FACTURA_MANUAL &&
+      prevMeta.ingreso_ocr_auto
+        ? { ingreso_ocr_auto: true }
+        : undefined,
   });
   await enviarPickerAlmacenIngresoManual(supabase, chatId, proyectoId, nombre, 0, entidad_nombre);
 }
@@ -620,10 +662,15 @@ async function enviarPickerAlmacenIngresoManual(
   const entidadLine = entidadNombre?.trim()
     ? `\n🏢 Entidad: <b>${escHtml(entidadNombre.trim())}</b>`
     : '';
+  const estado = await getTelegramEstado(supabase, chatId);
+  const pasoAlmacen = flujoTelegramCompletoEnBot(flujoActivo(estado)) ? '2️⃣ ' : '';
+  const tituloAlmacen = flujoTelegramCompletoEnBot(flujoActivo(estado))
+    ? `${pasoAlmacen}<b>Elige el almacén de ingreso</b>`
+    : '🏭 <b>Elige el almacén de ingreso</b>';
 
   await sendTelegramMessage(
     chatId,
-    `🏭 <b>Elige el almacén de ingreso</b>\nObra: <b>${escHtml(nombreObra)}</b>${entidadLine}`,
+    `${tituloAlmacen}\nObra: <b>${escHtml(nombreObra)}</b>${entidadLine}`,
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
 }
@@ -631,8 +678,16 @@ async function enviarPickerAlmacenIngresoManual(
 function promptNumDocTrasProveedor(
   flujo: FlujoRecepcionCampoTelegram | undefined,
   proveedorNombre: string,
+  ingresoOcrAuto?: boolean,
 ): string {
   const prov = escHtml(proveedorNombre);
+  if (ingresoOcrAuto && flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
+    return (
+      `🏢 Proveedor: <b>${prov}</b>\n\n` +
+      '4️⃣ Envíe <b>foto o PDF</b> de la factura (IA leerá número y artículos).\n\n' +
+      'También puede escribir el <b>número de factura</b> (<code>S/N</code> si no hay) para cargar artículos manualmente.'
+    );
+  }
   if (flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
     return `🏢 Proveedor: <b>${prov}</b>\n\n4️⃣ 📄 Escribe el <b>número de factura</b> (<code>S/N</code> si no hay):`;
   }
@@ -656,19 +711,128 @@ async function avanzarTrasProveedor(
     telegramUsername?: string | null;
   },
 ): Promise<void> {
+  const flujo = flujoActivo(estado);
+  const m = meta(estado);
+  const pasoSiguiente =
+    m.ingreso_ocr_auto && flujo === FLUJO_INGRESO_FACTURA_MANUAL ? 'ocr_factura' : 'num_doc';
+
   await patchMeta(supabase, chatId, estado, {
-    paso: 'num_doc',
+    paso: pasoSiguiente,
     proveedor_nombre: params.proveedorNombre.trim(),
     proveedor_id: params.proveedorId?.trim() || undefined,
     telegram_user_id: params.telegramUserId,
     telegram_username: params.telegramUsername ?? null,
   });
-  const flujo = flujoActivo(estado);
   await sendTelegramMessage(
     chatId,
-    promptNumDocTrasProveedor(flujo, params.proveedorNombre),
+    promptNumDocTrasProveedor(flujo, params.proveedorNombre, m.ingreso_ocr_auto),
     { parse_mode: 'HTML' },
   );
+}
+
+async function cargarCategoriaMaterialInventario(
+  supabase: SupabaseClient,
+  materialId: string,
+): Promise<{ id: string; nombre: string } | null> {
+  const { data: row } = await supabase
+    .from('global_inventory')
+    .select('category_id')
+    .eq('id', materialId)
+    .maybeSingle();
+  const catId = String(row?.category_id ?? '').trim();
+  if (!catId) return null;
+  const categorias = await asegurarCategoriasCompraSugeridas(supabase);
+  const hit = buscarCategoriaPorId(categorias, catId);
+  return hit ? { id: hit.id, nombre: hit.name } : null;
+}
+
+async function iniciarSiguienteLineaOcrPendiente(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  const m = meta(estado);
+  const pendientes = m.ocr_lineas_pendientes ?? [];
+
+  if (!pendientes.length) {
+    const lineas = m.lineas ?? [];
+    const avisoOcr = m.ocr_aviso_sin_resolver?.trim();
+    if (!lineas.length) {
+      await patchMeta(supabase, chatId, estado, {
+        paso: 'material',
+        ocr_aviso_sin_resolver: undefined,
+      });
+      const msg = avisoOcr
+        ? `⚠️ ${avisoOcr}\n\n5️⃣ Elija artículos manualmente:`
+        : '5️⃣ Elige artículo del catálogo de la obra o agrega material nuevo:';
+      await sendTelegramMessage(chatId, msg, { parse_mode: 'HTML' });
+      if (estado.proyecto_id) {
+        await enviarPickerMaterialIngresoManual(supabase, chatId, estado.proyecto_id);
+      }
+      return;
+    }
+    if (avisoOcr) {
+      await sendTelegramMessage(chatId, `⚠️ ${avisoOcr}`, { parse_mode: 'HTML' });
+      await patchMeta(supabase, chatId, estado, { ocr_aviso_sin_resolver: undefined });
+    }
+    await preguntarMasLineas(supabase, chatId, lineas.length);
+    return;
+  }
+
+  const [head, ...rest] = pendientes;
+  const totalOcr = (m.lineas?.length ?? 0) + pendientes.length;
+  const idx = (m.lineas?.length ?? 0) + 1;
+
+  await patchMeta(supabase, chatId, estado, {
+    ocr_lineas_pendientes: rest,
+    draft_material_id: head.material_id,
+    draft_material_nombre: head.material_nombre,
+    draft_unidad: head.unidad,
+    draft_cantidad: head.cantidad,
+    paso: 'categoria',
+  });
+
+  await sendTelegramMessage(
+    chatId,
+    `🤖 Artículo ${idx} de ${totalOcr} (IA): <b>${escHtml(head.material_nombre)}</b>`,
+    { parse_mode: 'HTML' },
+  );
+
+  const cat = await cargarCategoriaMaterialInventario(supabase, head.material_id);
+  if (cat) {
+    await aplicarCategoriaMaterialDraft(
+      supabase,
+      chatId,
+      await getTelegramEstado(supabase, chatId),
+      cat.id,
+      cat.nombre,
+    );
+  } else {
+    await enviarPickerCategoriaMaterialIngreso(supabase, chatId, head.material_nombre);
+  }
+}
+
+async function continuarTrasNumDocIngreso(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  numDoc: string,
+): Promise<void> {
+  await patchMeta(supabase, chatId, estado, { paso: 'material', num_doc: numDoc });
+  const flujoMat = flujoActivo(estado);
+  const etiquetaDoc =
+    flujoMat === FLUJO_INGRESO_FACTURA_MANUAL
+      ? 'Factura'
+      : flujoMat === FLUJO_NOTA_ENTREGA
+        ? 'Nota'
+        : 'Ref.';
+  const promptMat = flujoTelegramCompletoEnBot(flujoMat)
+    ? `📄 ${etiquetaDoc}: <b>${numDoc}</b>\n\n5️⃣ Elige artículo del catálogo de la obra o agrega material nuevo:`
+    : `📄 Ref.: <b>${numDoc}</b>\n\nElige el material del catálogo o crea uno nuevo:`;
+  await sendTelegramMessage(chatId, promptMat, { parse_mode: 'HTML' });
+  if (estado.proyecto_id) {
+    await enviarPickerMaterialIngresoManual(supabase, chatId, estado.proyecto_id);
+  }
 }
 
 async function enviarPickerProveedorIngresoManual(
@@ -771,14 +935,20 @@ async function promptCantidadMaterialDraft(
   const estado = await getTelegramEstado(supabase, chatId);
   await patchMeta(supabase, chatId, estado, { paso: 'cantidad' });
 
-  const pasoCantidad = flujoTelegramCompletoEnBot(meta(estado).flujo) ? '6️⃣ ' : '';
+  const m = meta(estado);
+  const pasoCantidad = flujoTelegramCompletoEnBot(m.flujo) ? '6️⃣ ' : '';
   const extra = params.creado
     ? '\n\nℹ️ Material nuevo agregado al catálogo de la obra.'
     : '';
+  const sugerida = m.draft_cantidad;
+  const hintSugerida =
+    sugerida && Number(sugerida) > 0
+      ? `\n\n🤖 Cantidad detectada: <b>${sugerida}</b> — confirme escribiendo el mismo número o indique otra.`
+      : '';
 
   await sendTelegramMessage(
     chatId,
-    `${pasoCantidad}🔢 Indique la <b>cantidad</b> de «${escHtml(params.nombre)}» (${escHtml(params.unidad)}):${extra}`,
+    `${pasoCantidad}🔢 Indique la <b>cantidad</b> de «${escHtml(params.nombre)}» (${escHtml(params.unidad)}):${extra}${hintSugerida}`,
     { parse_mode: 'HTML' },
   );
 }
@@ -1147,7 +1317,7 @@ async function enviarConfirmacion(
     : 'Factura/nota';
   const nFotosLinea = lineas.filter((l) => l.soporte_storage_path).length;
   const stockHint = flujoTelegramCompletoEnBot(f)
-    ? '\n\n<i>Al confirmar se registra en <b>almacén</b> (stock) y en <b>contabilidad</b> (compra provisional si aplica).</i>'
+    ? '\n\n<i>Al confirmar se registra en <b>almacén</b> (stock) y en <b>contabilidad provisional</b> (conciliación fiscal posterior).</i>'
     : '\n\n<i>Al confirmar se suma el stock en el almacén elegido.</i>';
   const texto =
     tituloConfirm +
@@ -1228,6 +1398,13 @@ async function finalizarLineaDraft(
     draft_soporte_file_name: undefined,
     draft_soporte_mime_type: undefined,
   });
+
+  const fresh = await getTelegramEstado(supabase, chatId);
+  const pendientesOcr = meta(fresh).ocr_lineas_pendientes ?? [];
+  if (pendientesOcr.length > 0) {
+    await iniciarSiguienteLineaOcrPendiente(supabase, chatId, fresh);
+    return;
+  }
   await preguntarMasLineas(supabase, chatId, lineas.length);
 }
 
@@ -1348,7 +1525,11 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
     await answerCallbackQuery(params.callbackId, String(ubi.nombre));
-    if (flujoUsaHandoffWebTrasAlmacen(m.flujo)) {
+    const flujoNorm = normalizarFlujoRecepcionCampo(m.flujo);
+    if (flujoNorm && flujoNorm !== m.flujo) {
+      await patchMeta(supabase, params.chatId, estado, { flujo: flujoNorm });
+    }
+    if (flujoUsaHandoffWebTrasAlmacen(flujoNorm ?? m.flujo)) {
       await enviarHandoffRecepcionWebTrasAlmacen(
         supabase,
         params.chatId,
@@ -1356,25 +1537,14 @@ export async function manejarCallbackIngresoManual(
         ubicacionId,
         String(ubi.nombre),
       );
-    } else if (m.ingreso_ocr_auto && m.flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
-      await patchMeta(supabase, params.chatId, estado, {
-        paso: 'ocr_factura',
-        ubicacion_id: ubicacionId,
-        ubicacion_nombre: String(ubi.nombre),
-      });
-      await sendTelegramMessage(
-        params.chatId,
-        `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n` +
-          '📷 Envíe la <b>foto o PDF de la factura</b> para lectura automática (IA).',
-        { parse_mode: 'HTML' },
-      );
     } else {
       await patchMeta(supabase, params.chatId, estado, {
         paso: 'proveedor',
         ubicacion_id: ubicacionId,
         ubicacion_nombre: String(ubi.nombre),
+        ...(flujoNorm ? { flujo: flujoNorm } : {}),
       });
-      if (flujoTelegramCompletoEnBot(m.flujo)) {
+      if (flujoTelegramCompletoEnBot(flujoNorm ?? m.flujo)) {
         await enviarPickerProveedorIngresoManual(
           supabase,
           params.chatId,
@@ -1699,7 +1869,7 @@ export async function manejarCallbackIngresoManual(
         '\n\n📋 Contabilidad provisional registrada. Concilie con la factura fiscal cuando llegue.';
     } else {
       avisoContabilidad =
-        `\n\n📒 Compra registrada en contabilidad (${conta.compraId?.slice(0, 8) ?? 'OK'}…).`;
+        '\n\n📋 Contabilidad provisional registrada (conciliación fiscal posterior).';
     }
 
     const borradorToken = fm.recepcion_campo_token?.trim();
@@ -1787,21 +1957,13 @@ export async function manejarTextoIngresoManual(
 
   if (paso === 'num_doc') {
     const numDoc = trimmed || 'S/N';
-    await patchMeta(supabase, chatId, estado, { paso: 'material', num_doc: numDoc });
-    const flujoMat = flujoActivo(estado);
-    const etiquetaDoc =
-      flujoMat === FLUJO_INGRESO_FACTURA_MANUAL
-        ? 'Factura'
-        : flujoMat === FLUJO_NOTA_ENTREGA
-          ? 'Nota'
-          : 'Ref.';
-    const promptMat = flujoTelegramCompletoEnBot(flujoMat)
-      ? `📄 ${etiquetaDoc}: <b>${numDoc}</b>\n\n5️⃣ Elige <b>artículo</b> del catálogo de la obra o agrega material nuevo:`
-      : `📄 Ref.: <b>${numDoc}</b>\n\nElige el <b>material</b> del catálogo o crea uno nuevo:`;
-    await sendTelegramMessage(chatId, promptMat, { parse_mode: 'HTML' });
-    if (estado.proyecto_id) {
-      await enviarPickerMaterialIngresoManual(supabase, chatId, estado.proyecto_id);
-    }
+    await continuarTrasNumDocIngreso(supabase, chatId, estado, numDoc);
+    return true;
+  }
+
+  if (paso === 'ocr_factura') {
+    const numDoc = trimmed || 'S/N';
+    await continuarTrasNumDocIngreso(supabase, chatId, estado, numDoc);
     return true;
   }
 
@@ -1952,6 +2114,7 @@ export async function manejarFotoIngresoManual(params: {
   if (paso === 'ocr_factura') {
     if (!estado.proyecto_id) return false;
     try {
+      const m0 = meta(estado);
       const storagePath = `recepciones-campo/telegram-ocr-${params.chatId}/${Date.now()}.${params.ext}`;
       const { error: upErr } = await params.supabase.storage
         .from(PROCUREMENT_DOCUMENTS_BUCKET)
@@ -1964,9 +2127,10 @@ export async function manejarFotoIngresoManual(params: {
         fileName: params.fileName ?? `factura.${params.ext}`,
       });
 
-      const proveedor = String(extracted.supplier_name ?? '').trim() || 'Proveedor';
+      const proveedorOcr = String(extracted.supplier_name ?? '').trim();
       const numDoc = String(extracted.invoice_number ?? 'S/N').trim() || 'S/N';
-      const lineasDraft: LineaIngresoManualDraft[] = [];
+      const lineasOcr: OcrLineaPendienteIngreso[] = [];
+      let sinResolver = 0;
 
       for (const item of extracted.items ?? []) {
         const descripcion = String(item.description ?? '').trim();
@@ -1978,38 +2142,48 @@ export async function manejarFotoIngresoManual(params: {
           item_code: String(item.item_code ?? '').trim() || undefined,
           proyectoId: estado.proyecto_id,
         });
-        if (!resuelto?.id) continue;
-        lineasDraft.push({
+        if (!resuelto?.id) {
+          sinResolver += 1;
+          continue;
+        }
+        lineasOcr.push({
           material_id: resuelto.id,
           material_nombre: resuelto.name || descripcion,
           unidad,
           cantidad,
-          forma_ingreso: 'con_factura',
-          soporte_storage_path: storagePath,
-          soporte_file_name: params.fileName ?? `factura-ocr.${params.ext}`,
-          soporte_mime_type: params.mimeType,
         });
       }
 
-      if (!lineasDraft.length) {
+      if (!lineasOcr.length) {
         await sendTelegramMessage(
           params.chatId,
-          '❌ No pude vincular materiales del OCR. Use ingreso manual de factura o complete en la app.',
+          '❌ No pude vincular materiales del OCR al catálogo de la obra.\n\n' +
+            'Escriba el número de factura para cargar artículos manualmente, o use ingreso manual de factura.',
           { parse_mode: 'HTML' },
         );
         return true;
       }
 
+      const avisoSinResolver =
+        sinResolver > 0
+          ? `${sinResolver} artículo(s) de la factura no se vincularon al catálogo; podrá agregarlos manualmente después.`
+          : undefined;
+      const fotosPrevias = m0.fotos_storage_paths ?? [];
+
       await patchMeta(params.supabase, params.chatId, estado, {
-        paso: 'confirmar',
-        proveedor_nombre: proveedor,
         num_doc: numDoc,
-        lineas: lineasDraft,
+        ...(m0.proveedor_nombre?.trim()
+          ? {}
+          : proveedorOcr
+            ? { proveedor_nombre: proveedorOcr }
+            : {}),
+        ocr_lineas_pendientes: lineasOcr,
+        ocr_aviso_sin_resolver: avisoSinResolver,
         soporte_storage_path: storagePath,
         soporte_file_name: params.fileName ?? `factura-ocr.${params.ext}`,
         soporte_mime_type: params.mimeType,
-        fotos_storage_paths: [storagePath],
-        observaciones: 'Origen: ingreso automático OCR (/ingreso)',
+        fotos_storage_paths: [...fotosPrevias, storagePath],
+        lineas: m0.lineas ?? [],
         telegram_user_id: params.userId,
         telegram_username: params.username ?? null,
       });
@@ -2017,22 +2191,23 @@ export async function manejarFotoIngresoManual(params: {
       await sendTelegramMessage(
         params.chatId,
         `✅ <b>Factura leída por IA</b>\n\n` +
-          `🏢 ${escHtml(proveedor)}\n` +
           `📄 Nº <code>${escHtml(numDoc)}</code>\n` +
-          `📦 ${lineasDraft.length} material(es) detectado(s).\n\n` +
-          'Revise el resumen y confirme el ingreso.',
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [[{ text: '✅ Registrar ingreso', callback_data: `${PREFIX}conf:ok` }]],
-          },
-        },
+          `📦 ${lineasOcr.length} artículo(s) detectado(s).\n\n` +
+          '5️⃣–6️⃣ Revise <b>categoría</b> y <b>cantidad</b> de cada línea antes de continuar.',
+        { parse_mode: 'HTML' },
+      );
+
+      await iniciarSiguienteLineaOcrPendiente(
+        params.supabase,
+        params.chatId,
+        await getTelegramEstado(params.supabase, params.chatId),
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error OCR';
       await sendTelegramMessage(
         params.chatId,
-        `❌ No se pudo leer la factura.\n${escHtml(msg)}\n\nPuede usar ingreso manual de factura.`,
+        `❌ No se pudo leer la factura.\n${escHtml(msg)}\n\n` +
+          'Escriba el número de factura para continuar manualmente, o reintente con otra foto.',
         { parse_mode: 'HTML' },
       );
     }

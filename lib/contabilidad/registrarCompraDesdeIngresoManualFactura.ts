@@ -233,7 +233,8 @@ export async function registrarCompraDesdeIngresoManualFactura(
 ): Promise<ResultadoRegistroCompraIngresoManualFactura> {
   try {
     const tipo = params.tipoRecepcion ?? 'factura_canal';
-    const esProvisional = tipo === 'nota_entrega' || tipo === 'emergencia';
+    /** Stock ya ingresado en almacén: contabilidad provisional hasta conciliación fiscal. */
+    const esProvisional = true;
     const fecha = new Date().toISOString().slice(0, 10);
     const invoiceNumber = numeroDocumentoContabilidad(tipo, params.numDoc);
     const proveedorNombre = params.proveedorNombre.trim() || 'Proveedor';
