@@ -20,8 +20,26 @@ export type LineaIngresoManualFacturaContabilidad = {
 };
 
 export type ResultadoRegistroCompraIngresoManualFactura =
-  | { ok: true; compraId: string; purchaseInvoiceId: string; yaExistia: boolean }
+  | { ok: true; compraId: string; purchaseInvoiceId: string; yaExistia: boolean; provisional?: boolean }
   | { ok: false; error: string };
+
+export type TipoRecepcionCampoContabilidad = 'factura_canal' | 'nota_entrega' | 'emergencia';
+
+function numeroDocumentoContabilidad(
+  tipo: TipoRecepcionCampoContabilidad,
+  numDoc: string,
+): string {
+  const doc = numDoc.trim() || 'S/N';
+  if (tipo === 'nota_entrega') return doc.startsWith('NE-') ? doc : `NE-${doc}`;
+  if (tipo === 'emergencia') return doc.startsWith('EMG-') ? doc : `EMG-${doc}`;
+  return doc;
+}
+
+function origenContabilidadDesdeRecepcion(tipo: TipoRecepcionCampoContabilidad): string {
+  if (tipo === 'nota_entrega') return 'FRM_NOTA';
+  if (tipo === 'emergencia') return 'FRM_EMERGENCIA';
+  return 'TELEGRAM';
+}
 
 async function cargarItemCodes(
   supabase: SupabaseClient,
@@ -205,14 +223,18 @@ export async function registrarCompraDesdeIngresoManualFactura(
     entidadId?: string | null;
     proveedorNombre: string;
     numDoc: string;
+    tipoRecepcion?: TipoRecepcionCampoContabilidad;
     lineas: LineaIngresoManualFacturaContabilidad[];
     soporteStoragePath?: string | null;
   },
 ): Promise<ResultadoRegistroCompraIngresoManualFactura> {
   try {
+    const tipo = params.tipoRecepcion ?? 'factura_canal';
+    const esProvisional = tipo === 'nota_entrega' || tipo === 'emergencia';
     const fecha = new Date().toISOString().slice(0, 10);
-    const invoiceNumber = params.numDoc.trim() || 'S/N';
+    const invoiceNumber = numeroDocumentoContabilidad(tipo, params.numDoc);
     const proveedorNombre = params.proveedorNombre.trim() || 'Proveedor';
+    const origen = origenContabilidadDesdeRecepcion(tipo);
     const lineasConta = lineasContabilidadDesdeIngreso(
       params.lineas,
       await cargarItemCodes(
@@ -241,10 +263,12 @@ export async function registrarCompraDesdeIngresoManualFactura(
     let compraId = existente?.id?.trim() || '';
     let yaExistia = Boolean(compraId);
 
-    const pendienteCanal = await buscarPendienteCanalDuplicado(supabase, {
-      invoice_number: invoiceNumber,
-      supplier_name: proveedorNombre,
-    });
+    const pendienteCanal = tipo === 'factura_canal'
+      ? await buscarPendienteCanalDuplicado(supabase, {
+          invoice_number: invoiceNumber,
+          supplier_name: proveedorNombre,
+        })
+      : null;
     if (pendienteCanal?.purchase_invoice_id?.trim()) {
       purchaseInvoiceId = pendienteCanal.purchase_invoice_id.trim();
     }
@@ -297,7 +321,7 @@ export async function registrarCompraDesdeIngresoManualFactura(
         total_amount: 0,
         moneda: 'VES',
         lineas: lineasConta,
-        origen: 'TELEGRAM',
+        origen,
         ubicacion_destino_id: params.ubicacionId,
         entidad_id: entidadId,
         document_storage_path: params.soporteStoragePath ?? null,
@@ -308,9 +332,11 @@ export async function registrarCompraDesdeIngresoManualFactura(
 
     await actualizarCantidadesLineasContabilidad(supabase, compraId, lineasConta);
 
+    const ingresadoAt = new Date().toISOString();
     const patchCompra: Record<string, unknown> = {
       ubicacion_destino_id: params.ubicacionId,
-      origen: 'TELEGRAM',
+      origen,
+      ingresado_almacen_at: ingresadoAt,
     };
     if (entidadId) patchCompra.entidad_id = entidadId;
     if (!existente?.purchase_invoice_id?.trim()) {
@@ -330,7 +356,10 @@ export async function registrarCompraDesdeIngresoManualFactura(
 
     await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
 
-    const nota = `Contabilidad: compra ${compraId.slice(0, 8)}… · PI ${purchaseInvoiceId.slice(0, 8)}…`;
+    const notaProvisional = esProvisional
+      ? ' · Pendiente conciliación fiscal (factura posterior)'
+      : '';
+    const nota = `Contabilidad: compra ${compraId.slice(0, 8)}… · PI ${purchaseInvoiceId.slice(0, 8)}…${notaProvisional}`;
     const { data: recepcion } = await supabase
       .from('ci_recepciones_campo')
       .select('observaciones, factura_canal_pendiente_id')
@@ -339,6 +368,7 @@ export async function registrarCompraDesdeIngresoManualFactura(
     const obsPrev = String(recepcion?.observaciones ?? '').trim();
     const patchRecepcion: Record<string, unknown> = {
       observaciones: obsPrev ? `${obsPrev}\n${nota}` : nota,
+      contabilidad_compra_id: compraId,
       updated_at: new Date().toISOString(),
     };
     if (pendienteCanal?.id && !recepcion?.factura_canal_pendiente_id) {
@@ -349,7 +379,13 @@ export async function registrarCompraDesdeIngresoManualFactura(
       .update(patchRecepcion as never)
       .eq('id', params.recepcionCampoId);
 
-    return { ok: true, compraId, purchaseInvoiceId, yaExistia };
+    return {
+      ok: true,
+      compraId,
+      purchaseInvoiceId,
+      yaExistia,
+      provisional: esProvisional,
+    };
   } catch (err) {
     return {
       ok: false,

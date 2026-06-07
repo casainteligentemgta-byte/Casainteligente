@@ -8,10 +8,10 @@ import {
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import {
   manejarComandoIngresoFacturaManualTelegram,
+  manejarComandoIngresoFacturaOcrAutomaticoTelegram,
   manejarComandoIngresoSinNotaTelegram,
   manejarComandoNotaEntregaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
-import { iniciarModoCargaFacturasTelegram } from '@/lib/telegram/mensajesFactura';
 import { manejarComandoSalidaEgresoTelegram } from '@/lib/telegram/salidaEgresoFlujo';
 import { manejarComandoSalidaObraTelegram } from '@/lib/telegram/salidaObraTelegram';
 import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTelegram';
@@ -165,7 +165,7 @@ async function iniciarIngresoPorOpcion(
       await manejarComandoIngresoFacturaManualTelegram(supabase, chatId);
       break;
     case 'factauto':
-      await iniciarModoCargaFacturasTelegram(supabase, chatId);
+      await manejarComandoIngresoFacturaOcrAutomaticoTelegram(supabase, chatId);
       break;
     case 'nota':
       await manejarComandoNotaEntregaTelegram(supabase, chatId);

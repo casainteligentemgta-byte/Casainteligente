@@ -23,6 +23,7 @@ import {
 } from '@/lib/contabilidad/facturaCanalApi';
 import { createClient } from '@/lib/supabase/client';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
+import { TarjetaSugerenciaConciliacionField } from '@/components/contabilidad/TarjetaSugerenciaConciliacionField';
 
 const selectClass =
   'w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#FF9500]/50 focus:ring-2 focus:ring-[#FF9500]/20';
@@ -60,6 +61,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [editandoUbicacion, setEditandoUbicacion] = useState(false);
   const [ubicacionesDisponibles, setUbicacionesDisponibles] = useState<UbicacionInventario[]>([]);
   const [editando, setEditando] = useState(false);
+  const [frmPendienteBloquea, setFrmPendienteBloquea] = useState(false);
   const { isSubmitting: registrando, runLocked: runRegistro } = useSyncSubmitLock();
   const { isSubmitting: ingresandoAlmacen, runLocked: runIngreso } = useSyncSubmitLock();
   const [compraRegistrada, setCompraRegistrada] = useState(false);
@@ -393,6 +395,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       monedaConfirmada &&
       proyectoEfectivo &&
       ubicacionEfectiva &&
+      !frmPendienteBloquea &&
       !registrando &&
       !ingresandoAlmacen,
   );
@@ -401,6 +404,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     if (loading || !pendiente) return null;
     if (botonIngresoListo) return null;
     if (registrando || ingresandoAlmacen) return null;
+    if (frmPendienteBloquea) {
+      return 'Hay ingresos de campo sin conciliar. Use «Conciliar e inyectar costo» arriba.';
+    }
     if (!proyectoEfectivo) return 'Seleccione la obra (proyecto).';
     if (!ubicacionEfectiva) return 'Seleccione el almacén de ingreso.';
     if (!monedaConfirmada) return 'Indique si la factura está en bolívares o dólares.';
@@ -420,6 +426,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     proyectoEfectivo,
     ubicacionEfectiva,
     puedeIngresarAlmacen,
+    frmPendienteBloquea,
     monedaConfirmada,
   ]);
 
@@ -516,6 +523,23 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 Compra registrada en contabilidad. Solo falta el ingreso de mercancía al almacén de la
                 obra.
               </div>
+            ) : null}
+
+            {!yaEnContabilidad && pendiente ? (
+              <TarjetaSugerenciaConciliacionField
+                facturaId={pendingId}
+                proyectoId={proyectoEfectivo}
+                proveedorRif={extracted?.supplier_rif ?? undefined}
+                proveedorNombre={extracted?.supplier_name ?? undefined}
+                extracted={extracted}
+                onConciliadoExito={() => {
+                  void cargar().then(() => {
+                    setCompraRegistrada(true);
+                    setFrmPendienteBloquea(false);
+                  });
+                }}
+                onFrmPendienteChange={setFrmPendienteBloquea}
+              />
             ) : null}
 
             <section className={`${panelClass} space-y-3 border-[#FF9500]/30`}>

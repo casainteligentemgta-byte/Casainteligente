@@ -555,6 +555,7 @@ export default function RecepcionCampoClient() {
         recepcion_id?: string;
         ok?: boolean;
         ya_existia?: boolean;
+        contabilidad?: { ok: boolean; provisional?: boolean; error?: string };
       };
 
       if (!res.ok) {
@@ -565,8 +566,17 @@ export default function RecepcionCampoClient() {
         return;
       }
 
+      const msgConta =
+        json.contabilidad?.ok && json.contabilidad.provisional
+          ? ' Compra provisional en contabilidad (concilie cuando llegue la factura fiscal).'
+          : json.contabilidad?.ok
+            ? ' Registrado también en contabilidad.'
+            : json.contabilidad?.error
+              ? ` Contabilidad pendiente: ${json.contabilidad.error}`
+              : '';
+
       toast.success(
-        `Recepción registrada (${json.recepcion_id?.slice(0, 8) ?? 'OK'}). Stock actualizado en almacén.`,
+        `Recepción registrada (${json.recepcion_id?.slice(0, 8) ?? 'OK'}). Stock actualizado en almacén.${msgConta}`,
       );
       if (borradorToken) setBorradorToken('');
       setBorradorTelegram(false);

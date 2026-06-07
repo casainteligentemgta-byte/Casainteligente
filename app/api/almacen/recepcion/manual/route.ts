@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { limpiarBorradorRecepcionPorToken, obtenerBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { PayloadRecepcionManualApi } from '@/lib/almacen/recepcionCampoTypes';
 import { esFormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
-import { registrarCompraDesdeIngresoManualFactura } from '@/lib/contabilidad/registrarCompraDesdeIngresoManualFactura';
+import { sincronizarContabilidadDesdeRecepcionCampo } from '@/lib/contabilidad/sincronizarContabilidadDesdeRecepcionCampo';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -140,26 +140,34 @@ export async function POST(req: Request) {
     }
   }
 
-  let contabilidad: { ok: boolean; compra_id?: string; error?: string } | undefined;
-  if (tipo === 'factura_canal') {
-    const conta = await registrarCompraDesdeIngresoManualFactura(supabase, {
-      recepcionCampoId: id,
-      proyectoId,
-      ubicacionId,
-      proveedorNombre: proveedorNombre || 'Proveedor',
-      numDoc: String(body.num_doc ?? '').trim() || 'S/N',
-      lineas: lineas.map((l) => ({
-        material_id: l.material_id,
-        material_nombre: l.descripcion || 'Material',
-        unidad: l.unidad,
-        cantidad: l.cantidad,
-      })),
-      soporteStoragePath: body.soporte_storage_path?.trim() || null,
-    });
-    contabilidad = conta.ok
-      ? { ok: true, compra_id: conta.compraId }
-      : { ok: false, error: conta.error };
-  }
+  let contabilidad: {
+    ok: boolean;
+    compra_id?: string;
+    provisional?: boolean;
+    error?: string;
+  } | undefined;
+
+  const lineasConta = lineas.map((l) => ({
+    material_id: l.material_id,
+    material_nombre: l.descripcion || 'Material',
+    unidad: l.unidad,
+    cantidad: l.cantidad,
+  }));
+
+  const conta = await sincronizarContabilidadDesdeRecepcionCampo(supabase, {
+    recepcionCampoId: id,
+    proyectoId,
+    ubicacionId,
+    proveedorNombre: proveedorNombre || 'Proveedor',
+    numDoc: String(body.num_doc ?? '').trim() || 'S/N',
+    tipoRecepcion: tipo as 'factura_canal' | 'nota_entrega' | 'emergencia',
+    lineas: lineasConta,
+    soporteStoragePath: body.soporte_storage_path?.trim() || null,
+  });
+
+  contabilidad = conta.ok
+    ? { ok: true, compra_id: conta.compraId, provisional: conta.provisional }
+    : { ok: false, error: conta.error };
 
   return NextResponse.json({
     ok: true,
