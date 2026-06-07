@@ -193,18 +193,22 @@ function flujoUsaBorradorWeb(flujo: string | undefined): boolean {
   );
 }
 
-/** Ingreso manual de factura: flujo completo en Telegram (no redirige a la app tras almacén). */
-function flujoFacturaManualTelegramCompleto(flujo: string | undefined): boolean {
-  return flujo === FLUJO_INGRESO_FACTURA_MANUAL;
+/** Flujo guiado completo en Telegram (obra → almacén → proveedor → líneas → fotos → registro). */
+function flujoTelegramCompletoEnBot(flujo: string | undefined): boolean {
+  return (
+    flujo === FLUJO_INGRESO_FACTURA_MANUAL ||
+    flujo === FLUJO_NOTA_ENTREGA ||
+    flujo === FLUJO_EMERGENCIA
+  );
 }
 
 function flujoUsaHandoffWebTrasAlmacen(flujo: string | undefined): boolean {
-  if (flujoFacturaManualTelegramCompleto(flujo)) return false;
+  if (flujoTelegramCompletoEnBot(flujo)) return false;
   return flujoUsaBorradorWeb(flujo);
 }
 
 function ingresoFacturaPideCategoriaPorLinea(flujo: string | undefined): boolean {
-  return flujoFacturaManualTelegramCompleto(flujo);
+  return flujoTelegramCompletoEnBot(flujo);
 }
 
 async function resolverEntidadMetadataProyecto(
@@ -376,17 +380,28 @@ const FLUJO_PASOS_FACTURA_MANUAL =
 const FLUJO_PASOS_NOTA_ENTREGA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  PASOS_RECEPCION_WEB;
+  '3️⃣ Escribe el <b>proveedor</b>.\n' +
+  '4️⃣ Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay).\n' +
+  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
+  '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
+  '7️⃣ <b>Agregar más artículos</b> si hace falta.\n' +
+  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
+  '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b>.\n\n' +
+  '<code>/cancelar</code> para abortar.';
 
 const FLUJO_PASOS_SIN_NOTA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  PASOS_RECEPCION_WEB;
+  '3️⃣ Escribe el <b>proveedor</b>.\n' +
+  '4️⃣ Escribe una <b>referencia</b> del ingreso (<code>S/N</code> si no hay documento).\n' +
+  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
+  '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
+  '7️⃣ <b>Agregar más artículos</b> si hace falta.\n' +
+  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
+  '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b>.\n\n' +
+  '<code>/cancelar</code> para abortar.';
 
-const FLUJO_PASOS_EMERGENCIA =
-  '1️⃣ Elige la <b>obra</b>.\n' +
-  '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  PASOS_RECEPCION_WEB;
+const FLUJO_PASOS_EMERGENCIA = FLUJO_PASOS_SIN_NOTA;
 
 const MENSAJE_INICIO_FACTURA_MANUAL =
   '🧾 <b>Ingreso manual de factura</b> (<code>/ingreso</code>)\n\n' + FLUJO_PASOS_FACTURA_MANUAL;
@@ -398,9 +413,7 @@ const MENSAJE_INICIO_NOTA =
   '📄 <b>Ingreso con nota de entrega</b> (<code>/ingreso</code>)\n\n' + FLUJO_PASOS_NOTA_ENTREGA;
 
 const MENSAJE_INICIO_EMERGENCIA =
-  '🚨 <b>Ingreso de emergencia</b> (<code>/ingreso</code>)\n\n' +
-  'Material recibido sin papeles completos.\n\n' +
-  FLUJO_PASOS_EMERGENCIA;
+  '📝 <b>Ingreso sin nota de entrega</b> (<code>/ingreso</code>)\n\n' + FLUJO_PASOS_EMERGENCIA;
 
 function mensajeInicioFlujo(flujo: FlujoRecepcionCampoTelegram): string {
   if (flujo === FLUJO_INGRESO_FACTURA_MANUAL) return MENSAJE_INICIO_FACTURA_MANUAL;
@@ -477,12 +490,12 @@ export async function manejarComandoIngresoFacturaManualTelegram(
   );
 }
 
-/** Ingreso sin nota: flujo guiado completo en Telegram. */
+/** Ingreso sin nota: mismo flujo guiado en Telegram que factura manual (tipo emergencia en stock). */
 export async function manejarComandoIngresoSinNotaTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
-  await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_INGRESO_MANUAL, 'ingreso_manual');
+  await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_EMERGENCIA, 'emergencia');
 }
 
 /** Nota de entrega sin factura: mismo flujo estructurado con registro de stock inmediato. */
@@ -667,14 +680,14 @@ async function promptCantidadMaterialDraft(
   const estado = await getTelegramEstado(supabase, chatId);
   await patchMeta(supabase, chatId, estado, { paso: 'cantidad' });
 
-  const esFactura = ingresoFacturaPideCategoriaPorLinea(meta(estado).flujo);
+  const pasoCantidad = flujoTelegramCompletoEnBot(meta(estado).flujo) ? '6️⃣ ' : '';
   const extra = params.creado
     ? '\n\nℹ️ Material nuevo agregado al catálogo de la obra.'
     : '';
 
   await sendTelegramMessage(
     chatId,
-    `${esFactura ? '6️⃣ ' : ''}🔢 Indique la <b>cantidad</b> de «${escHtml(params.nombre)}» (${escHtml(params.unidad)}):${extra}`,
+    `${pasoCantidad}🔢 Indique la <b>cantidad</b> de «${escHtml(params.nombre)}» (${escHtml(params.unidad)}):${extra}`,
     { parse_mode: 'HTML' },
   );
 }
@@ -721,7 +734,7 @@ async function aplicarCategoriaMaterialDraft(
   });
 
   const materialId = m.draft_material_id?.trim();
-  if (materialId && m.flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
+  if (materialId && flujoTelegramCompletoEnBot(m.flujo)) {
     const hoy = new Date().toISOString().slice(0, 10);
     const depositId = await resolverDepositIdDesdeUbicacion(supabase, m.ubicacion_id);
     await actualizarMaterialExistenteCompra(supabase, materialId, {
@@ -898,7 +911,7 @@ async function enviarPickerMaterialIngresoManual(
 
   await sendTelegramMessage(
     chatId,
-    flujoActivo(await getTelegramEstado(supabase, chatId)) === FLUJO_INGRESO_FACTURA_MANUAL
+    flujoTelegramCompletoEnBot(flujoActivo(await getTelegramEstado(supabase, chatId)))
       ? '5️⃣ 🧱 <b>Elige artículo</b> del catálogo de la obra o agrega uno nuevo:'
       : '🧱 <b>Elige el material</b> de la construcción:',
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
@@ -983,10 +996,13 @@ async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): 
   await patchMeta(supabase, chatId, estado, { paso: 'foto' });
   const f = flujoActivo(estado);
   const tituloFoto =
-    f === FLUJO_INGRESO_FACTURA_MANUAL ? '8️⃣ 📷 <b>Soporte fotográfico</b> (opcional)'
-    : f === FLUJO_EMERGENCIA ? '📷 <b>Memoria fotográfica (emergencia)</b>'
-    : f === FLUJO_NOTA_ENTREGA ? '📷 <b>Fotos de la nota de entrega</b>'
-    : '📷 <b>Soporte fotográfico</b> (opcional)';
+    flujoTelegramCompletoEnBot(f)
+      ? f === FLUJO_NOTA_ENTREGA
+        ? '8️⃣ 📷 <b>Fotos de la nota de entrega</b> (opcional)'
+        : f === FLUJO_EMERGENCIA
+          ? '8️⃣ 📷 <b>Soporte fotográfico</b> (opcional, sin nota)'
+          : '8️⃣ 📷 <b>Soporte fotográfico</b> (opcional)'
+      : '📷 <b>Soporte fotográfico</b> (opcional)';
   await sendTelegramMessage(
     chatId,
     `${tituloFoto}\n\nEnvía una o varias fotos del documento o del material recibido.`,
@@ -1027,21 +1043,21 @@ async function enviarConfirmacion(
 
   const f = m.flujo;
   const tituloConfirm =
-    f === FLUJO_EMERGENCIA ? '📋 <b>Confirmar emergencia (sin papeles)</b>\n'
-    : f === FLUJO_NOTA_ENTREGA ? '📋 <b>Confirmar nota de entrega</b>\n'
+    f === FLUJO_EMERGENCIA ? '📋 <b>Registrar ingreso sin nota</b>\n'
+    : f === FLUJO_NOTA_ENTREGA ? '📋 <b>Registrar nota de entrega</b>\n'
     : f === FLUJO_INGRESO_FACTURA_MANUAL ? '📋 <b>Registrar ingreso de factura</b>\n'
     : f === FLUJO_INGRESO_MANUAL ? '📋 <b>Confirmar ingreso sin nota</b>\n'
     : '📋 <b>Confirmar ingreso manual</b>\n';
   const etiquetaDoc =
     f === FLUJO_INGRESO_FACTURA_MANUAL ? 'Nº factura'
     : f === FLUJO_NOTA_ENTREGA ? 'Nota de entrega'
+    : f === FLUJO_EMERGENCIA ? 'Referencia'
     : f === FLUJO_INGRESO_MANUAL ? 'Referencia'
     : 'Factura/nota';
   const nFotosLinea = lineas.filter((l) => l.soporte_storage_path).length;
-  const stockHint =
-    f === FLUJO_INGRESO_FACTURA_MANUAL
-      ? '\n\n<i>Al confirmar se registra en <b>almacén</b> (stock) y en el <b>cuadro de compras</b> (contabilidad).</i>'
-      : '\n\n<i>Al confirmar se suma el stock en el almacén elegido.</i>';
+  const stockHint = flujoTelegramCompletoEnBot(f)
+    ? '\n\n<i>Al confirmar se registra en <b>almacén</b> (stock) y en <b>contabilidad</b> (compra provisional si aplica).</i>'
+    : '\n\n<i>Al confirmar se suma el stock en el almacén elegido.</i>';
   const texto =
     tituloConfirm +
     '\n' +
@@ -1054,14 +1070,15 @@ async function enviarConfirmacion(
     (nFotosLinea > 0 ? `\n\n📷 ${nFotosLinea} línea(s) con foto de soporte` : '') +
     stockHint;
 
-  const textoBotonConfirmar =
-    f === FLUJO_INGRESO_FACTURA_MANUAL ? '✅ Registrar ingreso' : '✅ Confirmar ingreso';
+  const textoBotonConfirmar = flujoTelegramCompletoEnBot(f)
+    ? '✅ Registrar ingreso'
+    : '✅ Confirmar ingreso';
   const token = m.recepcion_campo_token?.trim();
   const vista = vistaDesdeFlujoTelegram(f);
   const keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [
     [{ text: textoBotonConfirmar, callback_data: `${PREFIX}conf:ok` }],
   ];
-  if (token && vista && !flujoFacturaManualTelegramCompleto(f)) {
+  if (token && vista && !flujoTelegramCompletoEnBot(f)) {
     keyboard.push([
       { text: '🌐 Completar en app', url: urlRecepcionCampoBorrador(token, vista) },
     ]);
@@ -1265,10 +1282,9 @@ export async function manejarCallbackIngresoManual(
         ubicacion_id: ubicacionId,
         ubicacion_nombre: String(ubi.nombre),
       });
-      const paso3 =
-        m.flujo === FLUJO_INGRESO_FACTURA_MANUAL
-          ? '3️⃣ ✏️ Escribe el <b>nombre del proveedor</b>:'
-          : '✏️ Escribe el <b>nombre del proveedor</b>:';
+      const paso3 = flujoTelegramCompletoEnBot(m.flujo)
+        ? '3️⃣ ✏️ Escribe el <b>nombre del proveedor</b>:'
+        : '✏️ Escribe el <b>nombre del proveedor</b>:';
       await sendTelegramMessage(
         params.chatId,
         `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n${paso3}`,
@@ -1290,7 +1306,7 @@ export async function manejarCallbackIngresoManual(
     await patchMeta(supabase, params.chatId, estado, { paso: 'material_nuevo' });
     await sendTelegramMessage(
       params.chatId,
-      ingresoFacturaPideCategoriaPorLinea(m.flujo)
+      flujoTelegramCompletoEnBot(m.flujo)
         ? '5️⃣ ✏️ Escribe el <b>nombre del material nuevo</b> (mín. 2 caracteres).'
         : '✏️ Escribe el <b>nombre del material</b> (mín. 2 caracteres).',
       { parse_mode: 'HTML' },
@@ -1395,7 +1411,7 @@ export async function manejarCallbackIngresoManual(
       );
       return true;
     }
-    if (flujoFacturaManualTelegramCompleto(m.flujo)) {
+    if (flujoTelegramCompletoEnBot(m.flujo)) {
       await preguntarFotoOpcional(supabase, params.chatId);
     } else {
       await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
@@ -1430,10 +1446,9 @@ export async function manejarCallbackIngresoManual(
   if (data === 'foto:skip' || data === 'foto:done') {
     await answerCallbackQuery(params.callbackId);
     await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
-    const obsPrompt =
-      m.flujo === FLUJO_INGRESO_FACTURA_MANUAL
-        ? '9️⃣ 📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):'
-        : '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):';
+    const obsPrompt = flujoTelegramCompletoEnBot(m.flujo)
+      ? '9️⃣ 📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):'
+      : '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):';
     await sendTelegramMessage(params.chatId, obsPrompt, { parse_mode: 'HTML' });
     return true;
   }
@@ -1524,7 +1539,7 @@ export async function manejarCallbackIngresoManual(
 
     const tituloExito =
       fm.flujo === FLUJO_EMERGENCIA
-        ? `✅ <b>Emergencia registrada</b> (almacén + contabilidad)\n\n`
+        ? `✅ <b>Ingreso sin nota registrado</b> (almacén + contabilidad)\n\n`
         : fm.flujo === FLUJO_NOTA_ENTREGA
           ? `✅ <b>Nota de entrega registrada</b> (almacén + contabilidad)\n\n`
           : fm.flujo === FLUJO_INGRESO_FACTURA_MANUAL
@@ -1587,15 +1602,18 @@ export async function manejarTextoIngresoManual(
       telegram_user_id: userId,
       telegram_username: username ?? null,
     });
+    const flujo = flujoActivo(estado);
     const promptNum =
-      flujoActivo(estado) === FLUJO_INGRESO_FACTURA_MANUAL
+      flujo === FLUJO_INGRESO_FACTURA_MANUAL
         ? `🏢 Proveedor: <b>${trimmed}</b>\n\n4️⃣ 📄 Escribe el <b>número de factura</b> (<code>S/N</code> si no hay):`
-        : flujoActivo(estado) === FLUJO_NOTA_ENTREGA
-          ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay):`
-          : flujoActivo(estado) === FLUJO_INGRESO_MANUAL
-            ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe una <b>referencia</b> (<code>S/N</code> si no hay documento):`
-            : `🏢 Proveedor: <b>${trimmed}</b>\n\n` +
-              `📄 Escribe el <b>número o referencia</b> (<code>S/N</code> si no hay):`;
+        : flujo === FLUJO_NOTA_ENTREGA
+          ? `🏢 Proveedor: <b>${trimmed}</b>\n\n4️⃣ 📄 Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay):`
+          : flujo === FLUJO_EMERGENCIA
+            ? `🏢 Proveedor: <b>${trimmed}</b>\n\n4️⃣ 📄 Escribe una <b>referencia</b> del ingreso (<code>S/N</code> si no hay documento):`
+            : flujo === FLUJO_INGRESO_MANUAL
+              ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe una <b>referencia</b> (<code>S/N</code> si no hay documento):`
+              : `🏢 Proveedor: <b>${trimmed}</b>\n\n` +
+                `📄 Escribe el <b>número o referencia</b> (<code>S/N</code> si no hay):`;
     await sendTelegramMessage(chatId, promptNum, { parse_mode: 'HTML' });
     return true;
   }
@@ -1603,9 +1621,15 @@ export async function manejarTextoIngresoManual(
   if (paso === 'num_doc') {
     const numDoc = trimmed || 'S/N';
     await patchMeta(supabase, chatId, estado, { paso: 'material', num_doc: numDoc });
-    const esFactura = flujoActivo(estado) === FLUJO_INGRESO_FACTURA_MANUAL;
-    const promptMat = esFactura
-      ? `📄 Factura: <b>${numDoc}</b>\n\n5️⃣ Elige <b>artículo</b> del catálogo de la obra o agrega material nuevo:`
+    const flujoMat = flujoActivo(estado);
+    const etiquetaDoc =
+      flujoMat === FLUJO_INGRESO_FACTURA_MANUAL
+        ? 'Factura'
+        : flujoMat === FLUJO_NOTA_ENTREGA
+          ? 'Nota'
+          : 'Ref.';
+    const promptMat = flujoTelegramCompletoEnBot(flujoMat)
+      ? `📄 ${etiquetaDoc}: <b>${numDoc}</b>\n\n5️⃣ Elige <b>artículo</b> del catálogo de la obra o agrega material nuevo:`
       : `📄 Ref.: <b>${numDoc}</b>\n\nElige el <b>material</b> del catálogo o crea uno nuevo:`;
     await sendTelegramMessage(chatId, promptMat, { parse_mode: 'HTML' });
     if (estado.proyecto_id) {
@@ -1686,7 +1710,7 @@ export async function manejarTextoIngresoManual(
     await patchMeta(supabase, chatId, estado, { draft_cantidad: qty });
     let estadoQty = await getTelegramEstado(supabase, chatId);
     const flujoQty = flujoActivo(estadoQty);
-    if (flujoQty === FLUJO_INGRESO_FACTURA_MANUAL) {
+    if (flujoTelegramCompletoEnBot(flujoQty)) {
       estadoQty = await asegurarMaterialDraftIdParaCantidad(supabase, chatId, estadoQty);
       await patchMeta(supabase, chatId, estadoQty, {
         draft_cantidad: qty,
@@ -1696,19 +1720,6 @@ export async function manejarTextoIngresoManual(
         supabase,
         chatId,
         await getTelegramEstado(supabase, chatId),
-      );
-    } else if (
-      flujoQty === FLUJO_NOTA_ENTREGA ||
-      flujoQty === FLUJO_INGRESO_MANUAL ||
-      flujoQty === FLUJO_EMERGENCIA
-    ) {
-      await patchMeta(supabase, chatId, estadoQty, {
-        draft_forma_ingreso: formaIngresoDefaultDesdeFlujoTelegram(flujoQty),
-      });
-      await preguntarFotoLinea(
-        supabase,
-        chatId,
-        meta(estadoQty).draft_material_nombre ?? 'Material',
       );
     } else {
       await preguntarFormaIngresoLinea(supabase, chatId, estadoQty);
