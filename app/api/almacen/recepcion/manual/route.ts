@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { limpiarBorradorRecepcionPorToken, obtenerBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { PayloadRecepcionManualApi } from '@/lib/almacen/recepcionCampoTypes';
 import { esFormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
+import { registrarCompraDesdeIngresoManualFactura } from '@/lib/contabilidad/registrarCompraDesdeIngresoManualFactura';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -139,11 +140,33 @@ export async function POST(req: Request) {
     }
   }
 
+  let contabilidad: { ok: boolean; compra_id?: string; error?: string } | undefined;
+  if (tipo === 'factura_canal') {
+    const conta = await registrarCompraDesdeIngresoManualFactura(supabase, {
+      recepcionCampoId: id,
+      proyectoId,
+      ubicacionId,
+      proveedorNombre: proveedorNombre || 'Proveedor',
+      numDoc: String(body.num_doc ?? '').trim() || 'S/N',
+      lineas: lineas.map((l) => ({
+        material_id: l.material_id,
+        material_nombre: l.descripcion || 'Material',
+        unidad: l.unidad,
+        cantidad: l.cantidad,
+      })),
+      soporteStoragePath: body.soporte_storage_path?.trim() || null,
+    });
+    contabilidad = conta.ok
+      ? { ok: true, compra_id: conta.compraId }
+      : { ok: false, error: conta.error };
+  }
+
   return NextResponse.json({
     ok: true,
     success: true,
     recepcion_id: id,
     estado: 'registrado',
     lineas_registradas: lineas.length,
+    ...(contabilidad ? { contabilidad } : {}),
   });
 }

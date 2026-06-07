@@ -15,6 +15,7 @@ import {
   asegurarCategoriasCompraSugeridas,
   buscarCategoriaPorId,
 } from '@/lib/almacen/categoriasMaterialCompra';
+import { registrarCompraDesdeIngresoManualFactura } from '@/lib/contabilidad/registrarCompraDesdeIngresoManualFactura';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import {
@@ -1008,7 +1009,10 @@ async function enviarConfirmacion(
     : f === FLUJO_INGRESO_MANUAL ? 'Referencia'
     : 'Factura/nota';
   const nFotosLinea = lineas.filter((l) => l.soporte_storage_path).length;
-  const stockHint = '\n\n<i>Al confirmar se suma el stock en el almacén elegido.</i>';
+  const stockHint =
+    f === FLUJO_INGRESO_FACTURA_MANUAL
+      ? '\n\n<i>Al confirmar se registra en <b>almacén</b> (stock) y en el <b>cuadro de compras</b> (contabilidad).</i>'
+      : '\n\n<i>Al confirmar se suma el stock en el almacén elegido.</i>';
   const texto =
     tituloConfirm +
     '\n' +
@@ -1436,6 +1440,29 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
 
+    let avisoContabilidad = '';
+    if (fm.flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
+      const conta = await registrarCompraDesdeIngresoManualFactura(supabase, {
+        recepcionCampoId: resultado.recepcionId,
+        proyectoId,
+        ubicacionId: fm.ubicacion_id,
+        entidadId: fm.entidad_id,
+        proveedorNombre: fm.proveedor_nombre,
+        numDoc: fm.num_doc ?? 'S/N',
+        lineas: lineas.map((l) => ({
+          material_id: l.material_id,
+          material_nombre: l.material_nombre,
+          unidad: l.unidad,
+          cantidad: l.cantidad,
+        })),
+        soporteStoragePath: fm.soporte_storage_path ?? fotos[0],
+      });
+      if (!conta.ok) {
+        avisoContabilidad =
+          `\n\n⚠️ Stock registrado, pero no se reflejó en compras: ${conta.error}`;
+      }
+    }
+
     const borradorToken = fm.recepcion_campo_token?.trim();
     if (borradorToken) {
       try {
@@ -1454,11 +1481,14 @@ export async function manejarCallbackIngresoManual(
     const tituloExito =
       fm.flujo === FLUJO_EMERGENCIA ? `✅ <b>Emergencia registrada</b>\n\n`
       : fm.flujo === FLUJO_NOTA_ENTREGA ? `✅ <b>Nota de entrega registrada</b>\n\n`
+      : fm.flujo === FLUJO_INGRESO_FACTURA_MANUAL
+        ? `✅ <b>Factura ingresada</b> (almacén + contabilidad)\n\n`
       : `✅ <b>Ingreso a almacén registrado</b>\n\n`;
     await sendTelegramMessage(
       params.chatId,
       tituloExito +
-        `${fm.proveedor_nombre ?? 'Proveedor'} · #${fm.num_doc ?? 'S/N'}`,
+        `${fm.proveedor_nombre ?? 'Proveedor'} · #${fm.num_doc ?? 'S/N'}` +
+        avisoContabilidad,
       { parse_mode: 'HTML' },
     );
     return true;

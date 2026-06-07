@@ -1,0 +1,359 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  buscarCompraContablePorFactura,
+  buscarPendienteCanalDuplicado,
+} from '@/lib/contabilidad/buscarCompraContablePorFactura';
+import {
+  payloadCompraBimonetario,
+  resolverMontosCompraBimonetario,
+} from '@/lib/contabilidad/comprasBimonetario';
+import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
+import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
+
+export type LineaIngresoManualFacturaContabilidad = {
+  material_id: string;
+  material_nombre: string;
+  unidad: string;
+  cantidad: number;
+};
+
+export type ResultadoRegistroCompraIngresoManualFactura =
+  | { ok: true; compraId: string; purchaseInvoiceId: string; yaExistia: boolean }
+  | { ok: false; error: string };
+
+async function cargarItemCodes(
+  supabase: SupabaseClient,
+  materialIds: string[],
+): Promise<Map<string, string | null>> {
+  const ids = Array.from(new Set(materialIds.filter(Boolean))).slice(0, 200);
+  if (!ids.length) return new Map();
+
+  const { data } = await supabase
+    .from('global_inventory')
+    .select('id, sku')
+    .in('id', ids);
+
+  return new Map(
+    (data ?? []).map((r) => [String(r.id), String(r.sku ?? '').trim() || null]),
+  );
+}
+
+function lineasContabilidadDesdeIngreso(
+  lineas: LineaIngresoManualFacturaContabilidad[],
+  itemCodes: Map<string, string | null>,
+): LineaCompraContabilidadInput[] {
+  return lineas
+    .filter((l) => l.material_id?.trim() && l.cantidad > 0)
+    .map((l) => ({
+      material_id: l.material_id.trim(),
+      descripcion: l.material_nombre.trim() || 'Material',
+      item_code: itemCodes.get(l.material_id.trim()) ?? null,
+      unidad: l.unidad.trim() || 'UND',
+      cantidad: l.cantidad,
+      precio_unitario: 0,
+    }));
+}
+
+async function actualizarCantidadesLineasContabilidad(
+  supabase: SupabaseClient,
+  compraId: string,
+  lineas: LineaCompraContabilidadInput[],
+): Promise<void> {
+  const { data: existentes } = await supabase
+    .from('contabilidad_compra_lineas')
+    .select('id, material_id, precio_unitario')
+    .eq('compra_id', compraId);
+
+  const porMaterial = new Map(
+    (existentes ?? []).map((r) => [String(r.material_id ?? ''), r]),
+  );
+
+  for (const l of lineas) {
+    const matId = l.material_id?.trim();
+    if (!matId) continue;
+    const prev = porMaterial.get(matId);
+    if (prev) {
+      const precio = Number(prev.precio_unitario) || l.precio_unitario || 0;
+      await supabase
+        .from('contabilidad_compra_lineas')
+        .update({ cantidad: l.cantidad, subtotal: l.cantidad * precio })
+        .eq('id', prev.id);
+    } else {
+      await supabase.from('contabilidad_compra_lineas').insert({
+        compra_id: compraId,
+        material_id: matId,
+        descripcion: l.descripcion,
+        item_code: l.item_code ?? null,
+        unidad: l.unidad || 'UND',
+        cantidad: l.cantidad,
+        precio_unitario: l.precio_unitario,
+        subtotal: l.cantidad * l.precio_unitario,
+      });
+    }
+  }
+
+  const { data: todas } = await supabase
+    .from('contabilidad_compra_lineas')
+    .select('subtotal')
+    .eq('compra_id', compraId);
+  const total = (todas ?? []).reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+  if (total > 0) {
+    await supabase.from('contabilidad_compras').update({ total_amount: total }).eq('id', compraId);
+  }
+}
+
+async function sincronizarLineasComprasFactura(
+  supabase: SupabaseClient,
+  facturaId: string,
+  lineas: LineaCompraContabilidadInput[],
+): Promise<void> {
+  const { data: existentes } = await supabase
+    .from('compras_factura_lineas')
+    .select('id, material_id')
+    .eq('factura_id', facturaId);
+
+  const porMaterial = new Map(
+    (existentes ?? []).map((r) => [String(r.material_id ?? ''), r]),
+  );
+
+  for (const l of lineas) {
+    const matId = l.material_id?.trim();
+    if (!matId) continue;
+    const prev = porMaterial.get(matId);
+    if (prev) {
+      await supabase
+        .from('compras_factura_lineas')
+        .update({ cantidad: l.cantidad })
+        .eq('id', prev.id);
+    } else {
+      await supabase.from('compras_factura_lineas').insert({
+        factura_id: facturaId,
+        material_id: matId,
+        descripcion: l.descripcion.trim().slice(0, 500) || 'Ítem',
+        cantidad: l.cantidad,
+        precio_unitario: l.precio_unitario,
+        requiere_serie: false,
+      });
+    }
+  }
+}
+
+/**
+ * Puente contable tras ingreso manual de factura (Telegram / recepción campo).
+ * El stock ya se aplicó vía ci_registrar_ingreso_manual_campo; aquí solo refleja cantidades en compras.
+ */
+async function asegurarComprasFacturaSinStockExtra(
+  supabase: SupabaseClient,
+  params: {
+    purchaseInvoiceId: string;
+    ubicacionId: string;
+    numeroFactura: string;
+    proveedorNombre: string;
+    fecha: string;
+    lineas: LineaCompraContabilidadInput[];
+    documentoStoragePath?: string | null;
+  },
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from('compras_facturas')
+    .select('id')
+    .eq('purchase_invoice_id', params.purchaseInvoiceId)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const facturaId = String(existing.id);
+    await sincronizarLineasComprasFactura(supabase, facturaId, params.lineas);
+    return facturaId;
+  }
+
+  const now = new Date().toISOString();
+  const { data: factura, error: fErr } = await supabase
+    .from('compras_facturas')
+    .insert({
+      numero_factura: params.numeroFactura.trim().slice(0, 80) || 'S/N',
+      proveedor_rif: 'S/R',
+      proveedor_nombre: params.proveedorNombre.trim().slice(0, 200) || 'Proveedor',
+      fecha_emision: params.fecha.slice(0, 10),
+      subtotal: 0,
+      impuesto: 0,
+      total: 0,
+      ubicacion_destino_id: params.ubicacionId,
+      estado: 'registrada',
+      registrada_at: now,
+      updated_at: now,
+      purchase_invoice_id: params.purchaseInvoiceId,
+      documento_storage_path: params.documentoStoragePath ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (fErr) throw new Error(fErr.message ?? 'No se pudo crear compras_facturas.');
+
+  const facturaId = String((factura as { id: string }).id);
+  await sincronizarLineasComprasFactura(supabase, facturaId, params.lineas);
+  return facturaId;
+}
+
+export async function registrarCompraDesdeIngresoManualFactura(
+  supabase: SupabaseClient,
+  params: {
+    recepcionCampoId: string;
+    proyectoId: string;
+    ubicacionId: string;
+    entidadId?: string | null;
+    proveedorNombre: string;
+    numDoc: string;
+    lineas: LineaIngresoManualFacturaContabilidad[];
+    soporteStoragePath?: string | null;
+  },
+): Promise<ResultadoRegistroCompraIngresoManualFactura> {
+  try {
+    const fecha = new Date().toISOString().slice(0, 10);
+    const invoiceNumber = params.numDoc.trim() || 'S/N';
+    const proveedorNombre = params.proveedorNombre.trim() || 'Proveedor';
+    const lineasConta = lineasContabilidadDesdeIngreso(
+      params.lineas,
+      await cargarItemCodes(
+        supabase,
+        params.lineas.map((l) => l.material_id),
+      ),
+    );
+
+    if (!lineasConta.length) {
+      return { ok: false, error: 'Sin líneas válidas para contabilidad.' };
+    }
+
+    let entidadId = params.entidadId?.trim() || null;
+    if (!entidadId) {
+      entidadId = await resolverEntidadIdDesdeProyecto(supabase, params.proyectoId);
+    }
+
+    const existente = await buscarCompraContablePorFactura(supabase, {
+      invoice_number: invoiceNumber,
+      supplier_name: proveedorNombre,
+      proyecto_id: params.proyectoId,
+      ignorar_proyecto: true,
+    });
+
+    let purchaseInvoiceId = existente?.purchase_invoice_id?.trim() || '';
+    let compraId = existente?.id?.trim() || '';
+    let yaExistia = Boolean(compraId);
+
+    const pendienteCanal = await buscarPendienteCanalDuplicado(supabase, {
+      invoice_number: invoiceNumber,
+      supplier_name: proveedorNombre,
+    });
+    if (pendienteCanal?.purchase_invoice_id?.trim()) {
+      purchaseInvoiceId = pendienteCanal.purchase_invoice_id.trim();
+    }
+
+    if (!purchaseInvoiceId) {
+      const montos = await resolverMontosCompraBimonetario({
+        montoTotal: 0,
+        moneda: 'VES',
+        fecha,
+      });
+
+      const { data: inv, error: invErr } = await supabase
+        .from('purchase_invoices')
+        .insert({
+          invoice_number: invoiceNumber.slice(0, 80),
+          supplier_rif: 'S/R',
+          supplier_name: proveedorNombre.slice(0, 200),
+          date: fecha,
+          status: 'REGISTRADA',
+          proyecto_id: params.proyectoId,
+          ubicacion_destino_id: params.ubicacionId,
+          ...(entidadId ? { entidad_id: entidadId } : {}),
+          ...payloadCompraBimonetario(montos),
+          document_storage_path: params.soporteStoragePath ?? null,
+        })
+        .select('id')
+        .single();
+
+      if (invErr) throw new Error(invErr.message ?? 'No se pudo crear purchase_invoices.');
+      purchaseInvoiceId = String((inv as { id: string }).id);
+    } else {
+      await supabase
+        .from('purchase_invoices')
+        .update({
+          proyecto_id: params.proyectoId,
+          ubicacion_destino_id: params.ubicacionId,
+          ...(entidadId ? { entidad_id: entidadId } : {}),
+        })
+        .eq('id', purchaseInvoiceId);
+    }
+
+    if (!compraId) {
+      const reg = await registerCompraDesdeRecepcion(supabase, {
+        purchase_invoice_id: purchaseInvoiceId,
+        proyecto_id: params.proyectoId,
+        invoice_number: invoiceNumber,
+        supplier_rif: 'S/R',
+        supplier_name: proveedorNombre,
+        fecha,
+        total_amount: 0,
+        moneda: 'VES',
+        lineas: lineasConta,
+        origen: 'TELEGRAM',
+        ubicacion_destino_id: params.ubicacionId,
+        entidad_id: entidadId,
+        document_storage_path: params.soporteStoragePath ?? null,
+      });
+      compraId = reg.compraId;
+      yaExistia = reg.yaExistia;
+    }
+
+    await actualizarCantidadesLineasContabilidad(supabase, compraId, lineasConta);
+
+    const patchCompra: Record<string, unknown> = {
+      ubicacion_destino_id: params.ubicacionId,
+      origen: 'TELEGRAM',
+    };
+    if (entidadId) patchCompra.entidad_id = entidadId;
+    if (!existente?.purchase_invoice_id?.trim()) {
+      patchCompra.purchase_invoice_id = purchaseInvoiceId;
+    }
+    await supabase.from('contabilidad_compras').update(patchCompra).eq('id', compraId);
+
+    await asegurarComprasFacturaSinStockExtra(supabase, {
+      purchaseInvoiceId,
+      ubicacionId: params.ubicacionId,
+      numeroFactura: invoiceNumber,
+      proveedorNombre,
+      fecha,
+      lineas: lineasConta,
+      documentoStoragePath: params.soporteStoragePath ?? null,
+    });
+
+    await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+
+    const nota = `Contabilidad: compra ${compraId.slice(0, 8)}… · PI ${purchaseInvoiceId.slice(0, 8)}…`;
+    const { data: recepcion } = await supabase
+      .from('ci_recepciones_campo')
+      .select('observaciones, factura_canal_pendiente_id')
+      .eq('id', params.recepcionCampoId)
+      .maybeSingle();
+    const obsPrev = String(recepcion?.observaciones ?? '').trim();
+    const patchRecepcion: Record<string, unknown> = {
+      observaciones: obsPrev ? `${obsPrev}\n${nota}` : nota,
+      updated_at: new Date().toISOString(),
+    };
+    if (pendienteCanal?.id && !recepcion?.factura_canal_pendiente_id) {
+      patchRecepcion.factura_canal_pendiente_id = pendienteCanal.id;
+    }
+    await supabase
+      .from('ci_recepciones_campo')
+      .update(patchRecepcion as never)
+      .eq('id', params.recepcionCampoId);
+
+    return { ok: true, compraId, purchaseInvoiceId, yaExistia };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Error al registrar compra contable.',
+    };
+  }
+}
