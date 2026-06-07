@@ -175,6 +175,16 @@ function flujoUsaBorradorWeb(flujo: string | undefined): boolean {
   );
 }
 
+/** Ingreso manual de factura: flujo completo en Telegram (no redirige a la app tras almacén). */
+function flujoFacturaManualTelegramCompleto(flujo: string | undefined): boolean {
+  return flujo === FLUJO_INGRESO_FACTURA_MANUAL;
+}
+
+function flujoUsaHandoffWebTrasAlmacen(flujo: string | undefined): boolean {
+  if (flujoFacturaManualTelegramCompleto(flujo)) return false;
+  return flujoUsaBorradorWeb(flujo);
+}
+
 function tokenBorradorRecepcion(
   flujo: FlujoRecepcionCampoTelegram,
   estadoPrev?: TelegramEstado,
@@ -196,18 +206,6 @@ async function patchMeta(
   await setTelegramContexto(supabase, chatId, {
     metadata: { ...meta(estado), ...patch },
   });
-}
-
-function enlaceRecepcionWebHtml(flujo: string | undefined, token: string | undefined): string {
-  const t = token?.trim();
-  if (!t) return '';
-  const vista = vistaDesdeFlujoTelegram(flujo);
-  if (!vista) return '';
-  const link = urlRecepcionCampoBorrador(t, vista);
-  return (
-    `\n\n🌐 <a href="${link}">Abrir recepción en la app</a>` +
-    '\n<i>Los datos del bot se sincronizan con la pantalla web.</i>'
-  );
 }
 
 function escHtml(s: string): string {
@@ -326,7 +324,14 @@ const PASOS_RECEPCION_WEB =
 const FLUJO_PASOS_FACTURA_MANUAL =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  PASOS_RECEPCION_WEB;
+  '3️⃣ Escribe el <b>proveedor</b>.\n' +
+  '4️⃣ Escribe el <b>número de factura</b> (<code>S/N</code> si no hay).\n' +
+  '5️⃣ <b>Artículos a ingresar</b>: material de la obra o agregar material nuevo.\n' +
+  '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
+  '7️⃣ <b>Agregar más artículos</b> si hace falta.\n' +
+  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
+  '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b>.\n\n' +
+  '<code>/cancelar</code> para abortar.';
 
 const FLUJO_PASOS_NOTA_ENTREGA =
   '1️⃣ Elige la <b>obra</b>.\n' +
@@ -568,13 +573,15 @@ async function usarMaterialEnDraft(
     draft_nombre_nuevo: undefined,
   });
 
+  const estado = await getTelegramEstado(supabase, chatId);
+  const esFactura = meta(estado).flujo === FLUJO_INGRESO_FACTURA_MANUAL;
   const extra = params.creado
     ? '\n\nℹ️ Material nuevo agregado al catálogo de la obra.'
     : '';
 
   await sendTelegramMessage(
     chatId,
-    `🔢 Indique la <b>cantidad</b> de «${params.nombre}» (${params.unidad}):${extra}`,
+    `${esFactura ? '6️⃣ ' : ''}🔢 Indique la <b>cantidad</b> de «${params.nombre}» (${params.unidad}):${extra}`,
     { parse_mode: 'HTML' },
   );
 }
@@ -699,7 +706,9 @@ async function enviarPickerMaterialIngresoManual(
 
   await sendTelegramMessage(
     chatId,
-    '🧱 <b>Elige el material</b> de la construcción:',
+    flujoActivo(await getTelegramEstado(supabase, chatId)) === FLUJO_INGRESO_FACTURA_MANUAL
+      ? '5️⃣ 🧱 <b>Elige artículo</b> del catálogo de la obra o agrega uno nuevo:'
+      : '🧱 <b>Elige el material</b> de la construcción:',
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
 }
@@ -762,7 +771,7 @@ async function preguntarMasLineas(supabase: SupabaseClient, chatId: string, nLin
   );
   await sendTelegramMessage(
     chatId,
-    `✅ Material agregado (${nLineas} línea(s) en total).\n\n¿Agregar <b>otro material</b>?`,
+    `✅ Material agregado (${nLineas} línea(s) en total).\n\n7️⃣ ¿Agregar <b>más artículos</b>?`,
     {
       parse_mode: 'HTML',
       reply_markup: {
@@ -782,7 +791,8 @@ async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): 
   await patchMeta(supabase, chatId, estado, { paso: 'foto' });
   const f = flujoActivo(estado);
   const tituloFoto =
-    f === FLUJO_EMERGENCIA ? '📷 <b>Memoria fotográfica (emergencia)</b>'
+    f === FLUJO_INGRESO_FACTURA_MANUAL ? '8️⃣ 📷 <b>Soporte fotográfico</b> (opcional)'
+    : f === FLUJO_EMERGENCIA ? '📷 <b>Memoria fotográfica (emergencia)</b>'
     : f === FLUJO_NOTA_ENTREGA ? '📷 <b>Fotos de la nota de entrega</b>'
     : '📷 <b>Soporte fotográfico</b> (opcional)';
   await sendTelegramMessage(
@@ -825,7 +835,7 @@ async function enviarConfirmacion(
   const tituloConfirm =
     f === FLUJO_EMERGENCIA ? '📋 <b>Confirmar emergencia (sin papeles)</b>\n'
     : f === FLUJO_NOTA_ENTREGA ? '📋 <b>Confirmar nota de entrega</b>\n'
-    : f === FLUJO_INGRESO_FACTURA_MANUAL ? '📋 <b>Confirmar ingreso de factura</b>\n'
+    : f === FLUJO_INGRESO_FACTURA_MANUAL ? '📋 <b>Registrar ingreso de factura</b>\n'
     : f === FLUJO_INGRESO_MANUAL ? '📋 <b>Confirmar ingreso sin nota</b>\n'
     : '📋 <b>Confirmar ingreso manual</b>\n';
   const etiquetaDoc =
@@ -846,13 +856,14 @@ async function enviarConfirmacion(
     (nFotosLinea > 0 ? `\n\n📷 ${nFotosLinea} línea(s) con foto de soporte` : '') +
     stockHint;
 
-  const textoBotonConfirmar = '✅ Confirmar ingreso';
+  const textoBotonConfirmar =
+    f === FLUJO_INGRESO_FACTURA_MANUAL ? '✅ Registrar ingreso' : '✅ Confirmar ingreso';
   const token = m.recepcion_campo_token?.trim();
   const vista = vistaDesdeFlujoTelegram(f);
   const keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [
     [{ text: textoBotonConfirmar, callback_data: `${PREFIX}conf:ok` }],
   ];
-  if (token && vista) {
+  if (token && vista && !flujoFacturaManualTelegramCompleto(f)) {
     keyboard.push([
       { text: '🌐 Completar en app', url: urlRecepcionCampoBorrador(token, vista) },
     ]);
@@ -1015,7 +1026,7 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
     await answerCallbackQuery(params.callbackId, String(ubi.nombre));
-    if (flujoUsaBorradorWeb(m.flujo)) {
+    if (flujoUsaHandoffWebTrasAlmacen(m.flujo)) {
       await enviarHandoffRecepcionWebTrasAlmacen(
         supabase,
         params.chatId,
@@ -1029,10 +1040,13 @@ export async function manejarCallbackIngresoManual(
         ubicacion_id: ubicacionId,
         ubicacion_nombre: String(ubi.nombre),
       });
+      const paso3 =
+        m.flujo === FLUJO_INGRESO_FACTURA_MANUAL
+          ? '3️⃣ ✏️ Escribe el <b>nombre del proveedor</b>:'
+          : '✏️ Escribe el <b>nombre del proveedor</b>:';
       await sendTelegramMessage(
         params.chatId,
-        `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n✏️ Escribe el <b>nombre del proveedor</b>:` +
-          enlaceRecepcionWebHtml(m.flujo, m.recepcion_campo_token),
+        `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n${paso3}`,
         { parse_mode: 'HTML' },
       );
     }
@@ -1109,17 +1123,11 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
     await answerCallbackQuery(params.callbackId, truncar(hit.name, 40));
-    await patchMeta(supabase, params.chatId, estado, {
-      paso: 'cantidad',
-      draft_material_id: hit.id,
-      draft_material_nombre: hit.name,
-      draft_unidad: hit.unit,
+    await usarMaterialEnDraft(supabase, params.chatId, {
+      materialId: hit.id,
+      nombre: hit.name,
+      unidad: hit.unit,
     });
-    await sendTelegramMessage(
-      params.chatId,
-      `🔢 Indique la <b>cantidad</b> de «${hit.name}» (${hit.unit}):`,
-      { parse_mode: 'HTML' },
-    );
     return true;
   }
 
@@ -1141,12 +1149,16 @@ export async function manejarCallbackIngresoManual(
       );
       return true;
     }
-    await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
-    await sendTelegramMessage(
-      params.chatId,
-      '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):',
-      { parse_mode: 'HTML' },
-    );
+    if (flujoFacturaManualTelegramCompleto(m.flujo)) {
+      await preguntarFotoOpcional(supabase, params.chatId);
+    } else {
+      await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
+      await sendTelegramMessage(
+        params.chatId,
+        '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):',
+        { parse_mode: 'HTML' },
+      );
+    }
     return true;
   }
 
@@ -1172,11 +1184,11 @@ export async function manejarCallbackIngresoManual(
   if (data === 'foto:skip' || data === 'foto:done') {
     await answerCallbackQuery(params.callbackId);
     await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
-    await sendTelegramMessage(
-      params.chatId,
-      '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):',
-      { parse_mode: 'HTML' },
-    );
+    const obsPrompt =
+      m.flujo === FLUJO_INGRESO_FACTURA_MANUAL
+        ? '9️⃣ 📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):'
+        : '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):';
+    await sendTelegramMessage(params.chatId, obsPrompt, { parse_mode: 'HTML' });
     return true;
   }
 
@@ -1300,7 +1312,7 @@ export async function manejarTextoIngresoManual(
     });
     const promptNum =
       flujoActivo(estado) === FLUJO_INGRESO_FACTURA_MANUAL
-        ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe el <b>número de factura</b> (<code>S/N</code> si no hay):`
+        ? `🏢 Proveedor: <b>${trimmed}</b>\n\n4️⃣ 📄 Escribe el <b>número de factura</b> (<code>S/N</code> si no hay):`
         : flujoActivo(estado) === FLUJO_NOTA_ENTREGA
           ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay):`
           : flujoActivo(estado) === FLUJO_INGRESO_MANUAL
@@ -1314,8 +1326,10 @@ export async function manejarTextoIngresoManual(
   if (paso === 'num_doc') {
     const numDoc = trimmed || 'S/N';
     await patchMeta(supabase, chatId, estado, { paso: 'material', num_doc: numDoc });
-    const promptMat =
-      `📄 Ref.: <b>${numDoc}</b>\n\nElige el <b>material</b> del catálogo o crea uno nuevo:`;
+    const esFactura = flujoActivo(estado) === FLUJO_INGRESO_FACTURA_MANUAL;
+    const promptMat = esFactura
+      ? `📄 Factura: <b>${numDoc}</b>\n\n5️⃣ Elige <b>artículo</b> del catálogo de la obra o agrega material nuevo:`
+      : `📄 Ref.: <b>${numDoc}</b>\n\nElige el <b>material</b> del catálogo o crea uno nuevo:`;
     await sendTelegramMessage(chatId, promptMat, { parse_mode: 'HTML' });
     if (estado.proyecto_id) {
       await enviarPickerMaterialIngresoManual(supabase, chatId, estado.proyecto_id);
@@ -1380,8 +1394,16 @@ export async function manejarTextoIngresoManual(
     await patchMeta(supabase, chatId, estado, { draft_cantidad: qty });
     const estadoQty = await getTelegramEstado(supabase, chatId);
     const flujoQty = flujoActivo(estadoQty);
-    if (
-      flujoQty === FLUJO_INGRESO_FACTURA_MANUAL ||
+    if (flujoQty === FLUJO_INGRESO_FACTURA_MANUAL) {
+      await patchMeta(supabase, chatId, estadoQty, {
+        draft_forma_ingreso: formaIngresoDefaultDesdeFlujoTelegram(flujoQty),
+      });
+      await finalizarLineaDraft(
+        supabase,
+        chatId,
+        await getTelegramEstado(supabase, chatId),
+      );
+    } else if (
       flujoQty === FLUJO_NOTA_ENTREGA ||
       flujoQty === FLUJO_INGRESO_MANUAL ||
       flujoQty === FLUJO_EMERGENCIA
