@@ -1196,7 +1196,7 @@ async function finalizarLineaDraft(
     material_id: m.draft_material_id,
     material_nombre: m.draft_material_nombre,
     unidad: m.draft_unidad ?? 'UND',
-    cantidad: m.draft_cantidad,
+    cantidad: Number(m.draft_cantidad),
     forma_ingreso: m.draft_forma_ingreso ?? formaIngresoDefaultDesdeFlujoTelegram(m.flujo),
     ...(m.draft_category_id
       ? {
@@ -1252,7 +1252,7 @@ async function registrarIngresoManual(
 ): Promise<{ ok: true; recepcionId: string } | { ok: false; error: string }> {
   const lineasRpc: LineaRecepcionCampoInput[] = params.lineas.map((l) => ({
     material_id: l.material_id,
-    cantidad: l.cantidad,
+    cantidad: Number(l.cantidad),
     unidad: l.unidad,
     descripcion: l.material_nombre,
     observaciones: `Origen: ${params.origenLabel}`,
@@ -1636,6 +1636,18 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
 
+    const lineasInvalidas = lineas.filter(
+      (l) => !l.material_id?.trim() || !Number.isFinite(Number(l.cantidad)) || Number(l.cantidad) <= 0,
+    );
+    if (lineasInvalidas.length) {
+      await sendTelegramMessage(
+        params.chatId,
+        '❌ Hay materiales sin cantidad válida. Agregue de nuevo las líneas con cantidad mayor a cero.',
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+
     const fotos = fm.fotos_storage_paths ?? [];
     const resultado = await registrarIngresoManual(supabase, {
       proyectoId,
@@ -1660,11 +1672,12 @@ export async function manejarCallbackIngresoManual(
     }
 
     let avisoContabilidad = '';
+    let contaOk = false;
     const lineasConta = lineas.map((l) => ({
       material_id: l.material_id,
       material_nombre: l.material_nombre,
       unidad: l.unidad,
-      cantidad: l.cantidad,
+      cantidad: Number(l.cantidad),
     }));
     const conta = await sincronizarContabilidadDesdeRecepcionCampo(supabase, {
       recepcionCampoId: resultado.recepcionId,
@@ -1677,12 +1690,16 @@ export async function manejarCallbackIngresoManual(
       lineas: lineasConta,
       soporteStoragePath: fm.soporte_storage_path ?? fotos[0],
     });
+    contaOk = conta.ok;
     if (!conta.ok) {
       avisoContabilidad =
         `\n\n⚠️ Stock registrado, pero no se reflejó en compras: ${conta.error}`;
     } else if (conta.provisional) {
       avisoContabilidad =
         '\n\n📋 Contabilidad provisional registrada. Concilie con la factura fiscal cuando llegue.';
+    } else {
+      avisoContabilidad =
+        `\n\n📒 Compra registrada en contabilidad (${conta.compraId?.slice(0, 8) ?? 'OK'}…).`;
     }
 
     const borradorToken = fm.recepcion_campo_token?.trim();
@@ -1700,14 +1717,15 @@ export async function manejarCallbackIngresoManual(
       metadata: {},
     });
 
+    const suffixAlmacenConta = contaOk ? ' (almacén + contabilidad)' : ' (solo almacén)';
     const tituloExito =
       fm.flujo === FLUJO_EMERGENCIA
-        ? `✅ <b>Ingreso sin nota registrado</b> (almacén + contabilidad)\n\n`
+        ? `✅ <b>Ingreso sin nota registrado</b>${suffixAlmacenConta}\n\n`
         : fm.flujo === FLUJO_NOTA_ENTREGA
-          ? `✅ <b>Nota de entrega registrada</b> (almacén + contabilidad)\n\n`
+          ? `✅ <b>Nota de entrega registrada</b>${suffixAlmacenConta}\n\n`
           : fm.flujo === FLUJO_INGRESO_FACTURA_MANUAL
-            ? `✅ <b>Factura ingresada</b> (almacén + contabilidad)\n\n`
-            : `✅ <b>Ingreso a almacén registrado</b> (almacén + contabilidad)\n\n`;
+            ? `✅ <b>Factura ingresada</b>${suffixAlmacenConta}\n\n`
+            : `✅ <b>Ingreso a almacén registrado</b>${suffixAlmacenConta}\n\n`;
     await sendTelegramMessage(
       params.chatId,
       tituloExito +

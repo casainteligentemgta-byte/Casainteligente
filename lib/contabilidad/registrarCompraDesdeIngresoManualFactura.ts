@@ -172,6 +172,8 @@ async function asegurarComprasFacturaSinStockExtra(
     fecha: string;
     lineas: LineaCompraContabilidadInput[];
     documentoStoragePath?: string | null;
+    /** Stock ya ingresado vía ci_registrar_ingreso_manual_campo: no disparar trigger registrada. */
+    stockYaIngresadoEnAlmacen?: boolean;
   },
 ): Promise<string> {
   const { data: existing } = await supabase
@@ -187,6 +189,7 @@ async function asegurarComprasFacturaSinStockExtra(
   }
 
   const now = new Date().toISOString();
+  const estadoFactura = params.stockYaIngresadoEnAlmacen ? 'borrador' : 'registrada';
   const { data: factura, error: fErr } = await supabase
     .from('compras_facturas')
     .insert({
@@ -198,8 +201,8 @@ async function asegurarComprasFacturaSinStockExtra(
       impuesto: 0,
       total: 0,
       ubicacion_destino_id: params.ubicacionId,
-      estado: 'registrada',
-      registrada_at: now,
+      estado: estadoFactura,
+      registrada_at: estadoFactura === 'registrada' ? now : null,
       updated_at: now,
       purchase_invoice_id: params.purchaseInvoiceId,
       documento_storage_path: params.documentoStoragePath ?? null,
@@ -352,6 +355,7 @@ export async function registrarCompraDesdeIngresoManualFactura(
       fecha,
       lineas: lineasConta,
       documentoStoragePath: params.soporteStoragePath ?? null,
+      stockYaIngresadoEnAlmacen: true,
     });
 
     await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
@@ -366,18 +370,32 @@ export async function registrarCompraDesdeIngresoManualFactura(
       .eq('id', params.recepcionCampoId)
       .maybeSingle();
     const obsPrev = String(recepcion?.observaciones ?? '').trim();
-    const patchRecepcion: Record<string, unknown> = {
-      observaciones: obsPrev ? `${obsPrev}\n${nota}` : nota,
-      contabilidad_compra_id: compraId,
-      updated_at: new Date().toISOString(),
-    };
-    if (pendienteCanal?.id && !recepcion?.factura_canal_pendiente_id) {
-      patchRecepcion.factura_canal_pendiente_id = pendienteCanal.id;
-    }
-    await supabase
+    const obsNext = obsPrev ? `${obsPrev}\n${nota}` : nota;
+
+    const { error: obsErr } = await supabase
       .from('ci_recepciones_campo')
-      .update(patchRecepcion as never)
+      .update({
+        observaciones: obsNext,
+        updated_at: new Date().toISOString(),
+        ...(pendienteCanal?.id && !recepcion?.factura_canal_pendiente_id
+          ? { factura_canal_pendiente_id: pendienteCanal.id }
+          : {}),
+      } as never)
       .eq('id', params.recepcionCampoId);
+    if (obsErr) {
+      console.warn('[registrarCompraDesdeIngresoManualFactura] observaciones recepción', obsErr.message);
+    }
+
+    const { error: linkErr } = await supabase
+      .from('ci_recepciones_campo')
+      .update({
+        contabilidad_compra_id: compraId,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq('id', params.recepcionCampoId);
+    if (linkErr && !/contabilidad_compra_id|42703|schema cache/i.test(linkErr.message ?? '')) {
+      throw new Error(linkErr.message ?? 'No se pudo enlazar recepción con contabilidad.');
+    }
 
     return {
       ok: true,
