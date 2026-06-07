@@ -5,6 +5,7 @@ import {
   listarUbicacionesParaSelector,
 } from '@/lib/almacen/ubicacionesInventario';
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
+import { listarProveedoresSugeridosIngreso } from '@/lib/almacen/listarProveedoresSugeridosIngreso';
 import { normalizarCodigoUnidad, UNIDADES_MEDIDA_DEFAULT } from '@/lib/almacen/unidadesMedidaDefault';
 import {
   crearMaterialParaLineaCompra,
@@ -101,6 +102,7 @@ export type MetadataIngresoManual = {
   ubicacion_id?: string;
   ubicacion_nombre?: string;
   proveedor_nombre?: string;
+  proveedor_id?: string;
   num_doc?: string;
   lineas?: LineaIngresoManualDraft[];
   draft_material_id?: string;
@@ -368,7 +370,7 @@ const PASOS_RECEPCION_WEB =
 const FLUJO_PASOS_FACTURA_MANUAL =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b>.\n' +
+  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b>.\n' +
   '4️⃣ Escribe el <b>número de factura</b> (<code>S/N</code> si no hay).\n' +
   '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
   '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
@@ -380,7 +382,7 @@ const FLUJO_PASOS_FACTURA_MANUAL =
 const FLUJO_PASOS_NOTA_ENTREGA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b>.\n' +
+  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b>.\n' +
   '4️⃣ Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay).\n' +
   '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
   '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
@@ -392,7 +394,7 @@ const FLUJO_PASOS_NOTA_ENTREGA =
 const FLUJO_PASOS_SIN_NOTA =
   '1️⃣ Elige la <b>obra</b>.\n' +
   '2️⃣ Elige el <b>almacén</b> de ingreso.\n' +
-  '3️⃣ Escribe el <b>proveedor</b>.\n' +
+  '3️⃣ <b>Elige o escribe</b> el <b>proveedor</b>.\n' +
   '4️⃣ Escribe una <b>referencia</b> del ingreso (<code>S/N</code> si no hay documento).\n' +
   '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
   '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
@@ -622,6 +624,95 @@ async function enviarPickerAlmacenIngresoManual(
   await sendTelegramMessage(
     chatId,
     `🏭 <b>Elige el almacén de ingreso</b>\nObra: <b>${escHtml(nombreObra)}</b>${entidadLine}`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
+  );
+}
+
+function promptNumDocTrasProveedor(
+  flujo: FlujoRecepcionCampoTelegram | undefined,
+  proveedorNombre: string,
+): string {
+  const prov = escHtml(proveedorNombre);
+  if (flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
+    return `🏢 Proveedor: <b>${prov}</b>\n\n4️⃣ 📄 Escribe el <b>número de factura</b> (<code>S/N</code> si no hay):`;
+  }
+  if (flujo === FLUJO_NOTA_ENTREGA) {
+    return `🏢 Proveedor: <b>${prov}</b>\n\n4️⃣ 📄 Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay):`;
+  }
+  if (flujo === FLUJO_EMERGENCIA) {
+    return `🏢 Proveedor: <b>${prov}</b>\n\n4️⃣ 📄 Escribe una <b>referencia</b> del ingreso (<code>S/N</code> si no hay documento):`;
+  }
+  return `🏢 Proveedor: <b>${prov}</b>\n\n📄 Escribe el <b>número o referencia</b> (<code>S/N</code> si no hay):`;
+}
+
+async function avanzarTrasProveedor(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  params: {
+    proveedorNombre: string;
+    proveedorId?: string | null;
+    telegramUserId?: string;
+    telegramUsername?: string | null;
+  },
+): Promise<void> {
+  await patchMeta(supabase, chatId, estado, {
+    paso: 'num_doc',
+    proveedor_nombre: params.proveedorNombre.trim(),
+    proveedor_id: params.proveedorId?.trim() || undefined,
+    telegram_user_id: params.telegramUserId,
+    telegram_username: params.telegramUsername ?? null,
+  });
+  const flujo = flujoActivo(estado);
+  await sendTelegramMessage(
+    chatId,
+    promptNumDocTrasProveedor(flujo, params.proveedorNombre),
+    { parse_mode: 'HTML' },
+  );
+}
+
+async function enviarPickerProveedorIngresoManual(
+  supabase: SupabaseClient,
+  chatId: string,
+  proyectoId: string,
+  ubicacionNombre: string,
+  page = 0,
+): Promise<void> {
+  const estado = await getTelegramEstado(supabase, chatId);
+  await patchMeta(supabase, chatId, estado, { paso: 'proveedor' });
+
+  const proveedores = await listarProveedoresSugeridosIngreso(supabase, proyectoId);
+  const totalPages = Math.max(1, Math.ceil(proveedores.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const slice = proveedores.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((p) => [
+    {
+      text: truncar(`🏢 ${p.nombre}`),
+      callback_data: p.empresasId
+        ? `${PREFIX}prve:${p.empresasId}`
+        : `${PREFIX}prvk:${p.key}`,
+    },
+  ]);
+
+  if (totalPages > 1) {
+    const nav: Array<{ text: string; callback_data: string }> = [];
+    if (safePage > 0) nav.push({ text: '◀', callback_data: `${PREFIX}prvp:${safePage - 1}` });
+    nav.push({ text: `${safePage + 1}/${totalPages}`, callback_data: `${PREFIX}prvp:${safePage}` });
+    if (safePage < totalPages - 1) nav.push({ text: '▶', callback_data: `${PREFIX}prvp:${safePage + 1}` });
+    buttons.push(nav);
+  }
+
+  buttons.push([{ text: '✏️ Escribir otro proveedor', callback_data: `${PREFIX}prv:otro` }]);
+
+  const listaHint = proveedores.length
+    ? 'Elige un proveedor de la lista o escribe otro nombre.'
+    : 'No hay proveedores precargados. Escribe el nombre del proveedor.';
+
+  await sendTelegramMessage(
+    chatId,
+    `✅ Almacén: <b>${escHtml(ubicacionNombre)}</b>\n\n` +
+      `3️⃣ <b>Proveedor</b>: ${listaHint}`,
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
 }
@@ -1146,6 +1237,7 @@ async function registrarIngresoManual(
     proyectoId: string;
     ubicacionId: string;
     proveedorNombre: string;
+    proveedorId?: string | null;
     numDoc: string;
     lineas: LineaIngresoManualDraft[];
     origenLabel: string;
@@ -1173,7 +1265,7 @@ async function registrarIngresoManual(
   const { data: recepcionId, error: rpcErr } = await supabase.rpc('ci_registrar_ingreso_manual_campo', {
     p_proyecto_id: params.proyectoId,
     p_ubicacion_id: params.ubicacionId,
-    p_proveedor_id: null,
+    p_proveedor_id: params.proveedorId?.trim() || null,
     p_tipo: params.tipoRecepcion,
     p_num_doc: params.numDoc.trim() || 'S/N',
     p_lineas: lineasRpc,
@@ -1282,15 +1374,85 @@ export async function manejarCallbackIngresoManual(
         ubicacion_id: ubicacionId,
         ubicacion_nombre: String(ubi.nombre),
       });
-      const paso3 = flujoTelegramCompletoEnBot(m.flujo)
-        ? '3️⃣ ✏️ Escribe el <b>nombre del proveedor</b>:'
-        : '✏️ Escribe el <b>nombre del proveedor</b>:';
-      await sendTelegramMessage(
-        params.chatId,
-        `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n${paso3}`,
-        { parse_mode: 'HTML' },
-      );
+      if (flujoTelegramCompletoEnBot(m.flujo)) {
+        await enviarPickerProveedorIngresoManual(
+          supabase,
+          params.chatId,
+          proyectoId,
+          String(ubi.nombre),
+        );
+      } else {
+        await sendTelegramMessage(
+          params.chatId,
+          `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n` +
+            '✏️ Escribe el <b>nombre del proveedor</b>:',
+          { parse_mode: 'HTML' },
+        );
+      }
     }
+    return true;
+  }
+
+  if (data.startsWith('prvp:')) {
+    const page = Number(data.slice(5));
+    await answerCallbackQuery(params.callbackId);
+    await enviarPickerProveedorIngresoManual(
+      supabase,
+      params.chatId,
+      proyectoId,
+      m.ubicacion_nombre ?? 'Almacén',
+      page,
+    );
+    return true;
+  }
+
+  if (data === 'prv:otro') {
+    await answerCallbackQuery(params.callbackId);
+    await patchMeta(supabase, params.chatId, estado, { paso: 'proveedor' });
+    await sendTelegramMessage(
+      params.chatId,
+      '3️⃣ ✏️ Escribe el <b>nombre del proveedor</b>:',
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
+
+  if (data.startsWith('prve:')) {
+    const empId = data.slice(5);
+    const { data: emp } = await supabase
+      .from('empresas')
+      .select('id,nombre')
+      .eq('id', empId)
+      .maybeSingle();
+    if (!emp?.nombre) {
+      await answerCallbackQuery(params.callbackId, 'Proveedor no encontrado', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, truncar(String(emp.nombre), 40));
+    await avanzarTrasProveedor(supabase, params.chatId, estado, {
+      proveedorNombre: String(emp.nombre).trim(),
+      proveedorId: String(emp.id),
+      telegramUserId: m.telegram_user_id,
+      telegramUsername: m.telegram_username,
+    });
+    return true;
+  }
+
+  if (data.startsWith('prvk:')) {
+    const key = data.slice(5);
+    const proveedores = await listarProveedoresSugeridosIngreso(supabase, proyectoId);
+    const hit = proveedores.find((p) => p.key === key);
+    if (!hit) {
+      await answerCallbackQuery(params.callbackId, 'Proveedor no encontrado', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, truncar(hit.nombre, 40));
+    await avanzarTrasProveedor(supabase, params.chatId, estado, {
+      proveedorNombre: hit.nombre,
+      proveedorId: hit.empresasId,
+      telegramUserId: m.telegram_user_id,
+      telegramUsername: m.telegram_username,
+    });
     return true;
   }
 
@@ -1479,6 +1641,7 @@ export async function manejarCallbackIngresoManual(
       proyectoId,
       ubicacionId: fm.ubicacion_id,
       proveedorNombre: fm.proveedor_nombre,
+      proveedorId: fm.proveedor_id,
       numDoc: fm.num_doc ?? 'S/N',
       lineas,
       origenLabel: etiquetaOrigen(fm.flujo),
@@ -1596,25 +1759,11 @@ export async function manejarTextoIngresoManual(
       );
       return true;
     }
-    await patchMeta(supabase, chatId, estado, {
-      paso: 'num_doc',
-      proveedor_nombre: trimmed,
-      telegram_user_id: userId,
-      telegram_username: username ?? null,
+    await avanzarTrasProveedor(supabase, chatId, estado, {
+      proveedorNombre: trimmed,
+      telegramUserId: userId,
+      telegramUsername: username ?? null,
     });
-    const flujo = flujoActivo(estado);
-    const promptNum =
-      flujo === FLUJO_INGRESO_FACTURA_MANUAL
-        ? `🏢 Proveedor: <b>${trimmed}</b>\n\n4️⃣ 📄 Escribe el <b>número de factura</b> (<code>S/N</code> si no hay):`
-        : flujo === FLUJO_NOTA_ENTREGA
-          ? `🏢 Proveedor: <b>${trimmed}</b>\n\n4️⃣ 📄 Escribe el <b>número de la nota de entrega</b> (<code>S/N</code> si no hay):`
-          : flujo === FLUJO_EMERGENCIA
-            ? `🏢 Proveedor: <b>${trimmed}</b>\n\n4️⃣ 📄 Escribe una <b>referencia</b> del ingreso (<code>S/N</code> si no hay documento):`
-            : flujo === FLUJO_INGRESO_MANUAL
-              ? `🏢 Proveedor: <b>${trimmed}</b>\n\n📄 Escribe una <b>referencia</b> (<code>S/N</code> si no hay documento):`
-              : `🏢 Proveedor: <b>${trimmed}</b>\n\n` +
-                `📄 Escribe el <b>número o referencia</b> (<code>S/N</code> si no hay):`;
-    await sendTelegramMessage(chatId, promptNum, { parse_mode: 'HTML' });
     return true;
   }
 
