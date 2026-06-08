@@ -4,7 +4,10 @@ import { approveAllQualityInspectionsForInvoice } from '@/lib/almacen/approveQua
 import { crearCuarentenaDesdeFactura } from '@/lib/almacen/crearCuarentenaDesdeFactura';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
-import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import {
+  parseCondicionPagoExtracted,
+  type ExtractedCanalHeader,
+} from '@/lib/contabilidad/extractedCanal';
 import {
   mensajeLineasSinMaterialSku,
   resolverMaterialIdLineasCompra,
@@ -390,6 +393,9 @@ export async function ingresoAlmacenDesdePendienteCanal(
       };
     }
 
+    const extractedHeader = (pendiente?.extracted ?? null) as ExtractedCanalHeader | null;
+    const condicionPago = parseCondicionPagoExtracted(extractedHeader?.condicion_pago);
+
     const result = await registrarCompraInventario(supabase, {
       ubicacionDestinoId: destino,
       numeroFactura: String(compra.invoice_number ?? 'S/N'),
@@ -399,6 +405,8 @@ export async function ingresoAlmacenDesdePendienteCanal(
       total: Number(compra.total_amount ?? 0),
       purchaseInvoiceId,
       documentoStoragePath: opts?.documentoStoragePath?.trim() || null,
+      condicion_pago: condicionPago,
+      dias_credito: extractedHeader?.dias_credito ?? null,
       lineas: lineasInventario,
     });
 

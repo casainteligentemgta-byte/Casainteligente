@@ -13,6 +13,8 @@ import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import {
   formatTotalExtracted,
   monedaExtractedConfirmada,
+  condicionPagoExtractedConfirmada,
+  parseCondicionPagoExtracted,
   normalizarMonedaExtracted,
 } from '@/lib/contabilidad/extractedCanal';
 import {
@@ -255,8 +257,20 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     await guardarExtracted(next);
   };
 
+  const elegirCondicionPago = async (condicion: 'contado' | 'credito') => {
+    if (!extracted) return;
+    const next: ExtractedCanalHeader = {
+      ...extracted,
+      condicion_pago: condicion,
+      dias_credito: condicion === 'credito' ? extracted.dias_credito ?? null : null,
+    };
+    await guardarExtracted(next);
+  };
+
   const monedaConfirmada = monedaExtractedConfirmada(extracted?.moneda);
   const monedaActual = normalizarMonedaExtracted(extracted?.moneda);
+  const condicionPagoConfirmada = condicionPagoExtractedConfirmada(extracted?.condicion_pago);
+  const condicionPagoActual = parseCondicionPagoExtracted(extracted?.condicion_pago);
 
   const finalizarIngresoYIrAlmacen = useCallback(
     (mensaje: string) => {
@@ -424,6 +438,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     !gastoEntidad &&
       puedeIngresarAlmacen &&
       monedaConfirmada &&
+      condicionPagoConfirmada &&
       proyectoEfectivo &&
       ubicacionEfectiva &&
       !frmPendienteBloquea &&
@@ -435,6 +450,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     gastoEntidad &&
       puedeIngresarAlmacen &&
       monedaConfirmada &&
+      condicionPagoConfirmada &&
       entidadEfectiva &&
       !frmPendienteBloquea &&
       !registrando,
@@ -454,6 +470,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       if (!ubicacionEfectiva) return 'Seleccione el almacén de ingreso.';
     }
     if (!monedaConfirmada) return 'Indique si la factura está en bolívares o dólares.';
+    if (!condicionPagoConfirmada) return 'Indique si la compra es a contado o a crédito.';
     if (pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') {
       return 'Espere el procesamiento IA o pulse Actualizar arriba.';
     }
@@ -475,6 +492,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     puedeIngresarAlmacen,
     frmPendienteBloquea,
     monedaConfirmada,
+    condicionPagoConfirmada,
   ]);
 
   if (!montado) {
@@ -626,6 +644,37 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                   </span>
                 </p>
               ) : null}
+            </section>
+
+            <section className={`${panelClass} space-y-3 border-[#FF9500]/30`}>
+              <h2 className="text-sm font-bold text-[#FF9500]">Forma de pago</h2>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                Indique si esta compra se paga de contado o a crédito.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void elegirCondicionPago('contado')}
+                  className={`rounded-xl border py-3 text-sm font-bold transition ${
+                    condicionPagoConfirmada && condicionPagoActual === 'contado'
+                      ? 'border-[#FF9500] bg-[#FF9500]/15 text-white'
+                      : 'border-white/10 bg-black/30 text-zinc-300 hover:border-white/20'
+                  }`}
+                >
+                  Contado
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void elegirCondicionPago('credito')}
+                  className={`rounded-xl border py-3 text-sm font-bold transition ${
+                    condicionPagoConfirmada && condicionPagoActual === 'credito'
+                      ? 'border-[#FF9500] bg-[#FF9500]/15 text-white'
+                      : 'border-white/10 bg-black/30 text-zinc-300 hover:border-white/20'
+                  }`}
+                >
+                  Crédito
+                </button>
+              </div>
             </section>
 
             <section className={`${panelClass} space-y-3`}>

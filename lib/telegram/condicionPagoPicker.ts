@@ -1,20 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  formatTotalExtracted,
-  normalizarMonedaExtracted,
+  etiquetaCondicionPagoExtracted,
+  parseCondicionPagoExtracted,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { resumenFacturaCompradorHtml } from '@/lib/telegram/mensajesFactura';
 
-const PREFIX = 'mf:';
+const PREFIX = 'cp:';
 
-export function esCallbackMonedaFactura(data: string): boolean {
-  return data === `${PREFIX}ves` || data === `${PREFIX}usd`;
+export function esCallbackCondicionPagoFactura(data: string): boolean {
+  return data === `${PREFIX}contado` || data === `${PREFIX}credito`;
 }
 
-export async function enviarPickerMonedaFacturaTelegram(
+export async function enviarPickerCondicionPagoTelegram(
   supabase: SupabaseClient,
   chatId: string,
   pendingId: string,
@@ -33,16 +33,14 @@ export async function enviarPickerMonedaFacturaTelegram(
 
   await sendTelegramMessage(
     chatId,
-    `💱 <b>¿En qué moneda está esta factura?</b>\n\n` +
-      resumenFacturaCompradorHtml(extracted, { sinMoneda: true }) +
-      `\n\n<i>Total y precios unitarios están en la moneda que elija.</i>`,
+    `💳 <b>¿La compra es a contado o a crédito?</b>\n\n` + resumenFacturaCompradorHtml(extracted),
     {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
           [
-            { text: 'Bolívares (Bs)', callback_data: `${PREFIX}ves` },
-            { text: 'Dólares (USD)', callback_data: `${PREFIX}usd` },
+            { text: 'Contado', callback_data: `${PREFIX}contado` },
+            { text: 'Crédito', callback_data: `${PREFIX}credito` },
           ],
         ],
       },
@@ -50,14 +48,15 @@ export async function enviarPickerMonedaFacturaTelegram(
   );
 }
 
-export async function manejarCallbackMonedaFacturaTelegram(
+export async function manejarCallbackCondicionPagoFacturaTelegram(
   supabase: SupabaseClient,
   params: { chatId: string; callbackId: string; data: string },
 ): Promise<boolean> {
-  if (!esCallbackMonedaFactura(params.data)) return false;
+  if (!esCallbackCondicionPagoFactura(params.data)) return false;
 
-  const moneda: ExtractedCanalHeader['moneda'] =
-    params.data === `${PREFIX}usd` ? 'USD' : 'VES';
+  const condicion = parseCondicionPagoExtracted(
+    params.data === `${PREFIX}credito` ? 'credito' : 'contado',
+  );
 
   const estado = await getTelegramEstado(supabase, params.chatId);
   const pendingId = estado.pending_factura_id;
@@ -74,7 +73,8 @@ export async function manejarCallbackMonedaFacturaTelegram(
   const prev = (row?.extracted ?? {}) as ExtractedCanalHeader;
   const nextExtracted: ExtractedCanalHeader = {
     ...prev,
-    moneda: normalizarMonedaExtracted(moneda),
+    condicion_pago: condicion,
+    dias_credito: condicion === 'credito' ? prev.dias_credito ?? null : null,
   };
 
   const { error } = await supabase
@@ -86,27 +86,20 @@ export async function manejarCallbackMonedaFacturaTelegram(
     .eq('id', pendingId);
 
   if (error) {
-    await answerCallbackQuery(params.callbackId, 'Error al guardar moneda', true);
+    await answerCallbackQuery(params.callbackId, 'Error al guardar forma de pago', true);
     return true;
   }
 
-  const label = simboloMoneda(moneda);
-  await answerCallbackQuery(params.callbackId, `Moneda: ${label}`);
+  const label = etiquetaCondicionPagoExtracted(condicion);
+  await answerCallbackQuery(params.callbackId, label);
 
   await sendTelegramMessage(
     params.chatId,
-    `✅ Moneda: <b>${label}</b>` +
-      (nextExtracted.total_amount != null
-        ? `\n💰 Total: ${formatTotalExtracted(nextExtracted)}`
-        : ''),
+    `✅ Forma de pago: <b>${label}</b>`,
     { parse_mode: 'HTML' },
   );
 
-  const { enviarPickerCondicionPagoTelegram } = await import('@/lib/telegram/condicionPagoPicker');
-  await enviarPickerCondicionPagoTelegram(supabase, params.chatId, pendingId);
+  const { enviarPickerProyectosTelegram } = await import('@/lib/telegram/proyectoPicker');
+  await enviarPickerProyectosTelegram(supabase, params.chatId, 'factura_compra');
   return true;
-}
-
-function simboloMoneda(moneda: ExtractedCanalHeader['moneda']): string {
-  return normalizarMonedaExtracted(moneda) === 'USD' ? 'USD' : 'Bs';
 }

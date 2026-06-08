@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import type { CompraCondicionPago } from '@/types/inventario-obra';
+
 export type LineaCompraInventarioInput = {
   material_id: string;
   descripcion: string;
@@ -25,6 +27,8 @@ export async function registrarCompraInventario(
     total: number;
     purchaseInvoiceId?: string | null;
     documentoStoragePath?: string | null;
+    condicion_pago?: CompraCondicionPago;
+    dias_credito?: number | null;
     lineas: LineaCompraInventarioInput[];
   },
 ): Promise<{ compraFacturaId: string }> {
@@ -50,6 +54,9 @@ export async function registrarCompraInventario(
       estado: 'borrador',
       purchase_invoice_id: params.purchaseInvoiceId ?? null,
       documento_storage_path: params.documentoStoragePath ?? null,
+      condicion_pago: params.condicion_pago ?? 'contado',
+      dias_credito:
+        params.condicion_pago === 'credito' ? params.dias_credito ?? null : null,
     })
     .select('id')
     .single();

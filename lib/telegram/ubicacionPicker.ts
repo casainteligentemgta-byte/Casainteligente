@@ -130,7 +130,7 @@ export async function enviarPickerUbicacionesTelegram(
 
   await sendTelegramMessage(
     chatId,
-    `📦 <b>Elige el almacén</b> de esta compra\nObra: <b>${params.nombreObra}</b>`,
+    `📦 <b>¿A qué almacén será despachada?</b>\nObra: <b>${params.nombreObra}</b>`,
     { parse_mode: 'HTML', reply_markup: keyboard },
   );
 }

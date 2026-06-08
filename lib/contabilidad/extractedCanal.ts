@@ -1,4 +1,5 @@
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
+import type { CompraCondicionPago } from '@/types/inventario-obra';
 
 export type ExtractedCanalItem = {
   description?: string;
@@ -21,6 +22,20 @@ export function monedaExtractedConfirmada(moneda?: string | null): boolean {
     .trim()
     .toUpperCase();
   return m === 'USD' || m === 'VES' || m === 'BS';
+}
+
+export function parseCondicionPagoExtracted(v: unknown): CompraCondicionPago {
+  return String(v ?? '').trim().toLowerCase() === 'credito' ? 'credito' : 'contado';
+}
+
+/** true si el comprador ya indicó contado o crédito. */
+export function condicionPagoExtractedConfirmada(v: unknown): boolean {
+  const m = String(v ?? '').trim().toLowerCase();
+  return m === 'contado' || m === 'credito';
+}
+
+export function etiquetaCondicionPagoExtracted(v: unknown): string {
+  return parseCondicionPagoExtracted(v) === 'credito' ? 'Crédito' : 'Contado';
 }
 
 export function simboloMonedaExtracted(moneda?: string | null): string {
@@ -48,6 +63,9 @@ export type ExtractedCanalHeader = {
   total_amount?: number | null;
   /** Moneda del total y precios unitarios de líneas (por defecto VES). */
   moneda?: MonedaOrigen | string | null;
+  /** Forma de pago indicada por el comprador tras el OCR. */
+  condicion_pago?: CompraCondicionPago | string | null;
+  dias_credito?: number | null;
   items?: ExtractedCanalItem[];
   modelUsed?: string;
   fromGemini?: boolean;

@@ -5,8 +5,10 @@ import {
 } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
 import {
+  condicionPagoExtractedConfirmada,
   monedaExtractedConfirmada,
   normalizarMonedaExtracted,
+  parseCondicionPagoExtracted,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
@@ -254,6 +256,9 @@ async function confirmarCompraDesdeCanalInterno(
   }
   if (!monedaExtractedConfirmada(extracted.moneda)) {
     throw new Error('Indique si la factura está en bolívares (Bs) o dólares (USD).');
+  }
+  if (!condicionPagoExtractedConfirmada(extracted.condicion_pago)) {
+    throw new Error('Indique si la compra es a contado o a crédito.');
   }
 
   const gastoEntidad = params.imputacionEntidad === true;

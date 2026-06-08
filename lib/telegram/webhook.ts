@@ -30,6 +30,10 @@ import {
   mensajeModoFacturasActivado,
 } from '@/lib/telegram/mensajesFactura';
 import {
+  esCallbackCondicionPagoFactura,
+  manejarCallbackCondicionPagoFacturaTelegram,
+} from '@/lib/telegram/condicionPagoPicker';
+import {
   esCallbackMonedaFactura,
   manejarCallbackMonedaFacturaTelegram,
 } from '@/lib/telegram/monedaFacturaPicker';
@@ -584,6 +588,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledMoneda) {
         return NextResponse.json({ ok: true, callback: 'factura_moneda' });
+      }
+    }
+
+    if (esCallbackCondicionPagoFactura(cq.data)) {
+      const handledPago = await manejarCallbackCondicionPagoFacturaTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledPago) {
+        return NextResponse.json({ ok: true, callback: 'factura_condicion_pago' });
       }
     }
 

@@ -231,7 +231,7 @@ export async function processInvoiceFromCanal(params: {
     `RIF: ${inv.supplier_rif ?? '—'}\n` +
     `Total: ${formatTotalExtracted(inv, { sinMoneda: true })}\n` +
     `Líneas: ${nItems}${fastTrackMsg ? `\n${fastTrackMsg}` : ''}\n\n` +
-    `Indique moneda (Bs o USD) y confirme en: ${link}`;
+    `Indique moneda (Bs o USD), contado/crédito y confirme en: ${link}`;
 
   if (prog) {
     await prog.ok('');

@@ -19,7 +19,7 @@ export function mensajeModoFacturasActivado(): string {
   return (
     '✅ <b>COMPRADOR: cargar factura.</b>\n\n' +
     'Envía una <b>foto</b> de la factura de compra.\n' +
-    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, elija obra y almacén.\n' +
+    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, si es <b>contado</b> o <b>crédito</b>, elija obra y almacén de despacho.\n' +
     'El sistema la enviará a <b>Contabilidad</b> y la <b>precargará en Almacén</b>.\n\n' +
     '<code>/cancelar</code> para salir de este modo.'
   );
