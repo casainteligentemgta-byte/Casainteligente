@@ -17,7 +17,14 @@ GEMINI_API_KEY=...
 NEXT_PUBLIC_BASE_URL=https://casainteligente.company
 ```
 
-Si `TELEGRAM_ALLOWED_CHAT_IDS` está vacío, se aceptan todos los chats (solo para pruebas).
+Si no hay reglas activas (env vacío, sin filas en BD y sin `TELEGRAM_WHITELIST_ENFORCED`), se aceptan todos los chats (solo para pruebas).
+
+### Lista blanca en la app
+
+- Pantalla: **`/configuracion/telegram`** — alta rápida (nombre + chat ID).
+- Tabla BD: `ci_telegram_whitelist` (migración `218`).
+- La nómina del proyecto (`ci_proyecto_nomina`) sincroniza automáticamente quienes tengan `telegram_chat_id`.
+- Producción estricta: `TELEGRAM_WHITELIST_ENFORCED=true` en Vercel.
 
 ## Configurar webhook
 

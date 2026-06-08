@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getTelegramBotToken,
-  isChatAllowed,
   sendTelegramMessage,
 } from '@/lib/telegram/botApi';
+import { isChatAllowedAsync } from '@/lib/telegram/chatWhitelist';
 import { procesarComandoTelegram } from '@/lib/telegram/commands';
 import {
   etiquetaContexto,
@@ -427,7 +427,7 @@ export async function handleTelegramCallbackQuery(
   }
 
   const chatId = String(cq.message.chat.id);
-  if (!isChatAllowed(chatId)) {
+  if (!(await isChatAllowedAsync(chatId))) {
     return NextResponse.json({ ok: true, denied: true });
   }
 
@@ -731,7 +731,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     const chatId = String(msg.chat.id);
     chatIdParaError = chatId;
 
-    if (!isChatAllowed(chatId)) {
+    if (!(await isChatAllowedAsync(chatId))) {
       await sendTelegramMessage(
         chatId,
         '⛔ Chat no autorizado. Contacte al administrador.',

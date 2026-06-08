@@ -3,6 +3,7 @@ import {
   esCategoriaNominaValida,
   type CategoriaNominaProyecto,
 } from '@/lib/proyectos/rolesProyectoNomina';
+import { sincronizarWhitelistDesdeNomina } from '@/lib/telegram/chatWhitelist';
 
 export type FilaNominaProyecto = {
   id: string;
@@ -181,7 +182,17 @@ export async function crearFilaNominaProyecto(
     .single();
 
   if (error) throw new Error(error.message);
-  return mapFila(data as RowDb);
+  const fila = mapFila(data as RowDb);
+  await sincronizarWhitelistDesdeNomina(supabase, {
+    nominaId: fila.id,
+    proyectoId: fila.proyecto_id,
+    empleadoId: fila.empleado_id,
+    nombre: fila.nombre_display,
+    email: fila.email ?? fila.empleado_email,
+    telegramChatId: fila.telegram_chat_id ?? fila.empleado_telegram_chat_id,
+    activo: fila.activo,
+  });
+  return fila;
 }
 
 export async function actualizarFilaNominaProyecto(
@@ -223,7 +234,17 @@ export async function actualizarFilaNominaProyecto(
 
   if (error) throw new Error(error.message);
   if (!data) throw new Error('Registro de nómina no encontrado');
-  return mapFila(data as RowDb);
+  const fila = mapFila(data as RowDb);
+  await sincronizarWhitelistDesdeNomina(supabase, {
+    nominaId: fila.id,
+    proyectoId: fila.proyecto_id,
+    empleadoId: fila.empleado_id,
+    nombre: fila.nombre_display,
+    email: fila.email ?? fila.empleado_email,
+    telegramChatId: fila.telegram_chat_id ?? fila.empleado_telegram_chat_id,
+    activo: fila.activo,
+  });
+  return fila;
 }
 
 export async function eliminarFilaNominaProyecto(
@@ -238,6 +259,15 @@ export async function eliminarFilaNominaProyecto(
     .eq('proyecto_id', proyectoId.trim());
 
   if (error) throw new Error(error.message);
+  await sincronizarWhitelistDesdeNomina(supabase, {
+    nominaId: nominaId.trim(),
+    proyectoId: proyectoId.trim(),
+    empleadoId: null,
+    nombre: '—',
+    email: null,
+    telegramChatId: null,
+    activo: false,
+  });
 }
 
 export type EmpleadoNominaOpcion = {

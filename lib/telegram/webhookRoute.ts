@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import {
   getTelegramBotToken,
-  isChatAllowed,
   sendTelegramMessage,
 } from '@/lib/telegram/botApi';
+import { isChatAllowedAsync } from '@/lib/telegram/chatWhitelist';
 import {
   extraerArgumentoStock,
   manejarComandoStockTelegram,
@@ -74,7 +74,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     const chatId = callback.message?.chat?.id
       ? String(callback.message.chat.id)
       : String(callback.from.id);
-    if (!isChatAllowed(chatId)) {
+    if (!(await isChatAllowedAsync(chatId))) {
       try {
         await sendTelegramMessage(chatId, '⛔ Chat no autorizado. Contacte al administrador.');
       } catch (err) {
@@ -90,7 +90,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
   }
 
   const chatId = String(msg.chat.id);
-  if (!isChatAllowed(chatId)) {
+  if (!(await isChatAllowedAsync(chatId))) {
     try {
       await sendTelegramMessage(
         chatId,

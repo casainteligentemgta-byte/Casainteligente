@@ -15,6 +15,7 @@ export function getTelegramAllowedChatIds(): Set<string> {
   );
 }
 
+/** Solo lista de env. Preferir {@link isChatAllowedAsync} (env + BD). */
 export function isChatAllowed(chatId: string | number): boolean {
   const allowed = getTelegramAllowedChatIds();
   if (allowed.size === 0) return true;

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   HardHat,
@@ -269,7 +270,14 @@ export default function ProyectoNominaRolesPanel({ proyectoId }: Props) {
               <h2 className="mt-1 text-lg font-bold text-white">Nómina del proyecto</h2>
               <p className="mt-1 max-w-2xl text-sm text-zinc-400">
                 Cuadro de obreros y empleados con rol operativo, correo y contacto Telegram por
-                obra.
+                obra. Con chat ID se autorizan automáticamente en el{' '}
+                <Link
+                  href="/configuracion/telegram"
+                  className="text-[#FF9500] hover:underline"
+                >
+                  bot de Telegram
+                </Link>
+                .
               </p>
             </div>
           </div>
