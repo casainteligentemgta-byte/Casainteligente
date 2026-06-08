@@ -38,6 +38,28 @@ export function etiquetaCondicionPagoExtracted(v: unknown): string {
   return parseCondicionPagoExtracted(v) === 'credito' ? 'Crédito' : 'Contado';
 }
 
+export function parseDiasCreditoExtracted(v: unknown): number | null {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) return null;
+  return n;
+}
+
+/** Crédito exige días > 0; contado no requiere dias_credito. */
+export function diasCreditoExtractedValido(row: {
+  condicion_pago?: unknown;
+  dias_credito?: number | null;
+}): boolean {
+  if (parseCondicionPagoExtracted(row.condicion_pago) !== 'credito') return true;
+  return parseDiasCreditoExtracted(row.dias_credito) != null;
+}
+
+export function formaPagoExtractedCompleta(row: {
+  condicion_pago?: unknown;
+  dias_credito?: number | null;
+}): boolean {
+  return condicionPagoExtractedConfirmada(row.condicion_pago) && diasCreditoExtractedValido(row);
+}
+
 export function simboloMonedaExtracted(moneda?: string | null): string {
   return normalizarMonedaExtracted(moneda) === 'USD' ? 'USD' : 'Bs';
 }

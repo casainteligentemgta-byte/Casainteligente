@@ -6,6 +6,8 @@ import {
 import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
 import {
   condicionPagoExtractedConfirmada,
+  diasCreditoExtractedValido,
+  formaPagoExtractedCompleta,
   monedaExtractedConfirmada,
   normalizarMonedaExtracted,
   parseCondicionPagoExtracted,
@@ -259,6 +261,9 @@ async function confirmarCompraDesdeCanalInterno(
   }
   if (!condicionPagoExtractedConfirmada(extracted.condicion_pago)) {
     throw new Error('Indique si la compra es a contado o a crédito.');
+  }
+  if (!diasCreditoExtractedValido(extracted)) {
+    throw new Error('Indique los días de crédito de la compra.');
   }
 
   const gastoEntidad = params.imputacionEntidad === true;

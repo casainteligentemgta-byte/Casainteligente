@@ -14,7 +14,9 @@ import {
   formatTotalExtracted,
   monedaExtractedConfirmada,
   condicionPagoExtractedConfirmada,
+  formaPagoExtractedCompleta,
   parseCondicionPagoExtracted,
+  parseDiasCreditoExtracted,
   normalizarMonedaExtracted,
 } from '@/lib/contabilidad/extractedCanal';
 import {
@@ -267,9 +269,21 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     await guardarExtracted(next);
   };
 
+  const guardarDiasCredito = async (raw: string) => {
+    if (!extracted) return;
+    const dias = parseDiasCreditoExtracted(raw.trim() === '' ? null : Number(raw));
+    const next: ExtractedCanalHeader = {
+      ...extracted,
+      condicion_pago: 'credito',
+      dias_credito: dias,
+    };
+    await guardarExtracted(next);
+  };
+
   const monedaConfirmada = monedaExtractedConfirmada(extracted?.moneda);
   const monedaActual = normalizarMonedaExtracted(extracted?.moneda);
   const condicionPagoConfirmada = condicionPagoExtractedConfirmada(extracted?.condicion_pago);
+  const formaPagoCompleta = formaPagoExtractedCompleta(extracted ?? {});
   const condicionPagoActual = parseCondicionPagoExtracted(extracted?.condicion_pago);
 
   const finalizarIngresoYIrAlmacen = useCallback(
@@ -438,7 +452,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     !gastoEntidad &&
       puedeIngresarAlmacen &&
       monedaConfirmada &&
-      condicionPagoConfirmada &&
+      formaPagoCompleta &&
       proyectoEfectivo &&
       ubicacionEfectiva &&
       !frmPendienteBloquea &&
@@ -450,7 +464,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     gastoEntidad &&
       puedeIngresarAlmacen &&
       monedaConfirmada &&
-      condicionPagoConfirmada &&
+      formaPagoCompleta &&
       entidadEfectiva &&
       !frmPendienteBloquea &&
       !registrando,
@@ -471,6 +485,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     }
     if (!monedaConfirmada) return 'Indique si la factura está en bolívares o dólares.';
     if (!condicionPagoConfirmada) return 'Indique si la compra es a contado o a crédito.';
+    if (!formaPagoCompleta) return 'Indique los días de crédito de la compra.';
     if (pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') {
       return 'Espere el procesamiento IA o pulse Actualizar arriba.';
     }
@@ -493,6 +508,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     frmPendienteBloquea,
     monedaConfirmada,
     condicionPagoConfirmada,
+    formaPagoCompleta,
   ]);
 
   if (!montado) {
@@ -675,6 +691,28 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                   Crédito
                 </button>
               </div>
+              {condicionPagoActual === 'credito' ? (
+                <div className="space-y-1.5">
+                  <label htmlFor="dias-credito-telegram" className="text-xs font-bold text-zinc-500">
+                    DÍAS DE CRÉDITO
+                  </label>
+                  <input
+                    id="dias-credito-telegram"
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="Ej. 30"
+                    value={
+                      extracted?.dias_credito != null && extracted.dias_credito > 0
+                        ? String(extracted.dias_credito)
+                        : ''
+                    }
+                    onChange={(e) => void guardarDiasCredito(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-zinc-100"
+                  />
+                </div>
+              ) : null}
             </section>
 
             <section className={`${panelClass} space-y-3`}>

@@ -31,7 +31,10 @@ import {
 } from '@/lib/telegram/mensajesFactura';
 import {
   esCallbackCondicionPagoFactura,
+  esCallbackDiasCreditoFactura,
   manejarCallbackCondicionPagoFacturaTelegram,
+  manejarCallbackDiasCreditoFacturaTelegram,
+  manejarTextoDiasCreditoFacturaTelegram,
 } from '@/lib/telegram/condicionPagoPicker';
 import {
   esCallbackMonedaFactura,
@@ -602,6 +605,17 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
+    if (esCallbackDiasCreditoFactura(cq.data)) {
+      const handledDias = await manejarCallbackDiasCreditoFacturaTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledDias) {
+        return NextResponse.json({ ok: true, callback: 'factura_dias_credito' });
+      }
+    }
+
     if (esCallbackUbicacion(cq.data)) {
       const handledUb = await manejarCallbackUbicacionTelegram(admin.client, {
         chatId,
@@ -827,6 +841,15 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       const textoIngresoFactura = await manejarTextoIngresoFactura(supabase, chatId, texto);
       if (textoIngresoFactura) {
         return NextResponse.json({ ok: true, ingreso_factura_texto: true });
+      }
+
+      const textoDiasCredito = await manejarTextoDiasCreditoFacturaTelegram(
+        supabase,
+        chatId,
+        texto,
+      );
+      if (textoDiasCredito) {
+        return NextResponse.json({ ok: true, factura_dias_credito_texto: true });
       }
 
       const textoIngresoManual = await manejarTextoIngresoManual(
