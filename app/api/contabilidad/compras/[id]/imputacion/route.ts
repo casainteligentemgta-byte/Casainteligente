@@ -38,6 +38,9 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     if (imputacion === IMPUTACION_ENTIDAD) {
       patch.proyecto_id = null;
       patch.valuacion_delegada_id = null;
+      patch.ubicacion_destino_id = null;
+    } else {
+      patch.clasificacion_gasto_entidad = null;
     }
 
     const { data, error } = await admin.client

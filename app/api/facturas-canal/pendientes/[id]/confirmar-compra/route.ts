@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { parseClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import { encolarIngresoAlmacenFallback } from '@/lib/contabilidad/encolarIngresoAlmacenFallback';
@@ -32,6 +33,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       ubicacion_destino_id?: string;
       entidad_id?: string;
       imputacion_entidad?: boolean;
+      clasificacion_gasto_entidad?: string | null;
       extracted?: ExtractedCanalHeader;
       /** Si true, intenta ingreso directo (fast-track vía cuarentena). Por defecto false. */
       ingreso_almacen_automatico?: boolean;
@@ -62,6 +64,9 @@ export async function POST(req: Request, ctx: RouteCtx) {
       entidadId: entidadId || undefined,
       imputacionEntidad: gastoEntidad,
       extractedOverride: body.extracted,
+      clasificacionGastoEntidad: gastoEntidad
+        ? parseClasificacionGastoEntidad(body.clasificacion_gasto_entidad)
+        : null,
     });
 
     const ingresoAutomatico = !gastoEntidad && body.ingreso_almacen_automatico === true;

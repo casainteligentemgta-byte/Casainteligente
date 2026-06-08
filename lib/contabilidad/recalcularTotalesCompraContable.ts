@@ -18,6 +18,7 @@ type CompraRow = {
 export async function recalcularTotalesCompraContable(
   supabase: SupabaseClient,
   compra: CompraRow,
+  opts?: { forzarTasaBcvPorFecha?: boolean },
 ): Promise<void> {
   const { data: lineas, error: lnErr } = await supabase
     .from('contabilidad_compra_lineas')
@@ -30,7 +31,7 @@ export async function recalcularTotalesCompraContable(
     montoTotal: sumSubtotal,
     moneda: monedaOriginalCompra(compra),
     fecha: compra.fecha,
-    tasaBcvDigitada: compra.tasa_bcv_ves_por_usd,
+    tasaBcvDigitada: opts?.forzarTasaBcvPorFecha ? null : compra.tasa_bcv_ves_por_usd,
   });
 
   const { error: upErr } = await supabase

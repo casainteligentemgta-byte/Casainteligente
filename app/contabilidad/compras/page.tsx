@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDeleteCompraError } from '@/lib/contabilidad/deleteCompraRegistro';
+import { auditoriaFechaCompra } from '@/lib/contabilidad/auditoriaFechaCompra';
 import {
     etiquetaPeriodo,
     rangoFechasPeriodo,
@@ -55,7 +56,13 @@ import {
 } from 'lucide-react';
 import ReubicarCompraModal from '@/components/contabilidad/ReubicarCompraModal';
 import ImputacionCompraToggle from '@/components/contabilidad/ImputacionCompraToggle';
-import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
+import ClasificacionGastoEntidadSelect from '@/components/contabilidad/ClasificacionGastoEntidadSelect';
+import { esGastoEntidadImputacion } from '@/lib/contabilidad/imputacionCompra';
+import { etiquetaClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
+import EditarFacturaCanalModal, {
+    type DestinoCompraEdicion,
+    type GuardarFacturaCanalOpts,
+} from '@/components/contabilidad/EditarFacturaCanalModal';
 import EditarLineaCompraModal, {
     type LineaCompraEditable,
 } from '@/components/contabilidad/EditarLineaCompraModal';
@@ -80,6 +87,7 @@ import {
     type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
 import { actualizarPendienteCanal, eliminarPendienteCanal } from '@/lib/contabilidad/facturaCanalApi';
+import { reubicarCompra as reubicarCompraApi } from '@/lib/contabilidad/reubicarCompraApi';
 import {
     compraCoincideFuente,
     etiquetaOrigenCompra,
@@ -217,6 +225,17 @@ function puedeReubicarCompra(c: CompraRow): boolean {
     );
 }
 
+function destinoEdicionDesdeCompra(c: CompraRow): DestinoCompraEdicion | null {
+    if (esGastoEntidadImputacion(c.imputacion)) return null;
+    return {
+        compraId: c.id,
+        imputacion: c.imputacion ?? 'obra',
+        entidadId: c.entidad_id ?? null,
+        proyectoId: c.proyecto_id ?? null,
+        ubicacionId: c.ubicacion_destino_id ?? null,
+    };
+}
+
 function compraPuedeVerImagen(c: CompraRow): boolean {
     return Boolean(
         c.document_storage_path ||
@@ -249,7 +268,9 @@ export default function ComprasPage() {
     const [cambiandoMonedaId, setCambiandoMonedaId] = useState<string | null>(null);
     const [editandoCanal, setEditandoCanal] = useState<{
         pendienteId: string;
+        compraId: string | null;
         extracted: ExtractedCanalHeader;
+        destino: DestinoCompraEdicion | null;
     } | null>(null);
     const [reubicarCompra, setReubicarCompra] = useState<{
         id: string;
@@ -524,12 +545,23 @@ export default function ComprasPage() {
             const selectLogistica =
                 'compra_factura_id,ingresado_almacen_at,cuarentena_rechazo_total,compra_factura:compras_facturas(numero_factura,estado)';
 
-            const buildComprasQuery = (conPuenteInventario = true) => {
+            const selectCompraBase =
+                'id,purchase_invoice_id,proyecto_id,entidad_id,imputacion,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,origen,estado,document_file_name,document_storage_path,created_at';
+            const selectAuditoriaFecha = ',alerta_fecha,fecha_confirmada_manual';
+            const selectClasificacionEntidad = ',clasificacion_gasto_entidad';
+
+            const buildComprasQuery = (
+                conPuenteInventario = true,
+                conAuditoriaFecha = true,
+                conClasificacionEntidad = true,
+            ) => {
                 const camposPuente = conPuenteInventario ? `,${selectLogistica}` : '';
+                const camposAuditoria = conAuditoriaFecha ? selectAuditoriaFecha : '';
+                const camposClasificacion = conClasificacionEntidad ? selectClasificacionEntidad : '';
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,entidad_id,imputacion,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
+                        `${selectCompraBase}${camposAuditoria}${camposClasificacion},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -577,18 +609,40 @@ export default function ComprasPage() {
                         qErr.message ?? '',
                     )
                 ) {
-                    const retry = await buildComprasQuery(false).limit(limiteCompras);
+                    const retry = await buildComprasQuery(false, true).limit(limiteCompras);
+                    data = retry.data;
+                    qErr = retry.error;
+                }
+                if (
+                    qErr &&
+                    /alerta_fecha|fecha_confirmada_manual/i.test(qErr.message ?? '')
+                ) {
+                    const retry = await buildComprasQuery(true, false, true).limit(limiteCompras);
+                    data = retry.data;
+                    qErr = retry.error;
+                }
+                if (
+                    qErr &&
+                    /clasificacion_gasto_entidad/i.test(qErr.message ?? '')
+                ) {
+                    const retry = await buildComprasQuery(true, true, false).limit(limiteCompras);
                     data = retry.data;
                     qErr = retry.error;
                 }
                 if (qErr) {
+                    const msg = qErr.message ?? '';
                     if (
-                        qErr.message.includes('contabilidad_compras') ||
-                        qErr.message.includes('does not exist') ||
-                        qErr.message.includes('proyecto_id')
+                        msg.includes('contabilidad_compras') ||
+                        msg.includes('does not exist') ||
+                        msg.includes('proyecto_id') ||
+                        msg.includes('imputacion') ||
+                        msg.includes('entidad_id') ||
+                        msg.includes('42703') ||
+                        /schema cache/i.test(msg)
                     ) {
                         throw new Error(
-                            'Tabla de compras incompleta. Ejecute la migración 138_compras_proyecto_y_borrado.sql en Supabase.'
+                            'Tabla de compras incompleta. En Supabase SQL Editor ejecute la migración ' +
+                                '220_repair_contabilidad_compras.sql (o 138 + 183 + 196 + 202 + 219) y luego: notify pgrst, \'reload schema\';'
                         );
                     }
                     throw qErr;
@@ -737,7 +791,12 @@ export default function ComprasPage() {
             });
             const data = (await res.json()) as { extracted?: ExtractedCanalHeader | null; error?: string };
             if (res.ok && data.extracted) {
-                setEditandoCanal({ pendienteId: canalId, extracted: data.extracted });
+                setEditandoCanal({
+                    pendienteId: canalId,
+                    compraId: c.id.startsWith('canal-') ? null : c.id,
+                    extracted: data.extracted,
+                    destino: destinoEdicionDesdeCompra(c),
+                });
                 return;
             }
         } catch {
@@ -745,6 +804,8 @@ export default function ComprasPage() {
         }
         setEditandoCanal({
             pendienteId: canalId,
+            compraId: c.id.startsWith('canal-') ? null : c.id,
+            destino: destinoEdicionDesdeCompra(c),
             extracted: extractedDesdeCompraLista({
                 ...c,
                 contabilidad_compra_lineas: lineasDetalle(c).map((l) => ({
@@ -758,12 +819,46 @@ export default function ComprasPage() {
         });
     };
 
-    const guardarEdicionTelegram = async (extracted: ExtractedCanalHeader) => {
+    const guardarEdicionTelegram = async (
+        extracted: ExtractedCanalHeader,
+        opts?: GuardarFacturaCanalOpts,
+    ) => {
         if (!editandoCanal) return;
-        await actualizarPendienteCanal(editandoCanal.pendienteId, {
-            extracted,
-            mensaje_error: null,
-        });
+        setError(null);
+
+        if (editandoCanal.compraId) {
+            const res = await fetch(`/api/contabilidad/compras/${editandoCanal.compraId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    extracted,
+                    confirmar_fecha_anomala: Boolean(opts?.confirmarFechaAnomala),
+                    pendiente_canal_id: editandoCanal.pendienteId,
+                }),
+            });
+            const data = (await res.json()) as { error?: string; requiere_confirmacion?: boolean };
+            if (!res.ok) {
+                throw new Error(data.error ?? 'No se pudo actualizar la compra');
+            }
+        } else {
+            await actualizarPendienteCanal(editandoCanal.pendienteId, {
+                extracted,
+                mensaje_error: null,
+            });
+        }
+
+        if (opts?.destino && editandoCanal.destino) {
+            const ini = editandoCanal.destino;
+            const d = opts.destino;
+            const changed =
+                d.proyecto_id !== String(ini.proyectoId ?? '').trim() ||
+                d.ubicacion_destino_id !== String(ini.ubicacionId ?? '').trim() ||
+                String(d.entidad_id ?? '').trim() !== String(ini.entidadId ?? '').trim();
+            if (changed) {
+                await reubicarCompraApi(ini.compraId, d);
+            }
+        }
+
         setEditandoCanal(null);
         await load();
     };
@@ -2660,12 +2755,37 @@ export default function ComprasPage() {
                                                         {c.ubicacion_nombre}
                                                     </span>
                                                 ) : null}
-                                                {c.fuente_lista === 'app' ? (
+                                                {c.fuente_lista === 'app' && !c.id.startsWith('canal-') ? (
                                                     <ImputacionCompraToggle
                                                         compraId={c.id}
                                                         imputacion={c.imputacion}
                                                         onChanged={() => void load()}
                                                     />
+                                                ) : null}
+                                                {esGastoEntidadImputacion(c.imputacion) &&
+                                                !c.id.startsWith('canal-') ? (
+                                                    <ClasificacionGastoEntidadSelect
+                                                        compraId={c.id}
+                                                        value={c.clasificacion_gasto_entidad}
+                                                        compact
+                                                        onChanged={() => void load()}
+                                                    />
+                                                ) : esGastoEntidadImputacion(c.imputacion) &&
+                                                  c.clasificacion_gasto_entidad ? (
+                                                    <span
+                                                        style={{
+                                                            fontSize: '10px',
+                                                            fontWeight: 700,
+                                                            padding: '4px 8px',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(139,92,246,0.15)',
+                                                            color: '#c4b5fd',
+                                                        }}
+                                                    >
+                                                        {etiquetaClasificacionGastoEntidad(
+                                                            c.clasificacion_gasto_entidad,
+                                                        )}
+                                                    </span>
                                                 ) : null}
                                             </div>
                                         ) : null}
@@ -2816,6 +2936,29 @@ export default function ComprasPage() {
                                             }}
                                         >
                                             {c.fecha}
+                                            {(() => {
+                                                const stored = (c as { alerta_fecha?: string | null })
+                                                    .alerta_fecha;
+                                                const audit =
+                                                    stored === 'advertencia' || stored === 'critico'
+                                                        ? { nivel: stored }
+                                                        : auditoriaFechaCompra(c.fecha);
+                                                if (audit.nivel === 'ok') return null;
+                                                return (
+                                                    <span
+                                                        style={{
+                                                            marginLeft: 6,
+                                                            color:
+                                                                audit.nivel === 'critico'
+                                                                    ? '#FF6B6B'
+                                                                    : '#FF9500',
+                                                            fontWeight: 600,
+                                                        }}
+                                                    >
+                                                        · fecha {audit.nivel}
+                                                    </span>
+                                                );
+                                            })()}
                                             {(() => {
                                                 const tasa = tasaDisplayCompra(c);
                                                 return tasa != null
@@ -3037,6 +3180,7 @@ export default function ComprasPage() {
             <EditarFacturaCanalModal
                 open={editandoCanal != null}
                 extracted={editandoCanal?.extracted ?? null}
+                destino={editandoCanal?.destino ?? null}
                 onClose={() => setEditandoCanal(null)}
                 onGuardar={guardarEdicionTelegram}
             />

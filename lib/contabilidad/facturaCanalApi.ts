@@ -83,6 +83,7 @@ export async function confirmarCompraCanal(
     ubicacion_destino_id: string;
     entidad_id?: string;
     imputacion_entidad?: boolean;
+    clasificacion_gasto_entidad?: string | null;
     extracted?: ExtractedCanalHeader;
     /** Fast-track: liberar cuarentena al confirmar (omitir en flujo normal). */
     ingreso_almacen_automatico?: boolean;

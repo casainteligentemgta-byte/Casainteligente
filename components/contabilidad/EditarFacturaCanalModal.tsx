@@ -1,7 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Trash2, X } from 'lucide-react';
+import {
+  auditoriaFechaCompra,
+  exigeConfirmacionFechaAnomala,
+} from '@/lib/contabilidad/auditoriaFechaCompra';
 import {
   extractedDesdeForm,
   formDesdeExtracted,
@@ -11,35 +15,116 @@ import {
   normalizarMonedaExtracted,
 } from '@/lib/contabilidad/extractedCanal';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
+import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioSelect';
+import { esGastoEntidadImputacion } from '@/lib/contabilidad/imputacionCompra';
+import { createClient } from '@/lib/supabase/client';
+import {
+  filtrarProyectosPorEntidad,
+  type ProyectoRow,
+} from '@/lib/almacen/inventoryClasificacion';
+import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
+
+const selectClass =
+  'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white outline-none focus:border-sky-500/50';
+
+export type DestinoCompraEdicion = {
+  /** contabilidad_compras.id o canal-{uuid} para reubicar */
+  compraId: string;
+  imputacion?: 'obra' | 'entidad' | null;
+  entidadId?: string | null;
+  proyectoId?: string | null;
+  ubicacionId?: string | null;
+};
+
+export type GuardarFacturaCanalOpts = {
+  confirmarFechaAnomala?: boolean;
+  destino?: {
+    entidad_id?: string;
+    proyecto_id: string;
+    ubicacion_destino_id: string;
+    nombre_obra?: string;
+  } | null;
+};
+
+type EntidadRow = { id: string; nombre: string };
 
 type Props = {
   open: boolean;
   titulo?: string;
   extracted: ExtractedCanalHeader | null;
+  destino?: DestinoCompraEdicion | null;
   onClose: () => void;
-  onGuardar: (extracted: ExtractedCanalHeader) => Promise<void>;
+  onGuardar: (extracted: ExtractedCanalHeader, opts?: GuardarFacturaCanalOpts) => Promise<void>;
 };
 
 export default function EditarFacturaCanalModal({
   open,
   titulo = 'Modificar factura',
   extracted,
+  destino,
   onClose,
   onGuardar,
 }: Props) {
   const [form, setForm] = useState<FacturaCanalForm>(() => formDesdeExtracted(extracted));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmarFechaCritica, setConfirmarFechaCritica] = useState(false);
+  const [entidades, setEntidades] = useState<EntidadRow[]>([]);
+  const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
+  const [entidadId, setEntidadId] = useState('');
+  const [proyectoId, setProyectoId] = useState('');
+  const [ubicacionId, setUbicacionId] = useState('');
+
+  const mostrarDestino = Boolean(destino) && !esGastoEntidadImputacion(destino?.imputacion);
 
   useEffect(() => {
     if (open) {
       setForm(formDesdeExtracted(extracted));
       setError(null);
+      setConfirmarFechaCritica(false);
+      setEntidadId(destino?.entidadId ?? '');
+      setProyectoId(destino?.proyectoId ?? '');
+      setUbicacionId(destino?.ubicacionId ?? '');
     }
-  }, [open, extracted]);
+  }, [open, extracted, destino?.entidadId, destino?.proyectoId, destino?.ubicacionId]);
+
+  useEffect(() => {
+    if (!open || !mostrarDestino) return;
+    void (async () => {
+      try {
+        const [entRes, cat] = await Promise.all([
+          fetch('/api/almacen/entidades', { cache: 'no-store' }),
+          loadCatalogoProyectosApp(createClient()),
+        ]);
+        const entData = (await entRes.json()) as { entidades?: EntidadRow[] };
+        const proyRows = (cat.proyectos ?? []).map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          entidad_id: p.entidad_id ?? null,
+        }));
+        setEntidades(entData.entidades ?? []);
+        setProyectos(proyRows);
+
+        if (!destino?.entidadId?.trim() && destino?.proyectoId?.trim()) {
+          const proy = proyRows.find((p) => p.id === destino.proyectoId);
+          if (proy?.entidad_id) setEntidadId(proy.entidad_id);
+        }
+      } catch {
+        /* opcional */
+      }
+    })();
+  }, [open, mostrarDestino, destino?.entidadId, destino?.proyectoId]);
+
+  const proyectosFiltrados = useMemo(
+    () => filtrarProyectosPorEntidad(proyectos, entidadId || null),
+    [proyectos, entidadId],
+  );
+
+  const auditFecha = useMemo(() => auditoriaFechaCompra(form.date), [form.date]);
+  const requiereConfirmacionFecha = exigeConfirmacionFechaAnomala(auditFecha);
 
   if (!open) return null;
 
@@ -57,11 +142,30 @@ export default function EditarFacturaCanalModal({
       setError('Indique el nombre del proveedor.');
       return;
     }
+    if (requiereConfirmacionFecha && !confirmarFechaCritica) {
+      setError('Debe confirmar que la fecha es correcta antes de guardar.');
+      return;
+    }
+    if (mostrarDestino && (!entidadId.trim() || !proyectoId.trim() || !ubicacionId.trim())) {
+      setError('Seleccione entidad, obra y almacén de ingreso.');
+      return;
+    }
     setGuardando(true);
     setError(null);
     try {
       const next = extractedDesdeForm(form, extracted);
-      await onGuardar(next);
+      const nombreObra = proyectos.find((p) => p.id === proyectoId)?.nombre;
+      await onGuardar(next, {
+        confirmarFechaAnomala: requiereConfirmacionFecha ? confirmarFechaCritica : undefined,
+        destino: mostrarDestino
+          ? {
+              entidad_id: entidadId.trim(),
+              proyecto_id: proyectoId.trim(),
+              ubicacion_destino_id: ubicacionId.trim(),
+              nombre_obra: nombreObra,
+            }
+          : null,
+      });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar');
@@ -112,6 +216,70 @@ export default function EditarFacturaCanalModal({
             </select>
           </div>
 
+          {mostrarDestino ? (
+            <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-3">
+              <div>
+                <p className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">
+                  Obra y almacén
+                </p>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Si el material ya ingresó a inventario, el stock se traslada al nuevo almacén.
+                </p>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500">ENTIDAD</label>
+                <select
+                  className={`${selectClass} mt-1`}
+                  value={entidadId}
+                  onChange={(e) => {
+                    setEntidadId(e.target.value);
+                    setProyectoId('');
+                    setUbicacionId('');
+                  }}
+                >
+                  <option value="">Seleccione entidad…</option>
+                  {entidades.map((en) => (
+                    <option key={en.id} value={en.id}>
+                      {en.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500">OBRA / PROYECTO</label>
+                <select
+                  className={`${selectClass} mt-1`}
+                  value={proyectoId}
+                  disabled={!entidadId}
+                  onChange={(e) => {
+                    setProyectoId(e.target.value);
+                    setUbicacionId('');
+                  }}
+                >
+                  <option value="">
+                    {entidadId ? 'Seleccione obra…' : 'Primero elija entidad…'}
+                  </option>
+                  {proyectosFiltrados.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500">ALMACÉN DE INGRESO</label>
+                <div className="mt-1">
+                  <UbicacionInventarioSelect
+                    proyectoId={proyectoId}
+                    value={ubicacionId}
+                    onChange={setUbicacionId}
+                    disabled={!proyectoId}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="text-[10px] font-bold text-zinc-500">Nº FACTURA</label>
@@ -127,8 +295,38 @@ export default function EditarFacturaCanalModal({
                 type="date"
                 className={`${inputClass} mt-1`}
                 value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                onChange={(e) => {
+                  setConfirmarFechaCritica(false);
+                  setForm((f) => ({ ...f, date: e.target.value }));
+                }}
               />
+              {auditFecha.nivel !== 'ok' ? (
+                <p
+                  className={`mt-1.5 text-[11px] leading-snug ${
+                    auditFecha.nivel === 'critico' ? 'text-red-400' : 'text-amber-400'
+                  }`}
+                >
+                  {auditFecha.mensaje}
+                  {auditFecha.nivel !== 'critico'
+                    ? ' Al guardar, la tasa BCV se recalculará para esta fecha.'
+                    : null}
+                </p>
+              ) : (
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  Si cambia la fecha, la tasa BCV se actualizará automáticamente.
+                </p>
+              )}
+              {requiereConfirmacionFecha ? (
+                <label className="mt-2 flex items-start gap-2 text-[11px] text-zinc-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={confirmarFechaCritica}
+                    onChange={(e) => setConfirmarFechaCritica(e.target.checked)}
+                  />
+                  <span>Confirmo que la fecha {form.date} es la real de la factura fiscal.</span>
+                </label>
+              ) : null}
             </div>
             <div className="sm:col-span-2">
               <label className="text-[10px] font-bold text-zinc-500">PROVEEDOR</label>

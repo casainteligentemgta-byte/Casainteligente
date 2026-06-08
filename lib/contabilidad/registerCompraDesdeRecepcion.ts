@@ -15,6 +15,7 @@ import {
   type ImputacionCompra,
   esGastoEntidadImputacion,
 } from '@/lib/contabilidad/imputacionCompra';
+import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id?: string | null;
@@ -47,6 +48,7 @@ export type RegistrarCompraContabilidadInput = {
   ubicacion_destino_id?: string | null;
   entidad_id?: string | null;
   imputacion?: ImputacionCompra;
+  clasificacion_gasto_entidad?: ClasificacionGastoEntidad | null;
 };
 
 export async function registerCompraDesdeRecepcion(
@@ -158,6 +160,9 @@ export async function registerCompraDesdeRecepcion(
         ? { ubicacion_destino_id: input.ubicacion_destino_id }
         : {}),
       ...(entidadId ? { entidad_id: entidadId } : {}),
+      ...(gastoEntidad && input.clasificacion_gasto_entidad
+        ? { clasificacion_gasto_entidad: input.clasificacion_gasto_entidad }
+        : {}),
     })
     .select('id')
     .single();

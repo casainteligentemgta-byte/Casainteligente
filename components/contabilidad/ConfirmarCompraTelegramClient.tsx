@@ -9,6 +9,8 @@ import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioS
 import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
+import { ClasificacionGastoEntidadSelectForm } from '@/components/contabilidad/ClasificacionGastoEntidadSelect';
+import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import {
   formatTotalExtracted,
@@ -64,6 +66,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [entidadId, setEntidadId] = useState('');
   const [entidades, setEntidades] = useState<{ id: string; nombre: string }[]>([]);
   const [gastoEntidad, setGastoEntidad] = useState(false);
+  const [clasificacionGastoEntidad, setClasificacionGastoEntidad] = useState<
+    ClasificacionGastoEntidad | ''
+  >('');
   const [ubicacionId, setUbicacionId] = useState('');
   const [editandoUbicacion, setEditandoUbicacion] = useState(false);
   const [ubicacionesDisponibles, setUbicacionesDisponibles] = useState<UbicacionInventario[]>([]);
@@ -303,6 +308,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         toast.error('Seleccione la entidad que absorbe el gasto');
         return;
       }
+      if (!clasificacionGastoEntidad) {
+        toast.error('Indique si el gasto es operacional, administrativo o servicio');
+        return;
+      }
     } else {
       if (!proyectoEfectivo) {
         toast.error('Seleccione el proyecto');
@@ -324,6 +333,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           ubicacion_destino_id: gastoEntidad ? '' : ubicacionEfectiva,
           entidad_id: entidadEfectiva || undefined,
           imputacion_entidad: gastoEntidad,
+          clasificacion_gasto_entidad: gastoEntidad ? clasificacionGastoEntidad : null,
           extracted,
           ingreso_almacen_automatico: !gastoEntidad,
         });
@@ -804,7 +814,10 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 <input
                   type="checkbox"
                   checked={gastoEntidad}
-                  onChange={(e) => setGastoEntidad(e.target.checked)}
+                  onChange={(e) => {
+                    setGastoEntidad(e.target.checked);
+                    if (!e.target.checked) setClasificacionGastoEntidad('');
+                  }}
                   className="mt-1 h-4 w-4 rounded border-white/20 bg-zinc-900 accent-[#FF9500]"
                 />
                 <span>
@@ -820,6 +833,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             </section>
 
             {gastoEntidad ? (
+              <>
               <section className="space-y-2">
                 <label htmlFor="entidad-telegram" className="text-xs font-bold text-zinc-500">
                   ENTIDAD (PATRONO)
@@ -838,6 +852,18 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                   ))}
                 </select>
               </section>
+              <section className="space-y-2">
+                <label htmlFor="clasif-gasto-telegram" className="text-xs font-bold text-zinc-500">
+                  TIPO DE GASTO (OpEx)
+                </label>
+                <ClasificacionGastoEntidadSelectForm
+                  id="clasif-gasto-telegram"
+                  className={selectClass}
+                  value={clasificacionGastoEntidad}
+                  onChange={setClasificacionGastoEntidad}
+                />
+              </section>
+              </>
             ) : (
               <>
             <section className="space-y-2">

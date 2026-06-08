@@ -22,6 +22,14 @@ export default function ContabilidadPage() {
 
     const modules: ModuloContabilidad[] = [
         {
+            title: 'Gastos entidad',
+            description: 'OpEx del patrono por tipo y periodo',
+            icon: '🏢',
+            href: '/contabilidad/gastos-entidad',
+            color: '#AF52DE',
+            active: true,
+        },
+        {
             title: 'Compras',
             description: 'Registro de facturas y egresos',
             icon: '🛒',

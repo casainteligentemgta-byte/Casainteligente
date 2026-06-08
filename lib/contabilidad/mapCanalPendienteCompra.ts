@@ -94,6 +94,9 @@ export type CompraListaUnificada = {
   monto_usd?: number | null;
   /** obra = valuación AD; entidad = gasto del patrono */
   imputacion?: 'obra' | 'entidad' | null;
+  clasificacion_gasto_entidad?: 'operacional' | 'administrativo' | 'servicio' | null;
+  alerta_fecha?: 'advertencia' | 'critico' | null;
+  fecha_confirmada_manual?: boolean | null;
 };
 
 export function lineasDesdeExtractedCanal(ex: ExtractedCanalHeader | null): CompraLineaUi[] {

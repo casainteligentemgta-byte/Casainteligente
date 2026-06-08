@@ -95,6 +95,8 @@ export type ExtractedCanalHeader = {
   document_kind?: string;
   /** La factura fiscal aún no fue cargada por contabilidad. */
   factura_pendiente?: boolean;
+  /** Comprador confirmó fecha sospechosa en Telegram o contabilidad. */
+  fecha_auditoria_confirmada?: boolean;
 };
 
 export type LineaFacturaCanalForm = {

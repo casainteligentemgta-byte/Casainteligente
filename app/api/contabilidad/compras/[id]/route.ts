@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { actualizarCompraContableDesdeExtracted } from '@/lib/contabilidad/actualizarCompraContableDesdeExtracted';
+import { FechaCompraAnomalaError } from '@/lib/contabilidad/auditoriaFechaCompra';
 import { deleteCompraRegistro } from '@/lib/contabilidad/deleteCompraRegistro';
 import { normalizarMonedaExtracted, type ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import { repartirMontosFacturaEnLineas } from '@/lib/contabilidad/filtrosFacturaCanal';
@@ -154,7 +156,7 @@ async function sincronizarMonedaEnRecepcionYCanal(
   }
 }
 
-/** PATCH — Cambia moneda original (VES/USD) y recalcula montos bimonetarios. */
+/** PATCH — Cambia moneda o sincroniza cabecera/líneas desde `extracted` (recalcula tasa si cambia fecha). */
 export async function PATCH(req: Request, ctx: RouteCtx) {
   try {
     const { id } = await resolveParams(ctx.params);
@@ -166,12 +168,49 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       );
     }
 
-    const body = (await req.json()) as { moneda?: string };
-    const monedaNueva = normalizarMonedaExtracted(body.moneda) as MonedaOrigen;
+    const body = (await req.json()) as {
+      moneda?: string;
+      extracted?: ExtractedCanalHeader;
+      confirmar_fecha_anomala?: boolean;
+      pendiente_canal_id?: string | null;
+    };
 
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
+    if (body.extracted && typeof body.extracted === 'object') {
+      try {
+        const result = await actualizarCompraContableDesdeExtracted(admin.client, {
+          compraId: id,
+          extracted: body.extracted,
+          confirmarFechaAnomala: Boolean(body.confirmar_fecha_anomala),
+          pendienteCanalId: body.pendiente_canal_id,
+        });
+        const { data: compra } = await admin.client
+          .from('contabilidad_compras')
+          .select(
+            'id,fecha,purchase_invoice_id,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,alerta_fecha,fecha_confirmada_manual,invoice_number,supplier_name,supplier_rif',
+          )
+          .eq('id', id)
+          .maybeSingle();
+        return NextResponse.json({ ok: true, compra, ...result });
+      } catch (err) {
+        if (err instanceof FechaCompraAnomalaError) {
+          return NextResponse.json(
+            {
+              error: err.message,
+              codigo: 'fecha_anomala',
+              audit: err.audit,
+              requiere_confirmacion: true,
+            },
+            { status: 422 },
+          );
+        }
+        throw err;
+      }
+    }
+
+    const monedaNueva = normalizarMonedaExtracted(body.moneda) as MonedaOrigen;
     const { data: row, error: loadErr } = await admin.client
       .from('contabilidad_compras')
       .select(

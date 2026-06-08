@@ -236,8 +236,8 @@ export async function processInvoiceFromCanal(params: {
   if (prog) {
     await prog.ok('');
     if (params.canal === 'telegram' && !fastTrackMsg) {
-      const { enviarPickerMonedaFacturaTelegram } = await import('@/lib/telegram/monedaFacturaPicker');
-      await enviarPickerMonedaFacturaTelegram(supabase, params.chatId, params.pendingId);
+      const { continuarPostOcrFacturaTelegram } = await import('@/lib/telegram/fechaFacturaPicker');
+      await continuarPostOcrFacturaTelegram(supabase, params.chatId, params.pendingId, datosSinMoneda);
     }
   } else {
     await params.sendReply(plain, false);

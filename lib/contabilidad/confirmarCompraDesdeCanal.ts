@@ -20,11 +20,17 @@ import {
   IMPUTACION_ENTIDAD,
   IMPUTACION_OBRA,
 } from '@/lib/contabilidad/imputacionCompra';
+import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
 import { copiarDocumentoProcurementAInvoice } from '@/lib/almacen/procurementDocumentStorage';
+import {
+  auditoriaFechaCompra,
+  exigeConfirmacionFechaAnomala,
+  FechaCompraAnomalaError,
+} from '@/lib/contabilidad/auditoriaFechaCompra';
 import {
   asegurarMaterialesLineasCompra,
   mensajeLineasSinMaterialSku,
@@ -140,6 +146,8 @@ export async function confirmarCompraDesdeCanal(
     imputacionEntidad?: boolean;
     extractedOverride?: ExtractedCanalHeader;
     lineasOverride?: LineaCompraContabilidadInput[];
+    confirmarFechaAnomala?: boolean;
+    clasificacionGastoEntidad?: ClasificacionGastoEntidad | null;
   },
 ): Promise<{
   compraId: string;
@@ -239,6 +247,8 @@ async function confirmarCompraDesdeCanalInterno(
     imputacionEntidad?: boolean;
     extractedOverride?: ExtractedCanalHeader;
     lineasOverride?: LineaCompraContabilidadInput[];
+    confirmarFechaAnomala?: boolean;
+    clasificacionGastoEntidad?: ClasificacionGastoEntidad | null;
   },
   row: PendienteRow,
   _estadoPrevio: string,
@@ -325,6 +335,13 @@ async function confirmarCompraDesdeCanalInterno(
   }
 
   const fecha = (extracted.date ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const auditFecha = auditoriaFechaCompra(fecha);
+  const fechaConfirmada =
+    Boolean(params.confirmarFechaAnomala) ||
+    Boolean(extracted.fecha_auditoria_confirmada);
+  if (exigeConfirmacionFechaAnomala(auditFecha) && !fechaConfirmada) {
+    throw new FechaCompraAnomalaError(auditFecha);
+  }
   const lineasBase = params.lineasOverride?.length
     ? params.lineasOverride
     : lineasDesdeExtracted(extracted);
@@ -462,7 +479,23 @@ async function confirmarCompraDesdeCanalInterno(
     ubicacion_destino_id: ubicacionDestinoId || null,
     entidad_id: entidadId || null,
     imputacion: gastoEntidad ? IMPUTACION_ENTIDAD : IMPUTACION_OBRA,
+    clasificacion_gasto_entidad: gastoEntidad
+      ? params.clasificacionGastoEntidad ?? null
+      : null,
   });
+
+  const patchAuditoria = {
+    alerta_fecha: auditFecha.nivel === 'ok' ? null : auditFecha.nivel,
+    fecha_confirmada_manual:
+      auditFecha.nivel === 'critico' ? fechaConfirmada : false,
+  };
+  const { error: auditErr } = await supabase
+    .from('contabilidad_compras')
+    .update(patchAuditoria as never)
+    .eq('id', compraId);
+  if (auditErr && !auditErr.message?.includes('alerta_fecha')) {
+    console.warn('[confirmarCompraDesdeCanal] alerta_fecha:', auditErr.message);
+  }
 
   await supabase
     .from('ci_facturas_canal_pendientes')
