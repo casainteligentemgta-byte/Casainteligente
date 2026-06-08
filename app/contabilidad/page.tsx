@@ -41,9 +41,9 @@ export default function ContabilidadPage() {
             title: 'Procuras',
             description: 'Gestión de abastecimiento y pedidos',
             icon: '📦',
-            href: '#',
+            href: '/contabilidad/procuras',
             color: '#FF3B30',
-            active: false,
+            active: true,
         },
         {
             title: 'Registro de facturas',
