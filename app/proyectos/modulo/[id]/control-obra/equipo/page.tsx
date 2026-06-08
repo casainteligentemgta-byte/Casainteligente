@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import RegistroMaquinariaIntercompany from '@/components/almacen/RegistroMaquinariaIntercompany';
 import ProyectoEquipoAlertasPanel from '@/components/proyectos/ProyectoEquipoAlertasPanel';
 import ProyectoDepositarioTelegramPanel from '@/components/proyectos/ProyectoDepositarioTelegramPanel';
+import ProyectoNominaRolesPanel from '@/components/proyectos/ProyectoNominaRolesPanel';
 import { normalizarProyectoIdCandidato } from '@/lib/proyectos/validarProyectoUuid';
 
 type Props = {
@@ -14,6 +15,7 @@ export default function ControlObraEquipoPage({ params }: Props) {
 
   return (
     <div className="space-y-8">
+      <ProyectoNominaRolesPanel proyectoId={proyectoId} />
       <ProyectoEquipoAlertasPanel proyectoId={proyectoId} />
       <ProyectoDepositarioTelegramPanel proyectoId={proyectoId} />
       <Suspense
