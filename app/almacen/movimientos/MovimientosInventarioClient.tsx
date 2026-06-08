@@ -2,21 +2,39 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowDownRight,
   ArrowLeft,
   ArrowUpRight,
   Box,
   ChevronDown,
+  Download,
+  FileText,
   Filter,
   Loader2,
   Package,
   Pencil,
+  Printer,
   RefreshCw,
   Search,
+  Share2,
   Trash2,
 } from 'lucide-react';
+import { abrirMovimientosCuadroVentana } from '@/lib/almacen/movimientosCuadroPrintHtml';
+import {
+  buildMovimientosCuadroShareUrl,
+  copiarTextoMovimientosCuadro,
+  hasMovimientosCuadroShareParams,
+  movimientosCuadroPathFromState,
+  parseMovimientosCuadroShareParams,
+  type MovimientosCuadroShareState,
+} from '@/lib/almacen/movimientosCuadroShare';
+import {
+  exportarMovimientosCuadroExcel,
+  movimientosFilasATsv,
+  type MovimientosExportScope,
+} from '@/lib/almacen/movimientosExportShare';
 import type {
   FilaMovimientoInventario,
   VistaMovimientoInventario,
@@ -64,6 +82,17 @@ function badgeTipo(tipo: FilaMovimientoInventario['tipo']) {
   }
 }
 
+function abrevTipo(tipo: FilaMovimientoInventario['tipo']) {
+  switch (tipo) {
+    case 'ingreso':
+      return 'ING';
+    case 'despacho':
+      return 'SAL';
+    default:
+      return 'STOCK';
+  }
+}
+
 function labelTipo(tipo: FilaMovimientoInventario['tipo']) {
   switch (tipo) {
     case 'ingreso':
@@ -75,6 +104,16 @@ function labelTipo(tipo: FilaMovimientoInventario['tipo']) {
   }
 }
 
+function etiquetaAlmacen(f: FilaMovimientoInventario): string | null {
+  if (f.tipo === 'despacho') return f.origen ?? f.destino;
+  return f.destino ?? f.origen;
+}
+
+function etiquetaOrigenDestino(f: FilaMovimientoInventario): string {
+  if (f.origen && f.destino) return `${f.origen} → ${f.destino}`;
+  return f.destino ?? f.origen ?? '—';
+}
+
 function parseVistaInicial(raw: string | null): VistaMovimientoInventario {
   if (raw === 'ingresado' || raw === 'despachado' || raw === 'almacenado' || raw === 'todos') {
     return raw;
@@ -82,8 +121,17 @@ function parseVistaInicial(raw: string | null): VistaMovimientoInventario {
   return 'todos';
 }
 
+const VISTA_LABEL: Record<VistaMovimientoInventario, string> = {
+  ingresado: 'Ingresos',
+  almacenado: 'Stock',
+  despachado: 'Salidas',
+  todos: 'Todos',
+};
+
 export default function MovimientosInventarioClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const [hydrated, setHydrated] = useState(false);
   const [vista, setVista] = useState<VistaMovimientoInventario>(() =>
     parseVistaInicial(searchParams.get('vista')),
   );
@@ -103,7 +151,33 @@ export default function MovimientosInventarioClient() {
   const [eliminandoBulk, setEliminandoBulk] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const [exportScope, setExportScope] = useState<MovimientosExportScope>('filtrado');
+  const [compartidoOk, setCompartidoOk] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!hasMovimientosCuadroShareParams(searchParams)) {
+      setHydrated(true);
+      return;
+    }
+    const fromUrl = parseMovimientosCuadroShareParams(searchParams);
+    if (fromUrl.vista) setVista(fromUrl.vista);
+    if (fromUrl.proveedor != null) {
+      setProveedorInput(fromUrl.proveedor);
+      setProveedor(fromUrl.proveedor);
+    }
+    if (fromUrl.destino != null) {
+      setDestinoInput(fromUrl.destino);
+      setDestino(fromUrl.destino);
+    }
+    if (fromUrl.material != null) {
+      setMaterialInput(fromUrl.material);
+      setMaterial(fromUrl.material);
+    }
+    if (fromUrl.fechaDesde != null) setFechaDesde(fromUrl.fechaDesde);
+    if (fromUrl.fechaHasta != null) setFechaHasta(fromUrl.fechaHasta);
+    setHydrated(true);
+  }, [searchParams]);
 
   const filtrosActivos = useMemo(() => {
     const activos: string[] = [];
@@ -292,6 +366,147 @@ export default function MovimientosInventarioClient() {
     return filas.find((f) => f.id === id) ?? null;
   }, [selectedIds, filas]);
 
+  const filasSeleccionadas = useMemo(
+    () => filas.filter((f) => selectedIds.has(f.id)),
+    [filas, selectedIds],
+  );
+
+  const estadoCompartir = useMemo(
+    (): MovimientosCuadroShareState => ({
+      vista,
+      proveedor,
+      destino,
+      material,
+      fechaDesde,
+      fechaHasta,
+    }),
+    [vista, proveedor, destino, material, fechaDesde, fechaHasta],
+  );
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const path = movimientosCuadroPathFromState(estadoCompartir);
+    router.replace(path, { scroll: false });
+  }, [hydrated, estadoCompartir, router]);
+
+  useEffect(() => {
+    if (exportScope === 'seleccionado' && filasSeleccionadas.length === 0) {
+      setExportScope('filtrado');
+    }
+  }, [exportScope, filasSeleccionadas.length]);
+
+  const construirFilasExport = useCallback(
+    (scope: MovimientosExportScope) =>
+      scope === 'seleccionado' ? filasSeleccionadas : filas,
+    [filas, filasSeleccionadas],
+  );
+
+  const subtituloCuadro = useMemo(() => {
+    const partes = [`Vista: ${VISTA_LABEL[vista]}`];
+    if (proveedor.trim()) partes.push(`Proveedor: ${proveedor.trim()}`);
+    if (destino.trim()) partes.push(`Destino: ${destino.trim()}`);
+    if (material.trim()) partes.push(`Material: ${material.trim()}`);
+    if (fechaDesde) partes.push(`Desde: ${fechaDesde}`);
+    if (fechaHasta) partes.push(`Hasta: ${fechaHasta}`);
+    return partes.join(' · ');
+  }, [vista, proveedor, destino, material, fechaDesde, fechaHasta]);
+
+  const etiquetaScopeExport = useCallback(
+    (scope: MovimientosExportScope) =>
+      scope === 'filtrado'
+        ? `Filtrado (${filas.length} movimiento(s))`
+        : `Seleccionado (${filasSeleccionadas.length} movimiento(s))`,
+    [filas.length, filasSeleccionadas.length],
+  );
+
+  const exportarCuadroExcel = useCallback(
+    (scope: MovimientosExportScope) => {
+      const exportFilas = construirFilasExport(scope);
+      if (!exportarMovimientosCuadroExcel(exportFilas, scope)) {
+        setError(
+          scope === 'seleccionado'
+            ? 'Seleccione al menos un movimiento para exportar.'
+            : 'No hay movimientos para exportar.',
+        );
+      }
+    },
+    [construirFilasExport],
+  );
+
+  const verPdfCuadro = useCallback(
+    (scope: MovimientosExportScope = exportScope) => {
+      const exportFilas = construirFilasExport(scope);
+      if (!exportFilas.length) {
+        setError('No hay movimientos para ver en PDF.');
+        return;
+      }
+      try {
+        abrirMovimientosCuadroVentana({
+          subtitulo: `${etiquetaScopeExport(scope)} · ${subtituloCuadro}`,
+          filas: exportFilas,
+          resumen,
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo abrir la vista PDF');
+      }
+    },
+    [construirFilasExport, exportScope, etiquetaScopeExport, subtituloCuadro, resumen],
+  );
+
+  const imprimirCuadro = useCallback(
+    (scope: MovimientosExportScope = exportScope) => {
+      const exportFilas = construirFilasExport(scope);
+      if (!exportFilas.length) {
+        setError('No hay movimientos para imprimir.');
+        return;
+      }
+      try {
+        abrirMovimientosCuadroVentana({
+          subtitulo: `${etiquetaScopeExport(scope)} · ${subtituloCuadro}`,
+          filas: exportFilas,
+          resumen,
+          autoPrint: true,
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo abrir la vista de impresión');
+      }
+    },
+    [construirFilasExport, exportScope, etiquetaScopeExport, subtituloCuadro, resumen],
+  );
+
+  const compartirCuadro = useCallback(
+    async (scope: MovimientosExportScope = exportScope) => {
+      if (typeof window === 'undefined') return;
+      const exportFilas = construirFilasExport(scope);
+      if (!exportFilas.length && !filas.length) return;
+      const url = buildMovimientosCuadroShareUrl(window.location.origin, estadoCompartir);
+      const resumenTexto = `${etiquetaScopeExport(scope)} · ${subtituloCuadro}`;
+      const titulo = 'Movimientos de almacén — Casa Inteligente';
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ title: titulo, text: resumenTexto, url });
+          return;
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+        }
+      }
+      const tsv = exportFilas.length > 0 ? `\n\n${movimientosFilasATsv(exportFilas)}` : '';
+      const ok = await copiarTextoMovimientosCuadro(`${titulo}\n${resumenTexto}\n${url}${tsv}`);
+      if (ok) {
+        setCompartidoOk(true);
+        window.setTimeout(() => setCompartidoOk(false), 2000);
+      }
+    },
+    [
+      construirFilasExport,
+      exportScope,
+      filas.length,
+      estadoCompartir,
+      etiquetaScopeExport,
+      subtituloCuadro,
+    ],
+  );
+
   return (
     <div className="min-h-screen bg-[#050508] text-white p-4 md:p-6 pb-24">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -456,6 +671,59 @@ export default function MovimientosInventarioClient() {
         ) : null}
 
         {!loading && filas.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 m-0">
+              Cuadro ({filas.length} movimiento{filas.length === 1 ? '' : 's'})
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={exportScope}
+                onChange={(e) => setExportScope(e.target.value as MovimientosExportScope)}
+                className="rounded-lg border border-white/15 bg-black/45 px-2.5 py-2 text-[10px] font-bold text-white"
+                aria-label="Alcance de exportación"
+              >
+                <option value="filtrado">Filtrado ({filas.length})</option>
+                <option value="seleccionado" disabled={filasSeleccionadas.length === 0}>
+                  Seleccionado ({filasSeleccionadas.length})
+                </option>
+              </select>
+              <button
+                type="button"
+                onClick={() => exportarCuadroExcel(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/45 bg-emerald-500/15 px-3 py-2 text-[11px] font-bold text-emerald-100 hover:bg-emerald-500/25"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => void compartirCuadro(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/45 bg-violet-500/15 px-3 py-2 text-[11px] font-bold text-violet-100 hover:bg-violet-500/25"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                {compartidoOk ? 'Copiado' : 'Compartir'}
+              </button>
+              <button
+                type="button"
+                onClick={() => verPdfCuadro(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/45 bg-sky-500/15 px-3 py-2 text-[11px] font-bold text-sky-100 hover:bg-sky-500/25"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Ver PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => imprimirCuadro(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/8 px-3 py-2 text-[11px] font-bold text-zinc-200 hover:bg-white/12"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Imprimir
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && filas.length > 0 ? (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
             <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-300">
               <input
@@ -505,12 +773,12 @@ export default function MovimientosInventarioClient() {
                   <th className="p-3 w-10">
                     <span className="sr-only">Seleccionar</span>
                   </th>
-                  <th className="p-3">Tipo</th>
+                  <th className="p-3 w-14">Tipo</th>
                   <th className="p-3">Fecha</th>
+                  <th className="p-3">Proveedor</th>
                   <th className="p-3">Material</th>
                   <th className="p-3 text-right">Cant.</th>
-                  <th className="p-3">Proveedor</th>
-                  <th className="p-3">Origen → Destino</th>
+                  <th className="p-3">Origen / Destino</th>
                   <th className="p-3">Capítulo</th>
                   <th className="p-3">Ref.</th>
                   <th className="p-3 text-right">Acciones</th>
@@ -549,32 +817,35 @@ export default function MovimientosInventarioClient() {
                       </td>
                       <td className="p-3">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${badgeTipo(f.tipo)}`}
+                          className={`inline-flex min-w-[2.5rem] justify-center rounded px-1.5 py-0.5 text-[10px] font-black tracking-wide ${badgeTipo(f.tipo)}`}
+                          title={labelTipo(f.tipo)}
                         >
-                          {labelTipo(f.tipo)}
+                          {abrevTipo(f.tipo)}
                         </span>
                       </td>
-                      <td className="p-3 text-zinc-400 whitespace-nowrap">{f.fecha}</td>
-                      <td className="p-3">
-                        <p className="font-medium text-zinc-100">{f.material_nombre}</p>
+                      <td className="p-3 text-zinc-300 whitespace-nowrap">
+                        <p className="font-medium">{f.fecha || '—'}</p>
+                        {f.hora ? (
+                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{f.hora}</p>
+                        ) : null}
+                      </td>
+                      <td className="p-3 text-zinc-400 max-w-[140px]">
+                        <p className="truncate">{f.proveedor ?? '—'}</p>
+                      </td>
+                      <td className="p-3 min-w-[160px]">
+                        <p className="font-medium text-zinc-100 leading-snug">{f.material_nombre}</p>
                         {f.material_codigo ? (
-                          <p className="text-[10px] text-zinc-500">{f.material_codigo}</p>
+                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{f.material_codigo}</p>
                         ) : null}
-                        {f.proyecto_nombre ? (
-                          <p className="text-[10px] text-violet-300/90">{f.proyecto_nombre}</p>
+                        {etiquetaAlmacen(f) ? (
+                          <p className="text-[10px] text-sky-300/90 mt-0.5">{etiquetaAlmacen(f)}</p>
                         ) : null}
                       </td>
-                      <td className="p-3 text-right font-mono text-zinc-200">
+                      <td className="p-3 text-right font-mono text-zinc-200 whitespace-nowrap">
                         {f.cantidad > 0 ? `${f.cantidad} ${f.unidad}` : '—'}
-                        {f.tipo === 'almacenado' && f.notas ? (
-                          <p className="text-[10px] text-zinc-500 font-sans mt-0.5">{f.notas}</p>
-                        ) : null}
                       </td>
-                      <td className="p-3 text-zinc-400 max-w-[140px] truncate">{f.proveedor ?? '—'}</td>
-                      <td className="p-3 text-zinc-400 text-xs max-w-[180px]">
-                        {f.origen && f.destino
-                          ? `${f.origen} → ${f.destino}`
-                          : f.destino ?? f.origen ?? '—'}
+                      <td className="p-3 text-zinc-400 text-xs max-w-[180px] leading-snug">
+                        {etiquetaOrigenDestino(f)}
                       </td>
                       <td className="p-3 text-amber-200/90 text-xs max-w-[120px] truncate">
                         {f.capitulo ?? '—'}

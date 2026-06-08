@@ -19,6 +19,7 @@ export type FilaMovimientoInventario = {
   id: string;
   tipo: 'ingreso' | 'despacho' | 'almacenado';
   fecha: string;
+  hora: string | null;
   material_id: string | null;
   material_nombre: string;
   material_codigo: string | null;
@@ -87,6 +88,28 @@ function nombreProy(raw: unknown): { id: string; nombre: string } {
   return { id: String(o.id ?? ''), nombre: String(o.nombre ?? '') };
 }
 
+function parseFechaHora(
+  primario?: string | null,
+  fallbackConHora?: string | null,
+): { fecha: string; hora: string | null } {
+  const conHora = String(fallbackConHora ?? '').trim();
+  if (conHora.length > 10) {
+    const d = new Date(conHora);
+    if (!Number.isNaN(d.getTime())) {
+      return {
+        fecha: conHora.slice(0, 10),
+        hora: d.toLocaleTimeString('es-VE', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }),
+      };
+    }
+  }
+  const fecha = String(primario ?? conHora ?? '').slice(0, 10);
+  return { fecha, hora: null };
+}
+
 function etiquetaTipoRecepcionCampo(tipo: string, observaciones?: string | null): string {
   const obs = String(observaciones ?? '');
   if (obs.includes('Origen: ingreso manual')) return 'Ingreso manual';
@@ -145,7 +168,7 @@ async function cargarIngresosRecepcionCampo(
     const proyNombre = proy.nombre || null;
     const dest = nombreUbi(rec.ubicacion);
     const ubicacionId = String(rec.ubicacion_id ?? '') || null;
-    const fecha = String(rec.created_at ?? '').slice(0, 10);
+    const { fecha, hora } = parseFechaHora(null, rec.created_at);
     const tipoLabel = etiquetaTipoRecepcionCampo(String(rec.tipo ?? ''), rec.observaciones);
     const obs = String(rec.observaciones ?? '').trim();
     const notasBase = tipoLabel + (obs ? ` · ${obs.slice(0, 200)}` : '');
@@ -170,6 +193,7 @@ async function cargarIngresosRecepcionCampo(
         id: filaId,
         tipo: 'ingreso',
         fecha,
+        hora,
         material_id: mat.id || null,
         material_nombre: mat.name || ln.descripcion || 'Material',
         material_codigo: mat.sap,
@@ -232,7 +256,7 @@ async function cargarIngresos(
         ? ((Array.isArray(ubi) ? ubi[0] : ubi) as { proyecto?: unknown }).proyecto
         : null,
     );
-    const fecha = String(fac.fecha_emision ?? fac.created_at ?? '').slice(0, 10);
+    const { fecha, hora } = parseFechaHora(fac.fecha_emision, fac.created_at);
     const esFacturaTransito = Boolean(fac.purchase_invoice_id);
     const lineas = (fac.lineas ?? []) as Array<{
       id: string;
@@ -246,6 +270,7 @@ async function cargarIngresos(
         id: `ing-fac-${fac.id}`,
         tipo: 'ingreso',
         fecha,
+        hora,
         material_id: null,
         material_nombre: '(cabecera sin líneas contables)',
         material_codigo: null,
@@ -276,6 +301,7 @@ async function cargarIngresos(
         id: filaId,
         tipo: 'ingreso',
         fecha,
+        hora,
         material_id: mat.id || null,
         material_nombre: mat.name || ln.descripcion || 'Material',
         material_codigo: mat.sap,
@@ -360,10 +386,12 @@ async function cargarIngresosCuarentena(
     const proy = nombreProy(ubi?.proyecto);
     const filaId = `ing-pd-${invoiceId}_${detailId}`;
 
+    const { fecha, hora } = parseFechaHora(inv?.date, inv?.date);
     filas.push({
       id: filaId,
       tipo: 'ingreso',
-      fecha: String(inv?.date ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+      fecha: fecha || new Date().toISOString().slice(0, 10),
+      hora,
       material_id: mat.id || String(row.material_id ?? '') || null,
       material_nombre: mat.name || String(row.description ?? 'Material'),
       material_codigo: mat.sap,
@@ -427,7 +455,7 @@ async function cargarDespachosTransferencia(
     const proy = nombreProy(tr.proyecto);
     const origen = nombreUbi(tr.origen);
     const destino = nombreUbi(tr.destino);
-    const fecha = String(tr.despachado_at ?? tr.created_at ?? '').slice(0, 10);
+    const { fecha, hora } = parseFechaHora(null, tr.despachado_at ?? tr.created_at);
     const lineas = (tr.lineas ?? []) as Array<{
       id: string;
       cantidad: number;
@@ -460,6 +488,7 @@ async function cargarDespachosTransferencia(
         id: filaId,
         tipo: 'despacho',
         fecha,
+        hora,
         material_id: mat.id || null,
         material_nombre: mat.name,
         material_codigo: mat.sap,
@@ -519,10 +548,12 @@ async function cargarDespachosTelegram(
       null;
 
     const filaId = `desp-tg-${m.id}`;
+    const { fecha, hora } = parseFechaHora(null, m.created_at);
     return {
       id: filaId,
       tipo: 'despacho' as const,
-      fecha: String(m.created_at ?? '').slice(0, 10),
+      fecha,
+      hora,
       material_id: null,
       material_nombre: '(registro fotográfico Telegram)',
       material_codigo: null,
@@ -619,6 +650,7 @@ function calcularFilasStock(
         id: `stk-calc-${agg.ubicacion_id}_${agg.material_id}`,
         tipo: 'almacenado' as const,
         fecha: hoy,
+        hora: null,
         material_id: agg.material_id,
         material_nombre: agg.material_nombre,
         material_codigo: agg.material_codigo,
