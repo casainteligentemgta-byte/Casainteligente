@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { obtenerTasaBcvConfigNominaGlobal } from '@/lib/contabilidad/tasaBcvConfigNomina';
 import {
+  IMPUTACION_ENTIDAD,
+  IMPUTACION_OBRA,
+  parseImputacionCompra,
+} from '@/lib/contabilidad/imputacionCompra';
+import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
+import {
   parseMontoBimonetario,
   validarMontosCompraBimonetarios,
 } from '@/lib/contabilidad/validarCompraBimonetaria';
@@ -22,7 +28,9 @@ type LineaCompraBody = {
 
 type CompraInsertBody = {
   purchase_invoice_id?: string | null;
-  proyecto_id?: string;
+  proyecto_id?: string | null;
+  entidad_id?: string | null;
+  imputacion?: string;
   invoice_number?: string;
   supplier_rif?: string;
   supplier_name?: string;
@@ -60,17 +68,20 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as CompraInsertBody;
 
-    const proyectoId = body.proyecto_id?.trim();
+    const imputacion = parseImputacionCompra(body.imputacion);
+    const gastoEntidad = imputacion === IMPUTACION_ENTIDAD;
+    const proyectoId = body.proyecto_id?.trim() || null;
+    const entidadIdBody = body.entidad_id?.trim() || null;
     const invoiceNumber = body.invoice_number?.trim();
     const supplierRif = body.supplier_rif?.trim();
     const supplierName = body.supplier_name?.trim();
     const fecha = normalizarFecha(body.fecha);
 
-    if (!proyectoId) {
+    if (!gastoEntidad && !proyectoId) {
       return NextResponse.json(
         {
-          error: 'El campo proyecto_id es obligatorio.',
-          hint: 'Asocia la compra a un proyecto (ci_proyectos.id).',
+          error: 'El campo proyecto_id es obligatorio para compras de obra.',
+          hint: 'Use imputacion: "entidad" para gastos del patrono sin proyecto.',
         },
         { status: 400 },
       );
@@ -151,11 +162,24 @@ export async function POST(req: Request) {
       }
     }
 
+    let entidadId = entidadIdBody;
+    if (!entidadId && proyectoId) {
+      entidadId = (await resolverEntidadIdDesdeProyecto(supabase, proyectoId)) ?? null;
+    }
+    if (gastoEntidad && !entidadId) {
+      return NextResponse.json(
+        { error: 'entidad_id requerido para imputacion entidad' },
+        { status: 400 },
+      );
+    }
+
     const { data: compra, error: compraError } = await supabase
       .from('contabilidad_compras')
       .insert({
         purchase_invoice_id: purchaseInvoiceId,
-        proyecto_id: proyectoId,
+        proyecto_id: gastoEntidad ? null : proyectoId,
+        imputacion: gastoEntidad ? IMPUTACION_ENTIDAD : IMPUTACION_OBRA,
+        ...(entidadId ? { entidad_id: entidadId } : {}),
         invoice_number: invoiceNumber,
         supplier_rif: supplierRif,
         supplier_name: supplierName,

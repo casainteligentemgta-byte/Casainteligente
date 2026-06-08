@@ -23,6 +23,7 @@ export type PendienteCanal = {
   chat_label: string | null;
   estado: string;
   proyecto_id?: string | null;
+  entidad_id?: string | null;
   ubicacion_destino_id?: string | null;
   purchase_invoice_id?: string | null;
   document_file_name: string | null;
@@ -80,6 +81,8 @@ export async function confirmarCompraCanal(
   body: {
     proyecto_id: string;
     ubicacion_destino_id: string;
+    entidad_id?: string;
+    imputacion_entidad?: boolean;
     extracted?: ExtractedCanalHeader;
     /** Fast-track: liberar cuarentena al confirmar (omitir en flujo normal). */
     ingreso_almacen_automatico?: boolean;

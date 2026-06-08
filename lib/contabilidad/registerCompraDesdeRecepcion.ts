@@ -10,6 +10,11 @@ import {
 } from '@/lib/contabilidad/syncDocumentoCompraRecepcion';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
+import {
+  IMPUTACION_OBRA,
+  type ImputacionCompra,
+  esGastoEntidadImputacion,
+} from '@/lib/contabilidad/imputacionCompra';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id?: string | null;
@@ -23,7 +28,8 @@ export type LineaCompraContabilidadInput = {
 
 export type RegistrarCompraContabilidadInput = {
   purchase_invoice_id: string;
-  proyecto_id: string;
+  /** Null cuando imputacion = entidad (gasto del patrono). */
+  proyecto_id: string | null;
   invoice_number: string;
   supplier_rif: string;
   supplier_name: string;
@@ -40,12 +46,24 @@ export type RegistrarCompraContabilidadInput = {
   origen?: string;
   ubicacion_destino_id?: string | null;
   entidad_id?: string | null;
+  imputacion?: ImputacionCompra;
 };
 
 export async function registerCompraDesdeRecepcion(
   supabase: SupabaseClient,
   input: RegistrarCompraContabilidadInput
 ): Promise<{ compraId: string; yaExistia: boolean }> {
+  const imputacion = input.imputacion ?? IMPUTACION_OBRA;
+  const gastoEntidad = esGastoEntidadImputacion(imputacion);
+  const proyectoId = input.proyecto_id?.trim() || null;
+
+  if (!gastoEntidad && !proyectoId) {
+    throw new Error('proyecto_id es obligatorio para compras imputadas a obra.');
+  }
+  if (gastoEntidad && !input.entidad_id?.trim() && !proyectoId) {
+    throw new Error('Indique entidad_id para gastos imputados a la entidad.');
+  }
+
   const doc = await resolverDocumentoCompra(supabase, {
     purchaseInvoiceId: input.purchase_invoice_id,
     documentStoragePath: input.document_storage_path,
@@ -69,7 +87,7 @@ export async function registerCompraDesdeRecepcion(
     invoice_number: input.invoice_number,
     supplier_rif: input.supplier_rif,
     supplier_name: input.supplier_name,
-    proyecto_id: input.proyecto_id,
+    proyecto_id: proyectoId ?? undefined,
     ignorar_proyecto: true,
   });
   if (duplicada?.id) {
@@ -117,15 +135,16 @@ export async function registerCompraDesdeRecepcion(
   const bimonetario = payloadCompraBimonetario(montos);
 
   let entidadId = input.entidad_id?.trim() || null;
-  if (!entidadId && input.proyecto_id) {
-    entidadId = await resolverEntidadIdDesdeProyecto(supabase, input.proyecto_id);
+  if (!entidadId && proyectoId) {
+    entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
   }
 
   const { data: compra, error: compraError } = await supabase
     .from('contabilidad_compras')
     .insert({
       purchase_invoice_id: input.purchase_invoice_id,
-      proyecto_id: input.proyecto_id,
+      proyecto_id: gastoEntidad ? null : proyectoId,
+      imputacion,
       invoice_number: input.invoice_number,
       supplier_rif: input.supplier_rif,
       supplier_name: input.supplier_name,

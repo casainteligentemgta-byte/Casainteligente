@@ -13,6 +13,10 @@ import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCo
 import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import {
+  IMPUTACION_ENTIDAD,
+  IMPUTACION_OBRA,
+} from '@/lib/contabilidad/imputacionCompra';
+import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
@@ -128,6 +132,8 @@ export async function confirmarCompraDesdeCanal(
     proyectoId: string;
     ubicacionDestinoId: string;
     entidadId?: string;
+    /** Gasto absorbido por la entidad; no entra en valuación AD. */
+    imputacionEntidad?: boolean;
     extractedOverride?: ExtractedCanalHeader;
     lineasOverride?: LineaCompraContabilidadInput[];
   },
@@ -226,6 +232,7 @@ async function confirmarCompraDesdeCanalInterno(
     proyectoId: string;
     ubicacionDestinoId: string;
     entidadId?: string;
+    imputacionEntidad?: boolean;
     extractedOverride?: ExtractedCanalHeader;
     lineasOverride?: LineaCompraContabilidadInput[];
   },
@@ -249,20 +256,28 @@ async function confirmarCompraDesdeCanalInterno(
     throw new Error('Indique si la factura está en bolívares (Bs) o dólares (USD).');
   }
 
-  const proyectoId = params.proyectoId.trim() || row.proyecto_id?.trim() || '';
-  if (!proyectoId) {
+  const gastoEntidad = params.imputacionEntidad === true;
+
+  const proyectoIdRaw = params.proyectoId.trim() || row.proyecto_id?.trim() || '';
+  let entidadId =
+    params.entidadId?.trim() || row.entidad_id?.trim() || '';
+  if (!entidadId && proyectoIdRaw) {
+    entidadId = (await resolverEntidadIdDesdeProyecto(supabase, proyectoIdRaw)) ?? '';
+  }
+
+  if (gastoEntidad) {
+    if (!entidadId) {
+      throw new Error('Seleccione la entidad que absorbe este gasto.');
+    }
+  } else if (!proyectoIdRaw) {
     throw new Error('Seleccione el proyecto al que pertenece la compra.');
   }
 
-  let entidadId =
-    params.entidadId?.trim() || row.entidad_id?.trim() || '';
-  if (!entidadId) {
-    entidadId = (await resolverEntidadIdDesdeProyecto(supabase, proyectoId)) ?? '';
-  }
+  const proyectoId = gastoEntidad ? null : proyectoIdRaw;
 
   const ubicacionDestinoId =
     params.ubicacionDestinoId.trim() || row.ubicacion_destino_id?.trim() || '';
-  if (!ubicacionDestinoId) {
+  if (!gastoEntidad && !ubicacionDestinoId) {
     throw new Error('Seleccione el almacén de ingreso del material.');
   }
 
@@ -274,10 +289,10 @@ async function confirmarCompraDesdeCanalInterno(
 
   const compraDuplicada = await buscarCompraContablePorFactura(supabase, {
     ...facturaParams,
-    proyecto_id: proyectoId,
+    proyecto_id: proyectoIdRaw || undefined,
     ignorar_proyecto: true,
   });
-  if (compraDuplicada?.id) {
+  if (compraDuplicada?.id && !gastoEntidad) {
     let purchaseInvoiceId =
       compraDuplicada.purchase_invoice_id?.trim() || row.purchase_invoice_id?.trim() || '';
     if (purchaseInvoiceId) {
@@ -291,7 +306,7 @@ async function confirmarCompraDesdeCanalInterno(
         pendingId: params.pendingId,
         purchaseInvoiceId,
         compraId: compraDuplicada.id,
-        proyectoId,
+        proyectoId: proyectoIdRaw,
         ubicacionDestinoId,
         entidadId,
         extracted,
@@ -307,19 +322,24 @@ async function confirmarCompraDesdeCanalInterno(
     throw new Error('Agregue al menos una línea con descripción.');
   }
 
-  const { lineas, sinMatch } = await asegurarMaterialesLineasCompra(supabase, lineasBase, {
-    proyectoId,
-    fecha,
-    ubicacionDestinoId,
-  });
+  let lineas = lineasBase;
+  let lineasConMaterial = lineasBase;
 
-  const lineasConMaterial = lineas.filter((l) => l.material_id?.trim());
-  if (!lineasConMaterial.length) {
-    const detalle = mensajeLineasSinMaterialSku(sinMatch);
-    throw new Error(
-      detalle ||
-        'No se pudo vincular ninguna línea al catálogo. Revise descripciones o códigos SAP en la factura.',
-    );
+  if (!gastoEntidad) {
+    const resuelto = await asegurarMaterialesLineasCompra(supabase, lineasBase, {
+      proyectoId: proyectoIdRaw,
+      fecha,
+      ubicacionDestinoId,
+    });
+    lineas = resuelto.lineas;
+    lineasConMaterial = lineas.filter((l) => l.material_id?.trim());
+    if (!lineasConMaterial.length) {
+      const detalle = mensajeLineasSinMaterialSku(resuelto.sinMatch);
+      throw new Error(
+        detalle ||
+          'No se pudo vincular ninguna línea al catálogo. Revise descripciones o códigos SAP en la factura.',
+      );
+    }
   }
 
   const sumLineas = lineas.reduce((s, l) => s + l.cantidad * l.precio_unitario, 0);
@@ -357,7 +377,7 @@ async function confirmarCompraDesdeCanalInterno(
       date: fecha,
       status: 'REGISTRADA',
       proyecto_id: proyectoId,
-      ubicacion_destino_id: ubicacionDestinoId,
+      ...(ubicacionDestinoId ? { ubicacion_destino_id: ubicacionDestinoId } : {}),
       ...(entidadId ? { entidad_id: entidadId } : {}),
       ...payloadCompraBimonetario(montos),
       document_storage_path: docStoragePath,
@@ -378,7 +398,7 @@ async function confirmarCompraDesdeCanalInterno(
       .from('purchase_invoices')
       .update({
         proyecto_id: proyectoId,
-        ubicacion_destino_id: ubicacionDestinoId,
+        ...(ubicacionDestinoId ? { ubicacion_destino_id: ubicacionDestinoId } : {}),
         ...(entidadId ? { entidad_id: entidadId } : {}),
       })
       .eq('id', purchaseInvoiceId);
@@ -429,8 +449,9 @@ async function confirmarCompraDesdeCanalInterno(
     document_file_name: docFileName,
     lineas,
     origen: 'TELEGRAM',
-    ubicacion_destino_id: ubicacionDestinoId,
-    ...(entidadId ? { entidad_id: entidadId } : {}),
+    ubicacion_destino_id: ubicacionDestinoId || null,
+    entidad_id: entidadId || null,
+    imputacion: gastoEntidad ? IMPUTACION_ENTIDAD : IMPUTACION_OBRA,
   });
 
   await supabase
@@ -438,7 +459,7 @@ async function confirmarCompraDesdeCanalInterno(
     .update({
       estado: 'confirmado',
       proyecto_id: proyectoId,
-      ubicacion_destino_id: ubicacionDestinoId,
+      ubicacion_destino_id: ubicacionDestinoId || null,
       ...(entidadId ? { entidad_id: entidadId } : {}),
       purchase_invoice_id: purchaseInvoiceId,
       extracted,
@@ -446,6 +467,15 @@ async function confirmarCompraDesdeCanalInterno(
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.pendingId);
+
+  if (gastoEntidad) {
+    return {
+      compraId,
+      purchaseInvoiceId,
+      yaExistia,
+      cuarentena: undefined,
+    };
+  }
 
   const cuarentena = await crearCuarentenaDesdeFactura(supabase, {
     purchaseInvoiceId,

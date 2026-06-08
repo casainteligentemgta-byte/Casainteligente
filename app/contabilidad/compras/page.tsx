@@ -54,6 +54,7 @@ import {
     Trash2,
 } from 'lucide-react';
 import ReubicarCompraModal from '@/components/contabilidad/ReubicarCompraModal';
+import ImputacionCompraToggle from '@/components/contabilidad/ImputacionCompraToggle';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
 import EditarLineaCompraModal, {
     type LineaCompraEditable,
@@ -528,7 +529,7 @@ export default function ComprasPage() {
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `id,purchase_invoice_id,proyecto_id,entidad_id,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
+                        `id,purchase_invoice_id,proyecto_id,entidad_id,imputacion,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,origen,estado,document_file_name,document_storage_path,created_at,ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -2658,6 +2659,13 @@ export default function ComprasPage() {
                                                     >
                                                         {c.ubicacion_nombre}
                                                     </span>
+                                                ) : null}
+                                                {c.fuente_lista === 'app' ? (
+                                                    <ImputacionCompraToggle
+                                                        compraId={c.id}
+                                                        imputacion={c.imputacion}
+                                                        onChanged={() => void load()}
+                                                    />
                                                 ) : null}
                                             </div>
                                         ) : null}

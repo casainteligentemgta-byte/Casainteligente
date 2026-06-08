@@ -57,6 +57,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [pendiente, setPendiente] = useState<PendienteCanal | null>(null);
   const [proyectos, setProyectos] = useState<{ id: string; nombre: string }[]>([]);
   const [proyectoId, setProyectoId] = useState('');
+  const [entidadId, setEntidadId] = useState('');
+  const [entidades, setEntidades] = useState<{ id: string; nombre: string }[]>([]);
+  const [gastoEntidad, setGastoEntidad] = useState(false);
   const [ubicacionId, setUbicacionId] = useState('');
   const [editandoUbicacion, setEditandoUbicacion] = useState(false);
   const [ubicacionesDisponibles, setUbicacionesDisponibles] = useState<UbicacionInventario[]>([]);
@@ -100,14 +103,16 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     void (async () => {
       try {
         const supabase = createClient();
-        const { data, error } = await supabase
-          .from('ci_proyectos')
-          .select('id,nombre')
-          .order('nombre');
-        if (error) throw error;
-        setProyectos(data ?? []);
+        const [proyRes, entRes] = await Promise.all([
+          supabase.from('ci_proyectos').select('id,nombre').order('nombre'),
+          fetch('/api/almacen/entidades', { cache: 'no-store' }),
+        ]);
+        if (proyRes.error) throw proyRes.error;
+        setProyectos(proyRes.data ?? []);
+        const entData = (await entRes.json()) as { entidades?: { id: string; nombre: string }[] };
+        setEntidades(entData.entidades ?? []);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'No se pudieron cargar proyectos');
+        toast.error(e instanceof Error ? e.message : 'No se pudieron cargar catálogos');
       }
     })();
   }, []);
@@ -118,6 +123,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     if (pendienteSyncIdRef.current === pendiente.id) return;
     pendienteSyncIdRef.current = pendiente.id;
     setProyectoId(pendiente.proyecto_id ?? '');
+    setEntidadId(pendiente.entidad_id ?? '');
     setUbicacionId(pendiente.ubicacion_destino_id ?? '');
     setEditandoUbicacion(false);
   }, [pendiente]);
@@ -206,6 +212,11 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     [proyectoId, pendiente?.proyecto_id],
   );
 
+  const entidadEfectiva = useMemo(
+    () => entidadId.trim() || pendiente?.entidad_id?.trim() || '',
+    [entidadId, pendiente?.entidad_id],
+  );
+
   const ubicacionEfectiva = useMemo(
     () => ubicacionId.trim() || pendiente?.ubicacion_destino_id?.trim() || '',
     [ubicacionId, pendiente?.ubicacion_destino_id],
@@ -259,13 +270,20 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   );
 
   const registrar = async () => {
-    if (!proyectoEfectivo) {
-      toast.error('Seleccione el proyecto');
-      return;
-    }
-    if (!ubicacionEfectiva) {
-      toast.error('Seleccione el almacén de ingreso');
-      return;
+    if (gastoEntidad) {
+      if (!entidadEfectiva) {
+        toast.error('Seleccione la entidad que absorbe el gasto');
+        return;
+      }
+    } else {
+      if (!proyectoEfectivo) {
+        toast.error('Seleccione el proyecto');
+        return;
+      }
+      if (!ubicacionEfectiva) {
+        toast.error('Seleccione el almacén de ingreso');
+        return;
+      }
     }
     if (!extracted) {
       toast.error('No hay datos de la factura');
@@ -274,11 +292,23 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     await runRegistro(async () => {
       try {
         const r = await confirmarCompraCanal(pendingId, {
-          proyecto_id: proyectoEfectivo,
-          ubicacion_destino_id: ubicacionEfectiva,
+          proyecto_id: gastoEntidad ? '' : proyectoEfectivo,
+          ubicacion_destino_id: gastoEntidad ? '' : ubicacionEfectiva,
+          entidad_id: entidadEfectiva || undefined,
+          imputacion_entidad: gastoEntidad,
           extracted,
-          ingreso_almacen_automatico: true,
+          ingreso_almacen_automatico: !gastoEntidad,
         });
+        if (gastoEntidad) {
+          setCompraRegistrada(true);
+          setPendiente((prev) => (prev ? { ...prev, estado: 'confirmado' } : prev));
+          toast.success(
+            r.yaExistia
+              ? 'Gasto de entidad ya registrado (fuera de valuación AD)'
+              : 'Gasto registrado a la entidad — no afecta administración delegada',
+          );
+          return;
+        }
         if (r.ingresoAlmacen?.success) {
           finalizarIngresoYIrAlmacen(
             r.yaExistia
@@ -391,7 +421,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   );
 
   const botonIngresoListo = Boolean(
-    puedeIngresarAlmacen &&
+    !gastoEntidad &&
+      puedeIngresarAlmacen &&
       monedaConfirmada &&
       proyectoEfectivo &&
       ubicacionEfectiva &&
@@ -400,15 +431,28 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       !ingresandoAlmacen,
   );
 
+  const botonGastoEntidadListo = Boolean(
+    gastoEntidad &&
+      puedeIngresarAlmacen &&
+      monedaConfirmada &&
+      entidadEfectiva &&
+      !frmPendienteBloquea &&
+      !registrando,
+  );
+
   const motivoBotonInactivo = useMemo(() => {
     if (loading || !pendiente) return null;
-    if (botonIngresoListo) return null;
+    if (gastoEntidad ? botonGastoEntidadListo : botonIngresoListo) return null;
     if (registrando || ingresandoAlmacen) return null;
     if (frmPendienteBloquea) {
       return 'Hay ingresos de campo sin conciliar. Use «Conciliar e inyectar costo» arriba.';
     }
-    if (!proyectoEfectivo) return 'Seleccione la obra (proyecto).';
-    if (!ubicacionEfectiva) return 'Seleccione el almacén de ingreso.';
+    if (gastoEntidad) {
+      if (!entidadEfectiva) return 'Seleccione la entidad que absorbe el gasto.';
+    } else {
+      if (!proyectoEfectivo) return 'Seleccione la obra (proyecto).';
+      if (!ubicacionEfectiva) return 'Seleccione el almacén de ingreso.';
+    }
     if (!monedaConfirmada) return 'Indique si la factura está en bolívares o dólares.';
     if (pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') {
       return 'Espere el procesamiento IA o pulse Actualizar arriba.';
@@ -421,10 +465,13 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     loading,
     pendiente,
     botonIngresoListo,
+    botonGastoEntidadListo,
     registrando,
     ingresandoAlmacen,
     proyectoEfectivo,
     ubicacionEfectiva,
+    entidadEfectiva,
+    gastoEntidad,
     puedeIngresarAlmacen,
     frmPendienteBloquea,
     monedaConfirmada,
@@ -665,6 +712,47 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               )}
             </section>
 
+            <section className={`${panelClass} space-y-3`}>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={gastoEntidad}
+                  onChange={(e) => setGastoEntidad(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-white/20 bg-zinc-900 accent-[#FF9500]"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-zinc-100">
+                    Gasto de la entidad (no valuación AD)
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    OpEx del patrono (ej. gasolina del vehículo del comprador). No entra en el
+                    porcentaje de administración delegada.
+                  </span>
+                </span>
+              </label>
+            </section>
+
+            {gastoEntidad ? (
+              <section className="space-y-2">
+                <label htmlFor="entidad-telegram" className="text-xs font-bold text-zinc-500">
+                  ENTIDAD (PATRONO)
+                </label>
+                <select
+                  id="entidad-telegram"
+                  value={entidadId}
+                  onChange={(e) => setEntidadId(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">Seleccione entidad…</option>
+                  {entidades.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.nombre}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            ) : (
+              <>
             <section className="space-y-2">
               <label htmlFor="proyecto-telegram" className="text-xs font-bold text-zinc-500">
                 PROYECTO
@@ -737,7 +825,48 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 </div>
               ) : null}
             </section>
+              </>
+            )}
 
+            {gastoEntidad ? (
+              <>
+                <button
+                  key={`${pendiente.id}-entidad-${entidadEfectiva}`}
+                  type="button"
+                  data-cta="registrar-gasto-entidad"
+                  disabled={!botonGastoEntidadListo}
+                  onClick={() => {
+                    if (!botonGastoEntidadListo) return;
+                    void registrar();
+                  }}
+                  className="w-full rounded-xl bg-[#FF9500] disabled:opacity-50 disabled:cursor-not-allowed text-black text-sm font-bold py-3.5 flex items-center justify-center gap-2 shadow-lg shadow-[#FF9500]/25"
+                >
+                  {registrando ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Registrando gasto…
+                    </>
+                  ) : loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando datos…
+                    </>
+                  ) : (
+                    'Registrar gasto de entidad'
+                  )}
+                </button>
+
+                {motivoBotonInactivo ? (
+                  <p className="text-center text-xs text-amber-300/90">{motivoBotonInactivo}</p>
+                ) : null}
+
+                <p className="text-[11px] text-zinc-500 text-center leading-relaxed pb-2">
+                  El gasto queda imputado al patrono y no entra en la base de administración
+                  delegada. No se ingresa stock ni se envía a cuarentena.
+                </p>
+              </>
+            ) : (
+              <>
             <button
               key={`${pendiente.id}-${proyectoEfectivo}-${ubicacionEfectiva}`}
               type="button"
@@ -789,6 +918,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 </>
               )}
             </p>
+              </>
+            )}
           </>
         )}
       </main>
