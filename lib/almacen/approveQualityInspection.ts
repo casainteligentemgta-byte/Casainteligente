@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
 import { aplicarLiberacionTransitoADisponible } from '@/lib/almacen/stockTransitoCompra';
+import { materialEsGastoInmediato } from '@/lib/almacen/esGastoInmediatoCompra';
 import {
   registrarCompraInventario,
   type LineaCompraInventarioInput,
@@ -93,12 +94,15 @@ async function registrarLineaEnCompraFactura(
   });
   if (lineErr) throw lineErr;
 
-  await aplicarDeltaStock(
-    supabase,
-    params.ubicacionDestinoId,
-    params.materialId,
-    params.quantity,
-  );
+  const gastoInmediato = await materialEsGastoInmediato(supabase, params.materialId);
+  if (!gastoInmediato) {
+    await aplicarDeltaStock(
+      supabase,
+      params.ubicacionDestinoId,
+      params.materialId,
+      params.quantity,
+    );
+  }
 }
 
 type InspeccionPendiente = {

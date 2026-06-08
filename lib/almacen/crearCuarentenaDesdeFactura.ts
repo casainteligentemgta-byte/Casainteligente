@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { materialEsGastoInmediato } from '@/lib/almacen/esGastoInmediatoCompra';
 import { aplicarEntradaTransitoCompra } from '@/lib/almacen/stockTransitoCompra';
 
 export type LineaCuarentenaInput = {
@@ -98,13 +99,16 @@ export async function crearCuarentenaDesdeFactura(
     if (qualityError) throw new Error(qualityError.message);
 
     if (ubicacionDestinoId) {
-      await aplicarEntradaTransitoCompra(supabase, {
-        ubicacionDestinoId,
-        materialId: linea.material_id.trim(),
-        cantidad: qty,
-        purchaseInvoiceId: invoiceId,
-        referenciaId: detailId,
-      });
+      const gastoInmediato = await materialEsGastoInmediato(supabase, linea.material_id.trim());
+      if (!gastoInmediato) {
+        await aplicarEntradaTransitoCompra(supabase, {
+          ubicacionDestinoId,
+          materialId: linea.material_id.trim(),
+          cantidad: qty,
+          purchaseInvoiceId: invoiceId,
+          referenciaId: detailId,
+        });
+      }
     }
 
     creadas += 1;

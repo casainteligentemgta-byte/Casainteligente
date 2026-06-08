@@ -49,9 +49,11 @@ import {
 } from '@/lib/almacen/resolverMaterialParaCompra';
 import {
     asegurarCategoriasCompraSugeridas,
+    buscarCategoriaPorId,
     resolverCategoriaPorDefecto,
     type MaterialCategoryRow,
 } from '@/lib/almacen/categoriasMaterialCompra';
+import { esGastoInmediatoCompra } from '@/lib/almacen/esGastoInmediatoCompra';
 import SelectorCategoriaMaterial from '@/components/almacen/SelectorCategoriaMaterial';
 import { validarCompraProcurement } from '@/lib/almacen/validarCompraProcurement';
 import {
@@ -668,6 +670,7 @@ export default function ProcurementClient() {
             }
 
             const lineasContabilidad: LineaCompraContabilidadInput[] = [];
+            const lineasTransito: { material_id: string; cantidad: number }[] = [];
             let depositIdMaterial: string | null = null;
             const { data: ubDestino } = await supabase
                 .from('inv_ubicaciones')
@@ -787,20 +790,26 @@ export default function ProcurementClient() {
                     precio_unitario: line.unit_price,
                 });
 
+                const catNombre = buscarCategoriaPorId(materialCategories, line.category_id)?.name;
+                if (
+                    !esGastoInmediatoCompra(
+                        { categoria: catNombre, category_id: line.category_id },
+                        materialCategories,
+                    )
+                ) {
+                    lineasTransito.push({ material_id: materialId, cantidad: line.quantity });
+                }
             }
 
-            /* Stock físico disponible: al liberar tránsito (inventario_stock), no en global_inventory. */
+            /* Stock físico: solo materiales almacenables; consumibles/servicios → solo contabilidad. */
 
-            await aplicarStockTransitoDesdeLineasCuarentena(supabase, {
-                ubicacionDestinoId,
-                purchaseInvoiceId: invData.id,
-                lineas: lineasContabilidad
-                    .filter((l) => l.material_id)
-                    .map((l) => ({
-                        material_id: l.material_id!,
-                        cantidad: l.cantidad,
-                    })),
-            });
+            if (lineasTransito.length > 0) {
+                await aplicarStockTransitoDesdeLineasCuarentena(supabase, {
+                    ubicacionDestinoId,
+                    purchaseInvoiceId: invData.id,
+                    lineas: lineasTransito,
+                });
+            }
 
             const fromTelegram = searchParams.get('fromTelegram');
 
