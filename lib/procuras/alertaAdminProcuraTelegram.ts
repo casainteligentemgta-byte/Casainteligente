@@ -11,6 +11,7 @@ import {
   CB_PROCURA_ADMIN_APROBAR,
   CB_PROCURA_ADMIN_RECHAZAR,
 } from '@/lib/procuras/procuraAdminCallbacks';
+import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -34,6 +35,9 @@ export type AlertaProcuraAdminRow = {
   estado: string;
   observaciones?: string | null;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
+  capitulo_maestro_id?: string | null;
+  prioridad?: string | null;
+  monto_estimado_usd?: number | null;
 };
 
 /** Envía alerta al canal admin con botones Aprobar / Almacén / Rechazar. */
@@ -51,7 +55,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,observaciones,ci_proyectos(nombre)',
+      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -61,34 +65,49 @@ export async function enviarAlertaProcuraPendienteAdmin(
     return false;
   }
 
-  const row = data as AlertaProcuraAdminRow;
+  const row = data as AlertaProcuraAdminRow & {
+    ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
+  };
   if (!debeAlertarProcura(row.estado, alertas)) return false;
 
-  const obra = nombreObra(row.ci_proyectos);
+  const capRel = row.ci_compras_capitulos_maestro;
+  const capLabel = capRel
+    ? `${capRel.codigo ?? ''} ${capRel.nombre ?? ''}`.trim()
+    : null;
+  const obra = capLabel || nombreObra(row.ci_proyectos);
   const solicitante = row.solicitante_nombre?.trim() || '—';
-  const prioridad = prioridadProcuraDesdeObs(row.observaciones, alertas);
+  const prioridad =
+    row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
   const cantidad = Number(row.cantidad).toLocaleString('es-VE');
+  const montoUsd =
+    row.monto_estimado_usd != null && Number.isFinite(Number(row.monto_estimado_usd))
+      ? `\n💵 Estimado: <b>USD ${Number(row.monto_estimado_usd).toFixed(2)}</b>`
+      : '';
 
   const msg =
     '🏗️ <b>ALERTA DE PROCURA PENDIENTE</b>\n\n' +
     `🎫 <b>Ticket:</b> ${escHtml(row.ticket)}\n` +
     `👷‍♂️ <b>Solicitante:</b> ${escHtml(solicitante)}\n` +
-    `📁 <b>Obra:</b> ${escHtml(obra)}\n` +
+    `📁 <b>Capítulo / Obra:</b> ${escHtml(obra)}\n` +
     `📦 <b>Material:</b> ${cantidad} ${escHtml(row.unidad)} de ${escHtml(row.material_txt)}\n` +
-    `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}\n\n` +
-    '¿Deseas autorizar este requerimiento?';
+    `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${montoUsd}\n\n` +
+    '¿Autoriza el Aprobador?';
+
+  const replyMarkup = row.capitulo_maestro_id
+    ? tecladoAprobacionDepartamento(row.id)
+    : {
+        inline_keyboard: [
+          [
+            { text: '🟢 Aprobar compra', callback_data: `${CB_PROCURA_ADMIN_APROBAR}${row.id}` },
+            { text: '📦 Usar almacén', callback_data: `${CB_PROCURA_ADMIN_ALMACEN}${row.id}` },
+          ],
+          [{ text: '🔴 Rechazar', callback_data: `${CB_PROCURA_ADMIN_RECHAZAR}${row.id}` }],
+        ],
+      };
 
   await sendTelegramMessage(canal, msg, {
     parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '🟢 Aprobar compra', callback_data: `${CB_PROCURA_ADMIN_APROBAR}${row.id}` },
-          { text: '📦 Usar almacén', callback_data: `${CB_PROCURA_ADMIN_ALMACEN}${row.id}` },
-        ],
-        [{ text: '🔴 Rechazar', callback_data: `${CB_PROCURA_ADMIN_RECHAZAR}${row.id}` }],
-      ],
-    },
+    reply_markup: replyMarkup,
   });
 
   return true;

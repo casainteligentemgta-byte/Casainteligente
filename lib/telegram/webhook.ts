@@ -114,6 +114,17 @@ import {
   manejarComandoProcuraTelegram,
   manejarTextoProcuraTelegram,
 } from '@/lib/telegram/procuraTelegram';
+import {
+  esCallbackAprobacionDepartamentoCompras,
+  manejarCallbackAprobacionDepartamentoCompras,
+} from '@/lib/compras/aprobacionDepartamentoTelegram';
+import {
+  esCallbackProcuraDepartamentoTelegram,
+  esFlujoProcuraDepartamentoTelegram,
+  manejarCallbackProcuraDepartamentoTelegram,
+  manejarComandoProcuraDepartamentoTelegram,
+  manejarTextoProcuraDepartamentoTelegram,
+} from '@/lib/compras/procuraDepartamentoTelegram';
 import { esChatCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
 import {
   esCallbackAvanceCampo,
@@ -360,7 +371,10 @@ async function aplicarComando(
   }
 
   if (cmd.comandoProcura) {
-    await manejarComandoProcuraTelegram(supabase, chatId);
+    const dept = await manejarComandoProcuraDepartamentoTelegram(supabase, chatId, userId ?? chatId);
+    if (!dept) {
+      await manejarComandoProcuraTelegram(supabase, chatId);
+    }
     return;
   }
 
@@ -764,6 +778,19 @@ export async function handleTelegramCallbackQuery(
       return NextResponse.json({ ok: true, callback: 'asignar_obra' });
     }
 
+    if (esCallbackAprobacionDepartamentoCompras(cq.data)) {
+      const handledCmp = await manejarCallbackAprobacionDepartamentoCompras(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        userId,
+        messageId: cq.message?.message_id,
+      });
+      if (handledCmp) {
+        return NextResponse.json({ ok: true, callback: 'compras_aprobacion' });
+      }
+    }
+
     if (esCallbackProcuraAdmin(cq.data)) {
       const handledAdminProcura = await manejarCallbackProcuraAdminTelegram(admin.client, {
         chatId,
@@ -774,6 +801,18 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledAdminProcura) {
         return NextResponse.json({ ok: true, callback: 'procura_admin' });
+      }
+    }
+
+    if (esCallbackProcuraDepartamentoTelegram(cq.data)) {
+      const handledDept = await manejarCallbackProcuraDepartamentoTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        userId,
+      });
+      if (handledDept) {
+        return NextResponse.json({ ok: true, callback: 'procura_departamento' });
       }
     }
 
@@ -912,6 +951,19 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       );
       if (textoDiasCredito) {
         return NextResponse.json({ ok: true, factura_dias_credito_texto: true });
+      }
+
+      const estadoPre = await getTelegramEstado(supabase, chatId);
+      if (esFlujoProcuraDepartamentoTelegram(estadoPre)) {
+        const textoDept = await manejarTextoProcuraDepartamentoTelegram(
+          supabase,
+          chatId,
+          userId ?? chatId,
+          texto,
+        );
+        if (textoDept) {
+          return NextResponse.json({ ok: true, procura_departamento_texto: true });
+        }
       }
 
       const textoProcura = await manejarTextoProcuraTelegram(supabase, chatId, texto);

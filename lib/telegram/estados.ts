@@ -15,7 +15,8 @@ export type TelegramContexto =
   | 'depositario_recepcion'
   | 'traspaso_inventario'
   | 'consulta_stock'
-  | 'procura_solicitud';
+  | 'procura_solicitud'
+  | 'procura_departamento';
 
 export type TelegramEstado = {
   chat_id: string;
@@ -42,6 +43,7 @@ const CONTEXTOS: TelegramContexto[] = [
   'traspaso_inventario',
   'consulta_stock',
   'procura_solicitud',
+  'procura_departamento',
 ];
 
 export function isTelegramContexto(v: string): v is TelegramContexto {
@@ -163,6 +165,8 @@ export function etiquetaContexto(ctx: TelegramContexto): string {
       return 'Consulta de stock por almacén';
     case 'procura_solicitud':
       return 'Solicitud de procura (abastecimiento)';
+    case 'procura_departamento':
+      return 'Procura departamento compras (capítulo)';
     default:
       return 'Menú principal';
   }

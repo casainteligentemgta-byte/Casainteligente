@@ -2,6 +2,7 @@ export const ESTADOS_PROCURA = [
   'borrador',
   'solicitada',
   'aprobada',
+  'aprobada_directa',
   'en_compra',
   'recibida_parcial',
   'recibida',
@@ -13,9 +14,10 @@ export type EstadoProcura = (typeof ESTADOS_PROCURA)[number];
 
 const ETIQUETAS: Record<EstadoProcura, string> = {
   borrador: 'Borrador',
-  solicitada: 'Solicitada',
+  solicitada: 'Pendiente',
   aprobada: 'Aprobada',
-  en_compra: 'En compra',
+  aprobada_directa: 'Aprobada directa',
+  en_compra: 'Comprada',
   recibida_parcial: 'Recibida parcial',
   recibida: 'Recibida',
   cancelada: 'Cancelada',
@@ -26,6 +28,7 @@ export const COLOR_ESTADO_PROCURA: Record<EstadoProcura, string> = {
   borrador: '#8E8E93',
   solicitada: '#5AC8FA',
   aprobada: '#34C759',
+  aprobada_directa: '#30D158',
   en_compra: '#FF9500',
   recibida_parcial: '#FFD60A',
   recibida: '#30D158',
