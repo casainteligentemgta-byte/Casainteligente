@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Loader2,
@@ -146,9 +147,11 @@ export default function TelegramWhitelistPanel() {
             </p>
             <h1 className="mt-1 text-xl font-bold text-white">Lista blanca del bot</h1>
             <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-              Solo los chats autorizados pueden usar comandos del bot. También se incluyen
-              automáticamente quienes tengan chat ID en la nómina del proyecto (control de obra →
-              equipo).
+              Solo los chats autorizados pueden usar comandos del bot. Configure roles en{' '}
+              <Link href="/configuracion/equipo" className="text-sky-400 hover:underline">
+                Equipo y permisos
+              </Link>
+              ; la nómina del proyecto sincroniza chat IDs automáticamente.
             </p>
             <p className="mt-2 text-xs text-zinc-500">
               Estado:{' '}

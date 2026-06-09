@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
+import { puedeProcesarEstadoProcuraWeb } from '@/lib/auth/permisos';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -15,9 +17,6 @@ type RpcRow = {
 
 /** POST — Cambia estado de procuras en lote y notifica por Telegram. */
 export async function POST(request: Request) {
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) return admin.response;
-
   try {
     const body = (await request.json()) as {
       ids?: string[];
@@ -37,6 +36,27 @@ export async function POST(request: Request) {
     if (!nuevoEstado) {
       return NextResponse.json({ error: 'Estado no válido.' }, { status: 400 });
     }
+
+    const auth = await requirePermisoWeb('procura.aprobar');
+    if (!auth.ok) {
+      const permAlt =
+        nuevoEstado === 'en_compra'
+          ? ('procura.ejecutar_compra' as const)
+          : nuevoEstado === 'aprobada'
+            ? ('procura.usar_almacen' as const)
+            : ('procura.aprobar' as const);
+      const authAlt = await requirePermisoWeb(permAlt);
+      if (!authAlt.ok || !puedeProcesarEstadoProcuraWeb(authAlt.actor, nuevoEstado)) {
+        return authAlt.ok
+          ? NextResponse.json({ error: 'No tiene permiso para este cambio de estado.' }, { status: 403 })
+          : authAlt.response;
+      }
+    } else if (!puedeProcesarEstadoProcuraWeb(auth.actor, nuevoEstado)) {
+      return NextResponse.json({ error: 'No tiene permiso para este cambio de estado.' }, { status: 403 });
+    }
+
+    const admin = supabaseAdminForRoute();
+    if (!admin.ok) return admin.response;
 
     const { data, error } = await admin.client.rpc(
       'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',

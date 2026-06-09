@@ -14,11 +14,11 @@ import { cn } from '@/lib/utils';
 
 const ROLES_SUGERIDOS = [
   { value: 'admin', label: 'Administrador' },
+  { value: 'pm_obra', label: 'Project manager / coordinador' },
+  { value: 'contador', label: 'Contador / contabilidad' },
+  { value: 'comprador', label: 'Comprador / procura' },
+  { value: 'almacen_central', label: 'Almacén central' },
   { value: 'rrhh', label: 'RRHH' },
-  { value: 'almacen', label: 'Almacén' },
-  { value: 'contabilidad', label: 'Contabilidad' },
-  { value: 'proyectos', label: 'Proyectos' },
-  { value: 'compras', label: 'Compras' },
   { value: 'solo_lectura', label: 'Solo lectura' },
 ] as const;
 

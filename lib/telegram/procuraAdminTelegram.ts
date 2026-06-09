@@ -6,6 +6,11 @@ import {
 } from '@/lib/telegram/botApi';
 import { isChatAllowedAsync } from '@/lib/telegram/chatWhitelist';
 import { esChatCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
+import {
+  puedeAprobarProcuraTelegram,
+  permisosEnforcementActivo,
+  resolverActorTelegram,
+} from '@/lib/auth/permisos';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import {
@@ -48,13 +53,21 @@ function parseCallbackProcuraAdmin(data: string): { accion: AccionAdmin; procura
 }
 
 async function puedeAutorizarProcuraAdmin(
+  supabase: SupabaseClient,
   chatId: string,
   userId: string,
+  accion: AccionAdmin,
 ): Promise<boolean> {
-  if (esChatCanalAdminTelegram(chatId)) {
-    return isChatAllowedAsync(userId);
+  if (!(await isChatAllowedAsync(userId))) return false;
+
+  if (!permisosEnforcementActivo()) {
+    return esChatCanalAdminTelegram(chatId) || (await isChatAllowedAsync(userId));
   }
-  return isChatAllowedAsync(userId);
+
+  if (esChatCanalAdminTelegram(chatId)) return true;
+
+  const actor = await resolverActorTelegram(supabase, userId);
+  return puedeAprobarProcuraTelegram(actor, accion);
 }
 
 async function procesarAccionProcuraAdmin(
@@ -129,12 +142,13 @@ export async function manejarCallbackProcuraAdminTelegram(
     return true;
   }
 
-  if (!(await puedeAutorizarProcuraAdmin(params.chatId, params.userId))) {
-    await answerCallbackQuery(params.callbackId, 'No autorizado', true);
+  if (!(await puedeAutorizarProcuraAdmin(supabase, params.chatId, params.userId, parsed.accion))) {
+    await answerCallbackQuery(params.callbackId, 'No autorizado para esta acción', true);
     return true;
   }
 
-  const autorNombre = params.userId;
+  const actor = await resolverActorTelegram(supabase, params.userId);
+  const autorNombre = actor.nombre?.trim() || params.userId;
 
   await answerCallbackQuery(params.callbackId, 'Procesando…');
 

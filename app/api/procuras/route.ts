@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { insertarProcura } from '@/lib/procuras/registrarProcura';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { SELECT_PROCURA_SOLICITANTE } from '@/lib/procuras/solicitanteProcura';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -58,9 +59,6 @@ export async function GET(req: Request) {
 
 /** POST — Nueva procura. */
 export async function POST(req: Request) {
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) return admin.response;
-
   try {
     const body = (await req.json()) as {
       material_id?: string | null;
@@ -77,6 +75,15 @@ export async function POST(req: Request) {
       solicitante_telegram_chat_id?: number | string | null;
       asignado_telegram_chat_id?: number | string | null;
     };
+
+    const auth = await requirePermisoWeb('procura.solicitar', {
+      proyectoId: body.proyecto_id,
+      entidadId: body.entidad_id,
+    });
+    if (!auth.ok) return auth.response;
+
+    const admin = supabaseAdminForRoute();
+    if (!admin.ok) return admin.response;
 
     const solicitanteChat = Number(body.solicitante_telegram_chat_id);
     const { data, error } = await insertarProcura(

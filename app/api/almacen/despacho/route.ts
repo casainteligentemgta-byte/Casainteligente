@@ -5,6 +5,7 @@ import {
   type RegistrarDespachoWebInput,
 } from '@/lib/almacen/registrarDespachoWeb';
 import { uploadDespachoFoto } from '@/lib/almacen/uploadDespachoFoto';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { createClient } from '@/lib/supabase/server';
 
@@ -42,6 +43,9 @@ export async function POST(req: Request) {
     if (!Array.isArray(body.lineas) || body.lineas.length === 0) {
       return NextResponse.json({ error: 'Agregue al menos una línea.' }, { status: 400 });
     }
+
+    const auth = await requirePermisoWeb('almacen.despacho', { proyectoId: body.proyectoId });
+    if (!auth.ok) return auth.response;
 
     const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
     const fotos = [];

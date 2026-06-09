@@ -7,6 +7,7 @@ import {
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
 import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +28,9 @@ type CompraFacturaExistente = { id: string };
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   try {
+    const auth = await requirePermisoWeb('almacen.ingreso');
+    if (!auth.ok) return auth.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
     const supabase = admin.client;

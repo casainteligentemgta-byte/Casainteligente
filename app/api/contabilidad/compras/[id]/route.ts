@@ -16,6 +16,8 @@ import {
 } from '@/lib/contabilidad/monedaCompra';
 import { tasaBcvCompra } from '@/lib/contabilidad/comprasMontos';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import type { Permiso } from '@/lib/auth/permisosCatalogo';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
@@ -179,6 +181,16 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       actualizar_solo_fecha?: string;
       pendiente_canal_id?: string | null;
     };
+
+    let permiso: Permiso = 'compra.registrar';
+    if (body.actualizar_solo_fecha || body.confirmar_solo_fecha) {
+      permiso = 'compra.verificar_fecha';
+    } else if (body.extracted) {
+      permiso = 'compra.confirmar';
+    }
+
+    const auth = await requirePermisoWeb(permiso);
+    if (!auth.ok) return auth.response;
 
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
