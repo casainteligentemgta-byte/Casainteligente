@@ -3,6 +3,7 @@ import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import { monedaExtractedConfirmada } from '@/lib/contabilidad/extractedCanal';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import { actualizarCompraProvisionalConFacturaCanal } from '@/lib/contabilidad/actualizarCompraProvisionalConFacturaCanal';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 
 export type ResultadoConciliacionFrm = {
@@ -150,10 +151,11 @@ export async function conciliarFrmConFacturaCanal(
   if (!actualizoProvisional) {
     const ingresadoAt = new Date().toISOString();
     const patchConta: Record<string, unknown> = { ingresado_almacen_at: ingresadoAt };
-    const { error: contaErr } = await supabase
-      .from('contabilidad_compras')
-      .update(patchConta)
-      .eq('id', resultado.compraId);
+    const { error: contaErr } = await updateContabilidadCompraRow(
+      supabase,
+      resultado.compraId,
+      patchConta,
+    );
 
     if (contaErr && !/ingresado_almacen_at|42703|schema cache/i.test(contaErr.message ?? '')) {
       throw new Error(contaErr.message);

@@ -16,6 +16,7 @@ import {
   esGastoEntidadImputacion,
 } from '@/lib/contabilidad/imputacionCompra';
 import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id?: string | null;
@@ -95,18 +96,10 @@ export async function registerCompraDesdeRecepcion(
   if (duplicada?.id) {
     const piId = input.purchase_invoice_id?.trim();
     if (piId) {
-      await supabase
-        .from('contabilidad_compras')
-        .update({ purchase_invoice_id: piId } as never)
-        .eq('id', duplicada.id)
-        .is('purchase_invoice_id', null);
+      await updateContabilidadCompraRow(supabase, duplicada.id, { purchase_invoice_id: piId });
     }
     if (input.origen === 'TELEGRAM') {
-      await supabase
-        .from('contabilidad_compras')
-        .update({ origen: 'TELEGRAM' } as never)
-        .eq('id', duplicada.id)
-        .eq('origen', 'RECEPCION_MERCANCIA');
+      await updateContabilidadCompraRow(supabase, duplicada.id, { origen: 'TELEGRAM' });
     }
     const { data: compraDoc } = await supabase
       .from('contabilidad_compras')

@@ -15,6 +15,7 @@ import {
   subtotalLineaEnMonedaOriginal,
 } from '@/lib/contabilidad/monedaCompra';
 import { tasaBcvCompra } from '@/lib/contabilidad/comprasMontos';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
@@ -292,17 +293,21 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       monedaNueva,
     );
 
-    const { data: updated, error: upErr } = await admin.client
+    const { error: upErr } = await updateContabilidadCompraRow(admin.client, id, payloadMoneda);
+    if (upErr) {
+      return NextResponse.json({ error: upErr.message }, { status: 500 });
+    }
+
+    const { data: updated, error: loadUpErr } = await admin.client
       .from('contabilidad_compras')
-      .update(payloadMoneda as never)
-      .eq('id', id)
       .select(
         'id,fecha,purchase_invoice_id,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd',
       )
+      .eq('id', id)
       .single();
 
-    if (upErr) {
-      return NextResponse.json({ error: upErr.message }, { status: 500 });
+    if (loadUpErr) {
+      return NextResponse.json({ error: loadUpErr.message }, { status: 500 });
     }
 
     const filaActualizada = {

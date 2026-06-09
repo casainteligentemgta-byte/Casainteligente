@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 
 type ResumenInspeccion = { status: string };
 
@@ -59,11 +60,11 @@ export async function sincronizarContabilidadTrasInventarioCompra(
     patch.ingresado_almacen_at = ingresadoAt;
   }
 
-  const { error: upErr } = await supabase.from('contabilidad_compras').update(patch).eq('id', compra.id);
+  const { error: upErr } = await updateContabilidadCompraRow(supabase, compra.id, patch);
   if (upErr && /cuarentena_rechazo_total|42703|schema cache/i.test(upErr.message ?? '')) {
     const slim: Record<string, unknown> = { compra_factura_id: compraFacturaId };
     if (!compra.ingresado_almacen_at) slim.ingresado_almacen_at = ingresadoAt;
-    await supabase.from('contabilidad_compras').update(slim).eq('id', compra.id);
+    await updateContabilidadCompraRow(supabase, compra.id, slim);
   }
 
   return { compraFacturaId };
@@ -128,7 +129,7 @@ export async function revisarCuarentenaRechazoTotal(
 
   const { error: rechazoErr } = await supabase
     .from('contabilidad_compras')
-    .update({ cuarentena_rechazo_total: true })
+    .update({ cuarentena_rechazo_total: true } as never)
     .eq('purchase_invoice_id', invId);
 
   if (rechazoErr && /cuarentena_rechazo_total|42703|schema cache/i.test(rechazoErr.message ?? '')) {

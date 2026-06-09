@@ -5,6 +5,7 @@ import {
   FechaCompraAnomalaError,
   type AuditoriaFechaCompra,
 } from '@/lib/contabilidad/auditoriaFechaCompra';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import {
   monedaExtractedConfirmada,
   normalizarMonedaExtracted,
@@ -152,15 +153,16 @@ export async function actualizarCompraContableDesdeExtracted(
       audit.nivel === 'critico' ? Boolean(input.confirmarFechaAnomala) : false,
   };
 
-  const { error: upCompraErr } = await supabase
-    .from('contabilidad_compras')
-    .update({ ...patchCompra, ...patchAuditoria } as never)
-    .eq('id', input.compraId);
+  const { error: upCompraErr } = await updateContabilidadCompraRow(supabase, input.compraId, {
+    ...patchCompra,
+    ...patchAuditoria,
+  });
   if (upCompraErr?.message?.includes('alerta_fecha')) {
-    const { error: retryErr } = await supabase
-      .from('contabilidad_compras')
-      .update(patchCompra as never)
-      .eq('id', input.compraId);
+    const { error: retryErr } = await updateContabilidadCompraRow(
+      supabase,
+      input.compraId,
+      patchCompra,
+    );
     if (retryErr) throw new Error(retryErr.message);
   } else if (upCompraErr) {
     throw new Error(upCompraErr.message);

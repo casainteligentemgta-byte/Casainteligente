@@ -8,11 +8,12 @@ import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
-import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import {
   asegurarMaterialesLineasCompra,
   mensajeLineasSinMaterialSku,
 } from '@/lib/almacen/resolverMaterialIdPorSku';
+import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { copiarDocumentoProcurementAInvoice } from '@/lib/almacen/procurementDocumentStorage';
 
 function lineasDesdeExtracted(ex: ExtractedCanalHeader): LineaCompraContabilidadInput[] {
@@ -135,7 +136,12 @@ export async function actualizarCompraProvisionalConFacturaCanal(
     origen: 'FRM_CONCILIADO',
     ...(params.entidadId ? { entidad_id: params.entidadId } : {}),
   };
-  await supabase.from('contabilidad_compras').update(patchCompra).eq('id', params.compraId);
+  const { error: upCompraErr } = await updateContabilidadCompraRow(
+    supabase,
+    params.compraId,
+    patchCompra,
+  );
+  if (upCompraErr) throw new Error(upCompraErr.message);
 
   const { data: cf } = await supabase
     .from('compras_facturas')

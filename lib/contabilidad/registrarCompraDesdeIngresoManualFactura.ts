@@ -11,6 +11,7 @@ import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCo
 import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 
 export type LineaIngresoManualFacturaContabilidad = {
   material_id: string;
@@ -118,7 +119,7 @@ async function actualizarCantidadesLineasContabilidad(
     .eq('compra_id', compraId);
   const total = (todas ?? []).reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
   if (total > 0) {
-    await supabase.from('contabilidad_compras').update({ total_amount: total }).eq('id', compraId);
+    await updateContabilidadCompraRow(supabase, compraId, { total_amount: total });
   }
 }
 
@@ -346,7 +347,8 @@ export async function registrarCompraDesdeIngresoManualFactura(
     if (!existente?.purchase_invoice_id?.trim()) {
       patchCompra.purchase_invoice_id = purchaseInvoiceId;
     }
-    await supabase.from('contabilidad_compras').update(patchCompra).eq('id', compraId);
+    const { error: patchErr } = await updateContabilidadCompraRow(supabase, compraId, patchCompra);
+    if (patchErr) throw new Error(patchErr.message);
 
     await asegurarComprasFacturaSinStockExtra(supabase, {
       purchaseInvoiceId,

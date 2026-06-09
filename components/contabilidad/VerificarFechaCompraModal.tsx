@@ -14,7 +14,11 @@ import {
 
 type Props = {
   open: boolean;
+  /** contabilidad_compras.id (vacío si solo pendiente Telegram). */
   compraId: string;
+  /** Pendiente ci_facturas_canal_pendientes (Telegram sin contabilidad aún). */
+  pendienteCanalId?: string | null;
+  esCanalSolo?: boolean;
   fechaFactura: string;
   fechaRegistro?: string | null;
   tasaBcv?: number | null;
@@ -29,6 +33,8 @@ type Props = {
 export default function VerificarFechaCompraModal({
   open,
   compraId,
+  pendienteCanalId,
+  esCanalSolo = false,
   fechaFactura,
   fechaRegistro,
   tasaBcv,
@@ -118,20 +124,51 @@ export default function VerificarFechaCompraModal({
     setGuardando(true);
     setError(null);
     try {
-      const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(compraId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actualizar_solo_fecha: fecha,
-          confirmar_fecha_anomala: requiereCheckbox ? confirmado : undefined,
-        }),
-      });
-      const data = (await res.json()) as {
-        error?: string;
-        requiere_confirmacion?: boolean;
-      };
-      if (!res.ok) {
-        throw new Error(data.error ?? 'No se pudo guardar la fecha');
+      if (esCanalSolo && pendienteCanalId) {
+        const canalRes = await fetch(
+          `/api/facturas-canal/pendientes/${encodeURIComponent(pendienteCanalId)}`,
+          { cache: 'no-store' },
+        );
+        const canalData = (await canalRes.json()) as {
+          extracted?: Record<string, unknown> | null;
+          error?: string;
+        };
+        if (!canalRes.ok) {
+          throw new Error(canalData.error ?? 'No se pudo cargar la factura de Telegram');
+        }
+        const extracted: Record<string, unknown> = { ...(canalData.extracted ?? {}), date: fecha };
+        if (requiereCheckbox && confirmado) {
+          extracted.fecha_auditoria_confirmada = true;
+        }
+        const res = await fetch(
+          `/api/facturas-canal/pendientes/${encodeURIComponent(pendienteCanalId)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extracted, mensaje_error: null }),
+          },
+        );
+        const data = (await res.json()) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? 'No se pudo guardar la fecha');
+      } else {
+        if (!compraId || compraId.startsWith('canal-')) {
+          throw new Error('Esta factura aún no está en contabilidad. Use Modificar o confirme desde Telegram.');
+        }
+        const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(compraId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actualizar_solo_fecha: fecha,
+            confirmar_fecha_anomala: requiereCheckbox ? confirmado : undefined,
+          }),
+        });
+        const data = (await res.json()) as {
+          error?: string;
+          requiere_confirmacion?: boolean;
+        };
+        if (!res.ok) {
+          throw new Error(data.error ?? 'No se pudo guardar la fecha');
+        }
       }
       await onConfirmado();
       onClose();

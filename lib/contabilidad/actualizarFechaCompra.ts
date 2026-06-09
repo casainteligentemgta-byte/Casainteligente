@@ -11,6 +11,7 @@ import {
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
 import { monedaOriginalCompra } from '@/lib/contabilidad/monedaCompra';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 
 type CompraFechaRow = {
   id: string;
@@ -76,17 +77,11 @@ export async function actualizarFechaCompra(
       : false,
   };
 
-  const { error: upErr } = await supabase
-    .from('contabilidad_compras')
-    .update(patch as never)
-    .eq('id', compraId);
+  const { error: upErr } = await updateContabilidadCompraRow(supabase, compraId, patch);
 
   if (upErr?.message?.includes('alerta_fecha') || upErr?.message?.includes('fecha_confirmada_manual')) {
     const { fecha: _f, alerta_fecha: _a, fecha_confirmada_manual: _c, ...sinAuditoria } = patch;
-    const { error: retryErr } = await supabase
-      .from('contabilidad_compras')
-      .update(sinAuditoria as never)
-      .eq('id', compraId);
+    const { error: retryErr } = await updateContabilidadCompraRow(supabase, compraId, sinAuditoria);
     if (retryErr) throw new Error(retryErr.message);
   } else if (upErr) {
     throw new Error(upErr.message);

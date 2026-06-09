@@ -3,6 +3,7 @@ import {
   auditoriaFechaCompraAlmacenada,
   type AuditoriaFechaCompra,
 } from '@/lib/contabilidad/auditoriaFechaCompra';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 
 type CompraFechaRow = {
   id: string;
@@ -46,10 +47,7 @@ export async function confirmarFechaAnomalaCompra(
     alerta_fecha: audit.nivel,
   };
 
-  const { error: upErr } = await supabase
-    .from('contabilidad_compras')
-    .update(patch as never)
-    .eq('id', compraId);
+  const { error: upErr } = await updateContabilidadCompraRow(supabase, compraId, patch);
 
   if (upErr?.message?.includes('fecha_confirmada_manual')) {
     throw new Error('La verificación de fecha no está disponible en la base de datos.');

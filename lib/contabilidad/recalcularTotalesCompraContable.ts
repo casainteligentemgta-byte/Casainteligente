@@ -4,6 +4,7 @@ import {
   resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
 import { monedaOriginalCompra } from '@/lib/contabilidad/monedaCompra';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 
 type CompraRow = {
   id: string;
@@ -34,9 +35,10 @@ export async function recalcularTotalesCompraContable(
     tasaBcvDigitada: opts?.forzarTasaBcvPorFecha ? null : compra.tasa_bcv_ves_por_usd,
   });
 
-  const { error: upErr } = await supabase
-    .from('contabilidad_compras')
-    .update(payloadCompraBimonetario(montos) as never)
-    .eq('id', compra.id);
+  const { error: upErr } = await updateContabilidadCompraRow(
+    supabase,
+    compra.id,
+    payloadCompraBimonetario(montos),
+  );
   if (upErr) throw upErr;
 }

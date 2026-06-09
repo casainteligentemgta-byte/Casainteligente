@@ -290,6 +290,8 @@ export default function ComprasPage() {
     } | null>(null);
     const [verificandoFecha, setVerificandoFecha] = useState<{
         compraId: string;
+        pendienteCanalId?: string | null;
+        esCanalSolo?: boolean;
         fechaFactura: string;
         fechaRegistro?: string | null;
         tasaBcv?: number | null;
@@ -1714,7 +1716,6 @@ export default function ComprasPage() {
     };
 
     const abrirVerificarFechaCompra = useCallback((c: CompraRow) => {
-        if (c.id.startsWith('canal-')) return;
         const meta = metaAlertaFechaCompra({
             fecha: String(c.fecha ?? '').slice(0, 10),
             alertaAlmacenada: c.alerta_fecha,
@@ -1722,12 +1723,23 @@ export default function ComprasPage() {
             umbrales: umbralesFecha,
         });
         if (!meta.requiereVerificacion) return;
+
+        const esCanalSolo = c.id.startsWith('canal-');
+        const pendienteCanalId =
+            c.pendiente_canal_id?.trim() ||
+            (esCanalSolo ? c.id.slice('canal-'.length) : null);
+        const compraContabilidadId = esCanalSolo ? '' : c.id;
+
+        if (!compraContabilidadId && !pendienteCanalId) return;
+
         setVerificandoFecha({
-            compraId: c.id,
+            compraId: compraContabilidadId || pendienteCanalId!,
+            pendienteCanalId,
+            esCanalSolo: esCanalSolo || !compraContabilidadId,
             fechaFactura: String(c.fecha ?? '').slice(0, 10),
             fechaRegistro: c.created_at ? String(c.created_at).slice(0, 10) : null,
-            tasaBcv: tasaParaCompra(c),
-            proveedor: c.supplier_name ?? undefined,
+            tasaBcv: esCanalSolo ? null : tasaParaCompra(c),
+            proveedor: c.supplier_name?.trim() || undefined,
             factura: c.invoice_number ?? undefined,
             nivelAlerta: meta.nivel === 'advertencia' ? 'advertencia' : 'critico',
             mensajeAuditoria: meta.mensaje,
@@ -1736,10 +1748,12 @@ export default function ComprasPage() {
 
     const onVerificarFechaFila = useCallback(
         (row: FilaFacturaCanal) => {
-            const c = compraPorId.get(row.pendienteId);
+            const c =
+                compraPorId.get(row.pendienteId) ??
+                compras.find((x) => x.id === row.pendienteId);
             if (c) abrirVerificarFechaCompra(c);
         },
-        [compraPorId, abrirVerificarFechaCompra],
+        [compraPorId, compras, abrirVerificarFechaCompra],
     );
 
     const estadoCompartir = useMemo(
@@ -2991,10 +3005,7 @@ export default function ComprasPage() {
                                                     fechaConfirmadaManual: c.fecha_confirmada_manual,
                                                     umbrales: umbralesFecha,
                                                 });
-                                                if (
-                                                    !metaFecha.requiereVerificacion ||
-                                                    c.id.startsWith('canal-')
-                                                ) {
+                                                if (!metaFecha.requiereVerificacion) {
                                                     return null;
                                                 }
                                                 const esAdvertencia = metaFecha.nivel === 'advertencia';
@@ -3370,6 +3381,8 @@ export default function ComprasPage() {
             <VerificarFechaCompraModal
                 open={verificandoFecha != null}
                 compraId={verificandoFecha?.compraId ?? ''}
+                pendienteCanalId={verificandoFecha?.pendienteCanalId}
+                esCanalSolo={verificandoFecha?.esCanalSolo}
                 fechaFactura={verificandoFecha?.fechaFactura ?? ''}
                 fechaRegistro={verificandoFecha?.fechaRegistro}
                 tasaBcv={verificandoFecha?.tasaBcv}

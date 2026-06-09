@@ -4,6 +4,7 @@ import {
   reclamarConfirmacionCompraCanal,
 } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
+import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import {
   condicionPagoExtractedConfirmada,
   diasCreditoExtractedValido,
@@ -489,10 +490,7 @@ async function confirmarCompraDesdeCanalInterno(
     fecha_confirmada_manual:
       auditFecha.nivel === 'critico' ? fechaConfirmada : false,
   };
-  const { error: auditErr } = await supabase
-    .from('contabilidad_compras')
-    .update(patchAuditoria as never)
-    .eq('id', compraId);
+  const { error: auditErr } = await updateContabilidadCompraRow(supabase, compraId, patchAuditoria);
   if (auditErr && !auditErr.message?.includes('alerta_fecha')) {
     console.warn('[confirmarCompraDesdeCanal] alerta_fecha:', auditErr.message);
   }
