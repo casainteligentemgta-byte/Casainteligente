@@ -63,6 +63,7 @@ export async function POST(req: Request) {
 
   try {
     const body = (await req.json()) as {
+      material_id?: string | null;
       material_txt?: string;
       cantidad?: number | string;
       unidad?: string;
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
     const { data, error } = await insertarProcura(
       admin.client,
       {
+        material_id: body.material_id?.trim() || null,
         material_txt: String(body.material_txt ?? ''),
         cantidad: Number(body.cantidad),
         unidad: body.unidad,

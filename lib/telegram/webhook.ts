@@ -105,11 +105,16 @@ import {
 } from '@/lib/telegram/liberarCuarentenaPicker';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 import {
+  esCallbackProcuraAdmin,
+  manejarCallbackProcuraAdminTelegram,
+} from '@/lib/telegram/procuraAdminTelegram';
+import {
   esCallbackProcuraTelegram,
   manejarCallbackProcuraTelegram,
   manejarComandoProcuraTelegram,
   manejarTextoProcuraTelegram,
 } from '@/lib/telegram/procuraTelegram';
+import { esChatCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
 import {
   esCallbackAvanceCampo,
   manejarCallbackAvanceCampo,
@@ -449,7 +454,15 @@ export async function handleTelegramCallbackQuery(
   }
 
   const chatId = String(cq.message.chat.id);
-  if (!(await isChatAllowedAsync(chatId))) {
+  const userId = String(cq.from.id);
+  const esAdminProcura = esCallbackProcuraAdmin(cq.data);
+  const enCanalAdmin = esChatCanalAdminTelegram(chatId);
+
+  let chatPermitido = await isChatAllowedAsync(chatId);
+  if (!chatPermitido && esAdminProcura && enCanalAdmin) {
+    chatPermitido = await isChatAllowedAsync(userId);
+  }
+  if (!chatPermitido) {
     return NextResponse.json({ ok: true, denied: true });
   }
 
@@ -459,7 +472,6 @@ export async function handleTelegramCallbackQuery(
   }
 
   try {
-    const userId = String(cq.from.id);
 
     if (esCallbackMenuIngresoTelegram(cq.data)) {
       const handled = await manejarCallbackMenuIngresoTelegram(admin.client, {
@@ -750,6 +762,19 @@ export async function handleTelegramCallbackQuery(
     });
     if (handledAsignar) {
       return NextResponse.json({ ok: true, callback: 'asignar_obra' });
+    }
+
+    if (esCallbackProcuraAdmin(cq.data)) {
+      const handledAdminProcura = await manejarCallbackProcuraAdminTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        userId,
+        messageId: cq.message?.message_id,
+      });
+      if (handledAdminProcura) {
+        return NextResponse.json({ ok: true, callback: 'procura_admin' });
+      }
     }
 
     if (esCallbackProcuraTelegram(cq.data)) {

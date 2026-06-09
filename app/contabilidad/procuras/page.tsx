@@ -17,6 +17,11 @@ import {
   UNIDADES_PROCURA,
   normalizarUnidadProcura,
 } from '@/lib/procuras/unidadesProcura';
+import BuscadorMaterialCampo, {
+  type MaterialCampoOpcion,
+} from '@/components/almacen/BuscadorMaterialCampo';
+import SelectorMaterialObraRecepcion from '@/components/almacen/SelectorMaterialObraRecepcion';
+import { etiquetaMaterialCatalogo } from '@/lib/almacen/buscarMaterialesCatalogo';
 
 type EntidadRow = { id: string; nombre: string };
 type ProyectoRow = { id: string; nombre: string };
@@ -98,6 +103,9 @@ export default function ProcurasPage() {
   const [creando, setCreando] = useState(false);
 
   const [formMaterial, setFormMaterial] = useState('');
+  const [formMaterialId, setFormMaterialId] = useState('');
+  const [modoMaterialLibre, setModoMaterialLibre] = useState(false);
+  const [busquedaGlobalAbierta, setBusquedaGlobalAbierta] = useState(false);
   const [formCantidad, setFormCantidad] = useState('1');
   const [formUnidad, setFormUnidad] = useState('UND');
   const [formProyectoId, setFormProyectoId] = useState('');
@@ -235,10 +243,23 @@ export default function ProcurasPage() {
     }
   };
 
+  const aplicarMaterialCatalogo = (m: MaterialCampoOpcion) => {
+    setFormMaterialId(m.id);
+    setFormMaterial(etiquetaMaterialCatalogo(m));
+    setFormUnidad(normalizarUnidadProcura(m.unit));
+    setModoMaterialLibre(false);
+    setBusquedaGlobalAbierta(false);
+  };
+
   const crearProcura = async () => {
     const solicitanteTxt = formSolicitanteNombre.trim();
+    const materialTxt = formMaterial.trim();
     if (!formSolicitanteEmpleadoId.trim() && !solicitanteTxt) {
       setError('Indique quién realiza la procura.');
+      return;
+    }
+    if (!materialTxt) {
+      setError('Indique el material (catálogo o descripción libre).');
       return;
     }
     setCreando(true);
@@ -249,7 +270,8 @@ export default function ProcurasPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          material_txt: formMaterial,
+          material_id: formMaterialId.trim() || null,
+          material_txt: materialTxt,
           cantidad: formCantidad,
           unidad: normalizarUnidadProcura(formUnidad),
           proyecto_id: formProyectoId || null,
@@ -269,6 +291,9 @@ export default function ProcurasPage() {
       if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
       setMsgOk(`Procura ${json.procura?.ticket ?? ''} creada.`);
       setFormMaterial('');
+      setFormMaterialId('');
+      setModoMaterialLibre(false);
+      setBusquedaGlobalAbierta(false);
       setFormCantidad('1');
       setFormObs('');
       setFormSolicitanteNombre('');
@@ -414,17 +439,143 @@ export default function ProcurasPage() {
           </button>
           {showNueva ? (
             <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
+                    OBRA (opcional si hay entidad)
+                  </label>
+                  <select
+                    value={formProyectoId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setFormProyectoId(id);
+                      setFormMaterial('');
+                      setFormMaterialId('');
+                      setModoMaterialLibre(false);
+                    }}
+                    style={{ ...inputStyle, marginTop: '6px' }}
+                  >
+                    <option value="">—</option>
+                    {proyectos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
+                    ENTIDAD (opcional si hay obra)
+                  </label>
+                  <select
+                    value={formEntidadId}
+                    onChange={(e) => setFormEntidadId(e.target.value)}
+                    style={{ ...inputStyle, marginTop: '6px' }}
+                  >
+                    <option value="">—</option>
+                    {entidades.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                  MATERIAL / DESCRIPCIÓN
+                  MATERIAL — CATÁLOGO DE LA OBRA
                 </label>
-                <input
-                  value={formMaterial}
-                  onChange={(e) => setFormMaterial(e.target.value)}
-                  placeholder="Ej. Cemento gris 42.5 kg"
-                  style={{ ...inputStyle, marginTop: '6px' }}
-                />
+                <div style={{ marginTop: '6px' }}>
+                  <SelectorMaterialObraRecepcion
+                    proyectoId={formProyectoId}
+                    value={formMaterialId}
+                    onChange={(id) => {
+                      setFormMaterialId(id);
+                      if (!id) setFormMaterial('');
+                    }}
+                    onMaterialSeleccionado={(m) => {
+                      if (m) aplicarMaterialCatalogo(m);
+                    }}
+                    disabled={!formProyectoId.trim() || modoMaterialLibre}
+                    selectClassName="w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-4 py-3 text-sm text-zinc-100 outline-none min-h-[46px]"
+                    inputClassName="w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-4 py-3 text-sm text-zinc-100 outline-none min-h-[46px]"
+                  />
+                </div>
+                {!formProyectoId.trim() ? (
+                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '6px' }}>
+                    Seleccione una obra para ver el catálogo de materiales.
+                  </p>
+                ) : null}
               </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setBusquedaGlobalAbierta((v) => !v)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.45)',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  {busquedaGlobalAbierta ? '▾ Ocultar búsqueda global' : '▸ Buscar en catálogo global (nombre/SKU)'}
+                </button>
+                {busquedaGlobalAbierta ? (
+                  <div style={{ marginTop: '8px' }}>
+                    <BuscadorMaterialCampo
+                      onSeleccionar={aplicarMaterialCatalogo}
+                      disabled={modoMaterialLibre}
+                      minChars={1}
+                      modoPrefijo
+                      placeholder="Escribe desde 1 letra (ej. c → Cemento…)"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModoMaterialLibre((v) => !v);
+                    if (!modoMaterialLibre) {
+                      setFormMaterialId('');
+                    }
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: modoMaterialLibre ? '#FF9500' : 'rgba(255,255,255,0.45)',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  {modoMaterialLibre ? '▾ Ocultar texto libre' : '✏️ Otro material (descripción libre)'}
+                </button>
+                {modoMaterialLibre ? (
+                  <input
+                    value={formMaterial}
+                    onChange={(e) => {
+                      setFormMaterial(e.target.value);
+                      setFormMaterialId('');
+                    }}
+                    placeholder="Ej. Cemento gris 42.5 kg, material especial"
+                    style={{ ...inputStyle, marginTop: '6px' }}
+                  />
+                ) : formMaterial.trim() ? (
+                  <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px', marginTop: '6px' }}>
+                    Seleccionado: <strong>{formMaterial}</strong>
+                  </p>
+                ) : null}
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
@@ -490,42 +641,6 @@ export default function ProcurasPage() {
                       <option key={e.id} value={e.id}>
                         {e.nombre_completo}
                         {e.oficio ? ` (${e.oficio})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    OBRA (opcional si hay entidad)
-                  </label>
-                  <select
-                    value={formProyectoId}
-                    onChange={(e) => setFormProyectoId(e.target.value)}
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  >
-                    <option value="">—</option>
-                    {proyectos.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    ENTIDAD (opcional si hay obra)
-                  </label>
-                  <select
-                    value={formEntidadId}
-                    onChange={(e) => setFormEntidadId(e.target.value)}
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  >
-                    <option value="">—</option>
-                    {entidades.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.nombre}
                       </option>
                     ))}
                   </select>

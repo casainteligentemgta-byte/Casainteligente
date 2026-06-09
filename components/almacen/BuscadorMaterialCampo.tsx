@@ -15,6 +15,10 @@ type Props = {
   onSeleccionar: (material: MaterialCampoOpcion) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Mínimo de caracteres para buscar (default 2). */
+  minChars?: number;
+  /** Si true, coincide solo al inicio del nombre/SKU (ej. "c" → Cemento…). */
+  modoPrefijo?: boolean;
 };
 
 const inputClass =
@@ -24,6 +28,8 @@ export default function BuscadorMaterialCampo({
   onSeleccionar,
   disabled,
   placeholder = 'Buscar material por nombre o SKU…',
+  minChars = 2,
+  modoPrefijo = false,
 }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [q, setQ] = useState('');
@@ -33,17 +39,18 @@ export default function BuscadorMaterialCampo({
   const buscar = useCallback(
     async (term: string) => {
       const t = term.trim();
-      if (t.length < 2) {
+      if (t.length < minChars) {
         setResultados([]);
         return;
       }
       setLoading(true);
       try {
         const q = t.replace(/%/g, '');
+        const patron = modoPrefijo ? `${q}%` : `%${q}%`;
         const { data, error } = await supabase
           .from('global_inventory')
           .select('id,name,sap_code,unit')
-          .or(`name.ilike.%${q}%,sap_code.ilike.%${q}%`)
+          .or(`name.ilike.${patron},sap_code.ilike.${patron}`)
           .order('name')
           .limit(24);
         if (error) throw error;
@@ -61,7 +68,7 @@ export default function BuscadorMaterialCampo({
         setLoading(false);
       }
     },
-    [supabase],
+    [supabase, minChars, modoPrefijo],
   );
 
   useEffect(() => {
@@ -110,7 +117,7 @@ export default function BuscadorMaterialCampo({
         </ul>
       ) : null}
 
-      {q.trim().length >= 2 && !loading && resultados.length === 0 ? (
+      {q.trim().length >= minChars && !loading && resultados.length === 0 ? (
         <p className="text-xs text-zinc-500">Sin coincidencias en catálogo.</p>
       ) : null}
     </div>

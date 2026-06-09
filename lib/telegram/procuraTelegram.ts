@@ -17,6 +17,22 @@ import {
   setTelegramContexto,
   type TelegramEstado,
 } from '@/lib/telegram/estados';
+import {
+  PRC_MAT_BUSCAR,
+  PRC_MAT_CAT,
+  PRC_MAT_OTRO,
+  PRC_MAT_PAGE_PREFIX,
+  PRC_MAT_PREFIX,
+  PRC_MAT_TXT_OK,
+  PRC_SRCH_PAGE_PREFIX,
+  aplicarMaterialCatalogoProcura,
+  buscarYMostrarMaterialesProcura,
+  confirmarTextoLibreMaterialProcura,
+  enviarBusquedaMaterialProcura,
+  enviarPickerMaterialProcura,
+  enviarTextoLibreMaterialProcura,
+  resolverMaterialProcuraPorId,
+} from '@/lib/telegram/procuraMaterialPicker';
 import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
 
 const PREFIX = 'prc:';
@@ -25,15 +41,24 @@ const CB_CANCEL = `${PREFIX}no`;
 const CB_UNIDAD = `${PREFIX}u:`;
 const CB_UNIDAD_PAGE = `${PREFIX}pg:`;
 
-export type PasoProcuraTelegram = 'material' | 'cantidad' | 'unidad' | 'observaciones';
+export type PasoProcuraTelegram =
+  | 'material_elegir'
+  | 'material_buscar'
+  | 'material_libre'
+  | 'cantidad'
+  | 'unidad'
+  | 'observaciones';
 
 export type MetadataProcuraTelegram = {
   paso?: PasoProcuraTelegram;
+  material_id?: string;
   material_txt?: string;
   cantidad?: number;
   unidad?: string;
   observaciones?: string;
   nombre_obra?: string;
+  busqueda_material?: string;
+  texto_libre_borrador?: string;
 };
 
 function escHtml(s: string): string {
@@ -67,13 +92,27 @@ async function pedirObservacionesProcura(chatId: string): Promise<void> {
 async function enviarPickerUnidadProcura(chatId: string, cantidad: number, page = 0): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    `2️⃣ Cantidad: <b>${cantidad.toLocaleString('es-VE')}</b>\n\n` +
+    `3️⃣ Cantidad: <b>${cantidad.toLocaleString('es-VE')}</b>\n\n` +
       `Elige la <b>unidad de medida</b>:\n` +
       `<i>También puedes escribir, ej. M3, Litros, Pulgadas</i>`,
     {
       parse_mode: 'HTML',
       reply_markup: tecladoUnidadesProcuraPagina(CB_UNIDAD, page, CB_UNIDAD_PAGE),
     },
+  );
+}
+
+async function pedirCantidadProcura(chatId: string, materialTxt: string, unidadHint?: string): Promise<void> {
+  const unidadLine = unidadHint
+    ? `Unidad sugerida: <b>${escHtml(unidadHint)}</b>\n\n`
+    : '';
+  await sendTelegramMessage(
+    chatId,
+    `📦 Material: <b>${escHtml(materialTxt)}</b>\n` +
+      unidadLine +
+      `2️⃣ Indica la <b>cantidad</b> (y unidad opcional).\n` +
+      `<i>Ej.: 50 SAC · 2.5 M3 · 100 Mts · 20 Litros · 10</i>`,
+    { parse_mode: 'HTML' },
   );
 }
 
@@ -107,18 +146,16 @@ export async function prepararProcuraTrasObra(
     proyecto_id: proyectoId,
     reemplazarMetadata: true,
     metadata: {
-      paso: 'material',
+      paso: 'material_elegir',
       nombre_obra: nombre,
     },
   });
   await sendTelegramMessage(
     chatId,
-    `📦 <b>Solicitud de procura</b>\n\n` +
-      `Obra: <b>${escHtml(nombre)}</b>\n\n` +
-      `1️⃣ Escribe la <b>descripción del material</b> que necesitas.\n` +
-      `<i>Ej.: Cemento gris 42.5 kg, 50 sacos</i>`,
+    `📦 <b>Solicitud de procura</b>\n\nObra: <b>${escHtml(nombre)}</b>`,
     { parse_mode: 'HTML' },
   );
+  await enviarPickerMaterialProcura(supabase, chatId, proyectoId);
 }
 
 async function enviarResumenConfirmacion(
@@ -129,12 +166,13 @@ async function enviarResumenConfirmacion(
   const m = metaProcura(estado);
   const nombreObra = m.nombre_obra ?? (await nombreProyectoTelegram(supabase, estado.proyecto_id)) ?? '—';
   const solicitante = await resolverSolicitanteDesdeTelegram(supabase, chatId);
+  const catalogo = m.material_id ? '\n<i>Vinculado al catálogo</i>' : '';
   await sendTelegramMessage(
     chatId,
     `📋 <b>Confirma la procura</b>\n\n` +
       `👤 Solicita: <b>${escHtml(solicitante.nombre)}</b>\n` +
       `🏗 Obra: <b>${escHtml(nombreObra)}</b>\n` +
-      `📦 Material: <b>${escHtml(m.material_txt ?? '—')}</b>\n` +
+      `📦 Material: <b>${escHtml(m.material_txt ?? '—')}</b>${catalogo}\n` +
       `🔢 Cantidad: <b>${m.cantidad ?? '—'} ${escHtml(m.unidad ?? 'UND')}</b>\n` +
       (m.observaciones ? `📝 Nota: ${escHtml(m.observaciones)}\n` : '') +
       `\nEstado inicial: <b>${escHtml(etiquetaEstadoProcura('solicitada'))}</b>`,
@@ -175,6 +213,7 @@ async function registrarProcuraTelegram(
   const { data, error } = await insertarProcura(
     supabase,
     {
+      material_id: m.material_id?.trim() || null,
       material_txt: materialTxt,
       cantidad,
       unidad,
@@ -192,8 +231,8 @@ async function registrarProcuraTelegram(
   });
 
   if (error) {
-    const hint = /ci_procuras|solicitante_nombre/i.test(error.message)
-      ? '\n\n<i>Aplique las migraciones 224 y 225 en Supabase.</i>'
+    const hint = /ci_procuras/i.test(error.message)
+      ? '\n\n<i>Verifique migraciones 224/225 y ejecute:</i>\n<code>notify pgrst, \'reload schema\';</code>'
       : '';
     await sendTelegramMessage(chatId, `❌ No se pudo registrar: ${escHtml(error.message)}${hint}`, {
       parse_mode: 'HTML',
@@ -233,26 +272,12 @@ export async function manejarTextoProcuraTelegram(
   }
 
   const m = metaProcura(estado);
-  const paso = m.paso ?? 'material';
+  const paso = m.paso ?? 'material_elegir';
 
-  if (paso === 'material') {
-    if (t.length < 2) {
-      await sendTelegramMessage(chatId, '⚠️ Describe el material con al menos 2 caracteres.', {
-        parse_mode: 'HTML',
-      });
-      return true;
-    }
-    await patchMeta(supabase, chatId, estado, {
-      paso: 'cantidad',
-      material_txt: t.slice(0, 500),
+  if (paso === 'material_buscar' || paso === 'material_libre' || paso === 'material_elegir') {
+    return buscarYMostrarMaterialesProcura(supabase, chatId, estado, t, {
+      modoLibre: paso === 'material_libre',
     });
-    await sendTelegramMessage(
-      chatId,
-      `2️⃣ Indica la <b>cantidad</b> (y unidad opcional).\n` +
-        `<i>Ej.: 50 SAC · 2.5 M3 · 100 Mts · 20 Litros · 4 Pulgadas · 10</i>`,
-      { parse_mode: 'HTML' },
-    );
-    return true;
   }
 
   if (paso === 'cantidad') {
@@ -267,6 +292,16 @@ export async function manejarTextoProcuraTelegram(
     }
 
     if (parsed.kind === 'solo_cantidad') {
+      const unidadSugerida = m.unidad ? normalizarUnidadProcura(m.unidad) : null;
+      if (unidadSugerida) {
+        await patchMeta(supabase, chatId, estado, {
+          paso: 'observaciones',
+          cantidad: parsed.cantidad,
+          unidad: unidadSugerida,
+        });
+        await pedirObservacionesProcura(chatId);
+        return true;
+      }
       await patchMeta(supabase, chatId, estado, {
         paso: 'unidad',
         cantidad: parsed.cantidad,
@@ -322,6 +357,78 @@ export async function manejarCallbackProcuraTelegram(
   const estado = await getTelegramEstado(supabase, params.chatId);
   if (!esFlujoProcuraTelegram(estado)) {
     await answerCallbackQuery(params.callbackId, 'Sesión expirada', true);
+    return true;
+  }
+
+  const proyectoId = estado.proyecto_id?.trim();
+  if (!proyectoId) {
+    await answerCallbackQuery(params.callbackId, 'Sin obra', true);
+    return true;
+  }
+
+  if (params.data.startsWith(PRC_SRCH_PAGE_PREFIX)) {
+    const page = Number(params.data.slice(PRC_SRCH_PAGE_PREFIX.length));
+    const m = metaProcura(estado);
+    const term = m.busqueda_material?.trim() ?? '';
+    if (!term) {
+      await answerCallbackQuery(params.callbackId, 'Sin búsqueda activa', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId);
+    await buscarYMostrarMaterialesProcura(supabase, params.chatId, estado, term, {
+      page: Number.isFinite(page) ? page : 0,
+      modoLibre: Boolean(m.texto_libre_borrador?.trim()),
+    });
+    return true;
+  }
+
+  if (params.data === PRC_MAT_TXT_OK) {
+    const m = metaProcura(estado);
+    const txt = (m.texto_libre_borrador || m.busqueda_material || '').trim();
+    await answerCallbackQuery(params.callbackId, 'Texto libre');
+    await confirmarTextoLibreMaterialProcura(supabase, params.chatId, estado, txt);
+    return true;
+  }
+
+  if (params.data.startsWith(PRC_MAT_PAGE_PREFIX)) {
+    const page = Number(params.data.slice(PRC_MAT_PAGE_PREFIX.length));
+    await answerCallbackQuery(params.callbackId);
+    await enviarPickerMaterialProcura(supabase, params.chatId, proyectoId, page);
+    return true;
+  }
+
+  if (params.data === PRC_MAT_BUSCAR) {
+    await answerCallbackQuery(params.callbackId, 'Buscar');
+    await patchMeta(supabase, params.chatId, estado, { paso: 'material_buscar' });
+    await enviarBusquedaMaterialProcura(params.chatId);
+    return true;
+  }
+
+  if (params.data === PRC_MAT_OTRO) {
+    await answerCallbackQuery(params.callbackId, 'Texto libre');
+    await patchMeta(supabase, params.chatId, estado, {
+      paso: 'material_libre',
+      material_id: '',
+    });
+    await enviarTextoLibreMaterialProcura(params.chatId);
+    return true;
+  }
+
+  if (params.data === PRC_MAT_CAT) {
+    await answerCallbackQuery(params.callbackId);
+    await enviarPickerMaterialProcura(supabase, params.chatId, proyectoId);
+    return true;
+  }
+
+  if (params.data.startsWith(PRC_MAT_PREFIX)) {
+    const materialId = params.data.slice(PRC_MAT_PREFIX.length).trim();
+    const material = await resolverMaterialProcuraPorId(supabase, materialId, proyectoId);
+    if (!material) {
+      await answerCallbackQuery(params.callbackId, 'Material no encontrado', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, material.name.slice(0, 40));
+    await aplicarMaterialCatalogoProcura(supabase, params.chatId, estado, material);
     return true;
   }
 
