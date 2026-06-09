@@ -10,12 +10,17 @@ import {
   type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
 import {
+  etiquetaSolicitanteProcura,
+  type RelEmpleadoSolicitante,
+} from '@/lib/procuras/solicitanteProcura';
+import {
   UNIDADES_PROCURA,
   normalizarUnidadProcura,
 } from '@/lib/procuras/unidadesProcura';
 
 type EntidadRow = { id: string; nombre: string };
 type ProyectoRow = { id: string; nombre: string };
+type EmpleadoRow = { id: string; nombre_completo: string; oficio?: string | null };
 
 type ProcuraRow = {
   id: string;
@@ -28,8 +33,11 @@ type ProcuraRow = {
   entidad_id: string | null;
   motivo_ultimo: string | null;
   observaciones: string | null;
+  solicitante_nombre: string | null;
+  solicitante_empleado_id: string | null;
   created_at: string;
   updated_at: string;
+  solicitante?: RelEmpleadoSolicitante;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
   ci_entidades?: { nombre: string } | { nombre: string }[] | null;
 };
@@ -95,6 +103,9 @@ export default function ProcurasPage() {
   const [formProyectoId, setFormProyectoId] = useState('');
   const [formEntidadId, setFormEntidadId] = useState('');
   const [formObs, setFormObs] = useState('');
+  const [formSolicitanteNombre, setFormSolicitanteNombre] = useState('');
+  const [formSolicitanteEmpleadoId, setFormSolicitanteEmpleadoId] = useState('');
+  const [empleadosObra, setEmpleadosObra] = useState<EmpleadoRow[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -112,6 +123,25 @@ export default function ProcurasPage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    void (async () => {
+      if (!formProyectoId.trim()) {
+        setEmpleadosObra([]);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/almacen/empleados-egreso?proyecto_id=${encodeURIComponent(formProyectoId.trim())}`,
+          { cache: 'no-store' },
+        );
+        const json = (await res.json()) as { empleados?: EmpleadoRow[] };
+        setEmpleadosObra(json.empleados ?? []);
+      } catch {
+        setEmpleadosObra([]);
+      }
+    })();
+  }, [formProyectoId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,6 +236,11 @@ export default function ProcurasPage() {
   };
 
   const crearProcura = async () => {
+    const solicitanteTxt = formSolicitanteNombre.trim();
+    if (!formSolicitanteEmpleadoId.trim() && !solicitanteTxt) {
+      setError('Indique quién realiza la procura.');
+      return;
+    }
     setCreando(true);
     setError(null);
     setMsgOk(null);
@@ -221,6 +256,8 @@ export default function ProcurasPage() {
           entidad_id: formEntidadId || null,
           observaciones: formObs.trim() || null,
           estado: 'solicitada',
+          solicitante_empleado_id: formSolicitanteEmpleadoId.trim() || null,
+          solicitante_nombre: solicitanteTxt || null,
         }),
       });
       const json = (await res.json()) as {
@@ -234,6 +271,8 @@ export default function ProcurasPage() {
       setFormMaterial('');
       setFormCantidad('1');
       setFormObs('');
+      setFormSolicitanteNombre('');
+      setFormSolicitanteEmpleadoId('');
       setShowNueva(false);
       await load();
     } catch (e) {
@@ -420,6 +459,45 @@ export default function ProcurasPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
+                    SOLICITADO POR (NOMBRE)
+                  </label>
+                  <input
+                    value={formSolicitanteNombre}
+                    onChange={(e) => setFormSolicitanteNombre(e.target.value)}
+                    placeholder="Nombre de quien solicita"
+                    style={{ ...inputStyle, marginTop: '6px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
+                    VINCULAR EMPLEADO (opcional)
+                  </label>
+                  <select
+                    value={formSolicitanteEmpleadoId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setFormSolicitanteEmpleadoId(id);
+                      const emp = empleadosObra.find((x) => x.id === id);
+                      if (emp?.nombre_completo) setFormSolicitanteNombre(emp.nombre_completo);
+                    }}
+                    disabled={!formProyectoId.trim()}
+                    style={{ ...inputStyle, marginTop: '6px', opacity: formProyectoId.trim() ? 1 : 0.5 }}
+                  >
+                    <option value="">
+                      {formProyectoId.trim() ? '— Sin vincular —' : 'Seleccione obra primero'}
+                    </option>
+                    {empleadosObra.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre_completo}
+                        {e.oficio ? ` (${e.oficio})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
                     OBRA (opcional si hay entidad)
                   </label>
                   <select
@@ -467,7 +545,11 @@ export default function ProcurasPage() {
               <button
                 type="button"
                 onClick={() => void crearProcura()}
-                disabled={creando || !formMaterial.trim()}
+                disabled={
+                  creando ||
+                  !formMaterial.trim() ||
+                  (!formSolicitanteNombre.trim() && !formSolicitanteEmpleadoId.trim())
+                }
                 style={{ ...btnPrimary, opacity: creando ? 0.6 : 1 }}
               >
                 {creando ? <Loader2 size={16} className="animate-spin" /> : null}
@@ -542,6 +624,7 @@ export default function ProcurasPage() {
                     </th>
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Ticket</th>
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Material</th>
+                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Solicitante</th>
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Cant.</th>
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Obra / Entidad</th>
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Estado</th>
@@ -574,6 +657,12 @@ export default function ProcurasPage() {
                               {p.motivo_ultimo}
                             </div>
                           ) : null}
+                        </td>
+                        <td style={{ padding: '12px', color: 'rgba(255,255,255,0.7)', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                          {etiquetaSolicitanteProcura({
+                            solicitante_nombre: p.solicitante_nombre,
+                            solicitante_empleado: p.solicitante,
+                          })}
                         </td>
                         <td style={{ padding: '12px', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
                           {Number(p.cantidad).toLocaleString('es-VE')} {p.unidad}

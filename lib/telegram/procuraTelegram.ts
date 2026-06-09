@@ -4,7 +4,9 @@ import {
   sendTelegramMessage,
 } from '@/lib/telegram/botApi';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
+import { insertarProcura } from '@/lib/procuras/registrarProcura';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
+import { resolverSolicitanteDesdeTelegram } from '@/lib/procuras/solicitanteProcura';
 import {
   normalizarUnidadProcura,
   parseCantidadUnidadProcura,
@@ -125,9 +127,11 @@ async function enviarResumenConfirmacion(
 ): Promise<void> {
   const m = metaProcura(estado);
   const nombreObra = m.nombre_obra ?? (await nombreProyectoTelegram(supabase, estado.proyecto_id)) ?? '—';
+  const solicitante = await resolverSolicitanteDesdeTelegram(supabase, chatId);
   await sendTelegramMessage(
     chatId,
     `📋 <b>Confirma la procura</b>\n\n` +
+      `👤 Solicita: <b>${escHtml(solicitante.nombre)}</b>\n` +
       `🏗 Obra: <b>${escHtml(nombreObra)}</b>\n` +
       `📦 Material: <b>${escHtml(m.material_txt ?? '—')}</b>\n` +
       `🔢 Cantidad: <b>${m.cantidad ?? '—'} ${escHtml(m.unidad ?? 'UND')}</b>\n` +
@@ -166,26 +170,20 @@ async function registrarProcuraTelegram(
   }
 
   const entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
-  const chatNum = Number(chatId);
 
-  const row: Record<string, unknown> = {
-    material_txt: materialTxt.slice(0, 500),
-    cantidad,
-    unidad,
-    proyecto_id: proyectoId,
-    estado: 'solicitada',
-    observaciones: m.observaciones?.trim()?.slice(0, 2000) || null,
-  };
-  if (entidadId) row.entidad_id = entidadId;
-  if (Number.isFinite(chatNum) && chatNum > 0) {
-    row.solicitante_telegram_chat_id = Math.trunc(chatNum);
-  }
-
-  const { data, error } = await supabase
-    .from('ci_procuras')
-    .insert(row as never)
-    .select('ticket, material_txt, cantidad, unidad')
-    .single();
+  const { data, error } = await insertarProcura(
+    supabase,
+    {
+      material_txt: materialTxt,
+      cantidad,
+      unidad,
+      proyecto_id: proyectoId,
+      entidad_id: entidadId,
+      estado: 'solicitada',
+      observaciones: m.observaciones?.trim()?.slice(0, 2000) || null,
+    },
+    { origen: 'telegram', telegram_chat_id: chatId },
+  );
 
   await setTelegramContexto(supabase, chatId, {
     contexto: 'menu',
@@ -193,8 +191,8 @@ async function registrarProcuraTelegram(
   });
 
   if (error) {
-    const hint = /ci_procuras/i.test(error.message)
-      ? '\n\n<i>Aplique la migración 224 en Supabase.</i>'
+    const hint = /ci_procuras|solicitante_nombre/i.test(error.message)
+      ? '\n\n<i>Aplique las migraciones 224 y 225 en Supabase.</i>'
       : '';
     await sendTelegramMessage(chatId, `❌ No se pudo registrar: ${escHtml(error.message)}${hint}`, {
       parse_mode: 'HTML',
@@ -202,12 +200,16 @@ async function registrarProcuraTelegram(
     return;
   }
 
+  const ticket = String(data.ticket ?? '');
+  const solicitanteNombre = String(data.solicitante_nombre ?? '');
+
   await sendTelegramMessage(
     chatId,
     `✅ <b>Procura registrada</b>\n\n` +
-      `🎫 Ticket: <b>${escHtml(data.ticket)}</b>\n` +
-      `📦 ${escHtml(data.material_txt)}\n` +
-      `🔢 ${Number(data.cantidad).toLocaleString('es-VE')} ${escHtml(data.unidad)}\n\n` +
+      `🎫 Ticket: <b>${escHtml(ticket)}</b>\n` +
+      (solicitanteNombre ? `👤 Solicitante: <b>${escHtml(solicitanteNombre)}</b>\n` : '') +
+      `📦 ${escHtml(String(data.material_txt ?? materialTxt))}\n` +
+      `🔢 ${Number(data.cantidad).toLocaleString('es-VE')} ${escHtml(String(data.unidad ?? unidad))}\n\n` +
       `El equipo de abastecimiento la verá en Contabilidad → Procuras.`,
     { parse_mode: 'HTML' },
   );
