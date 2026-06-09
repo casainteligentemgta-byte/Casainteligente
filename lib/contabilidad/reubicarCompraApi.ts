@@ -1,7 +1,8 @@
 export type ReubicarCompraBody = {
   entidad_id?: string;
   proyecto_id: string;
-  ubicacion_destino_id: string;
+  /** Opcional: puede quedar vacío en contabilidad hasta el ingreso físico. */
+  ubicacion_destino_id?: string;
   nombre_obra?: string;
 };
 

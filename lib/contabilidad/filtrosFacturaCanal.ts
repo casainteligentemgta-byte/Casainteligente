@@ -54,6 +54,9 @@ export type FilaFacturaCanal = {
   subtotalUsdLinea?: number | null;
   /** UUID contabilidad_compra_lineas (solo compras confirmadas en app). */
   lineaId?: string | null;
+  alertaFecha?: 'advertencia' | 'critico' | null;
+  fechaConfirmadaManual?: boolean | null;
+  fechaRegistro?: string | null;
 };
 
 export type FiltrosFacturaCanal = {
@@ -199,6 +202,9 @@ export type CompraConfirmadaParaLineas = {
   proyectoNombre?: string;
   entidadNombre?: string;
   almacenNombre?: string;
+  alerta_fecha?: 'advertencia' | 'critico' | null;
+  fecha_confirmada_manual?: boolean | null;
+  created_at?: string | null;
   lineas: Array<{
     id?: string;
     descripcion: string;
@@ -322,6 +328,9 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       montoUsd: montos.usd,
       tasaBcv: tasa ?? tasaBcvCompra(c),
       monedaOriginal: moneda,
+      alertaFecha: c.alerta_fecha ?? null,
+      fechaConfirmadaManual: c.fecha_confirmada_manual ?? null,
+      fechaRegistro: c.created_at ? String(c.created_at).slice(0, 10) : null,
     };
 
     if (!c.lineas.length) {

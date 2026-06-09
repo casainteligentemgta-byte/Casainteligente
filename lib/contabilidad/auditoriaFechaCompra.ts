@@ -95,3 +95,60 @@ export class FechaCompraAnomalaError extends Error {
 export function exigeConfirmacionFechaAnomala(audit: AuditoriaFechaCompra): boolean {
   return audit.nivel === 'critico';
 }
+
+/** Usa el nivel persistido en BD cuando existe; si no, lo calcula desde la fecha. */
+export function auditoriaFechaCompraAlmacenada(
+  fechaIso: string,
+  alertaAlmacenada?: NivelAlertaFechaCompra | null,
+  refDate?: Date,
+): AuditoriaFechaCompra {
+  const audit = auditoriaFechaCompra(fechaIso, refDate);
+  if (alertaAlmacenada === 'advertencia' || alertaAlmacenada === 'critico') {
+    return { ...audit, nivel: alertaAlmacenada };
+  }
+  return audit;
+}
+
+export type MetaAlertaFechaCompra = {
+  nivel: NivelAlertaFechaCompra;
+  mensaje: string;
+  requiereVerificacion: boolean;
+  verificada: boolean;
+};
+
+export function fechaAnomalaRequiereAtencion(nivel: NivelAlertaFechaCompra): boolean {
+  return nivel === 'critico' || nivel === 'advertencia';
+}
+
+export function claseBlinkFechaCompra(nivel: NivelAlertaFechaCompra): string | null {
+  if (nivel === 'critico') return 'compras-fecha-critica-blink';
+  if (nivel === 'advertencia') return 'compras-fecha-advertencia-blink';
+  return null;
+}
+
+export function etiquetaFechaAnomalaCorta(nivel: NivelAlertaFechaCompra): string {
+  if (nivel === 'critico') return 'Fecha crítica';
+  if (nivel === 'advertencia') return 'Fecha advertencia';
+  return '';
+}
+
+export function metaAlertaFechaCompra(input: {
+  fecha: string;
+  alertaAlmacenada?: NivelAlertaFechaCompra | null;
+  fechaConfirmadaManual?: boolean | null;
+  refDate?: Date;
+}): MetaAlertaFechaCompra {
+  const audit = auditoriaFechaCompraAlmacenada(
+    input.fecha,
+    input.alertaAlmacenada,
+    input.refDate,
+  );
+  const verificada =
+    Boolean(input.fechaConfirmadaManual) && fechaAnomalaRequiereAtencion(audit.nivel);
+  return {
+    nivel: audit.nivel,
+    mensaje: audit.mensaje,
+    requiereVerificacion: fechaAnomalaRequiereAtencion(audit.nivel) && !verificada,
+    verificada,
+  };
+}

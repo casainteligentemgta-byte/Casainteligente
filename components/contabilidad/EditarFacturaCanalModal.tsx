@@ -146,8 +146,8 @@ export default function EditarFacturaCanalModal({
       setError('Debe confirmar que la fecha es correcta antes de guardar.');
       return;
     }
-    if (mostrarDestino && (!entidadId.trim() || !proyectoId.trim() || !ubicacionId.trim())) {
-      setError('Seleccione entidad, obra y almacén de ingreso.');
+    if (mostrarDestino && (!entidadId.trim() || !proyectoId.trim())) {
+      setError('Seleccione entidad y obra.');
       return;
     }
     setGuardando(true);
@@ -223,7 +223,8 @@ export default function EditarFacturaCanalModal({
                   Obra y almacén
                 </p>
                 <p className="text-[11px] text-zinc-400 mt-1">
-                  Si el material ya ingresó a inventario, el stock se traslada al nuevo almacén.
+                  El almacén es opcional en contabilidad: puede asignarlo después, al ingresar el
+                  material. Si ya ingresó a inventario, el stock se traslada al cambiar almacén.
                 </p>
               </div>
               <div>
@@ -267,7 +268,12 @@ export default function EditarFacturaCanalModal({
                 </select>
               </div>
               <div>
-                <label className="text-[10px] font-bold text-zinc-500">ALMACÉN DE INGRESO</label>
+                <label className="text-[10px] font-bold text-zinc-500">
+                  ALMACÉN DE INGRESO <span className="font-normal text-zinc-600">(opcional)</span>
+                </label>
+                <p className="mt-0.5 text-[10px] text-zinc-500">
+                  Déjelo vacío si aún no ha ingresado el material a ningún almacén.
+                </p>
                 <div className="mt-1">
                   <UbicacionInventarioSelect
                     proyectoId={proyectoId}

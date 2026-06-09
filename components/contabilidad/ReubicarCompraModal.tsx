@@ -78,8 +78,8 @@ export default function ReubicarCompraModal({
   );
 
   const guardar = async () => {
-    if (!entidadId || !proyectoId || !ubicacionId) {
-      toast.error('Seleccione entidad, obra y almacén');
+    if (!entidadId || !proyectoId) {
+      toast.error('Seleccione entidad y obra');
       return;
     }
     const nombreObra = proyectos.find((p) => p.id === proyectoId)?.nombre;
@@ -134,9 +134,9 @@ export default function ReubicarCompraModal({
         </div>
 
         <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
-          Asigne la <b className="text-zinc-400">entidad</b>, la <b className="text-zinc-400">obra</b> y el{' '}
-          <b className="text-zinc-400">almacén</b> donde queda el material. Si ya ingresó a inventario, el
-          stock se traslada.
+          Asigne la <b className="text-zinc-400">entidad</b> y la <b className="text-zinc-400">obra</b> en
+          contabilidad. El <b className="text-zinc-400">almacén</b> es opcional hasta que ingrese el material;
+          si ya está en inventario y cambia almacén, el stock se traslada.
         </p>
 
         <div className="space-y-4">
@@ -182,8 +182,11 @@ export default function ReubicarCompraModal({
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-500">
-              Almacén de ingreso
+              Almacén de ingreso <span className="font-normal normal-case text-zinc-600">(opcional)</span>
             </label>
+            <p className="mb-1.5 text-[10px] text-zinc-500">
+              Vacío = contabilidad sin almacén asignado (ingreso físico pendiente).
+            </p>
             <UbicacionInventarioSelect
               proyectoId={proyectoId}
               value={ubicacionId}
@@ -203,7 +206,7 @@ export default function ReubicarCompraModal({
           </button>
           <button
             type="button"
-            disabled={guardando || !entidadId || !proyectoId || !ubicacionId}
+            disabled={guardando || !entidadId || !proyectoId}
             onClick={() => void guardar()}
             className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 py-2.5 text-sm font-bold text-black disabled:opacity-40 flex items-center justify-center gap-2"
           >

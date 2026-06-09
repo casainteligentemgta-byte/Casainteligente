@@ -8,7 +8,8 @@ export type ReubicarCompraInput = {
   referenciaTipo?: 'compra' | 'purchase_invoice';
   entidadId?: string | null;
   proyectoId: string;
-  ubicacionDestinoId: string;
+  /** Vacío = contabilidad sin almacén asignado (ingreso físico pendiente). */
+  ubicacionDestinoId?: string | null;
   nombreObra?: string;
 };
 
@@ -66,32 +67,33 @@ export async function reubicarCompraObra(
   input: ReubicarCompraInput,
 ): Promise<ReubicarCompraResult> {
   const proyectoId = input.proyectoId.trim();
-  const ubicacionNuevaId = input.ubicacionDestinoId.trim();
+  const ubicacionNuevaId = String(input.ubicacionDestinoId ?? '').trim() || null;
   const entidadId = input.entidadId?.trim() || null;
   if (!proyectoId) throw new Error('Seleccione la obra.');
-  if (!ubicacionNuevaId) throw new Error('Seleccione el almacén de ingreso.');
 
-  const { data: ubi, error: uErr } = await supabase
-    .from('inv_ubicaciones')
-    .select('id, nombre, tipo, ci_proyecto_id, activo')
-    .eq('id', ubicacionNuevaId)
-    .maybeSingle();
+  if (ubicacionNuevaId) {
+    const { data: ubi, error: uErr } = await supabase
+      .from('inv_ubicaciones')
+      .select('id, nombre, tipo, ci_proyecto_id, activo')
+      .eq('id', ubicacionNuevaId)
+      .maybeSingle();
 
-  if (uErr?.code === '42P01') {
-    throw new Error('Tabla inv_ubicaciones no existe. Aplique migración 180.');
-  }
-  if (uErr) throw new Error(uErr.message);
-  if (!ubi) throw new Error('Ubicación de almacén no encontrada.');
-  if (ubi.activo === false) throw new Error('La ubicación seleccionada está inactiva.');
+    if (uErr?.code === '42P01') {
+      throw new Error('Tabla inv_ubicaciones no existe. Aplique migración 180.');
+    }
+    if (uErr) throw new Error(uErr.message);
+    if (!ubi) throw new Error('Ubicación de almacén no encontrada.');
+    if (ubi.activo === false) throw new Error('La ubicación seleccionada está inactiva.');
 
-  const esDeObra =
-    ubi.tipo === 'obra' ||
-    ubi.tipo === 'almacen_movil' ||
-    (ubi.ci_proyecto_id != null && ubi.ci_proyecto_id === proyectoId);
-  const esCentral = ubi.tipo === 'almacen_central' || ubi.tipo === 'cuarentena';
+    const esDeObra =
+      ubi.tipo === 'obra' ||
+      ubi.tipo === 'almacen_movil' ||
+      (ubi.ci_proyecto_id != null && ubi.ci_proyecto_id === proyectoId);
+    const esCentral = ubi.tipo === 'almacen_central' || ubi.tipo === 'cuarentena';
 
-  if (!esCentral && !esDeObra) {
-    throw new Error('La ubicación no corresponde a la obra seleccionada.');
+    if (!esCentral && !esDeObra) {
+      throw new Error('La ubicación no corresponde a la obra seleccionada.');
+    }
   }
 
   let purchaseInvoiceId: string | null = null;
@@ -270,6 +272,7 @@ export async function reubicarCompraObra(
       if (
         estado === 'registrada' &&
         ubiAnt &&
+        ubicacionNuevaId &&
         ubiAnt !== ubicacionNuevaId
       ) {
         await moverStockCompraRegistrada(supabase, {
@@ -301,6 +304,8 @@ export async function reubicarCompraObra(
     ubicacionAnteriorId,
     message: stockMovido
       ? 'Compra reubicada con éxito. Inventarios físicos y libros contables bimonetarios sincronizados en caliente.'
-      : 'Obra y almacén de ingreso actualizados.',
+      : ubicacionNuevaId
+        ? 'Obra y almacén de ingreso actualizados.'
+        : 'Obra actualizada en contabilidad. El almacén se asignará al ingresar el material.',
   };
 }

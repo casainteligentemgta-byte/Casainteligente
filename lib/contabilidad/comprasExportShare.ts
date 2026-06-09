@@ -42,6 +42,9 @@ export type CompraCuadroInput = {
   ubicacion_nombre?: string | null;
   ci_proyectos?: { nombre?: string | null } | { nombre?: string | null }[] | null;
   contabilidad_compra_lineas?: CompraCuadroLineaInput[] | { count: number }[];
+  alerta_fecha?: 'advertencia' | 'critico' | null;
+  fecha_confirmada_manual?: boolean | null;
+  created_at?: string | null;
 };
 
 const CSV_HEADERS = [
@@ -105,6 +108,9 @@ export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
     entidadNombre: c.entidad_nombre ?? undefined,
     proyectoNombre: proyectoNombreCompra(c) || undefined,
     almacenNombre: c.ubicacion_nombre ?? undefined,
+    alerta_fecha: c.alerta_fecha ?? null,
+    fecha_confirmada_manual: c.fecha_confirmada_manual ?? null,
+    created_at: c.created_at ?? null,
     lineas: lineasDetalleCompra(c).map((l) => {
       const cantidad = Number(l.cantidad) || 0;
       const precio =

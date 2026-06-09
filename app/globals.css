@@ -823,6 +823,50 @@
   gap: 12px;
 }
 
+@keyframes comprasFechaCriticaPulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.45);
+  }
+  50% {
+    opacity: 0.88;
+    box-shadow: 0 0 10px 2px rgba(255, 59, 48, 0.55);
+  }
+}
+
+.compras-fecha-critica-blink {
+  animation: comprasFechaCriticaPulse 1.15s ease-in-out infinite;
+}
+
+@keyframes comprasFechaAdvertenciaPulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 149, 0, 0.4);
+  }
+  50% {
+    opacity: 0.9;
+    box-shadow: 0 0 10px 2px rgba(255, 149, 0, 0.5);
+  }
+}
+
+.compras-fecha-advertencia-blink {
+  animation: comprasFechaAdvertenciaPulse 1.25s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compras-fecha-critica-blink {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.55);
+  }
+
+  .compras-fecha-advertencia-blink {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.55);
+  }
+}
+
 .compras-lineas-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

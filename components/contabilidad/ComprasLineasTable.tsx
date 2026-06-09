@@ -2,7 +2,13 @@
 
 import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
-import { Loader2, Pencil, Trash2 } from 'lucide-react';
+import { CalendarClock, Loader2, Pencil, Trash2 } from 'lucide-react';
+import {
+  claseBlinkFechaCompra,
+  etiquetaFechaAnomalaCorta,
+  metaAlertaFechaCompra,
+} from '@/lib/contabilidad/auditoriaFechaCompra';
+import { etiquetaAlmacenIngresoCompra } from '@/lib/contabilidad/etiquetaAlmacenCompra';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
 import type { ColumnaOrdenCompras, DireccionOrden } from '@/lib/contabilidad/ordenarLineasCompras';
 import {
@@ -32,6 +38,7 @@ type Props = {
   accionesPorCompra?: (compraId: string) => AccionesCompraLinea | null;
   onModificar?: (compraId: string) => void;
   onModificarLinea?: (row: FilaFacturaCanal) => void;
+  onVerificarFecha?: (row: FilaFacturaCanal) => void;
   onEliminar?: (compraId: string) => void;
   onEliminarLinea?: (compraId: string, lineaId: string) => void;
   deletingId?: string | null;
@@ -68,6 +75,7 @@ export default function ComprasLineasTable({
   accionesPorCompra,
   onModificar,
   onModificarLinea,
+  onVerificarFecha,
   onEliminar,
   onEliminarLinea,
   deletingId = null,
@@ -235,6 +243,11 @@ export default function ComprasLineasTable({
               mostrarAccionesEnFila && accionesPorCompra
                 ? accionesPorCompra(row.pendienteId)
                 : null;
+            const metaFecha = metaAlertaFechaCompra({
+              fecha: row.fecha,
+              alertaAlmacenada: row.alertaFecha,
+              fechaConfirmadaManual: row.fechaConfirmadaManual,
+            });
             const rowSpan = ordenPlano
               ? 1
               : mostrarAccionesFactura
@@ -291,7 +304,29 @@ export default function ComprasLineasTable({
                     ) : null}
                   </td>
                 ) : null}
-                <td style={td}>{row.fecha || '—'}</td>
+                <td style={td}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                    <span>{row.fecha || '—'}</span>
+                    {metaFecha.nivel === 'ok' ? null : metaFecha.requiereVerificacion ? (
+                      <button
+                        type="button"
+                        className={claseBlinkFechaCompra(metaFecha.nivel) ?? undefined}
+                        onClick={() => onVerificarFecha?.(row)}
+                        title={metaFecha.mensaje}
+                        style={
+                          metaFecha.nivel === 'advertencia' ? btnFechaAdvertencia : btnFechaCritica
+                        }
+                      >
+                        <CalendarClock size={11} />
+                        {etiquetaFechaAnomalaCorta(metaFecha.nivel)}
+                      </button>
+                    ) : metaFecha.verificada ? (
+                      <span style={badgeFechaVerificada} title="Fecha fiscal verificada manualmente">
+                        ✓ fecha verificada
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
                 <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{row.rif}</td>
@@ -301,7 +336,30 @@ export default function ComprasLineasTable({
                 <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>
                   {row.proyecto || '—'}
                 </td>
-                <td style={{ ...td, maxWidth: 130, color: '#fdba74' }}>{row.almacen || '—'}</td>
+                <td style={{ ...td, maxWidth: 130 }}>
+                  {(() => {
+                    const { texto, pendienteIngreso } = etiquetaAlmacenIngresoCompra({
+                      ubicacionNombre: row.almacen,
+                      proyectoNombre: row.proyecto,
+                    });
+                    return (
+                      <span
+                        style={{
+                          color: pendienteIngreso ? 'rgba(251,191,36,0.85)' : '#fdba74',
+                          fontStyle: pendienteIngreso ? 'italic' : undefined,
+                          fontWeight: pendienteIngreso ? 600 : undefined,
+                        }}
+                        title={
+                          pendienteIngreso
+                            ? 'Registrada en contabilidad; almacén se asigna al ingresar el material'
+                            : undefined
+                        }
+                      >
+                        {texto}
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td style={{ ...td, maxWidth: 180 }}>
                   {row.esLinea ? row.articulo : <span style={{ opacity: 0.4 }}>(cabecera)</span>}
                 </td>
@@ -368,6 +426,25 @@ export default function ComprasLineasTable({
                           minWidth: '108px',
                         }}
                       >
+                        {onVerificarFecha &&
+                        esFilaAcciones(filas, row, i) &&
+                        metaFecha.requiereVerificacion &&
+                        !row.pendienteId.startsWith('canal-') ? (
+                          <button
+                            type="button"
+                            className={claseBlinkFechaCompra(metaFecha.nivel) ?? undefined}
+                            onClick={() => onVerificarFecha(row)}
+                            disabled={deletingId !== null || deletingLineaId !== null}
+                            style={
+                              metaFecha.nivel === 'advertencia'
+                                ? btnVerificarFechaAdvertencia
+                                : btnVerificarFecha
+                            }
+                          >
+                            <CalendarClock size={12} />
+                            Verificar fecha
+                          </button>
+                        ) : null}
                         {acc?.puedeModificar && onModificar && esFilaAcciones(filas, row, i) ? (
                           <button
                             type="button"
@@ -474,6 +551,65 @@ const btnModificar: CSSProperties = {
   fontSize: '10px',
   fontWeight: 800,
   cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const btnFechaAdvertencia: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '3px 8px',
+  borderRadius: 8,
+  border: '1px solid rgba(255,149,0,0.55)',
+  background: 'rgba(255,149,0,0.18)',
+  color: '#FFC56D',
+  fontSize: 9,
+  fontWeight: 800,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const btnFechaCritica: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '3px 8px',
+  borderRadius: 8,
+  border: '1px solid rgba(255,59,48,0.55)',
+  background: 'rgba(255,59,48,0.18)',
+  color: '#FF8A85',
+  fontSize: 9,
+  fontWeight: 800,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const btnVerificarFecha: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '6px 10px',
+  borderRadius: 8,
+  border: '1px solid rgba(255,59,48,0.55)',
+  background: 'rgba(255,59,48,0.2)',
+  color: '#FF8A85',
+  fontSize: 10,
+  fontWeight: 800,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const btnVerificarFechaAdvertencia: CSSProperties = {
+  ...btnVerificarFecha,
+  border: '1px solid rgba(255,149,0,0.55)',
+  background: 'rgba(255,149,0,0.2)',
+  color: '#FFC56D',
+};
+
+const badgeFechaVerificada: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  color: '#86efac',
   whiteSpace: 'nowrap',
 };
 

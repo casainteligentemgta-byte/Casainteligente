@@ -36,11 +36,8 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     const ubicacionDestinoId = String(body.ubicacion_destino_id ?? '').trim();
     let entidadId = String(body.entidad_id ?? '').trim() || null;
 
-    if (!proyectoId || !ubicacionDestinoId) {
-      return NextResponse.json(
-        { error: 'Faltan parámetros de destino obligatorios.' },
-        { status: 400 },
-      );
+    if (!proyectoId) {
+      return NextResponse.json({ error: 'Seleccione la obra o proyecto.' }, { status: 400 });
     }
 
     const supabase = admin.client;
@@ -69,10 +66,11 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
         ubicacion_destino_id: string | null;
         extracted: Record<string, unknown> | null;
       };
+      const ubiPend = String(pend.ubicacion_destino_id ?? '');
       if (
         String(pend.entidad_id ?? '') === (entidadId ?? '') &&
         String(pend.proyecto_id ?? '') === proyectoId &&
-        String(pend.ubicacion_destino_id ?? '') === ubicacionDestinoId
+        ubiPend === ubicacionDestinoId
       ) {
         return NextResponse.json({
           success: true,
@@ -85,7 +83,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       const prevExtracted = pend.extracted ?? {};
       const patchCanal: Record<string, unknown> = {
         proyecto_id: proyectoId,
-        ubicacion_destino_id: ubicacionDestinoId,
+        ubicacion_destino_id: ubicacionDestinoId || null,
         extracted: {
           ...prevExtracted,
           reubicacion: {
@@ -93,7 +91,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
             fecha_reubicacion: new Date().toISOString(),
             entidad_id: entidadId,
             proyecto_id: proyectoId,
-            ubicacion_destino_id: ubicacionDestinoId,
+            ubicacion_destino_id: ubicacionDestinoId || null,
           },
         },
         updated_at: new Date().toISOString(),

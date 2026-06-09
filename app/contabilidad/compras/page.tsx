@@ -5,7 +5,12 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDeleteCompraError } from '@/lib/contabilidad/deleteCompraRegistro';
-import { auditoriaFechaCompra } from '@/lib/contabilidad/auditoriaFechaCompra';
+import {
+    claseBlinkFechaCompra,
+    etiquetaFechaAnomalaCorta,
+    metaAlertaFechaCompra,
+} from '@/lib/contabilidad/auditoriaFechaCompra';
+import { etiquetaAlmacenIngresoCompra } from '@/lib/contabilidad/etiquetaAlmacenCompra';
 import {
     etiquetaPeriodo,
     rangoFechasPeriodo,
@@ -41,6 +46,7 @@ import {
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
 import {
+    CalendarClock,
     Download,
     Filter,
     FileText,
@@ -59,6 +65,7 @@ import ImputacionCompraToggle from '@/components/contabilidad/ImputacionCompraTo
 import ClasificacionGastoEntidadSelect from '@/components/contabilidad/ClasificacionGastoEntidadSelect';
 import { esGastoEntidadImputacion } from '@/lib/contabilidad/imputacionCompra';
 import { etiquetaClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
+import VerificarFechaCompraModal from '@/components/contabilidad/VerificarFechaCompraModal';
 import EditarFacturaCanalModal, {
     type DestinoCompraEdicion,
     type GuardarFacturaCanalOpts,
@@ -278,6 +285,16 @@ export default function ComprasPage() {
         proyectoId?: string | null;
         ubicacionId?: string | null;
         titulo?: string;
+    } | null>(null);
+    const [verificandoFecha, setVerificandoFecha] = useState<{
+        compraId: string;
+        fechaFactura: string;
+        fechaRegistro?: string | null;
+        tasaBcv?: number | null;
+        proveedor?: string;
+        factura?: string;
+        nivelAlerta: 'advertencia' | 'critico';
+        mensajeAuditoria: string;
     } | null>(null);
 
     const [hydrated, setHydrated] = useState(false);
@@ -1694,6 +1711,34 @@ export default function ComprasPage() {
         });
     };
 
+    const abrirVerificarFechaCompra = useCallback((c: CompraRow) => {
+        if (c.id.startsWith('canal-')) return;
+        const meta = metaAlertaFechaCompra({
+            fecha: String(c.fecha ?? '').slice(0, 10),
+            alertaAlmacenada: c.alerta_fecha,
+            fechaConfirmadaManual: c.fecha_confirmada_manual,
+        });
+        if (!meta.requiereVerificacion) return;
+        setVerificandoFecha({
+            compraId: c.id,
+            fechaFactura: String(c.fecha ?? '').slice(0, 10),
+            fechaRegistro: c.created_at ? String(c.created_at).slice(0, 10) : null,
+            tasaBcv: tasaParaCompra(c),
+            proveedor: c.supplier_name ?? undefined,
+            factura: c.invoice_number ?? undefined,
+            nivelAlerta: meta.nivel === 'advertencia' ? 'advertencia' : 'critico',
+            mensajeAuditoria: meta.mensaje,
+        });
+    }, [tasaParaCompra]);
+
+    const onVerificarFechaFila = useCallback(
+        (row: FilaFacturaCanal) => {
+            const c = compraPorId.get(row.pendienteId);
+            if (c) abrirVerificarFechaCompra(c);
+        },
+        [compraPorId, abrirVerificarFechaCompra],
+    );
+
     const estadoCompartir = useMemo(
         (): ComprasCuadroFiltrosState => ({
             fuenteFiltro,
@@ -2516,6 +2561,7 @@ export default function ComprasPage() {
                             onScrollToCompra={scrollToCompra}
                             accionesPorCompra={accionesCompra}
                             onModificar={onModificarCompra}
+                            onVerificarFecha={onVerificarFechaFila}
                             onModificarLinea={onModificarLinea}
                             onEliminarLinea={handleDeleteLinea}
                             deletingLineaId={deletingLineaId}
@@ -2704,7 +2750,12 @@ export default function ComprasPage() {
                                                 ))}
                                             </div>
                                         ) : null}
-                                        {(c.entidad_nombre || c.proyecto_nombre || c.ubicacion_nombre) ? (
+                                        {(c.entidad_nombre ||
+                                            c.proyecto_nombre ||
+                                            c.ubicacion_nombre ||
+                                            (!esGastoEntidadImputacion(c.imputacion) &&
+                                                c.proyecto_nombre &&
+                                                !c.ubicacion_destino_id)) ? (
                                             <div
                                                 style={{
                                                     display: 'flex',
@@ -2741,20 +2792,43 @@ export default function ComprasPage() {
                                                         {c.proyecto_nombre}
                                                     </span>
                                                 ) : null}
-                                                {c.ubicacion_nombre ? (
-                                                    <span
-                                                        style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 700,
-                                                            padding: '4px 8px',
-                                                            borderRadius: '8px',
-                                                            background: 'rgba(234,88,12,0.15)',
-                                                            color: '#fdba74',
-                                                        }}
-                                                    >
-                                                        {c.ubicacion_nombre}
-                                                    </span>
-                                                ) : null}
+                                                {(() => {
+                                                    const almacen = etiquetaAlmacenIngresoCompra({
+                                                        ubicacionNombre: c.ubicacion_nombre,
+                                                        ubicacionDestinoId: c.ubicacion_destino_id,
+                                                        proyectoNombre: c.proyecto_nombre,
+                                                        imputacionEntidad: esGastoEntidadImputacion(
+                                                            c.imputacion,
+                                                        ),
+                                                    });
+                                                    if (almacen.texto === '—') return null;
+                                                    return (
+                                                        <span
+                                                            style={{
+                                                                fontSize: '10px',
+                                                                fontWeight: 700,
+                                                                padding: '4px 8px',
+                                                                borderRadius: '8px',
+                                                                background: almacen.pendienteIngreso
+                                                                    ? 'rgba(251,191,36,0.12)'
+                                                                    : 'rgba(234,88,12,0.15)',
+                                                                color: almacen.pendienteIngreso
+                                                                    ? '#fcd34d'
+                                                                    : '#fdba74',
+                                                                fontStyle: almacen.pendienteIngreso
+                                                                    ? 'italic'
+                                                                    : undefined,
+                                                            }}
+                                                            title={
+                                                                almacen.pendienteIngreso
+                                                                    ? 'Contabilidad registrada; asigne almacén al ingresar el material'
+                                                                    : undefined
+                                                            }
+                                                        >
+                                                            {almacen.texto}
+                                                        </span>
+                                                    );
+                                                })()}
                                                 {c.fuente_lista === 'app' && !c.id.startsWith('canal-') ? (
                                                     <ImputacionCompraToggle
                                                         compraId={c.id}
@@ -2829,7 +2903,39 @@ export default function ComprasPage() {
                                                 </button>
                                             ) : null}
                                             {c.purchase_invoice_id &&
-                                            compraPermiteIngresoAlmacen(c.estado_logistica) ? (
+                                            compraPermiteIngresoAlmacen(c.estado_logistica) &&
+                                            !esGastoEntidadImputacion(c.imputacion) ? (
+                                                !c.ubicacion_destino_id ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setReubicarCompra({
+                                                                id: c.id,
+                                                                entidadId: c.entidad_id,
+                                                                proyectoId: c.proyecto_id,
+                                                                ubicacionId: c.ubicacion_destino_id,
+                                                                titulo: `Asignar almacén — ${c.supplier_name}`,
+                                                            })
+                                                        }
+                                                        disabled={deletingId !== null || deletingBulk}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            padding: '8px 12px',
+                                                            borderRadius: '10px',
+                                                            border: '1px solid rgba(251,191,36,0.45)',
+                                                            background: 'rgba(251,191,36,0.12)',
+                                                            color: '#fcd34d',
+                                                            fontSize: '11px',
+                                                            fontWeight: 800,
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        <MapPin size={14} />
+                                                        Asignar almacén
+                                                    </button>
+                                                ) : (
                                                 <button
                                                     type="button"
                                                     onClick={() => void handleIngresoAlmacen(c)}
@@ -2872,7 +2978,53 @@ export default function ComprasPage() {
                                                           ? 'Confirmar recepción'
                                                           : 'Ingreso a almacén'}
                                                 </button>
+                                                )
                                             ) : null}
+                                            {(() => {
+                                                const metaFecha = metaAlertaFechaCompra({
+                                                    fecha: String(c.fecha ?? '').slice(0, 10),
+                                                    alertaAlmacenada: c.alerta_fecha,
+                                                    fechaConfirmadaManual: c.fecha_confirmada_manual,
+                                                });
+                                                if (
+                                                    !metaFecha.requiereVerificacion ||
+                                                    c.id.startsWith('canal-')
+                                                ) {
+                                                    return null;
+                                                }
+                                                const esAdvertencia = metaFecha.nivel === 'advertencia';
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        className={
+                                                            claseBlinkFechaCompra(metaFecha.nivel) ??
+                                                            undefined
+                                                        }
+                                                        onClick={() => abrirVerificarFechaCompra(c)}
+                                                        disabled={deletingId !== null || deletingBulk}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            padding: '8px 12px',
+                                                            borderRadius: '10px',
+                                                            border: esAdvertencia
+                                                                ? '1px solid rgba(255,149,0,0.55)'
+                                                                : '1px solid rgba(255,59,48,0.55)',
+                                                            background: esAdvertencia
+                                                                ? 'rgba(255,149,0,0.18)'
+                                                                : 'rgba(255,59,48,0.18)',
+                                                            color: esAdvertencia ? '#FFC56D' : '#FF8A85',
+                                                            fontSize: '11px',
+                                                            fontWeight: 800,
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        <CalendarClock size={14} />
+                                                        Verificar fecha
+                                                    </button>
+                                                );
+                                            })()}
                                             {c.pendiente_canal_id ? (
                                                 <button
                                                     type="button"
@@ -2937,27 +3089,59 @@ export default function ComprasPage() {
                                         >
                                             {c.fecha}
                                             {(() => {
-                                                const stored = (c as { alerta_fecha?: string | null })
-                                                    .alerta_fecha;
-                                                const audit =
-                                                    stored === 'advertencia' || stored === 'critico'
-                                                        ? { nivel: stored }
-                                                        : auditoriaFechaCompra(c.fecha);
-                                                if (audit.nivel === 'ok') return null;
-                                                return (
-                                                    <span
-                                                        style={{
-                                                            marginLeft: 6,
-                                                            color:
-                                                                audit.nivel === 'critico'
-                                                                    ? '#FF6B6B'
-                                                                    : '#FF9500',
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        · fecha {audit.nivel}
-                                                    </span>
-                                                );
+                                                const meta = metaAlertaFechaCompra({
+                                                    fecha: String(c.fecha ?? '').slice(0, 10),
+                                                    alertaAlmacenada: c.alerta_fecha,
+                                                    fechaConfirmadaManual: c.fecha_confirmada_manual,
+                                                });
+                                                if (meta.nivel === 'ok') return null;
+                                                if (meta.verificada) {
+                                                    return (
+                                                        <span
+                                                            style={{
+                                                                marginLeft: 6,
+                                                                color: '#86efac',
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            · fecha verificada
+                                                        </span>
+                                                    );
+                                                }
+                                                if (meta.requiereVerificacion) {
+                                                    const esAdvertencia = meta.nivel === 'advertencia';
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            className={
+                                                                claseBlinkFechaCompra(meta.nivel) ??
+                                                                undefined
+                                                            }
+                                                            onClick={() => abrirVerificarFechaCompra(c)}
+                                                            style={{
+                                                                marginLeft: 6,
+                                                                padding: '2px 8px',
+                                                                borderRadius: 6,
+                                                                border: esAdvertencia
+                                                                    ? '1px solid rgba(255,149,0,0.55)'
+                                                                    : '1px solid rgba(255,59,48,0.55)',
+                                                                background: esAdvertencia
+                                                                    ? 'rgba(255,149,0,0.15)'
+                                                                    : 'rgba(255,59,48,0.15)',
+                                                                color: esAdvertencia
+                                                                    ? '#FFC56D'
+                                                                    : '#FF8A85',
+                                                                fontWeight: 700,
+                                                                fontSize: 10,
+                                                                cursor: 'pointer',
+                                                            }}
+                                                            title={meta.mensaje}
+                                                        >
+                                                            · {etiquetaFechaAnomalaCorta(meta.nivel).toLowerCase()} — verificar
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
                                             })()}
                                             {(() => {
                                                 const tasa = tasaDisplayCompra(c);
@@ -3176,6 +3360,20 @@ export default function ComprasPage() {
                 ) : null}
                 </div>
             </div>
+
+            <VerificarFechaCompraModal
+                open={verificandoFecha != null}
+                compraId={verificandoFecha?.compraId ?? ''}
+                fechaFactura={verificandoFecha?.fechaFactura ?? ''}
+                fechaRegistro={verificandoFecha?.fechaRegistro}
+                tasaBcv={verificandoFecha?.tasaBcv}
+                proveedor={verificandoFecha?.proveedor}
+                factura={verificandoFecha?.factura}
+                nivelAlerta={verificandoFecha?.nivelAlerta}
+                mensajeAuditoria={verificandoFecha?.mensajeAuditoria ?? ''}
+                onClose={() => setVerificandoFecha(null)}
+                onConfirmado={() => void load()}
+            />
 
             <EditarFacturaCanalModal
                 open={editandoCanal != null}
