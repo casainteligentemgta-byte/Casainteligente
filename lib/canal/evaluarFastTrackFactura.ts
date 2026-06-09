@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ExtractedPurchaseInvoice } from '@/lib/almacen/extractPurchaseInvoiceGemini';
+import { cargarAlertasConfig } from '@/lib/alertas/alertasConfig';
 import { calcularConfidenceScoreOcr, cumpleUmbralFastTrack } from '@/lib/canal/calcularConfidenceScoreOcr';
 import { resolverLimiteFastTrackUsd } from '@/lib/canal/limiteFastTrackUsd';
 import { resolverMontosCompraBimonetario } from '@/lib/contabilidad/comprasBimonetario';
@@ -20,6 +21,9 @@ export async function evaluarFastTrackFactura(
   extracted: ExtractedPurchaseInvoice & { confidence_score?: number },
   proyectoId?: string | null,
 ): Promise<ResultadoEvalFastTrack> {
+  const { config: alertas } = await cargarAlertasConfig(supabase);
+  const umbralOcr = alertas.fastTrack.umbralConfianzaOcrPct;
+
   const confidenceScore = calcularConfidenceScoreOcr(
     extracted,
     extracted.confidence_score,
@@ -30,13 +34,13 @@ export async function evaluarFastTrackFactura(
     .map((i) => String(i.item_code ?? '').trim())
     .filter(Boolean);
 
-  if (!cumpleUmbralFastTrack(confidenceScore)) {
+  if (!cumpleUmbralFastTrack(confidenceScore, umbralOcr)) {
     return {
       elegible: false,
       confidenceScore,
       totalUsd: 0,
       skuCoinciden: false,
-      motivo: `Confianza OCR ${confidenceScore}% ≤ 95%`,
+      motivo: `Confianza OCR ${confidenceScore}% ≤ ${umbralOcr}%`,
       materialIds: [],
     };
   }

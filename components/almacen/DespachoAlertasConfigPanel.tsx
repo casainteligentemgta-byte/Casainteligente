@@ -18,6 +18,7 @@ export function DespachoAlertasConfigPanel({ proyectoId, onConfigChange }: Props
   const [loading, setLoading] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [personalizado, setPersonalizado] = useState(false);
+  const [defaults, setDefaults] = useState<DespachoAlertasConfig>({ ...DESPACHO_ALERTAS_DEFAULT });
   const [config, setConfig] = useState<DespachoAlertasConfig>({ ...DESPACHO_ALERTAS_DEFAULT });
 
   const cargar = useCallback(async () => {
@@ -28,11 +29,14 @@ export function DespachoAlertasConfigPanel({ proyectoId, onConfigChange }: Props
       const res = await fetch(`/api/almacen/despacho-alertas?${q}`, { cache: 'no-store' });
       const data = (await res.json()) as {
         config?: DespachoAlertasConfig;
+        defaults?: DespachoAlertasConfig;
         personalizado?: boolean;
         error?: string;
       };
       if (!res.ok) throw new Error(data.error || 'No se pudo cargar configuración');
       const cfg = data.config ?? DESPACHO_ALERTAS_DEFAULT;
+      const defs = data.defaults ?? DESPACHO_ALERTAS_DEFAULT;
+      setDefaults(defs);
       setConfig(cfg);
       setPersonalizado(Boolean(data.personalizado));
       onConfigChange?.(cfg);
@@ -75,7 +79,7 @@ export function DespachoAlertasConfigPanel({ proyectoId, onConfigChange }: Props
   };
 
   const restaurar = () => {
-    setConfig({ ...DESPACHO_ALERTAS_DEFAULT });
+    setConfig({ ...defaults });
   };
 
   if (!proyectoId) return null;

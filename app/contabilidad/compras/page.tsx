@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDeleteCompraError } from '@/lib/contabilidad/deleteCompraRegistro';
+import { useUmbralesFechaCompras } from '@/lib/alertas/useUmbralesFechaCompras';
 import {
     claseBlinkFechaCompra,
     etiquetaFechaAnomalaCorta,
@@ -256,6 +257,7 @@ function compraPuedeVerImagen(c: CompraRow): boolean {
 export default function ComprasPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const umbralesFecha = useUmbralesFechaCompras();
     const [compras, setCompras] = useState<CompraRow[]>([]);
     /** Compras del periodo/carga sin filtros de obra, proveedor, logística, etc. (exportación «completo»). */
     const [comprasCuadroBase, setComprasCuadroBase] = useState<CompraRow[]>([]);
@@ -1717,6 +1719,7 @@ export default function ComprasPage() {
             fecha: String(c.fecha ?? '').slice(0, 10),
             alertaAlmacenada: c.alerta_fecha,
             fechaConfirmadaManual: c.fecha_confirmada_manual,
+            umbrales: umbralesFecha,
         });
         if (!meta.requiereVerificacion) return;
         setVerificandoFecha({
@@ -1729,7 +1732,7 @@ export default function ComprasPage() {
             nivelAlerta: meta.nivel === 'advertencia' ? 'advertencia' : 'critico',
             mensajeAuditoria: meta.mensaje,
         });
-    }, [tasaParaCompra]);
+    }, [tasaParaCompra, umbralesFecha]);
 
     const onVerificarFechaFila = useCallback(
         (row: FilaFacturaCanal) => {
@@ -2558,6 +2561,7 @@ export default function ComprasPage() {
                     showLineas ? (
                         <ComprasLineasTable
                             filas={lineasOrdenadas}
+                            umbralesFecha={umbralesFecha}
                             onScrollToCompra={scrollToCompra}
                             accionesPorCompra={accionesCompra}
                             onModificar={onModificarCompra}
@@ -2985,6 +2989,7 @@ export default function ComprasPage() {
                                                     fecha: String(c.fecha ?? '').slice(0, 10),
                                                     alertaAlmacenada: c.alerta_fecha,
                                                     fechaConfirmadaManual: c.fecha_confirmada_manual,
+                                                    umbrales: umbralesFecha,
                                                 });
                                                 if (
                                                     !metaFecha.requiereVerificacion ||
@@ -3093,6 +3098,7 @@ export default function ComprasPage() {
                                                     fecha: String(c.fecha ?? '').slice(0, 10),
                                                     alertaAlmacenada: c.alerta_fecha,
                                                     fechaConfirmadaManual: c.fecha_confirmada_manual,
+                                                    umbrales: umbralesFecha,
                                                 });
                                                 if (meta.nivel === 'ok') return null;
                                                 if (meta.verificada) {
@@ -3355,7 +3361,7 @@ export default function ComprasPage() {
                         >
                             Detalle por línea / artículo
                         </p>
-                        <ComprasLineasTable filas={lineasOrdenadas} />
+                        <ComprasLineasTable filas={lineasOrdenadas} umbralesFecha={umbralesFecha} />
                     </div>
                 ) : null}
                 </div>

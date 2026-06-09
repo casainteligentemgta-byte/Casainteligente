@@ -62,6 +62,12 @@ export default function DashboardView() {
             >
               Configuración nómina (costo hora + carga prestacional)
             </Link>
+            <Link
+              href="/admin/config/alertas"
+              className="inline-flex text-sm font-semibold text-amber-400 hover:text-amber-300 underline-offset-4 hover:underline"
+            >
+              Alertas centralizadas (Telegram, procuras, compras, despacho)
+            </Link>
           </div>
         </div>
         

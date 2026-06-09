@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
+import { cargarAlertasConfig, despachoDefaultsDesdeConfig } from '@/lib/alertas/alertasConfig';
 import {
   cargarDespachoAlertasProyecto,
   guardarDespachoAlertasProyecto,
   normalizarDespachoAlertasConfig,
 } from '@/lib/almacen/despachoAlertasProyecto';
-import { DESPACHO_ALERTAS_DEFAULT } from '@/lib/almacen/despachoAlertasConfig';
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
@@ -24,13 +24,15 @@ export async function GET(req: Request) {
   const supabase = admin ?? (await createClient());
 
   try {
+    const { config: alertas } = await cargarAlertasConfig(supabase);
+    const defaults = despachoDefaultsDesdeConfig(alertas);
     const result = await cargarDespachoAlertasProyecto(supabase, proyectoId);
     return NextResponse.json({
       ok: true,
       proyecto_id: proyectoId,
       config: result.config,
       personalizado: result.personalizado,
-      defaults: DESPACHO_ALERTAS_DEFAULT,
+      defaults,
       updated_at: result.updatedAt ?? null,
     });
   } catch (err) {

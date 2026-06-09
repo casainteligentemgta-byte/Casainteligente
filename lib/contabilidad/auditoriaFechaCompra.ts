@@ -1,6 +1,19 @@
 /** Umbrales para detectar fechas de factura sospechosas (OCR o captura manual). */
 export const UMBRAL_FECHA_ADVERTENCIA_DIAS = 90;
 export const UMBRAL_FECHA_CRITICO_DIAS = 365;
+export const UMBRAL_FECHA_FUTURO_CRITICO_DIAS = 7;
+
+export type UmbralesFechaCompra = {
+  advertenciaDias: number;
+  criticoDias: number;
+  futuroCriticoDias: number;
+};
+
+export const UMBRALES_FECHA_COMPRA_DEFAULT: UmbralesFechaCompra = {
+  advertenciaDias: UMBRAL_FECHA_ADVERTENCIA_DIAS,
+  criticoDias: UMBRAL_FECHA_CRITICO_DIAS,
+  futuroCriticoDias: UMBRAL_FECHA_FUTURO_CRITICO_DIAS,
+};
 
 export type NivelAlertaFechaCompra = 'ok' | 'advertencia' | 'critico';
 
@@ -27,6 +40,7 @@ function diasEntre(fecha: Date, ref: Date): number {
 export function auditoriaFechaCompra(
   fechaIso: string,
   refDate: Date = new Date(),
+  umbrales: UmbralesFechaCompra = UMBRALES_FECHA_COMPRA_DEFAULT,
 ): AuditoriaFechaCompra {
   const fecha = String(fechaIso ?? '').trim().slice(0, 10);
   const parsed = parseFechaIso(fecha);
@@ -45,7 +59,7 @@ export function auditoriaFechaCompra(
   const dias = diasEntre(parsed, ref);
   const abs = Math.abs(dias);
 
-  if (dias < -7) {
+  if (dias < -umbrales.futuroCriticoDias) {
     return {
       nivel: 'critico',
       fecha,
@@ -54,7 +68,7 @@ export function auditoriaFechaCompra(
     };
   }
 
-  if (abs >= UMBRAL_FECHA_CRITICO_DIAS) {
+  if (abs >= umbrales.criticoDias) {
     const cuando = dias > 0 ? `hace ${abs} días` : `dentro de ${abs} días`;
     return {
       nivel: 'critico',
@@ -64,7 +78,7 @@ export function auditoriaFechaCompra(
     };
   }
 
-  if (abs >= UMBRAL_FECHA_ADVERTENCIA_DIAS) {
+  if (abs >= umbrales.advertenciaDias) {
     const cuando = dias > 0 ? `hace ${abs} días` : `dentro de ${abs} días`;
     return {
       nivel: 'advertencia',
@@ -101,8 +115,9 @@ export function auditoriaFechaCompraAlmacenada(
   fechaIso: string,
   alertaAlmacenada?: NivelAlertaFechaCompra | null,
   refDate?: Date,
+  umbrales?: UmbralesFechaCompra,
 ): AuditoriaFechaCompra {
-  const audit = auditoriaFechaCompra(fechaIso, refDate);
+  const audit = auditoriaFechaCompra(fechaIso, refDate, umbrales);
   if (alertaAlmacenada === 'advertencia' || alertaAlmacenada === 'critico') {
     return { ...audit, nivel: alertaAlmacenada };
   }
@@ -137,11 +152,13 @@ export function metaAlertaFechaCompra(input: {
   alertaAlmacenada?: NivelAlertaFechaCompra | null;
   fechaConfirmadaManual?: boolean | null;
   refDate?: Date;
+  umbrales?: UmbralesFechaCompra;
 }): MetaAlertaFechaCompra {
   const audit = auditoriaFechaCompraAlmacenada(
     input.fecha,
     input.alertaAlmacenada,
     input.refDate,
+    input.umbrales,
   );
   const verificada =
     Boolean(input.fechaConfirmadaManual) && fechaAnomalaRequiereAtencion(audit.nivel);

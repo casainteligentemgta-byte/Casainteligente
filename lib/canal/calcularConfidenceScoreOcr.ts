@@ -37,8 +37,11 @@ export function calcularConfidenceScoreOcr(
   return Math.min(100, Math.round(score * 100) / 100);
 }
 
-export function cumpleUmbralFastTrack(confidenceScore: number): boolean {
-  return confidenceScore > UMBRAL_FAST_TRACK;
+export function cumpleUmbralFastTrack(
+  confidenceScore: number,
+  umbral: number = UMBRAL_FAST_TRACK,
+): boolean {
+  return confidenceScore > umbral;
 }
 
 export const UMBRAL_MONTO_FAST_TRACK_USD = 100;

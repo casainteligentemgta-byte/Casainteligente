@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { cargarAlertasConfig, despachoDefaultsDesdeConfig } from '@/lib/alertas/alertasConfig';
 import {
   DESPACHO_ALERTAS_DEFAULT,
   type DespachoAlertasConfig,
@@ -12,11 +13,14 @@ export type InvDespachoAlertasRow = {
   updated_at?: string;
 };
 
-export function rowToDespachoAlertasConfig(row: Partial<InvDespachoAlertasRow>): DespachoAlertasConfig {
+export function rowToDespachoAlertasConfig(
+  row: Partial<InvDespachoAlertasRow>,
+  defaults: DespachoAlertasConfig = DESPACHO_ALERTAS_DEFAULT,
+): DespachoAlertasConfig {
   return {
-    excesoAdvertenciaPct: Number(row.exceso_advertencia_pct ?? DESPACHO_ALERTAS_DEFAULT.excesoAdvertenciaPct),
-    excesoCriticoPct: Number(row.exceso_critico_pct ?? DESPACHO_ALERTAS_DEFAULT.excesoCriticoPct),
-    saldoInformativoPct: Number(row.saldo_informativo_pct ?? DESPACHO_ALERTAS_DEFAULT.saldoInformativoPct),
+    excesoAdvertenciaPct: Number(row.exceso_advertencia_pct ?? defaults.excesoAdvertenciaPct),
+    excesoCriticoPct: Number(row.exceso_critico_pct ?? defaults.excesoCriticoPct),
+    saldoInformativoPct: Number(row.saldo_informativo_pct ?? defaults.saldoInformativoPct),
   };
 }
 
@@ -64,11 +68,14 @@ export function normalizarDespachoAlertasConfig(
   };
 }
 
-/** Lee umbrales del proyecto o devuelve valores por defecto si no hay fila. */
+/** Lee umbrales del proyecto o devuelve defaults globales (ci_alertas_config) si no hay fila. */
 export async function cargarDespachoAlertasProyecto(
   supabase: SupabaseClient,
   proyectoId: string,
 ): Promise<{ config: DespachoAlertasConfig; personalizado: boolean; updatedAt?: string }> {
+  const { config: alertas } = await cargarAlertasConfig(supabase);
+  const defaults = despachoDefaultsDesdeConfig(alertas);
+
   const { data, error } = await supabase
     .from('inv_despacho_alertas_proyecto')
     .select('exceso_advertencia_pct, exceso_critico_pct, saldo_informativo_pct, updated_at')
@@ -76,16 +83,16 @@ export async function cargarDespachoAlertasProyecto(
     .maybeSingle();
 
   if (error?.code === '42P01') {
-    return { config: { ...DESPACHO_ALERTAS_DEFAULT }, personalizado: false };
+    return { config: { ...defaults }, personalizado: false };
   }
   if (error) throw new Error(error.message);
 
   if (!data) {
-    return { config: { ...DESPACHO_ALERTAS_DEFAULT }, personalizado: false };
+    return { config: { ...defaults }, personalizado: false };
   }
 
   return {
-    config: rowToDespachoAlertasConfig(data as InvDespachoAlertasRow),
+    config: rowToDespachoAlertasConfig(data as InvDespachoAlertasRow, defaults),
     personalizado: true,
     updatedAt: (data as { updated_at?: string }).updated_at,
   };

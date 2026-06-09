@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { cargarAlertasConfig, umbralesFechaDesdeConfig } from '@/lib/alertas/alertasConfig';
 import {
   auditoriaFechaCompra,
   fechaAnomalaRequiereAtencion,
@@ -50,7 +51,9 @@ export async function actualizarFechaCompra(
 
   const compra = compraRaw as CompraFechaRow;
   const fechaAnterior = String(compra.fecha ?? '').slice(0, 10);
-  const audit = auditoriaFechaCompra(fecha);
+  const { config: alertas } = await cargarAlertasConfig(supabase);
+  const umbrales = umbralesFechaDesdeConfig(alertas);
+  const audit = auditoriaFechaCompra(fecha, new Date(), umbrales);
 
   if (fechaAnomalaRequiereAtencion(audit.nivel) && !opts?.confirmarFechaAnomala) {
     throw new FechaCompraAnomalaError(audit);

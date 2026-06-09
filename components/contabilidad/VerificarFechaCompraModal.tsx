@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Loader2, X } from 'lucide-react';
 import { formatearTasaBcv } from '@/lib/contabilidad/comprasMontos';
+import { useUmbralesFechaCompras } from '@/lib/alertas/useUmbralesFechaCompras';
 import {
   auditoriaFechaCompra,
   claseBlinkFechaCompra,
@@ -38,6 +39,7 @@ export default function VerificarFechaCompraModal({
   onClose,
   onConfirmado,
 }: Props) {
+  const umbralesFecha = useUmbralesFechaCompras();
   const [fecha, setFecha] = useState(fechaFactura);
   const [tasaPreview, setTasaPreview] = useState<number | null>(tasaBcv ?? null);
   const [cargandoTasa, setCargandoTasa] = useState(false);
@@ -55,14 +57,18 @@ export default function VerificarFechaCompraModal({
     }
   }, [open, compraId, fechaFactura, tasaBcv]);
 
-  const audit = useMemo(() => auditoriaFechaCompra(fecha), [fecha]);
+  const audit = useMemo(
+    () => auditoriaFechaCompra(fecha, new Date(), umbralesFecha),
+    [fecha, umbralesFecha],
+  );
   const meta = useMemo(
     () =>
       metaAlertaFechaCompra({
         fecha,
         alertaAlmacenada: audit.nivel === 'ok' ? null : audit.nivel,
+        umbrales: umbralesFecha,
       }),
-    [fecha, audit.nivel],
+    [fecha, audit.nivel, umbralesFecha],
   );
   const esAdvertencia =
     (meta.nivel === 'ok' ? nivelAlerta : meta.nivel) === 'advertencia';

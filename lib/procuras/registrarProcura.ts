@@ -145,7 +145,7 @@ export async function insertarProcura(
     out.solicitante_nombre = solicitante.nombre;
   }
 
-  if (estado === 'solicitada' && out.id) {
+  if (out.id) {
     void enviarAlertaProcuraPendienteAdmin(supabase, String(out.id)).catch((e) => {
       console.warn('[insertarProcura] alerta admin', e);
     });

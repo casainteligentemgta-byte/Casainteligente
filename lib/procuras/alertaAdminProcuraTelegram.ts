@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
-import { idCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
+import {
+  cargarAlertasConfig,
+  debeAlertarProcura,
+  prioridadProcuraDesdeObs,
+  resolverCanalAdminEfectivo,
+} from '@/lib/alertas/alertasConfig';
 import {
   CB_PROCURA_ADMIN_ALMACEN,
   CB_PROCURA_ADMIN_APROBAR,
@@ -31,21 +36,15 @@ export type AlertaProcuraAdminRow = {
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
 };
 
-function prioridadDesdeObs(observaciones?: string | null): string {
-  const t = observaciones?.toLowerCase() ?? '';
-  if (/urgent|urgente|crit/i.test(t)) return 'Alta';
-  if (/prioridad|importante/i.test(t)) return 'Media';
-  return 'Normal';
-}
-
 /** Envía alerta al canal admin con botones Aprobar / Almacén / Rechazar. */
 export async function enviarAlertaProcuraPendienteAdmin(
   supabase: SupabaseClient,
   procuraId: string,
 ): Promise<boolean> {
-  const canal = idCanalAdminTelegram();
+  const { config: alertas } = await cargarAlertasConfig(supabase);
+  const canal = resolverCanalAdminEfectivo(alertas);
   if (!canal) {
-    console.warn('[alertaAdminProcura] TELEGRAM_ADMIN_CHANNEL_ID no configurado');
+    console.warn('[alertaAdminProcura] Canal admin Telegram no configurado');
     return false;
   }
 
@@ -63,11 +62,11 @@ export async function enviarAlertaProcuraPendienteAdmin(
   }
 
   const row = data as AlertaProcuraAdminRow;
-  if (row.estado !== 'solicitada') return false;
+  if (!debeAlertarProcura(row.estado, alertas)) return false;
 
   const obra = nombreObra(row.ci_proyectos);
   const solicitante = row.solicitante_nombre?.trim() || '—';
-  const prioridad = prioridadDesdeObs(row.observaciones);
+  const prioridad = prioridadProcuraDesdeObs(row.observaciones, alertas);
   const cantidad = Number(row.cantidad).toLocaleString('es-VE');
 
   const msg =

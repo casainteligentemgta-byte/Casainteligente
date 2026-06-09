@@ -7,6 +7,7 @@ import {
   claseBlinkFechaCompra,
   etiquetaFechaAnomalaCorta,
   metaAlertaFechaCompra,
+  type UmbralesFechaCompra,
 } from '@/lib/contabilidad/auditoriaFechaCompra';
 import { etiquetaAlmacenIngresoCompra } from '@/lib/contabilidad/etiquetaAlmacenCompra';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
@@ -34,6 +35,7 @@ export type AccionesCompraLinea = {
 
 type Props = {
   filas: FilaFacturaCanal[];
+  umbralesFecha?: UmbralesFechaCompra;
   onScrollToCompra?: (compraId: string) => void;
   accionesPorCompra?: (compraId: string) => AccionesCompraLinea | null;
   onModificar?: (compraId: string) => void;
@@ -71,6 +73,7 @@ function esFilaAcciones(filas: FilaFacturaCanal[], row: FilaFacturaCanal, index:
 
 export default function ComprasLineasTable({
   filas,
+  umbralesFecha,
   onScrollToCompra,
   accionesPorCompra,
   onModificar,
@@ -247,6 +250,7 @@ export default function ComprasLineasTable({
               fecha: row.fecha,
               alertaAlmacenada: row.alertaFecha,
               fechaConfirmadaManual: row.fechaConfirmadaManual,
+              umbrales: umbralesFecha,
             });
             const rowSpan = ordenPlano
               ? 1
