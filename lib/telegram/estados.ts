@@ -110,13 +110,24 @@ export async function setTelegramContexto(
   chatId: string,
   patch: Partial<
     Pick<TelegramEstado, 'contexto' | 'proyecto_id' | 'pending_factura_id' | 'metadata'>
-  >,
+  > & { reemplazarMetadata?: boolean },
 ): Promise<TelegramEstado> {
   const actual = await getTelegramEstado(supabase, chatId);
+  const { reemplazarMetadata, ...restPatch } = patch;
+  let metadata = actual.metadata;
+  if (restPatch.metadata !== undefined) {
+    if (reemplazarMetadata) {
+      metadata = restPatch.metadata;
+    } else if (Object.keys(restPatch.metadata).length === 0) {
+      metadata = {};
+    } else {
+      metadata = { ...actual.metadata, ...restPatch.metadata };
+    }
+  }
   const next: TelegramEstado = {
     ...actual,
-    ...patch,
-    metadata: patch.metadata ? { ...actual.metadata, ...patch.metadata } : actual.metadata,
+    ...restPatch,
+    metadata,
   };
   await upsertTelegramEstado(supabase, next);
   return next;

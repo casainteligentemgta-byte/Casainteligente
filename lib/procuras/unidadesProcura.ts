@@ -226,8 +226,9 @@ export function parseCantidadUnidadProcura(texto: string): CantidadUnidadProcura
 const UNIDAD_PAGE_SIZE = 8;
 
 export function tecladoUnidadesProcuraPagina(
-  prefix: string,
+  prefixUnidad: string,
   page = 0,
+  prefixPagina = 'prc:pg:',
 ): { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } {
   const totalPages = Math.max(1, Math.ceil(UNIDADES_PROCURA.length / UNIDAD_PAGE_SIZE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
@@ -239,18 +240,21 @@ export function tecladoUnidadesProcuraPagina(
   const rows: Array<Array<{ text: string; callback_data: string }>> = slice.map((u) => [
     {
       text: `${u.code} · ${u.name}`,
-      callback_data: `${prefix}${u.code}`,
+      callback_data: `${prefixUnidad}${u.code}`,
     },
   ]);
 
   if (totalPages > 1) {
     const nav: Array<{ text: string; callback_data: string }> = [];
     if (safePage > 0) {
-      nav.push({ text: '◀', callback_data: `${prefix}pg:${safePage - 1}` });
+      nav.push({ text: '◀', callback_data: `${prefixPagina}${safePage - 1}` });
     }
-    nav.push({ text: `${safePage + 1}/${totalPages}`, callback_data: `${prefix}pg:${safePage}` });
+    nav.push({
+      text: `${safePage + 1}/${totalPages}`,
+      callback_data: `${prefixPagina}${safePage}`,
+    });
     if (safePage < totalPages - 1) {
-      nav.push({ text: '▶', callback_data: `${prefix}pg:${safePage + 1}` });
+      nav.push({ text: '▶', callback_data: `${prefixPagina}${safePage + 1}` });
     }
     rows.push(nav);
   }

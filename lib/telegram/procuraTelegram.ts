@@ -58,7 +58,7 @@ async function patchMeta(
 async function pedirObservacionesProcura(chatId: string): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    `3️⃣ <b>Observaciones</b> (opcional).\n` +
+    `4️⃣ <b>Observaciones</b> (opcional).\n` +
       `Escribe una nota o envía <code>-</code> para omitir.`,
     { parse_mode: 'HTML' },
   );
@@ -72,7 +72,7 @@ async function enviarPickerUnidadProcura(chatId: string, cantidad: number, page 
       `<i>También puedes escribir, ej. M3, Litros, Pulgadas</i>`,
     {
       parse_mode: 'HTML',
-      reply_markup: tecladoUnidadesProcuraPagina(CB_UNIDAD, page),
+      reply_markup: tecladoUnidadesProcuraPagina(CB_UNIDAD, page, CB_UNIDAD_PAGE),
     },
   );
 }
@@ -105,6 +105,7 @@ export async function prepararProcuraTrasObra(
   await setTelegramContexto(supabase, chatId, {
     contexto: 'procura_solicitud',
     proyecto_id: proyectoId,
+    reemplazarMetadata: true,
     metadata: {
       paso: 'material',
       nombre_obra: nombre,
@@ -367,7 +368,16 @@ export async function manejarCallbackProcuraTelegram(
 
   if (params.data === CB_CONFIRM) {
     await answerCallbackQuery(params.callbackId, 'Registrando…');
-    await registrarProcuraTelegram(supabase, params.chatId, estado);
+    const fresh = await getTelegramEstado(supabase, params.chatId);
+    if (!esFlujoProcuraTelegram(fresh)) {
+      await sendTelegramMessage(
+        params.chatId,
+        '⚠️ La sesión expiró. Usa <code>/procura</code> de nuevo.',
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+    await registrarProcuraTelegram(supabase, params.chatId, fresh);
     return true;
   }
 
