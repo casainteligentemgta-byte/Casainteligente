@@ -362,15 +362,48 @@ export default function ProductosPage() {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center'
             }}>
                 <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 800 }}>Catálogo</h1>
-                <Link href="/productos/nuevo">
-                    <button style={{
-                        background: '#FF9500', color: 'white', border: 'none',
-                        borderRadius: '12px', padding: '10px 16px', fontWeight: 700,
-                        fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,149,0,0.3)'
-                    }}>
-                        + Nuevo
-                    </button>
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {cart.length > 0 ? (
+                        <button
+                            type="button"
+                            onClick={() =>
+                                router.push(`/ventas?productos=${cart.map((i) => i.product.id).join(',')}`)
+                            }
+                            style={{
+                                background: '#34C759',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                padding: '10px 14px',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(52,199,89,0.3)',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            🛒 Presupuesto ({cart.length})
+                        </button>
+                    ) : null}
+                    <Link href="/productos/nuevo">
+                        <button
+                            type="button"
+                            style={{
+                                background: '#FF9500',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                padding: '10px 16px',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(255,149,0,0.3)',
+                            }}
+                        >
+                            + Nuevo
+                        </button>
+                    </Link>
+                </div>
             </div>
 
             <div style={{ padding: '20px' }}>
@@ -424,22 +457,6 @@ export default function ProductosPage() {
             </div>
 
             {selected && <ProductDetail product={selected} onClose={() => setSelected(null)} />}
-
-            {cart.length > 0 && (
-                <div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 110 }}>
-                    <button
-                        onClick={() => router.push(`/ventas?productos=${cart.map(i => i.product.id).join(',')}`)}
-                        style={{
-                            width: '100%', background: '#34C759', padding: '18px',
-                            color: 'white', fontSize: '17px', fontWeight: 700, border: 'none',
-                            borderRadius: '18px', boxShadow: '0 8px 25px rgba(52,199,89,0.4)',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        🛒 Crear presupuesto ({cart.length})
-                    </button>
-                </div>
-            )}
         </div>
     );
 }

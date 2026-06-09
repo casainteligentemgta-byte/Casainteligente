@@ -14,6 +14,7 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'traspaso', description: 'Traspaso o préstamo entre almacenes u obras' },
   { command: 'memoria', description: 'Memoria descriptiva: foto de avance por partida' },
   { command: 'obra', description: 'Elegir obra y subir fotos de evidencia' },
+  { command: 'procura', description: 'Solicitar material (procura de abastecimiento)' },
   { command: 'gasto', description: 'Comprobante de gasto de obra' },
   { command: 'bitacora', description: 'Bitácora por nota de voz' },
   { command: 'stock', description: 'Stock: almacén, obra o total por proyecto' },

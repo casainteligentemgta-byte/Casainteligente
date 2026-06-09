@@ -22,6 +22,7 @@ export type ProyectoPickerModo =
   | 'ingreso_factura_manual'
   | 'nota_entrega'
   | 'emergencia'
+  | 'procura'
   | 'salida_almacen'
   | 'salida_almacen_dest'
   | 'salida_obra_despacho';
@@ -43,6 +44,7 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   ingreso_factura_manual: 'v',
   nota_entrega: 't',
   emergencia: 'e',
+  procura: 'r',
 };
 
 const MODO_LARGO: Record<string, ProyectoPickerModo> = {
@@ -60,6 +62,7 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   v: 'ingreso_factura_manual',
   t: 'nota_entrega',
   e: 'emergencia',
+  r: 'procura',
 };
 
 function truncarNombre(nombre: string, max = 28): string {
@@ -114,6 +117,8 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '📥 <b>Elige la obra</b> (nota de entrega → almacén):';
     case 'emergencia':
       return '🚨 <b>Elige el proyecto</b> (emergencia sin papeles → almacén):';
+    case 'procura':
+      return '📦 <b>Elige la obra</b> para la solicitud de procura:';
     case 'salida_obra':
       return '📤 <b>Elige la obra</b> (salida de material):';
     case 'salida_almacen':
@@ -151,6 +156,7 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
     case 'ingreso_factura_manual':
     case 'nota_entrega':
     case 'emergencia':
+    case 'procura':
     case 'salida_obra':
     case 'salida_almacen':
     case 'salida_almacen_dest':
@@ -310,6 +316,13 @@ export async function manejarCallbackProyectoTelegram(
     await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
     const { prepararNotaEntregaIngresoTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
     await prepararNotaEntregaIngresoTrasObra(supabase, params.chatId, parsed.proyectoId);
+    return true;
+  }
+
+  if (parsed.modo === 'procura') {
+    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
+    const { prepararProcuraTrasObra } = await import('@/lib/telegram/procuraTelegram');
+    await prepararProcuraTrasObra(supabase, params.chatId, parsed.proyectoId);
     return true;
   }
 

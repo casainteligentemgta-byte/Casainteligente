@@ -105,6 +105,12 @@ import {
 } from '@/lib/telegram/liberarCuarentenaPicker';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 import {
+  esCallbackProcuraTelegram,
+  manejarCallbackProcuraTelegram,
+  manejarComandoProcuraTelegram,
+  manejarTextoProcuraTelegram,
+} from '@/lib/telegram/procuraTelegram';
+import {
   esCallbackAvanceCampo,
   manejarCallbackAvanceCampo,
   manejarTextoAvanceCampo,
@@ -345,6 +351,11 @@ async function aplicarComando(
 
   if (cmd.comandoTraspaso) {
     await manejarComandoTraspasoTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoProcura) {
+    await manejarComandoProcuraTelegram(supabase, chatId);
     return;
   }
 
@@ -741,6 +752,17 @@ export async function handleTelegramCallbackQuery(
       return NextResponse.json({ ok: true, callback: 'asignar_obra' });
     }
 
+    if (esCallbackProcuraTelegram(cq.data)) {
+      const handledProcura = await manejarCallbackProcuraTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledProcura) {
+        return NextResponse.json({ ok: true, callback: 'procura' });
+      }
+    }
+
     const handled = await manejarCallbackProyectoTelegram(admin.client, {
       chatId,
       callbackId: cq.id,
@@ -865,6 +887,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       );
       if (textoDiasCredito) {
         return NextResponse.json({ ok: true, factura_dias_credito_texto: true });
+      }
+
+      const textoProcura = await manejarTextoProcuraTelegram(supabase, chatId, texto);
+      if (textoProcura) {
+        return NextResponse.json({ ok: true, procura_texto: true });
       }
 
       const textoIngresoManual = await manejarTextoIngresoManual(

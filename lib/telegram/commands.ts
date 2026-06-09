@@ -44,6 +44,8 @@ export type ComandoTelegramResult = {
   comandoTraspaso?: boolean;
   /** Resumen compras + stock por obra: /compras &lt;nombre obra&gt; */
   comandoComprasObra?: string;
+  /** Solicitud de procura / abastecimiento. */
+  comandoProcura?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -65,6 +67,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '• /obra — elegir obra y subir fotos de evidencia\n' +
         '• /proyecto — cambiar obra activa (lista)\n' +
         '• /gasto — comprobante de gasto de obra\n' +
+        '• /procura — solicitar material (abastecimiento)\n' +
         '• /stock — inventario guiado (entidad → obra → almacén)\n' +
         '• /stock &lt;obra&gt; — elige vista: almacén, obra o total proyecto\n' +
         '• /stock &lt;material&gt; — ej. cemento\n' +
@@ -95,6 +98,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '/obra — elegir obra (lista) y subir fotos\n' +
         '/proyecto — cambiar obra activa\n' +
         '/gasto — registrar comprobante de gasto\n' +
+        '/procura — solicitar material para una obra\n' +
         '/stock — consulta guiada (entidad → obra → almacén)\n' +
         '/stock rancho flamboyant — almacén, en obra o total · /stock cemento — por material\n' +
         '/bitacora — enviar nota de voz de bitácora (tras /obra)\n' +
@@ -161,6 +165,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         '💸 Modo <b>gasto de obra</b>.\n' +
         'Elige la obra abajo (si aún no hay una activa) y envía foto del comprobante.',
     };
+  }
+
+  if (cmd === '/procura' || cmd === '/procuras') {
+    return { handled: true, comandoProcura: true };
   }
 
   if (esComandoAgua(t)) {
