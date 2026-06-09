@@ -71,7 +71,6 @@ export async function actualizarFechaCompra(
     fecha_confirmada_manual: fechaAnomalaRequiereAtencion(audit.nivel)
       ? Boolean(opts?.confirmarFechaAnomala)
       : false,
-    updated_at: new Date().toISOString(),
   };
 
   const { error: upErr } = await supabase

@@ -184,7 +184,6 @@ export async function reubicarCompraObra(
   if (compraId) {
     const patchCompra: Record<string, unknown> = {
       proyecto_id: proyectoId,
-      updated_at: new Date().toISOString(),
     };
     if (entidadId) patchCompra.entidad_id = entidadId;
     const { error: upCompra } = await supabase
