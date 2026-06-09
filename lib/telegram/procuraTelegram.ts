@@ -6,6 +6,11 @@ import {
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import {
+  normalizarUnidadProcura,
+  parseCantidadUnidadProcura,
+  tecladoUnidadesProcuraPagina,
+} from '@/lib/procuras/unidadesProcura';
+import {
   getTelegramEstado,
   setTelegramContexto,
   type TelegramEstado,
@@ -15,8 +20,10 @@ import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/tel
 const PREFIX = 'prc:';
 const CB_CONFIRM = `${PREFIX}ok`;
 const CB_CANCEL = `${PREFIX}no`;
+const CB_UNIDAD = `${PREFIX}u:`;
+const CB_UNIDAD_PAGE = `${PREFIX}pg:`;
 
-export type PasoProcuraTelegram = 'material' | 'cantidad' | 'observaciones';
+export type PasoProcuraTelegram = 'material' | 'cantidad' | 'unidad' | 'observaciones';
 
 export type MetadataProcuraTelegram = {
   paso?: PasoProcuraTelegram;
@@ -46,14 +53,26 @@ async function patchMeta(
   });
 }
 
-function parseCantidadUnidad(texto: string): { cantidad: number; unidad: string } | null {
-  const t = texto.trim();
-  if (!t) return null;
-  const parts = t.split(/\s+/);
-  const cantidad = Number(parts[0]?.replace(',', '.'));
-  if (!Number.isFinite(cantidad) || cantidad <= 0) return null;
-  const unidad = parts.slice(1).join(' ').trim().toUpperCase() || 'UND';
-  return { cantidad, unidad: unidad.slice(0, 16) || 'UND' };
+async function pedirObservacionesProcura(chatId: string): Promise<void> {
+  await sendTelegramMessage(
+    chatId,
+    `3️⃣ <b>Observaciones</b> (opcional).\n` +
+      `Escribe una nota o envía <code>-</code> para omitir.`,
+    { parse_mode: 'HTML' },
+  );
+}
+
+async function enviarPickerUnidadProcura(chatId: string, cantidad: number, page = 0): Promise<void> {
+  await sendTelegramMessage(
+    chatId,
+    `2️⃣ Cantidad: <b>${cantidad.toLocaleString('es-VE')}</b>\n\n` +
+      `Elige la <b>unidad de medida</b>:\n` +
+      `<i>También puedes escribir, ej. M3, Litros, Pulgadas</i>`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: tecladoUnidadesProcuraPagina(CB_UNIDAD, page),
+    },
+  );
 }
 
 export function esFlujoProcuraTelegram(estado: TelegramEstado): boolean {
@@ -137,7 +156,7 @@ async function registrarProcuraTelegram(
   const proyectoId = estado.proyecto_id?.trim();
   const materialTxt = m.material_txt?.trim();
   const cantidad = m.cantidad;
-  const unidad = m.unidad?.trim() || 'UND';
+  const unidad = normalizarUnidadProcura(m.unidad);
 
   if (!proyectoId || !materialTxt || !cantidad || cantidad <= 0) {
     await sendTelegramMessage(chatId, '❌ Datos incompletos. Usa <code>/procura</code> de nuevo.', {
@@ -227,33 +246,54 @@ export async function manejarTextoProcuraTelegram(
     await sendTelegramMessage(
       chatId,
       `2️⃣ Indica la <b>cantidad</b> (y unidad opcional).\n` +
-        `<i>Ej.: 50 UND · 10 · 2.5 M3</i>`,
+        `<i>Ej.: 50 SAC · 2.5 M3 · 100 Mts · 20 Litros · 4 Pulgadas · 10</i>`,
       { parse_mode: 'HTML' },
     );
     return true;
   }
 
   if (paso === 'cantidad') {
-    const parsed = parseCantidadUnidad(t);
+    const parsed = parseCantidadUnidadProcura(t);
     if (!parsed) {
       await sendTelegramMessage(
         chatId,
-        '⚠️ Cantidad inválida. Ejemplo: <code>50 UND</code> o <code>10</code>',
+        '⚠️ Cantidad inválida. Ejemplo: <code>50 M3</code>, <code>20 Litros</code> o <code>10</code>',
         { parse_mode: 'HTML' },
       );
       return true;
     }
-    const next = await patchMeta(supabase, chatId, estado, {
+
+    if (parsed.kind === 'solo_cantidad') {
+      await patchMeta(supabase, chatId, estado, {
+        paso: 'unidad',
+        cantidad: parsed.cantidad,
+      });
+      await enviarPickerUnidadProcura(chatId, parsed.cantidad);
+      return true;
+    }
+
+    await patchMeta(supabase, chatId, estado, {
       paso: 'observaciones',
       cantidad: parsed.cantidad,
       unidad: parsed.unidad,
     });
-    await sendTelegramMessage(
-      chatId,
-      `3️⃣ <b>Observaciones</b> (opcional).\n` +
-        `Escribe una nota o envía <code>-</code> para omitir.`,
-      { parse_mode: 'HTML' },
-    );
+    await pedirObservacionesProcura(chatId);
+    return true;
+  }
+
+  if (paso === 'unidad') {
+    if (!Number.isFinite(m.cantidad) || (m.cantidad ?? 0) <= 0) {
+      await sendTelegramMessage(chatId, '⚠️ Falta la cantidad. Usa /procura de nuevo.', {
+        parse_mode: 'HTML',
+      });
+      return true;
+    }
+    const unidad = normalizarUnidadProcura(t);
+    await patchMeta(supabase, chatId, estado, {
+      paso: 'observaciones',
+      unidad,
+    });
+    await pedirObservacionesProcura(chatId);
     return true;
   }
 
@@ -279,6 +319,35 @@ export async function manejarCallbackProcuraTelegram(
   const estado = await getTelegramEstado(supabase, params.chatId);
   if (!esFlujoProcuraTelegram(estado)) {
     await answerCallbackQuery(params.callbackId, 'Sesión expirada', true);
+    return true;
+  }
+
+  if (params.data.startsWith(CB_UNIDAD_PAGE)) {
+    const page = Number(params.data.slice(CB_UNIDAD_PAGE.length));
+    const m = metaProcura(estado);
+    if (!Number.isFinite(m.cantidad) || (m.cantidad ?? 0) <= 0) {
+      await answerCallbackQuery(params.callbackId, 'Cantidad pendiente', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId);
+    await enviarPickerUnidadProcura(params.chatId, m.cantidad!, page);
+    return true;
+  }
+
+  if (params.data.startsWith(CB_UNIDAD)) {
+    const code = params.data.slice(CB_UNIDAD.length);
+    const m = metaProcura(estado);
+    if (!Number.isFinite(m.cantidad) || (m.cantidad ?? 0) <= 0) {
+      await answerCallbackQuery(params.callbackId, 'Cantidad pendiente', true);
+      return true;
+    }
+    const unidad = normalizarUnidadProcura(code);
+    await answerCallbackQuery(params.callbackId, unidad);
+    await patchMeta(supabase, params.chatId, estado, {
+      paso: 'observaciones',
+      unidad,
+    });
+    await pedirObservacionesProcura(params.chatId);
     return true;
   }
 

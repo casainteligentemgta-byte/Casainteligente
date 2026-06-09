@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
+import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
     const row: Record<string, unknown> = {
       material_txt: materialTxt.slice(0, 500),
       cantidad,
-      unidad: String(body.unidad ?? 'UND').trim().slice(0, 16) || 'UND',
+      unidad: normalizarUnidadProcura(body.unidad),
       estado,
       observaciones: body.observaciones?.trim()?.slice(0, 2000) || null,
     };

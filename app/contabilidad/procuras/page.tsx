@@ -9,6 +9,10 @@ import {
   etiquetaEstadoProcura,
   type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
+import {
+  UNIDADES_PROCURA,
+  normalizarUnidadProcura,
+} from '@/lib/procuras/unidadesProcura';
 
 type EntidadRow = { id: string; nombre: string };
 type ProyectoRow = { id: string; nombre: string };
@@ -212,7 +216,7 @@ export default function ProcurasPage() {
         body: JSON.stringify({
           material_txt: formMaterial,
           cantidad: formCantidad,
-          unidad: formUnidad,
+          unidad: normalizarUnidadProcura(formUnidad),
           proyecto_id: formProyectoId || null,
           entidad_id: formEntidadId || null,
           observaciones: formObs.trim() || null,
@@ -382,7 +386,7 @@ export default function ProcurasPage() {
                   style={{ ...inputStyle, marginTop: '6px' }}
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
                     CANTIDAD
@@ -400,11 +404,17 @@ export default function ProcurasPage() {
                   <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
                     UNIDAD
                   </label>
-                  <input
+                  <select
                     value={formUnidad}
                     onChange={(e) => setFormUnidad(e.target.value)}
                     style={{ ...inputStyle, marginTop: '6px' }}
-                  />
+                  >
+                    {UNIDADES_PROCURA.map((u) => (
+                      <option key={u.code} value={u.code}>
+                        {u.code} — {u.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
