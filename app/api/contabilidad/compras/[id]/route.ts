@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { actualizarCompraContableDesdeExtracted } from '@/lib/contabilidad/actualizarCompraContableDesdeExtracted';
 import { FechaCompraAnomalaError } from '@/lib/contabilidad/auditoriaFechaCompra';
+import { actualizarFechaCompra } from '@/lib/contabilidad/actualizarFechaCompra';
 import { confirmarFechaAnomalaCompra } from '@/lib/contabilidad/confirmarFechaAnomalaCompra';
 import { deleteCompraRegistro } from '@/lib/contabilidad/deleteCompraRegistro';
 import { normalizarMonedaExtracted, type ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
@@ -174,11 +175,44 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       extracted?: ExtractedCanalHeader;
       confirmar_fecha_anomala?: boolean;
       confirmar_solo_fecha?: boolean;
+      actualizar_solo_fecha?: string;
       pendiente_canal_id?: string | null;
     };
 
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
+
+    if (body.actualizar_solo_fecha) {
+      try {
+        const result = await actualizarFechaCompra(admin.client, id, body.actualizar_solo_fecha, {
+          confirmarFechaAnomala: Boolean(body.confirmar_fecha_anomala),
+        });
+        const { data: compra } = await admin.client
+          .from('contabilidad_compras')
+          .select(
+            'id,fecha,purchase_invoice_id,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,alerta_fecha,fecha_confirmada_manual,invoice_number,supplier_name,supplier_rif,created_at',
+          )
+          .eq('id', id)
+          .maybeSingle();
+        return NextResponse.json({ ok: true, compra, ...result });
+      } catch (err) {
+        if (err instanceof FechaCompraAnomalaError) {
+          return NextResponse.json(
+            {
+              error: err.message,
+              codigo: 'fecha_anomala',
+              audit: err.audit,
+              requiere_confirmacion: true,
+            },
+            { status: 422 },
+          );
+        }
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : 'No se pudo actualizar la fecha' },
+          { status: 400 },
+        );
+      }
+    }
 
     if (body.confirmar_solo_fecha) {
       try {

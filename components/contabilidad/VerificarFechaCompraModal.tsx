@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Loader2, X } from 'lucide-react';
 import { formatearTasaBcv } from '@/lib/contabilidad/comprasMontos';
 import {
+  auditoriaFechaCompra,
   claseBlinkFechaCompra,
+  fechaAnomalaRequiereAtencion,
+  metaAlertaFechaCompra,
   type NivelAlertaFechaCompra,
 } from '@/lib/contabilidad/auditoriaFechaCompra';
 
@@ -35,26 +38,75 @@ export default function VerificarFechaCompraModal({
   onClose,
   onConfirmado,
 }: Props) {
-  const esAdvertencia = nivelAlerta === 'advertencia';
+  const [fecha, setFecha] = useState(fechaFactura);
+  const [tasaPreview, setTasaPreview] = useState<number | null>(tasaBcv ?? null);
+  const [cargandoTasa, setCargandoTasa] = useState(false);
   const [confirmado, setConfirmado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
+      setFecha(String(fechaFactura ?? '').slice(0, 10));
+      setTasaPreview(tasaBcv ?? null);
       setConfirmado(false);
       setError(null);
       setGuardando(false);
     }
-  }, [open, compraId]);
+  }, [open, compraId, fechaFactura, tasaBcv]);
+
+  const audit = useMemo(() => auditoriaFechaCompra(fecha), [fecha]);
+  const meta = useMemo(
+    () =>
+      metaAlertaFechaCompra({
+        fecha,
+        alertaAlmacenada: audit.nivel === 'ok' ? null : audit.nivel,
+      }),
+    [fecha, audit.nivel],
+  );
+  const esAdvertencia =
+    (meta.nivel === 'ok' ? nivelAlerta : meta.nivel) === 'advertencia';
+  const requiereCheckbox = fechaAnomalaRequiereAtencion(audit.nivel);
+
+  useEffect(() => {
+    if (!open) return;
+    const f = String(fecha ?? '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+      setTasaPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setCargandoTasa(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/finanzas/bcv-tasas?fechas=${encodeURIComponent(f)}`, {
+          cache: 'no-store',
+        });
+        const data = (await res.json()) as { tasas?: Record<string, number> };
+        if (!cancelled) setTasaPreview(data.tasas?.[f] ?? null);
+      } catch {
+        if (!cancelled) setTasaPreview(null);
+      } finally {
+        if (!cancelled) setCargandoTasa(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, fecha]);
 
   if (!open) return null;
 
   const fechaRegistroCorta = fechaRegistro ? String(fechaRegistro).slice(0, 10) : null;
+  const fechaCambio = fecha !== String(fechaFactura ?? '').slice(0, 10);
 
   const handleGuardar = async () => {
-    if (!confirmado) {
-      setError('Marque la casilla para confirmar la fecha fiscal.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      setError('Indique una fecha válida.');
+      return;
+    }
+    if (requiereCheckbox && !confirmado) {
+      setError('Marque la casilla para confirmar esta fecha fiscal.');
       return;
     }
     setGuardando(true);
@@ -63,14 +115,22 @@ export default function VerificarFechaCompraModal({
       const res = await fetch(`/api/contabilidad/compras/${encodeURIComponent(compraId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmar_solo_fecha: true }),
+        body: JSON.stringify({
+          actualizar_solo_fecha: fecha,
+          confirmar_fecha_anomala: requiereCheckbox ? confirmado : undefined,
+        }),
       });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? 'No se pudo verificar la fecha');
+      const data = (await res.json()) as {
+        error?: string;
+        requiere_confirmacion?: boolean;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? 'No se pudo guardar la fecha');
+      }
       await onConfirmado();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al verificar la fecha');
+      setError(e instanceof Error ? e.message : 'Error al guardar la fecha');
     } finally {
       setGuardando(false);
     }
@@ -83,25 +143,17 @@ export default function VerificarFechaCompraModal({
       aria-modal="true"
       aria-labelledby="verificar-fecha-titulo"
     >
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1c1c1e] p-5 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#1c1c1e] p-5 shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div
-              className={`rounded-xl p-2 ${
-                esAdvertencia ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400'
-              }`}
-            >
-              <CalendarClock size={20} />
-            </div>
-            <div>
-              <h2 id="verificar-fecha-titulo" className="text-sm font-extrabold text-white">
-                Verificar fecha de factura
-              </h2>
-              <p className="mt-1 text-[11px] leading-snug text-zinc-400">
-                {proveedor ? `${proveedor}` : 'Compra'}
-                {factura ? ` · #${factura}` : ''}
+          <div>
+            <h2 id="verificar-fecha-titulo" className="text-sm font-extrabold text-white">
+              Fecha fiscal (BCV)
+            </h2>
+            {(proveedor || factura) && (
+              <p className="mt-0.5 text-[10px] text-zinc-500 truncate max-w-[240px]">
+                {[proveedor, factura ? `#${factura}` : ''].filter(Boolean).join(' · ')}
               </p>
-            </div>
+            )}
           </div>
           <button
             type="button"
@@ -113,53 +165,57 @@ export default function VerificarFechaCompraModal({
           </button>
         </div>
 
-        <div
-          className={`space-y-3 rounded-xl border p-3 text-[12px] ${
-            esAdvertencia
-              ? 'border-amber-500/25 bg-amber-500/8'
-              : 'border-red-500/25 bg-red-500/8'
-          }`}
-        >
-          <p className={`leading-snug ${esAdvertencia ? 'text-amber-200' : 'text-red-300'}`}>
-            {mensajeAuditoria}
+        {meta.nivel !== 'ok' ? (
+          <p
+            className={`mb-3 text-[11px] leading-snug ${
+              esAdvertencia ? 'text-amber-300/90' : 'text-red-300/90'
+            }`}
+          >
+            {audit.mensaje || mensajeAuditoria}
           </p>
-          <dl className="space-y-2 text-zinc-300">
-            <div className="flex justify-between gap-3">
-              <dt className="text-zinc-500">Fecha fiscal (BCV y contabilidad)</dt>
-              <dd className="font-bold text-white tabular-nums">{fechaFactura || '—'}</dd>
-            </div>
-            {fechaRegistroCorta && fechaRegistroCorta !== fechaFactura ? (
-              <div className="flex justify-between gap-3">
-                <dt className="text-zinc-500">Registro en sistema</dt>
-                <dd className="font-semibold tabular-nums">{fechaRegistroCorta}</dd>
-              </div>
-            ) : null}
-            {tasaBcv != null && tasaBcv > 0 ? (
-              <div className="flex justify-between gap-3">
-                <dt className="text-zinc-500">Tasa BCV de esa fecha</dt>
-                <dd className="font-semibold tabular-nums">{formatearTasaBcv(tasaBcv)}</dd>
-              </div>
-            ) : null}
-          </dl>
+        ) : null}
+
+        <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+          Fecha de la factura
+        </label>
+        <input
+          type="date"
+          className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/50"
+          value={fecha}
+          onChange={(e) => {
+            setConfirmado(false);
+            setFecha(e.target.value);
+          }}
+        />
+
+        <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-400">
+          <span>Tasa BCV de esta fecha</span>
+          <span className="font-bold tabular-nums text-white">
+            {cargandoTasa ? '…' : tasaPreview != null ? formatearTasaBcv(tasaPreview) : '—'}
+          </span>
         </div>
 
-        <p className="mt-3 text-[11px] leading-snug text-zinc-500">
-          La fecha fiscal es la que figura en la factura y define la tasa BCV y el periodo contable.
-          Si el OCR o la captura falló, use Modificar factura para corregirla antes de confirmar.
-        </p>
+        {fechaRegistroCorta && fechaRegistroCorta !== fecha ? (
+          <p className="mt-2 text-[10px] text-zinc-600">
+            Registro en sistema: {fechaRegistroCorta}
+          </p>
+        ) : null}
 
-        <label className="mt-4 flex cursor-pointer items-start gap-2 text-[12px] text-zinc-200">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={confirmado}
-            onChange={(e) => setConfirmado(e.target.checked)}
-          />
-          <span>
-            Confirmo que <strong className="text-white">{fechaFactura}</strong> es la fecha real de
-            la factura fiscal y debe usarse para BCV y reportes.
-          </span>
-        </label>
+        {requiereCheckbox ? (
+          <label className="mt-4 flex cursor-pointer items-start gap-2 text-[11px] text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={confirmado}
+              onChange={(e) => setConfirmado(e.target.checked)}
+            />
+            <span>Confirmo que {fecha} es la fecha real de la factura fiscal.</span>
+          </label>
+        ) : fechaCambio ? (
+          <p className="mt-3 text-[10px] text-zinc-500">
+            Se actualizará la tasa BCV y los montos en USD de esta compra.
+          </p>
+        ) : null}
 
         {error ? <p className="mt-3 text-[11px] text-red-400">{error}</p> : null}
 
@@ -176,14 +232,14 @@ export default function VerificarFechaCompraModal({
             type="button"
             onClick={() => void handleGuardar()}
             disabled={guardando}
-            className={`${claseBlinkFechaCompra(nivelAlerta) ?? ''} inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-extrabold disabled:opacity-60 ${
-              esAdvertencia
+            className={`${claseBlinkFechaCompra(meta.nivel === 'ok' ? nivelAlerta : meta.nivel) ?? ''} inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-extrabold disabled:opacity-60 ${
+              esAdvertencia && meta.nivel !== 'critico'
                 ? 'border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
                 : 'border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30'
             }`}
           >
             {guardando ? <Loader2 size={14} className="animate-spin" /> : <CalendarClock size={14} />}
-            Verificar fecha
+            Guardar fecha
           </button>
         </div>
       </div>
