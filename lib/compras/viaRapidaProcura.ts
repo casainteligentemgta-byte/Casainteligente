@@ -26,7 +26,17 @@ const PALABRAS_CONSUMIBLE = [
   'lija',
 ];
 
-/** Vía rápida: consumible explícito o monto estimado < límite USD (default $50 en config). */
+/** Tope USD para vía rápida (configurable en ci_alertas_config.fast_track). */
+export async function limiteViaRapidaUsd(
+  supabase: SupabaseClient,
+  override?: number,
+): Promise<number> {
+  if (override != null && Number.isFinite(override)) return override;
+  const { config: alertas } = await cargarAlertasConfig(supabase);
+  return alertas.fastTrack.limiteUsdDefault ?? 50;
+}
+
+/** Vía rápida: consumible explícito o monto estimado < límite USD configurado. */
 export async function evaluarViaRapidaProcura(
   supabase: SupabaseClient,
   params: {
@@ -36,9 +46,7 @@ export async function evaluarViaRapidaProcura(
     limiteUsdOverride?: number;
   },
 ): Promise<EvaluacionViaRapida> {
-  const { config: alertas } = await cargarAlertasConfig(supabase);
-  const limiteUsd = params.limiteUsdOverride ?? alertas.fastTrack.limiteUsdDefault ?? 50;
-  const limiteEfectivo = Math.min(limiteUsd, 50);
+  const limiteEfectivo = await limiteViaRapidaUsd(supabase, params.limiteUsdOverride);
 
   if (params.esConsumible) {
     return {

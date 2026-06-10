@@ -19,6 +19,7 @@ import {
   usuarioPuedeSolicitarProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import {
+  limiteViaRapidaUsd,
   parsePrioridadProcura,
   type PrioridadProcura,
 } from '@/lib/compras/viaRapidaProcura';
@@ -190,10 +191,11 @@ async function pedirConsumible(chatId: string): Promise<void> {
   );
 }
 
-async function pedirMonto(chatId: string): Promise<void> {
+async function pedirMonto(supabase: SupabaseClient, chatId: string): Promise<void> {
+  const limite = await limiteViaRapidaUsd(supabase);
   await sendTelegramMessage(
     chatId,
-    '6️⃣ <b>Monto estimado en USD</b> (opcional, para vía rápida &lt; $50).\n' +
+    `6️⃣ <b>Monto estimado en USD</b> (opcional, vía rápida si &lt; USD ${limite}).\n` +
       'Escribe un número (ej. <code>35</code>) o pulsa Omitir.',
     {
       parse_mode: 'HTML',
@@ -205,11 +207,14 @@ async function pedirMonto(chatId: string): Promise<void> {
 }
 
 async function enviarConfirmacion(
+  supabase: SupabaseClient,
   chatId: string,
   m: MetadataProcuraDepartamento,
 ): Promise<void> {
+  const limite = await limiteViaRapidaUsd(supabase);
   const viaHint =
-    m.es_consumible || (m.monto_estimado_usd != null && m.monto_estimado_usd < 50)
+    m.es_consumible ||
+    (m.monto_estimado_usd != null && m.monto_estimado_usd < limite)
       ? '<i>Puede calificar vía rápida (Aprobada directa)</i>'
       : '<i>Vía larga — pendiente de Aprobador</i>';
 
@@ -309,7 +314,7 @@ export async function manejarTextoProcuraDepartamentoTelegram(
       paso: 'confirm',
       monto_estimado_usd: n,
     });
-    await enviarConfirmacion(chatId, meta(next));
+    await enviarConfirmacion(supabase, chatId, meta(next));
     return true;
   }
 
@@ -378,7 +383,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       paso: 'monto',
       es_consumible: si,
     });
-    await pedirMonto(params.chatId);
+    await pedirMonto(supabase, params.chatId);
     return true;
   }
 
@@ -388,7 +393,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       paso: 'confirm',
       monto_estimado_usd: null,
     });
-    await enviarConfirmacion(params.chatId, meta(next));
+    await enviarConfirmacion(supabase, params.chatId, meta(next));
     return true;
   }
 
