@@ -15,12 +15,14 @@ export type UsuarioSistemaTelegram = {
   activo: boolean;
 };
 
-const ROLES: RolComprasTelegram[] = [
+export const ROLES_COMPRAS_TELEGRAM: RolComprasTelegram[] = [
   'Solicitante',
   'Aprobador',
   'Comprador',
   'Administrador',
 ];
+
+const ROLES = ROLES_COMPRAS_TELEGRAM;
 
 export function parseRolComprasTelegram(v: string | null | undefined): RolComprasTelegram | null {
   const t = String(v ?? '').trim();

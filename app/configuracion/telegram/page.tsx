@@ -1,9 +1,10 @@
 import { Suspense } from 'react';
 import TelegramWhitelistPanel from '@/components/configuracion/TelegramWhitelistPanel';
+import UsuariosComprasTelegramPanel from '@/components/configuracion/UsuariosComprasTelegramPanel';
 
 export const metadata = {
-  title: 'Lista blanca Telegram | Casa Inteligente',
-  description: 'Autorizar chats que pueden interactuar con el bot de Telegram.',
+  title: 'Telegram | Casa Inteligente',
+  description: 'Lista blanca del bot y usuarios del departamento de compras (/procura).',
 };
 
 export default function ConfiguracionTelegramPage() {
@@ -16,7 +17,10 @@ export default function ConfiguracionTelegramPage() {
           </div>
         }
       >
-        <TelegramWhitelistPanel />
+        <div className="mx-auto max-w-4xl space-y-12 px-4 py-8">
+          <TelegramWhitelistPanel embedded />
+          <UsuariosComprasTelegramPanel />
+        </div>
       </Suspense>
     </main>
   );

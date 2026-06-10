@@ -34,7 +34,9 @@ type Payload = {
 const campoClase =
   'mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#FF9500]/50 focus:ring-2 focus:ring-[#FF9500]/15';
 
-export default function TelegramWhitelistPanel() {
+type Props = { embedded?: boolean };
+
+export default function TelegramWhitelistPanel({ embedded = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +137,7 @@ export default function TelegramWhitelistPanel() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+    <div className={embedded ? 'space-y-6' : 'mx-auto max-w-4xl space-y-6 px-4 py-8'}>
       <header className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">
         <div className="flex gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/30 bg-sky-500/10">
@@ -147,11 +149,13 @@ export default function TelegramWhitelistPanel() {
             </p>
             <h1 className="mt-1 text-xl font-bold text-white">Lista blanca del bot</h1>
             <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-              Solo los chats autorizados pueden usar comandos del bot. Configure roles en{' '}
+              Solo los chats autorizados pueden usar comandos del bot. Para{' '}
+              <strong className="font-medium text-zinc-300">/procura por capítulos</strong>, registra
+              también al usuario en la sección «Departamento de compras» más abajo. Roles web en{' '}
               <Link href="/configuracion/equipo" className="text-sky-400 hover:underline">
                 Equipo y permisos
               </Link>
-              ; la nómina del proyecto sincroniza chat IDs automáticamente.
+              .
             </p>
             <p className="mt-2 text-xs text-zinc-500">
               Estado:{' '}

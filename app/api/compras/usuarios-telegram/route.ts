@@ -8,13 +8,16 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 
+async function authGestionarComprasTelegram() {
+  const equipo = await requirePermisoWeb('equipo.gestionar');
+  if (equipo.ok) return equipo;
+  return requirePermisoWeb('admin.config');
+}
+
 /** GET — Usuarios Telegram del departamento de compras. */
 export async function GET() {
-  const auth = await requirePermisoWeb('equipo.gestionar');
-  if (!auth.ok) {
-    const adminAuth = await requirePermisoWeb('admin.config');
-    if (!adminAuth.ok) return auth.response;
-  }
+  const auth = await authGestionarComprasTelegram();
+  if (!auth.ok) return auth.response;
 
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
@@ -38,7 +41,7 @@ export async function GET() {
 
 /** POST — Alta / upsert por telegram_id. */
 export async function POST(req: Request) {
-  const auth = await requirePermisoWeb('admin.config');
+  const auth = await authGestionarComprasTelegram();
   if (!auth.ok) return auth.response;
 
   const body = (await req.json()) as {

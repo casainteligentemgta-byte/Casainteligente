@@ -137,9 +137,9 @@ export default function EquipoPermisosClient() {
                 className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-[#FF9500]/40"
               >
                 <MessageCircle className="mb-2 h-5 w-5 text-emerald-400" />
-                <h3 className="font-bold text-white">Lista blanca Telegram</h3>
+                <h3 className="font-bold text-white">Telegram: whitelist y compras</h3>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Chats autorizados para el bot. Sincroniza desde nómina de proyecto.
+                  Lista blanca del bot y usuarios /procura (Solicitante, Aprobador, Comprador).
                 </p>
               </Link>
             </section>
