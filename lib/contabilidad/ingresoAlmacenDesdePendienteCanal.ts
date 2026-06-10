@@ -135,6 +135,41 @@ async function reaplicarStockCompraFactura(
   }
 }
 
+/**
+ * D-01: detecta ingreso físico previo (p. ej. `/ingreso` → ci_registrar_ingreso_manual_campo).
+ * En ese caso compras_facturas queda en borrador a propósito; no debe pasar a registrada
+ * (dispararía inv_compra_registrar_stock y duplicaría disponible).
+ */
+async function compraConIngresoFisicoPrevio(
+  supabase: SupabaseClient,
+  purchaseInvoiceId: string,
+  ubicacionId: string,
+  lineas: LineaStock[],
+): Promise<boolean> {
+  const invId = purchaseInvoiceId.trim();
+  if (!invId) return false;
+
+  const { data: compra, error } = await supabase
+    .from('contabilidad_compras')
+    .select('ingresado_almacen_at')
+    .eq('purchase_invoice_id', invId)
+    .maybeSingle();
+
+  if (error && !/ingresado_almacen_at|42703|does not exist/i.test(error.message ?? '')) {
+    throw new Error(error.message);
+  }
+
+  if ((compra as { ingresado_almacen_at?: string | null } | null)?.ingresado_almacen_at) {
+    return true;
+  }
+
+  if (ubicacionId.trim() && lineas.length > 0) {
+    return stockLineasEnUbicacion(supabase, ubicacionId, lineas);
+  }
+
+  return false;
+}
+
 async function resolverUbicacionIngreso(
   supabase: SupabaseClient,
   purchaseInvoiceId: string,
@@ -177,7 +212,34 @@ async function intentarCompletarCompraFacturaExistente(
     comprasFactura.ubicacion_destino_id ?? ubicacionFallback,
   ).trim();
 
+  const lineas = await lineasComprasFactura(supabase, compraFacturaId);
+  if (!ubicacionId) {
+    return {
+      success: false,
+      error: 'La compra no tiene almacén de destino.',
+    };
+  }
+
   if (comprasFactura.estado === 'borrador') {
+    const ingresoFisicoPrevio = await compraConIngresoFisicoPrevio(
+      supabase,
+      purchaseInvoiceId,
+      ubicacionId,
+      lineas,
+    );
+
+    if (ingresoFisicoPrevio) {
+      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+      return {
+        success: true,
+        yaExistia: true,
+        compraFacturaId,
+        avisos: [
+          'El stock ya fue ingresado en campo; se sincronizó contabilidad sin duplicar inventario.',
+        ],
+      };
+    }
+
     const { error: regErr } = await supabase
       .from('compras_facturas')
       .update({ estado: 'registrada', updated_at: new Date().toISOString() })
@@ -186,14 +248,6 @@ async function intentarCompletarCompraFacturaExistente(
     if (regErr) throw new Error(regErr.message);
   } else if (comprasFactura.estado !== 'registrada') {
     return null;
-  }
-
-  const lineas = await lineasComprasFactura(supabase, compraFacturaId);
-  if (!ubicacionId) {
-    return {
-      success: false,
-      error: 'La compra no tiene almacén de destino.',
-    };
   }
 
   if (lineas.length > 0) {

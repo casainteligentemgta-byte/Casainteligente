@@ -48,6 +48,13 @@ export async function obtenerCapituloMaestroPorId(
   };
 }
 
+/** Etiqueta legible: título del capítulo (p. ej. «Obras civiles»), no el código CAP-I. */
+export function etiquetaCapituloMaestro(c: Pick<CapituloMaestro, 'codigo' | 'nombre'>): string {
+  const nombre = c.nombre?.trim();
+  if (nombre) return nombre;
+  return c.codigo?.trim() || 'Capítulo';
+}
+
 /** Teclado inline 2 columnas para elegir capítulo. */
 export function tecladoCapitulosMaestro(
   capitulos: CapituloMaestro[],
@@ -57,7 +64,7 @@ export function tecladoCapitulosMaestro(
   let row: Array<{ text: string; callback_data: string }> = [];
 
   for (const c of capitulos) {
-    const label = `${c.codigo}`.slice(0, 32);
+    const label = etiquetaCapituloMaestro(c).slice(0, 64);
     row.push({ text: label, callback_data: `${prefix}${c.id}` });
     if (row.length >= 2) {
       rows.push(row);

@@ -12,6 +12,7 @@ import {
   CB_PROCURA_ADMIN_RECHAZAR,
 } from '@/lib/procuras/procuraAdminCallbacks';
 import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
+import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -72,7 +73,10 @@ export async function enviarAlertaProcuraPendienteAdmin(
 
   const capRel = row.ci_compras_capitulos_maestro;
   const capLabel = capRel
-    ? `${capRel.codigo ?? ''} ${capRel.nombre ?? ''}`.trim()
+    ? etiquetaCapituloMaestro({
+        codigo: String(capRel.codigo ?? ''),
+        nombre: String(capRel.nombre ?? ''),
+      })
     : null;
   const obra = capLabel || nombreObra(row.ci_proyectos);
   const solicitante = row.solicitante_nombre?.trim() || '—';

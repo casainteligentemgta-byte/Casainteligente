@@ -4,6 +4,7 @@ import { limpiarBorradorRecepcionPorToken, obtenerBorradorRecepcionPorToken } fr
 import type { PayloadRecepcionManualApi } from '@/lib/almacen/recepcionCampoTypes';
 import { esFormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
 import { sincronizarContabilidadDesdeRecepcionCampo } from '@/lib/contabilidad/sincronizarContabilidadDesdeRecepcionCampo';
+import { actualizarProcuraDesdeRecepcionCampo } from '@/lib/procuras/actualizarProcuraDesdeRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -64,6 +65,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'proveedor_id inválido.' }, { status: 400 });
   }
 
+  const procuraId = body.procura_id?.trim() ?? '';
+  if (procuraId && !isUuid(procuraId)) {
+    return NextResponse.json({ error: 'procura_id inválido.' }, { status: 400 });
+  }
+
   const auth = await createClient();
   const {
     data: { user },
@@ -100,6 +106,7 @@ export async function POST(req: Request) {
     p_num_doc: String(body.num_doc ?? '').trim() || 'S/N',
     p_lineas: lineas,
     p_usuario_id: user?.id ?? null,
+    p_procura_id: procuraId || null,
   } as never);
 
   if (rpcErr) {
@@ -169,6 +176,11 @@ export async function POST(req: Request) {
     ? { ok: true, compra_id: conta.compraId, provisional: conta.provisional }
     : { ok: false, error: conta.error };
 
+  const procura = await actualizarProcuraDesdeRecepcionCampo(supabase, {
+    recepcionId: id,
+    procuraId: procuraId || null,
+  });
+
   return NextResponse.json({
     ok: true,
     success: true,
@@ -176,5 +188,18 @@ export async function POST(req: Request) {
     estado: 'registrado',
     lineas_registradas: lineas.length,
     ...(contabilidad ? { contabilidad } : {}),
+    ...(procura.actualizado || procura.error
+      ? {
+          procura: {
+            actualizado: procura.actualizado,
+            ticket: procura.ticket,
+            estado: procura.estadoNuevo,
+            cantidad_recibida: procura.cantidadRecibida,
+            cantidad_solicitada: procura.cantidadSolicitada,
+            telegram: procura.telegram,
+            error: procura.error,
+          },
+        }
+      : {}),
   });
 }

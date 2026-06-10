@@ -59,6 +59,13 @@ export async function listarCapitulosObra(
   }));
 }
 
+/** Etiqueta legible: título del capítulo, no el código numérico/romano. */
+export function etiquetaCapituloObra(c: Pick<CapituloObraRow, 'codigo' | 'nombre'>): string {
+  const nombre = c.nombre?.trim();
+  if (nombre) return nombre;
+  return c.codigo?.trim() || 'Capítulo';
+}
+
 function parseCodigoNombreCapitulo(texto: string): { codigo: string; nombre: string } {
   const t = texto.trim();
   const m = t.match(/^(\d+(?:\.\d+)?)\s*[-–.:]?\s*(.+)$/);

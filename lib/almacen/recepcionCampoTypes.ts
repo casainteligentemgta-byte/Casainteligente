@@ -28,4 +28,6 @@ export type PayloadRecepcionManualApi = {
   observaciones?: string | null;
   /** Tras registrar en web, limpia el borrador Telegram asociado. */
   borrador_token?: string | null;
+  /** Procura PR-* que satisface este ingreso (D-03). */
+  procura_id?: string | null;
 };

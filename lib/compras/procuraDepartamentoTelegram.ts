@@ -9,6 +9,7 @@ import {
   type TelegramEstado,
 } from '@/lib/telegram/estados';
 import {
+  etiquetaCapituloMaestro,
   listarCapitulosMaestro,
   obtenerCapituloMaestroPorId,
   tecladoCapitulosMaestro,
@@ -184,9 +185,11 @@ function resumenSolicitudProcuraDepartamento(m: MetadataProcuraDepartamento): st
     m.material_busqueda_borrador?.trim() ||
     null;
   if (material) return material.slice(0, 120);
-  if (m.capitulo_codigo?.trim()) {
-    const nombre = m.capitulo_nombre?.trim();
-    return nombre ? `${m.capitulo_codigo} — ${nombre}` : m.capitulo_codigo;
+  if (m.capitulo_nombre?.trim() || m.capitulo_codigo?.trim()) {
+    return etiquetaCapituloMaestro({
+      codigo: m.capitulo_codigo ?? '',
+      nombre: m.capitulo_nombre ?? '',
+    }).slice(0, 120);
   }
   return 'procura sin confirmar';
 }
@@ -446,7 +449,7 @@ export async function manejarComandoProcuraDepartamentoTelegram(
 async function pedirMaterial(chatId: string, cap: { codigo: string; nombre: string }): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    `📂 Capítulo: <b>${escHtml(cap.codigo)}</b> — ${escHtml(cap.nombre)}\n\n` +
+    `📂 Capítulo: <b>${escHtml(etiquetaCapituloMaestro(cap))}</b>\n\n` +
       `2️⃣ Escribe al menos <b>${MIN_CHARS_BUSQUEDA_MATERIAL} letras</b> del material.\n` +
       'Buscaremos en el catálogo SAP y te mostraremos las mejores coincidencias.',
     { parse_mode: 'HTML' },
@@ -519,7 +522,7 @@ async function enviarConfirmacion(
     chatId,
     `📋 <b>Confirma la procura</b>\n\n` +
       `👤 ${escHtml(m.usuario_nombre ?? '—')}\n` +
-      `📂 ${escHtml(m.capitulo_codigo ?? '')} — ${escHtml(m.capitulo_nombre ?? '')}\n` +
+      `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
       `📦 ${escHtml(m.material_txt ?? '')}` +
       (m.por_verificar ? ' <i>(por verificar)</i>\n' : '\n') +
       `🔢 ${m.cantidad ?? '—'} ${escHtml(m.unidad ?? 'UND')}\n` +
@@ -724,7 +727,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       await answerCallbackQuery(params.callbackId, 'Capítulo no encontrado', true);
       return true;
     }
-    await answerCallbackQuery(params.callbackId, cap.codigo);
+    await answerCallbackQuery(params.callbackId, etiquetaCapituloMaestro(cap));
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'material',
       capitulo_id: cap.id,
@@ -814,7 +817,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       params.chatId,
       `✅ <b>Procura registrada</b>\n\n` +
         `🎫 ${escHtml(data.ticket)}\n` +
-        `📂 ${escHtml(m.capitulo_codigo ?? '')}\n` +
+        `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
         `📦 ${escHtml(m.material_txt)}\n\n` +
         msgVia,
       { parse_mode: 'HTML' },

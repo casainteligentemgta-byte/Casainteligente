@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { crearCapituloObra, listarCapitulosObra } from '@/lib/almacen/capitulosObra';
+import { crearCapituloObra, etiquetaCapituloObra, listarCapitulosObra } from '@/lib/almacen/capitulosObra';
 import { listarEmpleadosProyectoEgreso } from '@/lib/almacen/listarEmpleadosProyectoEgreso';
 import {
   asegurarUbicacionObra,
@@ -413,7 +413,7 @@ async function enviarPickerCapitulos(
   for (const c of slice) {
     buttons.push([
       {
-        text: truncar(`${c.codigo} · ${c.nombre}`),
+        text: truncar(etiquetaCapituloObra(c)),
         callback_data: `${PREFIX}cap:${c.id}`,
       },
     ]);
@@ -889,7 +889,10 @@ export async function manejarCallbackSalidaObraTelegram(
       await answerCallbackQuery(params.callbackId, 'Capítulo no encontrado', true);
       return true;
     }
-    const label = `${cap.codigo} · ${cap.nombre}`;
+    const label = etiquetaCapituloObra({
+      codigo: String(cap.codigo ?? ''),
+      nombre: String(cap.nombre ?? ''),
+    });
     await answerCallbackQuery(params.callbackId, truncar(label, 40));
     await patchMeta(supabase, params.chatId, estado, {
       capitulo_id: String(cap.id),
@@ -1188,7 +1191,10 @@ export async function manejarTextoSalidaObraTelegram(
     const pidDest = meta(estado).proyecto_destino_id ?? estado.proyecto_id;
     try {
       const cap = await crearCapituloObra(supabase, { proyectoId: pidDest, titulo: trimmed });
-      const label = `${cap.codigo} · ${cap.nombre}`;
+      const label = etiquetaCapituloObra({
+        codigo: String(cap.codigo ?? ''),
+        nombre: String(cap.nombre ?? ''),
+      });
       await patchMeta(supabase, chatId, estado, {
         paso: 'sabe_partida',
         capitulo_id: cap.id,

@@ -17,6 +17,7 @@ import {
   buscarCategoriaPorId,
 } from '@/lib/almacen/categoriasMaterialCompra';
 import { sincronizarContabilidadDesdeRecepcionCampo } from '@/lib/contabilidad/sincronizarContabilidadDesdeRecepcionCampo';
+import { actualizarProcuraDesdeRecepcionCampo } from '@/lib/procuras/actualizarProcuraDesdeRecepcion';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
@@ -1425,6 +1426,7 @@ async function registrarIngresoManual(
     soporteMimeType?: string;
     fotosCount?: number;
     telegramUserId?: string;
+    procuraId?: string | null;
   },
 ): Promise<{ ok: true; recepcionId: string } | { ok: false; error: string }> {
   const lineasRpc: LineaRecepcionCampoInput[] = params.lineas.map((l) => ({
@@ -1447,6 +1449,7 @@ async function registrarIngresoManual(
     p_num_doc: params.numDoc.trim() || 'S/N',
     p_lineas: lineasRpc,
     p_usuario_id: null,
+    p_procura_id: params.procuraId?.trim() || null,
   } as never);
 
   if (rpcErr) {
@@ -1476,6 +1479,13 @@ async function registrarIngresoManual(
   }
 
   await supabase.from('ci_recepciones_campo').update(patch as never).eq('id', id);
+
+  await actualizarProcuraDesdeRecepcionCampo(supabase, {
+    recepcionId: id,
+    procuraId: params.procuraId?.trim() || null,
+  }).catch((e) => {
+    console.warn('[ingresoManualTelegram] procura recepción', e);
+  });
 
   return { ok: true, recepcionId: id };
 }

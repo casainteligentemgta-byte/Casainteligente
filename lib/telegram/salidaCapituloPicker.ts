@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
-import { crearCapituloObra, listarCapitulosObra } from '@/lib/almacen/capitulosObra';
+import { crearCapituloObra, etiquetaCapituloObra, listarCapitulosObra } from '@/lib/almacen/capitulosObra';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { mensajeObraListaEntradaSalida } from '@/lib/telegram/mensajesEntradaSalida';
 import { nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
@@ -49,7 +49,7 @@ function buildKeyboard(
     [{ text: '➕ Crear capítulo nuevo', callback_data: PREFIX_NUEVO }],
     ...slice.map((c) => [
       {
-        text: truncar(`${c.codigo} · ${c.nombre}`),
+        text: truncar(etiquetaCapituloObra(c)),
         callback_data: `${PREFIX_SEL}${c.id}`,
       },
     ]),
@@ -179,7 +179,10 @@ export async function manejarCallbackSalidaCapituloTelegram(
     return true;
   }
 
-  const label = `${cap.codigo} · ${cap.nombre}`;
+  const label = etiquetaCapituloObra({
+    codigo: String(cap.codigo ?? ''),
+    nombre: String(cap.nombre ?? ''),
+  });
   await answerCallbackQuery(params.callbackId, label);
   await continuarTrasCapitulo(supabase, params.chatId, proyectoId, String(cap.id), label);
   return true;
@@ -200,7 +203,10 @@ export async function manejarTextoNuevoCapituloSalida(params: {
       proyectoId: estado.proyecto_id,
       titulo: params.texto,
     });
-    const label = `${cap.codigo} · ${cap.nombre}`;
+    const label = etiquetaCapituloObra({
+      codigo: String(cap.codigo ?? ''),
+      nombre: String(cap.nombre ?? ''),
+    });
     await sendTelegramMessage(
       params.chatId,
       `✅ Capítulo creado: <b>${label}</b>`,
