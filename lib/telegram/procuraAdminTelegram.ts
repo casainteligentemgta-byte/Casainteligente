@@ -15,7 +15,7 @@ import {
   obtenerUsuarioSistemaTelegram,
   usuarioPuedeAprobarProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
-import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
+import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import {
   CB_PROCURA_ADMIN_ALMACEN,
@@ -83,15 +83,26 @@ async function procesarAccionProcuraAdmin(
   procuraId: string,
   accion: AccionAdmin,
   autorNombre: string,
-): Promise<{ ok: boolean; ticket?: string; estado?: string; error?: string }> {
-  const estado =
-    accion === 'rechazar' ? 'rechazada' : accion === 'almacen' ? 'aprobada' : 'en_compra';
+): Promise<{
+  ok: boolean;
+  ticket?: string;
+  estado?: string;
+  error?: string;
+  compradoresNotificados?: number;
+}> {
+  if (accion === 'aprobar') {
+    return emitirOrdenCompraProcura(supabase, {
+      procuraId,
+      autorNombre,
+      motivo: `Compra autorizada por ${autorNombre} (Telegram)`,
+    });
+  }
+
+  const estado = accion === 'rechazar' ? 'rechazada' : 'aprobada';
   const motivo =
     accion === 'rechazar'
       ? `Rechazada por ${autorNombre} (Telegram)`
-      : accion === 'almacen'
-        ? `Autorizada desde almacén por ${autorNombre} (Telegram)`
-        : `Compra autorizada por ${autorNombre} (Telegram)`;
+      : `Autorizada desde almacén por ${autorNombre} (Telegram)`;
 
   const { data, error } = await supabase.rpc(
     'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
@@ -114,6 +125,7 @@ async function procesarAccionProcuraAdmin(
   }>;
 
   if (filas.length) {
+    const { notificarProcurasTelegram } = await import('@/lib/procuras/notificarProcuraTelegram');
     await notificarProcurasTelegram(
       filas.map((f) => ({
         ticket: f.ticket,
@@ -181,10 +193,19 @@ export async function manejarCallbackProcuraAdminTelegram(
       ? '🔴 Rechazada'
       : parsed.accion === 'almacen'
         ? '📦 Aprobada (almacén)'
-        : '🟢 En compra';
+        : '🟢 Orden de compra';
+
+  const compradoresPie =
+    parsed.accion === 'aprobar' &&
+    resultado.compradoresNotificados != null &&
+    resultado.compradoresNotificados > 0
+      ? `\n🛒 Avisados ${resultado.compradoresNotificados} comprador(es).`
+      : parsed.accion === 'aprobar'
+        ? '\n⚠️ Sin compradores Telegram activos.'
+        : '';
 
   const pie =
-    `\n\n${etiquetaAccion} por <code>${escHtml(autorNombre)}</code>\n` +
+    `\n\n${etiquetaAccion} por <code>${escHtml(autorNombre)}</code>${compradoresPie}\n` +
     `Estado: <b>${escHtml(etiquetaEstadoProcura(resultado.estado ?? ''))}</b>`;
 
   if (params.messageId != null) {

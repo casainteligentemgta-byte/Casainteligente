@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronUp, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import {
   COLOR_ESTADO_PROCURA,
   ESTADOS_PROCURA,
@@ -98,6 +98,7 @@ export default function ProcurasPage() {
   const [nuevoEstado, setNuevoEstado] = useState<EstadoProcura>('aprobada');
   const [motivoLote, setMotivoLote] = useState('');
   const [procesando, setProcesando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [msgOk, setMsgOk] = useState<string | null>(null);
   const [showNueva, setShowNueva] = useState(false);
   const [creando, setCreando] = useState(false);
@@ -225,21 +226,69 @@ export default function ProcurasPage() {
       const json = (await res.json()) as {
         ok?: boolean;
         count?: number;
+        estado?: string;
+        compradores_notificados?: number;
         telegram?: { enviados: number; omitidos: number };
         error?: string;
         hint?: string;
+        errores?: string[];
       };
       if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
-      const tg = json.telegram;
-      setMsgOk(
-        `Actualizadas ${json.count ?? 0} procura(s). Telegram: ${tg?.enviados ?? 0} enviados, ${tg?.omitidos ?? 0} omitidos.`,
-      );
+      if (json.estado === 'en_compra' || nuevoEstado === 'aprobada' || nuevoEstado === 'aprobada_directa') {
+        setMsgOk(
+          `Orden de compra emitida para ${json.count ?? 0} procura(s) · estado Comprada. ` +
+            `Compradores avisados: ${json.compradores_notificados ?? 0}.` +
+            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
+        );
+      } else {
+        const tg = json.telegram;
+        setMsgOk(
+          `Actualizadas ${json.count ?? 0} procura(s). Telegram: ${tg?.enviados ?? 0} enviados, ${tg?.omitidos ?? 0} omitidos.`,
+        );
+      }
       setMotivoLote('');
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al procesar lote');
     } finally {
       setProcesando(false);
+    }
+  };
+
+  const eliminarProcuras = async (ids: string[], confirmar = true) => {
+    if (!ids.length) return;
+    if (
+      confirmar &&
+      !window.confirm(
+        ids.length === 1
+          ? '¿Eliminar esta procura? No se puede deshacer.'
+          : `¿Eliminar ${ids.length} procuras seleccionadas? No se puede deshacer.`,
+      )
+    ) {
+      return;
+    }
+    setEliminando(true);
+    setError(null);
+    setMsgOk(null);
+    try {
+      const res = await fetch('/api/procuras', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        eliminadas?: number;
+        tickets?: string[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error ?? 'No se pudieron eliminar');
+      setMsgOk(`Eliminadas ${json.eliminadas ?? ids.length} procura(s).`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setEliminando(false);
     }
   };
 
@@ -348,7 +397,9 @@ export default function ProcurasPage() {
 
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {error ? (
-          <div style={{ ...cardStyle, borderColor: 'rgba(255,59,48,0.4)', color: '#FF6961' }}>{error}</div>
+          <div style={{ ...cardStyle, borderColor: 'rgba(255,59,48,0.4)', color: '#FF6961', whiteSpace: 'pre-wrap' }}>
+            {error}
+          </div>
         ) : null}
         {msgOk ? (
           <div style={{ ...cardStyle, borderColor: 'rgba(52,199,89,0.4)', color: '#34C759' }}>{msgOk}</div>
@@ -708,15 +759,31 @@ export default function ProcurasPage() {
                 />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => void procesarLote()}
-              disabled={procesando}
-              style={{ ...btnPrimary, opacity: procesando ? 0.6 : 1 }}
-            >
-              {procesando ? <Loader2 size={16} className="animate-spin" /> : null}
-              Aplicar y notificar
-            </button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => void procesarLote()}
+                disabled={procesando || eliminando}
+                style={{ ...btnPrimary, opacity: procesando ? 0.6 : 1 }}
+              >
+                {procesando ? <Loader2 size={16} className="animate-spin" /> : null}
+                Aplicar y notificar
+              </button>
+              <button
+                type="button"
+                onClick={() => void eliminarProcuras(Array.from(selected))}
+                disabled={procesando || eliminando}
+                style={{
+                  ...btnPrimary,
+                  background: 'rgba(255,59,48,0.15)',
+                  border: '1px solid rgba(255,59,48,0.45)',
+                  opacity: eliminando ? 0.6 : 1,
+                }}
+              >
+                {eliminando ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Eliminar seleccionadas
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -744,6 +811,7 @@ export default function ProcurasPage() {
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Obra / Entidad</th>
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Estado</th>
                     <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Actualizado</th>
+                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'right' }} aria-label="Acciones" />
                   </tr>
                 </thead>
                 <tbody>
@@ -807,6 +875,26 @@ export default function ProcurasPage() {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            onClick={() => void eliminarProcuras([p.id])}
+                            disabled={eliminando || procesando}
+                            title="Eliminar procura"
+                            aria-label={`Eliminar ${p.ticket}`}
+                            style={{
+                              background: 'rgba(255,59,48,0.12)',
+                              border: '1px solid rgba(255,59,48,0.35)',
+                              borderRadius: '8px',
+                              padding: '6px 8px',
+                              color: '#FF6961',
+                              cursor: eliminando || procesando ? 'not-allowed' : 'pointer',
+                              opacity: eliminando || procesando ? 0.5 : 1,
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </td>
                       </tr>
                     );

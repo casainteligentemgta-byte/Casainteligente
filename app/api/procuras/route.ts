@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { insertarProcura } from '@/lib/procuras/registrarProcura';
+import { eliminarProcurasPorIds } from '@/lib/procuras/eliminarProcuras';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { SELECT_PROCURA_SOLICITANTE } from '@/lib/procuras/solicitanteProcura';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
@@ -119,5 +120,29 @@ export async function POST(req: Request) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al crear procura';
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/** DELETE — Elimina procuras seleccionadas (sin compra ni recepción vinculada). */
+export async function DELETE(req: Request) {
+  try {
+    const auth = await requirePermisoWeb('procura.aprobar');
+    if (!auth.ok) return auth.response;
+
+    const body = (await req.json()) as { ids?: string[] };
+    const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).trim()).filter(Boolean) : [];
+    if (!ids.length) {
+      return NextResponse.json({ error: 'Indique al menos un id de procura.' }, { status: 400 });
+    }
+
+    const admin = supabaseAdminForRoute();
+    if (!admin.ok) return admin.response;
+
+    const result = await eliminarProcurasPorIds(admin.client, ids);
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'No se pudieron eliminar las procuras';
+    const status = /Indique|No se pueden|no existen|vinculadas|recepciones/i.test(message) ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

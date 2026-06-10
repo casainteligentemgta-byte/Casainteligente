@@ -5,6 +5,7 @@ import type { PrioridadProcura } from '@/lib/compras/viaRapidaProcura';
 import { evaluarViaRapidaProcura } from '@/lib/compras/viaRapidaProcura';
 import type { UsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { enviarAlertaProcuraPendienteAdmin } from '@/lib/procuras/alertaAdminProcuraTelegram';
+import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
 import type { EstadoProcura } from '@/lib/procuras/procuraEstados';
 
@@ -139,6 +140,16 @@ export async function registrarProcuraDepartamento(
     });
   }
 
+  if (via.califica && out.id) {
+    void emitirOrdenCompraProcura(supabase, {
+      procuraId: String(out.id),
+      autorNombre: 'Vía rápida',
+      motivo: via.motivo,
+    }).catch((e) => {
+      console.warn('[registrarProcuraDepartamento] orden compra vía rápida', e);
+    });
+  }
+
   return {
     data: {
       id: String(out.id),
@@ -152,7 +163,7 @@ export async function registrarProcuraDepartamento(
   };
 }
 
-/** Aprobador / Administrador: cambia estado Pendiente → Aprobada o Rechazada. */
+/** Aprobador / Administrador: PM aprueba → orden de compra (en_compra) para el comprador. */
 export async function resolverProcuraDepartamento(
   supabase: SupabaseClient,
   params: {
@@ -162,38 +173,58 @@ export async function resolverProcuraDepartamento(
     aprobadorNombre: string;
     motivoRechazo?: string | null;
   },
-): Promise<{ ok: boolean; ticket?: string; estado?: string; error?: string }> {
-  const nuevoEstado = params.accion === 'rechazar' ? 'rechazada' : 'aprobada';
-  const motivo =
-    params.accion === 'rechazar'
-      ? params.motivoRechazo?.trim() ||
-        `Rechazada por ${params.aprobadorNombre} (Telegram ${params.aprobadorTelegramId})`
-      : `Aprobada por ${params.aprobadorNombre} (Telegram ${params.aprobadorTelegramId})`;
-
-  const { data, error } = await supabase.rpc(
-    'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
-    {
-      p_ids: [params.procuraId.trim()],
-      p_nuevo_estado: nuevoEstado,
-      p_motivo: motivo,
-    } as never,
-  );
-
-  if (error) {
-    return { ok: false, error: error.message };
-  }
-
+): Promise<{
+  ok: boolean;
+  ticket?: string;
+  estado?: string;
+  error?: string;
+  compradoresNotificados?: number;
+}> {
   if (params.accion === 'rechazar') {
+    const motivo =
+      params.motivoRechazo?.trim() ||
+      `Rechazada por ${params.aprobadorNombre} (Telegram ${params.aprobadorTelegramId})`;
+
+    const { data, error } = await supabase.rpc(
+      'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
+      {
+        p_ids: [params.procuraId.trim()],
+        p_nuevo_estado: 'rechazada',
+        p_motivo: motivo,
+      } as never,
+    );
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
     await supabase
       .from('ci_procuras')
       .update({ motivo_rechazo: motivo.slice(0, 2000) } as never)
       .eq('id', params.procuraId.trim());
+
+    const filas = (data ?? []) as Array<{ ticket: string; nuevo_est: string }>;
+    return {
+      ok: true,
+      ticket: filas[0]?.ticket,
+      estado: filas[0]?.nuevo_est ?? 'rechazada',
+    };
   }
 
-  const filas = (data ?? []) as Array<{ ticket: string; nuevo_est: string }>;
+  const orden = await emitirOrdenCompraProcura(supabase, {
+    procuraId: params.procuraId,
+    autorNombre: params.aprobadorNombre,
+    motivo: `Aprobada por Project Manager ${params.aprobadorNombre} (Telegram ${params.aprobadorTelegramId})`,
+  });
+
+  if (!orden.ok) {
+    return { ok: false, error: orden.error };
+  }
+
   return {
     ok: true,
-    ticket: filas[0]?.ticket,
-    estado: filas[0]?.nuevo_est ?? nuevoEstado,
+    ticket: orden.ticket,
+    estado: orden.estado ?? 'en_compra',
+    compradoresNotificados: orden.compradoresNotificados,
   };
 }

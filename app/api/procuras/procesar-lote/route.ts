@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { puedeProcesarEstadoProcuraWeb } from '@/lib/auth/permisos';
@@ -38,6 +39,8 @@ export async function POST(request: Request) {
     }
 
     const auth = await requirePermisoWeb('procura.aprobar');
+    let actorNombre = 'Usuario web';
+
     if (!auth.ok) {
       const permAlt =
         nuevoEstado === 'en_compra'
@@ -51,12 +54,52 @@ export async function POST(request: Request) {
           ? NextResponse.json({ error: 'No tiene permiso para este cambio de estado.' }, { status: 403 })
           : authAlt.response;
       }
-    } else if (!puedeProcesarEstadoProcuraWeb(auth.actor, nuevoEstado)) {
-      return NextResponse.json({ error: 'No tiene permiso para este cambio de estado.' }, { status: 403 });
+      actorNombre = authAlt.actor.nombre?.trim() || actorNombre;
+    } else {
+      if (!puedeProcesarEstadoProcuraWeb(auth.actor, nuevoEstado)) {
+        return NextResponse.json({ error: 'No tiene permiso para este cambio de estado.' }, { status: 403 });
+      }
+      actorNombre = auth.actor.nombre?.trim() || actorNombre;
     }
 
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
+
+    if (nuevoEstado === 'aprobada' || nuevoEstado === 'aprobada_directa') {
+      const ordenes: Array<{
+        ticket?: string;
+        estado?: string;
+        compradoresNotificados?: number;
+        error?: string;
+      }> = [];
+      for (const id of ids) {
+        const r = await emitirOrdenCompraProcura(admin.client, {
+          procuraId: id,
+          autorNombre: actorNombre,
+          motivo: motivo ?? `Orden de compra emitida desde web por ${actorNombre}`,
+        });
+        ordenes.push(r.ok ? r : { error: r.error });
+      }
+      const okCount = ordenes.filter((o) => !o.error).length;
+      const compradores = ordenes.reduce(
+        (acc, o) => acc + (o.compradoresNotificados ?? 0),
+        0,
+      );
+      const errores = ordenes.map((o) => o.error).filter(Boolean);
+      if (!okCount) {
+        return NextResponse.json(
+          { error: errores[0] ?? 'No se pudo emitir ninguna orden de compra.' },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        count: okCount,
+        estado: 'en_compra',
+        compradores_notificados: compradores,
+        errores: errores.length ? errores : undefined,
+      });
+    }
 
     const { data, error } = await admin.client.rpc(
       'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',

@@ -79,6 +79,38 @@ export function usuarioPuedeRechazarProcura(u: UsuarioSistemaTelegram): boolean 
   return usuarioPuedeAprobarProcura(u);
 }
 
+/** Compradores (y admin) que reciben órdenes de compra tras aprobación PM. */
+export async function listarUsuariosOrdenCompraTelegram(
+  supabase: SupabaseClient,
+): Promise<UsuarioSistemaTelegram[]> {
+  const { data, error } = await supabase
+    .from('ci_usuarios_sistema_telegram')
+    .select('id, nombre, telegram_id, rol, proyecto_id, activo')
+    .eq('activo', true)
+    .in('rol', ['Comprador', 'Administrador'])
+    .order('nombre');
+
+  if (error?.code === '42P01') return [];
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .map((row) => {
+      const rol = parseRolComprasTelegram(String(row.rol));
+      const telegram_id = parseTelegramIdNumerico(row.telegram_id);
+      if (!rol || telegram_id == null) return null;
+      const u: UsuarioSistemaTelegram = {
+        id: String(row.id),
+        nombre: String(row.nombre ?? '').trim() || 'Usuario',
+        telegram_id,
+        rol,
+        proyecto_id: row.proyecto_id ? String(row.proyecto_id) : null,
+        activo: true,
+      };
+      return u;
+    })
+    .filter((u): u is UsuarioSistemaTelegram => u != null);
+}
+
 export async function exigirUsuarioSistemaTelegram(
   supabase: SupabaseClient,
   telegramId: string | number,
