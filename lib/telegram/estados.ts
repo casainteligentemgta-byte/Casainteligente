@@ -16,7 +16,8 @@ export type TelegramContexto =
   | 'traspaso_inventario'
   | 'consulta_stock'
   | 'procura_solicitud'
-  | 'procura_departamento';
+  | 'procura_departamento'
+  | 'esperando_motivo_rechazo';
 
 export type TelegramEstado = {
   chat_id: string;
@@ -44,6 +45,7 @@ const CONTEXTOS: TelegramContexto[] = [
   'consulta_stock',
   'procura_solicitud',
   'procura_departamento',
+  'esperando_motivo_rechazo',
 ];
 
 export function isTelegramContexto(v: string): v is TelegramContexto {
@@ -93,6 +95,7 @@ export async function upsertTelegramEstado(
   supabase: SupabaseClient,
   estado: TelegramEstado,
 ): Promise<void> {
+  // updated_at se renueva en cada upsert; el flujo procura_departamento usa TTL de 2 h sobre este campo.
   const { error } = await supabase.from('ci_telegram_estados').upsert(
     {
       chat_id: estado.chat_id,
@@ -167,6 +170,8 @@ export function etiquetaContexto(ctx: TelegramContexto): string {
       return 'Solicitud de procura (abastecimiento)';
     case 'procura_departamento':
       return 'Procura departamento compras (capítulo)';
+    case 'esperando_motivo_rechazo':
+      return 'Motivo de rechazo de procura';
     default:
       return 'Menú principal';
   }

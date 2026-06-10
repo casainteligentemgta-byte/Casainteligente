@@ -8,6 +8,8 @@ import { enviarAlertaProcuraPendienteAdmin } from '@/lib/procuras/alertaAdminPro
 import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
 import type { EstadoProcura } from '@/lib/procuras/procuraEstados';
 
+const PREFIJO_POR_VERIFICAR = '[POR VERIFICAR]';
+
 export type RegistrarProcuraDepartamentoInput = {
   usuario: UsuarioSistemaTelegram;
   capituloMaestroId: string;
@@ -18,6 +20,8 @@ export type RegistrarProcuraDepartamentoInput = {
   montoEstimadoUsd?: number | null;
   esConsumible?: boolean;
   observaciones?: string | null;
+  materialId?: string | null;
+  porVerificar?: boolean;
 };
 
 export type RegistrarProcuraDepartamentoResult = {
@@ -26,6 +30,7 @@ export type RegistrarProcuraDepartamentoResult = {
   estado: EstadoProcura;
   viaRapida: boolean;
   motivoVia: string;
+  errorConsultaHistorico?: boolean;
 };
 
 export async function registrarProcuraDepartamento(
@@ -37,9 +42,12 @@ export async function registrarProcuraDepartamento(
     return { data: null, error: new Error('Capítulo no válido.') };
   }
 
-  const materialTxt = input.descripcionMaterial.trim().slice(0, 500);
+  let materialTxt = input.descripcionMaterial.trim().slice(0, 500);
   if (!materialTxt) {
     return { data: null, error: new Error('Indique la descripción del material.') };
+  }
+  if (input.porVerificar && !materialTxt.startsWith(PREFIJO_POR_VERIFICAR)) {
+    materialTxt = `${PREFIJO_POR_VERIFICAR} ${materialTxt}`.slice(0, 500);
   }
 
   const cantidad = input.cantidad;
@@ -47,11 +55,23 @@ export async function registrarProcuraDepartamento(
     return { data: null, error: new Error('Cantidad inválida.') };
   }
 
-  const via = await evaluarViaRapidaProcura(supabase, {
-    descripcionMaterial: materialTxt,
-    montoEstimadoUsd: input.montoEstimadoUsd ?? null,
-    esConsumible: input.esConsumible ?? false,
-  });
+  let via: Awaited<ReturnType<typeof evaluarViaRapidaProcura>>;
+  try {
+    via = await evaluarViaRapidaProcura(supabase, {
+      descripcionMaterial: materialTxt,
+      montoEstimadoUsd: input.montoEstimadoUsd ?? null,
+      esConsumible: input.esConsumible ?? false,
+      cantidad,
+      materialId: input.materialId ?? null,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error al evaluar vía rápida';
+    console.warn('[registrarProcuraDepartamento] viaRapida:', msg);
+    return {
+      data: null,
+      error: new Error(`No se pudo evaluar la vía rápida. ${msg}`),
+    };
+  }
 
   const estado: EstadoProcura = via.califica ? 'aprobada_directa' : 'solicitada';
   const proyectoId = input.usuario.proyecto_id?.trim() || null;
@@ -65,7 +85,18 @@ export async function registrarProcuraDepartamento(
   obsParts.push(`Capítulo: ${capitulo.codigo} — ${capitulo.nombre}`);
   obsParts.push(`Prioridad: ${input.prioridad}`);
   if (via.califica) obsParts.push(`Vía rápida: ${via.motivo}`);
+  if (!via.califica && input.montoEstimadoUsd == null) {
+    obsParts.push(`Análisis sin monto: ${via.motivo}`);
+  }
+  if (via.precioUnitarioHistoricoUsd != null && via.montoEstimadoEfectivoUsd != null) {
+    obsParts.push(
+      `Costo histórico ref.: USD ${via.precioUnitarioHistoricoUsd.toFixed(2)}/u × ${cantidad} = USD ${via.montoEstimadoEfectivoUsd.toFixed(2)}`,
+    );
+  }
+  if (input.porVerificar) obsParts.push('Material texto libre — por verificar en catálogo');
   const observaciones = obsParts.join('\n').slice(0, 2000);
+
+  const materialId = input.materialId?.trim() || null;
 
   const row: Record<string, unknown> = {
     material_txt: materialTxt,
@@ -74,7 +105,8 @@ export async function registrarProcuraDepartamento(
     estado,
     prioridad: input.prioridad,
     capitulo_maestro_id: capitulo.id,
-    monto_estimado_usd: input.montoEstimadoUsd ?? null,
+    monto_estimado_usd:
+      input.montoEstimadoUsd ?? via.montoEstimadoEfectivoUsd ?? null,
     es_consumible: Boolean(input.esConsumible),
     via_rapida: via.califica,
     observaciones,
@@ -84,6 +116,7 @@ export async function registrarProcuraDepartamento(
 
   if (proyectoId) row.proyecto_id = proyectoId;
   if (entidadId) row.entidad_id = entidadId;
+  if (materialId) row.material_id = materialId;
 
   const { data, error } = await supabase
     .from('ci_procuras')
@@ -113,6 +146,7 @@ export async function registrarProcuraDepartamento(
       estado: out.estado,
       viaRapida: Boolean(out.via_rapida),
       motivoVia: via.motivo,
+      errorConsultaHistorico: Boolean(via.errorConsultaHistorico),
     },
     error: null,
   };

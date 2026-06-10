@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MaterialCampoOpcion } from '@/components/almacen/BuscadorMaterialCampo';
-import { escapeIlike } from '@/lib/contabilidad/comprasQueryFiltros';
+import { escapeIlike, patronIlike } from '@/lib/contabilidad/comprasQueryFiltros';
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
 
 function mapRow(row: {
@@ -42,6 +42,54 @@ export async function buscarMaterialesCatalogo(
 
 export function etiquetaMaterialCatalogo(m: MaterialCampoOpcion): string {
   return m.sap_code ? `${m.name} (${m.sap_code})` : m.name;
+}
+
+function scoreMaterialFuzzy(term: string, m: MaterialCampoOpcion): number {
+  const t = term.toLowerCase();
+  const name = m.name.toLowerCase();
+  const code = (m.sap_code ?? '').toLowerCase();
+  if (!t) return 0;
+  if (name === t || code === t) return 100;
+  if (name.startsWith(t) || code.startsWith(t)) return 85;
+  if (name.split(/\s+/).some((w) => w.startsWith(t))) return 75;
+  if (name.includes(t) || code.includes(t)) return 60;
+  return 0;
+}
+
+/** Búsqueda difusa por nombre o SKU (mín. 3 caracteres, top N por relevancia). */
+export async function buscarMaterialesFuzzyCatalogo(
+  supabase: SupabaseClient,
+  term: string,
+  opts?: { limit?: number },
+): Promise<MaterialCampoOpcion[]> {
+  const t = term.trim().replace(/%/g, '');
+  if (t.length < 3) return [];
+
+  const limit = Math.min(Math.max(opts?.limit ?? 5, 1), 10);
+  const pattern = patronIlike(t);
+  if (!pattern) return [];
+
+  const { data, error } = await supabase
+    .from('global_inventory')
+    .select('id,name,sap_code,unit')
+    .or(`name.ilike.${pattern},sap_code.ilike.${pattern}`)
+    .order('name')
+    .limit(40);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .map((row) =>
+      mapRow(row as { id: string; name?: string; sap_code?: string; unit?: string }),
+    )
+    .map((m) => ({ m, score: scoreMaterialFuzzy(t, m) }))
+    .filter((x) => x.score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score || a.m.name.localeCompare(b.m.name, 'es', { sensitivity: 'base' }),
+    )
+    .slice(0, limit)
+    .map((x) => x.m);
 }
 
 function coincidePrefijo(m: MaterialCampoOpcion, term: string): boolean {

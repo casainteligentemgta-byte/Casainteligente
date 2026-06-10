@@ -116,7 +116,9 @@ import {
 } from '@/lib/telegram/procuraTelegram';
 import {
   esCallbackAprobacionDepartamentoCompras,
+  esEsperandoMotivoRechazoProcura,
   manejarCallbackAprobacionDepartamentoCompras,
+  manejarTextoMotivoRechazoProcura,
 } from '@/lib/compras/aprobacionDepartamentoTelegram';
 import {
   esCallbackProcuraDepartamentoTelegram,
@@ -951,6 +953,14 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       );
       if (textoDiasCredito) {
         return NextResponse.json({ ok: true, factura_dias_credito_texto: true });
+      }
+
+      const estadoMotivoRechazo = await getTelegramEstado(supabase, chatId);
+      if (esEsperandoMotivoRechazoProcura(estadoMotivoRechazo)) {
+        const textoRechazo = await manejarTextoMotivoRechazoProcura(supabase, chatId, texto);
+        if (textoRechazo) {
+          return NextResponse.json({ ok: true, procura_motivo_rechazo: true });
+        }
       }
 
       const estadoPre = await getTelegramEstado(supabase, chatId);
