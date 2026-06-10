@@ -1,6 +1,6 @@
 /**
  * Alta en ci_telegram_whitelist (misma lógica que POST /api/telegram/whitelist).
- * Uso: node scripts/add-telegram-whitelist.mjs --nombre "Neomar Cárdenas" --chat-id 8684897057
+ * Uso: node scripts/add-telegram-whitelist.mjs --nombre "Neomar Cárdenas" --chat-id 8684897057 --cargo Comprador
  */
 import fs from 'fs';
 import path from 'path';
@@ -32,6 +32,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--nombre') out.nombre = argv[++i];
     else if (a === '--chat-id') out.chatId = argv[++i];
+    else if (a === '--cargo') out.cargo = argv[++i];
     else if (a === '--notas') out.notas = argv[++i];
   }
   return out;
@@ -53,6 +54,7 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 const row = {
   chat_id: Math.trunc(chatId),
   nombre: nombre.slice(0, 200),
+  cargo: args.cargo?.trim().slice(0, 100) || null,
   notas: args.notas?.trim() || null,
   origen: 'manual',
   activo: true,
@@ -62,7 +64,7 @@ const row = {
 const { data, error } = await sb
   .from('ci_telegram_whitelist')
   .upsert(row, { onConflict: 'chat_id' })
-  .select('id, chat_id, nombre, activo, origen, notas')
+  .select('id, chat_id, nombre, cargo, activo, origen, notas')
   .single();
 
 if (error) {
@@ -74,8 +76,11 @@ console.log('OK whitelist:', JSON.stringify(data, null, 2));
 
 const { data: all } = await sb
   .from('ci_telegram_whitelist')
-  .select('chat_id, nombre, activo')
+  .select('chat_id, nombre, cargo, activo')
   .eq('activo', true)
   .order('nombre');
 console.log(`\nTotal activos en whitelist: ${all?.length ?? 0}`);
-for (const u of all ?? []) console.log(`  • ${u.nombre} (${u.chat_id})`);
+for (const u of all ?? []) {
+  const cargo = u.cargo ? ` · ${u.cargo}` : '';
+  console.log(`  • ${u.nombre} (${u.chat_id})${cargo}`);
+}

@@ -45,7 +45,9 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
   const [envCount, setEnvCount] = useState(0);
   const [nombre, setNombre] = useState('');
   const [chatId, setChatId] = useState('');
+  const [cargo, setCargo] = useState('');
   const [telefono, setTelefono] = useState('');
+  const [cargosCompras, setCargosCompras] = useState<Record<number, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +59,22 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
       setFilas(json.filas ?? []);
       setActiva(Boolean(json.activa));
       setEnvCount(json.envCount ?? 0);
+
+      try {
+        const cr = await fetch('/api/compras/usuarios-telegram', { cache: 'no-store' });
+        if (cr.ok) {
+          const cj = await parseFetchJson<{
+            usuarios?: { telegram_id: number; rol: string }[];
+          }>(cr);
+          const map: Record<number, string> = {};
+          for (const u of cj.usuarios ?? []) {
+            map[u.telegram_id] = u.rol;
+          }
+          setCargosCompras(map);
+        }
+      } catch {
+        setCargosCompras({});
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
       setFilas([]);
@@ -89,6 +107,7 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
         body: JSON.stringify({
           nombre: nombreTrim,
           chat_id: chatTrim,
+          cargo: cargo.trim() || null,
           telefono: telefono.trim() || null,
         }),
       });
@@ -97,12 +116,31 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
       toast.success(`${nombreTrim} autorizado en el bot`);
       setNombre('');
       setChatId('');
+      setCargo('');
       setTelefono('');
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const guardarCargo = async (fila: FilaTelegramWhitelist, nuevoCargo: string) => {
+    const cargoTrim = nuevoCargo.trim();
+    const actual = (fila.cargo ?? cargosCompras[fila.chat_id] ?? '').trim();
+    if (cargoTrim === actual) return;
+    try {
+      const res = await fetch(`/api/telegram/whitelist/${encodeURIComponent(fila.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cargo: cargoTrim || null }),
+      });
+      const json = await parseFetchJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(json.error ?? 'Error');
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar cargo');
     }
   };
 
@@ -176,7 +214,7 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
         <p className="mt-1 text-xs text-zinc-400">
           Escribe al bot una vez, copia el chat ID con @userinfobot o desde los logs, y agrégalo aquí.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label className="text-zinc-400">Nombre</Label>
             <Input
@@ -193,6 +231,15 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
               onChange={(e) => setChatId(e.target.value)}
               placeholder="123456789"
               className="mt-1.5 border-white/10 bg-zinc-900/80 font-mono text-sm text-zinc-100"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400">Cargo</Label>
+            <Input
+              value={cargo}
+              onChange={(e) => setCargo(e.target.value)}
+              placeholder="Comprador, Residente…"
+              className="mt-1.5 border-white/10 bg-zinc-900/80 text-zinc-100"
             />
           </div>
           <div>
@@ -245,6 +292,7 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
             <TableHeader>
               <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead className="text-zinc-400">Nombre</TableHead>
+                <TableHead className="text-zinc-400">Cargo</TableHead>
                 <TableHead className="text-zinc-400">Chat ID</TableHead>
                 <TableHead className="text-zinc-400">Origen</TableHead>
                 <TableHead className="text-zinc-400">Estado</TableHead>
@@ -255,6 +303,15 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
               {filas.map((f) => (
                 <TableRow key={f.id} className="border-white/5 hover:bg-white/[0.03]">
                   <TableCell className="font-medium text-white">{f.nombre}</TableCell>
+                  <TableCell>
+                    <Input
+                      key={`${f.id}-${f.cargo ?? ''}`}
+                      defaultValue={f.cargo ?? cargosCompras[f.chat_id] ?? ''}
+                      placeholder="Sin cargo"
+                      onBlur={(e) => void guardarCargo(f, e.target.value)}
+                      className="h-8 min-w-[8rem] border-white/10 bg-zinc-900/60 text-sm text-zinc-200"
+                    />
+                  </TableCell>
                   <TableCell className="font-mono text-sm text-zinc-400">{f.chat_id}</TableCell>
                   <TableCell className="text-sm capitalize text-zinc-500">{f.origen}</TableCell>
                   <TableCell>

@@ -25,6 +25,7 @@ export async function PATCH(req: Request, { params }: RouteCtx) {
 
   let body: {
     nombre?: string;
+    cargo?: string | null;
     telefono?: string | null;
     email?: string | null;
     activo?: boolean;

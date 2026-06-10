@@ -98,7 +98,11 @@ export default function UsuariosComprasTelegramPanel() {
         const wl = await fetch('/api/telegram/whitelist', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nombre: nombreTrim, chat_id: tidTrim }),
+          body: JSON.stringify({
+            nombre: nombreTrim,
+            chat_id: tidTrim,
+            cargo: rol,
+          }),
         });
         if (!wl.ok) {
           const wlJson = await parseFetchJson<{ error?: string }>(wl);
@@ -212,7 +216,7 @@ export default function UsuariosComprasTelegramPanel() {
             />
           </div>
           <div>
-            <Label className="text-zinc-400">Rol</Label>
+            <Label className="text-zinc-400">Cargo / rol</Label>
             <select
               value={rol}
               onChange={(e) => setRol(e.target.value as RolComprasTelegram)}
@@ -274,7 +278,7 @@ export default function UsuariosComprasTelegramPanel() {
               <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead className="text-zinc-400">Nombre</TableHead>
                 <TableHead className="text-zinc-400">Telegram ID</TableHead>
-                <TableHead className="text-zinc-400">Rol</TableHead>
+                <TableHead className="text-zinc-400">Cargo / rol</TableHead>
                 <TableHead className="text-zinc-400">Estado</TableHead>
                 <TableHead className="text-right text-zinc-400">Acciones</TableHead>
               </TableRow>

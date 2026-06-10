@@ -6,6 +6,7 @@ export type FilaTelegramWhitelist = {
   id: string;
   chat_id: number;
   nombre: string;
+  cargo: string | null;
   telefono: string | null;
   email: string | null;
   proyecto_id: string | null;
@@ -17,6 +18,28 @@ export type FilaTelegramWhitelist = {
   created_at: string;
   updated_at: string;
 };
+
+const SELECT_WHITELIST =
+  'id,chat_id,nombre,cargo,telefono,email,proyecto_id,empleado_id,nomina_id,origen,activo,notas,created_at,updated_at';
+
+function mapFilaTelegramWhitelist(r: Record<string, unknown>): FilaTelegramWhitelist {
+  return {
+    id: String(r.id),
+    chat_id: Number(r.chat_id),
+    nombre: String(r.nombre ?? '').trim() || 'Sin nombre',
+    cargo: r.cargo != null ? String(r.cargo).trim() || null : null,
+    telefono: r.telefono != null ? String(r.telefono).trim() || null : null,
+    email: r.email != null ? String(r.email).trim() || null : null,
+    proyecto_id: r.proyecto_id != null ? String(r.proyecto_id) : null,
+    empleado_id: r.empleado_id != null ? String(r.empleado_id) : null,
+    nomina_id: r.nomina_id != null ? String(r.nomina_id) : null,
+    origen: (r.origen as FilaTelegramWhitelist['origen']) ?? 'manual',
+    activo: Boolean(r.activo),
+    notas: r.notas != null ? String(r.notas).trim() || null : null,
+    created_at: String(r.created_at),
+    updated_at: String(r.updated_at),
+  };
+}
 
 const CACHE_TTL_MS = 60_000;
 let cacheAllowed: { ids: Set<string>; expiresAt: number } | null = null;
@@ -117,35 +140,20 @@ export async function listarTelegramWhitelist(
 ): Promise<FilaTelegramWhitelist[]> {
   const { data, error } = await supabase
     .from('ci_telegram_whitelist')
-    .select(
-      'id,chat_id,nombre,telefono,email,proyecto_id,empleado_id,nomina_id,origen,activo,notas,created_at,updated_at',
-    )
+    .select(SELECT_WHITELIST)
     .order('activo', { ascending: false })
     .order('nombre');
 
   if (error?.code === '42P01') return [];
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((r) => ({
-    id: String(r.id),
-    chat_id: Number(r.chat_id),
-    nombre: String(r.nombre ?? '').trim() || 'Sin nombre',
-    telefono: r.telefono != null ? String(r.telefono).trim() || null : null,
-    email: r.email != null ? String(r.email).trim() || null : null,
-    proyecto_id: r.proyecto_id != null ? String(r.proyecto_id) : null,
-    empleado_id: r.empleado_id != null ? String(r.empleado_id) : null,
-    nomina_id: r.nomina_id != null ? String(r.nomina_id) : null,
-    origen: (r.origen as FilaTelegramWhitelist['origen']) ?? 'manual',
-    activo: Boolean(r.activo),
-    notas: r.notas != null ? String(r.notas).trim() || null : null,
-    created_at: String(r.created_at),
-    updated_at: String(r.updated_at),
-  }));
+  return (data ?? []).map((r) => mapFilaTelegramWhitelist(r as Record<string, unknown>));
 }
 
 export type CrearTelegramWhitelistInput = {
   nombre: string;
   chat_id: string | number;
+  cargo?: string | null;
   telefono?: string | null;
   email?: string | null;
   notas?: string | null;
@@ -163,6 +171,7 @@ export async function crearTelegramWhitelist(
   const row = {
     chat_id: chatId,
     nombre,
+    cargo: input.cargo?.trim().slice(0, 100) || null,
     telefono: input.telefono?.trim() || null,
     email: input.email?.trim() || null,
     notas: input.notas?.trim() || null,
@@ -174,30 +183,13 @@ export async function crearTelegramWhitelist(
   const { data, error } = await supabase
     .from('ci_telegram_whitelist')
     .upsert(row, { onConflict: 'chat_id' })
-    .select(
-      'id,chat_id,nombre,telefono,email,proyecto_id,empleado_id,nomina_id,origen,activo,notas,created_at,updated_at',
-    )
+    .select(SELECT_WHITELIST)
     .single();
 
   if (error) throw new Error(error.message);
   invalidarCacheWhitelistTelegram();
 
-  const r = data as Record<string, unknown>;
-  return {
-    id: String(r.id),
-    chat_id: Number(r.chat_id),
-    nombre: String(r.nombre),
-    telefono: r.telefono != null ? String(r.telefono) : null,
-    email: r.email != null ? String(r.email) : null,
-    proyecto_id: r.proyecto_id != null ? String(r.proyecto_id) : null,
-    empleado_id: r.empleado_id != null ? String(r.empleado_id) : null,
-    nomina_id: r.nomina_id != null ? String(r.nomina_id) : null,
-    origen: 'manual',
-    activo: Boolean(r.activo),
-    notas: r.notas != null ? String(r.notas) : null,
-    created_at: String(r.created_at),
-    updated_at: String(r.updated_at),
-  };
+  return mapFilaTelegramWhitelist(data as Record<string, unknown>);
 }
 
 export async function actualizarTelegramWhitelist(
@@ -205,6 +197,7 @@ export async function actualizarTelegramWhitelist(
   id: string,
   patch: Partial<{
     nombre: string;
+    cargo: string | null;
     telefono: string | null;
     email: string | null;
     activo: boolean;
@@ -213,6 +206,7 @@ export async function actualizarTelegramWhitelist(
 ): Promise<FilaTelegramWhitelist> {
   const body: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.nombre !== undefined) body.nombre = patch.nombre.trim();
+  if (patch.cargo !== undefined) body.cargo = patch.cargo?.trim().slice(0, 100) || null;
   if (patch.telefono !== undefined) body.telefono = patch.telefono?.trim() || null;
   if (patch.email !== undefined) body.email = patch.email?.trim() || null;
   if (patch.activo !== undefined) body.activo = patch.activo;
@@ -222,31 +216,14 @@ export async function actualizarTelegramWhitelist(
     .from('ci_telegram_whitelist')
     .update(body)
     .eq('id', id.trim())
-    .select(
-      'id,chat_id,nombre,telefono,email,proyecto_id,empleado_id,nomina_id,origen,activo,notas,created_at,updated_at',
-    )
+    .select(SELECT_WHITELIST)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   if (!data) throw new Error('Registro no encontrado');
   invalidarCacheWhitelistTelegram();
 
-  const r = data as Record<string, unknown>;
-  return {
-    id: String(r.id),
-    chat_id: Number(r.chat_id),
-    nombre: String(r.nombre),
-    telefono: r.telefono != null ? String(r.telefono) : null,
-    email: r.email != null ? String(r.email) : null,
-    proyecto_id: r.proyecto_id != null ? String(r.proyecto_id) : null,
-    empleado_id: r.empleado_id != null ? String(r.empleado_id) : null,
-    nomina_id: r.nomina_id != null ? String(r.nomina_id) : null,
-    origen: (r.origen as FilaTelegramWhitelist['origen']) ?? 'manual',
-    activo: Boolean(r.activo),
-    notas: r.notas != null ? String(r.notas) : null,
-    created_at: String(r.created_at),
-    updated_at: String(r.updated_at),
-  };
+  return mapFilaTelegramWhitelist(data as Record<string, unknown>);
 }
 
 export async function eliminarTelegramWhitelist(
@@ -269,6 +246,7 @@ export async function sincronizarWhitelistDesdeNomina(
     email: string | null;
     telegramChatId: number | null;
     activo: boolean;
+    rolObra?: string | null;
   },
 ): Promise<void> {
   if (!params.activo || params.telegramChatId == null) {
@@ -284,6 +262,7 @@ export async function sincronizarWhitelistDesdeNomina(
     {
       chat_id: params.telegramChatId,
       nombre: params.nombre.trim() || 'Sin nombre',
+      cargo: params.rolObra?.trim().slice(0, 100) || null,
       email: params.email,
       proyecto_id: params.proyectoId,
       empleado_id: params.empleadoId,
