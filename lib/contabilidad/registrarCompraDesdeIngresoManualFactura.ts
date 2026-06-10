@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { buscarPrecioHistoricoUnitarioUsd } from '@/lib/compras/precioHistoricoMaterialProcura';
 import {
   buscarCompraContablePorFactura,
   buscarPendienteCanalDuplicado,
@@ -12,6 +13,7 @@ import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraD
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
+import { vincularProcuraCompraContabilidad } from '@/lib/procuras/vincularProcuraCompra';
 
 export type LineaIngresoManualFacturaContabilidad = {
   material_id: string;
@@ -59,20 +61,74 @@ async function cargarItemCodes(
   );
 }
 
-function lineasContabilidadDesdeIngreso(
+async function resolverPrecioUnitarioProvisionalUsd(
+  supabase: SupabaseClient,
+  linea: LineaIngresoManualFacturaContabilidad,
+  procuraPrecioUnitarioUsd: number | null,
+): Promise<{ precio: number; fuente: 'procura' | 'historico' | 'sin_dato' }> {
+  if (procuraPrecioUnitarioUsd != null && procuraPrecioUnitarioUsd > 0) {
+    return { precio: procuraPrecioUnitarioUsd, fuente: 'procura' };
+  }
+
+  const hist = await buscarPrecioHistoricoUnitarioUsd(supabase, {
+    materialId: linea.material_id,
+    descripcionMaterial: linea.material_nombre,
+  });
+  if (hist.precio?.precioUnitarioUsd && hist.precio.precioUnitarioUsd > 0) {
+    return { precio: hist.precio.precioUnitarioUsd, fuente: 'historico' };
+  }
+
+  return { precio: 0, fuente: 'sin_dato' };
+}
+
+async function lineasContabilidadDesdeIngreso(
+  supabase: SupabaseClient,
   lineas: LineaIngresoManualFacturaContabilidad[],
   itemCodes: Map<string, string | null>,
-): LineaCompraContabilidadInput[] {
-  return lineas
-    .filter((l) => l.material_id?.trim() && l.cantidad > 0)
-    .map((l) => ({
+  procuraPrecioUnitarioUsd: number | null,
+): Promise<LineaCompraContabilidadInput[]> {
+  const filtradas = lineas.filter((l) => l.material_id?.trim() && l.cantidad > 0);
+  const out: LineaCompraContabilidadInput[] = [];
+
+  for (const l of filtradas) {
+    const { precio } = await resolverPrecioUnitarioProvisionalUsd(
+      supabase,
+      l,
+      procuraPrecioUnitarioUsd,
+    );
+    out.push({
       material_id: l.material_id.trim(),
       descripcion: l.material_nombre.trim() || 'Material',
       item_code: itemCodes.get(l.material_id.trim()) ?? null,
       unidad: l.unidad.trim() || 'UND',
       cantidad: l.cantidad,
-      precio_unitario: 0,
-    }));
+      precio_unitario: precio,
+    });
+  }
+
+  return out;
+}
+
+async function cargarPrecioUnitarioDesdeProcura(
+  supabase: SupabaseClient,
+  procuraId: string | null | undefined,
+): Promise<number | null> {
+  const id = procuraId?.trim();
+  if (!id) return null;
+
+  const { data } = await supabase
+    .from('ci_procuras')
+    .select('monto_estimado_usd, cantidad')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (!data) return null;
+  const monto = Number(data.monto_estimado_usd);
+  const cant = Number(data.cantidad);
+  if (!Number.isFinite(monto) || !Number.isFinite(cant) || cant <= 0 || monto <= 0) {
+    return null;
+  }
+  return monto / cant;
 }
 
 async function actualizarCantidadesLineasContabilidad(
@@ -240,17 +296,34 @@ export async function registrarCompraDesdeIngresoManualFactura(
     const invoiceNumber = numeroDocumentoContabilidad(tipo, params.numDoc);
     const proveedorNombre = params.proveedorNombre.trim() || 'Proveedor';
     const origen = origenContabilidadDesdeRecepcion(tipo);
-    const lineasConta = lineasContabilidadDesdeIngreso(
+
+    const { data: recepcionMeta } = await supabase
+      .from('ci_recepciones_campo')
+      .select('procura_id')
+      .eq('id', params.recepcionCampoId)
+      .maybeSingle();
+    const procuraId = String(recepcionMeta?.procura_id ?? '').trim() || null;
+    const procuraPrecioUnitarioUsd = await cargarPrecioUnitarioDesdeProcura(supabase, procuraId);
+
+    const lineasConta = await lineasContabilidadDesdeIngreso(
+      supabase,
       params.lineas,
       await cargarItemCodes(
         supabase,
         params.lineas.map((l) => l.material_id),
       ),
+      procuraPrecioUnitarioUsd,
     );
 
     if (!lineasConta.length) {
       return { ok: false, error: 'Sin líneas válidas para contabilidad.' };
     }
+
+    const totalProvisionalUsd = lineasConta.reduce(
+      (s, l) => s + l.cantidad * (Number(l.precio_unitario) || 0),
+      0,
+    );
+    const lineasSinPrecio = lineasConta.filter((l) => !(Number(l.precio_unitario) > 0)).length;
 
     let entidadId = params.entidadId?.trim() || null;
     if (!entidadId) {
@@ -323,13 +396,14 @@ export async function registrarCompraDesdeIngresoManualFactura(
         supplier_rif: 'S/R',
         supplier_name: proveedorNombre,
         fecha,
-        total_amount: 0,
-        moneda: 'VES',
+        total_amount: totalProvisionalUsd > 0 ? totalProvisionalUsd : 0,
+        moneda: totalProvisionalUsd > 0 ? 'USD' : 'VES',
         lineas: lineasConta,
         origen,
         ubicacion_destino_id: params.ubicacionId,
         entidad_id: entidadId,
         document_storage_path: params.soporteStoragePath ?? null,
+        procura_id: procuraId,
       });
       compraId = reg.compraId;
       yaExistia = reg.yaExistia;
@@ -344,6 +418,10 @@ export async function registrarCompraDesdeIngresoManualFactura(
       ingresado_almacen_at: ingresadoAt,
     };
     if (entidadId) patchCompra.entidad_id = entidadId;
+    if (totalProvisionalUsd > 0) {
+      patchCompra.total_amount = totalProvisionalUsd;
+      patchCompra.moneda = 'USD';
+    }
     if (!existente?.purchase_invoice_id?.trim()) {
       patchCompra.purchase_invoice_id = purchaseInvoiceId;
     }
@@ -363,10 +441,28 @@ export async function registrarCompraDesdeIngresoManualFactura(
 
     await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
 
+    if (procuraId) {
+      const vinculo = await vincularProcuraCompraContabilidad(supabase, {
+        purchaseInvoiceId,
+        procuraId,
+        contabilidadCompraId: compraId,
+        autoMatch: false,
+      });
+      if (!vinculo.ok && vinculo.error) {
+        console.warn('[registrarCompraDesdeIngresoManualFactura] vinculo procura:', vinculo.error);
+      }
+    }
+
+    const notaPrecio =
+      lineasSinPrecio > 0
+        ? ` · ${lineasSinPrecio} línea(s) sin precio ref. (provisional)`
+        : totalProvisionalUsd > 0
+          ? ` · Precio ref. USD ${totalProvisionalUsd.toFixed(2)} (provisional)`
+          : '';
     const notaProvisional = esProvisional
       ? ' · Pendiente conciliación fiscal (factura posterior)'
       : '';
-    const nota = `Contabilidad: compra ${compraId.slice(0, 8)}… · PI ${purchaseInvoiceId.slice(0, 8)}…${notaProvisional}`;
+    const nota = `Contabilidad: compra ${compraId.slice(0, 8)}… · PI ${purchaseInvoiceId.slice(0, 8)}…${notaProvisional}${notaPrecio}`;
     const { data: recepcion } = await supabase
       .from('ci_recepciones_campo')
       .select('observaciones, factura_canal_pendiente_id')

@@ -152,6 +152,8 @@ export async function POST(req: Request) {
     compra_id?: string;
     provisional?: boolean;
     error?: string;
+    sync_pendiente?: boolean;
+    reintentar_path?: string;
   } | undefined;
 
   const lineasConta = lineas.map((l) => ({
@@ -174,7 +176,12 @@ export async function POST(req: Request) {
 
   contabilidad = conta.ok
     ? { ok: true, compra_id: conta.compraId, provisional: conta.provisional }
-    : { ok: false, error: conta.error };
+    : {
+        ok: false,
+        error: conta.error,
+        sync_pendiente: true,
+        reintentar_path: `/api/almacen/recepcion/${id}/reintentar-contabilidad`,
+      };
 
   const procura = await actualizarProcuraDesdeRecepcionCampo(supabase, {
     recepcionId: id,

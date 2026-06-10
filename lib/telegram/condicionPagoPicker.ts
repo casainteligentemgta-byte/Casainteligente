@@ -104,8 +104,10 @@ async function continuarTrasFormaPagoTelegram(
     contexto: 'factura',
     metadata: {},
   });
-  const { enviarPickerProyectosTelegram } = await import('@/lib/telegram/proyectoPicker');
-  await enviarPickerProyectosTelegram(supabase, chatId, 'factura_compra');
+  const { enviarPickerEntidadesFacturaTelegram } = await import(
+    '@/lib/telegram/facturaEntidadDestinoPicker'
+  );
+  await enviarPickerEntidadesFacturaTelegram(supabase, chatId);
 }
 
 async function guardarDiasCreditoYContinuar(

@@ -68,8 +68,8 @@ export async function POST(request: Request) {
     );
 
     if (error) {
-      const hint = /procesar_procuras_lote|ci_procuras/i.test(error.message)
-        ? 'Ejecute la migración 224_ci_procuras_lote.sql en Supabase.'
+      const hint = /procesar_procuras_lote|could not choose|PGRST203/i.test(error.message)
+        ? 'Ejecute migraciones 224 y 238_repair_procesar_procuras_lote_overload.sql en Supabase.'
         : undefined;
       return NextResponse.json({ error: error.message, hint }, { status: 500 });
     }

@@ -33,50 +33,14 @@ function rpcAmbiguo(error: { code?: string; message?: string } | null): boolean 
   );
 }
 
-/** Actualiza inventario_stock sin RPC (fallback si PostgREST no resuelve la función). */
+/** D-11: no escribir inventario_stock sin ledger; exigir migr. 204. */
 async function aplicarDeltaStockDirecto(
-  supabase: SupabaseClient,
-  params: AplicarDeltaStockParams,
+  _supabase: SupabaseClient,
+  _params: AplicarDeltaStockParams,
 ): Promise<void> {
-  const dDisp = params.deltaDisponible ?? 0;
-  const dRes = params.deltaReservada ?? 0;
-  const dTrans = params.deltaTransitoEntrante ?? 0;
-
-  const { data: row, error: readErr } = await supabase
-    .from('inventario_stock')
-    .select('id, cantidad_disponible, cantidad_reservada, cantidad_en_transito_entrante')
-    .eq('ubicacion_id', params.ubicacionId)
-    .eq('material_id', params.materialId)
-    .maybeSingle();
-
-  if (readErr?.code === '42P01') {
-    throw new Error('Tabla inventario_stock no disponible. Aplique migración 180 en Supabase.');
-  }
-  if (readErr) throw readErr;
-
-  if (!row?.id) {
-    if (dDisp <= 0 && dRes <= 0 && dTrans <= 0) return;
-    const { error: insErr } = await supabase.from('inventario_stock').insert({
-      ubicacion_id: params.ubicacionId,
-      material_id: params.materialId,
-      cantidad_disponible: Math.max(0, dDisp),
-      cantidad_reservada: Math.max(0, dRes),
-      cantidad_en_transito_entrante: Math.max(0, dTrans),
-    });
-    if (insErr) throw insErr;
-    return;
-  }
-
-  const { error: updErr } = await supabase
-    .from('inventario_stock')
-    .update({
-      cantidad_disponible: Math.max(0, Number(row.cantidad_disponible) + dDisp),
-      cantidad_reservada: Math.max(0, Number(row.cantidad_reservada ?? 0) + dRes),
-      cantidad_en_transito_entrante: Math.max(0, Number(row.cantidad_en_transito_entrante ?? 0) + dTrans),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', row.id);
-  if (updErr) throw updErr;
+  throw new Error(
+    'RPC inv_stock_apply_delta ambigua o no disponible. Aplique migraciones 203 y 204 en Supabase (ledger obligatorio).',
+  );
 }
 
 /**

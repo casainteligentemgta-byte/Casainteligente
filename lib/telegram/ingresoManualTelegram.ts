@@ -1873,7 +1873,8 @@ export async function manejarCallbackIngresoManual(
     contaOk = conta.ok;
     if (!conta.ok) {
       avisoContabilidad =
-        `\n\n⚠️ Stock registrado, pero no se reflejó en compras: ${conta.error}`;
+        `\n\n⚠️ Stock registrado, pero no se reflejó en compras: ${conta.error}` +
+        '\n<i>Quedó marcado para reintento. Un administrador puede ejecutar el sync contable.</i>';
     } else if (conta.provisional) {
       avisoContabilidad =
         '\n\n📋 Contabilidad provisional registrada. Concilie con la factura fiscal cuando llegue.';

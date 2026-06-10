@@ -47,3 +47,28 @@ export function etiquetaEstadoProcura(v: string | null | undefined): string {
   const p = parseEstadoProcura(v);
   return p ? ETIQUETAS[p] : String(v ?? '—');
 }
+
+/** Espejo TS de ci_procura_transicion_estado_valida (D-09). */
+export function transicionEstadoProcuraValida(
+  estadoAnterior: string | null | undefined,
+  estadoNuevo: string | null | undefined,
+): boolean {
+  const ant = parseEstadoProcura(estadoAnterior);
+  const nue = parseEstadoProcura(estadoNuevo);
+  if (!ant || !nue) return false;
+  if (ant === nue) return true;
+
+  const permitidas: Record<EstadoProcura, readonly EstadoProcura[]> = {
+    borrador: ['solicitada', 'cancelada'],
+    solicitada: ['aprobada', 'aprobada_directa', 'en_compra', 'rechazada', 'cancelada'],
+    aprobada: ['en_compra', 'rechazada', 'cancelada'],
+    aprobada_directa: ['en_compra', 'cancelada'],
+    en_compra: ['recibida_parcial', 'recibida', 'cancelada'],
+    recibida_parcial: ['recibida', 'en_compra', 'cancelada'],
+    recibida: ['cancelada'],
+    rechazada: [],
+    cancelada: [],
+  };
+
+  return permitidas[ant].includes(nue);
+}

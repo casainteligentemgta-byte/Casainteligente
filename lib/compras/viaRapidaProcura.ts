@@ -219,6 +219,54 @@ export async function evaluarViaRapidaProcura(
 
 export type PrioridadProcura = 'Baja' | 'Media' | 'Alta';
 
+/** D-10 / flujo Telegram: infiere consumible y monto USD sin preguntar al usuario. */
+export async function inferirConsumibleYMontoProcura(
+  supabase: SupabaseClient,
+  params: {
+    descripcionMaterial: string;
+    cantidad: number;
+    materialId?: string | null;
+  },
+): Promise<{
+  esConsumible: boolean;
+  montoEstimadoUsd: number | null;
+  precioUnitarioUsd: number | null;
+  notaAuto: string;
+}> {
+  const descripcion = limpiarDescripcionProcura(params.descripcionMaterial);
+  const esConsumible = coincideConsumibleEstricto(descripcion);
+
+  const resultadoHistorico = await buscarPrecioHistoricoUnitarioUsd(supabase, {
+    materialId: params.materialId,
+    descripcionMaterial: descripcion,
+  });
+
+  const unitario = resultadoHistorico.precio?.precioUnitarioUsd ?? null;
+  const montoEstimadoUsd =
+    unitario != null && params.cantidad > 0 ? unitario * params.cantidad : null;
+
+  const partes: string[] = [];
+  if (esConsumible) {
+    partes.push('consumible detectado por descripción');
+  }
+  if (montoEstimadoUsd != null) {
+    partes.push(
+      `USD ~${montoEstimadoUsd.toFixed(2)} (${unitario!.toFixed(2)}/u × ${params.cantidad})`,
+    );
+  } else if (resultadoHistorico.errorConsulta) {
+    partes.push('sin precio histórico (error de consulta)');
+  } else {
+    partes.push('sin precio histórico — vía larga o validación al confirmar');
+  }
+
+  return {
+    esConsumible,
+    montoEstimadoUsd,
+    precioUnitarioUsd: unitario,
+    notaAuto: partes.join(' · '),
+  };
+}
+
 export function parsePrioridadProcura(v: string): PrioridadProcura | null {
   const t = v.trim();
   if (t === 'Baja' || t === 'Media' || t === 'Alta') return t;

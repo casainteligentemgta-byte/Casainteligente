@@ -439,15 +439,47 @@ export async function cargarStockPorUbicaciones(
         .gt('cantidad_disponible', 0);
       if (fallback.error?.code === '42P01') return map;
       if (fallback.error) throw new Error(fallback.error.message);
+
+      const ubIds = Array.from(
+        new Set(
+          (fallback.data ?? [])
+            .map((row) => String(row.ubicacion_id ?? '').trim())
+            .filter(Boolean),
+        ),
+      );
+      const ubMeta = new Map<
+        string,
+        { nombre: string; proyectoId?: string; depositId?: string }
+      >();
+      if (ubIds.length) {
+        const { data: ubs } = await supabase
+          .from('inv_ubicaciones')
+          .select('id, nombre, deposit_id, ci_proyecto_id')
+          .in('id', ubIds);
+        for (const ub of ubs ?? []) {
+          const ubId = String(ub.id ?? '').trim();
+          if (!ubId) continue;
+          ubMeta.set(ubId, {
+            nombre: String(ub.nombre ?? 'Almacén').trim() || 'Almacén',
+            proyectoId: String(ub.ci_proyecto_id ?? '').trim() || undefined,
+            depositId: String(ub.deposit_id ?? '').trim() || undefined,
+          });
+        }
+      }
+
       for (const row of fallback.data ?? []) {
         const materialId = String(row.material_id ?? '');
         if (!materialId) continue;
         const qty = Number(row.cantidad_disponible ?? 0);
         if (qty <= 0) continue;
+        const ubId = String(row.ubicacion_id ?? '').trim() || null;
+        const meta = ubId ? ubMeta.get(ubId) : undefined;
         fusionarFilaEnResumenStock(map, materialId, {
           cantidad: qty,
-          ubicacionNombre: 'Almacén',
-          ubicacionId: String(row.ubicacion_id ?? '').trim() || null,
+          ubicacionNombre: meta?.nombre ?? 'Almacén',
+          ubicacionId: ubId,
+          proyectoId: meta?.proyectoId,
+          depositId: meta?.depositId,
         });
       }
       continue;

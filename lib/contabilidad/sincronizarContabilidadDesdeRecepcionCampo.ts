@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  limpiarContabilidadRecepcionPendiente,
+  marcarContabilidadRecepcionPendiente,
+} from '@/lib/contabilidad/contabilidadRecepcionCampoSync';
+import {
   registrarCompraDesdeIngresoManualFactura,
   type LineaIngresoManualFacturaContabilidad,
   type TipoRecepcionCampoContabilidad,
@@ -22,7 +26,7 @@ export async function sincronizarContabilidadDesdeRecepcionCampo(
   supabase: SupabaseClient,
   params: SincronizarContabilidadRecepcionParams,
 ) {
-  return registrarCompraDesdeIngresoManualFactura(supabase, {
+  const result = await registrarCompraDesdeIngresoManualFactura(supabase, {
     recepcionCampoId: params.recepcionCampoId,
     proyectoId: params.proyectoId,
     ubicacionId: params.ubicacionId,
@@ -33,4 +37,16 @@ export async function sincronizarContabilidadDesdeRecepcionCampo(
     lineas: params.lineas,
     soporteStoragePath: params.soporteStoragePath,
   });
+
+  if (result.ok) {
+    await limpiarContabilidadRecepcionPendiente(supabase, params.recepcionCampoId);
+  } else {
+    await marcarContabilidadRecepcionPendiente(
+      supabase,
+      params.recepcionCampoId,
+      result.error,
+    );
+  }
+
+  return result;
 }

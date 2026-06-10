@@ -37,6 +37,10 @@ import {
   manejarTextoDiasCreditoFacturaTelegram,
 } from '@/lib/telegram/condicionPagoPicker';
 import {
+  esCallbackFacturaEntidadDestino,
+  manejarCallbackFacturaEntidadDestinoTelegram,
+} from '@/lib/telegram/facturaEntidadDestinoPicker';
+import {
   esCallbackMonedaFactura,
   manejarCallbackMonedaFacturaTelegram,
 } from '@/lib/telegram/monedaFacturaPicker';
@@ -667,6 +671,20 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledDias) {
         return NextResponse.json({ ok: true, callback: 'factura_dias_credito' });
+      }
+    }
+
+    if (esCallbackFacturaEntidadDestino(cq.data)) {
+      const handledFacturaEntidad = await manejarCallbackFacturaEntidadDestinoTelegram(
+        admin.client,
+        {
+          chatId,
+          callbackId: cq.id,
+          data: cq.data,
+        },
+      );
+      if (handledFacturaEntidad) {
+        return NextResponse.json({ ok: true, callback: 'factura_entidad_destino' });
       }
     }
 

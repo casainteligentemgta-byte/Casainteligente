@@ -95,7 +95,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
     `📁 <b>Capítulo / Obra:</b> ${escHtml(obra)}\n` +
     `📦 <b>Material:</b> ${cantidad} ${escHtml(row.unidad)} de ${escHtml(row.material_txt)}\n` +
     `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${montoUsd}\n\n` +
-    '¿Autoriza el Aprobador?';
+    '¿Autoriza el Project Manager?';
 
   const replyMarkup = row.capitulo_maestro_id
     ? tecladoAprobacionDepartamento(row.id)

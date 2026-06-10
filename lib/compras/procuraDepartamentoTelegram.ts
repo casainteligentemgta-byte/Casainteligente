@@ -20,6 +20,7 @@ import {
   usuarioPuedeSolicitarProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import {
+  inferirConsumibleYMontoProcura,
   limiteViaRapidaUsd,
   parsePrioridadProcura,
   type PrioridadProcura,
@@ -30,7 +31,11 @@ import {
 } from '@/lib/almacen/buscarMaterialesCatalogo';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { marcarTtlPendienteAtomico } from '@/lib/compras/telegramTtlAtomico';
-import { normalizarUnidadProcura, parseCantidadUnidadProcura } from '@/lib/procuras/unidadesProcura';
+import {
+  etiquetaUnidadProcura,
+  normalizarUnidadProcura,
+  tecladoUnidadesProcuraPrincipales,
+} from '@/lib/procuras/unidadesProcura';
 import { resolverMaterialProcuraPorId } from '@/lib/telegram/procuraMaterialPicker';
 import {
   callbackDataTelegramValido,
@@ -44,10 +49,9 @@ const CB_CAP = `${PREFIX}cap:`;
 const CB_MAT_ID = `${PREFIX}mat_id:`;
 const CB_MAT_TXT = `${PREFIX}mat:txt`;
 const CB_PRI = `${PREFIX}pri:`;
-const CB_CONS = `${PREFIX}cons:`;
+const CB_UNI = `${PREFIX}uni:`;
 const CB_OK = `${PREFIX}ok`;
 const CB_NO = `${PREFIX}no`;
-const CB_MONTO_SKIP = `${PREFIX}monto:skip`;
 const CB_STATE_RESUME = `${PREFIX}state:resume`;
 const CB_STATE_RESET = `${PREFIX}state:reset`;
 const MIN_CHARS_BUSQUEDA_MATERIAL = 3;
@@ -60,10 +64,19 @@ export type PasoProcuraDepartamento =
   | 'capitulo'
   | 'material'
   | 'cantidad'
+  | 'unidad'
   | 'prioridad'
   | 'consumible'
   | 'monto'
   | 'confirm';
+
+function parseSoloCantidad(texto: string): number | null {
+  const t = texto.trim().replace(',', '.');
+  if (!t || /\s/.test(t)) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
 
 export type MetadataProcuraDepartamento = MetadataProcuraDepartamentoParsed;
 
@@ -77,19 +90,24 @@ function truncarBoton(s: string, max = 56): string {
   return `${t.slice(0, max - 1)}…`;
 }
 
-async function pedirCantidadMaterial(
-  chatId: string,
-  materialTxt: string,
-  unidadSugerida?: string,
-): Promise<void> {
-  const unidadHint = unidadSugerida
-    ? `\nUnidad catálogo: <b>${escHtml(unidadSugerida)}</b>`
-    : '';
+async function pedirCantidadMaterial(chatId: string, materialTxt: string): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    `📦 Material: <b>${escHtml(materialTxt)}</b>${unidadHint}\n\n` +
-      `3️⃣ Indica <b>cantidad</b> y unidad (ej. <code>50 SAC</code>, <code>2.5 M3</code>):`,
+    `📦 Material: <b>${escHtml(materialTxt)}</b>\n\n` +
+      `3️⃣ Indica solo la <b>cantidad</b> (número, ej. <code>50</code> o <code>2.5</code>):`,
     { parse_mode: 'HTML' },
+  );
+}
+
+async function pedirUnidadMaterial(chatId: string, cantidad: number): Promise<void> {
+  await sendTelegramMessage(
+    chatId,
+    `🔢 Cantidad: <b>${cantidad.toLocaleString('es-VE')}</b>\n\n` +
+      `4️⃣ Elige la <b>unidad</b>:`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: tecladoUnidadesProcuraPrincipales(CB_UNI),
+    },
   );
 }
 
@@ -253,10 +271,20 @@ async function renderizarPasoProcuraDepartamento(
       return;
     case 'cantidad':
       if (m.material_txt?.trim()) {
-        await pedirCantidadMaterial(chatId, m.material_txt, m.unidad);
+        await pedirCantidadMaterial(chatId, m.material_txt);
       } else {
-        await sendTelegramMessage(chatId, '3️⃣ Indica <b>cantidad</b> y unidad.', {
+        await sendTelegramMessage(chatId, '3️⃣ Indica solo la <b>cantidad</b> (número).', {
           parse_mode: 'HTML',
+        });
+      }
+      return;
+    case 'unidad':
+      if (m.cantidad != null && Number.isFinite(m.cantidad)) {
+        await pedirUnidadMaterial(chatId, m.cantidad);
+      } else {
+        await sendTelegramMessage(chatId, '4️⃣ Elige la <b>unidad</b> en los botones.', {
+          parse_mode: 'HTML',
+          reply_markup: tecladoUnidadesProcuraPrincipales(CB_UNI),
         });
       }
       return;
@@ -264,10 +292,8 @@ async function renderizarPasoProcuraDepartamento(
       await pedirPrioridad(chatId);
       return;
     case 'consumible':
-      await pedirConsumible(chatId);
-      return;
     case 'monto':
-      await pedirMonto(supabase, chatId);
+      await avanzarAConfirmacionAutocompletada(supabase, chatId, estado);
       return;
     case 'confirm':
       await enviarConfirmacion(supabase, chatId, m);
@@ -456,8 +482,36 @@ async function pedirMaterial(chatId: string, cap: { codigo: string; nombre: stri
   );
 }
 
+async function avanzarAConfirmacionAutocompletada(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  const m = meta(estado);
+  if (!m.material_txt?.trim() || m.cantidad == null || !m.unidad || !m.prioridad) {
+    await sendTelegramMessage(chatId, '❌ Datos incompletos. Use /procura de nuevo.', {
+      parse_mode: 'HTML',
+    });
+    return;
+  }
+
+  const auto = await inferirConsumibleYMontoProcura(supabase, {
+    descripcionMaterial: m.material_txt,
+    cantidad: m.cantidad,
+    materialId: m.material_id?.trim() || null,
+  });
+
+  const next = await patchMeta(supabase, chatId, estado, {
+    paso: 'confirm',
+    es_consumible: auto.esConsumible,
+    monto_estimado_usd: auto.montoEstimadoUsd,
+    observaciones: auto.notaAuto,
+  });
+  await enviarConfirmacion(supabase, chatId, meta(next));
+}
+
 async function pedirPrioridad(chatId: string): Promise<void> {
-  await sendTelegramMessage(chatId, '4️⃣ Elige la <b>prioridad</b>:', {
+  await sendTelegramMessage(chatId, '5️⃣ Elige la <b>prioridad</b>:', {
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
@@ -471,46 +525,13 @@ async function pedirPrioridad(chatId: string): Promise<void> {
   });
 }
 
-async function pedirConsumible(chatId: string): Promise<void> {
-  await sendTelegramMessage(
-    chatId,
-    '5️⃣ ¿Es <b>consumible</b>? (vía rápida si aplica)',
-    {
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Sí, consumible', callback_data: `${CB_CONS}si` },
-            { text: '❌ No', callback_data: `${CB_CONS}no` },
-          ],
-        ],
-      },
-    },
-  );
-}
-
-async function pedirMonto(supabase: SupabaseClient, chatId: string): Promise<void> {
-  const limite = await limiteViaRapidaUsd(supabase);
-  await sendTelegramMessage(
-    chatId,
-    `6️⃣ <b>Monto estimado en USD</b> (opcional, vía rápida si &lt; USD ${limite}).\n` +
-      'Escribe un número (ej. <code>35</code>) o pulsa Omitir.',
-    {
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [[{ text: '⏭ Omitir monto', callback_data: CB_MONTO_SKIP }]],
-      },
-    },
-  );
-}
-
 async function enviarConfirmacion(
   supabase: SupabaseClient,
   chatId: string,
   m: MetadataProcuraDepartamento,
 ): Promise<void> {
   const limite = await limiteViaRapidaUsd(supabase);
-  let viaHint = '<i>Vía larga — pendiente de Aprobador</i>';
+  let viaHint = '<i>Vía larga — pendiente de Project Manager</i>';
   if (m.monto_estimado_usd != null && m.monto_estimado_usd < limite) {
     viaHint = '<i>Monto declarado bajo techo — puede calificar vía rápida</i>';
   } else if (m.monto_estimado_usd == null) {
@@ -525,10 +546,12 @@ async function enviarConfirmacion(
       `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
       `📦 ${escHtml(m.material_txt ?? '')}` +
       (m.por_verificar ? ' <i>(por verificar)</i>\n' : '\n') +
-      `🔢 ${m.cantidad ?? '—'} ${escHtml(m.unidad ?? 'UND')}\n` +
+      `🔢 ${m.cantidad ?? '—'} ${escHtml(etiquetaUnidadProcura(m.unidad ?? 'UND'))}\n` +
       `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n` +
-      (m.es_consumible ? '🧴 Consumible: sí\n' : '') +
-      (m.monto_estimado_usd != null ? `💵 USD ~${m.monto_estimado_usd}\n` : '') +
+      (m.es_consumible ? '🧴 Consumible: sí (auto)\n' : '🧴 Consumible: no (auto)\n') +
+      (m.monto_estimado_usd != null
+        ? `💵 USD ~${m.monto_estimado_usd.toFixed(2)} (auto)\n`
+        : '💵 USD: sin histórico (auto)\n') +
       `\n${viaHint}`,
     {
       parse_mode: 'HTML',
@@ -585,40 +608,20 @@ export async function manejarTextoProcuraDepartamentoTelegram(
   }
 
   if (paso === 'cantidad') {
-    const parsed = parseCantidadUnidadProcura(t);
-    if (!parsed) {
-      await sendTelegramMessage(chatId, '⚠️ Cantidad inválida. Ej: <code>10 UND</code>', {
-        parse_mode: 'HTML',
-      });
+    const cantidad = parseSoloCantidad(t);
+    if (cantidad == null) {
+      await sendTelegramMessage(
+        chatId,
+        '⚠️ Cantidad inválida. Escribe solo un número (ej. <code>10</code> o <code>2.5</code>).',
+        { parse_mode: 'HTML' },
+      );
       return true;
     }
-    const cantidad = parsed.cantidad;
-    const unidad =
-      parsed.kind === 'completo'
-        ? parsed.unidad
-        : normalizarUnidadProcura(m.unidad ?? 'UND');
     await patchMeta(supabase, chatId, estado, {
-      paso: 'prioridad',
+      paso: 'unidad',
       cantidad,
-      unidad,
     });
-    await pedirPrioridad(chatId);
-    return true;
-  }
-
-  if (paso === 'monto') {
-    const n = Number(t.replace(',', '.'));
-    if (!Number.isFinite(n) || n < 0) {
-      await sendTelegramMessage(chatId, '⚠️ Monto inválido. Use un número o pulse Omitir.', {
-        parse_mode: 'HTML',
-      });
-      return true;
-    }
-    const next = await patchMeta(supabase, chatId, estado, {
-      paso: 'confirm',
-      monto_estimado_usd: n,
-    });
-    await enviarConfirmacion(supabase, chatId, meta(next));
+    await pedirUnidadMaterial(chatId, cantidad);
     return true;
   }
 
@@ -687,17 +690,14 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       sap_code: material.sap_code,
       unit: material.unit,
     });
-    const unidadCat = normalizarUnidadProcura(material.unit);
-
     await answerCallbackQuery(params.callbackId, truncarBoton(material.name, 40));
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'cantidad',
       material_id: material.id,
       material_txt: etiqueta.slice(0, 500),
       por_verificar: false,
-      unidad: unidadCat,
     });
-    await pedirCantidadMaterial(params.chatId, etiqueta, unidadCat);
+    await pedirCantidadMaterial(params.chatId, etiqueta);
     return true;
   }
 
@@ -738,6 +738,22 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     return true;
   }
 
+  if (params.data.startsWith(CB_UNI)) {
+    const codigo = normalizarUnidadProcura(params.data.slice(CB_UNI.length));
+    const valida = ['L', 'SAC', 'M', 'M3', 'M2'].includes(codigo);
+    if (!valida) {
+      await answerCallbackQuery(params.callbackId, 'Unidad inválida', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, etiquetaUnidadProcura(codigo));
+    await patchMeta(supabase, params.chatId, estado, {
+      paso: 'prioridad',
+      unidad: codigo,
+    });
+    await pedirPrioridad(params.chatId);
+    return true;
+  }
+
   if (params.data.startsWith(CB_PRI)) {
     const pri = parsePrioridadProcura(params.data.slice(CB_PRI.length));
     if (!pri) {
@@ -745,29 +761,8 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       return true;
     }
     await answerCallbackQuery(params.callbackId, pri);
-    await patchMeta(supabase, params.chatId, estado, { paso: 'consumible', prioridad: pri });
-    await pedirConsumible(params.chatId);
-    return true;
-  }
-
-  if (params.data.startsWith(CB_CONS)) {
-    const si = params.data.endsWith('si');
-    await answerCallbackQuery(params.callbackId, si ? 'Consumible' : 'No consumible');
-    await patchMeta(supabase, params.chatId, estado, {
-      paso: 'monto',
-      es_consumible: si,
-    });
-    await pedirMonto(supabase, params.chatId);
-    return true;
-  }
-
-  if (params.data === CB_MONTO_SKIP) {
-    await answerCallbackQuery(params.callbackId, 'Sin monto');
-    const next = await patchMeta(supabase, params.chatId, estado, {
-      paso: 'confirm',
-      monto_estimado_usd: null,
-    });
-    await enviarConfirmacion(supabase, params.chatId, meta(next));
+    const next = await patchMeta(supabase, params.chatId, estado, { prioridad: pri });
+    await avanzarAConfirmacionAutocompletada(supabase, params.chatId, next);
     return true;
   }
 
@@ -776,7 +771,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     const fresh = await getTelegramEstado(supabase, params.chatId);
     const m = meta(fresh);
 
-    if (!m.capitulo_id || !m.material_txt || !m.cantidad || !m.prioridad) {
+    if (!m.capitulo_id || !m.material_txt || !m.cantidad || !m.unidad || !m.prioridad) {
       await sendTelegramMessage(params.chatId, '❌ Datos incompletos. Use /procura de nuevo.', {
         parse_mode: 'HTML',
       });
