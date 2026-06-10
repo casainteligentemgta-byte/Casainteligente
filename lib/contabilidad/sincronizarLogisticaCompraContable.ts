@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
+import {
+  sincronizarContabilidadTrasInventarioRpc,
+  vincularProcuraCompraContabilidad,
+} from '@/lib/procuras/vincularProcuraCompra';
 
 type ResumenInspeccion = { status: string };
 
@@ -9,9 +13,19 @@ type ResumenInspeccion = { status: string };
 export async function sincronizarContabilidadTrasInventarioCompra(
   supabase: SupabaseClient,
   purchaseInvoiceId: string,
+  opts?: { procuraId?: string | null },
 ): Promise<{ compraFacturaId: string | null }> {
   const invId = purchaseInvoiceId.trim();
   if (!invId) return { compraFacturaId: null };
+
+  const rpc = await sincronizarContabilidadTrasInventarioRpc(supabase, invId);
+  if (rpc.rpcOk) {
+    await vincularProcuraCompraContabilidad(supabase, {
+      purchaseInvoiceId: invId,
+      procuraId: opts?.procuraId ?? null,
+    }).catch(() => undefined);
+    return { compraFacturaId: rpc.compraFacturaId };
+  }
 
   const { data: cf, error: cfErr } = await supabase
     .from('compras_facturas')
@@ -66,6 +80,12 @@ export async function sincronizarContabilidadTrasInventarioCompra(
     if (!compra.ingresado_almacen_at) slim.ingresado_almacen_at = ingresadoAt;
     await updateContabilidadCompraRow(supabase, compra.id, slim);
   }
+
+  await vincularProcuraCompraContabilidad(supabase, {
+    purchaseInvoiceId: invId,
+    contabilidadCompraId: compra.id,
+    procuraId: opts?.procuraId ?? null,
+  }).catch(() => undefined);
 
   return { compraFacturaId };
 }

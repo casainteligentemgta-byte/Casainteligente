@@ -6,6 +6,7 @@ import {
 } from '@/lib/almacen/resolverMaterialIdPorSku';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
+import { completarIngresoAlmacenCompraAtomico } from '@/lib/contabilidad/ingresoAlmacenAtomico';
 import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -22,6 +23,7 @@ type CompraContableRow = {
   total_amount: number | null;
   ubicacion_destino_id: string | null;
   document_storage_path: string | null;
+  procura_id?: string | null;
 };
 
 type CompraFacturaExistente = { id: string };
@@ -43,7 +45,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     const { data: compraRaw, error: cErr } = await supabase
       .from('contabilidad_compras')
       .select(
-        'id,purchase_invoice_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,ubicacion_destino_id,document_storage_path',
+        'id,purchase_invoice_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,ubicacion_destino_id,document_storage_path,procura_id',
       )
       .eq('id', compraId)
       .maybeSingle();
@@ -74,7 +76,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       .maybeSingle();
     const existente = existenteRaw as CompraFacturaExistente | null;
     if (existente?.id) {
-      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId, {
+        procuraId: compra.procura_id ?? null,
+      });
       return NextResponse.json({
         success: true,
         yaExistia: true,
@@ -143,25 +147,69 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       );
     }
 
-    const r = await registrarCompraInventario(supabase, {
-      ubicacionDestinoId: String(compra.ubicacion_destino_id),
+    const atomico = await completarIngresoAlmacenCompraAtomico(supabase, {
+      purchaseInvoiceId,
       numeroFactura: String(compra.invoice_number ?? 'S/N'),
       proveedorRif: String(compra.supplier_rif ?? 'S/R'),
       proveedorNombre: String(compra.supplier_name ?? 'Proveedor'),
       fechaEmision: String(compra.fecha ?? new Date().toISOString().slice(0, 10)),
       total: Number(compra.total_amount ?? 0),
-      purchaseInvoiceId,
+      ubicacionDestinoId: String(compra.ubicacion_destino_id),
       documentoStoragePath: compra.document_storage_path,
       lineas: lineasInventario,
     });
 
-    await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+    if (atomico.rpcNoDisponible) {
+      const r = await registrarCompraInventario(supabase, {
+        ubicacionDestinoId: String(compra.ubicacion_destino_id),
+        numeroFactura: String(compra.invoice_number ?? 'S/N'),
+        proveedorRif: String(compra.supplier_rif ?? 'S/R'),
+        proveedorNombre: String(compra.supplier_name ?? 'Proveedor'),
+        fechaEmision: String(compra.fecha ?? new Date().toISOString().slice(0, 10)),
+        total: Number(compra.total_amount ?? 0),
+        purchaseInvoiceId,
+        documentoStoragePath: compra.document_storage_path,
+        lineas: lineasInventario,
+      });
+      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId, {
+        procuraId: compra.procura_id ?? null,
+      });
+      return NextResponse.json({
+        success: true,
+        yaExistia: false,
+        viaCuarentena: false,
+        compraFacturaId: r.compraFacturaId,
+        avisos: avisos.length ? avisos : undefined,
+        materialesCreados: resuelto.materialesCreados || undefined,
+        estadoLogistica: 'en_almacen',
+      });
+    }
+
+    if (!atomico.success) {
+      return NextResponse.json({ error: atomico.error ?? 'Error al ingresar en almacén.' }, { status: 400 });
+    }
+
+    if (atomico.aviso) avisos.push(atomico.aviso);
+    if (atomico.procuraTicket && atomico.desviacionUsd != null) {
+      avisos.push(
+        `Procura ${atomico.procuraTicket}: desviación USD ${atomico.desviacionUsd >= 0 ? '+' : ''}${atomico.desviacionUsd.toFixed(2)}`,
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      yaExistia: false,
+      yaExistia: atomico.yaExistia,
       viaCuarentena: false,
-      compraFacturaId: r.compraFacturaId,
+      compraFacturaId: atomico.compraFacturaId,
+      ingresoFisicoPrevio: atomico.ingresoFisicoPrevio,
+      concurrencia: atomico.concurrencia,
+      procura: atomico.procuraId
+        ? {
+            id: atomico.procuraId,
+            ticket: atomico.procuraTicket,
+            desviacion_usd: atomico.desviacionUsd,
+          }
+        : undefined,
       avisos: avisos.length ? avisos : undefined,
       materialesCreados: resuelto.materialesCreados || undefined,
       estadoLogistica: 'en_almacen',

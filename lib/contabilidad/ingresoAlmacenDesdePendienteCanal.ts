@@ -13,6 +13,7 @@ import {
   resolverMaterialIdLineasCompra,
 } from '@/lib/almacen/resolverMaterialIdPorSku';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
+import { completarIngresoAlmacenCompraAtomico } from '@/lib/contabilidad/ingresoAlmacenAtomico';
 import { sincronizarContabilidadTrasInventarioCompra } from '@/lib/contabilidad/sincronizarLogisticaCompraContable';
 
 export type ResultadoIngresoAlmacenCanal = {
@@ -450,27 +451,49 @@ export async function ingresoAlmacenDesdePendienteCanal(
     const extractedHeader = (pendiente?.extracted ?? null) as ExtractedCanalHeader | null;
     const condicionPago = parseCondicionPagoExtracted(extractedHeader?.condicion_pago);
 
-    const result = await registrarCompraInventario(supabase, {
-      ubicacionDestinoId: destino,
+    const atomico = await completarIngresoAlmacenCompraAtomico(supabase, {
+      purchaseInvoiceId,
       numeroFactura: String(compra.invoice_number ?? 'S/N'),
       proveedorRif: String(compra.supplier_rif ?? 'S/R'),
       proveedorNombre: String(compra.supplier_name ?? 'Proveedor'),
       fechaEmision: String(compra.fecha ?? new Date().toISOString().slice(0, 10)),
       total: Number(compra.total_amount ?? 0),
-      purchaseInvoiceId,
+      ubicacionDestinoId: destino,
       documentoStoragePath: opts?.documentoStoragePath?.trim() || null,
       condicion_pago: condicionPago,
       dias_credito: extractedHeader?.dias_credito ?? null,
       lineas: lineasInventario,
     });
 
-    await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+    let compraFacturaId = atomico.compraFacturaId;
+
+    if (atomico.rpcNoDisponible) {
+      const result = await registrarCompraInventario(supabase, {
+        ubicacionDestinoId: destino,
+        numeroFactura: String(compra.invoice_number ?? 'S/N'),
+        proveedorRif: String(compra.supplier_rif ?? 'S/R'),
+        proveedorNombre: String(compra.supplier_name ?? 'Proveedor'),
+        fechaEmision: String(compra.fecha ?? new Date().toISOString().slice(0, 10)),
+        total: Number(compra.total_amount ?? 0),
+        purchaseInvoiceId,
+        documentoStoragePath: opts?.documentoStoragePath?.trim() || null,
+        condicion_pago: condicionPago,
+        dias_credito: extractedHeader?.dias_credito ?? null,
+        lineas: lineasInventario,
+      });
+      compraFacturaId = result.compraFacturaId;
+      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+    } else if (!atomico.success) {
+      return { success: false, error: atomico.error ?? 'Error al registrar ingreso' };
+    } else if (atomico.aviso) {
+      avisos.push(atomico.aviso);
+    }
 
     return {
       success: true,
-      yaExistia: false,
+      yaExistia: atomico.yaExistia ?? false,
       viaCuarentena: false,
-      compraFacturaId: result.compraFacturaId,
+      compraFacturaId,
       avisos: avisos.length ? avisos : undefined,
       materialesCreados: resuelto.materialesCreados || undefined,
       sinMatch: resuelto.sinMatch.length ? resuelto.sinMatch : undefined,

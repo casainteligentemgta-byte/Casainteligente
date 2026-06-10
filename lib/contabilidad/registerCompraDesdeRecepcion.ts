@@ -17,6 +17,7 @@ import {
 } from '@/lib/contabilidad/imputacionCompra';
 import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
+import { vincularProcuraCompraContabilidad } from '@/lib/procuras/vincularProcuraCompra';
 
 export type LineaCompraContabilidadInput = {
   purchase_detail_id?: string | null;
@@ -50,6 +51,8 @@ export type RegistrarCompraContabilidadInput = {
   entidad_id?: string | null;
   imputacion?: ImputacionCompra;
   clasificacion_gasto_entidad?: ClasificacionGastoEntidad | null;
+  /** D-05: procura origen explícita (si no, auto-match en migr. 236). */
+  procura_id?: string | null;
 };
 
 export async function registerCompraDesdeRecepcion(
@@ -83,6 +86,11 @@ export async function registerCompraDesdeRecepcion(
     if (doc.storagePath && !existente.document_storage_path?.trim()) {
       await sincronizarDocumentoEnCompra(supabase, existente.id, doc);
     }
+    await vincularProcuraCompraContabilidad(supabase, {
+      purchaseInvoiceId: input.purchase_invoice_id,
+      contabilidadCompraId: existente.id,
+      procuraId: input.procura_id ?? null,
+    }).catch(() => undefined);
     return { compraId: existente.id, yaExistia: true };
   }
 
@@ -156,6 +164,7 @@ export async function registerCompraDesdeRecepcion(
       ...(gastoEntidad && input.clasificacion_gasto_entidad
         ? { clasificacion_gasto_entidad: input.clasificacion_gasto_entidad }
         : {}),
+      ...(input.procura_id?.trim() ? { procura_id: input.procura_id.trim() } : {}),
     })
     .select('id')
     .single();
@@ -187,6 +196,12 @@ export async function registerCompraDesdeRecepcion(
       `Compra contable creada pero falló el detalle: ${lineasError.message}`
     );
   }
+
+  await vincularProcuraCompraContabilidad(supabase, {
+    purchaseInvoiceId: input.purchase_invoice_id,
+    contabilidadCompraId: String(compra.id),
+    procuraId: input.procura_id ?? null,
+  }).catch(() => undefined);
 
   return { compraId: compra.id, yaExistia: false };
 }

@@ -62,6 +62,20 @@ export async function registrarCompraInventario(
     .single();
 
   if (fErr) {
+    if (
+      fErr.code === '23505' &&
+      params.purchaseInvoiceId?.trim() &&
+      /purchase_invoice|idx_compras_facturas_purchase_invoice/i.test(fErr.message ?? '')
+    ) {
+      const { data: existente } = await supabase
+        .from('compras_facturas')
+        .select('id')
+        .eq('purchase_invoice_id', params.purchaseInvoiceId.trim())
+        .maybeSingle();
+      if (existente?.id) {
+        return { compraFacturaId: String(existente.id) };
+      }
+    }
     if (fErr.code === '42P01') {
       throw new Error('Tabla compras_facturas no existe. Aplique la migración 180 o 197.');
     }
