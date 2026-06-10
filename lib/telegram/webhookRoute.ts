@@ -50,6 +50,20 @@ export function handleTelegramWebhookGet() {
   });
 }
 
+function validarSecretoWebhookTelegram(req: Request): boolean {
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(
+        '[telegram webhook] TELEGRAM_WEBHOOK_SECRET no configurado — webhook expuesto a spoofing',
+      );
+    }
+    return true;
+  }
+  const header = req.headers.get('x-telegram-bot-api-secret-token');
+  return header === secret;
+}
+
 export async function handleTelegramWebhookRoutePost(req: Request) {
   if (!getTelegramBotToken()) {
     console.error('[telegram webhook] TELEGRAM_BOT_TOKEN no configurado en el servidor');
@@ -58,6 +72,11 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
       error: 'TELEGRAM_BOT_TOKEN',
       hint: 'Añada TELEGRAM_BOT_TOKEN en Vercel → Environment Variables (Production) y redeploy.',
     });
+  }
+
+  if (!validarSecretoWebhookTelegram(req)) {
+    console.warn('[telegram webhook] secret_token inválido o ausente');
+    return respuestaWebhook({ ok: false, error: 'unauthorized_webhook' }, 401);
   }
 
   let update: TelegramUpdate;

@@ -11,6 +11,10 @@ import {
   permisosEnforcementActivo,
   resolverActorTelegram,
 } from '@/lib/auth/permisos';
+import {
+  obtenerUsuarioSistemaTelegram,
+  usuarioPuedeAprobarProcura,
+} from '@/lib/compras/usuariosSistemaTelegram';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import {
@@ -60,11 +64,15 @@ async function puedeAutorizarProcuraAdmin(
 ): Promise<boolean> {
   if (!(await isChatAllowedAsync(userId))) return false;
 
-  if (!permisosEnforcementActivo()) {
-    return esChatCanalAdminTelegram(chatId) || (await isChatAllowedAsync(userId));
+  const usuarioDept = await obtenerUsuarioSistemaTelegram(supabase, userId);
+  if (usuarioDept && usuarioPuedeAprobarProcura(usuarioDept)) {
+    return true;
   }
 
-  if (esChatCanalAdminTelegram(chatId)) return true;
+  if (!permisosEnforcementActivo()) {
+    if (esChatCanalAdminTelegram(chatId)) return false;
+    return true;
+  }
 
   const actor = await resolverActorTelegram(supabase, userId);
   return puedeAprobarProcuraTelegram(actor, accion);

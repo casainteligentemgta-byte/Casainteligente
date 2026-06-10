@@ -52,16 +52,27 @@ async function main() {
   const webhookPath =
     process.env.TELEGRAM_WEBHOOK_PATH?.trim() || '/api/webhooks/telegram';
   const webhookUrl = `${base}${webhookPath.startsWith('/') ? webhookPath : `/${webhookPath}`}`;
+  const webhookSecret =
+    process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || env.TELEGRAM_WEBHOOK_SECRET?.trim();
   const api = `https://api.telegram.org/bot${token}/setWebhook`;
+
+  const payload = {
+    url: webhookUrl,
+    allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
+    drop_pending_updates: true,
+    ...(webhookSecret ? { secret_token: webhookSecret } : {}),
+  };
+
+  if (!webhookSecret) {
+    console.warn(
+      '⚠️ TELEGRAM_WEBHOOK_SECRET no definido — genere uno (openssl rand -hex 32) y añádalo a .env.local y Vercel.',
+    );
+  }
 
   const res = await fetch(api, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url: webhookUrl,
-      allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
-      drop_pending_updates: true,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const json = await res.json();

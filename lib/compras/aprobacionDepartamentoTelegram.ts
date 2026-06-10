@@ -77,7 +77,19 @@ async function puedeActuarComoAprobador(
   }
 
   if (esChatCanalAdminTelegram(chatId)) {
-    return { ok: true, nombre: 'Canal admin', telegramId: parseInt(userId, 10) || 0 };
+    const authCanal = await exigirUsuarioSistemaTelegram(supabase, userId);
+    if (!authCanal.ok) return { ok: false, mensaje: authCanal.error };
+    if (!usuarioPuedeAprobarProcura(authCanal.usuario)) {
+      return {
+        ok: false,
+        mensaje: `⛔ Rol «${authCanal.usuario.rol}» no puede aprobar/rechazar en el canal admin. Se requiere Aprobador o Administrador.`,
+      };
+    }
+    return {
+      ok: true,
+      nombre: authCanal.usuario.nombre,
+      telegramId: authCanal.usuario.telegram_id,
+    };
   }
 
   const auth = await exigirUsuarioSistemaTelegram(supabase, userId);
