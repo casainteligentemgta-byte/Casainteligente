@@ -1,11 +1,12 @@
 'use client';
 
-import { Download, FileSpreadsheet, X } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, X } from 'lucide-react';
 import {
   exportarReporteClienteExcel,
   REPORTE_CLIENTE_HEADERS,
   type ReporteClienteFila,
 } from '@/lib/contabilidad/reporteClienteCompras';
+import { exportarReporteClientePdf } from '@/lib/contabilidad/reporteClientePrintHtml';
 import type { ComprasExportScope } from '@/lib/contabilidad/comprasExportShare';
 import { formatearBs, formatearTasaBcv, formatearUsd } from '@/lib/contabilidad/comprasMontos';
 
@@ -26,8 +27,16 @@ export default function ReporteClienteComprasModal({
 }: Props) {
   if (!open) return null;
 
-  const exportar = () => {
+  const exportarExcel = () => {
     exportarReporteClienteExcel(filas, scope);
+  };
+
+  const exportarPdf = () => {
+    try {
+      exportarReporteClientePdf(filas, { subtitulo });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'No se pudo abrir el PDF');
+    }
   };
 
   return (
@@ -53,7 +62,8 @@ export default function ReporteClienteComprasModal({
               <p className="mt-1 text-xs text-zinc-500">{subtitulo}</p>
             ) : null}
             <p className="mt-1 text-xs text-zinc-400">
-              {filas.length} factura{filas.length === 1 ? '' : 's'} · resumen por factura
+              {filas.length} factura{filas.length === 1 ? '' : 's'} · una fila por factura · máx. 3
+              artículos en columna
             </p>
           </div>
           <button
@@ -89,18 +99,35 @@ export default function ReporteClienteComprasModal({
                 {filas.map((row, i) => (
                   <tr
                     key={`${row.factura}-${row.fecha}-${i}`}
-                    className="border-b border-white/[0.06] hover:bg-white/[0.03]"
+                    className="border-b border-white/[0.06] align-top hover:bg-white/[0.03]"
                   >
                     <td className="whitespace-nowrap px-3 py-2.5">{row.fecha || '—'}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-white">
                       {row.factura || '—'}
                     </td>
-                    <td className="max-w-[160px] truncate px-3 py-2.5" title={row.proveedor}>
+                    <td className="max-w-[160px] px-3 py-2.5" title={row.proveedor}>
                       {row.proveedor || '—'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">{row.rif || '—'}</td>
-                    <td className="max-w-[220px] px-3 py-2.5" title={row.articulos}>
-                      {row.articulos || '—'}
+                    <td className="min-w-[180px] max-w-[260px] px-3 py-2.5">
+                      {row.articulosLista.length ? (
+                        <div className="flex flex-col gap-1">
+                          {row.articulosLista.map((art, j) => (
+                            <div
+                              key={`${row.factura}-art-${j}`}
+                              className={
+                                j > 0
+                                  ? 'border-t border-dashed border-white/10 pt-1 leading-snug text-zinc-300'
+                                  : 'leading-snug text-zinc-300'
+                              }
+                            >
+                              {art}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
                       {row.totalArticulos.toLocaleString('es-VE')}
@@ -132,11 +159,20 @@ export default function ReporteClienteComprasModal({
           <button
             type="button"
             disabled={!filas.length}
-            onClick={exportar}
+            onClick={exportarPdf}
+            className="inline-flex items-center gap-2 rounded-xl border border-violet-500/45 bg-violet-500/15 px-4 py-2 text-xs font-bold text-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <FileText size={14} />
+            Ver PDF
+          </button>
+          <button
+            type="button"
+            disabled={!filas.length}
+            onClick={exportarExcel}
             className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/20 px-4 py-2 text-xs font-bold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download size={14} />
-            Descargar Excel
+            Excel
           </button>
         </div>
       </div>

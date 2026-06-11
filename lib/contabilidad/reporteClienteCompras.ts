@@ -3,13 +3,15 @@ import { descargarTextoComoArchivo } from '@/lib/almacen/inventarioExportShare';
 import { montoUsdCompra, montoVesCompra, tasaBcvCompra } from '@/lib/contabilidad/comprasMontos';
 import type { ComprasExportScope } from '@/lib/contabilidad/comprasExportShare';
 
+export const MAX_ARTICULOS_REPORTE_CLIENTE = 3;
+
 export type ReporteClienteFila = {
   fecha: string;
   factura: string;
   proveedor: string;
   rif: string;
-  /** Hasta 3 descripciones separadas por «;». */
-  articulos: string;
+  /** Hasta 3 descripciones (una por línea en pantalla / exporte). */
+  articulosLista: string[];
   /** Cantidad total de unidades (suma de cantidades por línea). */
   totalArticulos: number;
   montoTotalBs: number;
@@ -17,12 +19,12 @@ export type ReporteClienteFila = {
   tasaBcv: number | null;
 };
 
-const HEADERS = [
+export const REPORTE_CLIENTE_HEADERS = [
   'Fecha',
   'Factura',
   'Proveedor',
   'RIF',
-  'Artículos (máx. 3)',
+  'Artículos',
   'Nº artículos',
   'Monto total (Bs)',
   'Monto USD',
@@ -44,6 +46,10 @@ function etiquetaLinea(l: CompraCuadroLineaInput): string {
   return code || 'Artículo';
 }
 
+export function articulosReporteClienteTexto(fila: ReporteClienteFila): string {
+  return fila.articulosLista.join('\n');
+}
+
 export function buildReporteClienteDesdeCompras<T extends CompraCuadroInput>(
   compras: T[],
   tasaResolver: (c: T) => number | null,
@@ -51,7 +57,7 @@ export function buildReporteClienteDesdeCompras<T extends CompraCuadroInput>(
   const filas: ReporteClienteFila[] = compras.map((c) => {
     const lineas = lineasDetalleCompra(c);
     const nombres = lineas.map(etiquetaLinea).filter(Boolean);
-    const articulos = nombres.slice(0, 3).join('; ');
+    const articulosLista = nombres.slice(0, MAX_ARTICULOS_REPORTE_CLIENTE);
     const totalUnidades = lineas.reduce((acc, l) => acc + (Number(l.cantidad) || 0), 0);
     const totalArticulos = totalUnidades > 0 ? totalUnidades : lineas.length;
 
@@ -72,7 +78,7 @@ export function buildReporteClienteDesdeCompras<T extends CompraCuadroInput>(
       factura: String(c.invoice_number ?? 'S/N').trim(),
       proveedor: String(c.supplier_name ?? '').trim(),
       rif: String(c.supplier_rif ?? '').trim(),
-      articulos,
+      articulosLista,
       totalArticulos,
       montoTotalBs,
       montoUsd,
@@ -93,7 +99,7 @@ function filaAValores(row: ReporteClienteFila): (string | number)[] {
     row.factura,
     row.proveedor,
     row.rif,
-    row.articulos,
+    articulosReporteClienteTexto(row),
     row.totalArticulos,
     Math.round(row.montoTotalBs * 100) / 100,
     Math.round(row.montoUsd * 100) / 100,
@@ -102,7 +108,7 @@ function filaAValores(row: ReporteClienteFila): (string | number)[] {
 }
 
 export function reporteClienteAoa(filas: ReporteClienteFila[]): (string | number)[][] {
-  return [[...HEADERS], ...filas.map(filaAValores)];
+  return [[...REPORTE_CLIENTE_HEADERS], ...filas.map(filaAValores)];
 }
 
 function escapeXmlExcel(value: string): string {
@@ -113,22 +119,37 @@ function escapeXmlExcel(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function celdaSpreadsheetMl(value: string | number, header = false): string {
-  const tag = header ? 'Cell ss:StyleID="Header"' : 'Cell';
+function celdaSpreadsheetMl(
+  value: string | number,
+  opts?: { header?: boolean; wrap?: boolean },
+): string {
+  const header = opts?.header ?? false;
+  const wrap = opts?.wrap ?? false;
+  const style =
+    header ? ' ss:StyleID="Header"' : wrap ? ' ss:StyleID="Wrap"' : '';
+  const tag = `Cell${style}`;
   if (typeof value === 'number' && Number.isFinite(value)) {
     return `<${tag}><Data ss:Type="Number">${value}</Data></Cell>`;
   }
   return `<${tag}><Data ss:Type="String">${escapeXmlExcel(String(value ?? ''))}</Data></Cell>`;
 }
 
+const COL_ARTICULOS_IDX = 4;
+
 function reporteClienteSpreadsheetMl(filas: ReporteClienteFila[]): string {
-  const rows = reporteClienteAoa(filas);
-  const filasXml = rows
-    .map(
-      (row, idx) =>
-        `<Row>${row.map((cell) => celdaSpreadsheetMl(cell, idx === 0)).join('')}</Row>`,
-    )
-    .join('');
+  const headerRow = REPORTE_CLIENTE_HEADERS.map((h) => celdaSpreadsheetMl(h, { header: true }));
+  const dataRows = filas.map((row) => {
+    const vals = filaAValores(row);
+    return vals
+      .map((cell, idx) =>
+        celdaSpreadsheetMl(cell, { wrap: idx === COL_ARTICULOS_IDX }),
+      )
+      .join('');
+  });
+
+  const filasXml =
+    `<Row>${headerRow.join('')}</Row>` +
+    dataRows.map((cells) => `<Row>${cells}</Row>`).join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -138,6 +159,7 @@ function reporteClienteSpreadsheetMl(filas: ReporteClienteFila[]): string {
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
  <Styles>
   <Style ss:ID="Header"><Font ss:Bold="1"/></Style>
+  <Style ss:ID="Wrap"><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
  </Styles>
  <Worksheet ss:Name="Reporte Cliente">
   <Table>${filasXml}</Table>
@@ -145,11 +167,14 @@ function reporteClienteSpreadsheetMl(filas: ReporteClienteFila[]): string {
 </Workbook>`;
 }
 
-export function nombreArchivoReporteCliente(scope: ComprasExportScope): string {
+export function nombreArchivoReporteCliente(
+  scope: ComprasExportScope,
+  ext: 'xls' | 'pdf' = 'xls',
+): string {
   const fecha = new Date().toISOString().slice(0, 10);
-  return scope === 'filtrado'
-    ? `reporte-cliente-filtrado-${fecha}.xls`
-    : `reporte-cliente-completo-${fecha}.xls`;
+  const base =
+    scope === 'filtrado' ? `reporte-cliente-filtrado-${fecha}` : `reporte-cliente-completo-${fecha}`;
+  return `${base}.${ext}`;
 }
 
 export function exportarReporteClienteExcel(
@@ -159,10 +184,8 @@ export function exportarReporteClienteExcel(
   if (!filas.length) return false;
   descargarTextoComoArchivo(
     `\uFEFF${reporteClienteSpreadsheetMl(filas)}`,
-    nombreArchivoReporteCliente(scope),
+    nombreArchivoReporteCliente(scope, 'xls'),
     'application/vnd.ms-excel;charset=utf-8',
   );
   return true;
 }
-
-export { HEADERS as REPORTE_CLIENTE_HEADERS };
