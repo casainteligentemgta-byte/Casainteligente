@@ -13,7 +13,7 @@ import {
 } from '@/lib/ui/moduloProyectosTheme';
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
-import ModalConfigFastTrack from '@/components/proyectos/ModalConfigFastTrack';
+import ProyectoAccionesConfigRoles from '@/components/proyectos/ProyectoAccionesConfigRoles';
 
 /** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
@@ -587,18 +587,17 @@ export default function ModuloProyectosPage() {
                           Control de obra
                         </button>
                       </Link>
-                      <ModalConfigFastTrack
+                      <ProyectoAccionesConfigRoles
                         proyectoId={r.id}
                         proyectoNombre={r.nombre}
-                        limiteInicial={r.limite_fast_track_usd}
-                        onGuardado={(limite) => {
+                        limiteFastTrackUsd={r.limite_fast_track_usd}
+                        onGuardadoFastTrack={(limite) => {
                           setItems((prev) =>
                             prev.map((p) =>
                               p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
                             ),
                           );
                         }}
-                        triggerClassName="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04] text-zinc-300 backdrop-blur-xl transition hover:border-[#FF9500]/40 hover:text-[#FF9500]"
                       />
                       <button
                         type="button"

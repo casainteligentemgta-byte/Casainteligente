@@ -48,3 +48,20 @@ export function definicionRolAplicacion(slug: string): RolAplicacionProyectoDef 
 export function etiquetaRolAplicacion(slug: string): string {
   return definicionRolAplicacion(slug)?.label ?? slug.replace(/_/g, ' ');
 }
+
+/** Slug de rol personalizado a partir del título visible. */
+export function slugDesdeLabelRol(label: string): string {
+  const t = label
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 50);
+  return t || 'rol_personalizado';
+}
+
+export function esRolComprasTelegramSlug(slug: string): boolean {
+  return ROLES_COMPRAS_TELEGRAM.includes(slug as (typeof ROLES_COMPRAS_TELEGRAM)[number]);
+}

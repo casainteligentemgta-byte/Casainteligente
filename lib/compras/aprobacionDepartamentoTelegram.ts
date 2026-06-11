@@ -21,6 +21,7 @@ import {
   exigirUsuarioSistemaTelegram,
   usuarioPuedeAprobarProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
+import { esAprobadorNominaProyecto } from '@/lib/procuras/aprobadoresProcuraTelegram';
 
 export const CB_CMP_APROBAR = 'cmp_apr_';
 export const CB_CMP_RECHAZAR_CANCEL = 'cmp_rech_cancel:';
@@ -68,6 +69,7 @@ async function puedeActuarComoAprobador(
   supabase: SupabaseClient,
   chatId: string,
   userId: string,
+  proyectoId?: string | null,
 ): Promise<
   | { ok: true; nombre: string; telegramId: number }
   | { ok: false; mensaje: string }
@@ -93,18 +95,28 @@ async function puedeActuarComoAprobador(
   }
 
   const auth = await exigirUsuarioSistemaTelegram(supabase, userId);
-  if (!auth.ok) return { ok: false, mensaje: auth.error };
-  if (!usuarioPuedeAprobarProcura(auth.usuario)) {
+  if (auth.ok && usuarioPuedeAprobarProcura(auth.usuario)) {
     return {
-      ok: false,
-      mensaje: `⛔ Rol «${auth.usuario.rol}» no puede aprobar/rechazar. Se requiere Aprobador o Administrador.`,
+      ok: true,
+      nombre: auth.usuario.nombre,
+      telegramId: auth.usuario.telegram_id,
     };
   }
 
+  const tid = parseInt(userId, 10);
+  const pmNomina = await esAprobadorNominaProyecto(
+    supabase,
+    userId,
+    proyectoId?.trim() || null,
+  );
+  if (pmNomina.ok && Number.isFinite(tid)) {
+    return { ok: true, nombre: pmNomina.nombre, telegramId: tid };
+  }
+
+  if (!auth.ok) return { ok: false, mensaje: auth.error };
   return {
-    ok: true,
-    nombre: auth.usuario.nombre,
-    telegramId: auth.usuario.telegram_id,
+    ok: false,
+    mensaje: `⛔ Rol «${auth.usuario.rol}» no puede aprobar/rechazar. Se requiere Aprobador o Administrador.`,
   };
 }
 
@@ -117,6 +129,7 @@ type ProcuraAprobacionRow = {
   cantidad: number;
   unidad: string;
   solicitante_telegram_chat_id: number | null;
+  proyecto_id: string | null;
 };
 
 async function cargarProcuraParaAprobacion(
@@ -126,7 +139,7 @@ async function cargarProcuraParaAprobacion(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,solicitante_telegram_chat_id',
+      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,solicitante_telegram_chat_id,proyecto_id',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -461,7 +474,13 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
     return true;
   }
 
-  const perm = await puedeActuarComoAprobador(supabase, params.chatId, params.userId);
+  const procuraPreview = await cargarProcuraParaAprobacion(supabase, parsed.procuraId);
+  const perm = await puedeActuarComoAprobador(
+    supabase,
+    params.chatId,
+    params.userId,
+    procuraPreview?.proyecto_id,
+  );
   if (!perm.ok) {
     await answerCallbackQuery(params.callbackId, perm.mensaje.slice(0, 180), true);
     return true;

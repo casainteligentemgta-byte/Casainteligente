@@ -11,6 +11,7 @@ import {
   CB_PROCURA_ADMIN_APROBAR,
   CB_PROCURA_ADMIN_RECHAZAR,
 } from '@/lib/procuras/procuraAdminCallbacks';
+import { listarAprobadoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
 import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
 
@@ -35,6 +36,7 @@ export type AlertaProcuraAdminRow = {
   unidad: string;
   estado: string;
   observaciones?: string | null;
+  proyecto_id?: string | null;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
   capitulo_maestro_id?: string | null;
   prioridad?: string | null;
@@ -56,7 +58,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -113,6 +115,31 @@ export async function enviarAlertaProcuraPendienteAdmin(
     parse_mode: 'HTML',
     reply_markup: replyMarkup,
   });
+
+  const proyectoId = row.proyecto_id?.trim() || null;
+  let aprobadores: Awaited<ReturnType<typeof listarAprobadoresProcuraTelegram>> = [];
+  try {
+    aprobadores = await listarAprobadoresProcuraTelegram(supabase, proyectoId);
+  } catch (e) {
+    console.warn('[alertaAdminProcura] listar aprobadores', e);
+  }
+
+  const dmMarkup = tecladoAprobacionDepartamento(row.id);
+  const msgDm =
+    '📩 <b>Procura pendiente de tu aprobación</b>\n\n' +
+    msg.replace('🏗️ <b>ALERTA DE PROCURA PENDIENTE</b>\n\n', '');
+
+  for (const ap of aprobadores) {
+    if (String(ap.chatId) === canal) continue;
+    try {
+      await sendTelegramMessage(String(ap.chatId), msgDm, {
+        parse_mode: 'HTML',
+        reply_markup: dmMarkup,
+      });
+    } catch (e) {
+      console.warn('[alertaAdminProcura] DM aprobador', ap.nombre, ap.chatId, e);
+    }
+  }
 
   return true;
 }

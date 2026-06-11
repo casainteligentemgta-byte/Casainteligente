@@ -6,7 +6,6 @@ import {
   listarRolesAplicacionProyecto,
   type GuardarRolAplicacionInput,
 } from '@/lib/proyectos/proyectoRolesAplicacion';
-import { SLUGS_ROLES_APLICACION } from '@/lib/proyectos/rolesAplicacionProyecto';
 import {
   isValidProyectoUuid,
   mensajeProyectoIdInvalido,
@@ -42,19 +41,26 @@ export async function PUT(req: Request, { params }: RouteCtx) {
     return NextResponse.json({ error: mensajeProyectoIdInvalido(proyectoId) }, { status: 400 });
   }
 
-  let body: { roles?: GuardarRolAplicacionInput[] };
+  let body: { roles?: GuardarRolAplicacionInput[]; eliminados?: string[] };
   try {
-    body = (await req.json()) as { roles?: GuardarRolAplicacionInput[] };
+    body = (await req.json()) as { roles?: GuardarRolAplicacionInput[]; eliminados?: string[] };
   } catch {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
   }
 
   const rolesIn = Array.isArray(body.roles) ? body.roles : [];
-  const roles = rolesIn.filter((r) => SLUGS_ROLES_APLICACION.has(String(r.slug ?? '').trim()));
+  const eliminados = Array.isArray(body.eliminados)
+    ? body.eliminados.map((id) => String(id).trim()).filter(Boolean)
+    : [];
 
   try {
     const supabase = await supabaseAdmin();
-    const guardados = await guardarRolesAplicacionProyecto(supabase, proyectoId, roles);
+    const guardados = await guardarRolesAplicacionProyecto(
+      supabase,
+      proyectoId,
+      rolesIn,
+      eliminados,
+    );
     return NextResponse.json({ ok: true, proyectoId, roles: guardados });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'No se pudieron guardar los roles';

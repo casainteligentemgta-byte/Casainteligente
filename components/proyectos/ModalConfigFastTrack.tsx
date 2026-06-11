@@ -22,6 +22,8 @@ type Props = {
   onGuardado?: (limite: number) => void;
   /** Botón trigger compacto para la fila de la tarjeta. */
   triggerClassName?: string;
+  /** Permite abrir el modal desde otro botón (p. ej. «Editar roles»). */
+  registerAbrir?: (abrir: () => void) => void;
 };
 
 const inputClass =
@@ -33,10 +35,15 @@ export default function ModalConfigFastTrack({
   limiteInicial,
   onGuardado,
   triggerClassName,
+  registerAbrir,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [limite, setLimite] = useState(String(limiteInicial));
   const { isSubmitting, runLocked } = useSyncSubmitLock();
+
+  useEffect(() => {
+    registerAbrir?.(() => setOpen(true));
+  }, [registerAbrir]);
 
   useEffect(() => {
     if (open) setLimite(String(limiteInicial));

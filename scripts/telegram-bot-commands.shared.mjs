@@ -2,15 +2,19 @@
  * Comandos del menú de Telegram (BotFather / setMyCommands).
  * Mantener sincronizado con lib/telegram/botCommands.ts
  */
-export const TELEGRAM_BOT_COMMANDS = [
-  { command: 'menu', description: 'Menú principal de Casa Inteligente' },
-  { command: 'ayuda', description: 'Lista completa de comandos' },
-  { command: 'facturas', description: 'Comprador: foto/PDF → Contabilidad + precarga almacén' },
+export const TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO = [
   { command: 'procura', description: 'Solicitar material (procura de abastecimiento)' },
+  { command: 'facturas', description: 'Foto/PDF factura → Contabilidad + precarga almacén' },
   { command: 'compras', description: 'Compras e inventario por obra (ej. /compras Flamboyant)' },
   { command: 'comprasdia', description: 'Materiales comprados hoy' },
   { command: 'comprassemana', description: 'Materiales comprados esta semana' },
   { command: 'comprasmes', description: 'Materiales comprados este mes' },
+];
+
+export const TELEGRAM_BOT_COMMANDS = [
+  { command: 'menu', description: 'Menú principal de Casa Inteligente' },
+  { command: 'ayuda', description: 'Lista completa de comandos' },
+  ...TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO,
   { command: 'ingreso', description: 'Menú ingreso: factura, nota, sin nota, precargadas' },
   { command: 'recepcion', description: 'Recepción web sincronizada con Telegram' },
   { command: 'ingresosinnota', description: 'Atajo: ingreso sin nota (obra → almacén → material)' },
