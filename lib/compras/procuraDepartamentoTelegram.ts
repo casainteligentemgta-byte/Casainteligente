@@ -34,7 +34,9 @@ import {
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { marcarTtlPendienteAtomico } from '@/lib/compras/telegramTtlAtomico';
 import {
-  etiquetaUnidadProcura,
+  CB_UNIDAD_PROCURA_ESCRIBIR,
+  CODIGOS_UNIDADES_PROCURA_TELEGRAM,
+  etiquetaUnidadProcuraTelegram,
   normalizarUnidadProcura,
   tecladoUnidadesProcuraPrincipales,
 } from '@/lib/procuras/unidadesProcura';
@@ -291,6 +293,13 @@ async function renderizarPasoProcuraDepartamento(
           reply_markup: tecladoUnidadesProcuraPrincipales(CB_UNI),
         });
       }
+      return;
+    case 'unidad_texto':
+      await sendTelegramMessage(
+        chatId,
+        '✏️ Escribe la <b>unidad</b> (ej. <code>GAL</code>, <code>KG</code>, <code>ROLLO</code>):',
+        { parse_mode: 'HTML' },
+      );
       return;
     case 'prioridad':
       await pedirPrioridad(chatId);
@@ -550,7 +559,7 @@ async function enviarConfirmacion(
       `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
       `📦 ${escHtml(m.material_txt ?? '')}` +
       (m.por_verificar ? ' <i>(por verificar)</i>\n' : '\n') +
-      `🔢 ${m.cantidad ?? '—'} ${escHtml(etiquetaUnidadProcura(m.unidad ?? 'UND'))}\n` +
+      `🔢 ${m.cantidad ?? '—'} ${escHtml(etiquetaUnidadProcuraTelegram(m.unidad ?? 'UND'))}\n` +
       `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n` +
       (m.es_consumible ? '🧴 Consumible: sí (auto)\n' : '🧴 Consumible: no (auto)\n') +
       (m.monto_estimado_usd != null
@@ -620,6 +629,27 @@ export async function manejarTextoProcuraDepartamentoTelegram(
         { parse_mode: 'HTML' },
       );
     }
+    return true;
+  }
+
+  if (paso === 'unidad_texto') {
+    if (t.length < 1) {
+      await sendTelegramMessage(chatId, '⚠️ Escribe la unidad (ej. <code>KG</code>).', {
+        parse_mode: 'HTML',
+      });
+      return true;
+    }
+    const unidad = normalizarUnidadProcura(t);
+    await patchMeta(supabase, chatId, estado, {
+      paso: 'prioridad',
+      unidad,
+    });
+    await sendTelegramMessage(
+      chatId,
+      `📏 Unidad: <b>${escHtml(etiquetaUnidadProcuraTelegram(unidad))}</b>`,
+      { parse_mode: 'HTML' },
+    );
+    await pedirPrioridad(chatId);
     return true;
   }
 
@@ -789,13 +819,25 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
   }
 
   if (params.data.startsWith(CB_UNI)) {
-    const codigo = normalizarUnidadProcura(params.data.slice(CB_UNI.length));
-    const valida = ['L', 'SAC', 'M', 'M3', 'M2'].includes(codigo);
-    if (!valida) {
+    const suffix = params.data.slice(CB_UNI.length);
+
+    if (suffix === CB_UNIDAD_PROCURA_ESCRIBIR) {
+      await answerCallbackQuery(params.callbackId);
+      await patchMeta(supabase, params.chatId, estado, { paso: 'unidad_texto' });
+      await sendTelegramMessage(
+        params.chatId,
+        '✏️ Escribe la <b>unidad</b> (ej. <code>GAL</code>, <code>KG</code>, <code>ROLLO</code>):',
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+
+    const codigo = normalizarUnidadProcura(suffix);
+    if (!CODIGOS_UNIDADES_PROCURA_TELEGRAM.includes(codigo)) {
       await answerCallbackQuery(params.callbackId, 'Unidad inválida', true);
       return true;
     }
-    await answerCallbackQuery(params.callbackId, etiquetaUnidadProcura(codigo));
+    await answerCallbackQuery(params.callbackId, etiquetaUnidadProcuraTelegram(codigo));
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'prioridad',
       unidad: codigo,

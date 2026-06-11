@@ -8,6 +8,7 @@ export type PasoProcuraDepartamento =
   | 'material'
   | 'cantidad'
   | 'unidad'
+  | 'unidad_texto'
   | 'prioridad'
   | 'consumible'
   | 'monto'
@@ -19,6 +20,7 @@ const PASOS_PROCURA: readonly PasoProcuraDepartamento[] = [
   'material',
   'cantidad',
   'unidad',
+  'unidad_texto',
   'prioridad',
   'consumible',
   'monto',

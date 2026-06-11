@@ -225,12 +225,27 @@ export function parseCantidadUnidadProcura(texto: string): CantidadUnidadProcura
 
 /** Unidades principales en picker Telegram /procura. */
 export const UNIDADES_PROCURA_TELEGRAM_PRINCIPALES: UnidadMedidaOpcion[] = [
+  { code: 'UND', name: 'UND' },
+  { code: 'SAC', name: 'SACOS' },
   { code: 'L', name: 'Litro' },
-  { code: 'SAC', name: 'Saco' },
   { code: 'M', name: 'Metro' },
   { code: 'M3', name: 'Metro cúbico' },
   { code: 'M2', name: 'Metro cuadrado' },
 ];
+
+export const CB_UNIDAD_PROCURA_ESCRIBIR = 'txt';
+
+export const CODIGOS_UNIDADES_PROCURA_TELEGRAM = UNIDADES_PROCURA_TELEGRAM_PRINCIPALES.map(
+  (u) => u.code,
+);
+
+/** Etiqueta corta para confirmaciones Telegram (/procura). */
+export function etiquetaUnidadProcuraTelegram(code: string | null | undefined): string {
+  const c = normalizarUnidadProcura(code);
+  const principal = UNIDADES_PROCURA_TELEGRAM_PRINCIPALES.find((u) => u.code === c);
+  if (principal) return principal.name;
+  return etiquetaUnidadProcura(c);
+}
 
 export function tecladoUnidadesProcuraPrincipales(
   prefixUnidad: string,
@@ -249,6 +264,13 @@ export function tecladoUnidadesProcuraPrincipales(
     }
   }
   if (row.length) rows.push(row);
+
+  rows.push([
+    {
+      text: '✏️ Escribir unidad',
+      callback_data: `${prefixUnidad}${CB_UNIDAD_PROCURA_ESCRIBIR}`,
+    },
+  ]);
 
   return { inline_keyboard: rows };
 }
