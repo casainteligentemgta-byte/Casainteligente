@@ -155,6 +155,8 @@ export async function enviarAlertaProcuraPendienteAdmin(
       await sendTelegramMessage(String(ap.chatId), msgDm, {
         parse_mode: 'HTML',
         reply_markup: dmMarkup,
+        rolDestinatario:
+          ap.rol === 'Administrador' ? 'Administrador' : 'Project Manager',
       });
       dmsEnviados += 1;
     } catch (e) {

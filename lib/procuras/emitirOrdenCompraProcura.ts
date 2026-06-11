@@ -132,6 +132,7 @@ export async function notificarCompradoresOrdenCompra(
     try {
       await sendTelegramMessage(String(u.telegram_id), texto, {
         parse_mode: 'HTML',
+        rolDestinatario: u.rol === 'Administrador' ? 'Administrador' : 'Comprador',
       });
       enviados += 1;
     } catch (e) {

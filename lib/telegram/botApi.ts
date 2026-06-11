@@ -46,6 +46,8 @@ export type TelegramMessageExtra = {
   reply_markup?: unknown;
   /** Sin parse_mode (texto plano, sin etiquetas HTML). */
   plain?: boolean;
+  /** Etiqueta del rol destinatario (modo pruebas TELEGRAM_PRUEBAS_REDIRECT). */
+  rolDestinatario?: string;
 };
 
 export async function sendTelegramMessage(
@@ -62,10 +64,13 @@ export async function sendTelegramMessageWithId(
   text: string,
   extra?: TelegramMessageExtra,
 ): Promise<number> {
-  const { plain, parse_mode, ...rest } = extra ?? {};
+  const { prepararEnvioPruebasTelegram } = await import('@/lib/telegram/enrutamientoPruebasTelegram');
+  const enrutado = await prepararEnvioPruebasTelegram(chatId, text, extra);
+
+  const { plain, parse_mode, rolDestinatario: _rol, ...rest } = extra ?? {};
   const body: Record<string, unknown> = {
-    chat_id: chatId,
-    text,
+    chat_id: enrutado.chatId,
+    text: enrutado.text,
     disable_web_page_preview: false,
     ...rest,
   };

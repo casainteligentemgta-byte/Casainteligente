@@ -36,7 +36,7 @@ export async function notificarRechazoProcuraSolicitante(
         `(<b>${escHtml(cantidadTxt)}</b>) ha sido <b>RECHAZADA</b>.\n\n` +
         `🎫 ${escHtml(String(procura.ticket))}${quien}\n\n` +
         `💬 <b>Motivo:</b> ${escHtml(motivoTxt)}`,
-      { parse_mode: 'HTML' },
+      { parse_mode: 'HTML', rolDestinatario: 'Solicitante' },
     );
     return true;
   } catch (e) {
