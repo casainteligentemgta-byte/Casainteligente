@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { listarRolesEmpresaUsuario } from '@/lib/auth/ciUsuariosRolesDb';
 import {
   type Permiso,
   permisoRequeridoParaEstadoProcura,
@@ -59,8 +60,8 @@ export async function resolverActorWeb(
   userId: string,
   email?: string | null,
 ): Promise<ActorPermisos> {
-  const [{ data: rolesRows }, nominaResult] = await Promise.all([
-    supabase.from('ci_usuarios_roles').select('rol, entidad_id').eq('usuario_id', userId),
+  const [rolesRows, nominaResult] = await Promise.all([
+    listarRolesEmpresaUsuario(supabase, userId),
     email?.trim()
       ? supabase
           .from('ci_proyecto_nomina')
@@ -71,7 +72,7 @@ export async function resolverActorWeb(
   ]);
   const nominaRows = nominaResult.data;
 
-  const rolesEmpresa = (rolesRows ?? []).map((r) => String((r as { rol: string }).rol));
+  const rolesEmpresa = rolesRows.map((r) => String(r.rol));
   const rolesObra: RolObraAsignado[] = (nominaRows ?? []).map((r) => ({
     proyectoId: String((r as { proyecto_id: string }).proyecto_id),
     rol: String((r as { rol: string }).rol),
@@ -149,11 +150,8 @@ export async function resolverActorTelegram(
     if (admin.ok) {
       const lookup = await buscarUsuarioIdPorEmail(admin.client, email);
       if (!('error' in lookup)) {
-        const { data: rolesRows } = await supabase
-          .from('ci_usuarios_roles')
-          .select('rol')
-          .eq('usuario_id', lookup.userId);
-        rolesEmpresa = (rolesRows ?? []).map((r) => String((r as { rol: string }).rol));
+        const rolesRows = await listarRolesEmpresaUsuario(supabase, lookup.userId);
+        rolesEmpresa = rolesRows.map((r) => String(r.rol));
       }
     }
   }

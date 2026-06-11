@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { buscarUsuarioIdPorEmail } from '@/lib/auth/buscarUsuarioIdPorEmail';
+import { upsertRolEmpresaUsuario } from '@/lib/auth/ciUsuariosRolesDb';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
@@ -71,21 +72,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Entidad no encontrada' }, { status: 404 });
   }
 
-  const row = {
-    usuario_id: authLookup.userId,
+  const { data, error } = await upsertRolEmpresaUsuario(supabase, {
+    userId: authLookup.userId,
     rol,
-    entidad_id: entidadId,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data, error } = await supabase
-    .from('ci_usuarios_roles')
-    .upsert(row, { onConflict: 'usuario_id,entidad_id' })
-    .select('id, usuario_id, rol, entidad_id, created_at, updated_at')
-    .single();
+    entidadId,
+  });
 
   if (error) {
-    return NextResponse.json({ error: error.message, hint: error.hint }, { status: 500 });
+    return NextResponse.json({ error }, { status: 500 });
   }
 
   return NextResponse.json({

@@ -36,6 +36,8 @@ export type RolEmpresa = (typeof ROLES_EMPRESA)[number]['value'];
 export const ALIAS_ROL_EMPRESA: Record<string, RolEmpresa | 'solo_lectura'> = {
   admin: 'admin',
   administrador: 'admin',
+  /** Rol enum en BD legacy (permisos absolutos). */
+  super_admin: 'admin',
   pm_obra: 'pm_obra',
   proyectos: 'pm_obra',
   project_manager: 'pm_obra',
