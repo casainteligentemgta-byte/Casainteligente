@@ -27,9 +27,10 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const isRecruitment = path.startsWith('/reclutamiento');
   /** Postulación pública: sin dock CRM (evita «Inicio» y otros módulos). */
   const isPublicRegistro = path.startsWith('/registro');
+  const isLogin = path === '/login' || path.startsWith('/auth');
 
   const chromeMinimal =
-    isNexus || isPresupuestoPreview || isRecruitment || isPublicRegistro;
+    isNexus || isPresupuestoPreview || isRecruitment || isPublicRegistro || isLogin;
 
   return (
     <>

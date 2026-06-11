@@ -141,6 +141,7 @@ import {
     type ColumnaOrdenCompras,
     type DireccionOrden,
 } from '@/lib/contabilidad/ordenarLineasCompras';
+import { redirigirALoginSi401 } from '@/lib/auth/loginRedirect';
 import {
     monedaOriginalCompra,
     montosBimonetariosLista,
@@ -978,6 +979,7 @@ export default function ComprasPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ moneda }),
                 });
+                if (redirigirALoginSi401(res, '/contabilidad/compras')) return;
                 const data = (await res.json()) as {
                     error?: string;
                     compra?: Partial<CompraRow>;
