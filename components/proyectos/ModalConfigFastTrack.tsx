@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import ProyectoRolesAplicacionPanel from '@/components/proyectos/ProyectoRolesAplicacionPanel';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { apiUrl } from '@/lib/http/apiUrl';
 
@@ -41,7 +42,7 @@ export default function ModalConfigFastTrack({
     if (open) setLimite(String(limiteInicial));
   }, [open, limiteInicial]);
 
-  async function guardar() {
+  async function guardarFastTrack() {
     const valor = Number(limite.replace(',', '.'));
     if (!Number.isFinite(valor) || valor < 0) {
       toast.error('Indique un monto válido (≥ 0 USD).');
@@ -61,8 +62,7 @@ export default function ModalConfigFastTrack({
       }
       const guardado = Number(json.limite_fast_track_usd ?? valor);
       onGuardado?.(guardado);
-      toast.success(`Fast-Track: límite $${guardado.toFixed(2)} USD para ${proyectoNombre}.`);
-      setOpen(false);
+      toast.success(`Fast-Track: límite $${guardado.toFixed(2)} USD.`);
     });
   }
 
@@ -70,7 +70,7 @@ export default function ModalConfigFastTrack({
     <>
       <button
         type="button"
-        title="Configurar límite Fast-Track OCR"
+        title="Configuración del proyecto"
         onClick={() => setOpen(true)}
         className={
           triggerClassName ??
@@ -78,48 +78,57 @@ export default function ModalConfigFastTrack({
         }
       >
         <Settings className="h-4 w-4" aria-hidden />
-        <span className="sr-only">Configurar límite Fast-Track</span>
+        <span className="sr-only">Configuración del proyecto</span>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="border-white/10 bg-[#0A0A0F]/95 backdrop-blur-xl text-zinc-100">
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/10 bg-[#0A0A0F]/95 backdrop-blur-xl text-zinc-100">
           <DialogHeader>
-            <DialogTitle className="text-[#FF9500]">Límite Fast-Track OCR</DialogTitle>
+            <DialogTitle className="text-[#FF9500]">Configuración del proyecto</DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Facturas por Telegram por debajo de este monto (USD) y con confianza &gt;95% pueden aprobarse
-              automáticamente. Proyecto: <span className="font-semibold text-zinc-200">{proyectoNombre}</span>.
+              Obra: <span className="font-semibold text-zinc-200">{proyectoNombre}</span>
             </DialogDescription>
           </DialogHeader>
 
-          <label className="block text-xs font-bold uppercase tracking-widest text-zinc-500">
-            Límite máximo (USD)
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={limite}
-              onChange={(e) => setLimite(e.target.value)}
-              className={inputClass}
-              disabled={isSubmitting}
-            />
-          </label>
+          <div className="space-y-8">
+            <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <h3 className="text-sm font-bold text-zinc-200">Límite Fast-Track OCR</h3>
+              <p className="text-xs text-zinc-500">
+                Facturas por Telegram por debajo de este monto (USD) y con confianza &gt;95% pueden
+                aprobarse automáticamente.
+              </p>
+              <label className="block text-xs font-bold uppercase tracking-widest text-zinc-500">
+                Límite máximo (USD)
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={limite}
+                  onChange={(e) => setLimite(e.target.value)}
+                  className={inputClass}
+                  disabled={isSubmitting}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void guardarFastTrack()}
+                disabled={isSubmitting}
+                className="rounded-lg bg-[#FF9500] px-4 py-2 text-sm font-bold text-black hover:bg-[#FF9500]/90 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Guardando…' : 'Guardar Fast-Track'}
+              </button>
+            </section>
 
-          <DialogFooter className="gap-2 sm:gap-2">
+            <ProyectoRolesAplicacionPanel proyectoId={proyectoId} embedded={false} />
+          </div>
+
+          <DialogFooter>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              disabled={isSubmitting}
               className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/[0.08]"
             >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => void guardar()}
-              disabled={isSubmitting}
-              className="rounded-lg bg-[#FF9500] px-4 py-2 text-sm font-bold text-black hover:bg-[#FF9500]/90 disabled:opacity-50"
-            >
-              {isSubmitting ? 'Guardando…' : 'Guardar'}
+              Cerrar
             </button>
           </DialogFooter>
         </DialogContent>
