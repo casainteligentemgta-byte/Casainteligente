@@ -56,7 +56,10 @@ export function buildReporteClienteDesdeCompras<T extends CompraCuadroInput>(
     const totalArticulos = totalUnidades > 0 ? totalUnidades : lineas.length;
 
     const tasa = tasaResolver(c) ?? tasaBcvCompra(c);
-    const montoTotalBs = montoVesCompra(c);
+    const montoTotalBs = montoVesCompra({
+      total_amount: Number(c.total_amount) || 0,
+      monto_ves: c.monto_ves,
+    });
     const montoUsd = montoUsdCompra({
       total_amount: c.total_amount ?? montoTotalBs,
       monto_usd: c.monto_usd,
