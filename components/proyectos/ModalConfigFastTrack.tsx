@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import ProyectoRolesAplicacionPanel from '@/components/proyectos/ProyectoRolesAplicacionPanel';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { apiUrl } from '@/lib/http/apiUrl';
 
@@ -22,8 +21,6 @@ type Props = {
   onGuardado?: (limite: number) => void;
   /** Botón trigger compacto para la fila de la tarjeta. */
   triggerClassName?: string;
-  /** Permite abrir el modal desde otro botón (p. ej. «Editar roles»). */
-  registerAbrir?: (abrir: () => void) => void;
 };
 
 const inputClass =
@@ -35,15 +32,10 @@ export default function ModalConfigFastTrack({
   limiteInicial,
   onGuardado,
   triggerClassName,
-  registerAbrir,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [limite, setLimite] = useState(String(limiteInicial));
   const { isSubmitting, runLocked } = useSyncSubmitLock();
-
-  useEffect(() => {
-    registerAbrir?.(() => setOpen(true));
-  }, [registerAbrir]);
 
   useEffect(() => {
     if (open) setLimite(String(limiteInicial));
@@ -126,7 +118,10 @@ export default function ModalConfigFastTrack({
               </button>
             </section>
 
-            <ProyectoRolesAplicacionPanel proyectoId={proyectoId} embedded={false} />
+            <p className="text-xs text-zinc-500">
+              Usuarios del bot Telegram (roles, ID chat, activar/desactivar) se gestionan con el botón{' '}
+              <span className="font-semibold text-[#6ee7a0]">BOT</span> en la tarjeta del proyecto.
+            </p>
           </div>
 
           <DialogFooter>
