@@ -371,7 +371,11 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         if (upImg) toast.error(upImg.message ?? 'No se pudieron guardar las URLs de imagen.');
       }
 
-      toast.success(esEdicion ? 'Entidad actualizada.' : 'Entidad registrada.');
+      toast.success(
+        esEdicion
+          ? 'Entidad actualizada.'
+          : 'Entidad registrada. Se creó su catálogo de materiales (vacío).',
+      );
       onGuardado();
       onClose();
     } finally {

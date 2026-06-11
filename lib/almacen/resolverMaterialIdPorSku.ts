@@ -8,6 +8,7 @@ import {
   crearMaterialParaLineaCompra,
   resolverMaterialParaLineaCompra,
 } from '@/lib/almacen/resolverMaterialParaCompra';
+import { resolverEntidadIdCatalogo } from '@/lib/almacen/catalogoEntidad';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 
 /** Normaliza códigos SAP / item_code para comparación (OCR suele omitir prefijos o espacios). */
@@ -21,11 +22,12 @@ export function normSkuCodigo(s: string): string {
 
 export async function cargarMapaSkuGlobalInventory(
   supabase: SupabaseClient,
+  entidadId?: string | null,
 ): Promise<Map<string, string>> {
-  const { data, error } = await supabase
-    .from('global_inventory')
-    .select('id, sap_code')
-    .not('sap_code', 'is', null);
+  let q = supabase.from('global_inventory').select('id, sap_code').not('sap_code', 'is', null);
+  const eid = entidadId?.trim();
+  if (eid) q = q.eq('entidad_id', eid);
+  const { data, error } = await q.limit(8000);
 
   if (error) throw new Error(error.message);
 
@@ -40,11 +42,12 @@ export async function cargarMapaSkuGlobalInventory(
 
 export async function cargarCatalogoMaterialCompra(
   supabase: SupabaseClient,
+  entidadId?: string | null,
 ): Promise<MaterialCatalogRow[]> {
-  const { data, error } = await supabase
-    .from('global_inventory')
-    .select('id, name, sap_code')
-    .limit(5000);
+  let q = supabase.from('global_inventory').select('id, name, sap_code').limit(5000);
+  const eid = entidadId?.trim();
+  if (eid) q = q.eq('entidad_id', eid);
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []) as MaterialCatalogRow[];
 }
@@ -56,6 +59,7 @@ async function resolverMaterialIdEnLinea(
     mapaSku: Map<string, string>;
     catalogo: MaterialCatalogRow[];
     proyectoId?: string;
+    entidadId?: string | null;
   },
 ): Promise<{ linea: LineaCompraContabilidadInput; sinMatch?: string }> {
   if (l.material_id?.trim()) return { linea: l };
@@ -72,6 +76,7 @@ async function resolverMaterialIdEnLinea(
       item_code: l.item_code ?? undefined,
       description: desc,
       proyectoId: opts.proyectoId,
+      entidadId: opts.entidadId,
     });
     if (porNombre) {
       return { linea: { ...l, material_id: porNombre.id } };
@@ -89,11 +94,15 @@ async function resolverMaterialIdEnLinea(
 export async function enriquecerLineasConMaterial(
   supabase: SupabaseClient,
   lineas: LineaCompraContabilidadInput[],
-  opts?: { proyectoId?: string },
+  opts?: { proyectoId?: string; entidadId?: string | null },
 ): Promise<{ lineas: LineaCompraContabilidadInput[]; sinMatch: string[] }> {
+  const entidadId = await resolverEntidadIdCatalogo(supabase, {
+    entidadId: opts?.entidadId,
+    proyectoId: opts?.proyectoId,
+  });
   const [mapa, catalogo] = await Promise.all([
-    cargarMapaSkuGlobalInventory(supabase),
-    cargarCatalogoMaterialCompra(supabase),
+    cargarMapaSkuGlobalInventory(supabase, entidadId),
+    cargarCatalogoMaterialCompra(supabase, entidadId),
   ]);
   const sinMatch: string[] = [];
   const out: LineaCompraContabilidadInput[] = [];
@@ -103,6 +112,7 @@ export async function enriquecerLineasConMaterial(
       mapaSku: mapa,
       catalogo,
       proyectoId: opts?.proyectoId,
+      entidadId,
     });
     out.push(r.linea);
     if (r.sinMatch) sinMatch.push(r.sinMatch);

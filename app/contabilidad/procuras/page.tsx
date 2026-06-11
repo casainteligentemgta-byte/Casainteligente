@@ -25,7 +25,7 @@ import SelectorMaterialObraRecepcion from '@/components/almacen/SelectorMaterial
 import { etiquetaMaterialCatalogo } from '@/lib/almacen/buscarMaterialesCatalogo';
 
 type EntidadRow = { id: string; nombre: string };
-type ProyectoRow = { id: string; nombre: string };
+type ProyectoRow = { id: string; nombre: string; entidad_id?: string | null };
 type EmpleadoRow = { id: string; nombre_completo: string; oficio?: string | null };
 
 type ProcuraRow = {
@@ -152,6 +152,12 @@ export default function ProcurasPage() {
       }
     })();
   }, [formProyectoId]);
+
+  const catalogoEntidadId = useMemo(() => {
+    if (formEntidadId.trim()) return formEntidadId.trim();
+    const pr = proyectos.find((p) => p.id === formProyectoId.trim());
+    return pr?.entidad_id?.trim() || '';
+  }, [formEntidadId, formProyectoId, proyectos]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -551,6 +557,8 @@ export default function ProcurasPage() {
                       setFormMaterial('');
                       setFormMaterialId('');
                       setModoMaterialLibre(false);
+                      const pr = proyectos.find((p) => p.id === id);
+                      if (pr?.entidad_id) setFormEntidadId(pr.entidad_id);
                     }}
                     style={{ ...inputStyle, marginTop: '6px' }}
                   >
@@ -622,16 +630,21 @@ export default function ProcurasPage() {
                     padding: 0,
                   }}
                 >
-                  {busquedaGlobalAbierta ? '▾ Ocultar búsqueda global' : '▸ Buscar en catálogo global (nombre/SKU)'}
+                  {busquedaGlobalAbierta ? '▾ Ocultar búsqueda por entidad' : '▸ Buscar en catálogo de la entidad (nombre/SKU)'}
                 </button>
                 {busquedaGlobalAbierta ? (
                   <div style={{ marginTop: '8px' }}>
                     <BuscadorMaterialCampo
                       onSeleccionar={aplicarMaterialCatalogo}
-                      disabled={modoMaterialLibre}
+                      disabled={modoMaterialLibre || !catalogoEntidadId}
+                      entidadId={catalogoEntidadId || null}
                       minChars={1}
                       modoPrefijo
-                      placeholder="Escribe desde 1 letra (ej. c → Cemento…)"
+                      placeholder={
+                        catalogoEntidadId
+                          ? 'Escribe desde 1 letra (catálogo de la entidad)'
+                          : 'Seleccione obra o entidad para buscar materiales'
+                      }
                     />
                   </div>
                 ) : null}

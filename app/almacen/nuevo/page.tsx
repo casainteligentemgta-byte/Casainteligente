@@ -203,6 +203,10 @@ export default function NewInventoryItemPage() {
       alert('Selecciona una unidad de medida (maestro de unidades en almacén).');
       return;
     }
+    if (!clasificacion.entidad_id?.trim()) {
+      alert('Seleccione la entidad (patrono) del catálogo de materiales.');
+      return;
+    }
     setLoading(true);
     try {
       const sapTrim = item.sap_code.trim();

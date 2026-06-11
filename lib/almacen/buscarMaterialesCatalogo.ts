@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MaterialCampoOpcion } from '@/components/almacen/BuscadorMaterialCampo';
+import { filtrarQueryCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
 import { escapeIlike, patronIlike } from '@/lib/contabilidad/comprasQueryFiltros';
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
 
@@ -17,22 +18,33 @@ function mapRow(row: {
   };
 }
 
+export type BuscarMaterialesCatalogoOpts = {
+  limit?: number;
+  /** Catálogo de la entidad (patrono). Si se omite, búsqueda global (legacy). */
+  entidadId?: string | null;
+  proyectoId?: string | null;
+};
+
 /** Búsqueda por nombre o SKU en global_inventory (mín. 2 caracteres). */
 export async function buscarMaterialesCatalogo(
   supabase: SupabaseClient,
   term: string,
-  opts?: { limit?: number },
+  opts?: BuscarMaterialesCatalogoOpts,
 ): Promise<MaterialCampoOpcion[]> {
   const t = term.trim().replace(/%/g, '');
   if (t.length < 2) return [];
 
   const limit = Math.min(Math.max(opts?.limit ?? 12, 1), 24);
-  const { data, error } = await supabase
+  let query = supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
     .or(`name.ilike.%${t}%,sap_code.ilike.%${t}%`)
     .order('name')
     .limit(limit);
+
+  query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) =>
@@ -60,7 +72,7 @@ function scoreMaterialFuzzy(term: string, m: MaterialCampoOpcion): number {
 export async function buscarMaterialesFuzzyCatalogo(
   supabase: SupabaseClient,
   term: string,
-  opts?: { limit?: number },
+  opts?: BuscarMaterialesCatalogoOpts,
 ): Promise<MaterialCampoOpcion[]> {
   const t = term.trim().replace(/%/g, '');
   if (t.length < 3) return [];
@@ -69,12 +81,16 @@ export async function buscarMaterialesFuzzyCatalogo(
   const pattern = patronIlike(t);
   if (!pattern) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
     .or(`name.ilike.${pattern},sap_code.ilike.${pattern}`)
     .order('name')
     .limit(40);
+
+  query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
 
@@ -103,7 +119,7 @@ function coincidePrefijo(m: MaterialCampoOpcion, term: string): boolean {
 export async function buscarMaterialesPorPrefijo(
   supabase: SupabaseClient,
   term: string,
-  opts?: { limit?: number; proyectoId?: string | null },
+  opts?: BuscarMaterialesCatalogoOpts,
 ): Promise<MaterialCampoOpcion[]> {
   const t = term.trim().replace(/%/g, '');
   if (!t) return [];
@@ -120,13 +136,16 @@ export async function buscarMaterialesPorPrefijo(
   }
 
   const prefix = `${escapeIlike(t)}%`;
-  const { data, error } = await supabase
+  let query = supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
     .or(`name.ilike.${prefix},sap_code.ilike.${prefix}`)
     .order('name')
     .limit(limit);
 
+  query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   for (const row of data ?? []) {
     const m = mapRow(row as { id: string; name?: string; sap_code?: string; unit?: string });

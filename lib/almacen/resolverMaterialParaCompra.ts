@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolverEntidadIdCatalogo } from '@/lib/almacen/catalogoEntidad';
 import { normSkuCodigo } from '@/lib/almacen/resolverMaterialIdPorSku';
 
 export type MaterialCompraResuelto = {
@@ -21,14 +22,22 @@ export async function resolverMaterialParaLineaCompra(
     item_code?: string;
     description: string;
     proyectoId?: string;
+    entidadId?: string | null;
   },
 ): Promise<MaterialCompraResuelto | null> {
+  const entidadId = await resolverEntidadIdCatalogo(supabase, {
+    entidadId: opts.entidadId,
+    proyectoId: opts.proyectoId,
+  });
+
   const sku = normSkuCodigo(opts.item_code ?? '');
   if (sku) {
-    const { data: rows, error } = await supabase
+    let q = supabase
       .from('global_inventory')
       .select('id, sap_code, name, category_id')
       .not('sap_code', 'is', null);
+    if (entidadId) q = q.eq('entidad_id', entidadId);
+    const { data: rows, error } = await q.limit(5000);
     if (error) throw new Error(error.message);
     for (const row of rows ?? []) {
       if (normSkuCodigo(String(row.sap_code ?? '')) === sku) {
@@ -45,9 +54,31 @@ export async function resolverMaterialParaLineaCompra(
   const nombre = normalizarNombre(opts.description);
   if (nombre.length < 3) return null;
 
+  if (entidadId) {
+    const { data: porEntidad, error: entErr } = await supabase
+      .from('global_inventory')
+      .select('id, name, category_id')
+      .eq('entidad_id', entidadId)
+      .limit(800);
+    if (entErr) throw new Error(entErr.message);
+    for (const row of porEntidad ?? []) {
+      if (normalizarNombre(String(row.name ?? '')) === nombre) {
+        return {
+          id: String(row.id),
+          matchedBy: 'nombre',
+          name: String(row.name),
+          category_id: row.category_id ? String(row.category_id) : null,
+        };
+      }
+    }
+  }
+
   let q = supabase.from('global_inventory').select('id, name, proyecto_id, category_id');
   if (opts.proyectoId) {
     q = q.eq('proyecto_id', opts.proyectoId);
+  }
+  if (entidadId) {
+    q = q.eq('entidad_id', entidadId);
   }
   const { data: candidatos, error: nameErr } = await q.limit(200);
   if (nameErr) throw new Error(nameErr.message);
@@ -60,25 +91,6 @@ export async function resolverMaterialParaLineaCompra(
         name: String(row.name),
         category_id: row.category_id ? String(row.category_id) : null,
       };
-    }
-  }
-
-  if (opts.proyectoId) {
-    const { data: globalRows, error: globalErr } = await supabase
-      .from('global_inventory')
-      .select('id, name, category_id')
-      .is('proyecto_id', null)
-      .limit(300);
-    if (globalErr) throw new Error(globalErr.message);
-    for (const row of globalRows ?? []) {
-      if (normalizarNombre(String(row.name ?? '')) === nombre) {
-        return {
-          id: String(row.id),
-          matchedBy: 'nombre',
-          name: String(row.name),
-          category_id: row.category_id ? String(row.category_id) : null,
-        };
-      }
     }
   }
 
@@ -138,6 +150,10 @@ export async function crearMaterialParaLineaCompra(
     throw new Error('Descripción demasiado corta para crear material.');
   }
 
+  const entidadId =
+    opts.entidadId?.trim() ||
+    (await resolverEntidadIdCatalogo(supabase, { proyectoId: opts.proyectoId }));
+
   const materialBase: Record<string, unknown> = {
     name: desc,
     unit: (opts.unidad || 'UND').trim() || 'UND',
@@ -153,7 +169,7 @@ export async function crearMaterialParaLineaCompra(
   if (sap) materialBase.sap_code = sap;
   if (opts.depositId) materialBase.deposit_id = opts.depositId;
   if (opts.categoryId) materialBase.category_id = opts.categoryId;
-  if (opts.entidadId) materialBase.entidad_id = opts.entidadId;
+  if (entidadId) materialBase.entidad_id = entidadId;
 
   let res = await supabase.from('global_inventory').insert(materialBase).select('id').single();
   if (res.error && /deposit_id/i.test(res.error.message)) {

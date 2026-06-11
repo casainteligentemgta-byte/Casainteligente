@@ -100,7 +100,7 @@ export default function EntidadesPatronoClient() {
                 <h1 className="text-2xl font-bold tracking-tight text-white">Patronos / entidades legales</h1>
                 <p className="mt-1 max-w-xl text-sm text-zinc-500">
                   Gestión centralizada para contratos de obreros y planillas. RIF, representante, registro mercantil y
-                  permisología.
+                  permisología. Al crear una entidad se inicializa automáticamente su catálogo de materiales.
                 </p>
               </div>
             </div>

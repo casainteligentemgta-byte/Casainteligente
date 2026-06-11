@@ -19,6 +19,8 @@ type Props = {
   minChars?: number;
   /** Si true, coincide solo al inicio del nombre/SKU (ej. "c" → Cemento…). */
   modoPrefijo?: boolean;
+  /** Catálogo de la entidad (patrono). */
+  entidadId?: string | null;
 };
 
 const inputClass =
@@ -30,6 +32,7 @@ export default function BuscadorMaterialCampo({
   placeholder = 'Buscar material por nombre o SKU…',
   minChars = 2,
   modoPrefijo = false,
+  entidadId = null,
 }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [q, setQ] = useState('');
@@ -47,12 +50,15 @@ export default function BuscadorMaterialCampo({
       try {
         const q = t.replace(/%/g, '');
         const patron = modoPrefijo ? `${q}%` : `%${q}%`;
-        const { data, error } = await supabase
+        let query = supabase
           .from('global_inventory')
           .select('id,name,sap_code,unit')
           .or(`name.ilike.${patron},sap_code.ilike.${patron}`)
           .order('name')
           .limit(24);
+        const eid = entidadId?.trim();
+        if (eid) query = query.eq('entidad_id', eid);
+        const { data, error } = await query;
         if (error) throw error;
         setResultados(
           ((data ?? []) as MaterialCampoOpcion[]).map((r) => ({
@@ -68,7 +74,7 @@ export default function BuscadorMaterialCampo({
         setLoading(false);
       }
     },
-    [supabase, minChars, modoPrefijo],
+    [supabase, minChars, modoPrefijo, entidadId],
   );
 
   useEffect(() => {

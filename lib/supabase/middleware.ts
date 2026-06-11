@@ -29,6 +29,42 @@ function esRutaProtegida(pathname: string): boolean {
   return RUTAS_PROTEGIDAS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function esHostLocalDev(request: NextRequest): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  const host = request.nextUrl.hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+}
+
+function tieneCookieAuthSupabase(request: NextRequest): boolean {
+  return request.cookies.getAll().some((c) => /^sb-.*-auth-token/.test(c.name));
+}
+
+async function resolverUsuarioMiddleware(
+  supabase: ReturnType<typeof createServerClient>,
+  request: NextRequest,
+) {
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (user) return user;
+    if (esHostLocalDev(request) && (error || tieneCookieAuthSupabase(request))) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      return session?.user ?? null;
+    }
+    return null;
+  } catch {
+    if (!esHostLocalDev(request)) return null;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.user ?? null;
+  }
+}
+
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -58,9 +94,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await resolverUsuarioMiddleware(supabase, request);
 
   const { pathname } = request.nextUrl;
 

@@ -51,6 +51,7 @@ import {
     Download,
     Filter,
     FileText,
+    FileSpreadsheet,
     Loader2,
     MapPin,
     PackageCheck,
@@ -67,6 +68,8 @@ import ClasificacionGastoEntidadSelect from '@/components/contabilidad/Clasifica
 import { esGastoEntidadImputacion } from '@/lib/contabilidad/imputacionCompra';
 import { etiquetaClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import VerificarFechaCompraModal from '@/components/contabilidad/VerificarFechaCompraModal';
+import ReporteClienteComprasModal from '@/components/contabilidad/ReporteClienteComprasModal';
+import { buildReporteClienteDesdeCompras } from '@/lib/contabilidad/reporteClienteCompras';
 import EditarFacturaCanalModal, {
     type DestinoCompraEdicion,
     type GuardarFacturaCanalOpts,
@@ -263,6 +266,7 @@ export default function ComprasPage() {
     /** Compras del periodo/carga sin filtros de obra, proveedor, logística, etc. (exportación «completo»). */
     const [comprasCuadroBase, setComprasCuadroBase] = useState<CompraRow[]>([]);
     const [exportScope, setExportScope] = useState<ComprasExportScope>('filtrado');
+    const [reporteClienteAbierto, setReporteClienteAbierto] = useState(false);
     const [proyectos, setProyectos] = useState<ProyectoOpcion[]>([]);
     const [entidades, setEntidades] = useState<EntidadOpcion[]>([]);
     const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([]);
@@ -1884,6 +1888,29 @@ export default function ComprasPage() {
         [construirLineasExport],
     );
 
+    const construirComprasReporteCliente = useCallback(
+        (scope: ComprasExportScope) => (scope === 'filtrado' ? compras : comprasCuadroBase),
+        [compras, comprasCuadroBase],
+    );
+
+    const filasReporteCliente = useMemo(
+        () =>
+            buildReporteClienteDesdeCompras(
+                construirComprasReporteCliente(exportScope),
+                tasaParaCompra,
+            ),
+        [construirComprasReporteCliente, exportScope, tasaParaCompra],
+    );
+
+    const abrirReporteCliente = useCallback(() => {
+        const base = construirComprasReporteCliente(exportScope);
+        if (!base.length) {
+            setError('No hay facturas para generar el reporte cliente.');
+            return;
+        }
+        setReporteClienteAbierto(true);
+    }, [construirComprasReporteCliente, exportScope]);
+
     const compartirCuadro = async (scope: ComprasExportScope = 'filtrado') => {
         if (typeof window === 'undefined') return;
         const filas = construirLineasExport(scope);
@@ -2139,6 +2166,26 @@ export default function ComprasPage() {
                                 >
                                     <Download size={14} />
                                     Excel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={abrirReporteCliente}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(251,191,36,0.45)',
+                                        background: 'rgba(251,191,36,0.15)',
+                                        color: '#fde68a',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    <FileSpreadsheet size={14} />
+                                    Reporte Cliente
                                 </button>
                                 <button
                                     type="button"
@@ -3381,6 +3428,14 @@ export default function ComprasPage() {
                 ) : null}
                 </div>
             </div>
+
+            <ReporteClienteComprasModal
+                open={reporteClienteAbierto}
+                filas={filasReporteCliente}
+                scope={exportScope}
+                subtitulo={subtituloCuadro}
+                onClose={() => setReporteClienteAbierto(false)}
+            />
 
             <VerificarFechaCompraModal
                 open={verificandoFecha != null}

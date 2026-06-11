@@ -31,6 +31,7 @@ import {
   buscarMaterialesFuzzyCatalogo,
   etiquetaMaterialCatalogo,
 } from '@/lib/almacen/buscarMaterialesCatalogo';
+import { resolverEntidadIdCatalogo } from '@/lib/almacen/catalogoEntidad';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { marcarTtlPendienteAtomico } from '@/lib/compras/telegramTtlAtomico';
 import {
@@ -123,9 +124,16 @@ async function mostrarCoincidenciasMaterial(
   const t = term.trim();
   await patchMeta(supabase, chatId, estado, { material_busqueda_borrador: t });
 
+  const proyectoId = estado.proyecto_id?.trim() || null;
+  const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
+
   let materiales: Awaited<ReturnType<typeof buscarMaterialesFuzzyCatalogo>>;
   try {
-    materiales = await buscarMaterialesFuzzyCatalogo(supabase, t, { limit: 5 });
+    materiales = await buscarMaterialesFuzzyCatalogo(supabase, t, {
+      limit: 5,
+      entidadId,
+      proyectoId,
+    });
   } catch (e) {
     await sendTelegramMessage(
       chatId,

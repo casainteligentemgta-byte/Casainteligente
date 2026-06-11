@@ -5,6 +5,7 @@ import {
   etiquetaMaterialCatalogo,
 } from '@/lib/almacen/buscarMaterialesCatalogo';
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
+import { resolverEntidadIdCatalogo } from '@/lib/almacen/catalogoEntidad';
 import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
@@ -269,9 +270,11 @@ export async function buscarYMostrarMaterialesProcura(
 
   try {
     const proyectoId = estado.proyecto_id?.trim() || null;
+    const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
     const todos = await buscarMaterialesPorPrefijo(supabase, t, {
       limit: 60,
       proyectoId,
+      entidadId,
     });
 
     await patchMeta(supabase, chatId, estado, {
