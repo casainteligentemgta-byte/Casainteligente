@@ -13,6 +13,7 @@ import { esChatCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { resolverProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
+import { etiquetaResultadoAbastecimiento } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import {
   esUuidProcura,
   parseMetadataMotivoRechazo,
@@ -552,14 +553,10 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
 
     const procura = await cargarProcuraParaAprobacion(supabase, parsed.procuraId);
 
-    const compradoresTxt =
-      resultado.compradoresNotificados != null && resultado.compradoresNotificados > 0
-        ? `\n🛒 Orden enviada a <b>${resultado.compradoresNotificados}</b> comprador(es).`
-        : '\n⚠️ Sin compradores Telegram activos para la orden.';
-
     const pie =
-      `\n\n🟢 <b>Orden de compra emitida</b> por <b>${escHtml(perm.nombre)}</b>${compradoresTxt}\n` +
-      `Estado: <b>${escHtml(etiquetaEstadoProcura(resultado.estado ?? 'en_compra'))}</b>`;
+      `\n\n🟢 <b>Aprobada</b> por <b>${escHtml(perm.nombre)}</b>\n` +
+      `${escHtml(etiquetaResultadoAbastecimiento({ ok: true, estado: resultado.estado, ticket: resultado.ticket, modo: resultado.estado === 'aprobada' ? 'pendiente_depositario' : 'ejecutado', compraEmitida: (resultado.compradoresNotificados ?? 0) > 0 }))}\n` +
+      `Estado: <b>${escHtml(etiquetaEstadoProcura(resultado.estado ?? 'aprobada'))}</b>`;
 
     if (params.messageId != null && procura) {
       const texto =

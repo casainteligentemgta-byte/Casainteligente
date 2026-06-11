@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
@@ -65,7 +66,29 @@ export async function POST(request: Request) {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
-    if (nuevoEstado === 'aprobada' || nuevoEstado === 'aprobada_directa') {
+    if (nuevoEstado === 'aprobada') {
+      const ordenes: Array<{
+        ticket?: string;
+        estado?: string;
+        compradoresNotificados?: number;
+        error?: string;
+      }> = [];
+      for (const id of ids) {
+        const r = await procesarAbastecimientoProcuraAprobada(admin.client, {
+          procuraId: id,
+          autorNombre: actorNombre,
+        });
+        ordenes.push({
+          ticket: r.ticket,
+          estado: r.estado,
+          compradoresNotificados: r.compraEmitida ? 1 : 0,
+          error: r.error,
+        });
+      }
+      return NextResponse.json({ ok: true, ordenes });
+    }
+
+    if (nuevoEstado === 'aprobada_directa') {
       const ordenes: Array<{
         ticket?: string;
         estado?: string;

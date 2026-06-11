@@ -61,7 +61,7 @@ export function transicionEstadoProcuraValida(
   const permitidas: Record<EstadoProcura, readonly EstadoProcura[]> = {
     borrador: ['solicitada', 'cancelada'],
     solicitada: ['aprobada', 'aprobada_directa', 'en_compra', 'rechazada', 'cancelada'],
-    aprobada: ['en_compra', 'rechazada', 'cancelada'],
+    aprobada: ['en_compra', 'recibida', 'recibida_parcial', 'rechazada', 'cancelada'],
     aprobada_directa: ['en_compra', 'cancelada'],
     en_compra: ['recibida_parcial', 'recibida', 'cancelada'],
     recibida_parcial: ['recibida', 'en_compra', 'cancelada'],

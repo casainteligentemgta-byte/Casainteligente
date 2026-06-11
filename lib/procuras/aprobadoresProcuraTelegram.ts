@@ -24,6 +24,7 @@ export type AprobadorProcuraTelegram = {
   chatId: number;
   nombre: string;
   origen: 'sistema' | 'nomina';
+  rol: 'Aprobador' | 'Administrador';
 };
 
 /** Upsert en ci_usuarios_sistema_telegram (permite aprobar /procura). */
@@ -78,13 +79,20 @@ export async function listarAprobadoresProcuraTelegram(
     for (const row of sistema ?? []) {
       const chatId = parseTelegramIdNumerico(row.telegram_id);
       if (chatId == null) continue;
+      const rol = String(row.rol ?? '').trim();
       const pid = row.proyecto_id ? String(row.proyecto_id) : null;
-      if (pid && proyectoId && pid !== proyectoId) continue;
-      out.set(chatId, {
-        chatId,
-        nombre: String(row.nombre ?? '').trim() || 'Aprobador',
-        origen: 'sistema',
-      });
+      const nombre = String(row.nombre ?? '').trim() || (rol === 'Administrador' ? 'Administrador' : 'Aprobador');
+
+      // Administradores globales siempre reciben alertas de procura pendiente.
+      if (rol === 'Administrador') {
+        out.set(chatId, { chatId, nombre, origen: 'sistema', rol: 'Administrador' });
+        continue;
+      }
+
+      if (rol === 'Aprobador') {
+        if (pid && proyectoId && pid !== proyectoId) continue;
+        out.set(chatId, { chatId, nombre, origen: 'sistema', rol: 'Aprobador' });
+      }
     }
   }
 
@@ -119,6 +127,7 @@ export async function listarAprobadoresProcuraTelegram(
           chatId,
           nombre: f.nombre_display?.trim() || f.nombre?.trim() || 'Project manager',
           origen: 'nomina',
+          rol: f.rol === 'admin' ? 'Administrador' : 'Aprobador',
         });
       }
     }

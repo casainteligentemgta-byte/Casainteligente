@@ -16,6 +16,7 @@ const ESTADOS_ORIGEN_ORDEN: readonly EstadoProcura[] = [
   'solicitada',
   'aprobada',
   'aprobada_directa',
+  'recibida_parcial',
 ];
 
 export type ProcuraOrdenCompraRow = {
@@ -71,7 +72,7 @@ export async function cargarProcuraOrdenCompra(
 
 function mensajeOrdenCompraComprador(
   procura: ProcuraOrdenCompraRow,
-  params: { autorNombre: string; motivo?: string | null },
+  params: { autorNombre: string; motivo?: string | null; cantidadCompra?: number | null },
 ): string {
   const cap = procura.ci_compras_capitulos_maestro;
   const capLabel = cap
@@ -85,7 +86,11 @@ function mensajeOrdenCompraComprador(
     nombreRel(procura.ci_proyectos) ||
     nombreRel(procura.ci_entidades) ||
     '—';
-  const cantidad = `${Number(procura.cantidad).toLocaleString('es-VE')} ${procura.unidad}`;
+  const qty =
+    params.cantidadCompra != null && Number.isFinite(params.cantidadCompra)
+      ? params.cantidadCompra
+      : Number(procura.cantidad);
+  const cantidad = `${qty.toLocaleString('es-VE')} ${procura.unidad}`;
   const prioridad = procura.prioridad?.trim() || '—';
   const monto =
     procura.monto_estimado_usd != null && Number.isFinite(Number(procura.monto_estimado_usd))
@@ -111,7 +116,7 @@ function mensajeOrdenCompraComprador(
 export async function notificarCompradoresOrdenCompra(
   supabase: SupabaseClient,
   procura: ProcuraOrdenCompraRow,
-  params: { autorNombre: string; motivo?: string | null },
+  params: { autorNombre: string; motivo?: string | null; cantidadCompra?: number | null },
 ): Promise<{ enviados: number; omitidos: number }> {
   const compradores = await listarUsuariosOrdenCompraTelegram(supabase);
   if (!compradores.length) {
@@ -154,6 +159,8 @@ export async function emitirOrdenCompraProcura(
     procuraId: string;
     autorNombre: string;
     motivo?: string | null;
+    /** Cantidad a comprar (saldo tras despacho parcial). */
+    cantidadCompra?: number | null;
   },
 ): Promise<EmitirOrdenCompraProcuraResult> {
   const procuraId = params.procuraId.trim();
@@ -172,7 +179,11 @@ export async function emitirOrdenCompraProcura(
   }
 
   if (estadoActual === 'en_compra') {
-    const notify = await notificarCompradoresOrdenCompra(supabase, procura, params);
+    const notify = await notificarCompradoresOrdenCompra(supabase, procura, {
+      autorNombre: params.autorNombre,
+      motivo: params.motivo,
+      cantidadCompra: params.cantidadCompra,
+    });
     return {
       ok: true,
       ticket: procura.ticket,
@@ -241,6 +252,7 @@ export async function emitirOrdenCompraProcura(
   const notify = await notificarCompradoresOrdenCompra(supabase, procura, {
     autorNombre: params.autorNombre,
     motivo: motivoOrden,
+    cantidadCompra: params.cantidadCompra,
   });
 
   return {

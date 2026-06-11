@@ -43,16 +43,22 @@ export type AlertaProcuraAdminRow = {
   monto_estimado_usd?: number | null;
 };
 
-/** Envía alerta al canal admin con botones Aprobar / Almacén / Rechazar. */
+export type ResultadoAlertaProcuraPendiente = {
+  enviado: boolean;
+  canalAdmin: boolean;
+  dmsEnviados: number;
+};
+
+/** Envía alerta al canal admin y DM a Project Manager + Administrador. */
 export async function enviarAlertaProcuraPendienteAdmin(
   supabase: SupabaseClient,
   procuraId: string,
-): Promise<boolean> {
+): Promise<ResultadoAlertaProcuraPendiente> {
   const { config: alertas } = await cargarAlertasConfig(supabase);
   const canal = resolverCanalAdminEfectivo(alertas);
-  if (!canal) {
+  const sinCanal = !canal;
+  if (sinCanal) {
     console.warn('[alertaAdminProcura] Canal admin Telegram no configurado');
-    return false;
   }
 
   const { data, error } = await supabase
@@ -65,13 +71,15 @@ export async function enviarAlertaProcuraPendienteAdmin(
 
   if (error || !data) {
     console.warn('[alertaAdminProcura] no se pudo cargar procura', procuraId, error?.message);
-    return false;
+    return { enviado: false, canalAdmin: false, dmsEnviados: 0 };
   }
 
   const row = data as AlertaProcuraAdminRow & {
     ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
   };
-  if (!debeAlertarProcura(row.estado, alertas)) return false;
+  if (!debeAlertarProcura(row.estado, alertas)) {
+    return { enviado: false, canalAdmin: false, dmsEnviados: 0 };
+  }
 
   const capRel = row.ci_compras_capitulos_maestro;
   const capLabel = capRel
@@ -111,10 +119,18 @@ export async function enviarAlertaProcuraPendienteAdmin(
         ],
       };
 
-  await sendTelegramMessage(canal, msg, {
-    parse_mode: 'HTML',
-    reply_markup: replyMarkup,
-  });
+  let canalAdmin = false;
+  if (canal) {
+    try {
+      await sendTelegramMessage(canal, msg, {
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
+      });
+      canalAdmin = true;
+    } catch (e) {
+      console.warn('[alertaAdminProcura] canal admin', e);
+    }
+  }
 
   const proyectoId = row.proyecto_id?.trim() || null;
   let aprobadores: Awaited<ReturnType<typeof listarAprobadoresProcuraTelegram>> = [];
@@ -125,21 +141,30 @@ export async function enviarAlertaProcuraPendienteAdmin(
   }
 
   const dmMarkup = tecladoAprobacionDepartamento(row.id);
-  const msgDm =
-    '📩 <b>Procura pendiente de tu aprobación</b>\n\n' +
-    msg.replace('🏗️ <b>ALERTA DE PROCURA PENDIENTE</b>\n\n', '');
+  const cuerpoDm = msg.replace('🏗️ <b>ALERTA DE PROCURA PENDIENTE</b>\n\n', '');
+  const msgDmPm =
+    '👷‍♂️ <b>ALERTA — Procura pendiente (Project Manager)</b>\n\n' + cuerpoDm;
+  const msgDmAdmin =
+    '🛡️ <b>ALERTA — Procura pendiente (Administrador)</b>\n\n' + cuerpoDm;
 
+  let dmsEnviados = 0;
   for (const ap of aprobadores) {
-    if (String(ap.chatId) === canal) continue;
+    if (canal && String(ap.chatId) === canal) continue;
+    const msgDm = ap.rol === 'Administrador' ? msgDmAdmin : msgDmPm;
     try {
       await sendTelegramMessage(String(ap.chatId), msgDm, {
         parse_mode: 'HTML',
         reply_markup: dmMarkup,
       });
+      dmsEnviados += 1;
     } catch (e) {
-      console.warn('[alertaAdminProcura] DM aprobador', ap.nombre, ap.chatId, e);
+      console.warn('[alertaAdminProcura] DM destinatario', ap.nombre, ap.chatId, e);
     }
   }
 
-  return true;
+  return {
+    enviado: canalAdmin || dmsEnviados > 0,
+    canalAdmin,
+    dmsEnviados,
+  };
 }

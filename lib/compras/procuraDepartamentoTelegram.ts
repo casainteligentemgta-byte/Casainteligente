@@ -40,6 +40,12 @@ import {
   normalizarUnidadProcura,
   tecladoUnidadesProcuraPrincipales,
 } from '@/lib/procuras/unidadesProcura';
+import {
+  confirmarAbastecimientoProcura,
+  esCallbackAbastecimientoProcura,
+  etiquetaResultadoAbastecimiento,
+  parseCallbackAbastecimientoProcura,
+} from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { resolverMaterialProcuraPorId } from '@/lib/telegram/procuraMaterialPicker';
 import {
   callbackDataTelegramValido,
@@ -91,7 +97,7 @@ async function pedirCantidadMaterial(chatId: string, materialTxt: string): Promi
   await sendTelegramMessage(
     chatId,
     `📦 Material: <b>${escHtml(materialTxt)}</b>\n\n` +
-      `3️⃣ Indica solo la <b>cantidad</b> (número, ej. <code>50</code> o <code>2.5</code>):`,
+      `3️⃣ Indica la <b>cantidad</b> del material (número, ej. <code>50</code> o <code>2.5</code>):`,
     { parse_mode: 'HTML' },
   );
 }
@@ -100,7 +106,7 @@ async function pedirUnidadMaterial(chatId: string, cantidad: number): Promise<vo
   await sendTelegramMessage(
     chatId,
     `🔢 Cantidad: <b>${cantidad.toLocaleString('es-VE')}</b>\n\n` +
-      `4️⃣ Elige la <b>unidad</b>:`,
+      `4️⃣ Elige la <b>unidad</b> del material:`,
     {
       parse_mode: 'HTML',
       reply_markup: tecladoUnidadesProcuraPrincipales(CB_UNI),
@@ -143,20 +149,19 @@ async function mostrarCoincidenciasMaterial(
 
   buttons.push([
     {
-      text: '➕ Usar texto libre escrito',
+      text: 'Ingresa Material',
       callback_data: CB_MAT_TXT,
     },
   ]);
 
   const sinResultados =
     materiales.length === 0
-      ? '\n\n<i>No hay coincidencias en catálogo. Puedes usar tu texto libre.</i>'
+      ? '\n\n<i>No hay coincidencias en catálogo. Usa «Ingresa Material» para confirmar tu descripción.</i>'
       : '';
 
   await sendTelegramMessage(
     chatId,
-    `🔍 Coincidencias para «<b>${escHtml(t)}</b>» (${materiales.length}):${sinResultados}\n` +
-      'Elige un material del catálogo o confirma tu descripción:',
+    `Elige un material del catálogo o confirma tu descripción:${sinResultados}`,
     {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: buttons },
@@ -270,7 +275,7 @@ async function renderizarPasoProcuraDepartamento(
       } else {
         await sendTelegramMessage(
           chatId,
-          '2️⃣ Escribe al menos <b>3 letras</b> del material para buscar en catálogo.',
+          '2️⃣ Escribe el <b>material</b> a solicitar.',
           { parse_mode: 'HTML' },
         );
       }
@@ -489,8 +494,8 @@ async function pedirMaterial(chatId: string, cap: { codigo: string; nombre: stri
   await sendTelegramMessage(
     chatId,
     `📂 Capítulo: <b>${escHtml(etiquetaCapituloMaestro(cap))}</b>\n\n` +
-      `2️⃣ Escribe al menos <b>${MIN_CHARS_BUSQUEDA_MATERIAL} letras</b> del material.\n` +
-      'Buscaremos en el catálogo SAP y te mostraremos las mejores coincidencias.',
+      `2️⃣ Escribe el <b>material</b> a solicitar.\n` +
+      `<i>(Mínimo ${MIN_CHARS_BUSQUEDA_MATERIAL} letras para buscar en catálogo.)</i>`,
     { parse_mode: 'HTML' },
   );
 }
@@ -524,7 +529,7 @@ async function avanzarAConfirmacionAutocompletada(
 }
 
 async function pedirPrioridad(chatId: string): Promise<void> {
-  await sendTelegramMessage(chatId, '5️⃣ Elige la <b>prioridad</b>:', {
+  await sendTelegramMessage(chatId, '5️⃣ Elige la <b>prioridad</b> de la procura:', {
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
@@ -554,7 +559,7 @@ async function enviarConfirmacion(
 
   await sendTelegramMessage(
     chatId,
-    `📋 <b>Confirma la procura</b>\n\n` +
+    `6️⃣ <b>CONFIRMACIÓN DE LA PROCURA</b>\n\n` +
       `👤 ${escHtml(m.usuario_nombre ?? '—')}\n` +
       `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
       `📦 ${escHtml(m.material_txt ?? '')}` +
@@ -571,7 +576,7 @@ async function enviarConfirmacion(
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '✅ Confirmar', callback_data: CB_OK },
+            { text: '✅ CONFIRMAR', callback_data: CB_OK },
             { text: '❌ Cancelar', callback_data: CB_NO },
           ],
         ],
@@ -657,7 +662,7 @@ export async function manejarTextoProcuraDepartamentoTelegram(
     if (t.length < MIN_CHARS_BUSQUEDA_MATERIAL) {
       await sendTelegramMessage(
         chatId,
-        `⚠️ Escribe al menos <b>${MIN_CHARS_BUSQUEDA_MATERIAL} letras</b> para buscar en el catálogo.`,
+        `⚠️ Escribe al menos <b>${MIN_CHARS_BUSQUEDA_MATERIAL} letras</b> del material a solicitar.`,
         { parse_mode: 'HTML' },
       );
       return true;
@@ -692,6 +697,29 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
   params: { chatId: string; callbackId: string; data: string; userId: string },
 ): Promise<boolean> {
   if (!esCallbackProcuraDepartamentoTelegram(params.data)) return false;
+
+  if (esCallbackAbastecimientoProcura(params.data)) {
+    const procuraId = parseCallbackAbastecimientoProcura(params.data);
+    if (!procuraId) {
+      await answerCallbackQuery(params.callbackId, 'Procura inválida', true);
+      return true;
+    }
+    const auth = await exigirUsuarioSistemaTelegram(supabase, params.userId);
+    const nombre = auth.ok ? auth.usuario.nombre : 'Depositario';
+    await answerCallbackQuery(params.callbackId, 'Verificando almacén…');
+    const resultado = await confirmarAbastecimientoProcura(supabase, {
+      procuraId,
+      autorNombre: nombre,
+    });
+    await sendTelegramMessage(
+      params.chatId,
+      resultado.ok
+        ? `✅ <b>${escHtml(etiquetaResultadoAbastecimiento(resultado))}</b>`
+        : `❌ ${escHtml(resultado.error ?? 'No se pudo abastecer')}`,
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
 
   if (await manejarCallbackTtlProcuraDepartamento(supabase, params)) {
     return true;
@@ -898,15 +926,25 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       ? '⚠️ No se pudo verificar el costo histórico por problemas de conexión. Por seguridad financiera, la solicitud se envió a revisión de la oficina (<b>Vía Larga</b>).'
       : data.viaRapida
         ? `⚡ <b>Vía rápida</b> — ${escHtml(etiquetaEstadoProcura('aprobada_directa'))}\n${escHtml(data.motivoVia)}`
-        : `⏳ <b>Vía larga</b> — pendiente de aprobación en oficina / canal admin.`;
+        : '⏳ <b>Vía larga</b> — pendiente de aprobación del Project Manager.';
+
+    const msgAlerta =
+      !data.viaRapida && data.alertaPmAdminEnviada
+        ? `\n\n📢 Se envió <b>alerta de procura pendiente</b> al Project Manager y al Administrador.`
+        : !data.viaRapida && !data.alertaPmAdminEnviada
+          ? '\n\n⚠️ No se pudo enviar la alerta automática. Avise al PM y al Administrador.'
+          : '';
 
     await sendTelegramMessage(
       params.chatId,
-      `✅ <b>Procura registrada</b>\n\n` +
-        `🎫 ${escHtml(data.ticket)}\n` +
+      `✅ <b>PROCURA REGISTRADA</b>\n\n` +
+        `🎫 <b>Ticket:</b> ${escHtml(data.ticket)}\n` +
         `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
-        `📦 ${escHtml(m.material_txt)}\n\n` +
-        msgVia,
+        `📦 ${escHtml(m.material_txt)}\n` +
+        `🔢 ${Number(m.cantidad).toLocaleString('es-VE')} ${escHtml(m.unidad ?? 'UND')}\n` +
+        `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n\n` +
+        msgVia +
+        msgAlerta,
       { parse_mode: 'HTML' },
     );
     return true;

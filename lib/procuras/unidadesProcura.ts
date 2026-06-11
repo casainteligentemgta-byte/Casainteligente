@@ -227,8 +227,8 @@ export function parseCantidadUnidadProcura(texto: string): CantidadUnidadProcura
 export const UNIDADES_PROCURA_TELEGRAM_PRINCIPALES: UnidadMedidaOpcion[] = [
   { code: 'UND', name: 'UND' },
   { code: 'SAC', name: 'SACOS' },
-  { code: 'L', name: 'Litro' },
-  { code: 'M', name: 'Metro' },
+  { code: 'L', name: 'Litro(s)' },
+  { code: 'M', name: 'Metro(s)' },
   { code: 'M3', name: 'Metro cúbico' },
   { code: 'M2', name: 'Metro cuadrado' },
 ];

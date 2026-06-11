@@ -5,6 +5,7 @@ import type { PrioridadProcura } from '@/lib/compras/viaRapidaProcura';
 import { evaluarViaRapidaProcura } from '@/lib/compras/viaRapidaProcura';
 import type { UsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { enviarAlertaProcuraPendienteAdmin } from '@/lib/procuras/alertaAdminProcuraTelegram';
+import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
 import type { EstadoProcura } from '@/lib/procuras/procuraEstados';
@@ -32,6 +33,9 @@ export type RegistrarProcuraDepartamentoResult = {
   viaRapida: boolean;
   motivoVia: string;
   errorConsultaHistorico?: boolean;
+  /** Alerta Telegram a PM y Administrador (vía larga). */
+  alertaPmAdminEnviada?: boolean;
+  alertaPmAdminDms?: number;
 };
 
 export async function registrarProcuraDepartamento(
@@ -134,10 +138,16 @@ export async function registrarProcuraDepartamento(
 
   const out = data as { id: string; ticket: string; estado: EstadoProcura; via_rapida?: boolean };
 
+  let alertaPmAdminEnviada = false;
+  let alertaPmAdminDms = 0;
   if (!via.califica && out.id) {
-    void enviarAlertaProcuraPendienteAdmin(supabase, String(out.id)).catch((e) => {
+    try {
+      const alerta = await enviarAlertaProcuraPendienteAdmin(supabase, String(out.id));
+      alertaPmAdminEnviada = alerta.enviado;
+      alertaPmAdminDms = alerta.dmsEnviados;
+    } catch (e) {
       console.warn('[registrarProcuraDepartamento] alerta', e);
-    });
+    }
   }
 
   if (via.califica && out.id) {
@@ -158,6 +168,8 @@ export async function registrarProcuraDepartamento(
       viaRapida: Boolean(out.via_rapida),
       motivoVia: via.motivo,
       errorConsultaHistorico: Boolean(via.errorConsultaHistorico),
+      alertaPmAdminEnviada,
+      alertaPmAdminDms,
     },
     error: null,
   };
@@ -211,20 +223,19 @@ export async function resolverProcuraDepartamento(
     };
   }
 
-  const orden = await emitirOrdenCompraProcura(supabase, {
+  const abas = await procesarAbastecimientoProcuraAprobada(supabase, {
     procuraId: params.procuraId,
     autorNombre: params.aprobadorNombre,
-    motivo: `Aprobada por Project Manager ${params.aprobadorNombre} (Telegram ${params.aprobadorTelegramId})`,
   });
 
-  if (!orden.ok) {
-    return { ok: false, error: orden.error };
+  if (!abas.ok) {
+    return { ok: false, error: abas.error };
   }
 
   return {
     ok: true,
-    ticket: orden.ticket,
-    estado: orden.estado ?? 'en_compra',
-    compradoresNotificados: orden.compradoresNotificados,
+    ticket: abas.ticket,
+    estado: abas.estado ?? 'aprobada',
+    compradoresNotificados: abas.compraEmitida ? 1 : 0,
   };
 }
