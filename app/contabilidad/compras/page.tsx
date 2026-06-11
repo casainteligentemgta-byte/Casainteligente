@@ -2605,17 +2605,28 @@ export default function ComprasPage() {
                 ) : null}
 
                 {showList && vistaListado === 'facturas' ? (
-                    <p
-                        style={{
-                            color: 'rgba(255,255,255,0.4)',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            marginBottom: '12px',
-                            lineHeight: 1.45,
-                        }}
-                    >
-                        Pulsa el nombre del proveedor para ver u ocultar la imagen de la factura.
-                    </p>
+                    <>
+                        <p
+                            style={{
+                                color: 'rgba(255,255,255,0.4)',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                marginBottom: '8px',
+                                lineHeight: 1.45,
+                            }}
+                        >
+                            Pulsa el nombre del proveedor para ver u ocultar la imagen de la factura.
+                        </p>
+                        <div
+                            className="compras-leyenda-acciones compras-no-imprimir"
+                            aria-label="Acciones disponibles por factura"
+                        >
+                            <span className="compras-leyenda-obra">Obra / almacén</span>
+                            <span className="compras-leyenda-recepcion">Confirmación recepción</span>
+                            <span className="compras-leyenda-modificar">Modificar</span>
+                            <span className="compras-leyenda-borrar">Borrar</span>
+                        </div>
+                    </>
                 ) : null}
 
                 {showList && vistaListado === 'facturas' ? (
@@ -2883,14 +2894,7 @@ export default function ComprasPage() {
                                                 ) : null}
                                             </div>
                                         ) : null}
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                flexWrap: 'wrap',
-                                                gap: '8px',
-                                                marginTop: '10px',
-                                            }}
-                                        >
+                                        <div className="compras-factura-acciones compras-no-imprimir">
                                             {puedeReubicarCompra(c) ? (
                                                 <button
                                                     type="button"
@@ -2994,9 +2998,7 @@ export default function ComprasPage() {
                                                     )}
                                                     {c.estado_logistica === 'en_almacen_parcial'
                                                         ? 'Liberar pendiente'
-                                                        : c.estado_logistica === 'cuarentena'
-                                                          ? 'Confirmar recepción'
-                                                          : 'Ingreso a almacén'}
+                                                        : 'Confirmación recepción'}
                                                 </button>
                                                 )
                                             ) : null}

@@ -250,29 +250,6 @@ async function iniciarCapturaMotivoRechazo(
   }
 }
 
-async function notificarRechazoAlSolicitante(
-  procura: ProcuraAprobacionRow,
-  motivo: string,
-): Promise<void> {
-  const chatSol = procura.solicitante_telegram_chat_id;
-  if (!chatSol) return;
-
-  const cantidadTxt = `${Number(procura.cantidad).toLocaleString('es-VE')} ${procura.unidad}`;
-
-  try {
-    await sendTelegramMessage(
-      String(chatSol),
-      `❌ Tu solicitud de procura para <b>${escHtml(String(procura.material_txt))}</b> ` +
-        `(<b>${escHtml(cantidadTxt)}</b>) ha sido <b>RECHAZADA</b>.\n\n` +
-        `🎫 ${escHtml(String(procura.ticket))}\n\n` +
-        `💬 <b>Motivo de la oficina:</b> ${escHtml(motivo)}`,
-      { parse_mode: 'HTML' },
-    );
-  } catch (e) {
-    console.warn('[aprobacionDepartamento] notificar solicitante:', e);
-  }
-}
-
 async function editarMensajeCanalTrasResolucion(
   meta: ReturnType<typeof parseMetadataMotivoRechazo>,
   procura: ProcuraAprobacionRow,
@@ -427,8 +404,6 @@ export async function manejarTextoMotivoRechazoProcura(
 
     const procura = await cargarProcuraParaAprobacion(supabase, procuraId);
     if (procura) {
-      await notificarRechazoAlSolicitante(procura, motivo);
-
       const pie =
         `\n\n🔴 <b>Rechazada</b> por <b>${escHtml(aprobadorNombre)}</b>\n` +
         `💬 ${escHtml(motivo)}\n` +

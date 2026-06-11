@@ -9,6 +9,7 @@ import {
   etiquetaEstadoProcura,
   type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
+import { MIN_MOTIVO_RECHAZO_PROCURA } from '@/lib/procuras/rechazarProcura';
 import {
   etiquetaSolicitanteProcura,
   type RelEmpleadoSolicitante,
@@ -208,8 +209,18 @@ export default function ProcurasPage() {
     return m;
   }, [procuras]);
 
-  const procesarLote = async () => {
+  const procesarLote = async (estadoOverride?: EstadoProcura) => {
     if (!someSelected) return;
+    const estadoEfectivo = estadoOverride ?? nuevoEstado;
+    const motivo = motivoLote.trim();
+
+    if (estadoEfectivo === 'rechazada' && motivo.length < MIN_MOTIVO_RECHAZO_PROCURA) {
+      setError(
+        `Indique el motivo del rechazo (mínimo ${MIN_MOTIVO_RECHAZO_PROCURA} caracteres) para avisar al solicitante.`,
+      );
+      return;
+    }
+
     setProcesando(true);
     setError(null);
     setMsgOk(null);
@@ -219,8 +230,8 @@ export default function ProcurasPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ids: Array.from(selected),
-          nuevoEstado,
-          motivo: motivoLote.trim() || null,
+          nuevoEstado: estadoEfectivo,
+          motivo: motivo || null,
         }),
       });
       const json = (await res.json()) as {
@@ -228,16 +239,35 @@ export default function ProcurasPage() {
         count?: number;
         estado?: string;
         compradores_notificados?: number;
+        solicitantes_notificados?: number;
         telegram?: { enviados: number; omitidos: number };
         error?: string;
         hint?: string;
         errores?: string[];
+        ordenes?: Array<{ ticket?: string; compradoresNotificados?: number; error?: string }>;
       };
       if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
-      if (json.estado === 'en_compra' || nuevoEstado === 'aprobada' || nuevoEstado === 'aprobada_directa') {
+
+      if (estadoEfectivo === 'rechazada') {
         setMsgOk(
-          `Orden de compra emitida para ${json.count ?? 0} procura(s) · estado Comprada. ` +
-            `Compradores avisados: ${json.compradores_notificados ?? 0}.` +
+          `Rechazadas ${json.count ?? 0} procura(s). ` +
+            `Solicitantes avisados por Telegram: ${json.solicitantes_notificados ?? 0}.` +
+            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
+        );
+      } else if (
+        estadoEfectivo === 'en_compra' ||
+        estadoEfectivo === 'aprobada' ||
+        estadoEfectivo === 'aprobada_directa'
+      ) {
+        const compradores =
+          json.compradores_notificados ??
+          (json.ordenes ?? []).reduce(
+            (acc, o) => acc + (o.compradoresNotificados ?? 0),
+            0,
+          );
+        setMsgOk(
+          `Procesadas ${json.count ?? selected.size} procura(s). ` +
+            `Órdenes de compra / aviso a compradores: ${compradores}.` +
             (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
         );
       } else {
@@ -247,12 +277,30 @@ export default function ProcurasPage() {
         );
       }
       setMotivoLote('');
+      setSelected(new Set());
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al procesar lote');
     } finally {
       setProcesando(false);
     }
+  };
+
+  const aprobarComoPm = () => {
+    setNuevoEstado('aprobada');
+    void procesarLote('aprobada');
+  };
+
+  const rechazarComoPm = () => {
+    const motivo = motivoLote.trim();
+    if (motivo.length < MIN_MOTIVO_RECHAZO_PROCURA) {
+      setError(
+        `Escriba el motivo del rechazo abajo (mínimo ${MIN_MOTIVO_RECHAZO_PROCURA} caracteres) y pulse «Rechazar (PM)».`,
+      );
+      return;
+    }
+    setNuevoEstado('rechazada');
+    void procesarLote('rechazada');
   };
 
   const eliminarProcuras = async (ids: string[], confirmar = true) => {
@@ -727,13 +775,57 @@ export default function ProcurasPage() {
 
         {someSelected ? (
           <div style={{ ...cardStyle, borderColor: 'rgba(255,59,48,0.35)' }}>
-            <p style={{ color: 'white', fontWeight: 700, marginBottom: '12px' }}>
-              Cambiar estado — {selected.size} seleccionada(s)
+            <p style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>
+              Project Manager — {selected.size} seleccionada(s)
             </p>
+            <p
+              style={{
+                color: 'rgba(255,255,255,0.45)',
+                fontSize: '11px',
+                lineHeight: 1.45,
+                marginBottom: '12px',
+              }}
+            >
+              <b>Aprobar</b> verifica almacén y, si hace falta compra, envía orden al comprador por
+              Telegram. <b>Rechazar</b> exige motivo y avisa al solicitante.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+              <button
+                type="button"
+                onClick={() => void aprobarComoPm()}
+                disabled={procesando || eliminando}
+                style={{
+                  ...btnPrimary,
+                  background: '#34C759',
+                  opacity: procesando ? 0.6 : 1,
+                }}
+              >
+                {procesando && nuevoEstado === 'aprobada' ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : null}
+                Aprobar (PM)
+              </button>
+              <button
+                type="button"
+                onClick={() => void rechazarComoPm()}
+                disabled={procesando || eliminando}
+                style={{
+                  ...btnPrimary,
+                  background: 'rgba(255,59,48,0.2)',
+                  border: '1px solid rgba(255,59,48,0.45)',
+                  opacity: procesando ? 0.6 : 1,
+                }}
+              >
+                {procesando && nuevoEstado === 'rechazada' ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : null}
+                Rechazar (PM)
+              </button>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                  NUEVO ESTADO
+                  OTRO ESTADO (avanzado)
                 </label>
                 <select
                   value={nuevoEstado}
@@ -749,12 +841,16 @@ export default function ProcurasPage() {
               </div>
               <div>
                 <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                  MOTIVO (opcional)
+                  MOTIVO {nuevoEstado === 'rechazada' ? '(obligatorio al rechazar)' : '(opcional)'}
                 </label>
                 <input
                   value={motivoLote}
                   onChange={(e) => setMotivoLote(e.target.value)}
-                  placeholder="Nota para historial y Telegram"
+                  placeholder={
+                    nuevoEstado === 'rechazada'
+                      ? 'Motivo del rechazo para el solicitante…'
+                      : 'Nota para historial y Telegram'
+                  }
                   style={{ ...inputStyle, marginTop: '6px' }}
                 />
               </div>
@@ -767,7 +863,7 @@ export default function ProcurasPage() {
                 style={{ ...btnPrimary, opacity: procesando ? 0.6 : 1 }}
               >
                 {procesando ? <Loader2 size={16} className="animate-spin" /> : null}
-                Aplicar y notificar
+                Aplicar estado avanzado
               </button>
               <button
                 type="button"

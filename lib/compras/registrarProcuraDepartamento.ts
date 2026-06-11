@@ -7,6 +7,7 @@ import type { UsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegr
 import { enviarAlertaProcuraPendienteAdmin } from '@/lib/procuras/alertaAdminProcuraTelegram';
 import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
+import { rechazarProcuraConMotivo } from '@/lib/procuras/rechazarProcura';
 import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
 import type { EstadoProcura } from '@/lib/procuras/procuraEstados';
 
@@ -197,29 +198,20 @@ export async function resolverProcuraDepartamento(
       params.motivoRechazo?.trim() ||
       `Rechazada por ${params.aprobadorNombre} (Telegram ${params.aprobadorTelegramId})`;
 
-    const { data, error } = await supabase.rpc(
-      'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
-      {
-        p_ids: [params.procuraId.trim()],
-        p_nuevo_estado: 'rechazada',
-        p_motivo: motivo,
-      } as never,
-    );
+    const resultado = await rechazarProcuraConMotivo(supabase, {
+      procuraId: params.procuraId,
+      motivo,
+      aprobadorNombre: params.aprobadorNombre,
+    });
 
-    if (error) {
-      return { ok: false, error: error.message };
+    if (!resultado.ok) {
+      return { ok: false, error: resultado.error };
     }
 
-    await supabase
-      .from('ci_procuras')
-      .update({ motivo_rechazo: motivo.slice(0, 2000) } as never)
-      .eq('id', params.procuraId.trim());
-
-    const filas = (data ?? []) as Array<{ ticket: string; nuevo_est: string }>;
     return {
       ok: true,
-      ticket: filas[0]?.ticket,
-      estado: filas[0]?.nuevo_est ?? 'rechazada',
+      ticket: resultado.ticket,
+      estado: resultado.estado ?? 'rechazada',
     };
   }
 

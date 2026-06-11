@@ -3,6 +3,11 @@ import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimi
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
+import {
+  MIN_MOTIVO_RECHAZO_PROCURA,
+  rechazarProcuraConMotivo,
+  type RechazarProcuraResult,
+} from '@/lib/procuras/rechazarProcura';
 import { puedeProcesarEstadoProcuraWeb } from '@/lib/auth/permisos';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -85,7 +90,26 @@ export async function POST(request: Request) {
           error: r.error,
         });
       }
-      return NextResponse.json({ ok: true, ordenes });
+      const okCount = ordenes.filter((o) => !o.error).length;
+      const compradores = ordenes.reduce(
+        (acc, o) => acc + (o.compradoresNotificados ?? 0),
+        0,
+      );
+      const errores = ordenes.map((o) => o.error).filter(Boolean);
+      if (!okCount) {
+        return NextResponse.json(
+          { error: errores[0] ?? 'No se pudo aprobar ninguna procura.' },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        count: okCount,
+        estado: 'aprobada',
+        compradores_notificados: compradores,
+        ordenes,
+        errores: errores.length ? errores : undefined,
+      });
     }
 
     if (nuevoEstado === 'aprobada_directa') {
@@ -120,6 +144,47 @@ export async function POST(request: Request) {
         count: okCount,
         estado: 'en_compra',
         compradores_notificados: compradores,
+        errores: errores.length ? errores : undefined,
+      });
+    }
+
+    if (nuevoEstado === 'rechazada') {
+      if (!motivo || motivo.length < MIN_MOTIVO_RECHAZO_PROCURA) {
+        return NextResponse.json(
+          {
+            error: `Indique el motivo del rechazo (mínimo ${MIN_MOTIVO_RECHAZO_PROCURA} caracteres).`,
+          },
+          { status: 400 },
+        );
+      }
+
+      const resultados: RechazarProcuraResult[] = [];
+      for (const id of ids) {
+        resultados.push(
+          await rechazarProcuraConMotivo(admin.client, {
+            procuraId: id,
+            motivo,
+            aprobadorNombre: actorNombre,
+          }),
+        );
+      }
+
+      const okCount = resultados.filter((r) => r.ok).length;
+      const errores = resultados.map((r) => r.error).filter(Boolean);
+      const notificados = resultados.filter((r) => r.solicitanteNotificado).length;
+
+      if (!okCount) {
+        return NextResponse.json(
+          { error: errores[0] ?? 'No se pudo rechazar ninguna procura.' },
+          { status: 400 },
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        count: okCount,
+        estado: 'rechazada',
+        solicitantes_notificados: notificados,
         errores: errores.length ? errores : undefined,
       });
     }

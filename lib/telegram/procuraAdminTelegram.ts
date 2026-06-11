@@ -17,6 +17,7 @@ import {
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
+import { rechazarProcuraConMotivo } from '@/lib/procuras/rechazarProcura';
 import {
   CB_PROCURA_ADMIN_ALMACEN,
   CB_PROCURA_ADMIN_APROBAR,
@@ -98,10 +99,19 @@ async function procesarAccionProcuraAdmin(
     });
   }
 
-  const estado = accion === 'rechazar' ? 'rechazada' : 'aprobada';
+  if (accion === 'rechazar') {
+    const motivoRechazo = `Rechazada por ${autorNombre} (Telegram)`;
+    return rechazarProcuraConMotivo(supabase, {
+      procuraId,
+      motivo: motivoRechazo,
+      aprobadorNombre: autorNombre,
+    });
+  }
+
+  const estado = accion === 'almacen' ? 'aprobada' : 'aprobada';
   const motivo =
-    accion === 'rechazar'
-      ? `Rechazada por ${autorNombre} (Telegram)`
+    accion === 'almacen'
+      ? `Autorizada desde almacén por ${autorNombre} (Telegram)`
       : `Autorizada desde almacén por ${autorNombre} (Telegram)`;
 
   const { data, error } = await supabase.rpc(
