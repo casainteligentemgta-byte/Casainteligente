@@ -11,6 +11,11 @@ import {
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import { etiquetaColumnaOrden, type ColumnaOrdenCompras, type DireccionOrden } from '@/lib/contabilidad/ordenarLineasCompras';
+import {
+  buildDocumentoPrintToolbarHtml,
+  documentoPrintToolbarStyles,
+  type DocumentoPrintShare,
+} from '@/lib/contabilidad/documentoPrintShare';
 
 function escapeHtml(s: string): string {
   return s
@@ -38,6 +43,8 @@ export type ComprasCuadroPrintInput = {
   sortColumn?: ColumnaOrdenCompras | null;
   sortDir?: DireccionOrden;
   autoPrint?: boolean;
+  /** Enlace al cuadro filtrado en la app (WhatsApp / Telegram / email). */
+  share?: DocumentoPrintShare | null;
 };
 
 export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): string {
@@ -70,6 +77,8 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
     ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},400)});</script>`
     : '';
 
+  const toolbarHtml = buildDocumentoPrintToolbarHtml(input.share);
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -79,10 +88,7 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; color: #111; background: #f1f5f9; }
-    .toolbar { max-width: 297mm; margin: 0 auto; padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-    .toolbar button { font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; }
-    .btn-print { background: #0f172a; color: #fff; }
-    .btn-hint { background: #6d28d9; color: #fff; }
+    ${documentoPrintToolbarStyles()}
     .sheet { max-width: 297mm; margin: 0 auto 32px; padding: 24px 28px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     h1 { font-size: 20px; margin: 0 0 4px; }
     .sub { color: #64748b; font-size: 13px; margin-bottom: 16px; line-height: 1.45; }
@@ -100,17 +106,13 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
     .brand { font-size: 11px; color: #94a3b8; margin-top: 20px; text-align: center; }
     @media print {
       body { background: #fff; }
-      .toolbar { display: none !important; }
       .sheet { box-shadow: none; margin: 0; max-width: none; padding: 10mm 12mm; }
       table { font-size: 9px; }
     }
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <button type="button" class="btn-print" onclick="window.print()">Imprimir</button>
-    <button type="button" class="btn-hint" onclick="alert('En el diálogo de impresión elija «Guardar como PDF» o «Microsoft Print to PDF».')">Guardar como PDF</button>
-  </div>
+  ${toolbarHtml}
   <main class="sheet">
     <h1>${escapeHtml(titulo)}</h1>
     <p class="sub">${escapeHtml(input.subtitulo)}${escapeHtml(sortNote)}</p>

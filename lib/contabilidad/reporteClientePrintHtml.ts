@@ -3,6 +3,11 @@ import {
   type ReporteClienteFila,
 } from '@/lib/contabilidad/reporteClienteCompras';
 import { formatearBs, formatearTasaBcv, formatearUsd } from '@/lib/contabilidad/comprasMontos';
+import {
+  buildDocumentoPrintToolbarHtml,
+  documentoPrintToolbarStyles,
+  type DocumentoPrintShare,
+} from '@/lib/contabilidad/documentoPrintShare';
 
 function escapeHtml(s: string): string {
   return s
@@ -21,6 +26,7 @@ export type ReporteClientePrintInput = {
   subtitulo?: string;
   filas: ReporteClienteFila[];
   autoPrint?: boolean;
+  share?: DocumentoPrintShare | null;
 };
 
 export function buildReporteClientePrintHtml(input: ReporteClientePrintInput): string {
@@ -46,6 +52,8 @@ export function buildReporteClientePrintHtml(input: ReporteClientePrintInput): s
     ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},400)});</script>`
     : '';
 
+  const toolbarHtml = buildDocumentoPrintToolbarHtml(input.share);
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -54,7 +62,9 @@ export function buildReporteClientePrintHtml(input: ReporteClientePrintInput): s
   <title>Reporte Cliente — Casa Inteligente</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: system-ui, Segoe UI, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 24px; }
+    body { font-family: system-ui, Segoe UI, sans-serif; font-size: 11px; color: #111; margin: 0; background: #f1f5f9; }
+    ${documentoPrintToolbarStyles()}
+    .sheet { max-width: 297mm; margin: 0 auto 32px; padding: 24px 28px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     h1 { font-size: 18px; margin: 0 0 4px; }
     .sub { color: #555; margin: 0 0 16px; font-size: 12px; }
     table { width: 100%; border-collapse: collapse; }
@@ -68,12 +78,15 @@ export function buildReporteClientePrintHtml(input: ReporteClientePrintInput): s
     .art-line + .art-line { border-top: 1px dashed #ddd; margin-top: 2px; padding-top: 3px; }
     .brand { margin-top: 16px; font-size: 10px; color: #888; text-align: right; }
     @media print {
-      body { padding: 12px; }
+      body { background: #fff; }
+      .sheet { box-shadow: none; margin: 0; max-width: none; padding: 10mm 12mm; }
       tr { page-break-inside: avoid; }
     }
   </style>
 </head>
 <body>
+  ${toolbarHtml}
+  <main class="sheet">
   <h1>Reporte Cliente</h1>
   ${input.subtitulo ? `<p class="sub">${escapeHtml(input.subtitulo)}</p>` : ''}
   <table>
@@ -81,6 +94,7 @@ export function buildReporteClientePrintHtml(input: ReporteClientePrintInput): s
     <tbody>${filasHtml || '<tr><td colspan="9">Sin facturas</td></tr>'}</tbody>
   </table>
   <p class="brand">Casa Inteligente · ${escapeHtml(new Date().toLocaleString('es-VE'))}</p>
+  </main>
   ${autoPrintScript}
 </body>
 </html>`;
@@ -101,12 +115,13 @@ export function abrirReporteClienteVentana(input: ReporteClientePrintInput): voi
 /** Abre HTML listo para imprimir / guardar como PDF desde el diálogo del navegador. */
 export function exportarReporteClientePdf(
   filas: ReporteClienteFila[],
-  opts?: { subtitulo?: string },
+  opts?: { subtitulo?: string; share?: DocumentoPrintShare | null },
 ): boolean {
   if (!filas.length) return false;
   abrirReporteClienteVentana({
     filas,
     subtitulo: opts?.subtitulo,
+    share: opts?.share,
     autoPrint: false,
   });
   return true;

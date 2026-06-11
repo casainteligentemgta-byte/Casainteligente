@@ -1849,6 +1849,10 @@ export default function ComprasPage() {
     const verPdfCuadro = () => {
         if (lineasOrdenadas.length === 0) return;
         try {
+            const shareUrl =
+                typeof window !== 'undefined'
+                    ? buildComprasCuadroShareUrl(window.location.origin, estadoCompartir)
+                    : '';
             abrirComprasCuadroVentana({
                 subtitulo: subtituloCuadro,
                 filas: lineasOrdenadas,
@@ -1856,6 +1860,13 @@ export default function ComprasPage() {
                 totalBs: totalLineasBs,
                 sortColumn,
                 sortDir,
+                share: shareUrl
+                    ? {
+                          titulo: 'Cuadro de compras — Casa Inteligente',
+                          resumen: `${etiquetaScopeExport('filtrado')} · USD ${formatearUsd(totalUsdLineasVista)} · Bs ${formatearBs(totalLineasBs)}`,
+                          url: shareUrl,
+                      }
+                    : null,
             });
         } catch (e) {
             setError(e instanceof Error ? e.message : 'No se pudo abrir la vista PDF');
@@ -3434,6 +3445,11 @@ export default function ComprasPage() {
                 filas={filasReporteCliente}
                 scope={exportScope}
                 subtitulo={subtituloCuadro}
+                shareUrl={
+                    typeof window !== 'undefined'
+                        ? buildComprasCuadroShareUrl(window.location.origin, estadoCompartir)
+                        : undefined
+                }
                 onClose={() => setReporteClienteAbierto(false)}
             />
 

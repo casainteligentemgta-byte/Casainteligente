@@ -9,12 +9,19 @@ import {
 import { exportarReporteClientePdf } from '@/lib/contabilidad/reporteClientePrintHtml';
 import type { ComprasExportScope } from '@/lib/contabilidad/comprasExportShare';
 import { formatearBs, formatearTasaBcv, formatearUsd } from '@/lib/contabilidad/comprasMontos';
+import {
+  urlCompartirEmail,
+  urlCompartirTelegram,
+  urlCompartirWhatsApp,
+  type DocumentoPrintShare,
+} from '@/lib/contabilidad/documentoPrintShare';
 
 type Props = {
   open: boolean;
   filas: ReporteClienteFila[];
   scope: ComprasExportScope;
   subtitulo?: string;
+  shareUrl?: string;
   onClose: () => void;
 };
 
@@ -23,9 +30,23 @@ export default function ReporteClienteComprasModal({
   filas,
   scope,
   subtitulo,
+  shareUrl,
   onClose,
 }: Props) {
   if (!open) return null;
+
+  const share: DocumentoPrintShare | null = shareUrl
+    ? {
+        titulo: 'Reporte Cliente — Casa Inteligente',
+        resumen: [
+          `${filas.length} factura${filas.length === 1 ? '' : 's'}`,
+          subtitulo?.trim(),
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        url: shareUrl,
+      }
+    : null;
 
   const exportarExcel = () => {
     exportarReporteClienteExcel(filas, scope);
@@ -33,10 +54,14 @@ export default function ReporteClienteComprasModal({
 
   const exportarPdf = () => {
     try {
-      exportarReporteClientePdf(filas, { subtitulo });
+      exportarReporteClientePdf(filas, { subtitulo, share });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'No se pudo abrir el PDF');
     }
+  };
+
+  const abrirShare = (href: string) => {
+    window.open(href, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -156,6 +181,36 @@ export default function ReporteClienteComprasModal({
           >
             Cerrar
           </button>
+          {share ? (
+            <>
+              <button
+                type="button"
+                disabled={!filas.length}
+                onClick={() => abrirShare(urlCompartirWhatsApp(share))}
+                className="inline-flex items-center gap-2 rounded-xl border border-green-500/45 bg-green-500/15 px-4 py-2 text-xs font-bold text-green-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                WhatsApp
+              </button>
+              <button
+                type="button"
+                disabled={!filas.length}
+                onClick={() => abrirShare(urlCompartirTelegram(share))}
+                className="inline-flex items-center gap-2 rounded-xl border border-sky-500/45 bg-sky-500/15 px-4 py-2 text-xs font-bold text-sky-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Telegram
+              </button>
+              <button
+                type="button"
+                disabled={!filas.length}
+                onClick={() => {
+                  window.location.href = urlCompartirEmail(share);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-500/45 bg-zinc-500/15 px-4 py-2 text-xs font-bold text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Email
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             disabled={!filas.length}
