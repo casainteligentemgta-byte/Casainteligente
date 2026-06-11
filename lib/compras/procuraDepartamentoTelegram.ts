@@ -9,11 +9,13 @@ import {
   type TelegramEstado,
 } from '@/lib/telegram/estados';
 import {
+  CB_CAPITULO_MAESTRO_NUEVO,
   etiquetaCapituloMaestro,
   listarCapitulosMaestro,
   obtenerCapituloMaestroPorId,
   tecladoCapitulosMaestro,
 } from '@/lib/compras/capitulosMaestro';
+import { crearCapituloMaestroProcura } from '@/lib/compras/capitulosProcuraApu';
 import { registrarProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
 import {
   exigirUsuarioSistemaTelegram,
@@ -42,6 +44,7 @@ import {
   esUuidProcura,
   parseMetadataProcuraDepartamento,
   type MetadataProcuraDepartamentoParsed,
+  type PasoProcuraDepartamento,
 } from '@/lib/compras/telegramMetadata';
 
 const PREFIX = 'cmp:';
@@ -60,15 +63,7 @@ const PREFIJO_POR_VERIFICAR = '[POR VERIFICAR]';
 /** TTL de sesión procura departamento (caídas de señal Margarita / interior). */
 export const TTL_PROCURA_DEPARTAMENTO_MS = 2 * 60 * 60 * 1000;
 
-export type PasoProcuraDepartamento =
-  | 'capitulo'
-  | 'material'
-  | 'cantidad'
-  | 'unidad'
-  | 'prioridad'
-  | 'consumible'
-  | 'monto'
-  | 'confirm';
+export type { PasoProcuraDepartamento };
 
 function parseSoloCantidad(texto: string): number | null {
   const t = texto.trim().replace(',', '.');
@@ -255,6 +250,15 @@ async function renderizarPasoProcuraDepartamento(
       );
       return;
     }
+    case 'nuevo_capitulo':
+      await sendTelegramMessage(
+        chatId,
+        '✏️ Escribe el <b>título del capítulo</b>.\n\n' +
+          'Opcional: incluye número al inicio, ej.\n' +
+          '<code>09 Techos y cubiertas</code>',
+        { parse_mode: 'HTML' },
+      );
+      return;
     case 'material':
       if (m.capitulo_codigo && m.capitulo_nombre) {
         await pedirMaterial(chatId, {
@@ -594,6 +598,31 @@ export async function manejarTextoProcuraDepartamentoTelegram(
   const m = meta(estado);
   const paso = m.paso ?? 'capitulo';
 
+  if (paso === 'nuevo_capitulo') {
+    try {
+      const cap = await crearCapituloMaestroProcura(supabase, t);
+      await patchMeta(supabase, chatId, estado, {
+        paso: 'material',
+        capitulo_id: cap.id,
+        capitulo_codigo: cap.codigo,
+        capitulo_nombre: cap.nombre,
+      });
+      await sendTelegramMessage(
+        chatId,
+        `✅ Capítulo creado: <b>${escHtml(etiquetaCapituloMaestro(cap))}</b>`,
+        { parse_mode: 'HTML' },
+      );
+      await pedirMaterial(chatId, cap);
+    } catch (e) {
+      await sendTelegramMessage(
+        chatId,
+        `❌ ${escHtml(e instanceof Error ? e.message : 'No se pudo crear el capítulo')}`,
+        { parse_mode: 'HTML' },
+      );
+    }
+    return true;
+  }
+
   if (paso === 'material') {
     if (t.length < MIN_CHARS_BUSQUEDA_MATERIAL) {
       await sendTelegramMessage(
@@ -722,6 +751,27 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
 
   if (params.data.startsWith(CB_CAP)) {
     const capId = params.data.slice(CB_CAP.length);
+
+    if (capId === 'cancel') {
+      await answerCallbackQuery(params.callbackId, 'Cancelado');
+      await setTelegramContexto(supabase, params.chatId, { contexto: 'menu', metadata: {} });
+      await sendTelegramMessage(params.chatId, '↩️ Procura cancelada.', { parse_mode: 'HTML' });
+      return true;
+    }
+
+    if (capId === CB_CAPITULO_MAESTRO_NUEVO) {
+      await answerCallbackQuery(params.callbackId);
+      await patchMeta(supabase, params.chatId, estado, { paso: 'nuevo_capitulo' });
+      await sendTelegramMessage(
+        params.chatId,
+        '✏️ Escribe el <b>título del capítulo</b>.\n\n' +
+          'Opcional: incluye número al inicio, ej.\n' +
+          '<code>09 Techos y cubiertas</code>',
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+
     const cap = await obtenerCapituloMaestroPorId(supabase, capId);
     if (!cap) {
       await answerCallbackQuery(params.callbackId, 'Capítulo no encontrado', true);

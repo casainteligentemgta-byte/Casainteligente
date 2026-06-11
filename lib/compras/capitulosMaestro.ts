@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ensureCapitulosProcuraApu } from '@/lib/compras/capitulosProcuraApu';
 
 export type CapituloMaestro = {
   id: string;
@@ -6,10 +7,14 @@ export type CapituloMaestro = {
   nombre: string;
 };
 
+export const CB_CAPITULO_MAESTRO_NUEVO = 'nuevo';
+
 export async function listarCapitulosMaestro(
   supabase: SupabaseClient,
   limite = 30,
 ): Promise<CapituloMaestro[]> {
+  await ensureCapitulosProcuraApu(supabase);
+
   const { data, error } = await supabase
     .from('ci_compras_capitulos_maestro')
     .select('id, codigo, nombre')
@@ -55,12 +60,14 @@ export function etiquetaCapituloMaestro(c: Pick<CapituloMaestro, 'codigo' | 'nom
   return c.codigo?.trim() || 'Capítulo';
 }
 
-/** Teclado inline 2 columnas para elegir capítulo. */
+/** Teclado inline 2 columnas para elegir capítulo (+ crear capítulo). */
 export function tecladoCapitulosMaestro(
   capitulos: CapituloMaestro[],
   prefix: string,
 ): { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } {
-  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [
+    [{ text: '➕ Crear el capítulo', callback_data: `${prefix}${CB_CAPITULO_MAESTRO_NUEVO}` }],
+  ];
   let row: Array<{ text: string; callback_data: string }> = [];
 
   for (const c of capitulos) {

@@ -4,6 +4,7 @@ import { parsePrioridadProcura } from '@/lib/compras/viaRapidaProcura';
 
 export type PasoProcuraDepartamento =
   | 'capitulo'
+  | 'nuevo_capitulo'
   | 'material'
   | 'cantidad'
   | 'unidad'
@@ -14,6 +15,7 @@ export type PasoProcuraDepartamento =
 
 const PASOS_PROCURA: readonly PasoProcuraDepartamento[] = [
   'capitulo',
+  'nuevo_capitulo',
   'material',
   'cantidad',
   'unidad',
