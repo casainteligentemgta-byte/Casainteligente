@@ -65,6 +65,36 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+const MENSAJE_PROCURA_LEGACY_DESHABILITADA =
+  '⚠️ <b>Acceso Denegado</b>\n\n' +
+  'El formato de solicitudes de procura por proyecto antiguo ha sido deshabilitado en producción. ' +
+  'Por favor, utiliza el nuevo comando /procura para gestionar las solicitudes por el departamento de compras de la empresa.';
+
+export function procuraLegacyDeshabilitadaEnProduccion(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+/** H-13: bloquea flujo legacy por proyecto en producción antes de mutar ci_telegram_estados. */
+async function bloquearProcuraLegacyEnProduccion(
+  supabase: SupabaseClient,
+  chatId: string,
+  opts?: { callbackId?: string },
+): Promise<boolean> {
+  if (!procuraLegacyDeshabilitadaEnProduccion()) return false;
+
+  const estado = await getTelegramEstado(supabase, chatId);
+  if (esFlujoProcuraTelegram(estado)) {
+    await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
+  }
+
+  if (opts?.callbackId) {
+    await answerCallbackQuery(opts.callbackId, 'Acceso denegado', true);
+  }
+
+  await sendTelegramMessage(chatId, MENSAJE_PROCURA_LEGACY_DESHABILITADA, { parse_mode: 'HTML' });
+  return true;
+}
+
 function metaProcura(estado: TelegramEstado): MetadataProcuraTelegram {
   return (estado.metadata ?? {}) as MetadataProcuraTelegram;
 }
@@ -128,6 +158,8 @@ export async function manejarComandoProcuraTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
+  if (await bloquearProcuraLegacyEnProduccion(supabase, chatId)) return;
+
   await setTelegramContexto(supabase, chatId, {
     contexto: 'menu',
     metadata: {},
@@ -140,6 +172,8 @@ export async function prepararProcuraTrasObra(
   chatId: string,
   proyectoId: string,
 ): Promise<void> {
+  if (await bloquearProcuraLegacyEnProduccion(supabase, chatId)) return;
+
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
   await setTelegramContexto(supabase, chatId, {
     contexto: 'procura_solicitud',
@@ -262,6 +296,7 @@ export async function manejarTextoProcuraTelegram(
 ): Promise<boolean> {
   const estado = await getTelegramEstado(supabase, chatId);
   if (!esFlujoProcuraTelegram(estado)) return false;
+  if (await bloquearProcuraLegacyEnProduccion(supabase, chatId)) return true;
 
   const t = texto.trim();
   if (!t) {
@@ -353,6 +388,9 @@ export async function manejarCallbackProcuraTelegram(
   params: { chatId: string; callbackId: string; data: string },
 ): Promise<boolean> {
   if (!esCallbackProcuraTelegram(params.data)) return false;
+  if (await bloquearProcuraLegacyEnProduccion(supabase, params.chatId, { callbackId: params.callbackId })) {
+    return true;
+  }
 
   const estado = await getTelegramEstado(supabase, params.chatId);
   if (!esFlujoProcuraTelegram(estado)) {
