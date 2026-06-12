@@ -2952,10 +2952,11 @@ export default function ComprasPage() {
                                                 ) : null}
                                             </div>
                                         ) : null}
-                                        <div className="compras-factura-acciones compras-no-imprimir">
+                                        <div className="compras-factura-acciones compras-no-imprimir flex w-full flex-wrap items-center gap-1.5">
                                             {puedeReubicarCompra(c) ? (
                                                 <button
                                                     type="button"
+                                                    className="compras-factura-accion-btn"
                                                     onClick={() =>
                                                         setReubicarCompra({
                                                             id: c.id,
@@ -2967,20 +2968,12 @@ export default function ComprasPage() {
                                                     }
                                                     disabled={deletingId !== null || deletingBulk}
                                                     style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '6px',
-                                                        padding: '8px 12px',
-                                                        borderRadius: '10px',
                                                         border: '1px solid rgba(251,146,60,0.45)',
                                                         background: 'rgba(234,88,12,0.15)',
                                                         color: '#fdba74',
-                                                        fontSize: '11px',
-                                                        fontWeight: 800,
-                                                        cursor: 'pointer',
                                                     }}
                                                 >
-                                                    <MapPin size={14} />
+                                                    <MapPin className="h-3.5 w-3.5" />
                                                     Obra / almacén
                                                 </button>
                                             ) : null}
@@ -2990,6 +2983,7 @@ export default function ComprasPage() {
                                                 !c.ubicacion_destino_id ? (
                                                     <button
                                                         type="button"
+                                                        className="compras-factura-accion-btn"
                                                         onClick={() =>
                                                             setReubicarCompra({
                                                                 id: c.id,
@@ -3001,33 +2995,21 @@ export default function ComprasPage() {
                                                         }
                                                         disabled={deletingId !== null || deletingBulk}
                                                         style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '6px',
-                                                            padding: '8px 12px',
-                                                            borderRadius: '10px',
                                                             border: '1px solid rgba(251,191,36,0.45)',
                                                             background: 'rgba(251,191,36,0.12)',
                                                             color: '#fcd34d',
-                                                            fontSize: '11px',
-                                                            fontWeight: 800,
-                                                            cursor: 'pointer',
                                                         }}
                                                     >
-                                                        <MapPin size={14} />
+                                                        <MapPin className="h-3.5 w-3.5" />
                                                         Asignar almacén
                                                     </button>
                                                 ) : (
                                                 <button
                                                     type="button"
+                                                    className="compras-factura-accion-btn"
                                                     onClick={() => void handleIngresoAlmacen(c)}
                                                     disabled={deletingId !== null || ingresandoAlmacenId !== null}
                                                     style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '6px',
-                                                        padding: '8px 12px',
-                                                        borderRadius: '10px',
                                                         border:
                                                             c.estado_logistica === 'cuarentena' ||
                                                             c.estado_logistica === 'en_almacen_parcial'
@@ -3043,16 +3025,13 @@ export default function ComprasPage() {
                                                             c.estado_logistica === 'en_almacen_parcial'
                                                                 ? '#fcd34d'
                                                                 : '#86efac',
-                                                        fontSize: '11px',
-                                                        fontWeight: 800,
-                                                        cursor: 'pointer',
                                                         opacity: ingresandoAlmacenId === c.id ? 0.6 : 1,
                                                     }}
                                                 >
                                                     {ingresandoAlmacenId === c.id ? (
-                                                        <Loader2 size={14} className="animate-spin" />
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                     ) : (
-                                                        <PackageCheck size={14} />
+                                                        <PackageCheck className="h-3.5 w-3.5" />
                                                     )}
                                                     {c.estado_logistica === 'en_almacen_parcial'
                                                         ? 'Liberar pendiente'
@@ -3075,17 +3054,16 @@ export default function ComprasPage() {
                                                     <button
                                                         type="button"
                                                         className={
-                                                            claseBlinkFechaCompra(metaFecha.nivel) ??
-                                                            undefined
+                                                            [
+                                                                'compras-factura-accion-btn',
+                                                                claseBlinkFechaCompra(metaFecha.nivel),
+                                                            ]
+                                                                .filter(Boolean)
+                                                                .join(' ') || undefined
                                                         }
                                                         onClick={() => abrirVerificarFechaCompra(c)}
                                                         disabled={deletingId !== null || deletingBulk}
                                                         style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '6px',
-                                                            padding: '8px 12px',
-                                                            borderRadius: '10px',
                                                             border: esAdvertencia
                                                                 ? '1px solid rgba(255,149,0,0.55)'
                                                                 : '1px solid rgba(255,59,48,0.55)',
@@ -3093,12 +3071,9 @@ export default function ComprasPage() {
                                                                 ? 'rgba(255,149,0,0.18)'
                                                                 : 'rgba(255,59,48,0.18)',
                                                             color: esAdvertencia ? '#FFC56D' : '#FF8A85',
-                                                            fontSize: '11px',
-                                                            fontWeight: 800,
-                                                            cursor: 'pointer',
                                                         }}
                                                     >
-                                                        <CalendarClock size={14} />
+                                                        <CalendarClock className="h-3.5 w-3.5" />
                                                         Verificar fecha
                                                     </button>
                                                 );
@@ -3106,49 +3081,35 @@ export default function ComprasPage() {
                                             {c.pendiente_canal_id ? (
                                                 <button
                                                     type="button"
+                                                    className="compras-factura-accion-btn"
                                                     onClick={() => void abrirEditarTelegram(c)}
                                                     disabled={deletingId !== null || deletingBulk}
                                                     style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '6px',
-                                                        padding: '8px 12px',
-                                                        borderRadius: '10px',
                                                         border: '1px solid rgba(56,189,248,0.4)',
                                                         background: 'rgba(14,116,144,0.25)',
                                                         color: '#7dd3fc',
-                                                        fontSize: '11px',
-                                                        fontWeight: 800,
-                                                        cursor: 'pointer',
                                                     }}
                                                 >
-                                                    <Pencil size={14} />
+                                                    <Pencil className="h-3.5 w-3.5" />
                                                     Modificar
                                                 </button>
                                             ) : null}
                                             <button
                                                 type="button"
+                                                className="compras-factura-accion-btn"
                                                 onClick={() => void handleDelete(c)}
                                                 disabled={deletingId !== null || deletingBulk}
                                                 style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    padding: '8px 12px',
-                                                    borderRadius: '10px',
                                                     border: '1px solid rgba(255,59,48,0.35)',
                                                     background: 'rgba(255,59,48,0.12)',
                                                     color: '#FF6B6B',
-                                                    fontSize: '11px',
-                                                    fontWeight: 800,
-                                                    cursor: deletingId ? 'not-allowed' : 'pointer',
                                                     opacity: deletingId === c.id ? 0.6 : 1,
                                                 }}
                                             >
                                                 {deletingId === c.id ? (
-                                                    <Loader2 size={14} className="animate-spin" />
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                 ) : (
-                                                    <Trash2 size={14} />
+                                                    <Trash2 className="h-3.5 w-3.5" />
                                                 )}
                                                 Borrar
                                             </button>
