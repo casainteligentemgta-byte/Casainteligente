@@ -17,6 +17,7 @@ import {
 } from '@/lib/compras/capitulosMaestro';
 import { crearCapituloMaestroProcura } from '@/lib/compras/capitulosProcuraApu';
 import { registrarProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
+import { sanitizarNumeroVenezolano } from '@/lib/compras/procuraMaterialTexto';
 import {
   exigirUsuarioSistemaTelegram,
   usuarioPuedeSolicitarProcura,
@@ -74,10 +75,8 @@ export const TTL_PROCURA_DEPARTAMENTO_MS = 2 * 60 * 60 * 1000;
 
 export type { PasoProcuraDepartamento };
 
-function parseSoloCantidad(texto: string): number | null {
-  const t = texto.trim().replace(',', '.');
-  if (!t || /\s/.test(t)) return null;
-  const n = Number(t);
+function cantidadDesdeTextoOperario(texto: string): number | null {
+  const n = sanitizarNumeroVenezolano(texto.trim());
   if (!Number.isFinite(n) || n <= 0) return null;
   return n;
 }
@@ -680,11 +679,11 @@ export async function manejarTextoProcuraDepartamentoTelegram(
   }
 
   if (paso === 'cantidad') {
-    const cantidad = parseSoloCantidad(t);
+    const cantidad = cantidadDesdeTextoOperario(t);
     if (cantidad == null) {
       await sendTelegramMessage(
         chatId,
-        '⚠️ Cantidad inválida. Escribe solo un número (ej. <code>10</code> o <code>2.5</code>).',
+        '⚠️ Cantidad inválida. Escribe un número (ej. <code>10</code>, <code>2,5</code> o <code>1.250</code>).',
         { parse_mode: 'HTML' },
       );
       return true;
@@ -694,6 +693,24 @@ export async function manejarTextoProcuraDepartamentoTelegram(
       cantidad,
     });
     await pedirUnidadMaterial(chatId, cantidad);
+    return true;
+  }
+
+  if (paso === 'monto') {
+    const monto = sanitizarNumeroVenezolano(t);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      await sendTelegramMessage(
+        chatId,
+        '⚠️ Monto inválido. Escribe un número (ej. <code>25</code>, <code>12,50</code> o <code>1.200</code>).',
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+    const next = await patchMeta(supabase, chatId, estado, {
+      paso: 'confirm',
+      monto_estimado_usd: monto,
+    });
+    await enviarConfirmacion(supabase, chatId, meta(next));
     return true;
   }
 
@@ -918,6 +935,10 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       materialId: m.material_id?.trim() || null,
       porVerificar: Boolean(m.por_verificar),
     });
+
+    if (!data && !error) {
+      return true;
+    }
 
     await setTelegramContexto(supabase, params.chatId, { contexto: 'menu', metadata: {} });
 

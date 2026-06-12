@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { obtenerCapituloMaestroPorId } from '@/lib/compras/capitulosMaestro';
+import { marcarTtlPendienteAtomico } from '@/lib/compras/telegramTtlAtomico';
 import type { PrioridadProcura } from '@/lib/compras/viaRapidaProcura';
 import { evaluarViaRapidaProcura } from '@/lib/compras/viaRapidaProcura';
 import type { UsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
@@ -43,6 +44,14 @@ export async function registrarProcuraDepartamento(
   supabase: SupabaseClient,
   input: RegistrarProcuraDepartamentoInput,
 ): Promise<{ data: RegistrarProcuraDepartamentoResult | null; error: Error | null }> {
+  const chatId = String(input.usuario.telegram_id ?? '').trim();
+  if (chatId) {
+    const { marked, error: errRpc } = await marcarTtlPendienteAtomico(supabase, chatId);
+    if (!errRpc && !marked) {
+      return { data: null, error: null };
+    }
+  }
+
   const capitulo = await obtenerCapituloMaestroPorId(supabase, input.capituloMaestroId);
   if (!capitulo) {
     return { data: null, error: new Error('Capítulo no válido.') };

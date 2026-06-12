@@ -4,6 +4,9 @@ import { eliminarProcurasPorIds } from '@/lib/procuras/eliminarProcuras';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { SELECT_PROCURA_SOLICITANTE } from '@/lib/procuras/solicitanteProcura';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { resolverActorWeb } from '@/lib/auth/permisos';
+import { normalizarRolEmpresa } from '@/lib/auth/permisosCatalogo';
+import { createClient } from '@/lib/supabase/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +15,34 @@ const SELECT_LISTADO = `id,ticket,estado,material_txt,cantidad,unidad,proyecto_i
 
 /** GET listado de procuras. */
 export async function GET(req: Request) {
+  const authSolicitar = await requirePermisoWeb('procura.solicitar');
+  if (!authSolicitar.ok) {
+    const authCompra = await requirePermisoWeb('compra.registrar');
+    if (!authCompra.ok) {
+      if (authSolicitar.response.status === 401) return authSolicitar.response;
+      if (authCompra.response.status === 401) return authCompra.response;
+
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) {
+        return NextResponse.json({ error: 'Debe iniciar sesión' }, { status: 401 });
+      }
+
+      const actor = await resolverActorWeb(supabase, user.id, user.email);
+      const esSoloLectura = actor.rolesEmpresa.some(
+        (rol) => normalizarRolEmpresa(rol) === 'solo_lectura',
+      );
+      if (!esSoloLectura) {
+        return NextResponse.json(
+          { error: 'No autorizado. Permisos insuficientes para consultar procuras.' },
+          { status: 403 },
+        );
+      }
+    }
+  }
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 
