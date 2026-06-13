@@ -13,7 +13,7 @@ import {
 } from '@/lib/procuras/procuraAdminCallbacks';
 import { listarAprobadoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
 import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
-import { construirMensajesAlertaProcuraPendiente } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
+import { construirMensajesProcuraRegistradaPendiente } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 
 export type AlertaProcuraAdminRow = {
   id: string;
@@ -82,7 +82,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
 
   const prioridad =
     row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
-  const mensajes = construirMensajesAlertaProcuraPendiente(row, prioridad);
+  const mensajes = construirMensajesProcuraRegistradaPendiente(row, prioridad);
 
   const replyMarkup = row.capitulo_maestro_id
     ? tecladoAprobacionDepartamento(row.id)

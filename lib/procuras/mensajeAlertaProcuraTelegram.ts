@@ -14,18 +14,17 @@ function nombreObra(
   return rel.nombre?.trim() || '—';
 }
 
-export type MensajesAlertaProcuraPendiente = {
+export type MensajesProcuraRegistradaPendiente = {
   canalAdmin: string;
   dmProjectManager: string;
   dmAdministrador: string;
 };
 
-export function construirMensajesAlertaProcuraPendiente(
-  row: AlertaProcuraAdminRow & {
-    ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
-  },
-  prioridad: string,
-): MensajesAlertaProcuraPendiente {
+type FilaProcuraMensaje = AlertaProcuraAdminRow & {
+  ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
+};
+
+function cuerpoDetalleProcura(row: FilaProcuraMensaje, prioridad: string): string {
   const capRel = row.ci_compras_capitulos_maestro;
   const capLabel = capRel
     ? etiquetaCapituloMaestro({
@@ -42,32 +41,81 @@ export function construirMensajesAlertaProcuraPendiente(
       ? `\n💵 Estimado: <b>USD ${Number(row.monto_estimado_usd).toFixed(2)}</b>`
       : '';
 
-  const cuerpo =
+  return (
     `🎫 <b>Ticket:</b> ${escHtml(row.ticket)}\n` +
     `👷‍♂️ <b>Solicitante:</b> ${escHtml(solicitante)}\n` +
     `📁 <b>Capítulo / Obra:</b> ${escHtml(obra)}\n` +
     `📦 <b>Material:</b> ${cantidad} ${escHtml(row.unidad)} de ${escHtml(material)}\n` +
-    `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${montoUsd}`;
+    `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${montoUsd}`
+  );
+}
+
+/** Mensaje único para aprobadores: registrada + pendiente, sin duplicar cabeceras. */
+export function construirMensajesProcuraRegistradaPendiente(
+  row: FilaProcuraMensaje,
+  prioridad: string,
+): MensajesProcuraRegistradaPendiente {
+  const cuerpo = cuerpoDetalleProcura(row, prioridad);
+  const titulo =
+    '✅ <b>PROCURA REGISTRADA</b> — <i>pendiente de autorización</i>\n\n';
 
   return {
-    canalAdmin:
-      '🏗️ <b>ALERTA DE PROCURA PENDIENTE</b>\n\n' +
-      cuerpo +
-      '\n\n¿Autoriza el <b>Administrador</b>?',
+    canalAdmin: titulo + cuerpo + '\n\n¿Autoriza el <b>Administrador</b>?',
     dmProjectManager:
-      '👷‍♂️ <b>ALERTA — Procura pendiente (Project Manager)</b>\n\n' +
-      cuerpo +
-      '\n\n¿Autoriza el <b>Project Manager</b>?',
-    dmAdministrador:
-      '🛡️ <b>ALERTA — Procura pendiente (Administrador)</b>\n\n' +
-      cuerpo +
-      '\n\n¿Autoriza el <b>Administrador</b>?',
+      titulo + cuerpo + '\n\n¿Autoriza el <b>Project Manager</b>?',
+    dmAdministrador: titulo + cuerpo + '\n\n¿Autoriza el <b>Administrador</b>?',
   };
+}
+
+/** @deprecated Usar construirMensajesProcuraRegistradaPendiente */
+export function construirMensajesAlertaProcuraPendiente(
+  row: FilaProcuraMensaje,
+  prioridad: string,
+): MensajesProcuraRegistradaPendiente {
+  return construirMensajesProcuraRegistradaPendiente(row, prioridad);
+}
+
+/** Confirmación breve al obrero (vía larga): ya vio los detalles al confirmar. */
+export function construirMensajeSolicitanteProcuraViaLarga(ticket: string): string {
+  return (
+    '✅ <b>PROCURA REGISTRADA</b>\n\n' +
+    `🎫 <b>Ticket:</b> ${escHtml(ticket)}\n` +
+    '⏳ Pendiente de aprobación del <b>Administrador</b>.'
+  );
+}
+
+/** Confirmación al obrero (vía rápida): incluye resumen porque no hay alerta posterior. */
+export function construirMensajeSolicitanteProcuraViaRapida(params: {
+  ticket: string;
+  capituloLabel: string;
+  materialTxt: string;
+  cantidad: number;
+  unidad: string;
+  prioridad: string;
+  motivoVia: string;
+}): string {
+  return (
+    '✅ <b>PROCURA REGISTRADA</b>\n\n' +
+    `🎫 <b>Ticket:</b> ${escHtml(params.ticket)}\n` +
+    `📂 ${escHtml(params.capituloLabel)}\n` +
+    `📦 ${escHtml(limpiarDescripcionProcura(params.materialTxt))}\n` +
+    `🔢 ${params.cantidad.toLocaleString('es-VE')} ${escHtml(params.unidad)}\n` +
+    `⚡ Prioridad: <b>${escHtml(params.prioridad)}</b>\n\n` +
+    `⚡ <b>Vía rápida</b> — ${escHtml(params.motivoVia)}`
+  );
+}
+
+/** Confirmación al obrero cuando falla histórico (vía larga forzada). */
+export function construirMensajeSolicitanteProcuraViaLargaHistorico(ticket: string): string {
+  return (
+    construirMensajeSolicitanteProcuraViaLarga(ticket) +
+    '\n\n⚠️ No se pudo verificar el costo histórico; la oficina revisará la solicitud.'
+  );
 }
 
 /** Ejemplo fijo para vista previa / pruebas Telegram. */
 export function mensajeAlertaProcuraAdminDemo(): string {
-  return construirMensajesAlertaProcuraPendiente(
+  return construirMensajesProcuraRegistradaPendiente(
     {
       id: '00000000-0000-4000-8000-000000000099',
       ticket: 'PR-2026-DEMO',

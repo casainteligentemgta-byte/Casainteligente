@@ -53,6 +53,11 @@ import {
   etiquetaResultadoAbastecimiento,
   parseCallbackAbastecimientoProcura,
 } from '@/lib/procuras/abastecimientoProcuraAprobada';
+import {
+  construirMensajeSolicitanteProcuraViaLarga,
+  construirMensajeSolicitanteProcuraViaLargaHistorico,
+  construirMensajeSolicitanteProcuraViaRapida,
+} from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 import { resolverMaterialProcuraPorId } from '@/lib/telegram/procuraMaterialPicker';
 import {
   callbackDataTelegramValido,
@@ -987,23 +992,27 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       return true;
     }
 
-    const msgVia = data.errorConsultaHistorico
-      ? '⚠️ No se pudo verificar el costo histórico por problemas de conexión. Por seguridad financiera, la solicitud se envió a revisión de la oficina (<b>Vía Larga</b>).'
-      : data.viaRapida
-        ? `⚡ <b>Vía rápida</b> — ${escHtml(etiquetaEstadoProcura('aprobada_directa'))}\n${escHtml(data.motivoVia)}`
-        : '⏳ <b>Vía larga</b> — pendiente de aprobación del Administrador.';
+    let textoConfirmacion: string;
+    if (data.errorConsultaHistorico) {
+      textoConfirmacion = construirMensajeSolicitanteProcuraViaLargaHistorico(data.ticket);
+    } else if (data.viaRapida) {
+      textoConfirmacion = construirMensajeSolicitanteProcuraViaRapida({
+        ticket: data.ticket,
+        capituloLabel: etiquetaCapituloMaestro({
+          codigo: m.capitulo_codigo ?? '',
+          nombre: m.capitulo_nombre ?? '',
+        }),
+        materialTxt: m.material_txt ?? '',
+        cantidad: Number(m.cantidad),
+        unidad: m.unidad ?? 'UND',
+        prioridad: m.prioridad ?? 'Media',
+        motivoVia: `${etiquetaEstadoProcura('aprobada_directa')} — ${data.motivoVia}`,
+      });
+    } else {
+      textoConfirmacion = construirMensajeSolicitanteProcuraViaLarga(data.ticket);
+    }
 
-    await sendTelegramMessage(
-      params.chatId,
-      `✅ <b>PROCURA REGISTRADA</b>\n\n` +
-        `🎫 <b>Ticket:</b> ${escHtml(data.ticket)}\n` +
-        `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
-        `📦 ${escHtml(limpiarDescripcionProcura(m.material_txt ?? ''))}\n` +
-        `🔢 ${Number(m.cantidad).toLocaleString('es-VE')} ${escHtml(m.unidad ?? 'UND')}\n` +
-        `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n\n` +
-        msgVia,
-      { parse_mode: 'HTML' },
-    );
+    await sendTelegramMessage(params.chatId, textoConfirmacion, { parse_mode: 'HTML' });
     return true;
   }
 
