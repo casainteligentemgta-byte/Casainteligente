@@ -18,9 +18,12 @@ export function sanitizarNumeroVenezolano(input: string): number {
 }
 
 export function limpiarDescripcionProcura(descripcion: string): string {
-  return descripcion
-    .replace(new RegExp(`^${PREFIJO_POR_VERIFICAR_PROCURA}\\s*`, 'i'), '')
-    .trim();
+  let s = descripcion.trim();
+  const prefijo = PREFIJO_POR_VERIFICAR_PROCURA;
+  if (s.length >= prefijo.length && s.slice(0, prefijo.length).toUpperCase() === prefijo.toUpperCase()) {
+    s = s.slice(prefijo.length).trimStart();
+  }
+  return s;
 }
 
 /** Nombre visible en confirmaciones (sin prefijo, «por verificar» ni código SAP). */
