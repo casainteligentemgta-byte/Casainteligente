@@ -615,14 +615,12 @@ async function enviarConfirmacion(
   }
 
   const proyectoId = estado.proyecto_id?.trim() || null;
-  const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
   const nombreMaterial = await resolverNombreMaterialConfirmacion(supabase, m, proyectoId);
   const unidadLabel = etiquetaUnidadProcuraTelegram(m.unidad ?? 'UND');
 
   const disponibilidad = await consultarDisponibilidadMaterialProcura(supabase, {
     materialId: m.material_id?.trim() || null,
     proyectoId,
-    entidadId,
     unidadFallback: m.unidad ?? 'UND',
   });
   const lineaStock = lineaDisponibilidadMaterialProcura(disponibilidad, escHtml);

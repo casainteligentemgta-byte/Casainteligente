@@ -1,8 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getStockRealObra } from '@/lib/almacen/getStockRealObra';
 import { esUbicacionAlmacenFisico } from '@/lib/almacen/inventarioFiltroUbicacion';
-import { cargarStockPorUbicaciones } from '@/lib/almacen/inventarioFiltroUbicacion';
-import { listarUbicacionesPorEntidad } from '@/lib/almacen/ubicacionesInventario';
 
 export type DisponibilidadMaterialProcura = {
   hayStock: boolean;
@@ -47,43 +45,12 @@ async function stockObraMaterial(
   );
 }
 
-async function stockEntidadMaterial(
-  supabase: SupabaseClient,
-  entidadId: string,
-  materialId: string,
-  excluirProyectoId?: string | null,
-): Promise<{ cantidad: number; almacenNombre: string; unidad: string } | null> {
-  const ubicaciones = await listarUbicacionesPorEntidad(supabase, entidadId, {
-    excluirProyectoId: excluirProyectoId?.trim() || undefined,
-  });
-  const idsAlmacen = ubicaciones
-    .filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil')
-    .map((u) => u.id);
-  if (!idsAlmacen.length) return null;
-
-  const map = await cargarStockPorUbicaciones(supabase, idsAlmacen);
-  const resumen = map.get(materialId);
-  if (!resumen || resumen.cantidad_disponible <= 0) return null;
-
-  const almacenNombre =
-    resumen.ubicacion_nombres.find(Boolean)?.trim() ||
-    resumen.ubicacion_nombres[0]?.trim() ||
-    'Almacén';
-
-  return {
-    cantidad: resumen.cantidad_disponible,
-    almacenNombre,
-    unidad: 'UND',
-  };
-}
-
-/** Consulta stock en almacenes de la obra y, si no hay, en almacenes de la entidad. */
+/** Consulta stock solo en almacenes físicos de la obra/proyecto. */
 export async function consultarDisponibilidadMaterialProcura(
   supabase: SupabaseClient,
   opts: {
     materialId?: string | null;
     proyectoId?: string | null;
-    entidadId?: string | null;
     unidadFallback?: string;
   },
 ): Promise<DisponibilidadMaterialProcura> {
@@ -94,30 +61,18 @@ export async function consultarDisponibilidadMaterialProcura(
   }
 
   const proyectoId = opts.proyectoId?.trim() || null;
-  const entidadId = opts.entidadId?.trim() || null;
-
-  if (proyectoId) {
-    const obra = await stockObraMaterial(supabase, proyectoId, materialId);
-    if (obra) {
-      return {
-        hayStock: true,
-        cantidad: obra.cantidad,
-        unidad: obra.unidad || unidadFallback,
-        almacenNombre: obra.almacenNombre,
-      };
-    }
+  if (!proyectoId) {
+    return { hayStock: false, cantidad: 0, unidad: unidadFallback, almacenNombre: null };
   }
 
-  if (entidadId) {
-    const ent = await stockEntidadMaterial(supabase, entidadId, materialId, proyectoId);
-    if (ent) {
-      return {
-        hayStock: true,
-        cantidad: ent.cantidad,
-        unidad: ent.unidad || unidadFallback,
-        almacenNombre: ent.almacenNombre,
-      };
-    }
+  const obra = await stockObraMaterial(supabase, proyectoId, materialId);
+  if (obra) {
+    return {
+      hayStock: true,
+      cantidad: obra.cantidad,
+      unidad: obra.unidad || unidadFallback,
+      almacenNombre: obra.almacenNombre,
+    };
   }
 
   return { hayStock: false, cantidad: 0, unidad: unidadFallback, almacenNombre: null };
@@ -128,10 +83,10 @@ export function lineaDisponibilidadMaterialProcura(
   escHtml: (s: string) => string,
 ): string {
   if (!d.hayStock || !d.almacenNombre) {
-    return '🏪 <b>NO HAY DISPONIBILIDAD</b>';
+    return '🏪 <b>NO HAY DISPONIBILIDAD</b> en almacén de la obra';
   }
   const qty = d.cantidad.toLocaleString('es-VE');
   return (
-    `🏪 Disponible: <b>${qty}</b> ${escHtml(d.unidad)} en <b>${escHtml(d.almacenNombre)}</b>`
+    `🏪 Disponible en obra: <b>${qty}</b> ${escHtml(d.unidad)} en <b>${escHtml(d.almacenNombre)}</b>`
   );
 }
