@@ -13,24 +13,13 @@ import {
 } from '@/lib/procuras/procuraAdminCallbacks';
 import { listarAprobadoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
 import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
-import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
-
-function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function nombreObra(
-  rel: { nombre?: string } | { nombre?: string }[] | null | undefined,
-): string {
-  if (!rel) return '—';
-  if (Array.isArray(rel)) return rel[0]?.nombre?.trim() || '—';
-  return rel.nombre?.trim() || '—';
-}
+import { construirMensajesAlertaProcuraPendiente } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 
 export type AlertaProcuraAdminRow = {
   id: string;
   ticket: string;
   solicitante_nombre?: string | null;
+  solicitante_telegram_chat_id?: number | null;
   material_txt: string;
   cantidad: number;
   unidad: string;
@@ -49,7 +38,12 @@ export type ResultadoAlertaProcuraPendiente = {
   dmsEnviados: number;
 };
 
-/** Envía alerta al canal admin y DM a Project Manager + Administrador. */
+function esChatSolicitante(chatId: string | number, solicitanteChatId?: number | null): boolean {
+  if (solicitanteChatId == null || !Number.isFinite(solicitanteChatId)) return false;
+  return String(chatId) === String(Math.trunc(solicitanteChatId));
+}
+
+/** Envía alerta al canal admin y DM a Project Manager + Administrador (no al solicitante). */
 export async function enviarAlertaProcuraPendienteAdmin(
   supabase: SupabaseClient,
   procuraId: string,
@@ -64,7 +58,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,solicitante_nombre,solicitante_telegram_chat_id,material_txt,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -81,31 +75,14 @@ export async function enviarAlertaProcuraPendienteAdmin(
     return { enviado: false, canalAdmin: false, dmsEnviados: 0 };
   }
 
-  const capRel = row.ci_compras_capitulos_maestro;
-  const capLabel = capRel
-    ? etiquetaCapituloMaestro({
-        codigo: String(capRel.codigo ?? ''),
-        nombre: String(capRel.nombre ?? ''),
-      })
-    : null;
-  const obra = capLabel || nombreObra(row.ci_proyectos);
-  const solicitante = row.solicitante_nombre?.trim() || '—';
+  const solicitanteChatId =
+    row.solicitante_telegram_chat_id != null
+      ? Number(row.solicitante_telegram_chat_id)
+      : null;
+
   const prioridad =
     row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
-  const cantidad = Number(row.cantidad).toLocaleString('es-VE');
-  const montoUsd =
-    row.monto_estimado_usd != null && Number.isFinite(Number(row.monto_estimado_usd))
-      ? `\n💵 Estimado: <b>USD ${Number(row.monto_estimado_usd).toFixed(2)}</b>`
-      : '';
-
-  const msg =
-    '🏗️ <b>ALERTA DE PROCURA PENDIENTE</b>\n\n' +
-    `🎫 <b>Ticket:</b> ${escHtml(row.ticket)}\n` +
-    `👷‍♂️ <b>Solicitante:</b> ${escHtml(solicitante)}\n` +
-    `📁 <b>Capítulo / Obra:</b> ${escHtml(obra)}\n` +
-    `📦 <b>Material:</b> ${cantidad} ${escHtml(row.unidad)} de ${escHtml(row.material_txt)}\n` +
-    `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${montoUsd}\n\n` +
-    '¿Autoriza el Project Manager?';
+  const mensajes = construirMensajesAlertaProcuraPendiente(row, prioridad);
 
   const replyMarkup = row.capitulo_maestro_id
     ? tecladoAprobacionDepartamento(row.id)
@@ -120,9 +97,9 @@ export async function enviarAlertaProcuraPendienteAdmin(
       };
 
   let canalAdmin = false;
-  if (canal) {
+  if (canal && !esChatSolicitante(canal, solicitanteChatId)) {
     try {
-      await sendTelegramMessage(canal, msg, {
+      await sendTelegramMessage(canal, mensajes.canalAdmin, {
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
       });
@@ -141,16 +118,14 @@ export async function enviarAlertaProcuraPendienteAdmin(
   }
 
   const dmMarkup = tecladoAprobacionDepartamento(row.id);
-  const cuerpoDm = msg.replace('🏗️ <b>ALERTA DE PROCURA PENDIENTE</b>\n\n', '');
-  const msgDmPm =
-    '👷‍♂️ <b>ALERTA — Procura pendiente (Project Manager)</b>\n\n' + cuerpoDm;
-  const msgDmAdmin =
-    '🛡️ <b>ALERTA — Procura pendiente (Administrador)</b>\n\n' + cuerpoDm;
 
   let dmsEnviados = 0;
   for (const ap of aprobadores) {
+    if (esChatSolicitante(ap.chatId, solicitanteChatId)) continue;
     if (canal && String(ap.chatId) === canal) continue;
-    const msgDm = ap.rol === 'Administrador' ? msgDmAdmin : msgDmPm;
+
+    const msgDm =
+      ap.rol === 'Administrador' ? mensajes.dmAdministrador : mensajes.dmProjectManager;
     try {
       await sendTelegramMessage(String(ap.chatId), msgDm, {
         parse_mode: 'HTML',

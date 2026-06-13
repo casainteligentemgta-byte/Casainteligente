@@ -1,4 +1,8 @@
 import type { TelegramMessageExtra } from '@/lib/telegram/botApi';
+import {
+  corregirNombreDisplayTelegram,
+  resolverNombreObraPorChatTelegram,
+} from '@/lib/procuras/resolverNombreTelegramObra';
 
 const ROL_CACHE = new Map<string, string>();
 
@@ -72,23 +76,25 @@ async function resolverEtiquetaRolDestinatario(chatId: string | number): Promise
     const u = await obtenerUsuarioSistemaTelegram(supabase, tid);
     if (u) {
       const rol = ETIQUETA_ROL_SISTEMA[u.rol] ?? u.rol;
-      const label = `${rol} · ${u.nombre}`;
+      const nombreNomina = await resolverNombreObraPorChatTelegram(supabase, tid);
+      const nombre = corregirNombreDisplayTelegram(nombreNomina || u.nombre);
+      const label = `${rol} · ${nombre}`;
       ROL_CACHE.set(key, label);
       return label;
     }
 
     const { data: nominaRows } = await supabase
       .from('ci_proyecto_nomina')
-      .select('rol, nombre, nombre_display, telegram_chat_id, empleado_telegram_chat_id')
+      .select('rol, nombre, telegram_chat_id, empleado_telegram_chat_id, ci_empleados(nombre_completo)')
       .eq('activo', true)
       .limit(50);
 
     type NominaRow = {
       rol?: string | null;
       nombre?: string | null;
-      nombre_display?: string | null;
       telegram_chat_id?: number | null;
       empleado_telegram_chat_id?: number | null;
+      ci_empleados?: { nombre_completo?: string | null } | null;
     };
 
     for (const row of (nominaRows ?? []) as NominaRow[]) {
@@ -96,8 +102,10 @@ async function resolverEtiquetaRolDestinatario(chatId: string | number): Promise
       const t2 =
         row.empleado_telegram_chat_id != null ? Number(row.empleado_telegram_chat_id) : null;
       if (t1 !== tid && t2 !== tid) continue;
-      const nombre =
-        String(row.nombre_display ?? row.nombre ?? '').trim() || 'Personal de obra';
+      const nombre = corregirNombreDisplayTelegram(
+        String(row.nombre ?? row.ci_empleados?.nombre_completo ?? '').trim() ||
+          'Personal de obra',
+      );
       const label = `${etiquetaRolNomina(String(row.rol ?? ''))} · ${nombre}`;
       ROL_CACHE.set(key, label);
       return label;
@@ -111,7 +119,9 @@ async function resolverEtiquetaRolDestinatario(chatId: string | number): Promise
 
     if (emp) {
       const e = emp as { nombre_completo?: string | null; oficio?: string | null };
-      const nombre = String(e.nombre_completo ?? '').trim() || 'Empleado';
+      const nombre = corregirNombreDisplayTelegram(
+        String(e.nombre_completo ?? '').trim() || 'Empleado',
+      );
       const oficio = String(e.oficio ?? '').trim();
       const label = oficio ? `${oficio} · ${nombre}` : nombre;
       ROL_CACHE.set(key, label);

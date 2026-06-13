@@ -17,7 +17,10 @@ import {
 } from '@/lib/compras/capitulosMaestro';
 import { crearCapituloMaestroProcura } from '@/lib/compras/capitulosProcuraApu';
 import { registrarProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
-import { sanitizarNumeroVenezolano } from '@/lib/compras/procuraMaterialTexto';
+import {
+  limpiarDescripcionProcura,
+  sanitizarNumeroVenezolano,
+} from '@/lib/compras/procuraMaterialTexto';
 import {
   exigirUsuarioSistemaTelegram,
   usuarioPuedeSolicitarProcura,
@@ -29,9 +32,11 @@ import {
   type PrioridadProcura,
 } from '@/lib/compras/viaRapidaProcura';
 import {
-  buscarMaterialesFuzzyCatalogo,
+  buscarMaterialesInteligenteCatalogo,
   etiquetaMaterialCatalogo,
 } from '@/lib/almacen/buscarMaterialesCatalogo';
+import { aprenderAliasMaterial } from '@/lib/almacen/materialAliases';
+import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
 import { resolverEntidadIdCatalogo } from '@/lib/almacen/catalogoEntidad';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { marcarTtlPendienteAtomico } from '@/lib/compras/telegramTtlAtomico';
@@ -68,7 +73,9 @@ const CB_NO = `${PREFIX}no`;
 const CB_STATE_RESUME = `${PREFIX}state:resume`;
 const CB_STATE_RESET = `${PREFIX}state:reset`;
 const MIN_CHARS_BUSQUEDA_MATERIAL = 3;
-const PREFIJO_POR_VERIFICAR = '[POR VERIFICAR]';
+
+/** Umbral para mostrar «¿Quisiste decir…?» cuando el término no coincide exactamente. */
+const SCORE_SUGERENCIA_MATERIAL = 80;
 
 /** TTL de sesión procura departamento (caídas de señal Margarita / interior). */
 export const TTL_PROCURA_DEPARTAMENTO_MS = 2 * 60 * 60 * 1000;
@@ -94,9 +101,10 @@ function truncarBoton(s: string, max = 56): string {
 }
 
 async function pedirCantidadMaterial(chatId: string, materialTxt: string): Promise<void> {
+  const nombre = limpiarDescripcionProcura(materialTxt);
   await sendTelegramMessage(
     chatId,
-    `📦 Material: <b>${escHtml(materialTxt)}</b>\n\n` +
+    `📦 Material: <b>${escHtml(nombre)}</b>\n\n` +
       `3️⃣ Indica la <b>cantidad</b> del material (número, ej. <code>50</code> o <code>2.5</code>):`,
     { parse_mode: 'HTML' },
   );
@@ -126,9 +134,9 @@ async function mostrarCoincidenciasMaterial(
   const proyectoId = estado.proyecto_id?.trim() || null;
   const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
 
-  let materiales: Awaited<ReturnType<typeof buscarMaterialesFuzzyCatalogo>>;
+  let resultados: Awaited<ReturnType<typeof buscarMaterialesInteligenteCatalogo>>;
   try {
-    materiales = await buscarMaterialesFuzzyCatalogo(supabase, t, {
+    resultados = await buscarMaterialesInteligenteCatalogo(supabase, t, {
       limit: 5,
       entidadId,
       proyectoId,
@@ -140,6 +148,22 @@ async function mostrarCoincidenciasMaterial(
       { parse_mode: 'HTML' },
     );
     return;
+  }
+
+  const materiales = resultados.map((r) => r.material);
+  const top = resultados[0];
+  const termNorm = normalizarTextoMaterial(t);
+
+  let sugerencia = '';
+  if (top && top.score >= SCORE_SUGERENCIA_MATERIAL) {
+    const topNorm = normalizarTextoMaterial(top.material.name);
+    const coincideExacto =
+      topNorm === termNorm ||
+      topNorm.split(/\s+/).some((w) => w === termNorm) ||
+      top.material.name.toLowerCase().includes(t.toLowerCase());
+    if (!coincideExacto) {
+      sugerencia = `\n\n💡 ¿Quisiste decir <b>${escHtml(top.material.name)}</b>?`;
+    }
   }
 
   const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
@@ -168,7 +192,7 @@ async function mostrarCoincidenciasMaterial(
 
   await sendTelegramMessage(
     chatId,
-    `Elige un material del catálogo o confirma tu descripción:${sinResultados}`,
+    `Elige un material del catálogo o confirma tu descripción:${sugerencia}${sinResultados}`,
     {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: buttons },
@@ -569,7 +593,7 @@ async function enviarConfirmacion(
     `6️⃣ <b>CONFIRMACIÓN DE LA PROCURA</b>\n\n` +
       `👤 ${escHtml(m.usuario_nombre ?? '—')}\n` +
       `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
-      `📦 ${escHtml(m.material_txt ?? '')}` +
+      `📦 ${escHtml(limpiarDescripcionProcura(m.material_txt ?? ''))}` +
       (m.por_verificar ? ' <i>(por verificar)</i>\n' : '\n') +
       `🔢 ${m.cantidad ?? '—'} ${escHtml(etiquetaUnidadProcuraTelegram(m.unidad ?? 'UND'))}\n` +
       `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n` +
@@ -790,6 +814,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
 
     const proyectoId =
       estado.proyecto_id?.trim() || auth.usuario.proyecto_id?.trim() || null;
+    const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
     const material = await resolverMaterialProcuraPorId(supabase, matId, proyectoId);
     if (!material) {
       await answerCallbackQuery(params.callbackId, 'Material no encontrado', true);
@@ -803,6 +828,17 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       unit: material.unit,
     });
     await answerCallbackQuery(params.callbackId, truncarBoton(material.name, 40));
+
+    const borrador = meta(estado).material_busqueda_borrador?.trim();
+    if (borrador && entidadId) {
+      void aprenderAliasMaterial(supabase, {
+        entidadId,
+        alias: borrador,
+        materialId: material.id,
+        materialName: material.name,
+      }).catch(() => {});
+    }
+
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'cantidad',
       material_id: material.id,
@@ -820,7 +856,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       return true;
     }
 
-    const materialTxt = `${PREFIJO_POR_VERIFICAR} ${borrador}`.slice(0, 500);
+    const materialTxt = borrador.slice(0, 500);
     await answerCallbackQuery(params.callbackId, 'Texto libre');
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'cantidad',
@@ -955,25 +991,17 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       ? '⚠️ No se pudo verificar el costo histórico por problemas de conexión. Por seguridad financiera, la solicitud se envió a revisión de la oficina (<b>Vía Larga</b>).'
       : data.viaRapida
         ? `⚡ <b>Vía rápida</b> — ${escHtml(etiquetaEstadoProcura('aprobada_directa'))}\n${escHtml(data.motivoVia)}`
-        : '⏳ <b>Vía larga</b> — pendiente de aprobación del Project Manager.';
-
-    const msgAlerta =
-      !data.viaRapida && data.alertaPmAdminEnviada
-        ? `\n\n📢 Se envió <b>alerta de procura pendiente</b> al Project Manager y al Administrador.`
-        : !data.viaRapida && !data.alertaPmAdminEnviada
-          ? '\n\n⚠️ No se pudo enviar la alerta automática. Avise al PM y al Administrador.'
-          : '';
+        : '⏳ <b>Vía larga</b> — pendiente de aprobación del Administrador.';
 
     await sendTelegramMessage(
       params.chatId,
       `✅ <b>PROCURA REGISTRADA</b>\n\n` +
         `🎫 <b>Ticket:</b> ${escHtml(data.ticket)}\n` +
         `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
-        `📦 ${escHtml(m.material_txt)}\n` +
+        `📦 ${escHtml(limpiarDescripcionProcura(m.material_txt ?? ''))}\n` +
         `🔢 ${Number(m.cantidad).toLocaleString('es-VE')} ${escHtml(m.unidad ?? 'UND')}\n` +
         `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n\n` +
-        msgVia +
-        msgAlerta,
+        msgVia,
       { parse_mode: 'HTML' },
     );
     return true;

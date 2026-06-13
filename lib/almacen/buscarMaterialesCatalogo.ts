@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MaterialCampoOpcion } from '@/components/almacen/BuscadorMaterialCampo';
 import { filtrarQueryCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
+import { buscarMaterialPorAlias } from '@/lib/almacen/materialAliases';
+import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
+import { scoreMaterialInteligente } from '@/lib/almacen/scoreMaterialInteligente';
 import { escapeIlike, patronIlike } from '@/lib/contabilidad/comprasQueryFiltros';
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
 
@@ -24,6 +27,123 @@ export type BuscarMaterialesCatalogoOpts = {
   entidadId?: string | null;
   proyectoId?: string | null;
 };
+
+export type MaterialBusquedaInteligente = {
+  material: MaterialCampoOpcion;
+  score: number;
+  fuente: 'alias' | 'ilike' | 'similitud' | 'obra';
+};
+
+export function etiquetaMaterialCatalogo(m: MaterialCampoOpcion): string {
+  return m.sap_code ? `${m.name} (${m.sap_code})` : m.name;
+}
+
+function mergeResultado(
+  map: Map<string, MaterialBusquedaInteligente>,
+  material: MaterialCampoOpcion,
+  score: number,
+  fuente: MaterialBusquedaInteligente['fuente'],
+): void {
+  const prev = map.get(material.id);
+  if (!prev || score > prev.score) {
+    map.set(material.id, { material, score, fuente });
+  }
+}
+
+async function listarPoolCatalogo(
+  supabase: SupabaseClient,
+  opts?: BuscarMaterialesCatalogoOpts,
+): Promise<MaterialCampoOpcion[]> {
+  const limit = 900;
+  const byId = new Map<string, MaterialCampoOpcion>();
+
+  const proyectoId = opts?.proyectoId?.trim();
+  if (proyectoId) {
+    try {
+      const obra = await listarMaterialesObraRecepcion(supabase, proyectoId);
+      for (const m of obra) byId.set(m.id, m);
+    } catch {
+      /* obra opcional */
+    }
+  }
+
+  let query = supabase
+    .from('global_inventory')
+    .select('id,name,sap_code,unit')
+    .order('name')
+    .limit(limit);
+
+  query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  for (const row of data ?? []) {
+    const m = mapRow(row as { id: string; name?: string; sap_code?: string; unit?: string });
+    byId.set(m.id, m);
+  }
+
+  return Array.from(byId.values());
+}
+
+/** Búsqueda inteligente: alias + ILIKE + similitud (Levenshtein + variantes obra). */
+export async function buscarMaterialesInteligenteCatalogo(
+  supabase: SupabaseClient,
+  term: string,
+  opts?: BuscarMaterialesCatalogoOpts,
+): Promise<MaterialBusquedaInteligente[]> {
+  const t = term.trim().replace(/%/g, '');
+  if (t.length < 3) return [];
+
+  const limit = Math.min(Math.max(opts?.limit ?? 5, 1), 10);
+  const termNorm = normalizarTextoMaterial(t);
+  const map = new Map<string, MaterialBusquedaInteligente>();
+
+  try {
+    const aliasHits = await buscarMaterialPorAlias(supabase, t, opts?.entidadId);
+    for (const m of aliasHits) mergeResultado(map, m, 100, 'alias');
+  } catch (e) {
+    console.warn('[buscarMaterialesInteligenteCatalogo] alias:', e);
+  }
+
+  const pattern = patronIlike(t);
+  if (pattern) {
+    let query = supabase
+      .from('global_inventory')
+      .select('id,name,sap_code,unit')
+      .or(`name.ilike.${pattern},sap_code.ilike.${pattern}`)
+      .order('name')
+      .limit(60);
+
+    query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    for (const row of data ?? []) {
+      const m = mapRow(row as { id: string; name?: string; sap_code?: string; unit?: string });
+      const score = scoreMaterialInteligente(termNorm, m);
+      if (score > 0) mergeResultado(map, m, score, 'ilike');
+    }
+  }
+
+  const fuertes = Array.from(map.values()).filter((x) => x.score >= 70);
+  if (fuertes.length < limit) {
+    const pool = await listarPoolCatalogo(supabase, opts);
+    for (const m of pool) {
+      const score = scoreMaterialInteligente(termNorm, m);
+      if (score >= 58) mergeResultado(map, m, score, 'similitud');
+    }
+  }
+
+  return Array.from(map.values())
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.material.name.localeCompare(b.material.name, 'es', { sensitivity: 'base' }),
+    )
+    .slice(0, limit);
+}
 
 /** Búsqueda por nombre o SKU en global_inventory (mín. 2 caracteres). */
 export async function buscarMaterialesCatalogo(
@@ -52,60 +172,14 @@ export async function buscarMaterialesCatalogo(
   );
 }
 
-export function etiquetaMaterialCatalogo(m: MaterialCampoOpcion): string {
-  return m.sap_code ? `${m.name} (${m.sap_code})` : m.name;
-}
-
-function scoreMaterialFuzzy(term: string, m: MaterialCampoOpcion): number {
-  const t = term.toLowerCase();
-  const name = m.name.toLowerCase();
-  const code = (m.sap_code ?? '').toLowerCase();
-  if (!t) return 0;
-  if (name === t || code === t) return 100;
-  if (name.startsWith(t) || code.startsWith(t)) return 85;
-  if (name.split(/\s+/).some((w) => w.startsWith(t))) return 75;
-  if (name.includes(t) || code.includes(t)) return 60;
-  return 0;
-}
-
 /** Búsqueda difusa por nombre o SKU (mín. 3 caracteres, top N por relevancia). */
 export async function buscarMaterialesFuzzyCatalogo(
   supabase: SupabaseClient,
   term: string,
   opts?: BuscarMaterialesCatalogoOpts,
 ): Promise<MaterialCampoOpcion[]> {
-  const t = term.trim().replace(/%/g, '');
-  if (t.length < 3) return [];
-
-  const limit = Math.min(Math.max(opts?.limit ?? 5, 1), 10);
-  const pattern = patronIlike(t);
-  if (!pattern) return [];
-
-  let query = supabase
-    .from('global_inventory')
-    .select('id,name,sap_code,unit')
-    .or(`name.ilike.${pattern},sap_code.ilike.${pattern}`)
-    .order('name')
-    .limit(40);
-
-  query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
-
-  const { data, error } = await query;
-
-  if (error) throw new Error(error.message);
-
-  return (data ?? [])
-    .map((row) =>
-      mapRow(row as { id: string; name?: string; sap_code?: string; unit?: string }),
-    )
-    .map((m) => ({ m, score: scoreMaterialFuzzy(t, m) }))
-    .filter((x) => x.score > 0)
-    .sort(
-      (a, b) =>
-        b.score - a.score || a.m.name.localeCompare(b.m.name, 'es', { sensitivity: 'base' }),
-    )
-    .slice(0, limit)
-    .map((x) => x.m);
+  const hits = await buscarMaterialesInteligenteCatalogo(supabase, term, opts);
+  return hits.map((h) => h.material);
 }
 
 function coincidePrefijo(m: MaterialCampoOpcion, term: string): boolean {

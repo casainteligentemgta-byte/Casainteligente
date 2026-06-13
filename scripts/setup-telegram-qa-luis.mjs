@@ -9,7 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LUIS_CHAT_ID = 267515133;
-const LUIS_NOMBRE = 'LUIS MATA MATA';
+const LUIS_NOMBRE = 'Luis Vicente Mata';
 
 function parseEnvFile(content) {
   const out = {};

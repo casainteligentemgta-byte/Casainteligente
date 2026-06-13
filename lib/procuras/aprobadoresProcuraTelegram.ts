@@ -5,6 +5,10 @@ import {
   type RolComprasTelegram,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { listarNominaProyecto } from '@/lib/proyectos/proyectoNomina';
+import {
+  corregirNombreDisplayTelegram,
+  resolverNombreMostrarTelegram,
+} from '@/lib/procuras/resolverNombreTelegramObra';
 
 /** Slugs de rol de app → rol en ci_usuarios_sistema_telegram (bot /procura). */
 export function rolSistemaTelegramDesdeSlugApp(slug: string): RolComprasTelegram | null {
@@ -81,7 +85,10 @@ export async function listarAprobadoresProcuraTelegram(
       if (chatId == null) continue;
       const rol = String(row.rol ?? '').trim();
       const pid = row.proyecto_id ? String(row.proyecto_id) : null;
-      const nombre = String(row.nombre ?? '').trim() || (rol === 'Administrador' ? 'Administrador' : 'Aprobador');
+      const nombreRaw = String(row.nombre ?? '').trim() || (rol === 'Administrador' ? 'Administrador' : 'Aprobador');
+      const nombre = corregirNombreDisplayTelegram(
+        await resolverNombreMostrarTelegram(supabase, chatId, nombreRaw, proyectoId),
+      );
 
       // Administradores globales siempre reciben alertas de procura pendiente.
       if (rol === 'Administrador') {
@@ -109,12 +116,15 @@ export async function listarAprobadoresProcuraTelegram(
       if (chatId == null || !Number.isFinite(chatId)) continue;
 
       const rolSlug = f.rol === 'admin' ? 'admin' : 'pm_obra';
+      const nombreNomina = corregirNombreDisplayTelegram(
+        f.nombre?.trim() || f.nombre_display?.trim() || 'Project manager',
+      );
       if (rolSistemaTelegramDesdeSlugApp(rolSlug)) {
         try {
           await sincronizarUsuarioSistemaTelegramProyecto(supabase, {
             proyectoId,
             rolSlug,
-            nombre: f.nombre_display?.trim() || f.nombre?.trim() || 'Project manager',
+            nombre: nombreNomina,
             chatId,
           });
         } catch (e) {
@@ -125,7 +135,7 @@ export async function listarAprobadoresProcuraTelegram(
       if (!out.has(chatId)) {
         out.set(chatId, {
           chatId,
-          nombre: f.nombre_display?.trim() || f.nombre?.trim() || 'Project manager',
+          nombre: nombreNomina,
           origen: 'nomina',
           rol: f.rol === 'admin' ? 'Administrador' : 'Aprobador',
         });
@@ -157,7 +167,9 @@ export async function esAprobadorNominaProyecto(
     if (chatId !== tid) continue;
     return {
       ok: true,
-      nombre: f.nombre_display?.trim() || f.nombre?.trim() || 'Project manager',
+      nombre: corregirNombreDisplayTelegram(
+        f.nombre?.trim() || f.nombre_display?.trim() || 'Project manager',
+      ),
     };
   }
   return { ok: false };
