@@ -18,7 +18,7 @@ import {
 import { crearCapituloMaestroProcura } from '@/lib/compras/capitulosProcuraApu';
 import { registrarProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
 import {
-  limpiarDescripcionProcura,
+  nombreMaterialProcuraVisible,
   sanitizarNumeroVenezolano,
 } from '@/lib/compras/procuraMaterialTexto';
 import {
@@ -58,6 +58,10 @@ import {
   construirMensajeSolicitanteProcuraViaLargaHistorico,
   construirMensajeSolicitanteProcuraViaRapida,
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
+import {
+  consultarDisponibilidadMaterialProcura,
+  lineaDisponibilidadMaterialProcura,
+} from '@/lib/procuras/disponibilidadMaterialProcura';
 import { resolverMaterialProcuraPorId } from '@/lib/telegram/procuraMaterialPicker';
 import {
   callbackDataTelegramValido,
@@ -106,7 +110,7 @@ function truncarBoton(s: string, max = 56): string {
 }
 
 async function pedirCantidadMaterial(chatId: string, materialTxt: string): Promise<void> {
-  const nombre = limpiarDescripcionProcura(materialTxt);
+  const nombre = nombreMaterialProcuraVisible(materialTxt);
   await sendTelegramMessage(
     chatId,
     `📦 Material: <b>${escHtml(nombre)}</b>\n\n` +
@@ -350,7 +354,7 @@ async function renderizarPasoProcuraDepartamento(
       await avanzarAConfirmacionAutocompletada(supabase, chatId, estado);
       return;
     case 'confirm':
-      await enviarConfirmacion(supabase, chatId, m);
+      await enviarConfirmacion(supabase, chatId, estado, m);
       return;
     default:
       await sendTelegramMessage(chatId, '↩️ Retomando flujo de procura…', { parse_mode: 'HTML' });
@@ -561,7 +565,7 @@ async function avanzarAConfirmacionAutocompletada(
     monto_estimado_usd: auto.montoEstimadoUsd,
     observaciones: auto.notaAuto,
   });
-  await enviarConfirmacion(supabase, chatId, meta(next));
+  await enviarConfirmacion(supabase, chatId, estado, meta(next));
 }
 
 async function pedirPrioridad(chatId: string): Promise<void> {
@@ -579,13 +583,31 @@ async function pedirPrioridad(chatId: string): Promise<void> {
   });
 }
 
+async function resolverNombreMaterialConfirmacion(
+  supabase: SupabaseClient,
+  m: MetadataProcuraDepartamento,
+  proyectoId: string | null,
+): Promise<string> {
+  const matId = m.material_id?.trim();
+  if (matId && esUuidProcura(matId)) {
+    try {
+      const material = await resolverMaterialProcuraPorId(supabase, matId, proyectoId);
+      if (material?.name?.trim()) return material.name.trim();
+    } catch {
+      /* fallback texto sesión */
+    }
+  }
+  return nombreMaterialProcuraVisible(m.material_txt ?? '');
+}
+
 async function enviarConfirmacion(
   supabase: SupabaseClient,
   chatId: string,
+  estado: TelegramEstado,
   m: MetadataProcuraDepartamento,
 ): Promise<void> {
   const limite = await limiteViaRapidaUsd(supabase);
-  let viaHint = '<i>Vía larga — pendiente de Project Manager</i>';
+  let viaHint = '<i>Vía larga — pendiente del Administrador</i>';
   if (m.monto_estimado_usd != null && m.monto_estimado_usd < limite) {
     viaHint = '<i>Monto declarado bajo techo — puede calificar vía rápida</i>';
   } else if (m.monto_estimado_usd == null) {
@@ -593,14 +615,27 @@ async function enviarConfirmacion(
       '<i>Sin monto USD — al confirmar se validará consumible estricto + precio histórico</i>';
   }
 
+  const proyectoId = estado.proyecto_id?.trim() || null;
+  const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
+  const nombreMaterial = await resolverNombreMaterialConfirmacion(supabase, m, proyectoId);
+  const unidadLabel = etiquetaUnidadProcuraTelegram(m.unidad ?? 'UND');
+
+  const disponibilidad = await consultarDisponibilidadMaterialProcura(supabase, {
+    materialId: m.material_id?.trim() || null,
+    proyectoId,
+    entidadId,
+    unidadFallback: m.unidad ?? 'UND',
+  });
+  const lineaStock = lineaDisponibilidadMaterialProcura(disponibilidad, escHtml);
+
   await sendTelegramMessage(
     chatId,
     `6️⃣ <b>CONFIRMACIÓN DE LA PROCURA</b>\n\n` +
       `👤 ${escHtml(m.usuario_nombre ?? '—')}\n` +
       `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
-      `📦 ${escHtml(limpiarDescripcionProcura(m.material_txt ?? ''))}` +
-      (m.por_verificar ? ' <i>(por verificar)</i>\n' : '\n') +
-      `🔢 ${m.cantidad ?? '—'} ${escHtml(etiquetaUnidadProcuraTelegram(m.unidad ?? 'UND'))}\n` +
+      `📦 <b>${escHtml(nombreMaterial)}</b>\n` +
+      `🔢 ${m.cantidad ?? '—'} ${escHtml(unidadLabel)}\n` +
+      `${lineaStock}\n` +
       `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n` +
       (m.es_consumible ? '🧴 Consumible: sí (auto)\n' : '🧴 Consumible: no (auto)\n') +
       (m.monto_estimado_usd != null
@@ -739,7 +774,7 @@ export async function manejarTextoProcuraDepartamentoTelegram(
       paso: 'confirm',
       monto_estimado_usd: monto,
     });
-    await enviarConfirmacion(supabase, chatId, meta(next));
+    await enviarConfirmacion(supabase, chatId, estado, meta(next));
     return true;
   }
 
@@ -826,12 +861,6 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       return true;
     }
 
-    const etiqueta = etiquetaMaterialCatalogo({
-      id: material.id,
-      name: material.name,
-      sap_code: material.sap_code,
-      unit: material.unit,
-    });
     await answerCallbackQuery(params.callbackId, truncarBoton(material.name, 40));
 
     const borrador = meta(estado).material_busqueda_borrador?.trim();
@@ -847,10 +876,10 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'cantidad',
       material_id: material.id,
-      material_txt: etiqueta.slice(0, 500),
+      material_txt: material.name.slice(0, 500),
       por_verificar: false,
     });
-    await pedirCantidadMaterial(params.chatId, etiqueta);
+    await pedirCantidadMaterial(params.chatId, material.name);
     return true;
   }
 

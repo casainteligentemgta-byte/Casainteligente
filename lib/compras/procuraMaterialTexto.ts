@@ -22,3 +22,11 @@ export function limpiarDescripcionProcura(descripcion: string): string {
     .replace(new RegExp(`^${PREFIJO_POR_VERIFICAR_PROCURA}\\s*`, 'i'), '')
     .trim();
 }
+
+/** Nombre visible en confirmaciones (sin prefijo, «por verificar» ni código SAP). */
+export function nombreMaterialProcuraVisible(materialTxt: string): string {
+  let limpio = limpiarDescripcionProcura(materialTxt);
+  limpio = limpio.replace(/\s*\(\s*por\s+verificar\s*\)\s*$/i, '').trim();
+  const sinSku = limpio.replace(/\s*\([^)]+\)\s*$/, '').trim();
+  return sinSku || limpio || 'Material';
+}
