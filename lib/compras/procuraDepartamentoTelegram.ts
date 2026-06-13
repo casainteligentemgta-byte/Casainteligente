@@ -54,9 +54,8 @@ import {
   parseCallbackAbastecimientoProcura,
 } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import {
-  construirMensajeSolicitanteProcuraViaLarga,
-  construirMensajeSolicitanteProcuraViaLargaHistorico,
-  construirMensajeSolicitanteProcuraViaRapida,
+  construirMensajeSolicitanteProcuraCompra,
+  construirMensajeSolicitanteProcuraStockSuficiente,
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 import {
   consultarDisponibilidadMaterialProcura,
@@ -607,7 +606,7 @@ async function enviarConfirmacion(
   m: MetadataProcuraDepartamento,
 ): Promise<void> {
   const limite = await limiteViaRapidaUsd(supabase);
-  let viaHint = '<i>Vía larga — pendiente del Administrador y Project Manager</i>';
+  let viaHint = '<i>Al confirmar se consultará stock en almacén de la obra</i>';
   if (m.monto_estimado_usd != null && m.monto_estimado_usd < limite) {
     viaHint = '<i>Monto declarado bajo techo — puede calificar vía rápida</i>';
   } else if (m.monto_estimado_usd == null) {
@@ -1022,23 +1021,38 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     }
 
     let textoConfirmacion: string;
-    if (data.errorConsultaHistorico) {
-      textoConfirmacion = construirMensajeSolicitanteProcuraViaLargaHistorico(data.ticket);
-    } else if (data.viaRapida) {
-      textoConfirmacion = construirMensajeSolicitanteProcuraViaRapida({
+    if (data.stockSuficiente) {
+      textoConfirmacion = construirMensajeSolicitanteProcuraStockSuficiente({
         ticket: data.ticket,
-        capituloLabel: etiquetaCapituloMaestro({
-          codigo: m.capitulo_codigo ?? '',
-          nombre: m.capitulo_nombre ?? '',
-        }),
         materialTxt: m.material_txt ?? '',
         cantidad: Number(m.cantidad),
         unidad: m.unidad ?? 'UND',
-        prioridad: m.prioridad ?? 'Media',
-        motivoVia: `${etiquetaEstadoProcura('aprobada_directa')} — ${data.motivoVia}`,
+        almacenNombre: data.almacenNombre,
       });
+    } else if (data.errorConsultaHistorico && !data.viaRapida) {
+      textoConfirmacion =
+        construirMensajeSolicitanteProcuraCompra({
+          ticket: data.ticket,
+          materialTxt: m.material_txt ?? '',
+          cantidad: Number(m.cantidad),
+          unidad: m.unidad ?? 'UND',
+          stockDisponible: data.stockDisponible ?? 0,
+          cantidadCompra: data.cantidadCompra ?? Number(m.cantidad),
+          viaRapida: false,
+        }) + '\n\n⚠️ No se pudo verificar el costo histórico; la oficina revisará la solicitud.';
     } else {
-      textoConfirmacion = construirMensajeSolicitanteProcuraViaLarga(data.ticket);
+      textoConfirmacion = construirMensajeSolicitanteProcuraCompra({
+        ticket: data.ticket,
+        materialTxt: m.material_txt ?? '',
+        cantidad: Number(m.cantidad),
+        unidad: m.unidad ?? 'UND',
+        stockDisponible: data.stockDisponible ?? 0,
+        cantidadCompra: data.cantidadCompra ?? Number(m.cantidad),
+        viaRapida: data.viaRapida,
+        motivoVia: data.viaRapida
+          ? `${data.motivoVia}`
+          : undefined,
+      });
     }
 
     await sendTelegramMessage(params.chatId, textoConfirmacion, { parse_mode: 'HTML' });

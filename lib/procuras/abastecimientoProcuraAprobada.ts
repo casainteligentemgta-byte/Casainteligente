@@ -121,6 +121,21 @@ export async function evaluarAbastecimientoProcura(
   };
 }
 
+/** Evalúa stock en obra y persiste split despacho/compra al registrar (vía larga). */
+export async function evaluarStockProcuraRegistro(
+  supabase: SupabaseClient,
+  procuraId: string,
+  params: {
+    proyecto_id: string | null;
+    material_id: string | null;
+    cantidad: number;
+  },
+): Promise<EvaluacionAbastecimientoProcura> {
+  const evaluacion = await evaluarAbastecimientoProcura(supabase, params);
+  await persistirEvaluacionAbastecimiento(supabase, procuraId, evaluacion);
+  return evaluacion;
+}
+
 async function persistirEvaluacionAbastecimiento(
   supabase: SupabaseClient,
   procuraId: string,
@@ -214,6 +229,73 @@ export async function enviarOrdenVerificacionDepositarioProcura(
       enviados += 1;
     } catch (e) {
       console.warn('[abastecimientoProcura] verificación depositario', chatId, e);
+    }
+  }
+
+  return { enviado: enviados > 0, destinos: enviados };
+}
+
+/** Orden al depositario cuando hay stock suficiente al registrar la procura. */
+export async function enviarOrdenDespachoDepositarioProcura(
+  supabase: SupabaseClient,
+  procura: ProcuraOrdenCompraRow & {
+    proyecto_id: string | null;
+    solicitante_nombre?: string | null;
+  },
+  evaluacion: EvaluacionAbastecimientoProcura,
+): Promise<{ enviado: boolean; destinos: number }> {
+  const proyectoId = procura.proyecto_id?.trim();
+  if (!proyectoId) return { enviado: false, destinos: 0 };
+
+  const config = await obtenerConfigTelegramAlmacenProyecto(supabase, proyectoId);
+  const destinos = new Set<string>();
+
+  const depChat = config?.depositarioAsignado?.telegram_chat_id;
+  if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
+  const grupo = config?.telegramGrupoAlmacenId;
+  if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
+
+  if (!destinos.size) return { enviado: false, destinos: 0 };
+
+  const cap = procura.ci_compras_capitulos_maestro;
+  const capLabel = cap
+    ? etiquetaCapituloMaestro({
+        codigo: String(cap.codigo ?? ''),
+        nombre: String(cap.nombre ?? ''),
+      })
+    : nombreProyecto(procura.ci_proyectos);
+
+  const solicitante = procura.solicitante_nombre?.trim() || '—';
+  const almacen = evaluacion.origenUbicacionNombre?.trim() || 'Almacén obra';
+
+  const msg =
+    '📋 <b>SOLICITUD DE MATERIAL — DESPACHO ALMACÉN</b>\n\n' +
+    `🎫 <b>${escHtml(procura.ticket)}</b>\n` +
+    `👷 <b>Solicitó:</b> ${escHtml(solicitante)}\n` +
+    `📁 ${escHtml(capLabel)}\n` +
+    `📦 ${escHtml(procura.material_txt)}\n` +
+    `🔢 <b>Cantidad:</b> ${Number(procura.cantidad).toLocaleString('es-VE')} ${escHtml(procura.unidad)}\n` +
+    `🏪 <b>Stock sistema:</b> ${evaluacion.stockDisponible.toLocaleString('es-VE')} (${escHtml(almacen)})\n\n` +
+    'Verifica físicamente y despacha el material al solicitante.';
+
+  const reply_markup = {
+    inline_keyboard: [
+      [
+        {
+          text: '✅ Confirmar despacho',
+          callback_data: `${CB_PROCURA_ABASTECIMIENTO_OK}${procura.id}`,
+        },
+      ],
+    ],
+  };
+
+  let enviados = 0;
+  for (const chatId of Array.from(destinos)) {
+    try {
+      await sendTelegramMessage(chatId, msg, { parse_mode: 'HTML', reply_markup });
+      enviados += 1;
+    } catch (e) {
+      console.warn('[abastecimientoProcura] despacho depositario', chatId, e);
     }
   }
 
@@ -325,7 +407,7 @@ export async function procesarAbastecimientoProcuraAprobada(
   if (!procura) return { ok: false, error: 'Procura no encontrada.' };
 
   const estado = String(procura.estado ?? '').toLowerCase();
-  if (estado === 'solicitada') {
+  if (estado === 'solicitada' || estado === 'pendiente_pm') {
     await transicionProcura(
       supabase,
       procuraId,
@@ -345,15 +427,6 @@ export async function procesarAbastecimientoProcuraAprobada(
   );
 
   if (verificacion.enviado) {
-    if (procura.solicitante_telegram_chat_id) {
-      await sendTelegramMessage(
-        String(procura.solicitante_telegram_chat_id),
-        `✅ <b>Procura aprobada</b> · ${escHtml(procura.ticket)}\n\n` +
-          '📋 Se envió <b>orden de verificación</b> al depositario de almacén.\n' +
-          resumenPlanAbastecimiento(evaluacion),
-        { parse_mode: 'HTML' },
-      );
-    }
     return {
       ok: true,
       ticket: procura.ticket,
@@ -427,29 +500,6 @@ export async function confirmarAbastecimientoProcura(
     }
     compraEmitida = true;
     estadoFinal = 'en_compra';
-  }
-
-  if (procura.solicitante_telegram_chat_id) {
-    if (parcial) {
-      await sendTelegramMessage(
-        String(procura.solicitante_telegram_chat_id),
-        `✅ <b>PROCURA — ABASTECIMIENTO PARCIAL</b>\n\n` +
-          `🎫 ${escHtml(procura.ticket)}\n` +
-          `📦 Despachado desde almacén: <b>${evaluacion.cantidadDespacho}</b> ${escHtml(procura.unidad)}\n` +
-          `🛒 Orden de compra por saldo: <b>${evaluacion.cantidadCompra}</b> ${escHtml(procura.unidad)}\n` +
-          (despacho.codigo ? `🚚 Despacho: <code>${escHtml(despacho.codigo)}</code>` : ''),
-        { parse_mode: 'HTML' },
-      );
-    } else if (soloDespacho) {
-      await sendTelegramMessage(
-        String(procura.solicitante_telegram_chat_id),
-        `✅ <b>PROCURA ABASTECIDA DESDE ALMACÉN</b>\n\n` +
-          `🎫 ${escHtml(procura.ticket)}\n` +
-          `📦 Despachado: <b>${evaluacion.cantidadDespacho}</b> ${escHtml(procura.unidad)}\n` +
-          (despacho.codigo ? `🚚 Transferencia: <code>${escHtml(despacho.codigo)}</code>` : ''),
-        { parse_mode: 'HTML' },
-      );
-    }
   }
 
   return {

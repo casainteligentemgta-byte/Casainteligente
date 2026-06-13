@@ -146,6 +146,53 @@ export async function listarAprobadoresProcuraTelegram(
   return Array.from(out.values());
 }
 
+/** Solo Administradores (validación de viabilidad presupuestaria). */
+export async function listarAdministradoresProcuraTelegram(
+  supabase: SupabaseClient,
+  proyectoId: string | null,
+): Promise<AprobadorProcuraTelegram[]> {
+  const todos = await listarAprobadoresProcuraTelegram(supabase, proyectoId);
+  return todos.filter((a) => a.rol === 'Administrador');
+}
+
+/** Solo Project Managers / Aprobadores (decisión final de procura). */
+export async function listarProjectManagersProcuraTelegram(
+  supabase: SupabaseClient,
+  proyectoId: string | null,
+): Promise<AprobadorProcuraTelegram[]> {
+  const todos = await listarAprobadoresProcuraTelegram(supabase, proyectoId);
+  return todos.filter((a) => a.rol === 'Aprobador');
+}
+
+/** ¿PM de obra vía nómina (pm_obra / coordinador)? */
+export async function esPmNominaProyecto(
+  supabase: SupabaseClient,
+  telegramId: string | number,
+  proyectoId: string | null,
+): Promise<{ ok: true; nombre: string } | { ok: false }> {
+  const tid = parseTelegramIdNumerico(telegramId);
+  if (tid == null || !proyectoId) return { ok: false };
+
+  const nomina = await listarNominaProyecto(supabase, proyectoId);
+  for (const f of nomina) {
+    if (f.rol !== 'pm_obra' && f.rol !== 'coordinador') continue;
+    const chatId =
+      f.telegram_chat_id != null
+        ? Number(f.telegram_chat_id)
+        : f.empleado_telegram_chat_id != null
+          ? Number(f.empleado_telegram_chat_id)
+          : null;
+    if (chatId !== tid) continue;
+    return {
+      ok: true,
+      nombre: corregirNombreDisplayTelegram(
+        f.nombre?.trim() || f.nombre_display?.trim() || 'Project manager',
+      ),
+    };
+  }
+  return { ok: false };
+}
+
 /** ¿Puede aprobar vía bot aunque no esté en ci_usuarios_sistema_telegram? */
 export async function esAprobadorNominaProyecto(
   supabase: SupabaseClient,

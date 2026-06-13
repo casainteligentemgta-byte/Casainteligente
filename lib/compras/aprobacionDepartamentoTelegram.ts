@@ -10,7 +10,6 @@ import {
   setTelegramContexto,
 } from '@/lib/telegram/estados';
 import { esChatCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
-import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { resolverProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
 import { etiquetaResultadoAbastecimiento } from '@/lib/procuras/abastecimientoProcuraAprobada';
@@ -20,9 +19,10 @@ import {
 } from '@/lib/compras/telegramMetadata';
 import {
   exigirUsuarioSistemaTelegram,
-  usuarioPuedeAprobarProcura,
+  usuarioEsAdministradorProcura,
+  usuarioEsProjectManagerProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
-import { esAprobadorNominaProyecto } from '@/lib/procuras/aprobadoresProcuraTelegram';
+import { esPmNominaProyecto } from '@/lib/procuras/aprobadoresProcuraTelegram';
 
 export const CB_CMP_APROBAR = 'cmp_apr_';
 export const CB_CMP_RECHAZAR_CANCEL = 'cmp_rech_cancel:';
@@ -66,7 +66,7 @@ function parseCallback(
   return null;
 }
 
-async function puedeActuarComoAprobador(
+async function puedeActuarComoProjectManager(
   supabase: SupabaseClient,
   chatId: string,
   userId: string,
@@ -79,24 +79,13 @@ async function puedeActuarComoAprobador(
     return { ok: false, mensaje: 'Chat no autorizado' };
   }
 
-  if (esChatCanalAdminTelegram(chatId)) {
-    const authCanal = await exigirUsuarioSistemaTelegram(supabase, userId);
-    if (!authCanal.ok) return { ok: false, mensaje: authCanal.error };
-    if (!usuarioPuedeAprobarProcura(authCanal.usuario)) {
-      return {
-        ok: false,
-        mensaje: `⛔ Rol «${authCanal.usuario.rol}» no puede aprobar/rechazar en el canal admin. Se requiere Aprobador o Administrador.`,
-      };
-    }
-    return {
-      ok: true,
-      nombre: authCanal.usuario.nombre,
-      telegramId: authCanal.usuario.telegram_id,
-    };
-  }
-
   const auth = await exigirUsuarioSistemaTelegram(supabase, userId);
-  if (auth.ok && usuarioPuedeAprobarProcura(auth.usuario)) {
+  if (auth.ok && usuarioEsProjectManagerProcura(auth.usuario)) {
+    const pidUsuario = auth.usuario.proyecto_id?.trim() || null;
+    const pidProcura = proyectoId?.trim() || null;
+    if (pidUsuario && pidProcura && pidUsuario !== pidProcura) {
+      return { ok: false, mensaje: '⛔ No eres Project Manager de esta obra.' };
+    }
     return {
       ok: true,
       nombre: auth.usuario.nombre,
@@ -105,7 +94,7 @@ async function puedeActuarComoAprobador(
   }
 
   const tid = parseInt(userId, 10);
-  const pmNomina = await esAprobadorNominaProyecto(
+  const pmNomina = await esPmNominaProyecto(
     supabase,
     userId,
     proyectoId?.trim() || null,
@@ -114,10 +103,18 @@ async function puedeActuarComoAprobador(
     return { ok: true, nombre: pmNomina.nombre, telegramId: tid };
   }
 
+  if (auth.ok && usuarioEsAdministradorProcura(auth.usuario)) {
+    return {
+      ok: false,
+      mensaje:
+        '⛔ El Administrador informa viabilidad presupuestaria; la aprobación la hace el Project Manager.',
+    };
+  }
+
   if (!auth.ok) return { ok: false, mensaje: auth.error };
   return {
     ok: false,
-    mensaje: `⛔ Rol «${auth.usuario.rol}» no puede aprobar/rechazar. Se requiere Aprobador o Administrador.`,
+    mensaje: `⛔ Rol «${auth.usuario.rol}» no puede aprobar/rechazar. Se requiere Project Manager.`,
   };
 }
 
@@ -173,7 +170,13 @@ async function iniciarCapturaMotivoRechazo(
     if (!procura) return { ok: false, error: 'Procura no encontrada' };
 
     const estadoActual = String(procura.estado ?? '').toLowerCase();
-    if (estadoActual !== 'solicitada') {
+    if (estadoActual === 'solicitada') {
+      return {
+        ok: false,
+        error: 'La procura espera validación del Administrador.',
+      };
+    }
+    if (estadoActual !== 'pendiente_pm') {
       return {
         ok: false,
         error: `La procura ya está en estado «${etiquetaEstadoProcura(estadoActual)}»`,
@@ -325,7 +328,7 @@ async function cancelarCapturaMotivoRechazo(
     return { ok: false, mensaje: 'Procura no encontrada.' };
   }
 
-  if (String(procura.estado ?? '').toLowerCase() !== 'solicitada') {
+  if (String(procura.estado ?? '').toLowerCase() !== 'pendiente_pm') {
     await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
     return {
       ok: false,
@@ -340,7 +343,7 @@ async function cancelarCapturaMotivoRechazo(
     ok: true,
     mensaje:
       `↩️ Rechazo cancelado. La procura <b>${escHtml(String(meta.procura_ticket ?? procura.ticket))}</b> ` +
-      'sigue pendiente de aprobación (<b>solicitada</b>).',
+      'sigue pendiente del <b>Project Manager</b>.',
   };
 }
 
@@ -451,7 +454,23 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
   }
 
   const procuraPreview = await cargarProcuraParaAprobacion(supabase, parsed.procuraId);
-  const perm = await puedeActuarComoAprobador(
+  if (procuraPreview) {
+    const estPrev = String(procuraPreview.estado ?? '').toLowerCase();
+    if (estPrev === 'solicitada') {
+      await answerCallbackQuery(
+        params.callbackId,
+        'Espera validación del Administrador.',
+        true,
+      );
+      return true;
+    }
+    if (estPrev !== 'pendiente_pm') {
+      await answerCallbackQuery(params.callbackId, 'Esta procura ya fue resuelta.', true);
+      return true;
+    }
+  }
+
+  const perm = await puedeActuarComoProjectManager(
     supabase,
     params.chatId,
     params.userId,
@@ -566,7 +585,7 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
   return true;
 }
 
-/** Botones [Aprobar] [Rechazar] para canal admin (vía larga). */
+/** Botones [Aprobar] [Rechazar] para el Project Manager (vía larga, tras viabilidad Admin). */
 export function tecladoAprobacionDepartamento(procuraId: string) {
   return {
     inline_keyboard: [

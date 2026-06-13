@@ -6,8 +6,15 @@ import type { PrioridadProcura } from '@/lib/compras/viaRapidaProcura';
 import { evaluarViaRapidaProcura } from '@/lib/compras/viaRapidaProcura';
 import type { UsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { enviarAlertaProcuraPendienteAdmin } from '@/lib/procuras/alertaAdminProcuraTelegram';
+import { evaluarStockProcuraRegistro } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
+import { notificarAprobadoProcuraSolicitante } from '@/lib/procuras/notificarAprobadoProcuraSolicitante';
+import {
+  evaluarStockRegistroProcura,
+  montoUsdSaldoCompra,
+  procesarProcuraStockSuficiente,
+} from '@/lib/procuras/procuraRegistroStock';
 import { rechazarProcuraConMotivo } from '@/lib/procuras/rechazarProcura';
 import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
 import type { EstadoProcura } from '@/lib/procuras/procuraEstados';
@@ -35,7 +42,11 @@ export type RegistrarProcuraDepartamentoResult = {
   viaRapida: boolean;
   motivoVia: string;
   errorConsultaHistorico?: boolean;
-  /** Alerta Telegram a PM y Administrador (vía larga). */
+  stockSuficiente?: boolean;
+  cantidadCompra?: number;
+  stockDisponible?: number;
+  almacenNombre?: string | null;
+  depositarioNotificado?: boolean;
   alertaPmAdminEnviada?: boolean;
   alertaPmAdminDms?: number;
 };
@@ -70,14 +81,98 @@ export async function registrarProcuraDepartamento(
     return { data: null, error: new Error('Cantidad inválida.') };
   }
 
+  const proyectoId = input.usuario.proyecto_id?.trim() || null;
+  const materialId = input.materialId?.trim() || null;
+  let entidadId: string | null = null;
+  if (proyectoId) {
+    entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
+  }
+
+  const evalStock = await evaluarStockRegistroProcura(supabase, {
+    proyecto_id: proyectoId,
+    material_id: materialId,
+    cantidad,
+  });
+
+  if (evalStock.stockSuficiente) {
+    const obsParts: string[] = [];
+    if (input.observaciones?.trim()) obsParts.push(input.observaciones.trim());
+    obsParts.push(`Capítulo: ${capitulo.codigo} — ${capitulo.nombre}`);
+    obsParts.push(`Prioridad: ${input.prioridad}`);
+    obsParts.push(
+      `Stock almacén obra: ${evalStock.stockDisponible} ${normalizarUnidadProcura(input.unidad)} — despacho directo`,
+    );
+    if (input.porVerificar) obsParts.push('Material texto libre — por verificar en catálogo');
+
+    const row: Record<string, unknown> = {
+      material_txt: materialTxt,
+      cantidad,
+      unidad: normalizarUnidadProcura(input.unidad),
+      estado: 'aprobada' satisfies EstadoProcura,
+      prioridad: input.prioridad,
+      capitulo_maestro_id: capitulo.id,
+      monto_estimado_usd: input.montoEstimadoUsd ?? null,
+      es_consumible: Boolean(input.esConsumible),
+      via_rapida: false,
+      observaciones: obsParts.join('\n').slice(0, 2000),
+      solicitante_nombre: input.usuario.nombre.slice(0, 150),
+      solicitante_telegram_chat_id: input.usuario.telegram_id,
+      cantidad_despacho: evalStock.cantidadDespacho,
+      cantidad_compra: 0,
+      stock_almacen_detectado: evalStock.stockDisponible,
+    };
+
+    if (proyectoId) row.proyecto_id = proyectoId;
+    if (entidadId) row.entidad_id = entidadId;
+    if (materialId) row.material_id = materialId;
+
+    const { data, error } = await supabase
+      .from('ci_procuras')
+      .insert(row as never)
+      .select('id, ticket, estado, via_rapida')
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    const out = data as { id: string; ticket: string; estado: EstadoProcura };
+    let depositarioNotificado = false;
+    try {
+      const proc = await procesarProcuraStockSuficiente(supabase, String(out.id));
+      depositarioNotificado = proc.depositarioNotificado;
+    } catch (e) {
+      console.warn('[registrarProcuraDepartamento] stock suficiente', e);
+    }
+
+    return {
+      data: {
+        id: String(out.id),
+        ticket: String(out.ticket ?? ''),
+        estado: out.estado,
+        viaRapida: false,
+        motivoVia: 'Stock suficiente en almacén de la obra',
+        stockSuficiente: true,
+        cantidadCompra: 0,
+        stockDisponible: evalStock.stockDisponible,
+        almacenNombre: evalStock.origenUbicacionNombre,
+        depositarioNotificado,
+      },
+      error: null,
+    };
+  }
+
+  const cantidadCompra = evalStock.cantidadCompra;
+  const montoSaldo = montoUsdSaldoCompra(input.montoEstimadoUsd, cantidad, cantidadCompra);
+
   let via: Awaited<ReturnType<typeof evaluarViaRapidaProcura>>;
   try {
     via = await evaluarViaRapidaProcura(supabase, {
       descripcionMaterial: materialTxt,
-      montoEstimadoUsd: input.montoEstimadoUsd ?? null,
+      montoEstimadoUsd: montoSaldo,
       esConsumible: input.esConsumible ?? false,
-      cantidad,
-      materialId: input.materialId ?? null,
+      cantidad: cantidadCompra,
+      materialId,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error al evaluar vía rápida';
@@ -89,29 +184,28 @@ export async function registrarProcuraDepartamento(
   }
 
   const estado: EstadoProcura = via.califica ? 'aprobada_directa' : 'solicitada';
-  const proyectoId = input.usuario.proyecto_id?.trim() || null;
-  let entidadId: string | null = null;
-  if (proyectoId) {
-    entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
-  }
 
   const obsParts: string[] = [];
   if (input.observaciones?.trim()) obsParts.push(input.observaciones.trim());
   obsParts.push(`Capítulo: ${capitulo.codigo} — ${capitulo.nombre}`);
   obsParts.push(`Prioridad: ${input.prioridad}`);
-  if (via.califica) obsParts.push(`Vía rápida: ${via.motivo}`);
-  if (!via.califica && input.montoEstimadoUsd == null) {
+  if (evalStock.stockDisponible > 0) {
+    obsParts.push(
+      `Stock almacén obra: ${evalStock.stockDisponible} — despacho ${evalStock.cantidadDespacho}, compra ${cantidadCompra}`,
+    );
+  } else {
+    obsParts.push('Sin stock en almacén de la obra');
+  }
+  if (via.califica) obsParts.push(`Vía rápida (saldo): ${via.motivo}`);
+  if (!via.califica && montoSaldo == null) {
     obsParts.push(`Análisis sin monto: ${via.motivo}`);
   }
   if (via.precioUnitarioHistoricoUsd != null && via.montoEstimadoEfectivoUsd != null) {
     obsParts.push(
-      `Costo histórico ref.: USD ${via.precioUnitarioHistoricoUsd.toFixed(2)}/u × ${cantidad} = USD ${via.montoEstimadoEfectivoUsd.toFixed(2)}`,
+      `Costo histórico ref. saldo: USD ${via.precioUnitarioHistoricoUsd.toFixed(2)}/u × ${cantidadCompra} = USD ${via.montoEstimadoEfectivoUsd.toFixed(2)}`,
     );
   }
   if (input.porVerificar) obsParts.push('Material texto libre — por verificar en catálogo');
-  const observaciones = obsParts.join('\n').slice(0, 2000);
-
-  const materialId = input.materialId?.trim() || null;
 
   const row: Record<string, unknown> = {
     material_txt: materialTxt,
@@ -120,13 +214,15 @@ export async function registrarProcuraDepartamento(
     estado,
     prioridad: input.prioridad,
     capitulo_maestro_id: capitulo.id,
-    monto_estimado_usd:
-      input.montoEstimadoUsd ?? via.montoEstimadoEfectivoUsd ?? null,
+    monto_estimado_usd: montoSaldo ?? via.montoEstimadoEfectivoUsd ?? input.montoEstimadoUsd ?? null,
     es_consumible: Boolean(input.esConsumible),
     via_rapida: via.califica,
-    observaciones,
+    observaciones: obsParts.join('\n').slice(0, 2000),
     solicitante_nombre: input.usuario.nombre.slice(0, 150),
     solicitante_telegram_chat_id: input.usuario.telegram_id,
+    cantidad_despacho: evalStock.cantidadDespacho,
+    cantidad_compra: cantidadCompra,
+    stock_almacen_detectado: evalStock.stockDisponible,
   };
 
   if (proyectoId) row.proyecto_id = proyectoId;
@@ -148,6 +244,18 @@ export async function registrarProcuraDepartamento(
 
   const out = data as { id: string; ticket: string; estado: EstadoProcura; via_rapida?: boolean };
 
+  if (out.id) {
+    try {
+      await evaluarStockProcuraRegistro(supabase, String(out.id), {
+        proyecto_id: proyectoId,
+        material_id: materialId,
+        cantidad,
+      });
+    } catch (e) {
+      console.warn('[registrarProcuraDepartamento] stock registro', e);
+    }
+  }
+
   let alertaPmAdminEnviada = false;
   let alertaPmAdminDms = 0;
   if (!via.califica && out.id) {
@@ -165,6 +273,7 @@ export async function registrarProcuraDepartamento(
       procuraId: String(out.id),
       autorNombre: 'Vía rápida',
       motivo: via.motivo,
+      cantidadCompra,
     }).catch((e) => {
       console.warn('[registrarProcuraDepartamento] orden compra vía rápida', e);
     });
@@ -178,6 +287,9 @@ export async function registrarProcuraDepartamento(
       viaRapida: Boolean(out.via_rapida),
       motivoVia: via.motivo,
       errorConsultaHistorico: Boolean(via.errorConsultaHistorico),
+      stockSuficiente: false,
+      cantidadCompra,
+      stockDisponible: evalStock.stockDisponible,
       alertaPmAdminEnviada,
       alertaPmAdminDms,
     },
@@ -207,6 +319,23 @@ export async function resolverProcuraDepartamento(
       params.motivoRechazo?.trim() ||
       `Rechazada por ${params.aprobadorNombre} (Telegram ${params.aprobadorTelegramId})`;
 
+    const { data: prev } = await supabase
+      .from('ci_procuras')
+      .select('estado')
+      .eq('id', params.procuraId.trim())
+      .maybeSingle();
+
+    const est = String((prev as { estado?: string } | null)?.estado ?? '').toLowerCase();
+    if (est !== 'pendiente_pm') {
+      return {
+        ok: false,
+        error:
+          est === 'solicitada'
+            ? 'La procura espera validación del Administrador.'
+            : 'La procura ya fue resuelta.',
+      };
+    }
+
     const resultado = await rechazarProcuraConMotivo(supabase, {
       procuraId: params.procuraId,
       motivo,
@@ -223,6 +352,35 @@ export async function resolverProcuraDepartamento(
       estado: resultado.estado ?? 'rechazada',
     };
   }
+
+  const { data: prevAprob } = await supabase
+    .from('ci_procuras')
+    .select('estado,material_txt,solicitante_telegram_chat_id,ticket')
+    .eq('id', params.procuraId.trim())
+    .maybeSingle();
+
+  const estAprob = String((prevAprob as { estado?: string } | null)?.estado ?? '').toLowerCase();
+  if (estAprob !== 'pendiente_pm') {
+    return {
+      ok: false,
+      error:
+        estAprob === 'solicitada'
+          ? 'La procura espera validación del Administrador.'
+          : 'La procura ya fue resuelta.',
+    };
+  }
+
+  const filaPrev = prevAprob as {
+    ticket: string;
+    material_txt: string;
+    solicitante_telegram_chat_id: number | null;
+  };
+
+  await notificarAprobadoProcuraSolicitante({
+    ticket: filaPrev.ticket,
+    material_txt: filaPrev.material_txt,
+    solicitante_telegram_chat_id: filaPrev.solicitante_telegram_chat_id,
+  });
 
   const abas = await procesarAbastecimientoProcuraAprobada(supabase, {
     procuraId: params.procuraId,

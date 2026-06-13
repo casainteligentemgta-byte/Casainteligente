@@ -50,6 +50,17 @@ export async function rechazarProcuraConMotivo(
     return { ok: false, error: 'Procura no encontrada.' };
   }
 
+  const estadoActual = String((procura as { estado?: string }).estado ?? '').toLowerCase();
+  if (estadoActual !== 'pendiente_pm') {
+    return {
+      ok: false,
+      error:
+        estadoActual === 'solicitada'
+          ? 'La procura espera validación del Administrador.'
+          : 'La procura ya fue resuelta.',
+    };
+  }
+
   const motivoFinal =
     motivo.length > 2000 ? motivo.slice(0, 2000) : motivo;
 

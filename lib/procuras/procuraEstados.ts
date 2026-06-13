@@ -1,6 +1,7 @@
 export const ESTADOS_PROCURA = [
   'borrador',
   'solicitada',
+  'pendiente_pm',
   'aprobada',
   'aprobada_directa',
   'en_compra',
@@ -15,6 +16,7 @@ export type EstadoProcura = (typeof ESTADOS_PROCURA)[number];
 const ETIQUETAS: Record<EstadoProcura, string> = {
   borrador: 'Borrador',
   solicitada: 'Pendiente',
+  pendiente_pm: 'Pendiente PM',
   aprobada: 'Aprobada',
   aprobada_directa: 'Aprobada directa',
   en_compra: 'Comprada',
@@ -27,6 +29,7 @@ const ETIQUETAS: Record<EstadoProcura, string> = {
 export const COLOR_ESTADO_PROCURA: Record<EstadoProcura, string> = {
   borrador: '#8E8E93',
   solicitada: '#5AC8FA',
+  pendiente_pm: '#007AFF',
   aprobada: '#34C759',
   aprobada_directa: '#30D158',
   en_compra: '#FF9500',
@@ -60,7 +63,8 @@ export function transicionEstadoProcuraValida(
 
   const permitidas: Record<EstadoProcura, readonly EstadoProcura[]> = {
     borrador: ['solicitada', 'cancelada'],
-    solicitada: ['aprobada', 'aprobada_directa', 'en_compra', 'rechazada', 'cancelada'],
+    solicitada: ['pendiente_pm', 'aprobada', 'aprobada_directa', 'en_compra', 'rechazada', 'cancelada'],
+    pendiente_pm: ['aprobada', 'rechazada', 'cancelada'],
     aprobada: ['en_compra', 'recibida', 'recibida_parcial', 'rechazada', 'cancelada'],
     aprobada_directa: ['en_compra', 'cancelada'],
     en_compra: ['recibida_parcial', 'recibida', 'cancelada'],

@@ -79,6 +79,14 @@ export function usuarioPuedeRechazarProcura(u: UsuarioSistemaTelegram): boolean 
   return usuarioPuedeAprobarProcura(u);
 }
 
+export function usuarioEsAdministradorProcura(u: UsuarioSistemaTelegram): boolean {
+  return u.activo && u.rol === 'Administrador';
+}
+
+export function usuarioEsProjectManagerProcura(u: UsuarioSistemaTelegram): boolean {
+  return u.activo && u.rol === 'Aprobador';
+}
+
 /** Compradores (y admin) que reciben órdenes de compra tras aprobación PM. */
 export async function listarUsuariosOrdenCompraTelegram(
   supabase: SupabaseClient,

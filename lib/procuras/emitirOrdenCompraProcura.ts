@@ -70,7 +70,7 @@ export async function cargarProcuraOrdenCompra(
   return data as ProcuraOrdenCompraRow;
 }
 
-function mensajeOrdenCompraComprador(
+export function mensajeOrdenCompraComprador(
   procura: ProcuraOrdenCompraRow,
   params: { autorNombre: string; motivo?: string | null; cantidadCompra?: number | null },
 ): string {

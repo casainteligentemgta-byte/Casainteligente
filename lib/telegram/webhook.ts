@@ -125,6 +125,10 @@ import {
   manejarTextoMotivoRechazoProcura,
 } from '@/lib/compras/aprobacionDepartamentoTelegram';
 import {
+  esCallbackViabilidadAdminProcura,
+  manejarCallbackViabilidadAdminProcuraTelegram,
+} from '@/lib/procuras/viabilidadAdminProcuraTelegram';
+import {
   esCallbackProcuraDepartamentoTelegram,
   esFlujoProcuraDepartamentoTelegram,
   manejarCallbackProcuraDepartamentoTelegram,
@@ -796,6 +800,18 @@ export async function handleTelegramCallbackQuery(
     });
     if (handledAsignar) {
       return NextResponse.json({ ok: true, callback: 'asignar_obra' });
+    }
+
+    if (esCallbackViabilidadAdminProcura(cq.data)) {
+      const handledViab = await manejarCallbackViabilidadAdminProcuraTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        userId,
+      });
+      if (handledViab) {
+        return NextResponse.json({ ok: true, callback: 'compras_viabilidad_admin' });
+      }
     }
 
     if (esCallbackAprobacionDepartamentoCompras(cq.data)) {
