@@ -75,12 +75,15 @@ export function construirMensajesAlertaProcuraPendiente(
   return construirMensajesProcuraRegistradaPendiente(row, prioridad);
 }
 
+const PENDIENTE_APROBACION_PM_ADMIN =
+  '⏳ Pendiente de aprobación del <b>Administrador</b> y el <b>Project Manager</b>.';
+
 /** Confirmación breve al obrero (vía larga): ya vio los detalles al confirmar. */
 export function construirMensajeSolicitanteProcuraViaLarga(ticket: string): string {
   return (
     '✅ <b>PROCURA REGISTRADA</b>\n\n' +
     `🎫 <b>Ticket:</b> ${escHtml(ticket)}\n` +
-    '⏳ Pendiente de aprobación del <b>Administrador</b>.'
+    PENDIENTE_APROBACION_PM_ADMIN
   );
 }
 
@@ -114,20 +117,25 @@ export function construirMensajeSolicitanteProcuraViaLargaHistorico(ticket: stri
 }
 
 /** Ejemplo fijo para vista previa / pruebas Telegram. */
-export function mensajeAlertaProcuraAdminDemo(): string {
+export function mensajesAlertaProcuraDemo(prioridad = 'Media'): MensajesProcuraRegistradaPendiente {
   return construirMensajesProcuraRegistradaPendiente(
     {
       id: '00000000-0000-4000-8000-000000000099',
-      ticket: 'PR-2026-DEMO',
+      ticket: 'PR-2026-00024',
       solicitante_nombre: 'Obrero de prueba',
-      material_txt: 'CABILLA 3/8',
-      cantidad: 120,
-      unidad: 'UND',
+      material_txt: 'CEMENTO GRIS',
+      cantidad: 50,
+      unidad: 'SACO',
       estado: 'solicitada',
-      prioridad: 'Alta',
-      monto_estimado_usd: 85.5,
+      prioridad,
+      monto_estimado_usd: 42.5,
       ci_compras_capitulos_maestro: { codigo: '03', nombre: 'Estructura' },
     },
-    'Alta',
-  ).dmAdministrador;
+    prioridad,
+  );
+}
+
+/** @deprecated Usar mensajesAlertaProcuraDemo().dmAdministrador */
+export function mensajeAlertaProcuraAdminDemo(): string {
+  return mensajesAlertaProcuraDemo('Alta').dmAdministrador;
 }

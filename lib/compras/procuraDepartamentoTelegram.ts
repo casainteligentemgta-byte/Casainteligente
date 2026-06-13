@@ -607,7 +607,7 @@ async function enviarConfirmacion(
   m: MetadataProcuraDepartamento,
 ): Promise<void> {
   const limite = await limiteViaRapidaUsd(supabase);
-  let viaHint = '<i>Vía larga — pendiente del Administrador</i>';
+  let viaHint = '<i>Vía larga — pendiente del Administrador y Project Manager</i>';
   if (m.monto_estimado_usd != null && m.monto_estimado_usd < limite) {
     viaHint = '<i>Monto declarado bajo techo — puede calificar vía rápida</i>';
   } else if (m.monto_estimado_usd == null) {
