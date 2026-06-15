@@ -18,7 +18,9 @@ import {
     Trash2,
     ArrowUpRight,
     Share2,
-    RotateCw,
+    ChevronLeft,
+    ChevronRight,
+    List,
     Pencil,
     Loader2,
     Download,
@@ -323,6 +325,19 @@ function InventoryListThumb({
             )}
         </div>
     );
+}
+
+function resolverDepositoValorItem(
+    item: InventoryItem,
+    stockUb: StockEnUbicacionResumen | undefined,
+    filterDepositId: string,
+): string {
+    if (filterDepositId) return filterDepositId;
+    const ids = stockUb?.deposit_ids?.filter(Boolean);
+    if (ids?.length === 1) return ids[0]!;
+    if (item.deposit_id?.trim()) return item.deposit_id.trim();
+    if (ids?.length) return ids[0]!;
+    return '__sin__';
 }
 
 export default function InventoryMasterPage() {
@@ -752,31 +767,6 @@ export default function InventoryMasterPage() {
         ubicacionesInventario,
         nombreProyectoFiltro,
     ]);
-
-    useEffect(() => {
-        if (!itemsCatalogo.length || !depositsLista.length) {
-            setValorPorDeposito([]);
-            return;
-        }
-        let cancelled = false;
-        const costoPorMaterial = new Map(
-            itemsCatalogo.map((i) => [i.id, Number(i.average_weighted_cost)]),
-        );
-        const depositLabels = new Map(
-            depositsLista.map((d) => [
-                d.id,
-                d.locality ? `${d.name} (${d.locality})` : d.name,
-            ]),
-        );
-        void cargarValorInventarioPorDeposito(supabase, costoPorMaterial, depositLabels)
-            .then((rows) => {
-                if (!cancelled) setValorPorDeposito(rows);
-            })
-            .catch((e) => console.warn('[inventario] valor por depósito:', e));
-        return () => {
-            cancelled = true;
-        };
-    }, [itemsCatalogo, depositsLista, supabase]);
 
     const fetchInventory = async () => {
         setLoading(true);
@@ -1337,50 +1327,84 @@ export default function InventoryMasterPage() {
             const val = qty * Number(item.average_weighted_cost);
             if (val <= 0) continue;
 
-            if (filtroPorUbicacionActivo) {
-                const stockUb = stockPorUbicacion.get(item.id);
-                let depId: string;
-                if (filterDepositId) {
-                    depId = filterDepositId;
-                } else if (stockUb?.deposit_ids?.length === 1) {
-                    depId = stockUb.deposit_ids[0]!;
-                } else if (stockUb?.deposit_ids?.length) {
-                    depId = stockUb.deposit_ids[0]!;
-                } else {
-                    depId = item.deposit_id ?? '__sin__';
-                }
-                const name = depId === '__sin__' ? 'Sin almacén asignado' : depositLabel(depId);
-                const prev = map.get(depId) ?? { name, value: 0 };
-                map.set(depId, { name: prev.name, value: prev.value + val });
-                continue;
-            }
-
-            const depId = item.deposit_id ?? '__sin__';
-            const name =
-                depId === '__sin__'
-                    ? 'Sin almacén asignado'
-                    : depositLabel(depId);
+            const stockUb = stockPorUbicacion.get(item.id);
+            const depId = resolverDepositoValorItem(item, stockUb, filterDepositId);
+            const name = depId === '__sin__' ? 'Sin almacén asignado' : depositLabel(depId);
             const prev = map.get(depId) ?? { name, value: 0 };
             map.set(depId, { name: prev.name, value: prev.value + val });
         }
-        for (const d of depositsLista) {
-            if (!map.has(d.id)) {
-                map.set(d.id, {
-                    name: d.locality ? `${d.name} (${d.locality})` : d.name,
-                    value: 0,
-                });
-            }
-        }
-        return Array.from(map.values()).sort((a, b) => b.value - a.value);
+
+        return Array.from(map.values())
+            .filter((r) => r.value > 0)
+            .sort((a, b) => b.value - a.value);
     }, [
         baseItemsKpi,
         cantidadStockReal,
         depositsById,
-        depositsLista,
-        filtroPorUbicacionActivo,
         filterDepositId,
         stockPorUbicacion,
     ]);
+
+    const valorDesglose = useMemo(() => {
+        const fromDeposito = valorPorDeposito
+            .filter((d) => d.value > 0)
+            .map((d) => ({ id: d.depositId, name: d.name, value: d.value }));
+        if (fromDeposito.length) return fromDeposito;
+        return valorPorAlmacen.map((d, i) => ({
+            id: `cat-${d.name}-${i}`,
+            name: d.name,
+            value: d.value,
+        }));
+    }, [valorPorDeposito, valorPorAlmacen]);
+
+    const valorTotalKpi = useMemo(() => {
+        const sum = valorDesglose.reduce((s, d) => s + d.value, 0);
+        if (sum > 0) return sum;
+        return statsFiltrados.totalValue;
+    }, [valorDesglose, statsFiltrados.totalValue]);
+
+    useEffect(() => {
+        if (!itemsCatalogo.length || !depositsLista.length) {
+            setValorPorDeposito([]);
+            return;
+        }
+        let cancelled = false;
+        const costoPorMaterial = new Map(
+            itemsCatalogo.map((i) => [i.id, Number(i.average_weighted_cost)]),
+        );
+        const depositLabels = new Map(
+            depositsLista.map((d) => [
+                d.id,
+                d.locality ? `${d.name} (${d.locality})` : d.name,
+            ]),
+        );
+        const materialIds =
+            hayFiltrosActivos && baseItemsKpi.length
+                ? new Set(baseItemsKpi.map((i) => i.id))
+                : undefined;
+        void cargarValorInventarioPorDeposito(supabase, costoPorMaterial, depositLabels, {
+            materialIds,
+            soloDepositoId: filterDepositId || undefined,
+        })
+            .then((rows) => {
+                if (!cancelled) setValorPorDeposito(rows);
+            })
+            .catch((e) => console.warn('[inventario] valor por depósito:', e));
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        itemsCatalogo,
+        depositsLista,
+        supabase,
+        hayFiltrosActivos,
+        baseItemsKpi,
+        filterDepositId,
+    ]);
+
+    useEffect(() => {
+        setValorRotateIdx(0);
+    }, [filterEntidadId, filterProyectoId, filterDepositId, hayFiltrosActivos]);
 
     const itemsStockBajo = useMemo(
         () =>
@@ -1419,37 +1443,24 @@ export default function InventoryMasterPage() {
     }, [baseItemsKpi]);
 
     const valorSlots = useMemo(() => {
-        const slots: { label: string; value: number }[] = [
-            { label: 'Valor total', value: statsFiltrados.totalValue },
-        ];
-        if (filtroStockPorUbicacion) {
-            for (const d of valorPorAlmacen) {
-                if (d.value > 0) slots.push({ label: d.name, value: d.value });
-            }
-            return slots;
+        if (filterDepositId && valorDesglose.length === 1) {
+            return [{ label: valorDesglose[0]!.name, value: valorTotalKpi }];
         }
-        for (const d of valorPorDeposito) {
+        const slots: { label: string; value: number }[] = [
+            { label: 'Valor total', value: valorTotalKpi },
+        ];
+        for (const d of valorDesglose) {
             slots.push({ label: d.name, value: d.value });
         }
-        if (valorPorAlmacen.length && !valorPorDeposito.length) {
-            for (const d of valorPorAlmacen) {
-                slots.push({ label: d.name, value: d.value });
-            }
-        }
         return slots;
-    }, [
-        statsFiltrados.totalValue,
-        valorPorDeposito,
-        valorPorAlmacen,
-        filtroPorUbicacionActivo,
-        filterProyectoId,
-        filterDepositId,
-    ]);
+    }, [valorTotalKpi, valorDesglose, filterDepositId]);
 
     const valorSlotActual = valorSlots[valorRotateIdx % Math.max(valorSlots.length, 1)] ?? {
         label: 'Valor total',
-        value: statsFiltrados.totalValue,
+        value: valorTotalKpi,
     };
+
+    const valorPuedeRotar = valorSlots.length > 1;
 
     const limpiarFiltros = () => {
         setSearchTerm('');
@@ -1630,13 +1641,27 @@ export default function InventoryMasterPage() {
         setKpiVista(opening ? vista : 'ninguno');
     }, [statFlips]);
 
-    const handleValorRotate = useCallback(() => {
-        if (statFlips.valor) {
-            toggleStatFlip('valor');
-            return;
-        }
-        setValorRotateIdx((i) => (i + 1) % Math.max(valorSlots.length, 1));
-    }, [statFlips.valor, toggleStatFlip, valorSlots.length]);
+    const handleValorCardToggle = useCallback(() => {
+        toggleStatFlip('valor');
+    }, [toggleStatFlip]);
+
+    const handleValorRotatePrev = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setValorRotateIdx(
+                (i) => (i - 1 + valorSlots.length) % Math.max(valorSlots.length, 1),
+            );
+        },
+        [valorSlots.length],
+    );
+
+    const handleValorRotateNext = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setValorRotateIdx((i) => (i + 1) % Math.max(valorSlots.length, 1));
+        },
+        [valorSlots.length],
+    );
 
     const navBtnClass =
         'inline-flex items-center gap-1.5 bg-zinc-900/80 border border-zinc-800 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide hover:bg-zinc-800 transition-all whitespace-nowrap';
@@ -1681,7 +1706,7 @@ export default function InventoryMasterPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
                 <FlipStatCard
                     flipped={statFlips.valor}
-                    onToggle={handleValorRotate}
+                    onToggle={handleValorCardToggle}
                     front={
                         <>
                             <div className="flex justify-between items-start mb-3">
@@ -1690,14 +1715,14 @@ export default function InventoryMasterPage() {
                                 </div>
                                 <button
                                     type="button"
-                                    title="Ver desglose completo"
+                                    title="Ver desglose por almacén"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         toggleStatFlip('valor');
                                     }}
                                     className="p-1 rounded-md text-zinc-600 hover:text-blue-400 hover:bg-blue-500/10"
                                 >
-                                    <RotateCw size={14} />
+                                    <List size={14} />
                                 </button>
                             </div>
                             <p className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-0.5 truncate">
@@ -1706,10 +1731,34 @@ export default function InventoryMasterPage() {
                             <h2 className="text-2xl font-black tracking-tight">
                                 {formatCurrency(valorSlotActual.value)}
                             </h2>
-                            <p className="text-[9px] text-zinc-600 font-bold mt-1 flex items-center gap-1">
-                                <RotateCw size={10} />
-                                Clic para rotar almacén
-                            </p>
+                            {valorPuedeRotar ? (
+                                <div className="flex items-center justify-between gap-1 mt-1">
+                                    <button
+                                        type="button"
+                                        title="Almacén anterior"
+                                        onClick={handleValorRotatePrev}
+                                        className="p-0.5 rounded text-zinc-600 hover:text-blue-400"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                    <p className="text-[9px] text-zinc-600 font-bold truncate">
+                                        {valorRotateIdx + 1}/{valorSlots.length} · Clic para desglose
+                                    </p>
+                                    <button
+                                        type="button"
+                                        title="Siguiente almacén"
+                                        onClick={handleValorRotateNext}
+                                        className="p-0.5 rounded text-zinc-600 hover:text-blue-400"
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-[9px] text-zinc-600 font-bold mt-1 flex items-center gap-1">
+                                    <List size={10} />
+                                    Clic para desglose por almacén
+                                </p>
+                            )}
                         </>
                     }
                     back={
@@ -1717,22 +1766,16 @@ export default function InventoryMasterPage() {
                             <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">
                                 Valor por almacén
                             </p>
-                            {(filtroStockPorUbicacion
-                                ? valorPorAlmacen.filter((r) => r.value > 0)
-                                : valorPorDeposito.length
-                                  ? valorPorDeposito
-                                  : valorPorAlmacen
-                            ).length === 0 ? (
+                            <div className="flex justify-between gap-2 text-[10px] font-bold border-b border-zinc-800/60 pb-1 mb-1">
+                                <span className="text-zinc-500">Total</span>
+                                <span className="text-blue-300 shrink-0">{formatCurrency(valorTotalKpi)}</span>
+                            </div>
+                            {valorDesglose.length === 0 ? (
                                 <p className="text-xs text-zinc-500">Sin datos de almacén</p>
                             ) : (
-                                (filtroStockPorUbicacion
-                                    ? valorPorAlmacen.filter((r) => r.value > 0)
-                                    : valorPorDeposito.length
-                                      ? valorPorDeposito
-                                      : valorPorAlmacen
-                                ).map((row) => (
+                                valorDesglose.map((row) => (
                                     <div
-                                        key={row.name}
+                                        key={row.id}
                                         className="flex justify-between gap-2 text-[11px] font-bold border-b border-zinc-800/60 pb-1"
                                     >
                                         <span className="text-zinc-400 truncate">{row.name}</span>

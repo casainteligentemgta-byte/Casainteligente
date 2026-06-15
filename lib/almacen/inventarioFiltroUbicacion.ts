@@ -625,6 +625,12 @@ export async function cargarValorInventarioPorDeposito(
   supabase: SupabaseClient,
   costoPorMaterial: Map<string, number>,
   depositLabels: Map<string, string>,
+  opts?: {
+    /** Limita a materiales visibles en el cuadro filtrado. */
+    materialIds?: ReadonlySet<string>;
+    /** Solo stock en ubicaciones de este depósito. */
+    soloDepositoId?: string;
+  },
 ): Promise<ValorInventarioDeposito[]> {
   const valorByDeposit = new Map<string, { value: number; unidades: number }>();
   const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
@@ -632,7 +638,14 @@ export async function cargarValorInventarioPorDeposito(
   propagarDepositIdFlat(flat);
   const ubToDeposit = new Map(flat.map((u) => [u.id, u.deposit_id ?? '']));
 
-  const ubicacionIds = flat.map((u) => u.id);
+  let ubicacionIds = flat.map((u) => u.id);
+  if (opts?.soloDepositoId) {
+    ubicacionIds = flat
+      .filter((u) => u.deposit_id === opts.soloDepositoId)
+      .map((u) => u.id);
+    if (!ubicacionIds.length) return [];
+  }
+
   const BATCH = 40;
   for (let i = 0; i < ubicacionIds.length; i += BATCH) {
     const batch = ubicacionIds.slice(i, i + BATCH);
@@ -649,9 +662,11 @@ export async function cargarValorInventarioPorDeposito(
       const materialId = String(row.material_id ?? '');
       const qty = Number(row.cantidad_disponible ?? 0);
       if (!materialId || qty <= 0) continue;
+      if (opts?.materialIds?.size && !opts.materialIds.has(materialId)) continue;
       const ubId = String(row.ubicacion_id ?? '');
       const depositId = ubToDeposit.get(ubId) || '';
       if (!depositId) continue;
+      if (opts?.soloDepositoId && depositId !== opts.soloDepositoId) continue;
       const cost = costoPorMaterial.get(materialId) ?? 0;
       const prev = valorByDeposit.get(depositId) ?? { value: 0, unidades: 0 };
       prev.value += qty * cost;
