@@ -78,7 +78,7 @@ export function mensajeVacioCuadroAlmacen(opts: {
     return {
       titulo: 'Sin materiales para esta entidad',
       subtitulo:
-        'No hay ítems del catálogo clasificados bajo esta entidad con stock disponible. Pruebe otra entidad o limpie filtros.',
+        'No hay ítems del catálogo clasificados bajo esta entidad. Registre materiales con entidad o prefijo SAP de la entidad.',
     };
   }
 
@@ -101,6 +101,32 @@ export function mensajeVacioCuadroAlmacen(opts: {
     titulo: 'No se encontraron materiales',
     subtitulo: 'Registra un nuevo ítem o verifica que haya stock en almacén.',
   };
+}
+
+/** Coincide clasificación de catálogo (entidad_id, obra de la entidad o prefijo SAP). */
+export function materialCoincideCatalogoEntidad(
+  item: {
+    entidad_id?: string | null;
+    proyecto_id?: string | null;
+    proyecto?: { entidad_id?: string | null } | null;
+    sap_code?: string | null;
+  },
+  opts: {
+    filterEntidadId: string;
+    proyectoIdsEntidad?: Set<string>;
+    sapPrefijoEntidad?: string | null;
+  },
+): boolean {
+  const eid = opts.filterEntidadId.trim();
+  if (!eid) return true;
+  if (String(item.entidad_id ?? '').trim() === eid) return true;
+  if (String(item.proyecto?.entidad_id ?? '').trim() === eid) return true;
+  const pid = item.proyecto_id?.trim();
+  if (pid && opts.proyectoIdsEntidad?.has(pid)) return true;
+  const pref = opts.sapPrefijoEntidad?.trim().toUpperCase();
+  const sap = item.sap_code?.trim().toUpperCase();
+  if (pref && sap && (sap.startsWith(`${pref}-`) || sap.startsWith(pref))) return true;
+  return false;
 }
 
 /** Cuarentena operativa acotada a entidad / obra / ubicaciones del cuadro. */

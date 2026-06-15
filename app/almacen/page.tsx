@@ -81,8 +81,10 @@ import {
     filtrarInspeccionesCuarentenaCuadro,
     guardarInventarioCuadroFiltros,
     leerInventarioCuadroFiltrosGuardados,
+    materialCoincideCatalogoEntidad,
     mensajeVacioCuadroAlmacen,
 } from '@/lib/almacen/inventarioCuadroFiltros';
+import { obtenerCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 import CeldaStockEditable from '@/components/almacen/CeldaStockEditable';
 import { resolverUbicacionAjusteStock } from '@/lib/almacen/resolverUbicacionAjusteStock';
@@ -141,8 +143,10 @@ function materialPasaFiltroEntidad(
         filterEntidadId?: string;
         filterProyectoId?: string;
         proyectoIdsEntidad?: Set<string>;
+        sapPrefijoEntidad?: string | null;
         stockEnFiltro: number;
         filtroStockPorUbicacion: boolean;
+        filtroSoloEntidad: boolean;
         /** Materiales en cuarentena de la obra filtrada (sin stock físico aún). */
         materialIdsCuarentenaObra?: Set<string>;
     },
@@ -154,15 +158,20 @@ function materialPasaFiltroEntidad(
         return true;
     }
 
-    const pid = item.proyecto_id?.trim();
-    const catalogMatchEntidad =
-        item.entidad_id === opts.filterEntidadId ||
-        item.proyecto?.entidad_id === opts.filterEntidadId ||
-        Boolean(pid && opts.proyectoIdsEntidad?.has(pid));
+    const catalogMatch = materialCoincideCatalogoEntidad(item, {
+        filterEntidadId: opts.filterEntidadId,
+        proyectoIdsEntidad: opts.proyectoIdsEntidad,
+        sapPrefijoEntidad: opts.sapPrefijoEntidad,
+    });
 
-    if (!catalogMatchEntidad) return false;
+    if (!opts.filterProyectoId) {
+        if (catalogMatch) return true;
+        if (opts.filtroSoloEntidad && opts.stockEnFiltro > 0) return true;
+        return false;
+    }
 
-    if (!opts.filterProyectoId) return true;
+    if (!catalogMatch) return false;
+
     if (item.proyecto_id === opts.filterProyectoId) return true;
     if (opts.materialIdsCuarentenaObra?.has(item.id)) return true;
     if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0) return true;
@@ -417,6 +426,7 @@ export default function InventoryMasterPage() {
     const [exportScope, setExportScope] = useState<InventarioExportScope>('filtrado');
     const [compartidoOk, setCompartidoOk] = useState(false);
     const [valorPorDeposito, setValorPorDeposito] = useState<ValorInventarioDeposito[]>([]);
+    const [sapPrefijoEntidadFiltro, setSapPrefijoEntidadFiltro] = useState<string | null>(null);
     /** Inspecciones PENDIENTE (fuente operativa de cuarentena). */
     const [cuarentenaOperativa, setCuarentenaOperativa] = useState<InspeccionCuarentenaRow[]>([]);
 
@@ -544,8 +554,28 @@ export default function InventoryMasterPage() {
         [filterEntidadId, proyectos],
     );
 
-    /** Stock por ubicación física solo con obra o depósito; entidad filtra el catálogo (columna Entidad). */
+    /** Stock por ubicación física con obra o depósito; solo entidad usa stock de sus obras. */
     const filtroStockPorUbicacion = Boolean(filterProyectoId || filterDepositId);
+    const filtroSoloEntidad = Boolean(filterEntidadId && !filterProyectoId && !filterDepositId);
+    const filtroStockEntidadActivo = filtroStockPorUbicacion || filtroSoloEntidad;
+
+    useEffect(() => {
+        if (!filterEntidadId) {
+            setSapPrefijoEntidadFiltro(null);
+            return;
+        }
+        let cancelled = false;
+        void obtenerCatalogoEntidad(supabase, filterEntidadId)
+            .then((row) => {
+                if (!cancelled) setSapPrefijoEntidadFiltro(row?.sap_prefijo ?? null);
+            })
+            .catch(() => {
+                if (!cancelled) setSapPrefijoEntidadFiltro(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [filterEntidadId, supabase]);
 
     const depositsLista = useMemo(() => {
         return Array.from(depositsById.values()).sort((a, b) =>
@@ -624,7 +654,7 @@ export default function InventoryMasterPage() {
     }, [items, itemsDesdeStock]);
 
     useEffect(() => {
-        if (!filterProyectoId && !filterDepositId) {
+        if (!filterProyectoId && !filterDepositId && !filterEntidadId) {
             setStockPorUbicacion(new Map());
             setItemsDesdeStock([]);
             setUbicacionIdsFiltro([]);
@@ -680,6 +710,13 @@ export default function InventoryMasterPage() {
                         ids = res.ubicacionIds;
                         depositoFallback = res.depositoSinInterseccion;
                     }
+                } else if (filterEntidadId) {
+                    const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
+                        entidadId: filterEntidadId,
+                        proyectos,
+                    });
+                    ids = res.ubicacionIds;
+                    depositoFallback = res.depositoSinInterseccion;
                 } else {
                     return;
                 }
@@ -723,6 +760,33 @@ export default function InventoryMasterPage() {
                             }
                         });
                     }
+                } else if (filterEntidadId && !filterDepositId) {
+                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
+                    const proysEntidad = proyectos.filter((p) => p.entidad_id === filterEntidadId);
+                    for (const pr of proysEntidad) {
+                        const agg = await getStockAgregadoPorMaterialObra(
+                            supabase,
+                            pr.id,
+                            pr.nombre,
+                        );
+                        agg.forEach((qty, materialId) => {
+                            if (qty <= 0) return;
+                            const prev = stockMap.get(materialId);
+                            if (!prev) {
+                                fusionarFilaEnResumenStock(stockMap, materialId, {
+                                    cantidad: qty,
+                                    ubicacionNombre: pr.nombre,
+                                    proyectoId: pr.id,
+                                    proyectoNombre: pr.nombre,
+                                });
+                            } else if (prev.cantidad_disponible < qty) {
+                                stockMap.set(materialId, {
+                                    ...prev,
+                                    cantidad_disponible: qty,
+                                });
+                            }
+                        });
+                    }
                 } else {
                     stockMap = await cargarStockPorUbicaciones(supabase, ids);
                 }
@@ -755,7 +819,9 @@ export default function InventoryMasterPage() {
                 }
                 const prFiltro = filterProyectoId
                     ? proyectos.find((p) => p.id === filterProyectoId)
-                    : undefined;
+                    : filterEntidadId
+                      ? proyectos.find((p) => p.entidad_id === filterEntidadId)
+                      : undefined;
                 setItemsDesdeStock(
                     (extraRows ?? []).map((row) => {
                         const item = row as InventoryItem;
@@ -905,18 +971,20 @@ export default function InventoryMasterPage() {
         }
     };
 
-    const filtroPorUbicacionActivo = filtroStockPorUbicacion;
+    const filtroPorUbicacionActivo = filtroStockEntidadActivo;
 
     const cantidadStockReal = useCallback(
         (item: InventoryItem): number => {
-            if (filtroStockPorUbicacion) {
-                return stockPorUbicacion.get(item.id)?.cantidad_disponible ?? 0;
+            if (filtroStockPorUbicacion || filtroSoloEntidad) {
+                const fromUb = stockPorUbicacion.get(item.id)?.cantidad_disponible;
+                if (fromUb != null && fromUb > 0) return fromUb;
+                if (filtroStockPorUbicacion) return fromUb ?? 0;
             }
             const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
             if (fromStock != null) return fromStock;
             return 0;
         },
-        [filtroStockPorUbicacion, stockPorUbicacion, stockGlobal],
+        [filtroStockPorUbicacion, filtroSoloEntidad, stockPorUbicacion, stockGlobal],
     );
 
     const actualizarStockLocal = useCallback(
@@ -1027,16 +1095,25 @@ export default function InventoryMasterPage() {
 
             if (!textMatch) return false;
             if (!categoriaCoincideFiltro(item, activeCategory)) return false;
-            if (filtroStockPorUbicacion && cargandoStockUbicacion && kpiVista !== 'cuarentena') {
-                return false;
+            const catalogEntidad =
+                filterEntidadId &&
+                materialCoincideCatalogoEntidad(item, {
+                    filterEntidadId,
+                    proyectoIdsEntidad,
+                    sapPrefijoEntidad: sapPrefijoEntidadFiltro,
+                });
+            if (filtroStockEntidadActivo && cargandoStockUbicacion && kpiVista !== 'cuarentena') {
+                if (!(filtroSoloEntidad && catalogEntidad)) return false;
             }
             if (
                 !materialPasaFiltroEntidad(item, {
                     filterEntidadId,
                     filterProyectoId,
                     proyectoIdsEntidad,
+                    sapPrefijoEntidad: sapPrefijoEntidadFiltro,
                     stockEnFiltro,
                     filtroStockPorUbicacion,
+                    filtroSoloEntidad,
                     materialIdsCuarentenaObra:
                         kpiVista === 'cuarentena' ? materialIdsCuarentenaObra : undefined,
                 })
@@ -1057,10 +1134,16 @@ export default function InventoryMasterPage() {
             if (kpiVista === 'cuarentena') {
                 if (!materialIdsCuarentenaObra.has(item.id)) return false;
             } else {
-                const stockDatosListos = filtroStockPorUbicacion
+                const stockDatosListos = filtroStockEntidadActivo
                     ? !cargandoStockUbicacion
                     : stockGlobalCargado;
-                if (stockDatosListos && qty <= 0) return false;
+                if (stockDatosListos && qty <= 0) {
+                    if (filtroSoloEntidad && catalogEntidad) {
+                        /* Catálogo de la entidad aunque aún no tenga stock */
+                    } else {
+                        return false;
+                    }
+                }
             }
 
             return true;
@@ -1077,6 +1160,9 @@ export default function InventoryMasterPage() {
         sinAlmacenAsignado,
         depositsById,
         filtroStockPorUbicacion,
+        filtroSoloEntidad,
+        filtroStockEntidadActivo,
+        sapPrefijoEntidadFiltro,
         proyectoIdsEntidad,
         stockPorUbicacion,
         stockGlobalCargado,
