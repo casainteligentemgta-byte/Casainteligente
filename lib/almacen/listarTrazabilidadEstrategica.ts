@@ -36,6 +36,8 @@ export type FilaTrazabilidadEstrategica = {
   cantidadAbsoluta: number;
   destinoResponsable: string;
   stockResultante: number;
+  /** Costo ponderado actual del material (referencial en kardex). */
+  costoPromedioUsd: number;
   ubicacionNombre: string;
   proyectoId: string | null;
   proyectoNombre: string | null;
@@ -81,7 +83,7 @@ const SELECT_MOV =
   referencia_tipo,
   referencia_id,
   documento_id,
-  material:global_inventory ( id, name, unit, sap_code ),
+  material:global_inventory ( id, name, unit, sap_code, average_weighted_cost ),
   ubicacion:inv_ubicaciones ( id, nombre, ci_proyecto_id, proyecto:ci_proyectos ( id, nombre ) )
 `;
 
@@ -89,17 +91,30 @@ function norm(s: string): string {
   return s.trim().toLowerCase();
 }
 
-function nombreMat(raw: unknown): { id: string; name: string; unit: string; sap: string | null } {
+function nombreMat(raw: unknown): {
+  id: string;
+  name: string;
+  unit: string;
+  sap: string | null;
+  costoUsd: number;
+} {
   const m = Array.isArray(raw) ? raw[0] : raw;
   if (!m || typeof m !== 'object') {
-    return { id: '', name: 'Material', unit: 'UND', sap: null };
+    return { id: '', name: 'Material', unit: 'UND', sap: null, costoUsd: 0 };
   }
-  const o = m as { id?: string; name?: string; unit?: string; sap_code?: string | null };
+  const o = m as {
+    id?: string;
+    name?: string;
+    unit?: string;
+    sap_code?: string | null;
+    average_weighted_cost?: number | null;
+  };
   return {
     id: String(o.id ?? ''),
     name: String(o.name ?? 'Material'),
     unit: String(o.unit ?? 'UND'),
     sap: o.sap_code ?? null,
+    costoUsd: Number(o.average_weighted_cost) || 0,
   };
 }
 
@@ -442,6 +457,7 @@ function mapearFila(
       tipo,
     ),
     stockResultante: stockMap.get(row.id) ?? 0,
+    costoPromedioUsd: mat.costoUsd,
     ubicacionNombre: ubi.nombre,
     proyectoId: ubi.proyectoId,
     proyectoNombre: ubi.proyectoNombre,

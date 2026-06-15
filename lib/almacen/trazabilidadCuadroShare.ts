@@ -10,7 +10,10 @@ export type TipoMovimientoTrazabilidadFiltro =
   | 'ajuste'
   | 'anulacion';
 
+export type TrazabilidadVista = 'cuadro' | 'kardex';
+
 export type TrazabilidadCuadroShareState = {
+  vista: TrazabilidadVista;
   materialFiltro: string;
   proyectoFiltro: string;
   tipoMovimientoFiltro: TipoMovimientoTrazabilidadFiltro;
@@ -23,6 +26,7 @@ export type TrazabilidadCuadroShareState = {
 export const TRAZABILIDAD_CUADRO_FILTROS_STORAGE_KEY = 'ci-trazabilidad-filtros-v1';
 
 const SHARE_QUERY_KEYS = [
+  'vista',
   'material',
   'proyecto',
   'tipo',
@@ -31,6 +35,8 @@ const SHARE_QUERY_KEYS = [
   'page',
   'pageSize',
 ] as const;
+
+const VISTAS_VALIDAS: TrazabilidadVista[] = ['cuadro', 'kardex'];
 
 const TIPOS_VALIDOS: TipoMovimientoTrazabilidadFiltro[] = [
   '',
@@ -58,6 +64,7 @@ export function buildTrazabilidadCuadroSearchParams(
   state: TrazabilidadCuadroShareState,
 ): URLSearchParams {
   const qs = new URLSearchParams();
+  if (state.vista === 'kardex') qs.set('vista', 'kardex');
   setParam(qs, 'material', state.materialFiltro);
   setParam(qs, 'proyecto', state.proyectoFiltro);
   if (state.tipoMovimientoFiltro) qs.set('tipo', state.tipoMovimientoFiltro);
@@ -77,6 +84,8 @@ export function parseTrazabilidadCuadroShareParams(
   params: URLSearchParams,
 ): Partial<TrazabilidadCuadroShareState> {
   const out: Partial<TrazabilidadCuadroShareState> = {};
+  const vista = params.get('vista')?.trim() as TrazabilidadVista | undefined;
+  if (vista && VISTAS_VALIDAS.includes(vista)) out.vista = vista;
   const material = params.get('material')?.trim();
   if (material) out.materialFiltro = material;
   const proyecto = params.get('proyecto')?.trim();

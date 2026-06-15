@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Download,
   Filter,
+  History,
   Loader2,
   RefreshCw,
   Route,
@@ -23,6 +24,7 @@ import {
   parseTrazabilidadCuadroShareParams,
   type TipoMovimientoTrazabilidadFiltro,
   type TrazabilidadCuadroShareState,
+  type TrazabilidadVista,
 } from '@/lib/almacen/trazabilidadCuadroShare';
 import { exportarTrazabilidadExcel } from '@/lib/almacen/trazabilidadExport';
 import {
@@ -42,6 +44,7 @@ const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-[#FF9500]/50';
 
 const DEFAULT_STATE: TrazabilidadCuadroShareState = {
+  vista: 'cuadro',
   materialFiltro: '',
   proyectoFiltro: '',
   tipoMovimientoFiltro: '',
@@ -50,6 +53,14 @@ const DEFAULT_STATE: TrazabilidadCuadroShareState = {
   pagina: 1,
   pageSize: 50,
 };
+
+function formatearMonedaUsd(val: number): string {
+  return new Intl.NumberFormat('es-VE', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  }).format(val);
+}
 
 function formatearFechaHora(iso: string): string {
   const d = new Date(iso);
@@ -74,6 +85,7 @@ export default function TrazabilidadEstrategicaClient() {
   const [materialFiltro, setMaterialFiltro] = useState('');
   const [proyectoFiltro, setProyectoFiltro] = useState('');
   const [entidadFiltro, setEntidadFiltro] = useState('');
+  const [vista, setVista] = useState<TrazabilidadVista>('cuadro');
   const [tipoMovimientoFiltro, setTipoMovimientoFiltro] =
     useState<TipoMovimientoTrazabilidadFiltro>('');
   const [fechaDesde, setFechaDesde] = useState('');
@@ -93,6 +105,7 @@ export default function TrazabilidadEstrategicaClient() {
   const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
 
   const aplicarFiltrosCuadro = useCallback((parsed: Partial<TrazabilidadCuadroShareState>) => {
+    if (parsed.vista) setVista(parsed.vista);
     if (parsed.materialFiltro != null) {
       setMaterialInput(parsed.materialFiltro);
       setMaterialFiltro(parsed.materialFiltro);
@@ -138,6 +151,7 @@ export default function TrazabilidadEstrategicaClient() {
 
   const estadoCompartir = useMemo<TrazabilidadCuadroShareState>(
     () => ({
+      vista,
       materialFiltro,
       proyectoFiltro,
       tipoMovimientoFiltro,
@@ -147,6 +161,7 @@ export default function TrazabilidadEstrategicaClient() {
       pageSize,
     }),
     [
+      vista,
       materialFiltro,
       proyectoFiltro,
       tipoMovimientoFiltro,
@@ -263,6 +278,13 @@ export default function TrazabilidadEstrategicaClient() {
     return activos;
   }, [materialFiltro, proyectoFiltro, tipoMovimientoFiltro, fechaDesde, fechaHasta]);
 
+  const cambiarVista = useCallback((next: TrazabilidadVista) => {
+    setVista(next);
+    setPagina(1);
+  }, []);
+
+  const esKardex = vista === 'kardex';
+
   return (
     <div className="min-h-screen bg-black text-white p-4 md:p-6 pb-24">
       <div className="max-w-[1600px] mx-auto space-y-6">
@@ -279,16 +301,46 @@ export default function TrazabilidadEstrategicaClient() {
             </Link>
             <div>
               <h1 className="text-2xl md:text-3xl font-black tracking-tighter flex items-center gap-2">
-                <Route className="text-[#FF9500]" size={28} />
-                Trazabilidad Estratégica
+                {esKardex ? (
+                  <History className="text-sky-400" size={28} />
+                ) : (
+                  <Route className="text-[#FF9500]" size={28} />
+                )}
+                Trazabilidad / Kardex
               </h1>
               <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">
-                Ciclo de vida completo · entradas, salidas y stock auditado
+                {esKardex
+                  ? 'Libro mayor · stock resultante y costo por movimiento'
+                  : 'Ciclo de vida completo · entradas, salidas y documentos'}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-xl border border-white/10 p-1 bg-black/40 mr-1">
+              <button
+                type="button"
+                onClick={() => cambiarVista('cuadro')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+                  !esKardex
+                    ? 'bg-[#FF9500]/20 text-[#FF9500]'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Cuadro
+              </button>
+              <button
+                type="button"
+                onClick={() => cambiarVista('kardex')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+                  esKardex
+                    ? 'bg-sky-500/20 text-sky-300'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Kardex
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => void cargar()}
@@ -463,6 +515,13 @@ export default function TrazabilidadEstrategicaClient() {
           ) : null}
         </section>
 
+        {esKardex ? (
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 px-1">
+            Kardex unificado sobre ledger inv_movimientos. El costo prom. es el ponderado actual del
+            catálogo (referencial).
+          </p>
+        ) : null}
+
         {error ? (
           <div className="rounded-xl border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">
             {error}
@@ -471,6 +530,92 @@ export default function TrazabilidadEstrategicaClient() {
 
         <section className="rounded-2xl border border-white/10 overflow-hidden bg-zinc-950/60">
           <div className="overflow-x-auto">
+            {esKardex ? (
+              <table className="w-full min-w-[960px] text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-black/40 text-left text-xs uppercase tracking-wider text-zinc-500">
+                    <th className="px-4 py-3 font-bold">Fecha / Hora</th>
+                    <th className="px-4 py-3 font-bold">Tipo</th>
+                    <th className="px-4 py-3 font-bold">Material</th>
+                    <th className="px-4 py-3 font-bold">Ubicación</th>
+                    <th className="px-4 py-3 font-bold text-right">Cantidad</th>
+                    <th className="px-4 py-3 font-bold text-right">Stock final</th>
+                    <th className="px-4 py-3 font-bold text-right">Costo prom.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-16 text-center text-zinc-500">
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="animate-spin text-sky-400" size={18} />
+                          Cargando kardex…
+                        </span>
+                      </td>
+                    </tr>
+                  ) : filas.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-16 text-center text-zinc-500">
+                        No hay movimientos con los filtros actuales.
+                      </td>
+                    </tr>
+                  ) : (
+                    filas.map((f) => (
+                      <tr
+                        key={f.id}
+                        className="border-b border-white/5 hover:bg-white/[0.02] align-top"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-zinc-300">
+                          <p className="font-semibold">{formatearFechaHora(f.fechaHora)}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClasesTipoMovimientoTrazabilidad(f.tipoMovimiento)}`}
+                          >
+                            {f.tipoEtiqueta}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-white">{f.materialNombre}</div>
+                          <div className="text-xs text-zinc-500 mt-0.5">
+                            {f.materialCodigo ? `SAP ${f.materialCodigo}` : 'Sin código'}
+                            {' · '}
+                            <Link
+                              href={`/almacen/trazabilidad?materialId=${encodeURIComponent(f.materialId)}`}
+                              className="text-sky-400 hover:underline"
+                            >
+                              Ver ruta
+                            </Link>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-400 text-xs max-w-[180px]">
+                          {f.ubicacionNombre || '—'}
+                          {f.proyectoNombre ? (
+                            <span className="block text-zinc-600 mt-0.5">{f.proyectoNombre}</span>
+                          ) : null}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-mono font-semibold ${
+                            f.cantidad >= 0 ? 'text-emerald-300' : 'text-red-300'
+                          }`}
+                        >
+                          {f.cantidad >= 0 ? '+' : '−'}
+                          {f.cantidadAbsoluta.toLocaleString('es-VE')}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-sky-200">
+                          {f.stockResultante.toLocaleString('es-VE')} {f.unidad}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-zinc-400">
+                          {f.costoPromedioUsd > 0
+                            ? formatearMonedaUsd(f.costoPromedioUsd)
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : (
             <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-white/10 bg-black/40 text-left text-xs uppercase tracking-wider text-zinc-500">
@@ -556,6 +701,7 @@ export default function TrazabilidadEstrategicaClient() {
                 )}
               </tbody>
             </table>
+            )}
           </div>
 
           <footer className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/10 px-4 py-3 bg-black/30">

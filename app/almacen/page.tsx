@@ -200,9 +200,8 @@ const NAV_ALMACEN = [
     { href: '/almacen/recepcion', label: 'Ingreso', icon: Package, className: 'border-[#FF9500]/40 bg-[#FF9500]/10 text-[#FF9500]' },
     { href: '/almacen/despacho', label: 'SALIDA', icon: ArrowUpRight, className: 'border-orange-500/35 text-orange-200' },
     { href: '/almacen/movimientos', label: 'Movimientos', icon: History, className: 'border-violet-500/35 text-violet-200' },
-    { href: '/almacen/trazabilidad', label: 'Trazabilidad', icon: Route, className: 'border-amber-500/35 bg-amber-500/10 text-amber-200' },
+    { href: '/almacen/trazabilidad', label: 'Trazabilidad / Kardex', icon: Route, className: 'border-amber-500/35 bg-amber-500/10 text-amber-200' },
     { href: '/almacen/maestros', label: 'Configuración', icon: Settings2, className: 'border-zinc-800 text-zinc-300' },
-    { href: '/almacen/kardex', label: 'Kardex', icon: History, className: 'border-zinc-800 text-zinc-300' },
     { href: null, label: 'Compartir', icon: Share2, className: 'border-zinc-800 text-zinc-300', action: 'share' as const },
     { href: '/almacen/nuevo', label: 'Nuevo', icon: Plus, className: 'border-white/20 bg-white text-black' },
 ] as const;
