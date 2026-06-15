@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MaterialCampoOpcion } from '@/components/almacen/BuscadorMaterialCampo';
 import { filtrarQueryCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
 import { buscarMaterialPorAlias, buscarMaterialPorAliasAproximado } from '@/lib/almacen/materialAliases';
-import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
+import { normalizarTextoMaterial, variantesObraMaterial } from '@/lib/almacen/normalizarTextoMaterial';
 import { scoreMaterialInteligente } from '@/lib/almacen/scoreMaterialInteligente';
 import { escapeIlike, patronIlike } from '@/lib/contabilidad/comprasQueryFiltros';
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
@@ -26,6 +26,8 @@ export type BuscarMaterialesCatalogoOpts = {
   /** Catálogo de la entidad (patrono). Si se omite, búsqueda global (legacy). */
   entidadId?: string | null;
   proyectoId?: string | null;
+  /** Siempre recorre el pool completo (modo corrección ortográfica). */
+  forzarSimilitud?: boolean;
 };
 
 export type MaterialBusquedaInteligente = {
@@ -90,6 +92,34 @@ async function listarPoolCatalogo(
   return { materiales: Array.from(byId.values()), obraIds };
 }
 
+async function buscarIlikeCatalogo(
+  supabase: SupabaseClient,
+  pattern: string,
+  termNorm: string,
+  map: Map<string, MaterialBusquedaInteligente>,
+  opts?: BuscarMaterialesCatalogoOpts,
+): Promise<void> {
+  if (!pattern) return;
+
+  let query = supabase
+    .from('global_inventory')
+    .select('id,name,sap_code,unit')
+    .or(`name.ilike.${pattern},sap_code.ilike.${pattern}`)
+    .order('name')
+    .limit(60);
+
+  query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  for (const row of data ?? []) {
+    const m = mapRow(row as { id: string; name?: string; sap_code?: string; unit?: string });
+    const score = scoreMaterialInteligente(termNorm, m);
+    if (score > 0) mergeResultado(map, m, score, 'ilike');
+  }
+}
+
 /** Búsqueda inteligente: alias + ILIKE + similitud (Levenshtein + variantes obra). */
 export async function buscarMaterialesInteligenteCatalogo(
   supabase: SupabaseClient,
@@ -115,27 +145,22 @@ export async function buscarMaterialesInteligenteCatalogo(
 
   const pattern = patronIlike(t);
   if (pattern) {
-    let query = supabase
-      .from('global_inventory')
-      .select('id,name,sap_code,unit')
-      .or(`name.ilike.${pattern},sap_code.ilike.${pattern}`)
-      .order('name')
-      .limit(60);
+    await buscarIlikeCatalogo(supabase, pattern, termNorm, map, opts);
 
-    query = filtrarQueryCatalogoEntidad(query, opts?.entidadId);
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-
-    for (const row of data ?? []) {
-      const m = mapRow(row as { id: string; name?: string; sap_code?: string; unit?: string });
-      const score = scoreMaterialInteligente(termNorm, m);
-      if (score > 0) mergeResultado(map, m, score, 'ilike');
+    const variantes = Array.from(
+      new Set(
+        variantesObraMaterial(termNorm).filter((v) => v.length >= 3 && v !== termNorm),
+      ),
+    ).slice(0, 6);
+    for (const variant of variantes) {
+      const varPattern = patronIlike(variant);
+      if (!varPattern || varPattern === pattern) continue;
+      await buscarIlikeCatalogo(supabase, varPattern, termNorm, map, opts);
     }
   }
 
   const fuertes = Array.from(map.values()).filter((x) => x.score >= 70);
-  if (fuertes.length < limit) {
+  if (opts?.forzarSimilitud || fuertes.length < limit) {
     const { materiales: pool, obraIds } = await listarPoolCatalogo(supabase, opts);
     for (const m of pool) {
       let score = scoreMaterialInteligente(termNorm, m);

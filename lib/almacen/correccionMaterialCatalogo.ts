@@ -5,13 +5,40 @@ import {
   type BuscarMaterialesCatalogoOpts,
 } from '@/lib/almacen/buscarMaterialesCatalogo';
 import { normalizarTextoMaterial, variantesObraMaterial } from '@/lib/almacen/normalizarTextoMaterial';
-import { ratioSimilitudLevenshtein } from '@/lib/almacen/scoreMaterialInteligente';
+import {
+  ratioSimilitudLevenshtein,
+  scoreMaterialInteligente,
+} from '@/lib/almacen/scoreMaterialInteligente';
 
 /** Score mínimo del buscador para considerar corrección ortográfica. */
 export const SCORE_MIN_CORRECCION_MATERIAL = 82;
 
 /** Similitud mínima entre el término y la mejor palabra del nombre canónico. */
 export const SIMILITUD_MIN_TYPO_MATERIAL = 72;
+
+/** Términos frecuentes en obra (Venezuela) para detectar typos aunque falten en catálogo. */
+const TERMINOS_OBRA_FRECUENTES = [
+  'cabilla',
+  'varilla',
+  'cemento',
+  'arena',
+  'clavo',
+  'alambre',
+  'bloque',
+  'hierro',
+  'tubo',
+  'pintura',
+  'yeso',
+  'gravilla',
+  'cal',
+  'malla',
+  'cloro',
+  'disco',
+  'broca',
+  'tornillo',
+  'pegamento',
+  'formon',
+] as const;
 
 export type EvaluacionCoincidenciaMaterial = {
   coincideExacto: boolean;
@@ -22,11 +49,15 @@ export type EvaluacionCoincidenciaMaterial = {
 export type CorreccionMaterialCatalogo = {
   termino: string;
   terminoNorm: string;
-  candidato: MaterialCampoOpcion;
+  /** Material del catálogo cuando existe; null si solo hay sugerencia ortográfica. */
+  candidato: MaterialCampoOpcion | null;
+  terminoCanonico: string;
   score: number;
   coincideExacto: boolean;
   esTypo: boolean;
   similitudPalabra: number;
+  /** true cuando el término corregido no está aún en global_inventory de la entidad. */
+  soloOrtografia: boolean;
 };
 
 function palabrasSignificativas(nameNorm: string): string[] {
@@ -46,6 +77,13 @@ function mejorSimilitudConPalabras(termNorm: string, nameNorm: string): number {
     }
   }
   return best;
+}
+
+export function etiquetaTerminoCanonicoObra(term: string): string {
+  const t = term.trim();
+  if (!t) return t;
+  if (t.length <= 8) return t.toUpperCase();
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
 }
 
 /** Evalúa si el término coincide exactamente o parece un typo del material. */
@@ -76,6 +114,50 @@ export function evaluarCoincidenciaMaterial(
   return { coincideExacto, esTypo, similitudPalabra };
 }
 
+function buscarTypoEnTerminosObra(term: string): { canonico: string; similitud: number; score: number } | null {
+  const termNorm = normalizarTextoMaterial(term);
+  if (termNorm.length < 3) return null;
+
+  let best: { canonico: string; similitud: number; score: number } | null = null;
+  for (const canon of TERMINOS_OBRA_FRECUENTES) {
+    if (canon === termNorm) continue;
+    const fake: MaterialCampoOpcion = {
+      id: '',
+      name: canon,
+      sap_code: null,
+      unit: 'UND',
+    };
+    const score = scoreMaterialInteligente(termNorm, fake);
+    const ev = evaluarCoincidenciaMaterial(term, fake, score);
+    if (!ev.esTypo) continue;
+    if (!best || ev.similitudPalabra > best.similitud) {
+      best = { canonico: canon, similitud: ev.similitudPalabra, score };
+    }
+  }
+  return best;
+}
+
+function construirCorreccion(
+  term: string,
+  candidato: MaterialCampoOpcion | null,
+  terminoCanonico: string,
+  score: number,
+  similitudPalabra: number,
+  soloOrtografia: boolean,
+): CorreccionMaterialCatalogo {
+  return {
+    termino: term,
+    terminoNorm: normalizarTextoMaterial(term),
+    candidato,
+    terminoCanonico,
+    score,
+    coincideExacto: false,
+    esTypo: true,
+    similitudPalabra,
+    soloOrtografia,
+  };
+}
+
 /** Mejor candidato canónico si el texto parece un error ortográfico (ej. cabiya → CABILLA). */
 export async function buscarCorreccionMaterialCatalogo(
   supabase: SupabaseClient,
@@ -85,27 +167,49 @@ export async function buscarCorreccionMaterialCatalogo(
   const t = term.trim();
   if (t.length < 3) return null;
 
-  const resultados = await buscarMaterialesInteligenteCatalogo(supabase, t, {
+  const buscarOpts: BuscarMaterialesCatalogoOpts = {
     ...opts,
     limit: opts?.limit ?? 8,
-  });
-
-  const top = resultados[0];
-  if (!top) return null;
-
-  const evaluacion = evaluarCoincidenciaMaterial(t, top.material, top.score);
-  if (!evaluacion.esTypo && !evaluacion.coincideExacto) return null;
-  if (evaluacion.coincideExacto) return null;
-
-  return {
-    termino: t,
-    terminoNorm: normalizarTextoMaterial(t),
-    candidato: top.material,
-    score: top.score,
-    coincideExacto: false,
-    esTypo: true,
-    similitudPalabra: evaluacion.similitudPalabra,
+    forzarSimilitud: true,
   };
+
+  const resultados = await buscarMaterialesInteligenteCatalogo(supabase, t, buscarOpts);
+  const top = resultados[0];
+  if (top) {
+    const evaluacion = evaluarCoincidenciaMaterial(t, top.material, top.score);
+    if (evaluacion.esTypo) {
+      return construirCorreccion(
+        t,
+        top.material,
+        top.material.name,
+        top.score,
+        evaluacion.similitudPalabra,
+        false,
+      );
+    }
+  }
+
+  const typoObra = buscarTypoEnTerminosObra(t);
+  if (!typoObra) return null;
+
+  const canonLabel = etiquetaTerminoCanonicoObra(typoObra.canonico);
+  const porCanon = await buscarMaterialesInteligenteCatalogo(supabase, typoObra.canonico, buscarOpts);
+  const hit = porCanon[0];
+  if (hit && hit.score >= 70) {
+    const ev = evaluarCoincidenciaMaterial(t, hit.material, hit.score);
+    if (!ev.coincideExacto) {
+      return construirCorreccion(
+        t,
+        hit.material,
+        hit.material.name,
+        Math.max(hit.score, typoObra.score),
+        Math.max(ev.similitudPalabra, typoObra.similitud),
+        false,
+      );
+    }
+  }
+
+  return construirCorreccion(t, null, canonLabel, typoObra.score, typoObra.similitud, true);
 }
 
 /**
@@ -124,6 +228,7 @@ export async function resolverMaterialCanonicoPorTexto(
   const resultados = await buscarMaterialesInteligenteCatalogo(supabase, t, {
     ...opts,
     limit: 3,
+    forzarSimilitud: true,
   });
 
   const top = resultados[0];

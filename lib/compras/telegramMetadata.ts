@@ -73,6 +73,7 @@ export type MetadataProcuraDepartamentoParsed = {
   material_id?: string;
   material_txt?: string;
   material_busqueda_borrador?: string;
+  material_canonico_sugerido?: string;
   por_verificar?: boolean;
   cantidad?: number;
   unidad?: string;
@@ -98,6 +99,7 @@ export function parseMetadataProcuraDepartamento(
     material_id: str(m.material_id),
     material_txt: str(m.material_txt),
     material_busqueda_borrador: str(m.material_busqueda_borrador),
+    material_canonico_sugerido: str(m.material_canonico_sugerido),
     por_verificar: bool(m.por_verificar),
     cantidad: num(m.cantidad),
     unidad: str(m.unidad),

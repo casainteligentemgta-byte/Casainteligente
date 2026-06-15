@@ -79,6 +79,7 @@ const CB_CAP = `${PREFIX}cap:`;
 const CB_MAT_ID = `${PREFIX}mat_id:`;
 const CB_MAT_TXT = `${PREFIX}mat:txt`;
 const CB_MAT_CORR = `${PREFIX}mat:corr:`;
+const CB_MAT_CANON = `${PREFIX}mat:canon`;
 const CB_MAT_KEEP = `${PREFIX}mat:keep`;
 const CB_MAT_LIST = `${PREFIX}mat:list`;
 const CB_PRI = `${PREFIX}pri:`;
@@ -168,29 +169,43 @@ async function enviarPromptCorreccionMaterial(
   chatId: string,
   correccion: CorreccionMaterialCatalogo,
 ): Promise<void> {
-  const etiqueta = etiquetaMaterialCatalogo(correccion.candidato);
-  const callbackCorr = `${CB_MAT_CORR}${correccion.candidato.id}`;
   const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
 
-  if (callbackDataTelegramValido(callbackCorr)) {
+  if (correccion.candidato && !correccion.soloOrtografia) {
+    const etiqueta = etiquetaMaterialCatalogo(correccion.candidato);
+    const callbackCorr = `${CB_MAT_CORR}${correccion.candidato.id}`;
+    if (callbackDataTelegramValido(callbackCorr)) {
+      buttons.push([
+        {
+          text: truncarBoton(`✅ Sí: ${etiqueta}`, 52),
+          callback_data: callbackCorr,
+        },
+      ]);
+    }
+  } else {
     buttons.push([
       {
-        text: truncarBoton(`✅ Sí: ${etiqueta}`, 52),
-        callback_data: callbackCorr,
+        text: truncarBoton(`✅ Sí: ${correccion.terminoCanonico}`, 52),
+        callback_data: CB_MAT_CANON,
       },
     ]);
   }
+
   buttons.push([
     { text: truncarBoton(`✏️ No, usar «${correccion.termino}»`, 48), callback_data: CB_MAT_KEEP },
   ]);
   buttons.push([{ text: '📋 Ver más opciones del catálogo', callback_data: CB_MAT_LIST }]);
 
+  const cuerpoCatalogo = correccion.candidato && !correccion.soloOrtografia
+    ? `¿Quisiste el material del catálogo?\n<b>${escHtml(etiquetaMaterialCatalogo(correccion.candidato))}</b>\n\n` +
+      '<i>Al confirmar usamos el nombre oficial del almacén (un solo material canónico).</i>'
+    : `¿Quisiste decir <b>${escHtml(correccion.terminoCanonico)}</b>?\n\n` +
+      '<i>Ese material no está en el catálogo de tu entidad todavía. ' +
+      'Al confirmar usamos el nombre unificado y queda <b>[POR VERIFICAR]</b> para que lo den de alta en almacén.</i>';
+
   await sendTelegramMessage(
     chatId,
-    `✏️ Escribiste: <b>${escHtml(correccion.termino)}</b>\n\n` +
-      `¿Quisiste el material del catálogo?\n` +
-      `<b>${escHtml(etiqueta)}</b>\n\n` +
-      '<i>Al confirmar usamos el nombre oficial del almacén (un solo material canónico).</i>',
+    `✏️ Escribiste: <b>${escHtml(correccion.termino)}</b>\n\n${cuerpoCatalogo}`,
     {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: buttons },
@@ -291,6 +306,9 @@ async function mostrarCoincidenciasMaterial(
         limit: 8,
       });
       if (correccion?.esTypo) {
+        await patchMeta(supabase, chatId, estado, {
+          material_canonico_sugerido: correccion.terminoCanonico,
+        });
         await enviarPromptCorreccionMaterial(chatId, correccion);
         return;
       }
@@ -957,6 +975,24 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     return true;
   }
 
+  if (params.data === CB_MAT_CANON) {
+    const canonico = meta(estado).material_canonico_sugerido?.trim() ?? '';
+    if (!canonico) {
+      await answerCallbackQuery(params.callbackId, 'Sin sugerencia', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, truncarBoton(canonico, 40));
+    await patchMeta(supabase, params.chatId, estado, {
+      paso: 'cantidad',
+      material_id: '',
+      material_txt: canonico.slice(0, 500),
+      por_verificar: true,
+      material_canonico_sugerido: canonico,
+    });
+    await pedirCantidadMaterial(params.chatId, canonico);
+    return true;
+  }
+
   if (params.data === CB_MAT_KEEP) {
     const borrador = meta(estado).material_busqueda_borrador?.trim() ?? '';
     if (borrador.length < MIN_CHARS_BUSQUEDA_MATERIAL) {
@@ -1027,6 +1063,9 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       });
       if (correccion?.esTypo) {
         await answerCallbackQuery(params.callbackId, 'Revisa la sugerencia');
+        await patchMeta(supabase, params.chatId, estado, {
+          material_canonico_sugerido: correccion.terminoCanonico,
+        });
         await enviarPromptCorreccionMaterial(params.chatId, correccion);
         return true;
       }
