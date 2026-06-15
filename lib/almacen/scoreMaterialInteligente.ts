@@ -33,13 +33,26 @@ export function ratioSimilitudLevenshtein(a: string, b: string): number {
 }
 
 function palabrasMaterial(nameNorm: string): string[] {
-  return nameNorm.split(/\s+/).filter(Boolean);
+  return nameNorm.split(/\s+/).filter((w) => w.length >= 2);
+}
+
+/** Evita falsos positivos tipo «arena»↔«al» o «cabilla»↔«c» en nombres SAP ruidosos. */
+const MIN_CHARS_PREFIJO_PALABRA = 3;
+
+function coincidePrefijoPalabra(term: string, word: string): boolean {
+  if (word.length >= MIN_CHARS_PREFIJO_PALABRA && term.startsWith(word)) return true;
+  if (term.length >= MIN_CHARS_PREFIJO_PALABRA && word.startsWith(term)) return true;
+  return false;
+}
+
+function palabrasSignificativas(words: string[]): string[] {
+  return words.filter((w) => w.length >= MIN_CHARS_PREFIJO_PALABRA);
 }
 
 function mejorSimilitudPalabras(term: string, words: string[]): number {
   if (!words.length) return 0;
   let best = ratioSimilitudLevenshtein(term, words.join(' '));
-  for (const w of words) {
+  for (const w of palabrasSignificativas(words)) {
     best = Math.max(best, ratioSimilitudLevenshtein(term, w));
   }
   return best;
@@ -63,7 +76,7 @@ export function scoreMaterialInteligente(
   if (nameNorm === t || codeNorm === t) return 100;
   if (words.some((w) => w === t)) return 97;
   if (nameNorm.startsWith(t) || codeNorm.startsWith(t)) return 90;
-  if (words.some((w) => w.startsWith(t) || t.startsWith(w))) return 88;
+  if (words.some((w) => coincidePrefijoPalabra(t, w))) return 88;
   if (nameNorm.includes(t) || codeNorm.includes(t)) return 78;
 
   let best = Math.max(
@@ -73,9 +86,9 @@ export function scoreMaterialInteligente(
 
   for (const variant of variantesObraMaterial(t)) {
     if (nameNorm === variant || words.some((w) => w === variant)) return 95;
-    if (words.some((w) => w.startsWith(variant) || variant.startsWith(w))) return 90;
+    if (words.some((w) => coincidePrefijoPalabra(variant, w))) return 90;
     best = Math.max(best, mejorSimilitudPalabras(variant, words));
   }
 
-  return best >= 58 ? Math.round(best) : 0;
+  return best >= 62 ? Math.round(best) : 0;
 }

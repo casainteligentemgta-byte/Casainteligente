@@ -53,15 +53,19 @@ function mergeResultado(
 async function listarPoolCatalogo(
   supabase: SupabaseClient,
   opts?: BuscarMaterialesCatalogoOpts,
-): Promise<MaterialCampoOpcion[]> {
+): Promise<{ materiales: MaterialCampoOpcion[]; obraIds: Set<string> }> {
   const limit = 900;
   const byId = new Map<string, MaterialCampoOpcion>();
+  const obraIds = new Set<string>();
 
   const proyectoId = opts?.proyectoId?.trim();
   if (proyectoId) {
     try {
       const obra = await listarMaterialesObraRecepcion(supabase, proyectoId);
-      for (const m of obra) byId.set(m.id, m);
+      for (const m of obra) {
+        byId.set(m.id, m);
+        obraIds.add(m.id);
+      }
     } catch {
       /* obra opcional */
     }
@@ -83,7 +87,7 @@ async function listarPoolCatalogo(
     byId.set(m.id, m);
   }
 
-  return Array.from(byId.values());
+  return { materiales: Array.from(byId.values()), obraIds };
 }
 
 /** Búsqueda inteligente: alias + ILIKE + similitud (Levenshtein + variantes obra). */
@@ -129,10 +133,11 @@ export async function buscarMaterialesInteligenteCatalogo(
 
   const fuertes = Array.from(map.values()).filter((x) => x.score >= 70);
   if (fuertes.length < limit) {
-    const pool = await listarPoolCatalogo(supabase, opts);
+    const { materiales: pool, obraIds } = await listarPoolCatalogo(supabase, opts);
     for (const m of pool) {
-      const score = scoreMaterialInteligente(termNorm, m);
-      if (score >= 58) mergeResultado(map, m, score, 'similitud');
+      let score = scoreMaterialInteligente(termNorm, m);
+      if (obraIds.has(m.id)) score = Math.min(100, score + 10);
+      if (score >= 62) mergeResultado(map, m, score, obraIds.has(m.id) ? 'obra' : 'similitud');
     }
   }
 
