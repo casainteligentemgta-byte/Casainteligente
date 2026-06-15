@@ -280,7 +280,6 @@ export type ResultadoResolverUbicacionFiltro = {
 function aplicarFiltroDepositoUbicaciones(
   candidatas: UbicacionInventario[],
   depositId?: string,
-  opts?: { permitirFallbackObra?: boolean },
 ): { candidatas: UbicacionInventario[]; depositoSinInterseccion: boolean } {
   if (!depositId?.trim()) {
     return { candidatas, depositoSinInterseccion: false };
@@ -291,8 +290,9 @@ function aplicarFiltroDepositoUbicaciones(
   if (filtradas.length) {
     return { candidatas: filtradas, depositoSinInterseccion: false };
   }
-  if (opts?.permitirFallbackObra && antesDeposito.length) {
-    return { candidatas: antesDeposito, depositoSinInterseccion: true };
+  /** Sin fallback a toda la obra: evita mezclar stock de otros almacenes. */
+  if (antesDeposito.length) {
+    return { candidatas: [], depositoSinInterseccion: true };
   }
   return { candidatas: [], depositoSinInterseccion: false };
 }
@@ -365,7 +365,6 @@ export function resolverUbicacionIdsFiltroConMeta(
   const { candidatas: finales, depositoSinInterseccion } = aplicarFiltroDepositoUbicaciones(
     candidatas,
     opts.depositId,
-    { permitirFallbackObra: Boolean(opts.proyectoId) },
   );
   return {
     ubicacionIds: finales.map((u) => u.id),
@@ -431,7 +430,6 @@ export function resolverUbicacionIdsFiltroEntidadConMeta(
   const { candidatas: finales, depositoSinInterseccion } = aplicarFiltroDepositoUbicaciones(
     result,
     opts.depositId,
-    { permitirFallbackObra: true },
   );
 
   return {

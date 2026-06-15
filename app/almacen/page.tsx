@@ -57,6 +57,7 @@ import {
     listarUbicacionesParaFiltroInventario,
     proyectoIdsDeEntidad,
     resolverUbicacionIdsFiltroConMeta,
+    resolverUbicacionIdsFiltroEntidadConMeta,
     type StockEnUbicacionResumen,
     type ValorInventarioDeposito,
 } from '@/lib/almacen/inventarioFiltroUbicacion';
@@ -149,7 +150,10 @@ function materialPasaFiltroEntidad(
     const pid = item.proyecto_id?.trim();
     if (pid && opts.proyectoIdsEntidad?.has(pid)) return true;
     if (opts.filterProyectoId && item.proyecto_id === opts.filterProyectoId) return true;
-    if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0) return true;
+    /** Stock físico en la obra filtrada aunque el catálogo no tenga entidad asignada. */
+    if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0 && opts.filterProyectoId) {
+        return true;
+    }
     return false;
 }
 
@@ -648,11 +652,24 @@ export default function InventoryMasterPage() {
                     });
                     ids = res.ubicacionIds;
                     depositoFallback = res.depositoSinInterseccion;
+                } else if (filterDepositId) {
+                    if (filterEntidadId) {
+                        const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
+                            entidadId: filterEntidadId,
+                            proyectos,
+                            depositId: filterDepositId,
+                        });
+                        ids = res.ubicacionIds;
+                        depositoFallback = res.depositoSinInterseccion;
+                    } else {
+                        const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
+                            depositId: filterDepositId,
+                        });
+                        ids = res.ubicacionIds;
+                        depositoFallback = res.depositoSinInterseccion;
+                    }
                 } else {
-                    const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
-                        depositId: filterDepositId || undefined,
-                    });
-                    ids = res.ubicacionIds;
+                    return;
                 }
 
                 if (cancelled) return;
@@ -677,7 +694,7 @@ export default function InventoryMasterPage() {
 
                 if (filterProyectoId) {
                     stockMap = await cargarStockPorUbicaciones(supabase, ids);
-                    if (!stockMap.size) {
+                    if (!stockMap.size && !filterDepositId) {
                         const agg = await getStockAgregadoPorMaterialObra(
                             supabase,
                             filterProyectoId,
@@ -761,6 +778,7 @@ export default function InventoryMasterPage() {
     }, [
         filterProyectoId,
         filterDepositId,
+        filterEntidadId,
         supabase,
         items,
         proyectos,
@@ -975,6 +993,7 @@ export default function InventoryMasterPage() {
 
             if (!textMatch) return false;
             if (!categoriaCoincideFiltro(item, activeCategory)) return false;
+            if (filtroStockPorUbicacion && cargandoStockUbicacion) return false;
             if (
                 !materialPasaFiltroEntidad(item, {
                     filterEntidadId,
@@ -2102,7 +2121,9 @@ export default function InventoryMasterPage() {
 
                     {depositoSinInterseccion && filterDepositId ? (
                         <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-200">
-                            El almacén elegido no coincide con ubicaciones de la obra; se muestra el stock de toda la obra.
+                            El almacén elegido no tiene ubicaciones vinculadas
+                            {filterProyectoId ? ' a la obra seleccionada' : filterEntidadId ? ' a la entidad seleccionada' : ''}.
+                            Revise maestros (inv_ubicaciones) o elija otro almacén.
                             {' '}
                             <button
                                 type="button"
