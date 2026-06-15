@@ -72,6 +72,14 @@ export function mensajeVacioCuadroAlmacen(opts: {
     };
   }
 
+  if (opts.hayFiltrosActivos && !opts.filtroStockPorUbicacion && opts.filterEntidadId) {
+    return {
+      titulo: 'Sin materiales para esta entidad',
+      subtitulo:
+        'No hay ítems del catálogo clasificados bajo esta entidad con stock disponible. Pruebe otra entidad o limpie filtros.',
+    };
+  }
+
   if (opts.hayFiltrosActivos) {
     return {
       titulo: 'No se encontraron materiales',

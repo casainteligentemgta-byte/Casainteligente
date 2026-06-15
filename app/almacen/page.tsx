@@ -55,7 +55,6 @@ import {
     listarUbicacionesParaFiltroInventario,
     proyectoIdsDeEntidad,
     resolverUbicacionIdsFiltroConMeta,
-    resolverUbicacionIdsFiltroEntidadConMeta,
     type StockEnUbicacionResumen,
     type ValorInventarioDeposito,
 } from '@/lib/almacen/inventarioFiltroUbicacion';
@@ -515,7 +514,8 @@ export default function InventoryMasterPage() {
         [filterEntidadId, proyectos],
     );
 
-    const filtroStockPorUbicacion = Boolean(filterEntidadId || filterProyectoId || filterDepositId);
+    /** Stock por ubicación física solo con obra o depósito; entidad filtra el catálogo (columna Entidad). */
+    const filtroStockPorUbicacion = Boolean(filterProyectoId || filterDepositId);
 
     const depositsLista = useMemo(() => {
         return Array.from(depositsById.values()).sort((a, b) =>
@@ -594,7 +594,7 @@ export default function InventoryMasterPage() {
     }, [items, itemsDesdeStock]);
 
     useEffect(() => {
-        if (!filterEntidadId && !filterProyectoId && !filterDepositId) {
+        if (!filterProyectoId && !filterDepositId) {
             setStockPorUbicacion(new Map());
             setItemsDesdeStock([]);
             setUbicacionIdsFiltro([]);
@@ -630,14 +630,6 @@ export default function InventoryMasterPage() {
                     const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
                         proyectoId: filterProyectoId,
                         proyectoNombre: nombreObraFiltro || undefined,
-                        depositId: filterDepositId || undefined,
-                    });
-                    ids = res.ubicacionIds;
-                    depositoFallback = res.depositoSinInterseccion;
-                } else if (filterEntidadId) {
-                    const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
-                        entidadId: filterEntidadId,
-                        proyectos,
                         depositId: filterDepositId || undefined,
                     });
                     ids = res.ubicacionIds;
@@ -687,38 +679,6 @@ export default function InventoryMasterPage() {
                                 });
                             }
                         });
-                    }
-                } else if (filterEntidadId) {
-                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
-                    const proysEntidad = proyectos.filter((p) => p.entidad_id === filterEntidadId);
-                    for (const pr of proysEntidad) {
-                        const agg = await getStockAgregadoPorMaterialObra(
-                            supabase,
-                            pr.id,
-                            pr.nombre,
-                        );
-                        agg.forEach((qty, materialId) => {
-                            if (qty <= 0) return;
-                            const prev = stockMap.get(materialId);
-                            if (!prev) {
-                                fusionarFilaEnResumenStock(stockMap, materialId, {
-                                    cantidad: qty,
-                                    ubicacionNombre: pr.nombre,
-                                    proyectoId: pr.id,
-                                    proyectoNombre: pr.nombre,
-                                });
-                            } else if (prev.cantidad_disponible < qty) {
-                                prev.cantidad_disponible = qty;
-                            }
-                        });
-                    }
-                    if (filterDepositId && !depositoFallback) {
-                        const stockUbDep = await cargarStockPorUbicaciones(supabase, ids);
-                        for (const mid of Array.from(stockMap.keys())) {
-                            const enUb = stockUbDep.get(mid)?.cantidad_disponible ?? 0;
-                            if (enUb <= 0) stockMap.delete(mid);
-                            else stockMap.get(mid)!.cantidad_disponible = enUb;
-                        }
                     }
                 } else {
                     stockMap = await cargarStockPorUbicaciones(supabase, ids);
@@ -785,7 +745,6 @@ export default function InventoryMasterPage() {
             cancelled = true;
         };
     }, [
-        filterEntidadId,
         filterProyectoId,
         filterDepositId,
         supabase,
@@ -2121,7 +2080,7 @@ export default function InventoryMasterPage() {
                                     : 'text-zinc-500'
                             }`}
                             title={
-                                filtroStockPorUbicacion
+                                filterProyectoId || filterDepositId
                                     ? 'Incompatible con filtro de obra o almacén (usa stock físico)'
                                     : undefined
                             }
