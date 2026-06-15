@@ -215,6 +215,20 @@ export default function ProcurasPage() {
     return m;
   }, [procuras]);
 
+  const filasSeleccionadas = useMemo(
+    () => procuras.filter((p) => selected.has(p.id)),
+    [procuras, selected],
+  );
+
+  const todasSolicitada =
+    filasSeleccionadas.length > 0 &&
+    filasSeleccionadas.every((p) => p.estado === 'solicitada');
+  const todasPendientePm =
+    filasSeleccionadas.length > 0 &&
+    filasSeleccionadas.every((p) => p.estado === 'pendiente_pm');
+  const seleccionMixta =
+    filasSeleccionadas.length > 0 && !todasSolicitada && !todasPendientePm;
+
   const procesarLote = async (estadoOverride?: EstadoProcura) => {
     if (!someSelected) return;
     const estadoEfectivo = estadoOverride ?? nuevoEstado;
@@ -250,6 +264,7 @@ export default function ProcurasPage() {
         error?: string;
         hint?: string;
         errores?: string[];
+        pms_notificados?: number;
         ordenes?: Array<{ ticket?: string; compradoresNotificados?: number; error?: string }>;
       };
       if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
@@ -260,8 +275,13 @@ export default function ProcurasPage() {
             `Solicitantes avisados por Telegram: ${json.solicitantes_notificados ?? 0}.` +
             (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
         );
+      } else if (estadoEfectivo === 'pendiente_pm') {
+        setMsgOk(
+          `Enviadas ${json.count ?? selected.size} procura(s) al PM. ` +
+            `PMs avisados por Telegram: ${json.pms_notificados ?? 0}.` +
+            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
+        );
       } else if (
-        estadoEfectivo === 'en_compra' ||
         estadoEfectivo === 'aprobada' ||
         estadoEfectivo === 'aprobada_directa'
       ) {
@@ -273,7 +293,19 @@ export default function ProcurasPage() {
           );
         setMsgOk(
           `Procesadas ${json.count ?? selected.size} procura(s). ` +
-            `Órdenes de compra / aviso a compradores: ${compradores}.` +
+            `Aviso al comprador (pendiente factura): ${compradores}.` +
+            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
+        );
+      } else if (estadoEfectivo === 'en_compra') {
+        const compradores =
+          json.compradores_notificados ??
+          (json.ordenes ?? []).reduce(
+            (acc, o) => acc + (o.compradoresNotificados ?? 0),
+            0,
+          );
+        setMsgOk(
+          `Procesadas ${json.count ?? selected.size} procura(s). ` +
+            `Compradores notificados: ${compradores}.` +
             (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
         );
       } else {
@@ -292,12 +324,65 @@ export default function ProcurasPage() {
     }
   };
 
+  const informarViabilidadAdmin = (viabilidad: 'si' | 'no') => {
+    setNuevoEstado('pendiente_pm');
+    void procesarLoteConViabilidad(viabilidad);
+  };
+
+  const procesarLoteConViabilidad = async (viabilidad: 'si' | 'no') => {
+    if (!someSelected) return;
+    setProcesando(true);
+    setError(null);
+    setMsgOk(null);
+    try {
+      const res = await fetch('/api/procuras/procesar-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: Array.from(selected),
+          nuevoEstado: 'pendiente_pm',
+          viabilidadPresupuestaria: viabilidad,
+          motivo: motivoLote.trim() || null,
+        }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        count?: number;
+        pms_notificados?: number;
+        errores?: string[];
+        error?: string;
+        hint?: string;
+      };
+      if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
+      setMsgOk(
+        `Enviadas ${json.count ?? selected.size} procura(s) al PM. ` +
+          `PMs avisados: ${json.pms_notificados ?? 0}.` +
+          (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
+      );
+      setMotivoLote('');
+      setSelected(new Set());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al informar viabilidad');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const aprobarComoPm = () => {
+    if (!todasPendientePm) {
+      setError('Solo puede aprobar procuras en estado «Pendiente PM».');
+      return;
+    }
     setNuevoEstado('aprobada');
     void procesarLote('aprobada');
   };
 
   const rechazarComoPm = () => {
+    if (!todasPendientePm) {
+      setError('Solo puede rechazar procuras en estado «Pendiente PM».');
+      return;
+    }
     const motivo = motivoLote.trim();
     if (motivo.length < MIN_MOTIVO_RECHAZO_PROCURA) {
       setError(
@@ -788,53 +873,109 @@ export default function ProcurasPage() {
 
         {someSelected ? (
           <div style={{ ...cardStyle, borderColor: 'rgba(255,59,48,0.35)' }}>
-            <p style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>
-              Project Manager — {selected.size} seleccionada(s)
-            </p>
-            <p
-              style={{
-                color: 'rgba(255,255,255,0.45)',
-                fontSize: '11px',
-                lineHeight: 1.45,
-                marginBottom: '12px',
-              }}
-            >
-              <b>Aprobar</b> verifica almacén y, si hace falta compra, envía orden al comprador por
-              Telegram. <b>Rechazar</b> exige motivo y avisa al solicitante.
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
-              <button
-                type="button"
-                onClick={() => void aprobarComoPm()}
-                disabled={procesando || eliminando}
-                style={{
-                  ...btnPrimary,
-                  background: '#34C759',
-                  opacity: procesando ? 0.6 : 1,
-                }}
-              >
-                {procesando && nuevoEstado === 'aprobada' ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : null}
-                Aprobar (PM)
-              </button>
-              <button
-                type="button"
-                onClick={() => void rechazarComoPm()}
-                disabled={procesando || eliminando}
-                style={{
-                  ...btnPrimary,
-                  background: 'rgba(255,59,48,0.2)',
-                  border: '1px solid rgba(255,59,48,0.45)',
-                  opacity: procesando ? 0.6 : 1,
-                }}
-              >
-                {procesando && nuevoEstado === 'rechazada' ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : null}
-                Rechazar (PM)
-              </button>
-            </div>
+            {seleccionMixta ? (
+              <p style={{ color: '#FF9500', fontSize: '12px', marginBottom: '12px' }}>
+                Seleccione procuras del mismo paso: todas «Pendiente» (Admin) o todas «Pendiente PM».
+              </p>
+            ) : null}
+
+            {todasSolicitada ? (
+              <>
+                <p style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>
+                  Administrador — {selected.size} seleccionada(s)
+                </p>
+                <p
+                  style={{
+                    color: 'rgba(255,255,255,0.45)',
+                    fontSize: '11px',
+                    lineHeight: 1.45,
+                    marginBottom: '12px',
+                  }}
+                >
+                  Informe viabilidad presupuestaria. La procura pasa a <b>Pendiente PM</b> y se avisa al
+                  Project Manager por Telegram.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+                  <button
+                    type="button"
+                    onClick={() => informarViabilidadAdmin('si')}
+                    disabled={procesando || eliminando}
+                    style={{
+                      ...btnPrimary,
+                      background: '#34C759',
+                      opacity: procesando ? 0.6 : 1,
+                    }}
+                  >
+                    Hay disponibilidad (Admin)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => informarViabilidadAdmin('no')}
+                    disabled={procesando || eliminando}
+                    style={{
+                      ...btnPrimary,
+                      background: '#FF9500',
+                      opacity: procesando ? 0.6 : 1,
+                    }}
+                  >
+                    No hay disponibilidad (Admin)
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {todasPendientePm ? (
+              <>
+                <p style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>
+                  Project Manager — {selected.size} seleccionada(s)
+                </p>
+                <p
+                  style={{
+                    color: 'rgba(255,255,255,0.45)',
+                    fontSize: '11px',
+                    lineHeight: 1.45,
+                    marginBottom: '12px',
+                  }}
+                >
+                  <b>Aprobar</b> verifica almacén y avisa al comprador (queda <b>Aprobada</b> hasta que
+                  cargue la factura). <b>Rechazar</b> exige motivo y avisa al solicitante.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+                  <button
+                    type="button"
+                    onClick={() => void aprobarComoPm()}
+                    disabled={procesando || eliminando}
+                    style={{
+                      ...btnPrimary,
+                      background: '#34C759',
+                      opacity: procesando ? 0.6 : 1,
+                    }}
+                  >
+                    {procesando && nuevoEstado === 'aprobada' ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : null}
+                    Aprobar (PM)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void rechazarComoPm()}
+                    disabled={procesando || eliminando}
+                    style={{
+                      ...btnPrimary,
+                      background: 'rgba(255,59,48,0.2)',
+                      border: '1px solid rgba(255,59,48,0.45)',
+                      opacity: procesando ? 0.6 : 1,
+                    }}
+                  >
+                    {procesando && nuevoEstado === 'rechazada' ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : null}
+                    Rechazar (PM)
+                  </button>
+                </div>
+              </>
+            ) : null}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>

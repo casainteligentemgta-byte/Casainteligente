@@ -16,7 +16,7 @@ import {
 import { listarProjectManagersProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
 import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
-import { transicionEstadoProcuraValida } from '@/lib/procuras/procuraEstados';
+import { informarViabilidadAdminProcura } from '@/lib/procuras/informarViabilidadAdminProcura';
 
 export const CB_CMP_VIAB_SI = 'cmp:via:si:';
 export const CB_CMP_VIAB_NO = 'cmp:via:no:';
@@ -157,53 +157,22 @@ export async function manejarCallbackViabilidadAdminProcuraTelegram(
     return true;
   }
 
-  const row = await cargarFilaProcuraMensaje(supabase, parsed.procuraId);
-  if (!row) {
-    await answerCallbackQuery(params.callbackId, 'Procura no encontrada', true);
-    return true;
-  }
+  const resultado = await informarViabilidadAdminProcura(supabase, {
+    procuraId: parsed.procuraId,
+    viabilidad: parsed.viabilidad,
+    adminNombre: auth.usuario.nombre,
+    adminTelegramId: auth.usuario.telegram_id,
+  });
 
-  const estado = String(row.estado ?? '').toLowerCase();
-  if (estado !== 'solicitada') {
-    await answerCallbackQuery(
-      params.callbackId,
-      estado === 'pendiente_pm'
-        ? 'Ya se informó al Project Manager.'
-        : 'Esta procura ya fue resuelta.',
-      true,
-    );
-    return true;
-  }
-
-  if (!transicionEstadoProcuraValida('solicitada', 'pendiente_pm')) {
-    await answerCallbackQuery(params.callbackId, 'Transición no permitida', true);
-    return true;
-  }
-
-  const ahora = new Date().toISOString();
-  const { error: updErr } = await supabase
-    .from('ci_procuras')
-    .update({
-      estado: 'pendiente_pm',
-      viabilidad_presupuestaria: parsed.viabilidad,
-      viabilidad_informada_por: auth.usuario.nombre.slice(0, 150),
-      viabilidad_informada_telegram_id: auth.usuario.telegram_id,
-      viabilidad_informada_at: ahora,
-      updated_at: ahora,
-    } as never)
-    .eq('id', parsed.procuraId)
-    .eq('estado', 'solicitada');
-
-  if (updErr) {
-    await answerCallbackQuery(params.callbackId, 'No se pudo guardar', true);
+  if (!resultado.ok) {
+    await answerCallbackQuery(params.callbackId, resultado.error?.slice(0, 180) ?? 'Error', true);
     return true;
   }
 
   const label = parsed.viabilidad === 'si' ? 'Hay disponibilidad' : 'No hay disponibilidad';
   await answerCallbackQuery(params.callbackId, `${label} — avisando al PM`);
 
-  const alerta = await enviarAlertaPmTrasViabilidadAdmin(supabase, parsed.procuraId);
-  if (!alerta.enviados) {
+  if (!resultado.pmsNotificados) {
     await sendTelegramMessage(
       params.chatId,
       '⚠️ Viabilidad registrada, pero no hay PM con Telegram activo para notificar.',

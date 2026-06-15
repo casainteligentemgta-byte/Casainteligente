@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
 
 export type ResultadoVinculoProcuraCompra = {
   ok: boolean;
@@ -59,10 +60,32 @@ export async function vincularProcuraCompraContabilidad(
     return { ok: true, vinculado: false };
   }
 
+  const procuraId = String(row.procura_id);
+  const { data: proc } = await supabase
+    .from('ci_procuras')
+    .select('estado')
+    .eq('id', procuraId)
+    .maybeSingle();
+
+  const est = parseEstadoProcura(proc?.estado);
+  if (est && (est === 'aprobada' || est === 'aprobada_directa' || est === 'recibida_parcial')) {
+    const { error: estErr } = await supabase.rpc(
+      'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
+      {
+        p_ids: [procuraId],
+        p_nuevo_estado: 'en_compra',
+        p_motivo: 'Factura de compra registrada por el comprador',
+      } as never,
+    );
+    if (estErr) {
+      console.warn('[vincularProcuraCompra] en_compra:', estErr.message);
+    }
+  }
+
   return {
     ok: true,
     vinculado: true,
-    procuraId: String(row.procura_id),
+    procuraId,
     ticket: row.ticket,
     desviacionUsd:
       row.desviacion_usd != null && Number.isFinite(Number(row.desviacion_usd))

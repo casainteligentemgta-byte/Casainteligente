@@ -407,7 +407,7 @@ export async function procesarAbastecimientoProcuraAprobada(
   if (!procura) return { ok: false, error: 'Procura no encontrada.' };
 
   const estado = String(procura.estado ?? '').toLowerCase();
-  if (estado === 'solicitada' || estado === 'pendiente_pm') {
+  if (estado === 'pendiente_pm') {
     await transicionProcura(
       supabase,
       procuraId,
@@ -415,6 +415,11 @@ export async function procesarAbastecimientoProcuraAprobada(
       `Aprobada por ${params.autorNombre} — verificación de almacén`,
     );
     procura = (await cargarProcuraAbastecimiento(supabase, procuraId)) ?? procura;
+  } else if (estado === 'solicitada') {
+    return {
+      ok: false,
+      error: 'La procura espera validación del Administrador (viabilidad presupuestaria).',
+    };
   }
 
   const evaluacion = await evaluarAbastecimientoProcura(supabase, procura);
@@ -499,7 +504,7 @@ export async function confirmarAbastecimientoProcura(
       return { ok: false, error: oc.error ?? 'No se pudo emitir orden de compra.' };
     }
     compraEmitida = true;
-    estadoFinal = 'en_compra';
+    estadoFinal = parcial ? 'recibida_parcial' : 'aprobada';
   }
 
   return {
@@ -529,7 +534,7 @@ export function etiquetaResultadoAbastecimiento(r: ResultadoAbastecimientoProcur
   }
   const partes: string[] = [];
   if (r.despachoCodigo) partes.push(`Despacho ${r.despachoCodigo}`);
-  if (r.compraEmitida) partes.push('Orden de compra emitida');
+  if (r.compraEmitida) partes.push('Orden enviada al comprador (pendiente factura)');
   if (r.estado) partes.push(etiquetaEstadoProcura(r.estado));
   return partes.join(' · ') || 'Abastecimiento procesado';
 }

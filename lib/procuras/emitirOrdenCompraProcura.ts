@@ -153,7 +153,7 @@ export type EmitirOrdenCompraProcuraResult = {
   error?: string;
 };
 
-/** PM / vía rápida: pasa la procura a en_compra y avisa a compradores. */
+/** PM / vía rápida: avisa a compradores. El estado «Comprada» (en_compra) queda al registrar factura. */
 export async function emitirOrdenCompraProcura(
   supabase: SupabaseClient,
   params: {
@@ -205,26 +205,11 @@ export async function emitirOrdenCompraProcura(
     params.motivo?.trim() ||
     `Orden de compra emitida por ${params.autorNombre}`.slice(0, 500);
 
-  const { data, error } = await supabase.rpc(
-    'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
-    {
-      p_ids: [procuraId],
-      p_nuevo_estado: 'en_compra',
-      p_motivo: motivoOrden,
-    } as never,
-  );
-
-  if (error) {
-    return { ok: false, error: error.message };
-  }
-
-  procura = (await cargarProcuraOrdenCompra(supabase, procuraId)) ?? procura;
-
-  const filas = (data ?? []) as Array<{
-    ticket: string;
-    nuevo_est: string;
-    telegram_id: string | null;
-  }>;
+  const notify = await notificarCompradoresOrdenCompra(supabase, procura, {
+    autorNombre: params.autorNombre,
+    motivo: motivoOrden,
+    cantidadCompra: params.cantidadCompra,
+  });
 
   if (procura.solicitante_telegram_chat_id) {
     await notificarProcurasTelegram(
@@ -232,34 +217,18 @@ export async function emitirOrdenCompraProcura(
         {
           ticket: procura.ticket,
           material_txt: procura.material_txt,
-          nuevo_est: 'en_compra',
+          nuevo_est: estadoActual,
           telegram_id: String(procura.solicitante_telegram_chat_id),
         },
       ],
-      motivoOrden,
-    );
-  } else if (filas[0]?.telegram_id) {
-    await notificarProcurasTelegram(
-      filas.map((f) => ({
-        ticket: f.ticket,
-        material_txt: procura!.material_txt,
-        nuevo_est: f.nuevo_est,
-        telegram_id: f.telegram_id,
-      })),
-      motivoOrden,
+      `Orden de compra enviada al comprador. Estado: ${etiquetaEstadoProcura(estadoActual)}.`,
     );
   }
 
-  const notify = await notificarCompradoresOrdenCompra(supabase, procura, {
-    autorNombre: params.autorNombre,
-    motivo: motivoOrden,
-    cantidadCompra: params.cantidadCompra,
-  });
-
   return {
     ok: true,
-    ticket: filas[0]?.ticket ?? procura.ticket,
-    estado: 'en_compra',
+    ticket: procura.ticket,
+    estado: estadoActual,
     compradoresNotificados: notify.enviados,
   };
 }

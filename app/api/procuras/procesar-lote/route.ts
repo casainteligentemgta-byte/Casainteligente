@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
+import { informarViabilidadAdminProcura } from '@/lib/procuras/informarViabilidadAdminProcura';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
 import {
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       nuevoEstado?: string;
       motivo?: string | null;
       notificar_telegram?: boolean;
+      viabilidadPresupuestaria?: 'si' | 'no';
     };
 
     const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).trim()).filter(Boolean) : [];
@@ -71,7 +73,70 @@ export async function POST(request: Request) {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
+    if (nuevoEstado === 'pendiente_pm') {
+      const viabilidad = body.viabilidadPresupuestaria;
+      if (viabilidad !== 'si' && viabilidad !== 'no') {
+        return NextResponse.json(
+          { error: 'Indique viabilidadPresupuestaria: «si» o «no».' },
+          { status: 400 },
+        );
+      }
+
+      const resultados: Array<{ ticket?: string; pmsNotificados?: number; error?: string }> = [];
+      for (const id of ids) {
+        const r = await informarViabilidadAdminProcura(admin.client, {
+          procuraId: id,
+          viabilidad,
+          adminNombre: actorNombre,
+        });
+        resultados.push(
+          r.ok
+            ? { ticket: r.ticket, pmsNotificados: r.pmsNotificados }
+            : { error: r.error },
+        );
+      }
+
+      const okCount = resultados.filter((r) => !r.error).length;
+      const pms = resultados.reduce((acc, r) => acc + (r.pmsNotificados ?? 0), 0);
+      const errores = resultados.map((r) => r.error).filter(Boolean);
+      if (!okCount) {
+        return NextResponse.json(
+          { error: errores[0] ?? 'No se pudo informar viabilidad.' },
+          { status: 400 },
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        count: okCount,
+        estado: 'pendiente_pm',
+        pms_notificados: pms,
+        errores: errores.length ? errores : undefined,
+      });
+    }
+
     if (nuevoEstado === 'aprobada') {
+      for (const id of ids) {
+        const { data: row } = await admin.client
+          .from('ci_procuras')
+          .select('estado,ticket')
+          .eq('id', id)
+          .maybeSingle();
+        const procRow = row as { estado?: string; ticket?: string } | null;
+        const est = String(procRow?.estado ?? '').toLowerCase();
+        if (est !== 'pendiente_pm') {
+          return NextResponse.json(
+            {
+              error:
+                est === 'solicitada'
+                  ? `La procura ${procRow?.ticket ?? id} espera viabilidad del Administrador.`
+                  : `La procura ${procRow?.ticket ?? id} no está pendiente de PM.`,
+            },
+            { status: 400 },
+          );
+        }
+      }
+
       const ordenes: Array<{
         ticket?: string;
         estado?: string;
@@ -142,7 +207,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         count: okCount,
-        estado: 'en_compra',
+        estado: 'aprobada_directa',
         compradores_notificados: compradores,
         errores: errores.length ? errores : undefined,
       });
