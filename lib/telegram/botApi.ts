@@ -108,11 +108,15 @@ export async function answerCallbackQuery(
   text?: string,
   showAlert = false,
 ): Promise<void> {
-  await telegramApi('answerCallbackQuery', {
-    callback_query_id: callbackQueryId,
-    ...(text ? { text: text.slice(0, 200) } : {}),
-    show_alert: showAlert,
-  });
+  try {
+    await telegramApi('answerCallbackQuery', {
+      callback_query_id: callbackQueryId,
+      ...(text ? { text: text.slice(0, 200) } : {}),
+      show_alert: showAlert,
+    });
+  } catch (e) {
+    console.warn('[telegram] answerCallbackQuery:', callbackQueryId, e);
+  }
 }
 
 /** Alias en español (mismo comportamiento que sendTelegramMessage). */
