@@ -56,7 +56,7 @@ export function mensajeVacioCuadroAlmacen(opts: {
       return {
         titulo: 'Sin ubicaciones para este almacén',
         subtitulo:
-          'No hay sitios de inventario (inv_ubicaciones) vinculados a ese depósito. Revise maestros o elija una obra.',
+          'No hay inv_ubicaciones vinculadas; se filtra por depósito asignado en catálogo. Revise maestros para stock físico.',
       };
     }
     return {
@@ -126,6 +126,41 @@ export function materialCoincideCatalogoEntidad(
   const pref = opts.sapPrefijoEntidad?.trim().toUpperCase();
   const sap = item.sap_code?.trim().toUpperCase();
   if (pref && sap && (sap.startsWith(`${pref}-`) || sap.startsWith(pref))) return true;
+  return false;
+}
+
+/** Stock físico o asignación de catálogo en el depósito filtrado. */
+export function materialPasaFiltroDeposito(
+  item: { deposit_id?: string | null },
+  stockUb: { deposit_ids?: string[]; cantidad_disponible?: number } | undefined,
+  opts: {
+    filterDepositId?: string;
+    filtroStockPorUbicacion: boolean;
+    filtroSinUbicaciones: boolean;
+    cargandoStockUbicacion: boolean;
+  },
+): boolean {
+  const depId = opts.filterDepositId?.trim();
+  if (!depId) return true;
+
+  const stockEnDeposito = Number(stockUb?.cantidad_disponible ?? 0);
+  const catalogDep = String(item.deposit_id ?? '').trim();
+  const depositIdsFisicos = stockUb?.deposit_ids ?? [];
+
+  if (stockEnDeposito > 0) return true;
+  if (catalogDep === depId) return true;
+  if (depositIdsFisicos.includes(depId)) return true;
+
+  if (opts.filtroSinUbicaciones && opts.filtroStockPorUbicacion) {
+    return catalogDep === depId;
+  }
+
+  if (!opts.filtroStockPorUbicacion) {
+    return catalogDep === depId;
+  }
+
+  if (opts.cargandoStockUbicacion && catalogDep === depId) return true;
+
   return false;
 }
 

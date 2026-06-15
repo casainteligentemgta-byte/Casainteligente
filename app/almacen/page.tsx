@@ -82,6 +82,7 @@ import {
     guardarInventarioCuadroFiltros,
     leerInventarioCuadroFiltrosGuardados,
     materialCoincideCatalogoEntidad,
+    materialPasaFiltroDeposito,
     mensajeVacioCuadroAlmacen,
 } from '@/lib/almacen/inventarioCuadroFiltros';
 import { obtenerCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
@@ -142,6 +143,7 @@ function materialPasaFiltroEntidad(
     opts: {
         filterEntidadId?: string;
         filterProyectoId?: string;
+        filterDepositId?: string;
         proyectoIdsEntidad?: Set<string>;
         sapPrefijoEntidad?: string | null;
         stockEnFiltro: number;
@@ -165,6 +167,11 @@ function materialPasaFiltroEntidad(
     });
 
     if (!opts.filterProyectoId) {
+        if (opts.filterDepositId) {
+            if (catalogMatch && opts.stockEnFiltro > 0) return true;
+            if (catalogMatch && item.deposit_id === opts.filterDepositId) return true;
+            return false;
+        }
         if (catalogMatch) return true;
         if (opts.filtroSoloEntidad && opts.stockEnFiltro > 0) return true;
         return false;
@@ -609,11 +616,12 @@ export default function InventoryMasterPage() {
     }, [depositsLista, filterEntidadId, filterProyectoId, depositIdsScope]);
 
     useEffect(() => {
-        if (!filterDepositId || !depositsFiltrados.length) return;
+        if (!filterDepositId) return;
         if (!depositsFiltrados.some((d) => d.id === filterDepositId)) {
+            if (depositsLista.some((d) => d.id === filterDepositId)) return;
             setFilterDepositId('');
         }
-    }, [filterDepositId, depositsFiltrados]);
+    }, [filterDepositId, depositsFiltrados, depositsLista]);
 
     useEffect(() => {
         if (!filterProyectoId || filterEntidadId) return;
@@ -1103,12 +1111,15 @@ export default function InventoryMasterPage() {
                     sapPrefijoEntidad: sapPrefijoEntidadFiltro,
                 });
             if (filtroStockEntidadActivo && cargandoStockUbicacion && kpiVista !== 'cuarentena') {
-                if (!(filtroSoloEntidad && catalogEntidad)) return false;
+                const catalogDepOk =
+                    filterDepositId && item.deposit_id === filterDepositId;
+                if (!(filtroSoloEntidad && catalogEntidad) && !catalogDepOk) return false;
             }
             if (
                 !materialPasaFiltroEntidad(item, {
                     filterEntidadId,
                     filterProyectoId,
+                    filterDepositId,
                     proyectoIdsEntidad,
                     sapPrefijoEntidad: sapPrefijoEntidadFiltro,
                     stockEnFiltro,
@@ -1116,6 +1127,16 @@ export default function InventoryMasterPage() {
                     filtroSoloEntidad,
                     materialIdsCuarentenaObra:
                         kpiVista === 'cuarentena' ? materialIdsCuarentenaObra : undefined,
+                })
+            ) {
+                return false;
+            }
+            if (
+                !materialPasaFiltroDeposito(item, stockUb, {
+                    filterDepositId,
+                    filtroStockPorUbicacion,
+                    filtroSinUbicaciones,
+                    cargandoStockUbicacion,
                 })
             ) {
                 return false;
@@ -1140,6 +1161,12 @@ export default function InventoryMasterPage() {
                 if (stockDatosListos && qty <= 0) {
                     if (filtroSoloEntidad && catalogEntidad) {
                         /* Catálogo de la entidad aunque aún no tenga stock */
+                    } else if (
+                        filterDepositId &&
+                        (item.deposit_id === filterDepositId ||
+                            stockUb?.deposit_ids?.includes(filterDepositId))
+                    ) {
+                        /* Asignado al depósito filtrado */
                     } else {
                         return false;
                     }
@@ -1164,6 +1191,7 @@ export default function InventoryMasterPage() {
         filtroStockEntidadActivo,
         sapPrefijoEntidadFiltro,
         proyectoIdsEntidad,
+        filtroSinUbicaciones,
         stockPorUbicacion,
         stockGlobalCargado,
         cargandoStockUbicacion,
@@ -2154,9 +2182,25 @@ export default function InventoryMasterPage() {
                                 Filtrar visualización
                             </span>
                         </div>
+                        {filterDepositId ? (
+                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wide">
+                                Almacén:{' '}
+                                {depositsById.get(filterDepositId)?.locality
+                                    ? `${depositsById.get(filterDepositId)!.name} (${depositsById.get(filterDepositId)!.locality})`
+                                    : depositsById.get(filterDepositId)?.name ?? 'Seleccionado'}
+                                {' · '}
+                                <button
+                                    type="button"
+                                    onClick={() => setFilterDepositId('')}
+                                    className="underline hover:text-emerald-200"
+                                >
+                                    quitar
+                                </button>
+                            </span>
+                        ) : null}
                         <span className="text-[10px] font-bold text-zinc-500 hidden xl:inline">
                             Mostrando {filteredItems.length} de {itemsCatalogo.length} ítems
-                            {cargandoStockUbicacion && filtroStockPorUbicacion
+                            {cargandoStockUbicacion && filtroStockEntidadActivo
                                 ? ' · actualizando stock…'
                                 : ' · stock editable con Enter'}
                         </span>
