@@ -631,8 +631,7 @@ export async function manejarComandoProcuraDepartamentoTelegram(
 
   await sendTelegramMessage(
     chatId,
-    `📦 <b>Nueva procura</b>\n\nHola <b>${escHtml(auth.usuario.nombre)}</b>.\n\n` +
-      `1️⃣ Elige el <b>capítulo</b> de obra:`,
+    `📦 <b>Nueva procura</b>\n\n1️⃣ Elige el <b>capítulo</b> de obra:`,
     {
       parse_mode: 'HTML',
       reply_markup: tecladoCapitulosMaestro(capitulos, CB_CAP),

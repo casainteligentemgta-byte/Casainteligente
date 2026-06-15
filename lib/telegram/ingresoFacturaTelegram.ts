@@ -9,6 +9,11 @@ import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import { ingresoAlmacenDesdePendienteCanal } from '@/lib/contabilidad/ingresoAlmacenDesdePendienteCanal';
 import { resolverMaterialIdLineasCompra } from '@/lib/almacen/resolverMaterialIdPorSku';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
+import {
+  responderHintCamaraTelegram,
+  tecladoSoporteFotosTelegram,
+  TEXTO_AYUDA_CAMARA_TELEGRAM,
+} from '@/lib/telegram/tecladoSoporteFotoTelegram';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 
@@ -153,11 +158,13 @@ export function parseCallbackIngresoFactura(data: string):
   | { type: 'page_fact'; page: number }
   | { type: 'foto_skip' }
   | { type: 'foto_done' }
+  | { type: 'foto_camera' }
   | { type: 'conf_ok' }
   | { type: 'volver_prov' }
   | null {
   if (data === `${PREFIX}foto:skip`) return { type: 'foto_skip' };
   if (data === `${PREFIX}foto:done`) return { type: 'foto_done' };
+  if (data === `${PREFIX}foto:camera`) return { type: 'foto_camera' };
   if (data === `${PREFIX}conf:ok`) return { type: 'conf_ok' };
   if (data === `${PREFIX}back:prov`) return { type: 'volver_prov' };
   if (data.startsWith(PREFIX_PROV)) {
@@ -498,17 +505,11 @@ async function preguntarFotos(supabase: SupabaseClient, chatId: string): Promise
     chatId,
     '📷 <b>Soporte fotográfico</b>\n\n' +
       'Envía una o varias fotos del material o comprobante.\n' +
+      `${TEXTO_AYUDA_CAMARA_TELEGRAM}\n\n` +
       'Cuando termines, pulsa <b>Listo con fotos</b> o <b>Omitir fotos</b>.',
     {
       parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Listo con fotos', callback_data: `${PREFIX}foto:done` },
-            { text: '⏭ Omitir fotos', callback_data: `${PREFIX}foto:skip` },
-          ],
-        ],
-      },
+      reply_markup: tecladoSoporteFotosTelegram(PREFIX),
     },
   );
 }
@@ -673,6 +674,11 @@ export async function manejarCallbackIngresoFacturaTelegram(
     return true;
   }
 
+  if (parsed.type === 'foto_camera') {
+    await responderHintCamaraTelegram(params.callbackId);
+    return true;
+  }
+
   const estado = await getTelegramEstado(supabase, params.chatId);
   if (!esFlujoIngresoFactura(estado)) {
     await answerCallbackQuery(params.callbackId);
@@ -827,14 +833,7 @@ export async function manejarFotoIngresoFactura(params: {
     `✅ Foto ${fotos.length} guardada.\n\nPuedes enviar más fotos o pulsar <b>Listo con fotos</b>.`,
     {
       parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Listo con fotos', callback_data: `${PREFIX}foto:done` },
-            { text: '⏭ Omitir fotos', callback_data: `${PREFIX}foto:skip` },
-          ],
-        ],
-      },
+      reply_markup: tecladoSoporteFotosTelegram(PREFIX),
     },
   );
   return true;

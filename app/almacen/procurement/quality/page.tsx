@@ -262,8 +262,7 @@ export default function QualityDashboard() {
                     <Info className="text-blue-500 shrink-0" size={24} />
                             <p className="text-blue-200/80 font-bold text-sm leading-relaxed">
                         Agrupe por factura y use <span className="text-blue-400 font-black">Liberar factura completa</span> cuando
-                        la mercancía coincida con el documento. También puede liberar línea por línea o con{' '}
-                        <span className="text-blue-400 font-black">/liberar</span> en Telegram.
+                        la mercancía coincida con el documento. También puede liberar línea por línea desde esta pantalla.
                     </p>
                 </div>
 

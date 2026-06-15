@@ -22,11 +22,11 @@ export default function ContabilidadPage() {
 
     const modules: ModuloContabilidad[] = [
         {
-            title: 'Gastos entidad',
-            description: 'OpEx del patrono por tipo y periodo',
-            icon: '🏢',
-            href: '/contabilidad/gastos-entidad',
-            color: '#AF52DE',
+            title: 'Procuras',
+            description: 'Gestión de abastecimiento y pedidos',
+            icon: '📦',
+            href: '/contabilidad/procuras',
+            color: '#FF3B30',
             active: true,
         },
         {
@@ -38,11 +38,11 @@ export default function ContabilidadPage() {
             active: true,
         },
         {
-            title: 'Procuras',
-            description: 'Gestión de abastecimiento y pedidos',
-            icon: '📦',
-            href: '/contabilidad/procuras',
-            color: '#FF3B30',
+            title: 'Gastos entidad',
+            description: 'OpEx del patrono por tipo y periodo',
+            icon: '🏢',
+            href: '/contabilidad/gastos-entidad',
+            color: '#AF52DE',
             active: true,
         },
         {

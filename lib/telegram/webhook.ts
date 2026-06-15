@@ -79,7 +79,6 @@ import {
   manejarComandoIngresoManualTelegram,
   manejarComandoNotaEntregaTelegram,
   manejarComandoEmergenciaTelegram,
-  manejarComandoRecepcionTelegram,
   manejarFotoIngresoManual,
   manejarTextoIngresoManual,
 } from '@/lib/telegram/ingresoManualTelegram';
@@ -105,7 +104,6 @@ import {
 import {
   esCallbackLiberarCuarentena,
   manejarCallbackLiberarCuarentenaTelegram,
-  manejarComandoLiberarCuarentenaTelegram,
 } from '@/lib/telegram/liberarCuarentenaPicker';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
 import {
@@ -315,11 +313,6 @@ async function aplicarComando(
     return;
   }
 
-  if (cmd.comandoRecepcion) {
-    await manejarComandoRecepcionTelegram(supabase, chatId);
-    return;
-  }
-
   if (cmd.comandoIngresoManual) {
     await manejarComandoIngresoManualTelegram(supabase, chatId);
     return;
@@ -352,11 +345,6 @@ async function aplicarComando(
       console.error('[telegram compras obra]', err);
       await avisoErrorTelegram(chatId, err);
     }
-    return;
-  }
-
-  if (cmd.comandoLiberarCuarentena) {
-    await manejarComandoLiberarCuarentenaTelegram(supabase, chatId);
     return;
   }
 
@@ -1100,7 +1088,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       if (texto.startsWith('/')) {
         await sendTelegramMessage(
           chatId,
-          '❌ Comando no reconocido.\n<code>/ingresosinnota</code> · <code>/salida</code> · <code>/agua</code>\n<code>/ayuda</code>',
+          '❌ Comando no reconocido.\n<code>/ingreso</code> · <code>/salida</code> · <code>/agua</code>\n<code>/ayuda</code>',
           { parse_mode: 'HTML' },
         );
         return NextResponse.json({ ok: true, unknown_command: true });

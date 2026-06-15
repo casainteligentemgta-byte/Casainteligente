@@ -74,7 +74,7 @@ export async function notificarNuevaCuarentenaTelegram(
     `Proveedor: ${escapeHtml(params.supplierName)}\n` +
     `${params.lineCount} línea(s) pendientes de inspección\n` +
     (lineasExtra ? `${lineasExtra}\n` : '') +
-    `\n<a href="${url}">Abrir cuarentena</a> · /liberar en el bot`;
+    `\n<a href="${url}">Abrir cuarentena</a>`;
 
   let enviados = 0;
   for (const chatId of chatIds) {

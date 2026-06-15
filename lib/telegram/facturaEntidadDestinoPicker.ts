@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   CLASIFICACIONES_GASTO_ENTIDAD,
+  ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD,
+  ETIQUETAS_GASTO_ENTIDAD_TELEGRAM,
   parseClasificacionGastoEntidad,
   type ClasificacionGastoEntidad,
 } from '@/lib/contabilidad/clasificacionGastoEntidad';
@@ -18,12 +20,7 @@ export const FLUJO_FACTURA_ENTIDAD = 'factura_compra_entidad';
 
 const PREFIX = 'fe:';
 const PICKER_SIZE = 8;
-
-const ETIQUETAS_GASTO_TELEGRAM: Record<ClasificacionGastoEntidad, string> = {
-  operacional: 'Gasto operativo',
-  administrativo: 'Gasto administrativo',
-  servicio: 'Gastos servicios',
-};
+const CB_GASTO_SIN = `${PREFIX}g:sin`;
 
 type EntidadOption = { id: string; nombre: string };
 
@@ -180,10 +177,13 @@ async function enviarPickerDestinoFacturaTelegram(
   }
 
   const buttons: Array<Array<{ text: string; callback_data: string }>> = [
-    CLASIFICACIONES_GASTO_ENTIDAD.map((c) => ({
-      text: truncar(ETIQUETAS_GASTO_TELEGRAM[c], 28),
-      callback_data: `${PREFIX}g:${c}`,
-    })),
+    ...CLASIFICACIONES_GASTO_ENTIDAD.map((c) => [
+      {
+        text: truncar(ETIQUETAS_GASTO_ENTIDAD_TELEGRAM[c], 40),
+        callback_data: `${PREFIX}g:${c}`,
+      },
+    ]),
+    [{ text: truncar(ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD, 40), callback_data: CB_GASTO_SIN }],
   ];
 
   if (proyectos.length) {
@@ -211,12 +211,13 @@ async function enviarPickerDestinoFacturaTelegram(
 
   const hintObras = proyectos.length
     ? `\n\n<i>O elija una obra de la entidad (${proyectos.length})</i>`
-    : '\n\n<i>Esta entidad no tiene obras; use un tipo de gasto OpEx.</i>';
+    : '\n\n<i>Esta entidad no tiene obras; elija un tipo de gasto OpEx.</i>';
 
   await sendTelegramMessage(
     chatId,
     `🏢 Entidad: <b>${escHtml(entidadNombre)}</b>\n\n` +
-      `¿Imputamos a <b>gasto de entidad</b> (OpEx) o a una <b>obra</b>?` +
+      `¿Imputamos a <b>gasto de entidad</b> (OpEx) o a una <b>obra</b>?\n\n` +
+      `<b>Tipos OpEx:</b> operativo · administrativo · servicios · sin clasificar` +
       hintObras,
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
@@ -228,9 +229,11 @@ async function confirmarGastoEntidadFacturaTelegram(
   pendingId: string,
   entidadId: string,
   entidadNombre: string,
-  clasificacion: ClasificacionGastoEntidad,
+  clasificacion: ClasificacionGastoEntidad | null,
 ): Promise<void> {
-  const label = ETIQUETAS_GASTO_TELEGRAM[clasificacion];
+  const label = clasificacion
+    ? ETIQUETAS_GASTO_ENTIDAD_TELEGRAM[clasificacion]
+    : ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD;
 
   await supabase
     .from('ci_facturas_canal_pendientes')
@@ -357,6 +360,23 @@ export async function manejarCallbackFacturaEntidadDestinoTelegram(
   }
 
   if (params.data.startsWith(`${PREFIX}g:`)) {
+    if (params.data === CB_GASTO_SIN) {
+      if (!m.entidad_id || !m.entidad_nombre) {
+        await answerCallbackQuery(params.callbackId, 'Seleccione entidad primero', true);
+        return true;
+      }
+      await answerCallbackQuery(params.callbackId, ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD);
+      await confirmarGastoEntidadFacturaTelegram(
+        supabase,
+        params.chatId,
+        pendingId,
+        m.entidad_id,
+        m.entidad_nombre,
+        null,
+      );
+      return true;
+    }
+
     const clasificacion = parseClasificacionGastoEntidad(params.data.slice(`${PREFIX}g:`.length));
     if (!clasificacion) return false;
     if (!m.entidad_id || !m.entidad_nombre) {
@@ -364,7 +384,7 @@ export async function manejarCallbackFacturaEntidadDestinoTelegram(
       return true;
     }
 
-    await answerCallbackQuery(params.callbackId, ETIQUETAS_GASTO_TELEGRAM[clasificacion]);
+    await answerCallbackQuery(params.callbackId, ETIQUETAS_GASTO_ENTIDAD_TELEGRAM[clasificacion]);
     await confirmarGastoEntidadFacturaTelegram(
       supabase,
       params.chatId,

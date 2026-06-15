@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   CLASIFICACIONES_GASTO_ENTIDAD,
+  ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD,
   etiquetaClasificacionGastoEntidad,
   type ClasificacionGastoEntidad,
 } from '@/lib/contabilidad/clasificacionGastoEntidad';
@@ -70,7 +71,7 @@ export default function ClasificacionGastoEntidadSelect({
           onChange={(e) => void guardar(e.target.value)}
           title="Clasificación del gasto de entidad"
         >
-          <option value="">Sin clasificar</option>
+          <option value="">{ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD}</option>
           {CLASIFICACIONES_GASTO_ENTIDAD.map((c) => (
             <option key={c} value={c}>
               {etiquetaClasificacionGastoEntidad(c)}

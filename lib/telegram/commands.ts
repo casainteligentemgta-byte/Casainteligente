@@ -33,14 +33,10 @@ export type ComandoTelegramResult = {
   comandoNotaEntrega?: boolean;
   /** Ingreso emergencia: mismo flujo, tipo emergencia en recepción de campo. */
   comandoEmergencia?: boolean;
-  /** Pantalla /almacen/recepcion (borrador Telegram ↔ web). */
-  comandoRecepcion?: boolean;
   /** Despacho desde almacén: obra → almacén → observaciones → stock → cantidades. */
   comandoSalidaObra?: boolean;
   /** Lista materiales comprados en el día, semana o mes (app + Telegram). */
   comandoComprasPeriodo?: PeriodoComprasTelegram;
-  /** Lista material en cuarentena para liberar (depositario). */
-  comandoLiberarCuarentena?: boolean;
   /** Traspaso / préstamo entre ubicaciones de inventario. */
   comandoTraspaso?: boolean;
   /** Resumen compras + stock por obra: /compras &lt;nombre obra&gt; */
@@ -148,17 +144,8 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoEmergencia: true };
   }
 
-  if (
-    cmd === '/ingresosinnota' ||
-    cmd === '/sinnota' ||
-    cmd === '/ingresosinnotas' ||
-    cmd === '/ingresomanual'
-  ) {
+  if (cmd === '/sinnota' || cmd === '/ingresomanual') {
     return { handled: true, comandoIngresoManual: true };
-  }
-
-  if (cmd === '/recepcion' || cmd === '/recepcioncampo') {
-    return { handled: true, comandoRecepcion: true };
   }
 
   if (cmd === '/ingreso') {
@@ -182,10 +169,6 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
   if (cmd === '/compras') {
     const obra = parts.slice(1).join(' ').trim();
     return { handled: true, comandoComprasObra: obra };
-  }
-
-  if (cmd === '/liberar' || cmd === '/cuarentena') {
-    return { handled: true, comandoLiberarCuarentena: true };
   }
 
   if (cmd === '/salidaalmacen' || cmd === '/salidaobra' || cmd === '/despacho') {

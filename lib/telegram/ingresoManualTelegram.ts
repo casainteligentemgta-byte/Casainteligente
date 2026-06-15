@@ -38,6 +38,11 @@ import {
   type FormaIngresoRecepcion,
 } from '@/lib/almacen/formaIngresoRecepcion';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
+import {
+  responderHintCamaraTelegram,
+  tecladoSoporteFotosTelegram,
+  TEXTO_AYUDA_CAMARA_TELEGRAM,
+} from '@/lib/telegram/tecladoSoporteFotoTelegram';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto, upsertTelegramEstado } from '@/lib/telegram/estados';
 import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
@@ -1267,17 +1272,10 @@ async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): 
       : '📷 <b>Soporte fotográfico</b> (opcional)';
   await sendTelegramMessage(
     chatId,
-    `${tituloFoto}\n\nEnvía una o varias fotos del documento o del material recibido.`,
+    `${tituloFoto}\n\nEnvía una o varias fotos del documento o del material recibido.\n${TEXTO_AYUDA_CAMARA_TELEGRAM}`,
     {
       parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Listo con fotos', callback_data: `${PREFIX}foto:done` },
-            { text: '⏭ Omitir fotos', callback_data: `${PREFIX}foto:skip` },
-          ],
-        ],
-      },
+      reply_markup: tecladoSoporteFotosTelegram(PREFIX),
     },
   );
 }
@@ -1782,6 +1780,11 @@ export async function manejarCallbackIngresoManual(
   if (data === 'fotoln:skip' || data === 'fotoln:done') {
     await answerCallbackQuery(params.callbackId);
     await finalizarLineaDraft(supabase, params.chatId, await getTelegramEstado(supabase, params.chatId));
+    return true;
+  }
+
+  if (data === 'foto:camera') {
+    await responderHintCamaraTelegram(params.callbackId);
     return true;
   }
 
@@ -2298,14 +2301,7 @@ export async function manejarFotoIngresoManual(params: {
     `✅ Foto ${fotos.length} guardada.\n\nPuedes enviar más fotos o pulsar <b>Listo con fotos</b>.`,
     {
       parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Listo con fotos', callback_data: `${PREFIX}foto:done` },
-            { text: '⏭ Omitir fotos', callback_data: `${PREFIX}foto:skip` },
-          ],
-        ],
-      },
+      reply_markup: tecladoSoporteFotosTelegram(PREFIX),
     },
   );
   return true;
@@ -2313,12 +2309,7 @@ export async function manejarFotoIngresoManual(params: {
 
 export function esComandoIngresoManual(texto: string): boolean {
   const t = texto.trim().toLowerCase().split(/\s+/)[0]?.split('@')[0] ?? '';
-  return (
-    t === '/ingresomanual' ||
-    t === '/ingresosinnota' ||
-    t === '/ingresosinnotas' ||
-    t === '/sinnota'
-  );
+  return t === '/ingresomanual' || t === '/sinnota';
 }
 
 /** Comandos que inician el flujo nota de entrega → stock (depositario). */

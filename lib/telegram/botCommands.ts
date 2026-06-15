@@ -23,9 +23,6 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   ...TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO,
   // — Ingresos almacén —
   { command: 'ingreso', description: 'Menú ingreso: factura, nota, sin nota, precargadas' },
-  { command: 'recepcion', description: 'Recepción web sincronizada con Telegram' },
-  { command: 'ingresosinnota', description: 'Atajo: ingreso sin nota (obra → almacén → material)' },
-  { command: 'liberar', description: 'Depositario: tránsito → almacén (cuarentena)' },
   // — Salidas almacén —
   { command: 'salida', description: 'Menú salidas: obra, almacén o préstamo/traspaso' },
   { command: 'salidaalmacen', description: 'Atajo: despacho desde almacén de obra' },
@@ -71,10 +68,7 @@ export const MENSAJE_MENU_TELEGRAM =
   `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n` +
   `${lineasComprasMenuTelegram()}\n\n` +
   '<b>Ingresos almacén</b>\n' +
-  '• /ingreso — manual · automático · nota · sin nota · precargadas\n' +
-  '• /recepcion — pantalla web sincronizada\n' +
-  '• /ingresosinnota — atajo ingreso sin nota\n' +
-  '• /liberar — depositario: tránsito → almacén\n\n' +
+  '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
   '<b>Salidas</b>\n' +
   '• /salida — menú (obra · almacén · traspaso)\n' +
   '• /salidaalmacen · /traspaso — atajos\n\n' +
@@ -92,9 +86,9 @@ export const MENSAJE_AYUDA_TELEGRAM =
   '<b>Comandos Casa Inteligente</b>\n\n' +
   `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n` +
   '/procura /facturas /compras /comprasdia /comprassemana /comprasmes\n\n' +
-  '<b>Ingresos</b>: /ingreso /recepcion /ingresosinnota /liberar\n' +
+  '<b>Ingresos</b>: /ingreso\n' +
   '<b>Salidas</b>: /salida /salidaalmacen /traspaso\n' +
   '<b>Campo</b>: /obra /proyecto /gasto /bitacora /avance /memoria /agua\n' +
   '<b>Stock</b>: /stock · /stock rancho flamboyant · /stock cemento\n\n' +
-  '<b>Atajos</b> (sin menú): /nota /entrada /emergencia /ingresofactura /egreso /cuarentena\n\n' +
+  '<b>Atajos</b> (sin menú): /nota /entrada /emergencia /ingresofactura /egreso\n\n' +
   '/menu — menú · /estado — sesión · /cancelar — reiniciar';
