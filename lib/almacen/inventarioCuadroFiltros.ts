@@ -1,4 +1,5 @@
 import type { InventarioShareState } from '@/lib/almacen/inventarioExportShare';
+import type { InspeccionCuarentenaRow } from '@/lib/almacen/listarInspeccionesCuarentena';
 
 export const INVENTARIO_CUADRO_FILTROS_STORAGE_KEY = 'ci-inventario-cuadro-filtros-v1';
 
@@ -46,6 +47,7 @@ export function mensajeVacioCuadroAlmacen(opts: {
   filterProyectoId: boolean;
   filterEntidadId: boolean;
   hayFiltrosActivos: boolean;
+  kpiCuarentena?: boolean;
 }): MensajeVacioCuadroAlmacen | null {
   if (opts.cargandoStockUbicacion) return null;
 
@@ -80,6 +82,14 @@ export function mensajeVacioCuadroAlmacen(opts: {
     };
   }
 
+  if (opts.hayFiltrosActivos && opts.kpiCuarentena) {
+    return {
+      titulo: 'Sin inspecciones en cuarentena',
+      subtitulo:
+        'No hay mercancía pendiente de liberación para la entidad u obra seleccionada.',
+    };
+  }
+
   if (opts.hayFiltrosActivos) {
     return {
       titulo: 'No se encontraron materiales',
@@ -91,4 +101,34 @@ export function mensajeVacioCuadroAlmacen(opts: {
     titulo: 'No se encontraron materiales',
     subtitulo: 'Registra un nuevo ítem o verifica que haya stock en almacén.',
   };
+}
+
+/** Cuarentena operativa acotada a entidad / obra / ubicaciones del cuadro. */
+export function filtrarInspeccionesCuarentenaCuadro(
+  rows: InspeccionCuarentenaRow[],
+  opts: {
+    filterEntidadId?: string;
+    filterProyectoId?: string;
+    filterDepositId?: string;
+    ubicacionIdsFiltro?: readonly string[];
+  },
+): InspeccionCuarentenaRow[] {
+  const entidad = opts.filterEntidadId?.trim();
+  const proyecto = opts.filterProyectoId?.trim();
+  const deposito = opts.filterDepositId?.trim();
+  const ubSet = opts.ubicacionIdsFiltro?.length
+    ? new Set(opts.ubicacionIdsFiltro)
+    : null;
+
+  if (!entidad && !proyecto && !deposito) return rows;
+
+  return rows.filter((row) => {
+    if (entidad && row.entidad_id?.trim() !== entidad) return false;
+    if (proyecto && row.proyecto_id?.trim() !== proyecto) return false;
+    if (ubSet?.size) {
+      const ub = row.ubicacion_destino_id?.trim();
+      if (ub && !ubSet.has(ub)) return false;
+    }
+    return true;
+  });
 }

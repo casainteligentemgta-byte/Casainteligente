@@ -59,6 +59,8 @@ export default function QualityDashboard() {
             document_storage_path: insp.purchase_invoices?.document_storage_path ?? null,
             document_file_name: insp.purchase_invoices?.document_file_name ?? null,
             ubicacion_destino_id: insp.purchase_invoices?.ubicacion_destino_id ?? null,
+            entidad_id: null,
+            proyecto_id: null,
             created_at: null,
         }));
         return agruparInspeccionesPorFactura(rows);

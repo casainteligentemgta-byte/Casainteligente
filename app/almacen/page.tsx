@@ -78,6 +78,7 @@ import {
 } from '@/lib/almacen/inventarioExportShare';
 import {
     borrarInventarioCuadroFiltrosGuardados,
+    filtrarInspeccionesCuarentenaCuadro,
     guardarInventarioCuadroFiltros,
     leerInventarioCuadroFiltrosGuardados,
     mensajeVacioCuadroAlmacen,
@@ -142,18 +143,29 @@ function materialPasaFiltroEntidad(
         proyectoIdsEntidad?: Set<string>;
         stockEnFiltro: number;
         filtroStockPorUbicacion: boolean;
+        /** Materiales en cuarentena de la obra filtrada (sin stock físico aún). */
+        materialIdsCuarentenaObra?: Set<string>;
     },
 ): boolean {
-    if (!opts.filterEntidadId) return true;
-    if (item.entidad_id === opts.filterEntidadId) return true;
-    if (item.proyecto?.entidad_id === opts.filterEntidadId) return true;
-    const pid = item.proyecto_id?.trim();
-    if (pid && opts.proyectoIdsEntidad?.has(pid)) return true;
-    if (opts.filterProyectoId && item.proyecto_id === opts.filterProyectoId) return true;
-    /** Stock físico en la obra filtrada aunque el catálogo no tenga entidad asignada. */
-    if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0 && opts.filterProyectoId) {
+    if (!opts.filterEntidadId) {
+        if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0 && opts.filterProyectoId) {
+            return true;
+        }
         return true;
     }
+
+    const pid = item.proyecto_id?.trim();
+    const catalogMatchEntidad =
+        item.entidad_id === opts.filterEntidadId ||
+        item.proyecto?.entidad_id === opts.filterEntidadId ||
+        Boolean(pid && opts.proyectoIdsEntidad?.has(pid));
+
+    if (!catalogMatchEntidad) return false;
+
+    if (!opts.filterProyectoId) return true;
+    if (item.proyecto_id === opts.filterProyectoId) return true;
+    if (opts.materialIdsCuarentenaObra?.has(item.id)) return true;
+    if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0) return true;
     return false;
 }
 
@@ -967,6 +979,28 @@ export default function InventoryMasterPage() {
         [actualizarStockLocal, stockPorUbicacion, stockGlobal, ubicacionIdsFiltro],
     );
 
+    const cuarentenaFiltrada = useMemo(
+        () =>
+            filtrarInspeccionesCuarentenaCuadro(cuarentenaOperativa, {
+                filterEntidadId: filterEntidadId || undefined,
+                filterProyectoId: filterProyectoId || undefined,
+                filterDepositId: filterDepositId || undefined,
+                ubicacionIdsFiltro: ubicacionIdsFiltro,
+            }),
+        [
+            cuarentenaOperativa,
+            filterEntidadId,
+            filterProyectoId,
+            filterDepositId,
+            ubicacionIdsFiltro,
+        ],
+    );
+
+    const materialIdsCuarentenaObra = useMemo(
+        () => new Set(cuarentenaFiltrada.map((i) => i.material_id)),
+        [cuarentenaFiltrada],
+    );
+
     const filteredItems = useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
 
@@ -993,7 +1027,9 @@ export default function InventoryMasterPage() {
 
             if (!textMatch) return false;
             if (!categoriaCoincideFiltro(item, activeCategory)) return false;
-            if (filtroStockPorUbicacion && cargandoStockUbicacion) return false;
+            if (filtroStockPorUbicacion && cargandoStockUbicacion && kpiVista !== 'cuarentena') {
+                return false;
+            }
             if (
                 !materialPasaFiltroEntidad(item, {
                     filterEntidadId,
@@ -1001,6 +1037,8 @@ export default function InventoryMasterPage() {
                     proyectoIdsEntidad,
                     stockEnFiltro,
                     filtroStockPorUbicacion,
+                    materialIdsCuarentenaObra:
+                        kpiVista === 'cuarentena' ? materialIdsCuarentenaObra : undefined,
                 })
             ) {
                 return false;
@@ -1017,8 +1055,7 @@ export default function InventoryMasterPage() {
             const qty = cantidadStockReal(item);
             if (kpiVista === 'stock_bajo' && qty > Number(item.reorder_point)) return false;
             if (kpiVista === 'cuarentena') {
-                const idsCuarentena = new Set(cuarentenaOperativa.map((i) => i.material_id));
-                if (!idsCuarentena.has(item.id)) return false;
+                if (!materialIdsCuarentenaObra.has(item.id)) return false;
             } else {
                 const stockDatosListos = filtroStockPorUbicacion
                     ? !cargandoStockUbicacion
@@ -1046,7 +1083,8 @@ export default function InventoryMasterPage() {
         cargandoStockUbicacion,
         cantidadStockReal,
         kpiVista,
-        cuarentenaOperativa,
+        cuarentenaFiltrada,
+        materialIdsCuarentenaObra,
     ]);
 
     const todasSeleccionadas = useMemo(
@@ -1312,7 +1350,7 @@ export default function InventoryMasterPage() {
         const lowStock = base.filter(
             (item) => cantidadStockReal(item) <= Number(item.reorder_point),
         ).length;
-        const quarantineUnidades = cuarentenaOperativa.reduce(
+        const quarantineUnidades = (hayFiltrosActivos ? cuarentenaFiltrada : cuarentenaOperativa).reduce(
             (acc, i) => acc + (Number(i.quantity) || 0),
             0,
         );
@@ -1322,7 +1360,14 @@ export default function InventoryMasterPage() {
             totalItems: base.length,
             quarantineCount: quarantineUnidades,
         };
-    }, [filteredItems, itemsCatalogo, hayFiltrosActivos, cantidadStockReal, cuarentenaOperativa]);
+    }, [
+        filteredItems,
+        itemsCatalogo,
+        hayFiltrosActivos,
+        cantidadStockReal,
+        cuarentenaOperativa,
+        cuarentenaFiltrada,
+    ]);
 
     const baseItemsKpi = useMemo(
         () => (hayFiltrosActivos ? filteredItems : itemsCatalogo),
@@ -1435,8 +1480,9 @@ export default function InventoryMasterPage() {
     );
 
     const itemsCuarentenaResumen = useMemo(() => {
+        const fuente = hayFiltrosActivos ? cuarentenaFiltrada : cuarentenaOperativa;
         const byMaterial = new Map<string, { nombre: string; qty: number; unit: string }>();
-        for (const insp of cuarentenaOperativa) {
+        for (const insp of fuente) {
             const mid = insp.material_id;
             const nombre =
                 String(insp.material_name ?? insp.line_description ?? 'Material').trim() || 'Material';
@@ -1448,7 +1494,7 @@ export default function InventoryMasterPage() {
             .map(([id, v]) => ({ id, ...v }))
             .sort((a, b) => b.qty - a.qty)
             .slice(0, 8);
-    }, [cuarentenaOperativa]);
+    }, [cuarentenaOperativa, cuarentenaFiltrada, hayFiltrosActivos]);
 
     const skuPorCategoria = useMemo(() => {
         const map = new Map<string, number>();
@@ -1506,6 +1552,7 @@ export default function InventoryMasterPage() {
                 filterProyectoId: Boolean(filterProyectoId),
                 filterEntidadId: Boolean(filterEntidadId),
                 hayFiltrosActivos,
+                kpiCuarentena: kpiVista === 'cuarentena',
             }),
         [
             cargandoStockUbicacion,
@@ -1515,6 +1562,7 @@ export default function InventoryMasterPage() {
             filterProyectoId,
             filterEntidadId,
             hayFiltrosActivos,
+            kpiVista,
         ],
     );
 
@@ -1889,7 +1937,9 @@ export default function InventoryMasterPage() {
                     back={
                         <div className="space-y-2">
                             <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-1">
-                                Inspecciones pendientes ({cuarentenaOperativa.length})
+                                Inspecciones pendientes (
+                                {hayFiltrosActivos ? cuarentenaFiltrada.length : cuarentenaOperativa.length}
+                                )
                             </p>
                             {itemsCuarentenaResumen.length === 0 ? (
                                 <p className="text-xs text-zinc-500">Sin mercancía en tránsito</p>

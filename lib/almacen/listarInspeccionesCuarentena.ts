@@ -13,6 +13,8 @@ export type InspeccionCuarentenaRow = {
   document_storage_path: string | null;
   document_file_name: string | null;
   ubicacion_destino_id: string | null;
+  entidad_id: string | null;
+  proyecto_id: string | null;
   created_at: string | null;
 };
 
@@ -32,7 +34,7 @@ export async function listarInspeccionesCuarentenaPendientes(
       line_description,
       created_at,
       global_inventory(name, unit),
-      purchase_invoices(invoice_number, supplier_name, document_storage_path, document_file_name, ubicacion_destino_id),
+      purchase_invoices(invoice_number, supplier_name, document_storage_path, document_file_name, ubicacion_destino_id, entidad_id, proyecto_id),
       purchase_details(description)
     `,
     )
@@ -61,6 +63,8 @@ export async function listarInspeccionesCuarentenaPendientes(
             document_storage_path: string | null;
             document_file_name: string | null;
             ubicacion_destino_id: string | null;
+            entidad_id: string | null;
+            proyecto_id: string | null;
           }
         | Array<{
             invoice_number: string;
@@ -68,6 +72,8 @@ export async function listarInspeccionesCuarentenaPendientes(
             document_storage_path: string | null;
             document_file_name: string | null;
             ubicacion_destino_id: string | null;
+            entidad_id: string | null;
+            proyecto_id: string | null;
           }>
         | null;
       purchase_details?: { description: string } | Array<{ description: string }> | null;
@@ -87,6 +93,8 @@ export async function listarInspeccionesCuarentenaPendientes(
       document_storage_path: inv?.document_storage_path ?? null,
       document_file_name: inv?.document_file_name ?? null,
       ubicacion_destino_id: inv?.ubicacion_destino_id ?? null,
+      entidad_id: inv?.entidad_id ?? null,
+      proyecto_id: inv?.proyecto_id ?? null,
       created_at: r.created_at,
     };
   });
