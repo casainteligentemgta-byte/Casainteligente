@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MaterialCampoOpcion } from '@/components/almacen/BuscadorMaterialCampo';
 import { filtrarQueryCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
-import { buscarMaterialPorAlias } from '@/lib/almacen/materialAliases';
+import { buscarMaterialPorAlias, buscarMaterialPorAliasAproximado } from '@/lib/almacen/materialAliases';
 import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
 import { scoreMaterialInteligente } from '@/lib/almacen/scoreMaterialInteligente';
 import { escapeIlike, patronIlike } from '@/lib/contabilidad/comprasQueryFiltros';
@@ -106,6 +106,9 @@ export async function buscarMaterialesInteligenteCatalogo(
   try {
     const aliasHits = await buscarMaterialPorAlias(supabase, t, opts?.entidadId);
     for (const m of aliasHits) mergeResultado(map, m, 100, 'alias');
+
+    const aliasAprox = await buscarMaterialPorAliasAproximado(supabase, t, opts?.entidadId);
+    for (const m of aliasAprox) mergeResultado(map, m, 98, 'alias');
   } catch (e) {
     console.warn('[buscarMaterialesInteligenteCatalogo] alias:', e);
   }

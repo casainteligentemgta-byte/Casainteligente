@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MaterialCampoOpcion } from '@/components/almacen/BuscadorMaterialCampo';
 import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
+import { ratioSimilitudLevenshtein } from '@/lib/almacen/scoreMaterialInteligente';
 
 function mapMaterial(row: {
   id: string;
@@ -53,6 +54,67 @@ export async function buscarMaterialPorAlias(
   return (mats ?? []).map((row) =>
     mapMaterial(row as { id: string; name?: string; sap_code?: string; unit?: string }),
   );
+}
+
+const MAX_DISTANCIA_ALIAS_APROX = 2;
+const SIMILITUD_MIN_ALIAS_APROX = 78;
+
+/** Alias con typo cercano (cabiya → alias cabilla ya aprendido, o caviya ≈ cabiya). */
+export async function buscarMaterialPorAliasAproximado(
+  supabase: SupabaseClient,
+  term: string,
+  entidadId?: string | null,
+): Promise<MaterialCampoOpcion[]> {
+  const termNorm = normalizarTextoMaterial(term);
+  if (termNorm.length < 3) return [];
+
+  const eid = entidadId?.trim();
+  if (!eid) return [];
+
+  const exactos = await buscarMaterialPorAlias(supabase, term, eid);
+  if (exactos.length) return exactos;
+
+  const { data: aliasRows, error: aliasErr } = await supabase
+    .from('ci_material_aliases')
+    .select('alias_norm, material_id')
+    .eq('entidad_id', eid)
+    .limit(400);
+
+  if (aliasErr) {
+    if (/ci_material_aliases|42P01|schema cache/i.test(aliasErr.message)) return [];
+    throw new Error(aliasErr.message);
+  }
+
+  const hits = new Map<string, number>();
+  for (const row of aliasRows ?? []) {
+    const aliasNorm = String(row.alias_norm ?? '').trim();
+    const materialId = String(row.material_id ?? '').trim();
+    if (!aliasNorm || !materialId) continue;
+    if (aliasNorm === termNorm) {
+      hits.set(materialId, 100);
+      continue;
+    }
+    const sim = ratioSimilitudLevenshtein(termNorm, aliasNorm);
+    const dist = Math.abs(termNorm.length - aliasNorm.length);
+    if (sim >= SIMILITUD_MIN_ALIAS_APROX && dist <= MAX_DISTANCIA_ALIAS_APROX) {
+      const prev = hits.get(materialId) ?? 0;
+      hits.set(materialId, Math.max(prev, Math.round(sim)));
+    }
+  }
+
+  if (!hits.size) return [];
+
+  const ids = Array.from(hits.keys());
+  const { data: mats, error: matErr } = await supabase
+    .from('global_inventory')
+    .select('id,name,sap_code,unit')
+    .in('id', ids);
+
+  if (matErr) throw new Error(matErr.message);
+
+  return (mats ?? [])
+    .map((row) => mapMaterial(row as { id: string; name?: string; sap_code?: string; unit?: string }))
+    .sort((a, b) => (hits.get(b.id) ?? 0) - (hits.get(a.id) ?? 0));
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolverEntidadIdCatalogo } from '@/lib/almacen/catalogoEntidad';
+import { resolverMaterialCanonicoPorTexto } from '@/lib/almacen/correccionMaterialCatalogo';
 import { normSkuCodigo } from '@/lib/almacen/resolverMaterialIdPorSku';
 
 export type MaterialCompraResuelto = {
@@ -85,6 +86,27 @@ export async function resolverMaterialParaLineaCompra(
 
   for (const row of candidatos ?? []) {
     if (normalizarNombre(String(row.name ?? '')) === nombre) {
+      return {
+        id: String(row.id),
+        matchedBy: 'nombre',
+        name: String(row.name),
+        category_id: row.category_id ? String(row.category_id) : null,
+      };
+    }
+  }
+
+  const canonico = await resolverMaterialCanonicoPorTexto(supabase, opts.description, {
+    entidadId,
+    proyectoId: opts.proyectoId,
+    scoreMinimo: 85,
+  });
+  if (canonico) {
+    const { data: row } = await supabase
+      .from('global_inventory')
+      .select('id, name, category_id')
+      .eq('id', canonico.material.id)
+      .maybeSingle();
+    if (row) {
       return {
         id: String(row.id),
         matchedBy: 'nombre',

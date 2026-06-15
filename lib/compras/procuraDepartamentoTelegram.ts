@@ -36,6 +36,10 @@ import {
   etiquetaMaterialCatalogo,
 } from '@/lib/almacen/buscarMaterialesCatalogo';
 import { aprenderAliasMaterial } from '@/lib/almacen/materialAliases';
+import {
+  buscarCorreccionMaterialCatalogo,
+  type CorreccionMaterialCatalogo,
+} from '@/lib/almacen/correccionMaterialCatalogo';
 import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
 import { resolverEntidadIdCatalogo } from '@/lib/almacen/catalogoEntidad';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
@@ -74,6 +78,9 @@ const PREFIX = 'cmp:';
 const CB_CAP = `${PREFIX}cap:`;
 const CB_MAT_ID = `${PREFIX}mat_id:`;
 const CB_MAT_TXT = `${PREFIX}mat:txt`;
+const CB_MAT_CORR = `${PREFIX}mat:corr:`;
+const CB_MAT_KEEP = `${PREFIX}mat:keep`;
+const CB_MAT_LIST = `${PREFIX}mat:list`;
 const CB_PRI = `${PREFIX}pri:`;
 const CB_UNI = `${PREFIX}uni:`;
 const CB_OK = `${PREFIX}ok`;
@@ -130,34 +137,73 @@ async function pedirUnidadMaterial(chatId: string, cantidad: number): Promise<vo
   );
 }
 
-async function mostrarCoincidenciasMaterial(
+async function aplicarMaterialCatalogoEnProcura(
   supabase: SupabaseClient,
   chatId: string,
   estado: TelegramEstado,
-  term: string,
+  material: { id: string; name: string },
+  entidadId: string | null,
+  opts?: { aprenderAlias?: boolean },
 ): Promise<void> {
-  const t = term.trim();
-  await patchMeta(supabase, chatId, estado, { material_busqueda_borrador: t });
-
-  const proyectoId = estado.proyecto_id?.trim() || null;
-  const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
-
-  let resultados: Awaited<ReturnType<typeof buscarMaterialesInteligenteCatalogo>>;
-  try {
-    resultados = await buscarMaterialesInteligenteCatalogo(supabase, t, {
-      limit: 5,
+  const borrador = meta(estado).material_busqueda_borrador?.trim();
+  if (opts?.aprenderAlias !== false && borrador && entidadId) {
+    void aprenderAliasMaterial(supabase, {
       entidadId,
-      proyectoId,
-    });
-  } catch (e) {
-    await sendTelegramMessage(
-      chatId,
-      `❌ Error al buscar materiales: ${escHtml(e instanceof Error ? e.message : 'Error')}`,
-      { parse_mode: 'HTML' },
-    );
-    return;
+      alias: borrador,
+      materialId: material.id,
+      materialName: material.name,
+    }).catch(() => {});
   }
 
+  await patchMeta(supabase, chatId, estado, {
+    paso: 'cantidad',
+    material_id: material.id,
+    material_txt: material.name.slice(0, 500),
+    por_verificar: false,
+  });
+  await pedirCantidadMaterial(chatId, material.name);
+}
+
+async function enviarPromptCorreccionMaterial(
+  chatId: string,
+  correccion: CorreccionMaterialCatalogo,
+): Promise<void> {
+  const etiqueta = etiquetaMaterialCatalogo(correccion.candidato);
+  const callbackCorr = `${CB_MAT_CORR}${correccion.candidato.id}`;
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (callbackDataTelegramValido(callbackCorr)) {
+    buttons.push([
+      {
+        text: truncarBoton(`✅ Sí: ${etiqueta}`, 52),
+        callback_data: callbackCorr,
+      },
+    ]);
+  }
+  buttons.push([
+    { text: truncarBoton(`✏️ No, usar «${correccion.termino}»`, 48), callback_data: CB_MAT_KEEP },
+  ]);
+  buttons.push([{ text: '📋 Ver más opciones del catálogo', callback_data: CB_MAT_LIST }]);
+
+  await sendTelegramMessage(
+    chatId,
+    `✏️ Escribiste: <b>${escHtml(correccion.termino)}</b>\n\n` +
+      `¿Quisiste el material del catálogo?\n` +
+      `<b>${escHtml(etiqueta)}</b>\n\n` +
+      '<i>Al confirmar usamos el nombre oficial del almacén (un solo material canónico).</i>',
+    {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: buttons },
+    },
+  );
+}
+
+async function enviarListaCoincidenciasMaterial(
+  chatId: string,
+  term: string,
+  resultados: Awaited<ReturnType<typeof buscarMaterialesInteligenteCatalogo>>,
+): Promise<void> {
+  const t = term.trim();
   const materiales = resultados.map((r) => r.material);
   const top = resultados[0];
   const termNorm = normalizarTextoMaterial(t);
@@ -206,6 +252,54 @@ async function mostrarCoincidenciasMaterial(
       reply_markup: { inline_keyboard: buttons },
     },
   );
+}
+
+async function mostrarCoincidenciasMaterial(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  term: string,
+  opts?: { omitirCorreccion?: boolean },
+): Promise<void> {
+  const t = term.trim();
+  await patchMeta(supabase, chatId, estado, { material_busqueda_borrador: t });
+
+  const proyectoId = estado.proyecto_id?.trim() || null;
+  const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
+
+  let resultados: Awaited<ReturnType<typeof buscarMaterialesInteligenteCatalogo>>;
+  try {
+    resultados = await buscarMaterialesInteligenteCatalogo(supabase, t, {
+      limit: 5,
+      entidadId,
+      proyectoId,
+    });
+  } catch (e) {
+    await sendTelegramMessage(
+      chatId,
+      `❌ Error al buscar materiales: ${escHtml(e instanceof Error ? e.message : 'Error')}`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  if (!opts?.omitirCorreccion) {
+    try {
+      const correccion = await buscarCorreccionMaterialCatalogo(supabase, t, {
+        entidadId,
+        proyectoId,
+        limit: 8,
+      });
+      if (correccion?.esTypo) {
+        await enviarPromptCorreccionMaterial(chatId, correccion);
+        return;
+      }
+    } catch (e) {
+      console.warn('[procuraDepartamento] correccion material:', e);
+    }
+  }
+
+  await enviarListaCoincidenciasMaterial(chatId, t, resultados);
 }
 
 function meta(estado: TelegramEstado): MetadataProcuraDepartamento {
@@ -842,6 +936,57 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     return true;
   }
 
+  if (params.data.startsWith(CB_MAT_CORR)) {
+    const matId = params.data.slice(CB_MAT_CORR.length).trim();
+    if (!matId || !esUuidProcura(matId)) {
+      await answerCallbackQuery(params.callbackId, 'Material inválido', true);
+      return true;
+    }
+
+    const proyectoId =
+      estado.proyecto_id?.trim() || auth.usuario.proyecto_id?.trim() || null;
+    const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
+    const material = await resolverMaterialProcuraPorId(supabase, matId, proyectoId);
+    if (!material) {
+      await answerCallbackQuery(params.callbackId, 'Material no encontrado', true);
+      return true;
+    }
+
+    await answerCallbackQuery(params.callbackId, truncarBoton(material.name, 40));
+    await aplicarMaterialCatalogoEnProcura(supabase, params.chatId, estado, material, entidadId);
+    return true;
+  }
+
+  if (params.data === CB_MAT_KEEP) {
+    const borrador = meta(estado).material_busqueda_borrador?.trim() ?? '';
+    if (borrador.length < MIN_CHARS_BUSQUEDA_MATERIAL) {
+      await answerCallbackQuery(params.callbackId, 'Escribe el material primero', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, 'Texto libre');
+    await patchMeta(supabase, params.chatId, estado, {
+      paso: 'cantidad',
+      material_id: '',
+      material_txt: borrador.slice(0, 500),
+      por_verificar: true,
+    });
+    await pedirCantidadMaterial(params.chatId, borrador);
+    return true;
+  }
+
+  if (params.data === CB_MAT_LIST) {
+    const borrador = meta(estado).material_busqueda_borrador?.trim() ?? '';
+    if (borrador.length < MIN_CHARS_BUSQUEDA_MATERIAL) {
+      await answerCallbackQuery(params.callbackId, 'Escribe el material primero', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId, 'Catálogo');
+    await mostrarCoincidenciasMaterial(supabase, params.chatId, estado, borrador, {
+      omitirCorreccion: true,
+    });
+    return true;
+  }
+
   if (params.data.startsWith(CB_MAT_ID)) {
     const matId = params.data.slice(CB_MAT_ID.length).trim();
     if (!matId || !esUuidProcura(matId)) {
@@ -859,24 +1004,7 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     }
 
     await answerCallbackQuery(params.callbackId, truncarBoton(material.name, 40));
-
-    const borrador = meta(estado).material_busqueda_borrador?.trim();
-    if (borrador && entidadId) {
-      void aprenderAliasMaterial(supabase, {
-        entidadId,
-        alias: borrador,
-        materialId: material.id,
-        materialName: material.name,
-      }).catch(() => {});
-    }
-
-    await patchMeta(supabase, params.chatId, estado, {
-      paso: 'cantidad',
-      material_id: material.id,
-      material_txt: material.name.slice(0, 500),
-      por_verificar: false,
-    });
-    await pedirCantidadMaterial(params.chatId, material.name);
+    await aplicarMaterialCatalogoEnProcura(supabase, params.chatId, estado, material, entidadId);
     return true;
   }
 
@@ -887,15 +1015,33 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       return true;
     }
 
-    const materialTxt = borrador.slice(0, 500);
+    const proyectoId =
+      estado.proyecto_id?.trim() || auth.usuario.proyecto_id?.trim() || null;
+    const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
+
+    try {
+      const correccion = await buscarCorreccionMaterialCatalogo(supabase, borrador, {
+        entidadId,
+        proyectoId,
+        limit: 8,
+      });
+      if (correccion?.esTypo) {
+        await answerCallbackQuery(params.callbackId, 'Revisa la sugerencia');
+        await enviarPromptCorreccionMaterial(params.chatId, correccion);
+        return true;
+      }
+    } catch {
+      /* texto libre */
+    }
+
     await answerCallbackQuery(params.callbackId, 'Texto libre');
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'cantidad',
       material_id: '',
-      material_txt: materialTxt,
+      material_txt: borrador.slice(0, 500),
       por_verificar: true,
     });
-    await pedirCantidadMaterial(params.chatId, materialTxt);
+    await pedirCantidadMaterial(params.chatId, borrador);
     return true;
   }
 
