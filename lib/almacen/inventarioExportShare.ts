@@ -84,6 +84,12 @@ export function parseInventarioShareParams(params: URLSearchParams): InventarioS
 }
 
 export function buildInventarioShareUrl(origin: string, state: InventarioShareState): string {
+  const qs = buildInventarioShareSearchParams(state);
+  const query = qs.toString();
+  return query ? `${origin}/almacen?${query}` : `${origin}/almacen`;
+}
+
+export function buildInventarioShareSearchParams(state: InventarioShareState): URLSearchParams {
   const qs = new URLSearchParams();
   setShareParam(qs, 'q', state.q);
   setShareParam(qs, 'cat', state.cat);
@@ -94,8 +100,12 @@ export function buildInventarioShareUrl(origin: string, state: InventarioShareSt
   setShareParam(qs, 'sinObra', state.sinObra);
   setShareParam(qs, 'sinAlmacen', state.sinAlmacen);
   setShareParam(qs, 'kpi', state.kpi);
-  const query = qs.toString();
-  return query ? `${origin}/almacen?${query}` : `${origin}/almacen`;
+  return qs;
+}
+
+export function inventarioCuadroPathFromState(state: InventarioShareState): string {
+  const query = buildInventarioShareSearchParams(state).toString();
+  return query ? `/almacen?${query}` : '/almacen';
 }
 
 function escapeCsvCell(value: string | number): string {

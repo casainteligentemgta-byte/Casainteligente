@@ -51,10 +51,11 @@ import {
     cargarValorInventarioPorDeposito,
     enriquecerMapaStockConProyectoFiltro,
     fusionarFilaEnResumenStock,
+    listarDepositIdsParaFiltroInventario,
     listarUbicacionesParaFiltroInventario,
     proyectoIdsDeEntidad,
-    resolverUbicacionIdsFiltro,
-    resolverUbicacionIdsFiltroEntidad,
+    resolverUbicacionIdsFiltroConMeta,
+    resolverUbicacionIdsFiltroEntidadConMeta,
     type StockEnUbicacionResumen,
     type ValorInventarioDeposito,
 } from '@/lib/almacen/inventarioFiltroUbicacion';
@@ -63,6 +64,7 @@ import {
     copiarTextoInventario,
     descargarTextoComoArchivo,
     hasInventarioShareParams,
+    inventarioCuadroPathFromState,
     inventarioFilasACsv,
     inventarioFilasATextoResumen,
     inventarioFilasATsv,
@@ -72,6 +74,13 @@ import {
     type InventarioFilaExport,
     type InventarioShareState,
 } from '@/lib/almacen/inventarioExportShare';
+import {
+    borrarInventarioCuadroFiltrosGuardados,
+    guardarInventarioCuadroFiltros,
+    leerInventarioCuadroFiltrosGuardados,
+    mensajeVacioCuadroAlmacen,
+} from '@/lib/almacen/inventarioCuadroFiltros';
+import type { UbicacionInventario } from '@/types/inventario-obra';
 import CeldaStockEditable from '@/components/almacen/CeldaStockEditable';
 import { resolverUbicacionAjusteStock } from '@/lib/almacen/resolverUbicacionAjusteStock';
 
@@ -302,7 +311,7 @@ function InventoryListThumb({
     return (
         <div
             suppressHydrationWarning
-            className="w-12 h-12 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center shrink-0"
+            className="w-9 h-9 bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800 flex items-center justify-center shrink-0"
         >
             {showImage ? (
                 <img
@@ -312,7 +321,7 @@ function InventoryListThumb({
                     onError={() => setFailed(true)}
                 />
             ) : (
-                <Package className="text-zinc-700" size={20} />
+                <Package className="text-zinc-700" size={16} />
             )}
         </div>
     );
@@ -322,6 +331,8 @@ export default function InventoryMasterPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const shareParamsApplied = useRef(false);
+    const filtrosPersistenciaLista = useRef(false);
+    const [hydrated, setHydrated] = useState(false);
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -359,6 +370,9 @@ export default function InventoryMasterPage() {
     const [itemsDesdeStock, setItemsDesdeStock] = useState<InventoryItem[]>([]);
     const [cargandoStockUbicacion, setCargandoStockUbicacion] = useState(false);
     const [ubicacionIdsFiltro, setUbicacionIdsFiltro] = useState<string[]>([]);
+    const [ubicacionesInventario, setUbicacionesInventario] = useState<UbicacionInventario[]>([]);
+    const [depositoSinInterseccion, setDepositoSinInterseccion] = useState(false);
+    const [filtroSinUbicaciones, setFiltroSinUbicaciones] = useState(false);
     const [savingStockId, setSavingStockId] = useState<string | null>(null);
     /** Stock agregado de todas las ubicaciones (KPIs sin filtro de almacén). */
     const [stockGlobal, setStockGlobal] = useState<Map<string, StockEnUbicacionResumen>>(new Map());
@@ -382,6 +396,30 @@ export default function InventoryMasterPage() {
     }, []);
 
     const supabase = createClient();
+
+    const aplicarFiltrosInventario = useCallback((parsed: Partial<InventarioShareState>) => {
+        if (parsed.q) setSearchTerm(parsed.q);
+        if (parsed.cat && (CATEGORIAS_FILTRO as readonly string[]).includes(parsed.cat)) {
+            setActiveCategory(parsed.cat);
+        }
+        if (parsed.entidad) setFilterEntidadId(parsed.entidad);
+        if (parsed.proyecto) setFilterProyectoId(parsed.proyecto);
+        if (parsed.partida) setFilterPartidaId(parsed.partida);
+        if (parsed.deposito) setFilterDepositId(parsed.deposito);
+        if (parsed.sinObra) setSinClasificacionObra(true);
+        if (parsed.sinAlmacen) setSinAlmacenAsignado(true);
+        if (
+            parsed.kpi === 'stock_bajo' ||
+            parsed.kpi === 'cuarentena' ||
+            parsed.kpi === 'sku'
+        ) {
+            setKpiVista(parsed.kpi);
+        }
+    }, []);
+
+    useEffect(() => {
+        setHydrated(true);
+    }, []);
 
     const cargarCuarentenaOperativa = useCallback(async () => {
         try {
@@ -410,28 +448,31 @@ export default function InventoryMasterPage() {
     }, [supabase]);
 
     useEffect(() => {
-        if (shareParamsApplied.current) return;
-        if (!hasInventarioShareParams(searchParams)) return;
+        if (!hydrated || shareParamsApplied.current) return;
         shareParamsApplied.current = true;
-        const parsed = parseInventarioShareParams(searchParams);
-        if (parsed.q) setSearchTerm(parsed.q);
-        if (parsed.cat && (CATEGORIAS_FILTRO as readonly string[]).includes(parsed.cat)) {
-            setActiveCategory(parsed.cat);
-        }
-        if (parsed.entidad) setFilterEntidadId(parsed.entidad);
-        if (parsed.proyecto) setFilterProyectoId(parsed.proyecto);
-        if (parsed.partida) setFilterPartidaId(parsed.partida);
-        if (parsed.deposito) setFilterDepositId(parsed.deposito);
-        if (parsed.sinObra) setSinClasificacionObra(true);
-        if (parsed.sinAlmacen) setSinAlmacenAsignado(true);
-        if (
-            parsed.kpi === 'stock_bajo' ||
-            parsed.kpi === 'cuarentena' ||
-            parsed.kpi === 'sku'
-        ) {
-            setKpiVista(parsed.kpi);
-        }
-    }, [searchParams]);
+
+        const fromUrl = hasInventarioShareParams(searchParams)
+            ? parseInventarioShareParams(searchParams)
+            : null;
+        const fromStorage = !fromUrl ? leerInventarioCuadroFiltrosGuardados() : null;
+        aplicarFiltrosInventario(fromUrl ?? fromStorage ?? {});
+        filtrosPersistenciaLista.current = true;
+    }, [hydrated, searchParams, aplicarFiltrosInventario]);
+
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
+                if (!cancelled) setUbicacionesInventario(ubicaciones);
+            } catch (e) {
+                console.warn('[inventario] ubicaciones maestro:', e);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [supabase]);
 
     useEffect(() => {
         let cancelled = false;
@@ -482,6 +523,50 @@ export default function InventoryMasterPage() {
         );
     }, [depositsById]);
 
+    const nombreProyectoFiltro = useMemo(
+        () => proyectos.find((p) => p.id === filterProyectoId)?.nombre ?? '',
+        [proyectos, filterProyectoId],
+    );
+
+    const depositIdsScope = useMemo(
+        () =>
+            listarDepositIdsParaFiltroInventario(ubicacionesInventario, {
+                entidadId: filterEntidadId || undefined,
+                proyectoId: filterProyectoId || undefined,
+                proyectoNombre: nombreProyectoFiltro || undefined,
+                proyectos,
+            }),
+        [ubicacionesInventario, filterEntidadId, filterProyectoId, nombreProyectoFiltro, proyectos],
+    );
+
+    /** Almacenes acotados a la entidad/obra seleccionada (si hay mapeo en inv_ubicaciones). */
+    const depositsFiltrados = useMemo(() => {
+        if (!filterEntidadId && !filterProyectoId) return depositsLista;
+        if (!depositIdsScope.length) return depositsLista;
+        const scope = new Set(depositIdsScope);
+        const scoped = depositsLista.filter((d) => scope.has(d.id));
+        return scoped.length ? scoped : depositsLista;
+    }, [depositsLista, filterEntidadId, filterProyectoId, depositIdsScope]);
+
+    useEffect(() => {
+        if (!filterDepositId || !depositsFiltrados.length) return;
+        if (!depositsFiltrados.some((d) => d.id === filterDepositId)) {
+            setFilterDepositId('');
+        }
+    }, [filterDepositId, depositsFiltrados]);
+
+    useEffect(() => {
+        if (!filterProyectoId || filterEntidadId) return;
+        const pr = proyectos.find((p) => p.id === filterProyectoId);
+        if (pr?.entidad_id) setFilterEntidadId(pr.entidad_id);
+    }, [filterProyectoId, filterEntidadId, proyectos]);
+
+    useEffect(() => {
+        if (filtroStockPorUbicacion && sinClasificacionObra) {
+            setSinClasificacionObra(false);
+        }
+    }, [filtroStockPorUbicacion, sinClasificacionObra]);
+
     const hayFiltrosActivos =
         Boolean(searchTerm.trim()) ||
         activeCategory !== 'Todos' ||
@@ -513,6 +598,8 @@ export default function InventoryMasterPage() {
             setStockPorUbicacion(new Map());
             setItemsDesdeStock([]);
             setUbicacionIdsFiltro([]);
+            setFiltroSinUbicaciones(false);
+            setDepositoSinInterseccion(false);
             return;
         }
 
@@ -520,38 +607,58 @@ export default function InventoryMasterPage() {
         void (async () => {
             setCargandoStockUbicacion(true);
             try {
-                const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
-                let nombreProyectoFiltro =
-                    proyectos.find((p) => p.id === filterProyectoId)?.nombre ?? '';
-                if (filterProyectoId && !nombreProyectoFiltro.trim()) {
+                const ubicaciones = ubicacionesInventario.length
+                    ? ubicacionesInventario
+                    : await listarUbicacionesParaFiltroInventario(supabase);
+                if (!ubicacionesInventario.length && ubicaciones.length && !cancelled) {
+                    setUbicacionesInventario(ubicaciones);
+                }
+
+                let nombreObraFiltro = nombreProyectoFiltro;
+                if (filterProyectoId && !nombreObraFiltro.trim()) {
                     const { data: prRow } = await supabase
                         .from('ci_proyectos')
                         .select('nombre')
                         .eq('id', filterProyectoId)
                         .maybeSingle();
-                    nombreProyectoFiltro = String(prRow?.nombre ?? '').trim();
+                    nombreObraFiltro = String(prRow?.nombre ?? '').trim();
                 }
 
                 let ids: string[];
+                let depositoFallback = false;
                 if (filterProyectoId) {
-                    ids = resolverUbicacionIdsFiltro(ubicaciones, {
+                    const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
                         proyectoId: filterProyectoId,
-                        proyectoNombre: nombreProyectoFiltro || undefined,
+                        proyectoNombre: nombreObraFiltro || undefined,
                         depositId: filterDepositId || undefined,
                     });
+                    ids = res.ubicacionIds;
+                    depositoFallback = res.depositoSinInterseccion;
                 } else if (filterEntidadId) {
-                    ids = resolverUbicacionIdsFiltroEntidad(ubicaciones, {
+                    const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
                         entidadId: filterEntidadId,
                         proyectos,
                         depositId: filterDepositId || undefined,
                     });
+                    ids = res.ubicacionIds;
+                    depositoFallback = res.depositoSinInterseccion;
                 } else {
-                    ids = resolverUbicacionIdsFiltro(ubicaciones, {
+                    const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
                         depositId: filterDepositId || undefined,
                     });
+                    ids = res.ubicacionIds;
                 }
+
                 if (cancelled) return;
                 setUbicacionIdsFiltro(ids);
+                setFiltroSinUbicaciones(ids.length === 0);
+                setDepositoSinInterseccion(depositoFallback);
+
+                if (ids.length === 0) {
+                    setStockPorUbicacion(new Map());
+                    setItemsDesdeStock([]);
+                    return;
+                }
 
                 const ubicacionesFiltro = ubicaciones.filter((u) => ids.includes(u.id));
                 const nombresUbicacionFiltro = ubicacionesFiltro
@@ -560,17 +667,15 @@ export default function InventoryMasterPage() {
 
                 let stockMap = new Map<string, StockEnUbicacionResumen>();
                 const etiquetaUb =
-                    nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
+                    nombresUbicacionFiltro[0] ?? nombreObraFiltro ?? 'Obra';
 
                 if (filterProyectoId) {
-                    if (ids.length) {
-                        stockMap = await cargarStockPorUbicaciones(supabase, ids);
-                    }
+                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
                     if (!stockMap.size) {
                         const agg = await getStockAgregadoPorMaterialObra(
                             supabase,
                             filterProyectoId,
-                            nombreProyectoFiltro || undefined,
+                            nombreObraFiltro || undefined,
                         );
                         agg.forEach((qty, materialId) => {
                             if (qty > 0) {
@@ -578,15 +683,13 @@ export default function InventoryMasterPage() {
                                     cantidad: qty,
                                     ubicacionNombre: etiquetaUb,
                                     proyectoId: filterProyectoId,
-                                    proyectoNombre: nombreProyectoFiltro || undefined,
+                                    proyectoNombre: nombreObraFiltro || undefined,
                                 });
                             }
                         });
                     }
                 } else if (filterEntidadId) {
-                    stockMap = ids.length
-                        ? await cargarStockPorUbicaciones(supabase, ids)
-                        : new Map<string, StockEnUbicacionResumen>();
+                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
                     const proysEntidad = proyectos.filter((p) => p.entidad_id === filterEntidadId);
                     for (const pr of proysEntidad) {
                         const agg = await getStockAgregadoPorMaterialObra(
@@ -609,7 +712,7 @@ export default function InventoryMasterPage() {
                             }
                         });
                     }
-                    if (filterDepositId) {
+                    if (filterDepositId && !depositoFallback) {
                         const stockUbDep = await cargarStockPorUbicaciones(supabase, ids);
                         for (const mid of Array.from(stockMap.keys())) {
                             const enUb = stockUbDep.get(mid)?.cantidad_disponible ?? 0;
@@ -617,19 +720,14 @@ export default function InventoryMasterPage() {
                             else stockMap.get(mid)!.cantidad_disponible = enUb;
                         }
                     }
+                } else {
+                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
                 }
 
-                if (ids.length && !filterProyectoId && !filterEntidadId) {
-                    stockMap = await cargarStockPorUbicaciones(supabase, ids);
-                } else if (!filterProyectoId && !filterEntidadId && filterDepositId) {
-                    setStockPorUbicacion(new Map());
-                    setItemsDesdeStock([]);
-                    return;
-                }
                 if (filterProyectoId) {
                     enriquecerMapaStockConProyectoFiltro(stockMap, {
                         proyectoId: filterProyectoId,
-                        proyectoNombre: nombreProyectoFiltro || undefined,
+                        proyectoNombre: nombreObraFiltro || undefined,
                     });
                 }
                 if (cancelled) return;
@@ -675,6 +773,8 @@ export default function InventoryMasterPage() {
                 if (!cancelled) {
                     setStockPorUbicacion(new Map());
                     setItemsDesdeStock([]);
+                    setFiltroSinUbicaciones(false);
+                    setDepositoSinInterseccion(false);
                 }
             } finally {
                 if (!cancelled) setCargandoStockUbicacion(false);
@@ -684,7 +784,16 @@ export default function InventoryMasterPage() {
         return () => {
             cancelled = true;
         };
-    }, [filterEntidadId, filterProyectoId, filterDepositId, supabase, items, proyectos]);
+    }, [
+        filterEntidadId,
+        filterProyectoId,
+        filterDepositId,
+        supabase,
+        items,
+        proyectos,
+        ubicacionesInventario,
+        nombreProyectoFiltro,
+    ]);
 
     useEffect(() => {
         if (!itemsCatalogo.length || !depositsLista.length) {
@@ -1395,7 +1504,41 @@ export default function InventoryMasterPage() {
         setSinAlmacenAsignado(false);
         setKpiVista('ninguno');
         setStatFlips({ valor: false, bajo: false, cuarentena: false, sku: false });
+        borrarInventarioCuadroFiltrosGuardados();
+        router.replace('/almacen', { scroll: false });
     };
+
+    const mensajeVacio = useMemo(
+        () =>
+            mensajeVacioCuadroAlmacen({
+                cargandoStockUbicacion,
+                filtroStockPorUbicacion,
+                filtroSinUbicaciones,
+                filterDepositId: Boolean(filterDepositId),
+                filterProyectoId: Boolean(filterProyectoId),
+                filterEntidadId: Boolean(filterEntidadId),
+                hayFiltrosActivos,
+            }),
+        [
+            cargandoStockUbicacion,
+            filtroStockPorUbicacion,
+            filtroSinUbicaciones,
+            filterDepositId,
+            filterProyectoId,
+            filterEntidadId,
+            hayFiltrosActivos,
+        ],
+    );
+
+    useEffect(() => {
+        if (!hydrated || !filtrosPersistenciaLista.current) return;
+        guardarInventarioCuadroFiltros(estadoCompartir);
+        const path = inventarioCuadroPathFromState(estadoCompartir);
+        const actual = `${window.location.pathname}${window.location.search}`;
+        if (path !== actual) {
+            router.replace(path, { scroll: false });
+        }
+    }, [hydrated, estadoCompartir, router]);
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD' }).format(val);
@@ -1541,10 +1684,10 @@ export default function InventoryMasterPage() {
         'inline-flex items-center gap-1.5 bg-zinc-900/80 border border-zinc-800 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide hover:bg-zinc-800 transition-all whitespace-nowrap';
 
     return (
-        <div className="min-h-screen bg-black text-white p-6 pb-24 font-sans">
+        <div className="min-h-screen bg-black text-white px-3 py-4 sm:px-4 lg:px-5 pb-20 font-sans max-w-[100vw] overflow-x-hidden">
             {/* Header Section */}
-            <div className="mb-6">
-                <h1 className="text-3xl md:text-4xl font-black tracking-tighter mb-3">ALMACENES</h1>
+            <div className="mb-4">
+                <h1 className="text-2xl lg:text-3xl font-black tracking-tighter mb-2">ALMACENES</h1>
                 <div className="flex flex-wrap items-center gap-1.5">
                     {NAV_ALMACEN.map((nav) => {
                         const Icon = nav.icon;
@@ -1577,7 +1720,7 @@ export default function InventoryMasterPage() {
             ) : null}
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
                 <FlipStatCard
                     flipped={statFlips.valor}
                     onToggle={handleValorRotate}
@@ -1806,7 +1949,7 @@ export default function InventoryMasterPage() {
             </div>
 
             {/* Filters & Search */}
-            <div className="flex flex-col gap-3 mb-6">
+            <div className="flex flex-col gap-2 mb-4">
                 <div className="relative group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-white transition-colors" size={18} />
                     <input
@@ -1855,15 +1998,36 @@ export default function InventoryMasterPage() {
                                 Filtrar visualización
                             </span>
                         </div>
-                        <span className="text-[10px] font-bold text-zinc-500">
+                        <span className="text-[10px] font-bold text-zinc-500 hidden xl:inline">
                             Mostrando {filteredItems.length} de {itemsCatalogo.length} ítems
                             {cargandoStockUbicacion && filtroStockPorUbicacion
-                                ? ' · actualizando stock por almacén…'
-                                : ' · edite la columna Stock y pulse Enter para guardar'}
+                                ? ' · actualizando stock…'
+                                : ' · stock editable con Enter'}
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <label className="block">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-violet-400 mb-1.5 block">
+                                Entidad
+                            </span>
+                            <select
+                                value={filterEntidadId}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    setFilterEntidadId(id);
+                                    setFilterProyectoId('');
+                                    setFilterPartidaId('');
+                                    if (id) setSinClasificacionObra(false);
+                                }}
+                                className="w-full rounded-xl border border-violet-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
+                            >
+                                <option value="">Todas las entidades</option>
+                                {entidades.map((en) => (
+                                    <option key={en.id} value={en.id}>{en.nombre}</option>
+                                ))}
+                            </select>
+                        </label>
                         <label className="block">
                             <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 mb-1.5 block">
                                 Proyecto / obra
@@ -1877,11 +2041,16 @@ export default function InventoryMasterPage() {
                                     if (id) {
                                         const pr = proyectos.find((p) => p.id === id);
                                         if (pr?.entidad_id) setFilterEntidadId(pr.entidad_id);
+                                        setSinClasificacionObra(false);
                                     }
                                 }}
-                                className="w-full rounded-xl border border-sky-500/30 bg-black/50 px-3 py-3 text-sm font-bold text-white"
+                                className="w-full rounded-xl border border-sky-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
                             >
-                                <option value="">Todos los proyectos</option>
+                                <option value="">
+                                    {filterEntidadId
+                                        ? 'Todas las obras de la entidad'
+                                        : 'Todas las obras'}
+                                </option>
                                 {proyectosFiltro.map((p) => (
                                     <option key={p.id} value={p.id}>{p.nombre}</option>
                                 ))}
@@ -1898,50 +2067,71 @@ export default function InventoryMasterPage() {
                                     if (e.target.value) setSinAlmacenAsignado(false);
                                 }}
                                 disabled={sinAlmacenAsignado}
-                                className="w-full rounded-xl border border-emerald-500/30 bg-black/50 px-3 py-3 text-sm font-bold text-white disabled:opacity-50"
+                                className="w-full rounded-xl border border-emerald-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                             >
-                                <option value="">Todos los almacenes</option>
-                                {depositsLista.map((d) => (
+                                <option value="">
+                                    {filterEntidadId || filterProyectoId
+                                        ? 'Todos los almacenes de la selección'
+                                        : 'Todos los almacenes'}
+                                </option>
+                                {depositsFiltrados.map((d) => (
                                     <option key={d.id} value={d.id}>
                                         {d.locality ? `${d.name} (${d.locality})` : d.name}
                                     </option>
                                 ))}
                             </select>
                         </label>
+                        <label className="block">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5 block">
+                                Partida Lulo
+                            </span>
+                            <select
+                                value={filterPartidaId}
+                                onChange={(e) => setFilterPartidaId(e.target.value)}
+                                disabled={!filterProyectoId}
+                                className="w-full rounded-xl border border-zinc-700 bg-black/50 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                            >
+                                <option value="">Todas las partidas</option>
+                                {partidasFiltro.map((pt) => (
+                                    <option key={pt.id} value={pt.id}>{labelPartida(pt)}</option>
+                                ))}
+                            </select>
+                        </label>
                     </div>
 
+                    {depositoSinInterseccion && filterDepositId ? (
+                        <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-200">
+                            El almacén elegido no coincide con ubicaciones de la obra; se muestra el stock de toda la obra.
+                            {' '}
+                            <button
+                                type="button"
+                                onClick={() => setFilterDepositId('')}
+                                className="underline hover:text-amber-100"
+                            >
+                                Quitar filtro de almacén
+                            </button>
+                        </div>
+                    ) : null}
+
                     <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-800/80">
-                        <select
-                            value={filterEntidadId}
-                            onChange={(e) => {
-                                setFilterEntidadId(e.target.value);
-                                setFilterProyectoId('');
-                                setFilterPartidaId('');
-                            }}
-                            className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-xs font-bold text-white min-w-[130px]"
+                        <label
+                            className={`flex items-center gap-2 text-[10px] font-bold uppercase cursor-pointer ${
+                                filtroStockPorUbicacion
+                                    ? 'text-zinc-600 cursor-not-allowed'
+                                    : 'text-zinc-500'
+                            }`}
+                            title={
+                                filtroStockPorUbicacion
+                                    ? 'Incompatible con filtro de obra o almacén (usa stock físico)'
+                                    : undefined
+                            }
                         >
-                            <option value="">Entidad</option>
-                            {entidades.map((en) => (
-                                <option key={en.id} value={en.id}>{en.nombre}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={filterPartidaId}
-                            onChange={(e) => setFilterPartidaId(e.target.value)}
-                            disabled={!filterProyectoId}
-                            className="rounded-xl border border-zinc-800 bg-black/50 px-3 py-2 text-xs font-bold text-white min-w-[160px] disabled:opacity-50"
-                        >
-                            <option value="">Partida Lulo</option>
-                            {partidasFiltro.map((pt) => (
-                                <option key={pt.id} value={pt.id}>{labelPartida(pt)}</option>
-                            ))}
-                        </select>
-                        <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={sinClasificacionObra}
+                                disabled={filtroStockPorUbicacion}
                                 onChange={(e) => setSinClasificacionObra(e.target.checked)}
-                                className="rounded border-zinc-700"
+                                className="rounded border-zinc-700 disabled:opacity-40"
                             />
                             Sin obra
                         </label>
@@ -2084,36 +2274,58 @@ export default function InventoryMasterPage() {
                 </div>
             ) : null}
 
-            <GlassCard className="overflow-x-auto">
-                <table className="w-full border-collapse">
+            <GlassCard className="overflow-hidden">
+                <table className="w-full table-fixed border-collapse text-sm">
+                    <colgroup>
+                        <col className="w-9" />
+                        <col className="w-[26%]" />
+                        <col className="w-[22%]" />
+                        <col className="w-[14%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[14%]" />
+                        <col className="w-[4.5rem]" />
+                    </colgroup>
                     <thead>
                         <tr className="bg-zinc-900/50 border-b border-zinc-800 text-left">
-                            <th className="p-5 w-10">
+                            <th className="px-2 py-2.5">
                                 <span className="sr-only">Seleccionar</span>
                             </th>
-                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Material / Info</th>
-                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Entidad / Obra / Partida</th>
-                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Ubicación</th>
-                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Stock Real</th>
-                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Costo Promedio</th>
-                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500">Última Compra</th>
-                            <th className="p-5 font-black text-[10px] uppercase tracking-widest text-zinc-500 text-right">Acciones</th>
+                            <th className="px-2 py-2.5 font-black text-[9px] uppercase tracking-widest text-zinc-500">Material</th>
+                            <th className="px-2 py-2.5 font-black text-[9px] uppercase tracking-widest text-zinc-500">Entidad / obra</th>
+                            <th className="px-2 py-2.5 font-black text-[9px] uppercase tracking-widest text-zinc-500">Ubicación</th>
+                            <th className="px-2 py-2.5 font-black text-[9px] uppercase tracking-widest text-zinc-500">Stock</th>
+                            <th className="px-2 py-2.5 font-black text-[9px] uppercase tracking-widest text-zinc-500">Costo / compra</th>
+                            <th className="px-1 py-2.5 font-black text-[9px] uppercase tracking-widest text-zinc-500 text-right">Acc.</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/50">
                         {loading && items.length === 0 ? (
                             [1, 2, 3].map(i => (
                                 <tr key={i} className="animate-pulse">
-                                    <td colSpan={8} className="p-8 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Loading material data...</td>
+                                    <td colSpan={7} className="p-6 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Loading material data...</td>
                                 </tr>
                             ))
                         ) : filteredItems.length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="p-20 text-center">
+                                <td colSpan={7} className="p-16 text-center">
                                     <div className="flex flex-col items-center">
                                         <Package size={48} className="text-zinc-800 mb-4" />
-                                        <p className="text-zinc-500 font-black text-xl tracking-tight">No se encontraron materiales</p>
-                                        <p className="text-zinc-600 font-bold text-sm uppercase tracking-widest mt-1">Ajusta tus filtros o registra un nuevo item</p>
+                                        <p className="text-zinc-500 font-black text-xl tracking-tight">
+                                            {mensajeVacio?.titulo ?? 'No se encontraron materiales'}
+                                        </p>
+                                        <p className="text-zinc-600 font-bold text-sm uppercase tracking-widest mt-1 max-w-md">
+                                            {mensajeVacio?.subtitulo ??
+                                                'Ajusta tus filtros o registra un nuevo item'}
+                                        </p>
+                                        {hayFiltrosActivos ? (
+                                            <button
+                                                type="button"
+                                                onClick={limpiarFiltros}
+                                                className="mt-4 text-[10px] font-black uppercase tracking-wide text-sky-400 hover:text-sky-300"
+                                            >
+                                                Limpiar filtros
+                                            </button>
+                                        ) : null}
                                     </div>
                                 </td>
                             </tr>
@@ -2150,19 +2362,19 @@ export default function InventoryMasterPage() {
                                     }`}
                                 >
                                     <td
-                                        className="p-5 w-10 align-middle"
+                                        className="px-2 py-2 align-middle"
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         <input
                                             type="checkbox"
                                             checked={selectedIds.has(item.id)}
                                             onChange={() => toggleSelectItem(item.id)}
-                                            className="h-4 w-4 rounded border-zinc-600 accent-sky-500"
+                                            className="h-3.5 w-3.5 rounded border-zinc-600 accent-sky-500"
                                             aria-label={`Seleccionar ${item.name}`}
                                         />
                                     </td>
-                                    <td className="p-5">
-                                        <div className="flex items-center gap-4">
+                                    <td className="px-2 py-2 overflow-hidden">
+                                        <div className="flex items-center gap-2 min-w-0">
                                             <InventoryListThumb
                                                 imageUrl={item.image_url}
                                                 catalogUrlFromProduct={
@@ -2174,19 +2386,19 @@ export default function InventoryMasterPage() {
                                                     catalogImagenByName[normalizeInventoryName(item.name)]
                                                 }
                                             />
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-[9px] font-black bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded border border-blue-500/20 uppercase">
-                                                        {item.sap_code || 'SIN COD'}
-                                                    </span>
-                                                </div>
-                                                <h4 className="font-black text-zinc-100 leading-tight">{item.name}</h4>
-                                                <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider">{item.unit}</p>
+                                            <div className="min-w-0">
+                                                <span className="text-[8px] font-black bg-blue-500/10 text-blue-500 px-1.5 py-px rounded border border-blue-500/20 uppercase truncate inline-block max-w-full">
+                                                    {item.sap_code || 'SIN COD'}
+                                                </span>
+                                                <h4 className="font-black text-zinc-100 text-sm leading-tight truncate" title={item.name}>
+                                                    {item.name}
+                                                </h4>
+                                                <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider truncate">{item.unit}</p>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="p-5 max-w-[220px]">
-                                        <div className="space-y-1 text-[10px] font-bold">
+                                    <td className="px-2 py-2 max-w-0">
+                                        <div className="space-y-0.5 text-[9px] font-bold min-w-0">
                                             {item.entidad?.nombre ? (
                                                 <p className="text-violet-300 truncate" title={item.entidad.nombre}>
                                                     {item.entidad.nombre}
@@ -2226,9 +2438,10 @@ export default function InventoryMasterPage() {
                                             ) : null}
                                         </div>
                                     </td>
-                                    <td className="p-5">
-                                        <div className="flex items-center gap-2 text-zinc-400 font-bold text-sm capitalize">
-                                            <div className="w-2 h-2 rounded-full bg-zinc-700"></div>
+                                    <td className="px-2 py-2 max-w-0">
+                                        <div className="flex items-center gap-1.5 text-zinc-400 font-bold text-xs capitalize min-w-0">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-700 shrink-0"></div>
+                                            <span className="truncate">
                                             {labelUbicacionEnTabla(
                                                 item,
                                                 stockUb,
@@ -2236,9 +2449,10 @@ export default function InventoryMasterPage() {
                                                 depositsById,
                                                 furnitureById,
                                             )}
+                                            </span>
                                         </div>
                                     </td>
-                                    <td className="p-5 text-right md:text-left">
+                                    <td className="px-2 py-2">
                                         <CeldaStockEditable
                                             cantidad={stockMostrar}
                                             reorderPoint={Number(item.reorder_point)}
@@ -2247,45 +2461,45 @@ export default function InventoryMasterPage() {
                                             onSave={(qty) => guardarStockCuadro(item.id, qty)}
                                         />
                                         {filtroPorUbicacionActivo && stockUb ? (
-                                            <span className="text-[10px] font-black text-emerald-500/90 uppercase mt-1 block">
-                                                En almacén filtrado
+                                            <span className="text-[8px] font-black text-emerald-500/90 uppercase mt-0.5 block leading-tight">
+                                                Almacén filtrado
                                             </span>
                                         ) : null}
                                         {!filtroPorUbicacionActivo && Number(item.stock_quarantine) > 0 ? (
-                                            <span className="text-[10px] font-black text-amber-500 uppercase mt-1 block">
-                                                + {item.stock_quarantine} Tránsito
+                                            <span className="text-[8px] font-black text-amber-500 uppercase mt-0.5 block leading-tight">
+                                                +{item.stock_quarantine} tránsito
                                             </span>
                                         ) : null}
                                     </td>
-                                    <td className="p-5">
-                                        <div className="font-bold text-zinc-300">
+                                    <td className="px-2 py-2 overflow-hidden">
+                                        <div className="font-bold text-zinc-300 text-xs tabular-nums truncate">
                                             {formatCurrency(Number(item.average_weighted_cost))}
-                                            <p className="text-[9px] text-zinc-600 uppercase tracking-widest font-black">Costo Ponderado</p>
                                         </div>
-                                    </td>
-                                    <td className="p-5">
                                         {item.last_purchase_date ? (
-                                            <div>
-                                                <p className="text-zinc-300 font-bold text-sm">
-                                                    {new Date(item.last_purchase_date).toLocaleDateString()}
-                                                </p>
-                                                <p className="text-[10px] text-zinc-500 font-bold">
-                                                    {formatCurrency(Number(item.last_purchase_price))}
-                                                </p>
-                                            </div>
+                                            <p
+                                                className="text-[9px] text-zinc-500 font-bold truncate leading-tight"
+                                                title={`${new Date(item.last_purchase_date).toLocaleDateString()} · ${formatCurrency(Number(item.last_purchase_price))}`}
+                                            >
+                                                {new Date(item.last_purchase_date).toLocaleDateString('es-VE', {
+                                                    day: '2-digit',
+                                                    month: 'short',
+                                                })}
+                                                {' · '}
+                                                {formatCurrency(Number(item.last_purchase_price))}
+                                            </p>
                                         ) : (
-                                            <span className="text-[10px] text-zinc-700 font-black uppercase tracking-widest">Sin registros</span>
+                                            <p className="text-[9px] text-zinc-700 font-bold uppercase">Sin compra</p>
                                         )}
                                     </td>
-                                    <td className="p-5 text-right w-10" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex gap-1 justify-end items-center">
+                                    <td className="px-1 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex gap-0.5 justify-end items-center">
                                             <Link href={`/almacen/editar/${item.id}`}>
                                                 <button
                                                     type="button"
                                                     title="Editar material"
-                                                    className="p-2 text-zinc-600 hover:text-sky-400 hover:bg-sky-500/10 rounded-lg transition-all"
+                                                    className="p-1.5 text-zinc-600 hover:text-sky-400 hover:bg-sky-500/10 rounded-md transition-all"
                                                 >
-                                                    <Pencil size={18} />
+                                                    <Pencil size={15} />
                                                 </button>
                                             </Link>
                                             <button
@@ -2296,12 +2510,12 @@ export default function InventoryMasterPage() {
                                                     e.stopPropagation();
                                                     void deleteMaterial(item.id, item.name);
                                                 }}
-                                                className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-40"
+                                                className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-all disabled:opacity-40"
                                             >
                                                 {deletingId === item.id ? (
-                                                    <span className="inline-block w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                                    <span className="inline-block w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
                                                 ) : (
-                                                    <Trash2 size={18} />
+                                                    <Trash2 size={15} />
                                                 )}
                                             </button>
                                         </div>

@@ -271,11 +271,85 @@ export function esUbicacionAlmacenFisico(tipo: string | undefined | null): boole
   return tipo === 'almacen_central' || tipo === 'almacen_movil' || !tipo || tipo === 'cuarentena';
 }
 
+export type ResultadoResolverUbicacionFiltro = {
+  ubicacionIds: string[];
+  /** Depósito elegido no intersectó con la obra; se muestra stock de la obra completa. */
+  depositoSinInterseccion: boolean;
+};
+
+function aplicarFiltroDepositoUbicaciones(
+  candidatas: UbicacionInventario[],
+  depositId?: string,
+  opts?: { permitirFallbackObra?: boolean },
+): { candidatas: UbicacionInventario[]; depositoSinInterseccion: boolean } {
+  if (!depositId?.trim()) {
+    return { candidatas, depositoSinInterseccion: false };
+  }
+  const did = depositId.trim();
+  const antesDeposito = candidatas;
+  const filtradas = candidatas.filter((u) => u.deposit_id === did);
+  if (filtradas.length) {
+    return { candidatas: filtradas, depositoSinInterseccion: false };
+  }
+  if (opts?.permitirFallbackObra && antesDeposito.length) {
+    return { candidatas: antesDeposito, depositoSinInterseccion: true };
+  }
+  return { candidatas: [], depositoSinInterseccion: false };
+}
+
+/** Depósitos físicos vinculados a ubicaciones de la entidad/obra seleccionada. */
+export function listarDepositIdsParaFiltroInventario(
+  ubicaciones: UbicacionInventario[],
+  opts: {
+    entidadId?: string;
+    proyectoId?: string;
+    proyectoNombre?: string;
+    proyectos: ProyectoFiltroUbicacion[];
+  },
+): string[] {
+  const flat = [...ubicaciones];
+  propagarObraIdFlat(flat);
+  propagarDepositIdFlat(flat);
+
+  const ids = new Set<string>();
+
+  const collect = (candidatas: UbicacionInventario[]) => {
+    for (const u of candidatas) {
+      const did = u.deposit_id?.trim();
+      if (did) ids.add(did);
+    }
+  };
+
+  if (opts.proyectoId) {
+    let candidatas = flat.filter((u) =>
+      ubicacionPerteneceAProyecto(u, opts.proyectoId!, opts.proyectoNombre),
+    );
+    candidatas = incluirAlmacenesCentralesHermanoObra(flat, candidatas);
+    candidatas = expandirDescendientesUbicacion(flat, candidatas);
+    collect(candidatas);
+  } else if (opts.entidadId) {
+    for (const pr of opts.proyectos.filter((p) => p.entidad_id === opts.entidadId)) {
+      let candidatas = flat.filter((u) =>
+        ubicacionPerteneceAProyecto(u, pr.id, pr.nombre),
+      );
+      candidatas = incluirAlmacenesCentralesHermanoObra(flat, candidatas);
+      collect(candidatas);
+    }
+  } else {
+    for (const u of flat) {
+      const did = u.deposit_id?.trim();
+      if (did) ids.add(did);
+    }
+  }
+
+  return Array.from(ids);
+}
+
 /** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */
-export function resolverUbicacionIdsFiltro(
+export function resolverUbicacionIdsFiltroConMeta(
   ubicaciones: UbicacionInventario[],
   opts: { proyectoId?: string; proyectoNombre?: string; depositId?: string },
-): string[] {
+): ResultadoResolverUbicacionFiltro {
   const flat = [...ubicaciones];
   propagarObraIdFlat(flat);
   propagarDepositIdFlat(flat);
@@ -288,15 +362,23 @@ export function resolverUbicacionIdsFiltro(
     candidatas = incluirAlmacenesCentralesHermanoObra(flat, candidatas);
     candidatas = expandirDescendientesUbicacion(flat, candidatas);
   }
-  if (opts.depositId) {
-    const antesDeposito = candidatas;
-    candidatas = candidatas.filter((u) => u.deposit_id === opts.depositId);
-    // Obra/subsitios a veces no tienen deposit_id aunque el stock esté en el almacén del proyecto.
-    if (!candidatas.length && opts.proyectoId && antesDeposito.length) {
-      candidatas = antesDeposito;
-    }
-  }
-  return candidatas.map((u) => u.id);
+  const { candidatas: finales, depositoSinInterseccion } = aplicarFiltroDepositoUbicaciones(
+    candidatas,
+    opts.depositId,
+    { permitirFallbackObra: Boolean(opts.proyectoId) },
+  );
+  return {
+    ubicacionIds: finales.map((u) => u.id),
+    depositoSinInterseccion,
+  };
+}
+
+/** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */
+export function resolverUbicacionIdsFiltro(
+  ubicaciones: UbicacionInventario[],
+  opts: { proyectoId?: string; proyectoNombre?: string; depositId?: string },
+): string[] {
+  return resolverUbicacionIdsFiltroConMeta(ubicaciones, opts).ubicacionIds;
 }
 
 export type ProyectoFiltroUbicacion = {
@@ -315,7 +397,7 @@ export function proyectoIdsDeEntidad(
 }
 
 /** Ubicaciones de todos los proyectos/obras de una entidad (y almacenes centrales hermanos). */
-export function resolverUbicacionIdsFiltroEntidad(
+export function resolverUbicacionIdsFiltroEntidadConMeta(
   ubicaciones: UbicacionInventario[],
   opts: {
     entidadId: string;
@@ -323,13 +405,13 @@ export function resolverUbicacionIdsFiltroEntidad(
     proyectoId?: string;
     depositId?: string;
   },
-): string[] {
+): ResultadoResolverUbicacionFiltro {
   const flat = [...ubicaciones];
   propagarObraIdFlat(flat);
   propagarDepositIdFlat(flat);
 
   const eid = opts.entidadId.trim();
-  if (!eid) return [];
+  if (!eid) return { ubicacionIds: [], depositoSinInterseccion: false };
 
   let proys = opts.proyectos.filter((p) => p.entidad_id === eid);
   if (opts.proyectoId) {
@@ -346,12 +428,29 @@ export function resolverUbicacionIdsFiltroEntidad(
   }
 
   let result = Array.from(byId.values());
-  if (opts.depositId) {
-    const filtradas = result.filter((u) => u.deposit_id === opts.depositId);
-    if (filtradas.length) result = filtradas;
-  }
+  const { candidatas: finales, depositoSinInterseccion } = aplicarFiltroDepositoUbicaciones(
+    result,
+    opts.depositId,
+    { permitirFallbackObra: true },
+  );
 
-  return result.map((u) => u.id);
+  return {
+    ubicacionIds: finales.map((u) => u.id),
+    depositoSinInterseccion,
+  };
+}
+
+/** Ubicaciones de todos los proyectos/obras de una entidad (y almacenes centrales hermanos). */
+export function resolverUbicacionIdsFiltroEntidad(
+  ubicaciones: UbicacionInventario[],
+  opts: {
+    entidadId: string;
+    proyectos: ProyectoFiltroUbicacion[];
+    proyectoId?: string;
+    depositId?: string;
+  },
+): string[] {
+  return resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, opts).ubicacionIds;
 }
 
 /** Coincide asignación de catálogo (global_inventory.proyecto_id / deposit_id). */

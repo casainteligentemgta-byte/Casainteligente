@@ -48,13 +48,13 @@ export default function CeldaStockEditable({
 
   return (
     <div
-      className="flex flex-col items-end md:items-start gap-1"
+      className="flex flex-col items-end md:items-start gap-0.5"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         {saving ? (
-          <Loader2 size={16} className="animate-spin text-sky-400 shrink-0" />
+          <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" />
         ) : null}
         <input
           type="number"
@@ -79,23 +79,21 @@ export default function CeldaStockEditable({
               setError(null);
             }
           }}
-          className={`w-24 rounded-lg border bg-black/40 px-2 py-1 text-right text-lg font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500/50 disabled:opacity-60 ${
+          className={`w-[4.5rem] rounded-md border bg-black/40 px-1.5 py-0.5 text-right text-sm font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500/50 disabled:opacity-60 ${
             bajo
               ? 'border-red-500/40 text-red-400'
               : 'border-zinc-700 text-zinc-100'
           }`}
         />
         {unidad ? (
-          <span className="text-[10px] font-bold uppercase text-zinc-500">{unidad}</span>
+          <span className="text-[9px] font-bold uppercase text-zinc-500 truncate max-w-[2.5rem]">
+            {unidad}
+          </span>
         ) : null}
       </div>
       {error ? (
-        <span className="text-[10px] font-bold text-red-400 max-w-[140px]">{error}</span>
-      ) : (
-        <span className="text-[9px] font-bold uppercase text-zinc-600 tracking-wide">
-          Editar stock
-        </span>
-      )}
+        <span className="text-[9px] font-bold text-red-400 max-w-[120px] leading-tight">{error}</span>
+      ) : null}
     </div>
   );
 }
