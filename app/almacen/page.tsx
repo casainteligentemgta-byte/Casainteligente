@@ -362,6 +362,7 @@ export default function InventoryMasterPage() {
     const [savingStockId, setSavingStockId] = useState<string | null>(null);
     /** Stock agregado de todas las ubicaciones (KPIs sin filtro de almacén). */
     const [stockGlobal, setStockGlobal] = useState<Map<string, StockEnUbicacionResumen>>(new Map());
+    const [stockGlobalCargado, setStockGlobalCargado] = useState(false);
     const [statFlips, setStatFlips] = useState<Record<StatFlipKey, boolean>>({
         valor: false,
         bajo: false,
@@ -440,9 +441,13 @@ export default function InventoryMasterPage() {
                 const ids = ubicaciones.map((u) => u.id);
                 if (!ids.length) return;
                 const stockMap = await cargarStockPorUbicaciones(supabase, ids);
-                if (!cancelled) setStockGlobal(stockMap);
+                if (!cancelled) {
+                    setStockGlobal(stockMap);
+                    setStockGlobalCargado(true);
+                }
             } catch (e) {
                 console.warn('[inventario] stock global:', e);
+                if (!cancelled) setStockGlobalCargado(true);
             }
         })();
         return () => {
@@ -470,7 +475,6 @@ export default function InventoryMasterPage() {
     );
 
     const filtroStockPorUbicacion = Boolean(filterEntidadId || filterProyectoId || filterDepositId);
-    const requiereStockEnUbicacion = Boolean(filterProyectoId || filterDepositId);
 
     const depositsLista = useMemo(() => {
         return Array.from(depositsById.values()).sort((a, b) =>
@@ -929,9 +933,7 @@ export default function InventoryMasterPage() {
             if (sinClasificacionObra && (item.proyecto_id || item.entidad_id)) return false;
             if (sinAlmacenAsignado && item.deposit_id) return false;
 
-            if (requiereStockEnUbicacion) {
-                if (stockEnFiltro <= 0) return false;
-            } else if (!filtroStockPorUbicacion) {
+            if (!filtroStockPorUbicacion) {
                 if (filterProyectoId && item.proyecto_id !== filterProyectoId) return false;
                 if (filterDepositId && item.deposit_id !== filterDepositId) return false;
             }
@@ -941,6 +943,11 @@ export default function InventoryMasterPage() {
             if (kpiVista === 'cuarentena') {
                 const idsCuarentena = new Set(cuarentenaOperativa.map((i) => i.material_id));
                 if (!idsCuarentena.has(item.id)) return false;
+            } else {
+                const stockDatosListos = filtroStockPorUbicacion
+                    ? !cargandoStockUbicacion
+                    : stockGlobalCargado;
+                if (stockDatosListos && qty <= 0) return false;
             }
 
             return true;
@@ -957,9 +964,10 @@ export default function InventoryMasterPage() {
         sinAlmacenAsignado,
         depositsById,
         filtroStockPorUbicacion,
-        requiereStockEnUbicacion,
         proyectoIdsEntidad,
         stockPorUbicacion,
+        stockGlobalCargado,
+        cargandoStockUbicacion,
         cantidadStockReal,
         kpiVista,
         cuarentenaOperativa,
