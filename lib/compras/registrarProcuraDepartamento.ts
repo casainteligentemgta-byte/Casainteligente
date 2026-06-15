@@ -297,7 +297,7 @@ export async function registrarProcuraDepartamento(
   };
 }
 
-/** Aprobador / Administrador: PM aprueba → orden de compra (en_compra) para el comprador. */
+/** Aprobador / Administrador: PM aprueba → avisa comprador; en_compra al vincular factura. */
 export async function resolverProcuraDepartamento(
   supabase: SupabaseClient,
   params: {

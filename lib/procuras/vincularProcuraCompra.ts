@@ -63,12 +63,17 @@ export async function vincularProcuraCompraContabilidad(
   const procuraId = String(row.procura_id);
   const { data: proc } = await supabase
     .from('ci_procuras')
-    .select('estado')
+    .select('estado,purchase_invoice_id')
     .eq('id', procuraId)
     .maybeSingle();
 
   const est = parseEstadoProcura(proc?.estado);
-  if (est && (est === 'aprobada' || est === 'aprobada_directa' || est === 'recibida_parcial')) {
+  const tieneFactura = Boolean(proc?.purchase_invoice_id?.trim());
+  if (
+    est &&
+    tieneFactura &&
+    (est === 'aprobada' || est === 'aprobada_directa' || est === 'recibida_parcial')
+  ) {
     const { error: estErr } = await supabase.rpc(
       'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
       {

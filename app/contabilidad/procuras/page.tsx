@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Loader2, Plus, RefreshCw, Trash2 } from 'lucide
 import {
   COLOR_ESTADO_PROCURA,
   ESTADOS_PROCURA,
+  ESTADOS_PROCURA_SOLO_SISTEMA,
   etiquetaEstadoProcura,
   type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
@@ -986,7 +987,9 @@ export default function ProcurasPage() {
                   onChange={(e) => setNuevoEstado(e.target.value as EstadoProcura)}
                   style={{ ...inputStyle, marginTop: '6px' }}
                 >
-                  {ESTADOS_PROCURA.map((e) => (
+                  {ESTADOS_PROCURA.filter(
+                    (e) => !ESTADOS_PROCURA_SOLO_SISTEMA.includes(e),
+                  ).map((e) => (
                     <option key={e} value={e}>
                       {etiquetaEstadoProcura(e)}
                     </option>

@@ -18,7 +18,7 @@ const ETIQUETAS: Record<EstadoProcura, string> = {
   solicitada: 'Pendiente',
   pendiente_pm: 'Pendiente PM',
   aprobada: 'Aprobada (pend. factura)',
-  aprobada_directa: 'Aprobada directa',
+  aprobada_directa: 'Aprobada directa (pend. factura)',
   en_compra: 'Comprada (factura cargada)',
   recibida_parcial: 'Recibida parcial',
   recibida: 'Recibida',
@@ -45,6 +45,9 @@ export function parseEstadoProcura(v: unknown): EstadoProcura | null {
     .toLowerCase();
   return (ESTADOS_PROCURA as readonly string[]).includes(s) ? (s as EstadoProcura) : null;
 }
+
+/** Solo al vincular factura de compra (purchase_invoice_id). */
+export const ESTADOS_PROCURA_SOLO_SISTEMA: readonly EstadoProcura[] = ['en_compra'];
 
 export function etiquetaEstadoProcura(v: string | null | undefined): string {
   const p = parseEstadoProcura(v);

@@ -91,6 +91,24 @@ function proveedorKey(name: string | null | undefined): string {
   return k || 'SINPROVEEDOR';
 }
 
+/** Clave estable de proveedor para agrupar facturas precargadas. */
+export const proveedorKeyFactura = proveedorKey;
+
+function compararNumeroFactura(a: string | null | undefined, b: string | null | undefined): number {
+  const na = String(a ?? '').trim();
+  const nb = String(b ?? '').trim();
+  return na.localeCompare(nb, 'es', { numeric: true, sensitivity: 'base' });
+}
+
+/** Orden natural por número de factura. */
+export function ordenarFacturasPendientesPorNumero(
+  facturas: FacturaPendienteIngreso[],
+): FacturaPendienteIngreso[] {
+  return [...facturas].sort((a, b) =>
+    compararNumeroFactura(a.invoice_number, b.invoice_number),
+  );
+}
+
 function meta(estado: TelegramEstado): MetadataIngresoFactura {
   return (estado.metadata ?? {}) as MetadataIngresoFactura;
 }
@@ -146,6 +164,8 @@ function agruparProveedores(facturas: FacturaPendienteIngreso[]): Array<{
     .map(([key, v]) => ({ key, nombre: v.nombre, count: v.count }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
+
+export const agruparProveedoresFacturasPrecargadas = agruparProveedores;
 
 export function esCallbackIngresoFactura(data: string): boolean {
   return data.startsWith(PREFIX);
@@ -336,6 +356,13 @@ export function etiquetaFacturaBoton(f: FacturaPendienteIngreso): string {
   return truncar(`${icon} #${f.invoice_number ?? 'S/N'} · ${prov} · ${accion}`, 58);
 }
 
+/** Etiqueta corta bajo un proveedor ya elegido (solo número). */
+export function etiquetaFacturaBotonPorNumero(f: FacturaPendienteIngreso): string {
+  const icon = f.accion === 'ingreso_almacen' ? '📥' : '⏳';
+  const accion = f.accion === 'ingreso_almacen' ? 'ingreso' : 'confirmar';
+  return truncar(`${icon} #${f.invoice_number ?? 'S/N'} · ${accion}`, 44);
+}
+
 /** Selecciona una factura precargada (menú /ingreso o flujo depositario). */
 export async function seleccionarFacturaPrecargadaTelegram(
   supabase: SupabaseClient,
@@ -381,13 +408,17 @@ export async function seleccionarFacturaPrecargadaTelegram(
   return 'ok';
 }
 
-function buildKeyboardFacturas(facturas: FacturaPendienteIngreso[], page: number) {
+function buildKeyboardFacturas(
+  facturas: FacturaPendienteIngreso[],
+  page: number,
+  soloNumero = false,
+) {
   const totalPages = Math.max(1, Math.ceil(facturas.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
   const slice = facturas.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
   const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((f) => [
     {
-      text: etiquetaFacturaBoton(f),
+      text: soloNumero ? etiquetaFacturaBotonPorNumero(f) : etiquetaFacturaBoton(f),
       callback_data: `${PREFIX_FACT}${f.key}`,
     },
   ]);
@@ -446,10 +477,17 @@ async function enviarListaFacturasProveedor(
   page = 0,
 ): Promise<void> {
   const todas = await listarFacturasPendientesIngreso(supabase);
-  const facturas = todas.filter((f) => proveedorKey(f.supplier_name) === provKey);
+  const facturas = ordenarFacturasPendientesPorNumero(
+    todas.filter((f) => proveedorKey(f.supplier_name) === provKey),
+  );
 
   if (!facturas.length) {
     await enviarListaProveedores(supabase, chatId);
+    return;
+  }
+
+  if (facturas.length === 1) {
+    await seleccionarFacturaPrecargadaTelegram(supabase, chatId, facturas[0]!.key);
     return;
   }
 
@@ -463,8 +501,12 @@ async function enviarListaFacturasProveedor(
 
   await sendTelegramMessage(
     chatId,
-    `🏢 <b>${escHtml(nombre)}</b>\n\nElige la factura a ingresar:`,
-    { parse_mode: 'HTML', reply_markup: buildKeyboardFacturas(facturas, page) },
+    `🏢 <b>${escHtml(nombre)}</b>\n\n` +
+      `Elige la factura por <b>número</b> (${facturas.length}):`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: buildKeyboardFacturas(facturas, page, true),
+    },
   );
 }
 

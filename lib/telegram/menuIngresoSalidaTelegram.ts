@@ -1,9 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { FacturaPendienteIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
 import { listarFacturasPendientesIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
 import {
-  callbackFacturaPrecargada,
-  etiquetaFacturaBoton,
+  agruparProveedoresFacturasPrecargadas,
+  etiquetaFacturaBotonPorNumero,
   manejarComandoIngresoFacturaTelegram,
+  ordenarFacturasPendientesPorNumero,
+  proveedorKeyFactura,
+  seleccionarFacturaPrecargadaTelegram,
 } from '@/lib/telegram/ingresoFacturaTelegram';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import {
@@ -18,7 +22,25 @@ import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTele
 
 const PREFIX_INGRESO = 'ig:';
 const PREFIX_SALIDA = 'sg:';
-const MENU_FACTURAS_PAGE_SIZE = 5;
+const MENU_PROV_PAGE_SIZE = 8;
+const MENU_FACT_PAGE_SIZE = 8;
+
+function truncar(s: string, max = 52): string {
+  const t = s.trim();
+  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+}
+
+function callbackMenuProveedor(key: string): string {
+  return `${PREFIX_INGRESO}pr:${key}`;
+}
+
+function callbackMenuFactura(key: string): string {
+  return `${PREFIX_INGRESO}fc:${key}`;
+}
+
+function callbackMenuFacturasPagina(provKey: string, page: number): string {
+  return `${PREFIX_INGRESO}fp:${provKey}:${page}`;
+}
 
 /** Opciones del submenú /ingreso (4 flujos + listado precargadas). */
 export type OpcionMenuIngreso = 'factura' | 'factauto' | 'nota' | 'sinnota' | 'precargadas';
@@ -57,7 +79,7 @@ export async function manejarComandoIngresoTelegram(
 export async function enviarMenuIngresoTelegram(
   supabase: SupabaseClient,
   chatId: string,
-  pageFacturas = 0,
+  pageProveedores = 0,
 ): Promise<void> {
   const facturas = await listarFacturasPendientesIngreso(supabase);
 
@@ -68,19 +90,30 @@ export async function enviarMenuIngresoTelegram(
     [{ text: '📝 Ingreso sin nota', callback_data: callbackMenuIngreso('sinnota') }],
   ];
 
+  const nIngreso = facturas.filter((f) => f.accion === 'ingreso_almacen').length;
+  const nConfirmar = facturas.length - nIngreso;
+  let texto = '📥 <b>Ingreso a almacén</b>\n\nElige el tipo de ingreso:';
+
   if (facturas.length) {
-    const totalPages = Math.max(1, Math.ceil(facturas.length / MENU_FACTURAS_PAGE_SIZE));
-    const safePage = Math.min(Math.max(0, pageFacturas), totalPages - 1);
-    const slice = facturas.slice(
-      safePage * MENU_FACTURAS_PAGE_SIZE,
-      safePage * MENU_FACTURAS_PAGE_SIZE + MENU_FACTURAS_PAGE_SIZE,
+    const proveedores = agruparProveedoresFacturasPrecargadas(facturas);
+    const totalPages = Math.max(1, Math.ceil(proveedores.length / MENU_PROV_PAGE_SIZE));
+    const safePage = Math.min(Math.max(0, pageProveedores), totalPages - 1);
+    const slice = proveedores.slice(
+      safePage * MENU_PROV_PAGE_SIZE,
+      safePage * MENU_PROV_PAGE_SIZE + MENU_PROV_PAGE_SIZE,
     );
 
-    for (const f of slice) {
+    texto +=
+      `\n\n<b>Facturas precargadas</b> — elige <b>proveedor</b> (${facturas.length})` +
+      (nIngreso ? `\n📥 ${nIngreso} para ingreso` : '') +
+      (nConfirmar ? `\n⏳ ${nConfirmar} pend. confirmar compra` : '') +
+      '\n<i>Luego verás las facturas por número.</i>';
+
+    for (const p of slice) {
       rows.push([
         {
-          text: etiquetaFacturaBoton(f),
-          callback_data: callbackFacturaPrecargada(f.key),
+          text: truncar(`🏢 ${p.nombre} (${p.count})`),
+          callback_data: callbackMenuProveedor(p.key),
         },
       ]);
     }
@@ -88,40 +121,99 @@ export async function enviarMenuIngresoTelegram(
     if (totalPages > 1) {
       const nav: Array<{ text: string; callback_data: string }> = [];
       if (safePage > 0) {
-        nav.push({ text: '◀', callback_data: `${PREFIX_INGRESO}pg:${safePage - 1}` });
+        nav.push({ text: '◀', callback_data: `${PREFIX_INGRESO}pp:${safePage - 1}` });
       }
-      nav.push({ text: `${safePage + 1}/${totalPages}`, callback_data: `${PREFIX_INGRESO}pg:${safePage}` });
+      nav.push({
+        text: `${safePage + 1}/${totalPages}`,
+        callback_data: `${PREFIX_INGRESO}pp:${safePage}`,
+      });
       if (safePage < totalPages - 1) {
-        nav.push({ text: '▶', callback_data: `${PREFIX_INGRESO}pg:${safePage + 1}` });
+        nav.push({ text: '▶', callback_data: `${PREFIX_INGRESO}pp:${safePage + 1}` });
       }
       rows.push(nav);
     }
-
-    if (facturas.length > MENU_FACTURAS_PAGE_SIZE) {
-      rows.push([
-        {
-          text: '📋 Ver todas por proveedor',
-          callback_data: callbackMenuIngreso('precargadas'),
-        },
-      ]);
-    }
-  }
-
-  const nIngreso = facturas.filter((f) => f.accion === 'ingreso_almacen').length;
-  const nConfirmar = facturas.length - nIngreso;
-  let texto = '📥 <b>Ingreso a almacén</b>\n\nElige el tipo de ingreso:';
-  if (facturas.length) {
-    texto +=
-      `\n\n<b>Facturas precargadas</b> (${facturas.length})` +
-      (nIngreso ? `\n📥 ${nIngreso} lista(s) para ingreso` : '') +
-      (nConfirmar ? `\n⏳ ${nConfirmar} requiere(n) confirmar compra` : '') +
-      '\n<i>📥 = ingresar · ⏳ = confirmar compra primero</i>';
   }
 
   await sendTelegramMessage(chatId, texto, {
     parse_mode: 'HTML',
     reply_markup: { inline_keyboard: rows },
   });
+}
+
+function tecladoFacturasPrecargadasMenu(
+  facturas: FacturaPendienteIngreso[],
+  provKey: string,
+  page: number,
+) {
+  const totalPages = Math.max(1, Math.ceil(facturas.length / MENU_FACT_PAGE_SIZE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const slice = facturas.slice(
+    safePage * MENU_FACT_PAGE_SIZE,
+    safePage * MENU_FACT_PAGE_SIZE + MENU_FACT_PAGE_SIZE,
+  );
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((f) => [
+    {
+      text: etiquetaFacturaBotonPorNumero(f),
+      callback_data: callbackMenuFactura(f.key),
+    },
+  ]);
+  buttons.push([{ text: '◀ Proveedores', callback_data: `${PREFIX_INGRESO}back` }]);
+  if (totalPages > 1) {
+    const nav: Array<{ text: string; callback_data: string }> = [];
+    if (safePage > 0) {
+      nav.push({ text: '◀', callback_data: callbackMenuFacturasPagina(provKey, safePage - 1) });
+    }
+    nav.push({
+      text: `${safePage + 1}/${totalPages}`,
+      callback_data: callbackMenuFacturasPagina(provKey, safePage),
+    });
+    if (safePage < totalPages - 1) {
+      nav.push({ text: '▶', callback_data: callbackMenuFacturasPagina(provKey, safePage + 1) });
+    }
+    buttons.push(nav);
+  }
+  return { inline_keyboard: buttons };
+}
+
+async function enviarFacturasPrecargadasMenuPorProveedor(
+  supabase: SupabaseClient,
+  chatId: string,
+  provKey: string,
+  page = 0,
+): Promise<void> {
+  const todas = await listarFacturasPendientesIngreso(supabase);
+  const facturas = ordenarFacturasPendientesPorNumero(
+    todas.filter((f) => proveedorKeyFactura(f.supplier_name) === provKey),
+  );
+
+  if (!facturas.length) {
+    await enviarMenuIngresoTelegram(supabase, chatId);
+    return;
+  }
+
+  if (facturas.length === 1) {
+    await seleccionarFacturaPrecargadaTelegram(supabase, chatId, facturas[0]!.key);
+    return;
+  }
+
+  const nombre = facturas[0]?.supplier_name ?? 'Proveedor';
+  await sendTelegramMessage(
+    chatId,
+    `🏢 <b>${escapeHtml(nombre)}</b>\n\n` +
+      `Elige la factura por <b>número</b> (${facturas.length}):`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: tecladoFacturasPrecargadasMenu(facturas, provKey, page),
+    },
+  );
+}
+
+async function manejarProveedorPrecargadoMenu(
+  supabase: SupabaseClient,
+  chatId: string,
+  provKey: string,
+): Promise<void> {
+  await enviarFacturasPrecargadasMenuPorProveedor(supabase, chatId, provKey, 0);
 }
 
 export async function enviarMenuSalidaTelegram(chatId: string): Promise<void> {
@@ -226,14 +318,81 @@ export async function manejarCallbackMenuIngresoTelegram(
   if (!esCallbackMenuIngresoTelegram(params.data)) return false;
 
   const raw = params.data.slice(PREFIX_INGRESO.length);
-  if (raw.startsWith('pg:')) {
+
+  if (raw === 'back') {
+    await answerCallbackQuery(params.callbackId);
+    await enviarMenuIngresoTelegram(supabase, params.chatId);
+    return true;
+  }
+
+  if (raw.startsWith('pp:')) {
     const page = Number(raw.slice(3));
     if (!Number.isFinite(page) || page < 0) return false;
     await answerCallbackQuery(params.callbackId);
     try {
       await enviarMenuIngresoTelegram(supabase, params.chatId, Math.floor(page));
     } catch (e) {
-      console.error('[telegram menu ingreso pagina]', e);
+      console.error('[telegram menu ingreso pagina proveedores]', e);
+    }
+    return true;
+  }
+
+  if (raw.startsWith('pg:')) {
+    const page = Number(raw.slice(3));
+    if (!Number.isFinite(page) || page < 0) return false;
+    await answerCallbackQuery(params.callbackId);
+    await enviarMenuIngresoTelegram(supabase, params.chatId, Math.floor(page));
+    return true;
+  }
+
+  if (raw.startsWith('fp:')) {
+    const rest = raw.slice(3);
+    const sep = rest.lastIndexOf(':');
+    if (sep <= 0) return false;
+    const provKey = rest.slice(0, sep);
+    const page = Number(rest.slice(sep + 1));
+    if (!Number.isFinite(page) || page < 0) return false;
+    await answerCallbackQuery(params.callbackId);
+    try {
+      await enviarFacturasPrecargadasMenuPorProveedor(
+        supabase,
+        params.chatId,
+        provKey,
+        Math.floor(page),
+      );
+    } catch (e) {
+      console.error('[telegram menu ingreso facturas proveedor]', e);
+    }
+    return true;
+  }
+
+  if (raw.startsWith('pr:')) {
+    const provKey = raw.slice(3);
+    if (!provKey) return false;
+    await answerCallbackQuery(params.callbackId);
+    try {
+      await manejarProveedorPrecargadoMenu(supabase, params.chatId, provKey);
+    } catch (e) {
+      console.error('[telegram menu ingreso proveedor]', e);
+    }
+    return true;
+  }
+
+  if (raw.startsWith('fc:')) {
+    const key = raw.slice(3);
+    if (!key) return false;
+    await answerCallbackQuery(params.callbackId, 'Cargando factura…');
+    try {
+      const resultado = await seleccionarFacturaPrecargadaTelegram(supabase, params.chatId, key);
+      if (resultado === 'not_found') {
+        await sendTelegramMessage(
+          params.chatId,
+          '⚠️ Factura no encontrada o ya ingresada. Use <code>/ingreso</code> de nuevo.',
+          { parse_mode: 'HTML' },
+        );
+      }
+    } catch (e) {
+      console.error('[telegram menu ingreso factura]', e);
     }
     return true;
   }

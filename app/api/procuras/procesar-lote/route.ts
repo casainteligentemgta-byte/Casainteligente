@@ -254,6 +254,16 @@ export async function POST(request: Request) {
       });
     }
 
+    if (nuevoEstado === 'en_compra') {
+      return NextResponse.json(
+        {
+          error:
+            '«Comprada» solo aplica al registrar la factura (/facturas). No se puede forzar manualmente.',
+        },
+        { status: 400 },
+      );
+    }
+
     const { data, error } = await admin.client.rpc(
       'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
       {
@@ -264,8 +274,10 @@ export async function POST(request: Request) {
     );
 
     if (error) {
-      const hint = /procesar_procuras_lote|could not choose|PGRST203/i.test(error.message)
-        ? 'Ejecute migraciones 224 y 238_repair_procesar_procuras_lote_overload.sql en Supabase.'
+      const hint = /procesar_procuras_lote|could not choose|PGRST203|purchase_invoice_id/i.test(
+        error.message,
+      )
+        ? 'Ejecute migraciones 224, 238 y 244 en Supabase.'
         : undefined;
       return NextResponse.json({ error: error.message, hint }, { status: 500 });
     }

@@ -65,6 +65,16 @@ export async function PATCH(req: Request) {
   };
 
   const nuevoEstado = String(body.nuevoEstado ?? '').trim().toLowerCase();
+  if (nuevoEstado === 'en_compra') {
+    return NextResponse.json(
+      {
+        error:
+          '«Comprada» solo aplica al vincular factura de compra. Use /facturas en Telegram.',
+      },
+      { status: 400 },
+    );
+  }
+
   const perm =
     nuevoEstado === 'en_compra'
       ? ('procura.ejecutar_compra' as const)
