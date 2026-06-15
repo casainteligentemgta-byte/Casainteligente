@@ -277,13 +277,13 @@ function FlipStatCard({
                 }}
             >
                 <div
-                    className="absolute inset-0"
+                    className={`absolute inset-0 ${flipped ? 'pointer-events-none' : 'pointer-events-auto'}`}
                     style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                 >
                     <GlassCard className="p-4 h-full">{front}</GlassCard>
                 </div>
                 <div
-                    className="absolute inset-0 overflow-y-auto max-h-[132px]"
+                    className={`absolute inset-0 overflow-y-auto max-h-[132px] ${flipped ? 'pointer-events-auto' : 'pointer-events-none'}`}
                     style={{
                         backfaceVisibility: 'hidden',
                         WebkitBackfaceVisibility: 'hidden',
@@ -1524,16 +1524,18 @@ export default function InventoryMasterPage() {
     ]);
 
     const valorDesglose = useMemo(() => {
-        const fromDeposito = valorPorDeposito
-            .filter((d) => d.value > 0)
-            .map((d) => ({ id: d.depositId, name: d.name, value: d.value }));
-        if (fromDeposito.length) return fromDeposito;
-        return valorPorAlmacen.map((d, i) => ({
+        const fromCatalogo = valorPorAlmacen.map((d, i) => ({
             id: `cat-${d.name}-${i}`,
             name: d.name,
             value: d.value,
         }));
-    }, [valorPorDeposito, valorPorAlmacen]);
+        if (filtroStockEntidadActivo && fromCatalogo.length) return fromCatalogo;
+        const fromDeposito = valorPorDeposito
+            .filter((d) => d.value > 0)
+            .map((d) => ({ id: d.depositId, name: d.name, value: d.value }));
+        if (fromDeposito.length) return fromDeposito;
+        return fromCatalogo;
+    }, [valorPorDeposito, valorPorAlmacen, filtroStockEntidadActivo]);
 
     const valorTotalKpi = useMemo(() => {
         const sum = valorDesglose.reduce((s, d) => s + d.value, 0);
@@ -1543,6 +1545,15 @@ export default function InventoryMasterPage() {
 
     useEffect(() => {
         if (!itemsCatalogo.length || !depositsLista.length) {
+            setValorPorDeposito([]);
+            return;
+        }
+        if (filtroStockEntidadActivo && cargandoStockUbicacion) return;
+        if (
+            filtroStockEntidadActivo &&
+            !filterDepositId &&
+            ubicacionIdsFiltro.length === 0
+        ) {
             setValorPorDeposito([]);
             return;
         }
@@ -1560,9 +1571,14 @@ export default function InventoryMasterPage() {
             hayFiltrosActivos && baseItemsKpi.length
                 ? new Set(baseItemsKpi.map((i) => i.id))
                 : undefined;
+        const ubicacionIds =
+            filtroStockEntidadActivo && ubicacionIdsFiltro.length
+                ? ubicacionIdsFiltro
+                : undefined;
         void cargarValorInventarioPorDeposito(supabase, costoPorMaterial, depositLabels, {
             materialIds,
             soloDepositoId: filterDepositId || undefined,
+            ubicacionIds,
         })
             .then((rows) => {
                 if (!cancelled) setValorPorDeposito(rows);
@@ -1578,6 +1594,9 @@ export default function InventoryMasterPage() {
         hayFiltrosActivos,
         baseItemsKpi,
         filterDepositId,
+        filtroStockEntidadActivo,
+        cargandoStockUbicacion,
+        ubicacionIdsFiltro,
     ]);
 
     useEffect(() => {
@@ -1640,6 +1659,11 @@ export default function InventoryMasterPage() {
     };
 
     const valorPuedeRotar = valorSlots.length > 1;
+
+    const valorSinStockFisico =
+        valorTotalKpi <= 0 &&
+        baseItemsKpi.length > 0 &&
+        (filtroStockEntidadActivo ? !cargandoStockUbicacion : stockGlobalCargado);
 
     const limpiarFiltros = () => {
         setSearchTerm('');
@@ -1937,22 +1961,41 @@ export default function InventoryMasterPage() {
                             ) : (
                                 <p className="text-[9px] text-zinc-600 font-bold mt-1 flex items-center gap-1">
                                     <List size={10} />
-                                    Clic para desglose por almacén
+                                    {valorSinStockFisico
+                                        ? 'Sin stock físico · clic para detalle'
+                                        : 'Clic para desglose por almacén'}
                                 </p>
                             )}
                         </>
                     }
                     back={
                         <div className="space-y-2">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">
-                                Valor por almacén
-                            </p>
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">
+                                    Valor por almacén
+                                </p>
+                                <button
+                                    type="button"
+                                    title="Volver"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleStatFlip('valor');
+                                    }}
+                                    className="p-0.5 rounded text-zinc-600 hover:text-blue-400 shrink-0"
+                                >
+                                    <ChevronLeft size={14} />
+                                </button>
+                            </div>
                             <div className="flex justify-between gap-2 text-[10px] font-bold border-b border-zinc-800/60 pb-1 mb-1">
                                 <span className="text-zinc-500">Total</span>
                                 <span className="text-blue-300 shrink-0">{formatCurrency(valorTotalKpi)}</span>
                             </div>
                             {valorDesglose.length === 0 ? (
-                                <p className="text-xs text-zinc-500">Sin datos de almacén</p>
+                                <p className="text-xs text-zinc-500">
+                                    {valorSinStockFisico
+                                        ? 'Stock físico en 0. El valor usa cantidad × costo ponderado.'
+                                        : 'Sin datos de almacén'}
+                                </p>
                             ) : (
                                 valorDesglose.map((row) => (
                                     <div

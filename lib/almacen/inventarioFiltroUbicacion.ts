@@ -628,6 +628,8 @@ export async function cargarValorInventarioPorDeposito(
     materialIds?: ReadonlySet<string>;
     /** Solo stock en ubicaciones de este depósito. */
     soloDepositoId?: string;
+    /** Acota a ubicaciones del filtro activo (entidad, obra o almacén). */
+    ubicacionIds?: readonly string[];
   },
 ): Promise<ValorInventarioDeposito[]> {
   const valorByDeposit = new Map<string, { value: number; unidades: number }>();
@@ -637,9 +639,14 @@ export async function cargarValorInventarioPorDeposito(
   const ubToDeposit = new Map(flat.map((u) => [u.id, u.deposit_id ?? '']));
 
   let ubicacionIds = flat.map((u) => u.id);
+  if (opts?.ubicacionIds?.length) {
+    const scope = new Set(opts.ubicacionIds);
+    ubicacionIds = flat.filter((u) => scope.has(u.id)).map((u) => u.id);
+    if (!ubicacionIds.length) return [];
+  }
   if (opts?.soloDepositoId) {
     ubicacionIds = flat
-      .filter((u) => u.deposit_id === opts.soloDepositoId)
+      .filter((u) => ubicacionIds.includes(u.id) && u.deposit_id === opts.soloDepositoId)
       .map((u) => u.id);
     if (!ubicacionIds.length) return [];
   }
