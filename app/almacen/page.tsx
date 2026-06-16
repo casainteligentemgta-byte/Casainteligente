@@ -755,6 +755,25 @@ export default function InventoryMasterPage() {
         [proyectos, filterProyectoId],
     );
 
+    const hrefDespacho = useMemo(() => {
+        const q = new URLSearchParams();
+        if (filterProyectoId) q.set('proyectoId', filterProyectoId);
+        if (filterDepositId && ubicacionesInventario.length) {
+            const candidatos = ubicacionesInventario.filter(
+                (u) => u.deposit_id === filterDepositId && u.activo !== false,
+            );
+            let raiz =
+                candidatos.find((u) => !u.ubicacion_padre_id) ??
+                (filterProyectoId
+                    ? candidatos.find((u) => u.obra_id === filterProyectoId)
+                    : undefined) ??
+                candidatos[0];
+            if (raiz?.id) q.set('ubicacion_id', raiz.id);
+        }
+        const qs = q.toString();
+        return qs ? `/almacen/despacho?${qs}` : '/almacen/despacho';
+    }, [filterProyectoId, filterDepositId, ubicacionesInventario]);
+
     const depositIdsScope = useMemo(
         () =>
             listarDepositIdsParaFiltroInventario(ubicacionesInventario, {
@@ -2214,9 +2233,7 @@ export default function InventoryMasterPage() {
                             return <span key={nav.label}>{btn}</span>;
                         }
                         const href =
-                            nav.href === '/almacen/despacho' && filterProyectoId
-                                ? `/almacen/despacho?proyectoId=${encodeURIComponent(filterProyectoId)}`
-                                : nav.href!;
+                            nav.href === '/almacen/despacho' ? hrefDespacho : nav.href!;
                         return (
                             <Link key={nav.href} href={href}>
                                 {btn}

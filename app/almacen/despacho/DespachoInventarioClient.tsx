@@ -192,6 +192,7 @@ export default function DespachoInventarioClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const proyectoIdParam = searchParams.get('proyectoId')?.trim() || '';
+  const ubicacionIdParam = searchParams.get('ubicacion_id')?.trim() || '';
   const [montado, setMontado] = useState(false);
   const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
   const [loadingProyectos, setLoadingProyectos] = useState(true);
@@ -287,6 +288,10 @@ export default function DespachoInventarioClient() {
   useEffect(() => {
     if (proyectoIdParam) setProyectoId(proyectoIdParam);
   }, [proyectoIdParam]);
+
+  useEffect(() => {
+    if (ubicacionIdParam) setOrigenId(ubicacionIdParam);
+  }, [ubicacionIdParam]);
 
   const cargarStock = useCallback(async (obraId: string, filtroUbicacionId?: string) => {
     if (!obraId) {
