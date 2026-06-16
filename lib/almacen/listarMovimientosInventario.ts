@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { movimientoInventarioEsEliminable } from '@/lib/almacen/eliminarMovimientoInventario';
+import { cargarFilasStockFisico } from '@/lib/almacen/stockFisicoMovimientos';
 
 export type VistaMovimientoInventario = 'ingresado' | 'despachado' | 'almacenado' | 'todos';
 
@@ -750,7 +751,11 @@ export async function listarMovimientosInventario(
   const todosDespachos = [...despachosTransferencia, ...despachosTelegram].sort((a, b) =>
     b.fecha.localeCompare(a.fecha),
   );
-  const filasStock = calcularFilasStock(todosIngresos, todosDespachos);
+  const filasStockCalculado = calcularFilasStock(todosIngresos, todosDespachos);
+  let filasStock = await cargarFilasStockFisico(supabase, filtros);
+  if (!filasStock.length) {
+    filasStock = filasStockCalculado;
+  }
 
   let merged: FilaMovimientoInventario[];
   if (vista === 'ingresado') merged = todosIngresos;

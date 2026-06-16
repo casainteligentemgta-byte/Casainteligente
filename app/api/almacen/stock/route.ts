@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { listarStockProyecto } from '@/lib/almacen/listarStockProyecto';
+import { listarMovimientosInventario } from '@/lib/almacen/listarMovimientosInventario';
+import { filaStockAStockProyectoItem } from '@/lib/almacen/stockFisicoMovimientos';
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
@@ -14,9 +16,20 @@ export async function GET(req: Request) {
 
   if (proyectoId) {
     try {
-      const items = await listarStockProyecto(supabase, proyectoId, {
+      let items = await listarStockProyecto(supabase, proyectoId, {
         ubicacionId: ubicacionId || undefined,
       });
+      if (!items.length) {
+        const mov = await listarMovimientosInventario(supabase, {
+          vista: 'almacenado',
+          proyectoId,
+          ubicacionId: ubicacionId || undefined,
+          limite: 400,
+        });
+        items = mov.filas
+          .map(filaStockAStockProyectoItem)
+          .filter((x): x is NonNullable<typeof x> => x != null);
+      }
       return NextResponse.json({
         ok: true,
         items,
