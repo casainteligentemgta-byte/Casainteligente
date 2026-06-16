@@ -47,6 +47,8 @@ export async function GET(req: Request) {
       proyectoId: url.searchParams.get('proyecto_id') ?? undefined,
       proyectoIdsEntidad: parseCsvIds(url.searchParams.get('proyecto_ids')),
       materialIdsCategoria: parseCsvIds(url.searchParams.get('material_ids')),
+      ubicacionId: url.searchParams.get('ubicacion_id') ?? undefined,
+      ubicacionIds: parseCsvIds(url.searchParams.get('ubicacion_ids')),
       fechaDesde: url.searchParams.get('fecha_desde') ?? undefined,
       fechaHasta: url.searchParams.get('fecha_hasta') ?? undefined,
       material: url.searchParams.get('material') ?? undefined,

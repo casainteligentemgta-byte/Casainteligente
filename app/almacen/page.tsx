@@ -842,14 +842,6 @@ export default function InventoryMasterPage() {
         return Array.from(byId.values());
     }, [items, itemsDesdeStock]);
 
-    const materialIdsCategoria = useMemo(() => {
-        if (activeCategory === 'Todos') return undefined;
-        const ids = itemsCatalogo
-            .filter((item) => categoriaCoincideFiltro(item, activeCategory))
-            .map((item) => item.id);
-        return ids.length > 0 ? ids : undefined;
-    }, [itemsCatalogo, activeCategory]);
-
     useEffect(() => {
         if (
             !filterProyectoId &&
@@ -1475,6 +1467,19 @@ export default function InventoryMasterPage() {
         cuarentenaFiltrada,
         materialIdsCuarentenaObra,
     ]);
+
+    const materialIdsParaMovimientos = useMemo(() => {
+        if (cuadroModo !== 'movimientos') return undefined;
+        if (!hayFiltrosActivos && !searchTerm.trim()) return undefined;
+        const ids = filteredItems.map((item) => item.id);
+        return ids.length > 0 ? ids : ['00000000-0000-0000-0000-000000000000'];
+    }, [cuadroModo, hayFiltrosActivos, searchTerm, filteredItems]);
+
+    const ubicacionIdsParaMovimientos = useMemo(() => {
+        if (cuadroModo !== 'movimientos') return undefined;
+        if (!filtroStockPorUbicacion && !filterDepositId) return undefined;
+        return ubicacionIdsFiltro.length > 0 ? ubicacionIdsFiltro : ['00000000-0000-0000-0000-000000000000'];
+    }, [cuadroModo, filtroStockPorUbicacion, filterDepositId, ubicacionIdsFiltro]);
 
     const todasSeleccionadas = useMemo(
         () => filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id)),
@@ -2897,7 +2902,8 @@ export default function InventoryMasterPage() {
                     skipUrlSync
                     proyectoId={filterProyectoId || undefined}
                     proyectoIdsEntidad={proyectoIdsEntidadArr}
-                    materialIdsCategoria={materialIdsCategoria}
+                    materialIdsCategoria={materialIdsParaMovimientos}
+                    ubicacionIds={ubicacionIdsParaMovimientos}
                     busquedaVinculada={searchTerm.trim() || undefined}
                     vistaExterna={movVista}
                     onVistaExternaChange={setMovVista}

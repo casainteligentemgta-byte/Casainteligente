@@ -14,6 +14,8 @@ export type FiltrosMovimientosInventario = {
   /** Restringir a materiales del catálogo (p. ej. categoría EPP). */
   materialIdsCategoria?: string[];
   ubicacionId?: string;
+  /** Varias ubicaciones (p. ej. almacén / depósito filtrado). */
+  ubicacionIds?: string[];
   fechaDesde?: string;
   fechaHasta?: string;
   material?: string;
@@ -692,6 +694,12 @@ function aplicarFiltros(
 
     if (f.materialIdsCategoria?.length) {
       if (!r.material_id || !f.materialIdsCategoria.includes(r.material_id)) return false;
+    }
+
+    if (f.ubicacionIds?.length) {
+      if (!r.ubicacion_id || !f.ubicacionIds.includes(r.ubicacion_id)) return false;
+    } else if (f.ubicacionId?.trim()) {
+      if (r.ubicacion_id !== f.ubicacionId.trim()) return false;
     }
 
     if (f.proveedor?.trim() && !incluye(r.proveedor ?? '', f.proveedor)) return false;

@@ -40,6 +40,8 @@ export type CompraCuadroInput = {
   entidad_nombre?: string | null;
   proyecto_nombre?: string | null;
   ubicacion_nombre?: string | null;
+  entidad_id?: string | null;
+  proyecto_id?: string | null;
   ci_proyectos?: { nombre?: string | null } | { nombre?: string | null }[] | null;
   contabilidad_compra_lineas?: CompraCuadroLineaInput[] | { count: number }[];
   alerta_fecha?: 'advertencia' | 'critico' | null;
@@ -108,6 +110,8 @@ export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
     entidadNombre: c.entidad_nombre ?? undefined,
     proyectoNombre: proyectoNombreCompra(c) || undefined,
     almacenNombre: c.ubicacion_nombre ?? undefined,
+    entidadId: c.entidad_id ?? null,
+    proyectoId: c.proyecto_id ?? null,
     alerta_fecha: c.alerta_fecha ?? null,
     fecha_confirmada_manual: c.fecha_confirmada_manual ?? null,
     created_at: c.created_at ?? null,

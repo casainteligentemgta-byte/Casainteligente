@@ -38,6 +38,8 @@ export type FilaFacturaCanal = {
   entidad?: string;
   proyecto?: string;
   almacen?: string;
+  entidadId?: string | null;
+  proyectoId?: string | null;
   montoBs: number;
   montoUsd: number | null;
   /** Tasa BCV de la factura (bolívares por 1 USD). */
@@ -65,6 +67,8 @@ export type FiltrosFacturaCanal = {
   proveedor?: string;
   rif?: string;
   articulo?: string;
+  entidadId?: string;
+  proyectoId?: string;
   cantidadMin?: string;
   cantidadMax?: string;
   montoMinBs?: string;
@@ -164,6 +168,20 @@ export function filtrarFilasFacturaCanal(
     if (hasta && row.fecha && row.fecha > hasta) return false;
     if (f.proveedor?.trim() && !incluye(row.proveedor, f.proveedor)) return false;
     if (f.rif?.trim() && !incluye(row.rif, f.rif)) return false;
+    if (f.entidadId?.trim()) {
+      if (f.entidadId === 'sin_entidad') {
+        if (row.entidadId) return false;
+      } else if ((row.entidadId ?? '') !== f.entidadId) {
+        return false;
+      }
+    }
+    if (f.proyectoId?.trim()) {
+      if (f.proyectoId === 'sin_proyecto') {
+        if (row.proyectoId) return false;
+      } else if ((row.proyectoId ?? '') !== f.proyectoId) {
+        return false;
+      }
+    }
     if (f.articulo?.trim()) {
       if (!incluye(row.articulo, f.articulo) && !incluye(row.codigo, f.articulo)) return false;
     }
@@ -202,6 +220,8 @@ export type CompraConfirmadaParaLineas = {
   proyectoNombre?: string;
   entidadNombre?: string;
   almacenNombre?: string;
+  entidadId?: string | null;
+  proyectoId?: string | null;
   alerta_fecha?: 'advertencia' | 'critico' | null;
   fecha_confirmada_manual?: boolean | null;
   created_at?: string | null;
@@ -324,6 +344,8 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       entidad: c.entidadNombre?.trim() || '',
       proyecto: c.proyectoNombre?.trim() || '',
       almacen: c.almacenNombre?.trim() || '',
+      entidadId: c.entidadId ?? null,
+      proyectoId: c.proyectoId ?? null,
       montoBs: montos.bs,
       montoUsd: montos.usd,
       tasaBcv: tasa ?? tasaBcvCompra(c),

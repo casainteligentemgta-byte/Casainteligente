@@ -135,6 +135,7 @@ export type MovimientosInventarioEmbedProps = {
   proyectoId?: string;
   proyectoIdsEntidad?: string[];
   materialIdsCategoria?: string[];
+  ubicacionIds?: string[];
   busquedaVinculada?: string;
   vistaExterna?: VistaMovimientoInventario;
   onVistaExternaChange?: (v: VistaMovimientoInventario) => void;
@@ -146,6 +147,7 @@ export default function MovimientosInventarioClient({
   proyectoId: proyectoIdBloqueado,
   proyectoIdsEntidad,
   materialIdsCategoria,
+  ubicacionIds,
   busquedaVinculada,
   vistaExterna,
   onVistaExternaChange,
@@ -257,6 +259,9 @@ export default function MovimientosInventarioClient({
     if (materialIdsCategoria?.length) {
       p.set('material_ids', materialIdsCategoria.join(','));
     }
+    if (ubicacionIds?.length) {
+      p.set('ubicacion_ids', ubicacionIds.join(','));
+    }
     if (proveedor.trim()) p.set('proveedor', proveedor.trim());
     if (destino.trim()) p.set('destino', destino.trim());
     const materialEfectivo = material.trim() || busquedaVinculada?.trim() || '';
@@ -270,6 +275,7 @@ export default function MovimientosInventarioClient({
     proyectoIdBloqueado,
     proyectoIdsEntidad,
     materialIdsCategoria,
+    ubicacionIds,
     proveedor,
     destino,
     material,

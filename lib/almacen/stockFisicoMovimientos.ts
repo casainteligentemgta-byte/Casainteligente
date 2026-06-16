@@ -81,7 +81,7 @@ export async function cargarFilasStockFisico(
   supabase: SupabaseClient,
   filtros: Pick<
     FiltrosMovimientosInventario,
-    'proyectoId' | 'proyectoIdsEntidad' | 'ubicacionId' | 'materialIdsCategoria'
+    'proyectoId' | 'proyectoIdsEntidad' | 'ubicacionId' | 'ubicacionIds' | 'materialIdsCategoria'
   >,
 ): Promise<FilaMovimientoInventario[]> {
   const hoy = new Date().toISOString().slice(0, 10);
@@ -96,14 +96,20 @@ export async function cargarFilasStockFisico(
 
   if (proyectoIds.length) {
     const nombres = await nombresProyectos(supabase, proyectoIds);
+    const ubicacionId =
+      filtros.ubicacionId ??
+      (filtros.ubicacionIds?.length === 1 ? filtros.ubicacionIds[0] : undefined);
     for (const pid of proyectoIds) {
       const items = await getStockRealObra(supabase, pid, {
-        ubicacionId: filtros.ubicacionId,
+        ubicacionId,
         soloConStock: true,
         proyectoNombre: nombres.get(pid),
       });
       const proyNombre = nombres.get(pid) ?? null;
       for (const item of items) {
+        if (filtros.ubicacionIds?.length && !filtros.ubicacionIds.includes(item.ubicacion_id)) {
+          continue;
+        }
         if (materialSet && !materialSet.has(item.material_id)) continue;
         const fila = itemStockAFila(item, pid, proyNombre, hoy);
         if (fila) filas.push(fila);
@@ -131,7 +137,9 @@ export async function cargarFilasStockFisico(
     .order('cantidad_disponible', { ascending: false })
     .limit(500);
 
-  if (filtros.ubicacionId) {
+  if (filtros.ubicacionIds?.length) {
+    q = q.in('ubicacion_id', filtros.ubicacionIds);
+  } else if (filtros.ubicacionId) {
     q = q.eq('ubicacion_id', filtros.ubicacionId);
   }
 

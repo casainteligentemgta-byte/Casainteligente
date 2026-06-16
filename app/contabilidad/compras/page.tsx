@@ -1239,6 +1239,8 @@ export default function ComprasPage() {
             proveedor: proveedorFiltro,
             rif: rifFiltro,
             articulo: articuloFiltro,
+            entidadId: entidadFiltro || undefined,
+            proyectoId: proyectoFiltro || undefined,
             cantidadMin,
             cantidadMax,
             montoMinBs,
@@ -1252,6 +1254,8 @@ export default function ComprasPage() {
             proveedorFiltro,
             rifFiltro,
             articuloFiltro,
+            entidadFiltro,
+            proyectoFiltro,
             cantidadMin,
             cantidadMax,
             montoMinBs,
@@ -2664,17 +2668,6 @@ export default function ComprasPage() {
 
                 {showList && vistaListado === 'facturas' ? (
                     <>
-                        <p
-                            style={{
-                                color: 'rgba(255,255,255,0.4)',
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                marginBottom: '8px',
-                                lineHeight: 1.45,
-                            }}
-                        >
-                            Pulsa el nombre del proveedor para ver u ocultar la imagen de la factura.
-                        </p>
                         <div
                             className="compras-leyenda-acciones compras-no-imprimir"
                             aria-label="Acciones disponibles por factura"
