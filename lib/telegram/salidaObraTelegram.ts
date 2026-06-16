@@ -1124,7 +1124,7 @@ export async function manejarCallbackSalidaObraTelegram(
     }
 
     const codigos = resultado.codigos.join(', ') || '—';
-    const link = `${baseUrlApp()}/almacen/movimientos`;
+    const link = `${baseUrlApp()}/almacen`;
     await sendTelegramMessage(
       params.chatId,
       `✅ <b>Salida registrada</b>\n\n` +

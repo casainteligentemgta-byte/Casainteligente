@@ -552,7 +552,7 @@ export default function DespachoInventarioClient() {
             ? `Despachos ${codigos.join(', ')} registrados`
             : `Despacho ${codigos[0] ?? ''} registrado`,
         );
-        router.push('/almacen/movimientos?vista=despachado');
+        router.push('/almacen?movVista=despachado');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error al guardar';
         if (/exceso presupuestario/i.test(msg)) {

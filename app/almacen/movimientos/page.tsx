@@ -1,18 +1,29 @@
-import dynamic from 'next/dynamic';
-
-const MovimientosInventarioClient = dynamic(() => import('./MovimientosInventarioClient'), {
-  ssr: false,
-  loading: () => (
-    <div className="min-h-screen bg-[#050508] text-white p-4 md:p-6 pb-24 flex items-center justify-center">
-      <p className="text-sm text-zinc-500">Cargando movimientos…</p>
-    </div>
-  ),
-});
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Movimientos de almacén | Casa Inteligente',
 };
 
-export default function MovimientosAlmacenPage() {
-  return <MovimientosInventarioClient />;
+type PageProps = {
+  searchParams: Record<string, string | string[] | undefined>;
+};
+
+/** Redirige al cuadro unificado en /almacen (vista movimientos por defecto). */
+export default function MovimientosAlmacenPage({ searchParams }: PageProps) {
+  const qs = new URLSearchParams();
+  qs.set('cuadro', 'movimientos');
+
+  for (const [key, raw] of Object.entries(searchParams)) {
+    const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    for (const value of values) {
+      if (key === 'vista') {
+        qs.set('movVista', value);
+      } else if (key !== 'cuadro') {
+        qs.set(key, value);
+      }
+    }
+  }
+
+  const query = qs.toString();
+  redirect(query ? `/almacen?${query}` : '/almacen?cuadro=movimientos');
 }

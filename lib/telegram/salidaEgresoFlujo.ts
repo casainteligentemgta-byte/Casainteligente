@@ -757,7 +757,7 @@ export async function manejarCallbackSalidaEgreso(
       return true;
     }
 
-    const link = `${baseUrlApp()}/almacen/movimientos`;
+    const link = `${baseUrlApp()}/almacen`;
     await sendTelegramMessage(
       params.chatId,
       `✅ <b>Egreso registrado</b>\n\n` +

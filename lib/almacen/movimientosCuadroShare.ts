@@ -34,17 +34,23 @@ export function buildMovimientosCuadroSearchParams(
 }
 
 export function movimientosCuadroPathFromState(state: MovimientosCuadroShareState): string {
-  const query = buildMovimientosCuadroSearchParams(state).toString();
-  return query ? `/almacen/movimientos?${query}` : '/almacen/movimientos';
+  const qs = buildMovimientosCuadroSearchParams(state);
+  qs.set('cuadro', 'movimientos');
+  if (state.vista && state.vista !== 'todos') {
+    qs.set('movVista', state.vista);
+    qs.delete('vista');
+  }
+  const query = qs.toString();
+  return query ? `/almacen?${query}` : '/almacen';
 }
 
 export function buildMovimientosCuadroShareUrl(
   baseOrigin: string,
   state: MovimientosCuadroShareState,
 ): string {
-  const query = buildMovimientosCuadroSearchParams(state).toString();
+  const path = movimientosCuadroPathFromState(state);
   const origin = baseOrigin.replace(/\/$/, '');
-  return query ? `${origin}/almacen/movimientos?${query}` : `${origin}/almacen/movimientos`;
+  return `${origin}${path}`;
 }
 
 export function parseMovimientosCuadroShareParams(

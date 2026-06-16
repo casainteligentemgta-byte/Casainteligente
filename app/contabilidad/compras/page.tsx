@@ -2667,20 +2667,6 @@ export default function ComprasPage() {
                 ) : null}
 
                 {showList && vistaListado === 'facturas' ? (
-                    <>
-                        <div
-                            className="compras-leyenda-acciones compras-no-imprimir"
-                            aria-label="Acciones disponibles por factura"
-                        >
-                            <span className="compras-leyenda-obra">Obra / almacén</span>
-                            <span className="compras-leyenda-recepcion">Confirmación recepción</span>
-                            <span className="compras-leyenda-modificar">Modificar</span>
-                            <span className="compras-leyenda-borrar">Borrar</span>
-                        </div>
-                    </>
-                ) : null}
-
-                {showList && vistaListado === 'facturas' ? (
                     <div className="compras-facturas-grid">
                         {compras.map((c) => (
                             <div

@@ -13,9 +13,7 @@ import {
     Plus,
     Truck,
     ShieldCheck,
-    History,
     Settings2,
-    ArrowRightLeft,
     Trash2,
     ArrowUpRight,
     Share2,
@@ -270,7 +268,7 @@ const NAV_ALMACEN = [
     { href: '/almacen/procurement', label: 'Compras', icon: Truck, className: 'border-blue-500/40 bg-blue-600/20 text-blue-100' },
     { href: '/almacen/recepcion', label: 'Ingreso', icon: Package, className: 'border-[#FF9500]/40 bg-[#FF9500]/10 text-[#FF9500]' },
     { href: '/almacen/despacho', label: 'SALIDA', icon: ArrowUpRight, className: 'border-orange-500/35 text-orange-200' },
-    { href: '/almacen/movimientos', label: 'Movimientos', icon: History, className: 'border-violet-500/35 text-violet-200' },
+    { href: '/almacen?cuadro=inventario', label: 'Catálogo SKU', icon: Package, className: 'border-blue-500/35 text-blue-200' },
     { href: '/almacen/trazabilidad', label: 'Trazabilidad / Kardex', icon: Route, className: 'border-amber-500/35 bg-amber-500/10 text-amber-200' },
     { href: '/almacen/maestros', label: 'Configuración', icon: Settings2, className: 'border-zinc-800 text-zinc-300' },
     { href: null, label: 'Compartir', icon: Share2, className: 'border-zinc-800 text-zinc-300', action: 'share' as const },
@@ -480,7 +478,7 @@ export default function InventoryMasterPage() {
     const [cuarentenaOperativa, setCuarentenaOperativa] = useState<InspeccionCuarentenaRow[]>([]);
     /** Panel categorías + filtros avanzados (colapsable para ver más tabla). */
     const [panelFiltrosExpandido, setPanelFiltrosExpandido] = useState(true);
-    const [cuadroModo, setCuadroModo] = useState<InventarioCuadroModo>('inventario');
+    const [cuadroModo, setCuadroModo] = useState<InventarioCuadroModo>('movimientos');
     const [movVista, setMovVista] = useState<VistaMovimientoInventario>('ingresado');
 
     const toggleStatFlip = useCallback((key: StatFlipKey) => {
@@ -581,6 +579,28 @@ export default function InventoryMasterPage() {
         aplicarFiltrosInventario(fromUrl ?? fromStorage ?? {});
         filtrosPersistenciaLista.current = true;
     }, [hydrated, searchParams, aplicarFiltrosInventario]);
+
+    useEffect(() => {
+        if (!hydrated) return;
+        const parsed = hasInventarioShareParams(searchParams)
+            ? parseInventarioShareParams(searchParams)
+            : {};
+        if (parsed.cuadro === 'inventario' || parsed.cuadro === 'movimientos') {
+            setCuadroModo(parsed.cuadro);
+        } else if (!searchParams.get('cuadro')) {
+            setCuadroModo('movimientos');
+        }
+        const vistaLegacy = searchParams.get('vista');
+        const movVistaParam = parsed.movVista ?? vistaLegacy;
+        if (
+            movVistaParam === 'ingresado' ||
+            movVistaParam === 'almacenado' ||
+            movVistaParam === 'despachado' ||
+            movVistaParam === 'todos'
+        ) {
+            setMovVista(movVistaParam);
+        }
+    }, [hydrated, searchParams]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1531,7 +1551,7 @@ export default function InventoryMasterPage() {
             sinObra: sinClasificacionObra || undefined,
             sinAlmacen: sinAlmacenAsignado || undefined,
             kpi: kpiVista !== 'ninguno' ? kpiVista : undefined,
-            cuadro: cuadroModo !== 'inventario' ? cuadroModo : undefined,
+            cuadro: cuadroModo === 'inventario' ? 'inventario' : undefined,
             movVista:
                 cuadroModo === 'movimientos' && movVista !== 'ingresado' ? movVista : undefined,
         };
@@ -2197,41 +2217,6 @@ export default function InventoryMasterPage() {
                     {mastersWarning}
                 </div>
             ) : null}
-
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 shrink-0">
-                    Cuadro
-                </span>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setCuadroModo('inventario');
-                    }}
-                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-all ${
-                        cuadroModo === 'inventario'
-                            ? 'border-blue-500/50 bg-blue-600 text-white shadow-sm shadow-blue-600/25'
-                            : 'border-zinc-800 bg-zinc-900/80 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-                    }`}
-                >
-                    <Package size={14} />
-                    Inventario
-                </button>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setCuadroModo('movimientos');
-                        setKpiVista('ninguno');
-                    }}
-                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-all ${
-                        cuadroModo === 'movimientos'
-                            ? 'border-sky-500/50 bg-sky-600 text-white shadow-sm shadow-sky-600/25'
-                            : 'border-zinc-800 bg-zinc-900/80 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-                    }`}
-                >
-                    <ArrowRightLeft size={14} />
-                    Movimientos
-                </button>
-            </div>
 
             {cuadroModo === 'inventario' && panelFiltrosExpandido ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
