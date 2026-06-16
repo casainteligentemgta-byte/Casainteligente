@@ -137,6 +137,13 @@ function categoriaCoincideFiltro(item: InventoryItem, filtro: string): boolean {
     }
 }
 
+function filtroCategoriaParaItem(item: InventoryItem): string {
+    for (const cat of CATEGORIAS_FILTRO) {
+        if (cat !== 'Todos' && categoriaCoincideFiltro(item, cat)) return cat;
+    }
+    return 'Todos';
+}
+
 /** Entidad del catálogo puede estar vacía aunque el material tenga stock físico en la obra filtrada. */
 function materialPasaFiltroEntidad(
     item: InventoryItem,
@@ -2587,6 +2594,8 @@ export default function InventoryMasterPage() {
                                     filterProyectoId,
                                     proyectos,
                                 );
+                                const categoriaNombre =
+                                    nombreCategoriaItem(item) || 'Sin categoría';
 
                                 return (
                                 <tr
@@ -2638,7 +2647,20 @@ export default function InventoryMasterPage() {
                                                 <h4 className="font-black text-zinc-100 text-sm leading-tight truncate" title={item.name}>
                                                     {item.name}
                                                 </h4>
-                                                <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider truncate">{item.unit}</p>
+                                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider truncate">{item.unit}</p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setActiveCategory(filtroCategoriaParaItem(item));
+                                                        }}
+                                                        className="text-[8px] font-black bg-amber-500/10 text-amber-400 px-1.5 py-px rounded border border-amber-500/25 uppercase truncate max-w-full hover:bg-amber-500/20 transition-colors"
+                                                        title={`Categoría: ${categoriaNombre}. Clic para filtrar.`}
+                                                    >
+                                                        {categoriaNombre}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
