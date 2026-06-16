@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { movimientoInventarioEsEliminable } from '@/lib/almacen/eliminarMovimientoInventario';
+import {
+  enriquecerFilasProyecto,
+  filaCoincideProyectosEntidad,
+  proyectoDesdeUbicacionRow,
+  type ProyectoRef,
+} from '@/lib/almacen/resolverProyectoMovimiento';
 import { cargarFilasStockFisico } from '@/lib/almacen/stockFisicoMovimientos';
 
 export type VistaMovimientoInventario = 'ingresado' | 'despachado' | 'almacenado' | 'todos';
@@ -43,6 +49,21 @@ export type FilaMovimientoInventario = {
   ubicacion_id: string | null;
   eliminable: boolean;
 };
+
+const SELECT_MATERIAL_MOV = `
+  id, name, unit, sap_code,
+  proyecto_id,
+  proyecto:ci_proyectos ( id, nombre )
+`;
+
+async function cargarProyectosCatalogo(supabase: SupabaseClient): Promise<ProyectoRef[]> {
+  const { data, error } = await supabase.from('ci_proyectos').select('id,nombre').order('nombre');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((p) => ({
+    id: String(p.id),
+    nombre: String(p.nombre ?? '').trim() || String(p.id),
+  }));
+}
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
@@ -157,7 +178,7 @@ async function cargarIngresosRecepcionCampo(
         cantidad,
         unidad,
         descripcion,
-        material:global_inventory ( id, name, unit, sap_code )
+        material:global_inventory ( ${SELECT_MATERIAL_MOV} )
       )
     `,
     )
@@ -225,6 +246,7 @@ async function cargarIngresosRecepcionCampo(
 async function cargarIngresos(
   supabase: SupabaseClient,
   limite: number,
+  proyectos: ProyectoRef[],
 ): Promise<FilaMovimientoInventario[]> {
   const { data, error } = await supabase
     .from('compras_facturas')
@@ -243,7 +265,7 @@ async function cargarIngresos(
         id,
         cantidad,
         descripcion,
-        material:global_inventory ( id, name, unit, sap_code )
+        material:global_inventory ( ${SELECT_MATERIAL_MOV} )
       )
     `,
     )
@@ -258,11 +280,7 @@ async function cargarIngresos(
   for (const fac of data ?? []) {
     const ubi = fac.ubicacion as unknown;
     const dest = nombreUbi(ubi);
-    const proy = nombreProy(
-      (Array.isArray(ubi) ? ubi[0] : ubi) as { proyecto?: unknown } | null
-        ? ((Array.isArray(ubi) ? ubi[0] : ubi) as { proyecto?: unknown }).proyecto
-        : null,
-    );
+    const proy = proyectoDesdeUbicacionRow(ubi, proyectos);
     const { fecha, hora } = parseFechaHora(fac.fecha_emision, fac.created_at);
     const esFacturaTransito = Boolean(fac.purchase_invoice_id);
     const lineas = (fac.lineas ?? []) as Array<{
@@ -286,8 +304,8 @@ async function cargarIngresos(
         proveedor: String(fac.proveedor_nombre ?? ''),
         origen: null,
         destino: dest || null,
-        proyecto_id: proy.id || null,
-        proyecto_nombre: proy.nombre || null,
+        proyecto_id: proy?.id || null,
+        proyecto_nombre: proy?.nombre || null,
         referencia: String(fac.numero_factura ?? ''),
         capitulo: null,
         notas:
@@ -317,8 +335,8 @@ async function cargarIngresos(
         proveedor: String(fac.proveedor_nombre ?? ''),
         origen: null,
         destino: dest || null,
-        proyecto_id: proy.id || null,
-        proyecto_nombre: proy.nombre || null,
+        proyecto_id: proy?.id || null,
+        proyecto_nombre: proy?.nombre || null,
         referencia: String(fac.numero_factura ?? ''),
         capitulo: null,
         notas: esFacturaTransito ? 'Factura en tránsito / compra registrada' : null,
@@ -333,6 +351,7 @@ async function cargarIngresos(
 async function cargarIngresosCuarentena(
   supabase: SupabaseClient,
   limite: number,
+  proyectos: ProyectoRef[],
 ): Promise<FilaMovimientoInventario[]> {
   const { data, error } = await supabase
     .from('purchase_details')
@@ -353,6 +372,7 @@ async function cargarIngresosCuarentena(
         ubicacion:inv_ubicaciones (
           id,
           nombre,
+          ci_proyecto_id,
           proyecto:ci_proyectos ( id, nombre )
         )
       )
@@ -390,7 +410,7 @@ async function cargarIngresosCuarentena(
     const inv = Array.isArray(invRaw) ? invRaw[0] : invRaw;
     const ubiRaw = inv?.ubicacion;
     const ubi = Array.isArray(ubiRaw) ? ubiRaw[0] : ubiRaw;
-    const proy = nombreProy(ubi?.proyecto);
+    const proy = proyectoDesdeUbicacionRow(ubi, proyectos);
     const filaId = `ing-pd-${invoiceId}_${detailId}`;
 
     const { fecha, hora } = parseFechaHora(inv?.date, inv?.date);
@@ -407,8 +427,8 @@ async function cargarIngresosCuarentena(
       proveedor: String(inv?.supplier_name ?? ''),
       origen: null,
       destino: nombreUbi(ubi) || null,
-      proyecto_id: proy.id || null,
-      proyecto_nombre: proy.nombre || null,
+      proyecto_id: proy?.id || null,
+      proyecto_nombre: proy?.nombre || null,
       referencia: String(inv?.invoice_number ?? ''),
       capitulo: null,
       notas: 'Factura en tránsito (pendiente de recepción física)',
@@ -442,7 +462,7 @@ async function cargarDespachosTransferencia(
       lineas:transferencias_inventario_lineas (
         id,
         cantidad,
-        material:global_inventory ( id, name, unit, sap_code ),
+        material:global_inventory ( ${SELECT_MATERIAL_MOV} ),
         imputaciones:detalle_transferencia_partidas (
           cantidad_imputada,
           partida:partidas ( descripcion, capitulo:capitulos ( codigo, nombre ) )
@@ -681,6 +701,7 @@ function calcularFilasStock(
 function aplicarFiltros(
   filas: FilaMovimientoInventario[],
   f: FiltrosMovimientosInventario,
+  proyectos: ProyectoRef[],
 ): FilaMovimientoInventario[] {
   const tipoVista = f.vista ? tipoParaVista(f.vista) : null;
 
@@ -689,7 +710,7 @@ function aplicarFiltros(
     if (f.proyectoId) {
       if (r.proyecto_id !== f.proyectoId) return false;
     } else if (f.proyectoIdsEntidad?.length) {
-      if (!r.proyecto_id || !f.proyectoIdsEntidad.includes(r.proyecto_id)) return false;
+      if (!filaCoincideProyectosEntidad(r, f.proyectoIdsEntidad, proyectos)) return false;
     }
 
     if (f.materialIdsCategoria?.length) {
@@ -734,6 +755,7 @@ export async function listarMovimientosInventario(
 }> {
   const limite = Math.min(Math.max(filtros.limite ?? 200, 20), 400);
   const vista = filtros.vista ?? 'todos';
+  const proyectos = await cargarProyectosCatalogo(supabase);
 
   const [
     ingresosFacturas,
@@ -742,28 +764,31 @@ export async function listarMovimientosInventario(
     despachosTransferencia,
     despachosTelegram,
   ] = await Promise.all([
-    cargarIngresos(supabase, limite),
-    cargarIngresosCuarentena(supabase, limite),
+    cargarIngresos(supabase, limite, proyectos),
+    cargarIngresosCuarentena(supabase, limite, proyectos),
     cargarIngresosRecepcionCampo(supabase, limite),
     cargarDespachosTransferencia(supabase, limite),
     cargarDespachosTelegram(supabase, limite),
   ]);
 
-  const todosIngresos = [
-    ...ingresosFacturas,
-    ...ingresosCuarentena,
-    ...ingresosRecepcionCampo,
-  ].sort((a, b) =>
-    b.fecha.localeCompare(a.fecha),
+  const todosIngresos = enriquecerFilasProyecto(
+    [...ingresosFacturas, ...ingresosCuarentena, ...ingresosRecepcionCampo].sort((a, b) =>
+      b.fecha.localeCompare(a.fecha),
+    ),
+    proyectos,
   );
-  const todosDespachos = [...despachosTransferencia, ...despachosTelegram].sort((a, b) =>
-    b.fecha.localeCompare(a.fecha),
+  const todosDespachos = enriquecerFilasProyecto(
+    [...despachosTransferencia, ...despachosTelegram].sort((a, b) =>
+      b.fecha.localeCompare(a.fecha),
+    ),
+    proyectos,
   );
   const filasStockCalculado = calcularFilasStock(todosIngresos, todosDespachos);
   let filasStock = await cargarFilasStockFisico(supabase, filtros);
   if (!filasStock.length) {
     filasStock = filasStockCalculado;
   }
+  filasStock = enriquecerFilasProyecto(filasStock, proyectos);
 
   let merged: FilaMovimientoInventario[];
   if (vista === 'ingresado') merged = todosIngresos;
@@ -771,13 +796,13 @@ export async function listarMovimientosInventario(
   else if (vista === 'almacenado') merged = filasStock;
   else merged = [...todosIngresos, ...todosDespachos];
 
-  const filtradas = aplicarFiltros(merged, filtros);
+  const filtradas = aplicarFiltros(merged, filtros, proyectos);
   const filas = filtradas.slice(0, limite);
 
   const filtrosResumen = { ...filtros, vista: undefined as VistaMovimientoInventario | undefined };
-  const ingresosResumen = aplicarFiltros(todosIngresos, filtrosResumen);
-  const despachosResumen = aplicarFiltros(todosDespachos, filtrosResumen);
-  const stockResumen = aplicarFiltros(filasStock, filtrosResumen);
+  const ingresosResumen = aplicarFiltros(todosIngresos, filtrosResumen, proyectos);
+  const despachosResumen = aplicarFiltros(todosDespachos, filtrosResumen, proyectos);
+  const stockResumen = aplicarFiltros(filasStock, filtrosResumen, proyectos);
 
   const resumen = {
     ingresado: ingresosResumen.length,
