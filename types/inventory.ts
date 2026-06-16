@@ -39,10 +39,18 @@ export interface InventoryItem {
     entidad_id?: string | null;
     /** Proyecto de obra (ci_proyectos). */
     proyecto_id?: string | null;
+    /** OpEx: operacional, administrativo o servicio (nivel entidad). */
+    clasificacion_gasto_entidad?: string | null;
     /** Partida presupuesto Lulo (ci_presupuesto_partidas). */
     presupuesto_partida_id?: string | null;
     entidad?: { id: string; nombre: string; rif?: string | null } | null;
-    proyecto?: { id: string; nombre: string; entidad_id?: string | null } | null;
+    proyecto?: {
+        id: string;
+        nombre: string;
+        entidad_id?: string | null;
+        naturaleza_proyecto?: string | null;
+        clasificacion_gasto_entidad?: string | null;
+    } | null;
     partida?: {
         id: string;
         codigo_partida: string;

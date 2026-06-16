@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { parseNaturalezaProyecto } from '@/lib/proyectos/naturalezaProyecto';
 
 /**
  * Subtipos lógicos en `ci_proyectos` (`tipo_proyecto`: integral | talento).
@@ -72,10 +73,12 @@ function mapFilasModuloIntegral(
     nombre?: unknown;
     tipo_proyecto?: string | null;
     entidad_id?: string | null;
+    naturaleza_proyecto?: string | null;
   }[],
 ): ProyectoModuloIntegral[] {
   return rows
     .filter((r) => filaEsModuloIntegral(r.tipo_proyecto))
+    .filter((r) => parseNaturalezaProyecto(r.naturaleza_proyecto) === 'obra_construccion')
     .map((r) => ({
       id: String(r.id),
       nombre: String(r.nombre ?? 'Sin nombre').trim() || 'Sin nombre',
@@ -97,7 +100,7 @@ export async function loadProyectosModuloIntegralPorEntidad(
   const errors: string[] = [];
   const res = await supabase
     .from('ci_proyectos')
-    .select('id,nombre,tipo_proyecto,entidad_id')
+    .select('id,nombre,tipo_proyecto,entidad_id,naturaleza_proyecto')
     .eq('entidad_id', eid)
     .or('tipo_proyecto.eq.integral,tipo_proyecto.is.null')
     .order('nombre', { ascending: true })

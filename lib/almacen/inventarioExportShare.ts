@@ -23,6 +23,8 @@ export type InventarioShareState = {
   proyecto?: string;
   partida?: string;
   deposito?: string;
+  /** operacional | administrativo | servicio | sin_clasificar */
+  gastoEntidad?: string;
   sinObra?: boolean;
   sinAlmacen?: boolean;
   kpi?: string;
@@ -35,6 +37,7 @@ const SHARE_KEYS = [
   'proyecto',
   'partida',
   'deposito',
+  'gastoEntidad',
   'sinObra',
   'sinAlmacen',
   'kpi',
@@ -77,6 +80,7 @@ export function parseInventarioShareParams(params: URLSearchParams): InventarioS
     proyecto: params.get('proyecto')?.trim() || undefined,
     partida: params.get('partida')?.trim() || undefined,
     deposito: params.get('deposito')?.trim() || undefined,
+    gastoEntidad: params.get('gastoEntidad')?.trim() || undefined,
     sinObra: params.get('sinObra') === '1',
     sinAlmacen: params.get('sinAlmacen') === '1',
     kpi: params.get('kpi')?.trim() || undefined,
@@ -97,6 +101,7 @@ export function buildInventarioShareSearchParams(state: InventarioShareState): U
   setShareParam(qs, 'proyecto', state.proyecto);
   setShareParam(qs, 'partida', state.partida);
   setShareParam(qs, 'deposito', state.deposito);
+  setShareParam(qs, 'gastoEntidad', state.gastoEntidad);
   setShareParam(qs, 'sinObra', state.sinObra);
   setShareParam(qs, 'sinAlmacen', state.sinAlmacen);
   setShareParam(qs, 'kpi', state.kpi);

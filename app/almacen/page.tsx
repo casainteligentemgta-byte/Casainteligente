@@ -46,6 +46,16 @@ import {
     type ProyectoRow,
 } from '@/lib/almacen/inventoryClasificacion';
 import {
+    filtrarObrasConstruccion,
+    materialCoincideFiltroGastoEntidad,
+    OPCIONES_FILTRO_GASTO_ENTIDAD,
+    parseFiltroGastoEntidadCuadro,
+    proyectoIdsCentroCostoPorClasificacion,
+    esCentroCostoEntidad,
+    type FiltroClasificacionGastoEntidadCuadro,
+} from '@/lib/proyectos/naturalezaProyecto';
+import { etiquetaClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
+import {
   getStockAgregadoPorMaterialObra,
 } from '@/lib/almacen/getStockRealObra';
 import {
@@ -93,7 +103,7 @@ import { resolverUbicacionAjusteStock } from '@/lib/almacen/resolverUbicacionAju
 const INVENTORY_SELECT = `
   *,
   entidad:ci_entidades(id,nombre,rif),
-  proyecto:ci_proyectos(id,nombre,entidad_id),
+  proyecto:ci_proyectos(id,nombre,entidad_id,naturaleza_proyecto,clasificacion_gasto_entidad),
   partida:ci_presupuesto_partidas(id,codigo_partida,descripcion),
   category:material_categories(id,name)
 `;
@@ -413,6 +423,9 @@ export default function InventoryMasterPage() {
     const [filterProyectoId, setFilterProyectoId] = useState('');
     const [filterPartidaId, setFilterPartidaId] = useState('');
     const [filterDepositId, setFilterDepositId] = useState('');
+    const [filterClasificacionGastoEntidad, setFilterClasificacionGastoEntidad] = useState<
+        FiltroClasificacionGastoEntidadCuadro | ''
+    >('');
     const [sinClasificacionObra, setSinClasificacionObra] = useState(false);
     const [sinAlmacenAsignado, setSinAlmacenAsignado] = useState(false);
     /** Stock en `inventario_stock` (compras registradas por ubicación, migr. 180). */
@@ -459,6 +472,8 @@ export default function InventoryMasterPage() {
         if (parsed.proyecto) setFilterProyectoId(parsed.proyecto);
         if (parsed.partida) setFilterPartidaId(parsed.partida);
         if (parsed.deposito) setFilterDepositId(parsed.deposito);
+        const gastoParsed = parseFiltroGastoEntidadCuadro(parsed.gastoEntidad);
+        if (gastoParsed) setFilterClasificacionGastoEntidad(gastoParsed);
         if (parsed.sinObra) setSinClasificacionObra(true);
         if (parsed.sinAlmacen) setSinAlmacenAsignado(true);
         if (
@@ -559,8 +574,28 @@ export default function InventoryMasterPage() {
     }, [filterProyectoId, supabase]);
 
     const proyectosFiltro = useMemo(
-        () => filtrarProyectosPorEntidad(proyectos, filterEntidadId || null),
+        () =>
+            filtrarObrasConstruccion(
+                filtrarProyectosPorEntidad(proyectos, filterEntidadId || null),
+            ),
         [proyectos, filterEntidadId],
+    );
+
+    const proyectosById = useMemo(
+        () => new Map(proyectos.map((p) => [p.id, p])),
+        [proyectos],
+    );
+
+    const proyectoIdsCentroCostoFiltrados = useMemo(
+        () =>
+            filterEntidadId && filterClasificacionGastoEntidad
+                ? proyectoIdsCentroCostoPorClasificacion(
+                      proyectos,
+                      filterEntidadId,
+                      filterClasificacionGastoEntidad,
+                  )
+                : new Set<string>(),
+        [proyectos, filterEntidadId, filterClasificacionGastoEntidad],
     );
 
     const proyectoIdsEntidad = useMemo(
@@ -568,9 +603,16 @@ export default function InventoryMasterPage() {
         [filterEntidadId, proyectos],
     );
 
-    /** Stock por ubicación física con obra o depósito; solo entidad usa stock de sus obras. */
-    const filtroStockPorUbicacion = Boolean(filterProyectoId || filterDepositId);
-    const filtroSoloEntidad = Boolean(filterEntidadId && !filterProyectoId && !filterDepositId);
+    /** Stock por ubicación física con obra, gasto entidad o depósito; solo entidad usa stock de sus obras. */
+    const filtroGastoEntidadActivo = Boolean(
+        filterEntidadId && filterClasificacionGastoEntidad,
+    );
+    const filtroStockPorUbicacion = Boolean(
+        filterProyectoId || filterDepositId || filtroGastoEntidadActivo,
+    );
+    const filtroSoloEntidad = Boolean(
+        filterEntidadId && !filterProyectoId && !filterDepositId && !filtroGastoEntidadActivo,
+    );
     const filtroStockEntidadActivo = filtroStockPorUbicacion || filtroSoloEntidad;
 
     useEffect(() => {
@@ -647,6 +689,7 @@ export default function InventoryMasterPage() {
         activeCategory !== 'Todos' ||
         Boolean(filterEntidadId) ||
         Boolean(filterProyectoId) ||
+        Boolean(filterClasificacionGastoEntidad) ||
         Boolean(filterPartidaId) ||
         Boolean(filterDepositId) ||
         sinClasificacionObra ||
@@ -669,7 +712,12 @@ export default function InventoryMasterPage() {
     }, [items, itemsDesdeStock]);
 
     useEffect(() => {
-        if (!filterProyectoId && !filterDepositId && !filterEntidadId) {
+        if (
+            !filterProyectoId &&
+            !filterDepositId &&
+            !filterEntidadId &&
+            !filtroGastoEntidadActivo
+        ) {
             setStockPorUbicacion(new Map());
             setItemsDesdeStock([]);
             setUbicacionIdsFiltro([]);
@@ -725,6 +773,29 @@ export default function InventoryMasterPage() {
                         ids = res.ubicacionIds;
                         depositoFallback = res.depositoSinInterseccion;
                     }
+                } else if (filtroGastoEntidadActivo && filterEntidadId) {
+                    const ubSet = new Set<string>();
+                    let depositoFallbackGasto = false;
+                    for (const pid of Array.from(proyectoIdsCentroCostoFiltrados)) {
+                        const pr = proyectosById.get(pid);
+                        const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
+                            proyectoId: pid,
+                            proyectoNombre: pr?.nombre,
+                            depositId: filterDepositId || undefined,
+                        });
+                        res.ubicacionIds.forEach((id) => ubSet.add(id));
+                        depositoFallbackGasto =
+                            depositoFallbackGasto || res.depositoSinInterseccion;
+                    }
+                    const resEnt = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
+                        entidadId: filterEntidadId,
+                        proyectos,
+                        depositId: filterDepositId || undefined,
+                    });
+                    resEnt.ubicacionIds.forEach((id) => ubSet.add(id));
+                    ids = Array.from(ubSet);
+                    depositoFallback =
+                        depositoFallbackGasto || resEnt.depositoSinInterseccion;
                 } else if (filterEntidadId) {
                     const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
                         entidadId: filterEntidadId,
@@ -777,7 +848,9 @@ export default function InventoryMasterPage() {
                     }
                 } else if (filterEntidadId && !filterDepositId) {
                     stockMap = await cargarStockPorUbicaciones(supabase, ids);
-                    const proysEntidad = proyectos.filter((p) => p.entidad_id === filterEntidadId);
+                    const proysEntidad = filtroGastoEntidadActivo
+                        ? proyectos.filter((p) => proyectoIdsCentroCostoFiltrados.has(p.id))
+                        : proyectos.filter((p) => p.entidad_id === filterEntidadId);
                     for (const pr of proysEntidad) {
                         const agg = await getStockAgregadoPorMaterialObra(
                             supabase,
@@ -872,6 +945,10 @@ export default function InventoryMasterPage() {
         filterProyectoId,
         filterDepositId,
         filterEntidadId,
+        filterClasificacionGastoEntidad,
+        filtroGastoEntidadActivo,
+        proyectoIdsCentroCostoFiltrados,
+        proyectosById,
         supabase,
         items,
         proyectos,
@@ -898,8 +975,19 @@ export default function InventoryMasterPage() {
 
             if (invRes.error) {
                 const msg = invRes.error.message ?? '';
-                if (msg.includes('entidad_id') || msg.includes('presupuesto_partida') || invRes.error.code === '42703') {
-                    invQuery = supabase.from('global_inventory').select('*').order('name');
+                if (
+                    msg.includes('entidad_id') ||
+                    msg.includes('presupuesto_partida') ||
+                    msg.includes('naturaleza_proyecto') ||
+                    msg.includes('clasificacion_gasto_entidad') ||
+                    invRes.error.code === '42703'
+                ) {
+                    invQuery = supabase
+                        .from('global_inventory')
+                        .select(
+                            `*, entidad:ci_entidades(id,nombre,rif), proyecto:ci_proyectos(id,nombre,entidad_id), partida:ci_presupuesto_partidas(id,codigo_partida,descripcion), category:material_categories(id,name)`,
+                        )
+                        .order('name');
                     invRes = await invQuery;
                 }
             }
@@ -1120,7 +1208,13 @@ export default function InventoryMasterPage() {
             if (filtroStockEntidadActivo && cargandoStockUbicacion && kpiVista !== 'cuarentena') {
                 const catalogDepOk =
                     filterDepositId && item.deposit_id === filterDepositId;
-                if (!(filtroSoloEntidad && catalogEntidad) && !catalogDepOk) return false;
+                if (
+                    !(filtroSoloEntidad && catalogEntidad) &&
+                    !(filtroGastoEntidadActivo && catalogEntidad) &&
+                    !catalogDepOk
+                ) {
+                    return false;
+                }
             }
             if (
                 !materialPasaFiltroEntidad(item, {
@@ -1148,6 +1242,24 @@ export default function InventoryMasterPage() {
             ) {
                 return false;
             }
+            if (filterClasificacionGastoEntidad && filterEntidadId) {
+                const catalogEntidadOk = materialCoincideCatalogoEntidad(item, {
+                    filterEntidadId,
+                    proyectoIdsEntidad,
+                    sapPrefijoEntidad: sapPrefijoEntidadFiltro,
+                });
+                if (
+                    !materialCoincideFiltroGastoEntidad(item, {
+                        filterClasificacionGastoEntidad,
+                        filterEntidadId,
+                        proyectoIdsCentroCosto: proyectoIdsCentroCostoFiltrados,
+                        proyectosById,
+                        catalogoEntidadOk: catalogEntidadOk,
+                    })
+                ) {
+                    return false;
+                }
+            }
             if (filterPartidaId && item.presupuesto_partida_id !== filterPartidaId) return false;
             if (sinClasificacionObra && (item.proyecto_id || item.entidad_id)) return false;
             if (sinAlmacenAsignado && item.deposit_id) return false;
@@ -1168,6 +1280,8 @@ export default function InventoryMasterPage() {
                 if (stockDatosListos && qty <= 0) {
                     if (filtroSoloEntidad && catalogEntidad) {
                         /* Catálogo de la entidad aunque aún no tenga stock */
+                    } else if (filtroGastoEntidadActivo && catalogEntidad) {
+                        /* Gasto OpEx de la entidad en catálogo */
                     } else if (
                         filterDepositId &&
                         (item.deposit_id === filterDepositId ||
@@ -1190,6 +1304,10 @@ export default function InventoryMasterPage() {
         filterProyectoId,
         filterPartidaId,
         filterDepositId,
+        filterClasificacionGastoEntidad,
+        filtroGastoEntidadActivo,
+        proyectoIdsCentroCostoFiltrados,
+        proyectosById,
         sinClasificacionObra,
         sinAlmacenAsignado,
         depositsById,
@@ -1254,6 +1372,7 @@ export default function InventoryMasterPage() {
             proyecto: filterProyectoId || undefined,
             partida: filterPartidaId || undefined,
             deposito: filterDepositId || undefined,
+            gastoEntidad: filterClasificacionGastoEntidad || undefined,
             sinObra: sinClasificacionObra || undefined,
             sinAlmacen: sinAlmacenAsignado || undefined,
             kpi: kpiVista !== 'ninguno' ? kpiVista : undefined,
@@ -1265,6 +1384,7 @@ export default function InventoryMasterPage() {
         filterProyectoId,
         filterPartidaId,
         filterDepositId,
+        filterClasificacionGastoEntidad,
         sinClasificacionObra,
         sinAlmacenAsignado,
         kpiVista,
@@ -1679,6 +1799,7 @@ export default function InventoryMasterPage() {
         setFilterProyectoId('');
         setFilterPartidaId('');
         setFilterDepositId('');
+        setFilterClasificacionGastoEntidad('');
         setSinClasificacionObra(false);
         setSinAlmacenAsignado(false);
         setKpiVista('ninguno');
@@ -1696,6 +1817,7 @@ export default function InventoryMasterPage() {
                 filterDepositId: Boolean(filterDepositId),
                 filterProyectoId: Boolean(filterProyectoId),
                 filterEntidadId: Boolean(filterEntidadId),
+                filtroGastoEntidad: filtroGastoEntidadActivo,
                 hayFiltrosActivos,
                 kpiCuarentena: kpiVista === 'cuarentena',
             }),
@@ -1706,6 +1828,7 @@ export default function InventoryMasterPage() {
             filterDepositId,
             filterProyectoId,
             filterEntidadId,
+            filtroGastoEntidadActivo,
             hayFiltrosActivos,
             kpiVista,
         ],
@@ -2248,6 +2371,24 @@ export default function InventoryMasterPage() {
                                 </button>
                             </span>
                         ) : null}
+                        {filterClasificacionGastoEntidad ? (
+                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wide">
+                                Gasto:{' '}
+                                {
+                                    OPCIONES_FILTRO_GASTO_ENTIDAD.find(
+                                        (o) => o.value === filterClasificacionGastoEntidad,
+                                    )?.label
+                                }
+                                {' · '}
+                                <button
+                                    type="button"
+                                    onClick={() => setFilterClasificacionGastoEntidad('')}
+                                    className="underline hover:text-amber-200"
+                                >
+                                    quitar
+                                </button>
+                            </span>
+                        ) : null}
                         <span className="text-[10px] font-bold text-zinc-500 hidden xl:inline">
                             Mostrando {filteredItems.length} de {itemsCatalogo.length} ítems
                             {cargandoStockUbicacion && filtroStockEntidadActivo
@@ -2256,7 +2397,7 @@ export default function InventoryMasterPage() {
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         <label className="block">
                             <span className="text-[10px] font-black uppercase tracking-widest text-violet-400 mb-1.5 block">
                                 Entidad
@@ -2268,6 +2409,7 @@ export default function InventoryMasterPage() {
                                     setFilterEntidadId(id);
                                     setFilterProyectoId('');
                                     setFilterPartidaId('');
+                                    setFilterClasificacionGastoEntidad('');
                                     if (id) setSinClasificacionObra(false);
                                 }}
                                 className="w-full rounded-xl border border-violet-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
@@ -2279,8 +2421,33 @@ export default function InventoryMasterPage() {
                             </select>
                         </label>
                         <label className="block">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-1.5 block">
+                                Gasto de entidad
+                            </span>
+                            <select
+                                value={filterClasificacionGastoEntidad}
+                                onChange={(e) => {
+                                    const v = parseFiltroGastoEntidadCuadro(e.target.value);
+                                    setFilterClasificacionGastoEntidad(v);
+                                    if (v) {
+                                        setFilterProyectoId('');
+                                        setFilterPartidaId('');
+                                        setSinClasificacionObra(false);
+                                    }
+                                }}
+                                disabled={!filterEntidadId}
+                                className="w-full rounded-xl border border-amber-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                            >
+                                {OPCIONES_FILTRO_GASTO_ENTIDAD.map((op) => (
+                                    <option key={op.label} value={op.value}>
+                                        {op.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="block">
                             <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 mb-1.5 block">
-                                Proyecto / obra
+                                Obra (construcción)
                             </span>
                             <select
                                 value={filterProyectoId}
@@ -2289,12 +2456,14 @@ export default function InventoryMasterPage() {
                                     setFilterProyectoId(id);
                                     setFilterPartidaId('');
                                     if (id) {
+                                        setFilterClasificacionGastoEntidad('');
                                         const pr = proyectos.find((p) => p.id === id);
                                         if (pr?.entidad_id) setFilterEntidadId(pr.entidad_id);
                                         setSinClasificacionObra(false);
                                     }
                                 }}
-                                className="w-full rounded-xl border border-sky-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
+                                disabled={Boolean(filterClasificacionGastoEntidad)}
+                                className="w-full rounded-xl border border-sky-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-40"
                             >
                                 <option value="">
                                     {filterEntidadId
@@ -2596,6 +2765,11 @@ export default function InventoryMasterPage() {
                                 );
                                 const categoriaNombre =
                                     nombreCategoriaItem(item) || 'Sin categoría';
+                                const proyectoItem = item.proyecto_id
+                                    ? proyectosById.get(item.proyecto_id)
+                                    : undefined;
+                                const esGastoEntidad =
+                                    proyectoItem && esCentroCostoEntidad(proyectoItem);
 
                                 return (
                                 <tr
@@ -2673,7 +2847,20 @@ export default function InventoryMasterPage() {
                                             ) : (
                                                 <p className="text-zinc-600 uppercase tracking-wider">Sin entidad</p>
                                             )}
-                                            {obraTabla ? (
+                                            {esGastoEntidad ? (
+                                                <p
+                                                    className="text-amber-400/95 truncate"
+                                                    title="Gasto de entidad (OpEx)"
+                                                >
+                                                    {etiquetaClasificacionGastoEntidad(
+                                                        item.clasificacion_gasto_entidad ??
+                                                            proyectoItem?.clasificacion_gasto_entidad,
+                                                    )}
+                                                    <span className="ml-1 text-[9px] font-black uppercase text-zinc-500">
+                                                        · entidad
+                                                    </span>
+                                                </p>
+                                            ) : obraTabla ? (
                                                 <p
                                                     className={`truncate ${
                                                         obraTabla.desdeStockFisico

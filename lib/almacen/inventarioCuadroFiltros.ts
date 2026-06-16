@@ -46,6 +46,7 @@ export function mensajeVacioCuadroAlmacen(opts: {
   filterDepositId: boolean;
   filterProyectoId: boolean;
   filterEntidadId: boolean;
+  filtroGastoEntidad?: boolean;
   hayFiltrosActivos: boolean;
   kpiCuarentena?: boolean;
 }): MensajeVacioCuadroAlmacen | null {
@@ -79,6 +80,14 @@ export function mensajeVacioCuadroAlmacen(opts: {
       titulo: 'Sin materiales para esta entidad',
       subtitulo:
         'No hay ítems del catálogo clasificados bajo esta entidad. Registre materiales con entidad o prefijo SAP de la entidad.',
+    };
+  }
+
+  if (opts.hayFiltrosActivos && opts.filtroGastoEntidad) {
+    return {
+      titulo: 'Sin materiales para este gasto de entidad',
+      subtitulo:
+        'No hay ítems OpEx con esa clasificación. Use imputación entidad en compras o asigne clasificación al material.',
     };
   }
 

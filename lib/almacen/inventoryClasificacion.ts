@@ -1,7 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type EntidadRow = { id: string; nombre: string; rif: string | null };
-export type ProyectoRow = { id: string; nombre: string; entidad_id: string | null };
+export type ProyectoRow = {
+  id: string;
+  nombre: string;
+  entidad_id: string | null;
+  naturaleza_proyecto?: string | null;
+  clasificacion_gasto_entidad?: string | null;
+};
 export type PartidaRow = {
   id: string;
   codigo_partida: string;
@@ -25,6 +31,13 @@ export async function loadEntidades(supabase: SupabaseClient): Promise<EntidadRo
 }
 
 export async function loadProyectos(supabase: SupabaseClient): Promise<ProyectoRow[]> {
+  const withNaturaleza = await supabase
+    .from('ci_proyectos')
+    .select('id,nombre,entidad_id,naturaleza_proyecto,clasificacion_gasto_entidad')
+    .order('nombre');
+  if (!withNaturaleza.error) {
+    return (withNaturaleza.data ?? []) as ProyectoRow[];
+  }
   const { data, error } = await supabase
     .from('ci_proyectos')
     .select('id,nombre,entidad_id')
