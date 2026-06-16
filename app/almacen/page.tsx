@@ -1440,9 +1440,12 @@ export default function InventoryMasterPage() {
 
     const ubicacionIdsParaMovimientos = useMemo(() => {
         if (cuadroModo !== 'movimientos') return undefined;
+        /** Con obra concreta el alcance es proyecto_id; ubicacion_ids recorta filas válidas. */
+        if (filterProyectoId) return undefined;
         if (!filtroStockPorUbicacion && !filterDepositId) return undefined;
-        return ubicacionIdsFiltro.length > 0 ? ubicacionIdsFiltro : ['00000000-0000-0000-0000-000000000000'];
-    }, [cuadroModo, filtroStockPorUbicacion, filterDepositId, ubicacionIdsFiltro]);
+        if (ubicacionIdsFiltro.length === 0) return undefined;
+        return ubicacionIdsFiltro;
+    }, [cuadroModo, filterProyectoId, filtroStockPorUbicacion, filterDepositId, ubicacionIdsFiltro]);
 
     const todasSeleccionadas = useMemo(
         () => filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id)),

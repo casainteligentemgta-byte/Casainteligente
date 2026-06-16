@@ -707,7 +707,7 @@ function aplicarFiltros(
   return filas.filter((r) => {
     if (tipoVista && r.tipo !== tipoVista) return false;
     if (f.proyectoId) {
-      if (r.proyecto_id !== f.proyectoId) return false;
+      if (!filaCoincideProyectosEntidad(r, [f.proyectoId], proyectos)) return false;
     } else if (f.proyectoIdsEntidad?.length) {
       if (!filaCoincideProyectosEntidad(r, f.proyectoIdsEntidad, proyectos)) return false;
     }
