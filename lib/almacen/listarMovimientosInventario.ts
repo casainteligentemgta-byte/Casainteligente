@@ -6,7 +6,6 @@ import {
   proyectoDesdeUbicacionRow,
   type ProyectoRef,
 } from '@/lib/almacen/resolverProyectoMovimiento';
-import { cargarFilasStockFisico } from '@/lib/almacen/stockFisicoMovimientos';
 
 export type VistaMovimientoInventario = 'ingresado' | 'despachado' | 'almacenado' | 'todos';
 
@@ -617,8 +616,8 @@ function claveStock(materialId: string, ubicacionId: string): string {
   return `${materialId}|${ubicacionId}`;
 }
 
-/** Stock = Σ ingresos − Σ salidas por material y ubicación. */
-function calcularFilasStock(
+/** Stock = Σ ingresos − Σ salidas por material y ubicación (cuadro de movimientos). */
+export function calcularFilasStock(
   ingresos: FilaMovimientoInventario[],
   despachos: FilaMovimientoInventario[],
 ): FilaMovimientoInventario[] {
@@ -783,12 +782,10 @@ export async function listarMovimientosInventario(
     ),
     proyectos,
   );
-  const filasStockCalculado = calcularFilasStock(todosIngresos, todosDespachos);
-  let filasStock = await cargarFilasStockFisico(supabase, filtros);
-  if (!filasStock.length) {
-    filasStock = filasStockCalculado;
-  }
-  filasStock = enriquecerFilasProyecto(filasStock, proyectos);
+  const filasStock = enriquecerFilasProyecto(
+    calcularFilasStock(todosIngresos, todosDespachos),
+    proyectos,
+  );
 
   let merged: FilaMovimientoInventario[];
   if (vista === 'ingresado') merged = todosIngresos;

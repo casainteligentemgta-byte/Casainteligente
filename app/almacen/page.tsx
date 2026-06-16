@@ -1429,11 +1429,14 @@ export default function InventoryMasterPage() {
 
     const materialIdsParaMovimientos = useMemo(() => {
         if (cuadroModo !== 'movimientos') return undefined;
+        // Ingresos/salidas: historial completo por entidad/obra; no recortar por filas visibles del catálogo
+        // (tras una SALIDA el stock puede quedar en ubicación «obra» y el material salir del cuadro filtrado).
+        if (movVista !== 'almacenado') return undefined;
         if (!hayFiltrosActivos && !searchTerm.trim()) return undefined;
         const ids = filteredItems.map((item) => item.id);
         if (!ids.length) return undefined;
         return ids;
-    }, [cuadroModo, hayFiltrosActivos, searchTerm, filteredItems]);
+    }, [cuadroModo, movVista, hayFiltrosActivos, searchTerm, filteredItems]);
 
     const ubicacionIdsParaMovimientos = useMemo(() => {
         if (cuadroModo !== 'movimientos') return undefined;
