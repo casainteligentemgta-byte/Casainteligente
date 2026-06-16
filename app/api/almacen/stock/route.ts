@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { listarStockProyecto } from '@/lib/almacen/listarStockProyecto';
-import { listarMovimientosInventario } from '@/lib/almacen/listarMovimientosInventario';
-import { filaStockAStockProyectoItem } from '@/lib/almacen/stockFisicoMovimientos';
-import { createClient } from '@/lib/supabase/server';
-import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
+import { supabaseAdminMovimientos } from '@/lib/almacen/supabaseAdminMovimientos';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,24 +9,17 @@ export async function GET(req: Request) {
   const ubicacionId = url.searchParams.get('ubicacion_id')?.trim();
   const proyectoId = url.searchParams.get('proyecto_id')?.trim();
 
-  const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
+  const admin = supabaseAdminMovimientos();
+  if (!admin.ok) return admin.response;
+
+  const supabase = admin.client;
 
   if (proyectoId) {
     try {
-      let items = await listarStockProyecto(supabase, proyectoId, {
+      const items = await listarStockProyecto(supabase, proyectoId, {
         ubicacionId: ubicacionId || undefined,
+        soloAlmacenesFisicos: true,
       });
-      if (!items.length) {
-        const mov = await listarMovimientosInventario(supabase, {
-          vista: 'almacenado',
-          proyectoId,
-          ubicacionId: ubicacionId || undefined,
-          limite: 400,
-        });
-        items = mov.filas
-          .map(filaStockAStockProyectoItem)
-          .filter((x): x is NonNullable<typeof x> => x != null);
-      }
       return NextResponse.json({
         ok: true,
         items,

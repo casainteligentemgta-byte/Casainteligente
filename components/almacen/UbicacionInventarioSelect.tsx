@@ -15,6 +15,8 @@ import {
 const selectClass =
   'w-full rounded-lg border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors hover:bg-white/[0.04] focus:border-white/20 disabled:opacity-50 min-h-[46px]';
 
+const OPCION_TODOS = '__todos_almacenes__';
+
 type Props = {
   proyectoId: string;
   value: string;
@@ -23,6 +25,8 @@ type Props = {
   permitirSinProyecto?: boolean;
   /** Excluye ubicaciones de obra (solo central y móvil). Por defecto true en ingreso de compra. */
   soloAlmacenes?: boolean;
+  /** Primera opción para quitar filtro (p. ej. despacho: todos los almacenes de la obra). */
+  incluirOpcionTodos?: boolean;
   disabled?: boolean;
   id?: string;
   className?: string;
@@ -35,6 +39,7 @@ export default function UbicacionInventarioSelect({
   onChange,
   permitirSinProyecto = false,
   soloAlmacenes = true,
+  incluirOpcionTodos = false,
   disabled,
   id = 'ubicacion-inventario',
   className = selectClass,
@@ -106,7 +111,7 @@ export default function UbicacionInventarioSelect({
     <div className="space-y-1">
       <Select
         value={valorSelect}
-        onValueChange={onChange}
+        onValueChange={(v) => onChange(v === OPCION_TODOS ? '' : v)}
         disabled={disabled || loading}
       >
         <SelectValue placeholder={placeholderActual} />
@@ -119,6 +124,9 @@ export default function UbicacionInventarioSelect({
           ) : undefined}
         </SelectTrigger>
         <SelectContent>
+          {incluirOpcionTodos ? (
+            <SelectItem value={OPCION_TODOS}>{placeholder}</SelectItem>
+          ) : null}
           {ubicaciones.map((u) => (
             <SelectItem key={u.id} value={u.id}>
               {labelUbicacionOpcion(u)}

@@ -112,16 +112,22 @@ export function mensajeVacioCuadroAlmacen(opts: {
   };
 }
 
+function normalizarEtiquetaEntidad(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 /** Coincide clasificación de catálogo (entidad_id, obra de la entidad o prefijo SAP). */
 export function materialCoincideCatalogoEntidad(
   item: {
     entidad_id?: string | null;
     proyecto_id?: string | null;
     proyecto?: { entidad_id?: string | null } | null;
+    entidad?: { id?: string | null; nombre?: string | null } | null;
     sap_code?: string | null;
   },
   opts: {
     filterEntidadId: string;
+    filterEntidadNombre?: string | null;
     proyectoIdsEntidad?: Set<string>;
     sapPrefijoEntidad?: string | null;
   },
@@ -129,12 +135,20 @@ export function materialCoincideCatalogoEntidad(
   const eid = opts.filterEntidadId.trim();
   if (!eid) return true;
   if (String(item.entidad_id ?? '').trim() === eid) return true;
+  if (String(item.entidad?.id ?? '').trim() === eid) return true;
   if (String(item.proyecto?.entidad_id ?? '').trim() === eid) return true;
   const pid = item.proyecto_id?.trim();
   if (pid && opts.proyectoIdsEntidad?.has(pid)) return true;
   const pref = opts.sapPrefijoEntidad?.trim().toUpperCase();
   const sap = item.sap_code?.trim().toUpperCase();
   if (pref && sap && (sap.startsWith(`${pref}-`) || sap.startsWith(pref))) return true;
+  const nombreFiltro = opts.filterEntidadNombre?.trim();
+  const nombreItem = item.entidad?.nombre?.trim();
+  if (nombreFiltro && nombreItem) {
+    const nf = normalizarEtiquetaEntidad(nombreFiltro);
+    const ni = normalizarEtiquetaEntidad(nombreItem);
+    if (ni === nf || ni.includes(nf) || nf.includes(ni)) return true;
+  }
   return false;
 }
 

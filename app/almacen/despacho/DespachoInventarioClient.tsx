@@ -653,6 +653,7 @@ export default function DespachoInventarioClient() {
               proyectoId={proyectoId}
               value={origenId}
               onChange={setOrigenId}
+              incluirOpcionTodos
               placeholder="Todos los almacenes de la obra…"
             />
           </div>
@@ -702,7 +703,8 @@ export default function DespachoInventarioClient() {
           ) : stockDisponible.length === 0 && lineas.length === 0 ? (
             <p className="text-xs text-amber-400/90">
               No hay stock en los almacenes de {nombreProyecto}
-              {origenId ? ' en el almacén filtrado' : ''}.
+              {origenId ? ' en el almacén filtrado' : ''}. Revise la pestaña Stock en Almacenes o
+              quite el filtro de almacén origen.
             </p>
           ) : stockDisponible.length > 0 ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">

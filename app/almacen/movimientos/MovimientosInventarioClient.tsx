@@ -857,7 +857,7 @@ export default function MovimientosInventarioClient({
                   </th>
                   <th className="p-3 w-14">Tipo</th>
                   <th className="p-3">Fecha</th>
-                  <th className="p-3">Proveedor</th>
+                  <th className="p-3 min-w-[120px] max-w-[220px]">Proveedor</th>
                   <th className="p-3">Material</th>
                   <th className="p-3 text-right">Cant.</th>
                   <th className="p-3">Origen / Destino</th>
@@ -911,8 +911,13 @@ export default function MovimientosInventarioClient({
                           <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{f.hora}</p>
                         ) : null}
                       </td>
-                      <td className="p-3 text-zinc-400 max-w-[140px]">
-                        <p className="truncate">{f.proveedor ?? '—'}</p>
+                      <td className="p-3 text-zinc-400 min-w-[120px] max-w-[220px] align-top">
+                        <p
+                          className="line-clamp-2 leading-snug break-words text-[13px]"
+                          title={f.proveedor?.trim() || undefined}
+                        >
+                          {f.proveedor ?? '—'}
+                        </p>
                       </td>
                       <td className="p-3 min-w-[160px]">
                         <p className="font-medium text-zinc-100 leading-snug">{f.material_nombre}</p>

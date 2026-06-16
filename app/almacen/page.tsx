@@ -177,6 +177,7 @@ function materialPasaFiltroEntidad(
     item: InventoryItem,
     opts: {
         filterEntidadId?: string;
+        filterEntidadNombre?: string | null;
         filterProyectoId?: string;
         filterDepositId?: string;
         proyectoIdsEntidad?: Set<string>;
@@ -197,6 +198,7 @@ function materialPasaFiltroEntidad(
 
     const catalogMatch = materialCoincideCatalogoEntidad(item, {
         filterEntidadId: opts.filterEntidadId,
+        filterEntidadNombre: opts.filterEntidadNombre,
         proyectoIdsEntidad: opts.proyectoIdsEntidad,
         sapPrefijoEntidad: opts.sapPrefijoEntidad,
     });
@@ -667,13 +669,20 @@ export default function InventoryMasterPage() {
         void loadPartidasPorProyecto(supabase, filterProyectoId).then(setPartidasFiltro).catch(() => setPartidasFiltro([]));
     }, [filterProyectoId, supabase]);
 
-    const proyectosFiltro = useMemo(
-        () =>
-            filtrarObrasConstruccion(
-                filtrarProyectosPorEntidad(proyectos, filterEntidadId || null),
-            ),
-        [proyectos, filterEntidadId],
+    const nombreEntidadFiltro = useMemo(
+        () => entidades.find((e) => e.id === filterEntidadId)?.nombre ?? '',
+        [entidades, filterEntidadId],
     );
+
+    const proyectosFiltro = useMemo(() => {
+        const base = filtrarObrasConstruccion(
+            filtrarProyectosPorEntidad(proyectos, filterEntidadId || null),
+        );
+        if (!filterProyectoId) return base;
+        if (base.some((p) => p.id === filterProyectoId)) return base;
+        const extra = proyectos.find((p) => p.id === filterProyectoId);
+        return extra ? [...base, extra] : base;
+    }, [proyectos, filterEntidadId, filterProyectoId]);
 
     const proyectosById = useMemo(
         () => new Map(proyectos.map((p) => [p.id, p])),
@@ -909,21 +918,13 @@ export default function InventoryMasterPage() {
                     ids = res.ubicacionIds;
                     depositoFallback = res.depositoSinInterseccion;
                 } else if (filterDepositId) {
-                    if (filterEntidadId) {
-                        const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
-                            entidadId: filterEntidadId,
-                            proyectos,
-                            depositId: filterDepositId,
-                        });
-                        ids = res.ubicacionIds;
-                        depositoFallback = res.depositoSinInterseccion;
-                    } else {
-                        const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
-                            depositId: filterDepositId,
-                        });
-                        ids = res.ubicacionIds;
-                        depositoFallback = res.depositoSinInterseccion;
-                    }
+                    const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
+                        depositId: filterDepositId,
+                        proyectoId: filterProyectoId || undefined,
+                        proyectoNombre: nombreObraFiltro || undefined,
+                    });
+                    ids = res.ubicacionIds;
+                    depositoFallback = res.depositoSinInterseccion;
                 } else if (filtroGastoEntidadActivo && filterEntidadId) {
                     const ubSet = new Set<string>();
                     let depositoFallbackGasto = false;
@@ -948,12 +949,17 @@ export default function InventoryMasterPage() {
                     depositoFallback =
                         depositoFallbackGasto || resEnt.depositoSinInterseccion;
                 } else if (filterEntidadId) {
-                    const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
-                        entidadId: filterEntidadId,
-                        proyectos,
-                    });
-                    ids = res.ubicacionIds;
-                    depositoFallback = res.depositoSinInterseccion;
+                    if (filtroSoloEntidad) {
+                        /** Catálogo por entidad; stock en cualquier ubicación activa (p. ej. Di Máquinas en Rancho). */
+                        ids = ubicaciones.filter((u) => u.activo !== false).map((u) => u.id);
+                    } else {
+                        const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
+                            entidadId: filterEntidadId,
+                            proyectos,
+                        });
+                        ids = res.ubicacionIds;
+                        depositoFallback = res.depositoSinInterseccion;
+                    }
                 } else {
                     return;
                 }
@@ -1363,6 +1369,7 @@ export default function InventoryMasterPage() {
                 filterEntidadId &&
                 materialCoincideCatalogoEntidad(item, {
                     filterEntidadId,
+                    filterEntidadNombre: nombreEntidadFiltro,
                     proyectoIdsEntidad,
                     sapPrefijoEntidad: sapPrefijoEntidadFiltro,
                 });
@@ -1380,6 +1387,7 @@ export default function InventoryMasterPage() {
             if (
                 !materialPasaFiltroEntidad(item, {
                     filterEntidadId,
+                    filterEntidadNombre: nombreEntidadFiltro,
                     filterProyectoId,
                     filterDepositId,
                     proyectoIdsEntidad,
@@ -1406,6 +1414,7 @@ export default function InventoryMasterPage() {
             if (filterClasificacionGastoEntidad && filterEntidadId) {
                 const catalogEntidadOk = materialCoincideCatalogoEntidad(item, {
                     filterEntidadId,
+                    filterEntidadNombre: nombreEntidadFiltro,
                     proyectoIdsEntidad,
                     sapPrefijoEntidad: sapPrefijoEntidadFiltro,
                 });
@@ -1476,6 +1485,7 @@ export default function InventoryMasterPage() {
         filtroSoloEntidad,
         filtroStockEntidadActivo,
         sapPrefijoEntidadFiltro,
+        nombreEntidadFiltro,
         proyectoIdsEntidad,
         filtroSinUbicaciones,
         stockPorUbicacion,
@@ -2203,8 +2213,12 @@ export default function InventoryMasterPage() {
                         if ('action' in nav && nav.action === 'share') {
                             return <span key={nav.label}>{btn}</span>;
                         }
+                        const href =
+                            nav.href === '/almacen/despacho' && filterProyectoId
+                                ? `/almacen/despacho?proyectoId=${encodeURIComponent(filterProyectoId)}`
+                                : nav.href!;
                         return (
-                            <Link key={nav.href} href={nav.href!}>
+                            <Link key={nav.href} href={href}>
                                 {btn}
                             </Link>
                         );
@@ -2650,7 +2664,6 @@ export default function InventoryMasterPage() {
                                 onChange={(e) => {
                                     const id = e.target.value;
                                     setFilterEntidadId(id);
-                                    setFilterProyectoId('');
                                     setFilterPartidaId('');
                                     setFilterClasificacionGastoEntidad('');
                                     if (id) setSinClasificacionObra(false);
@@ -2701,7 +2714,9 @@ export default function InventoryMasterPage() {
                                     if (id) {
                                         setFilterClasificacionGastoEntidad('');
                                         const pr = proyectos.find((p) => p.id === id);
-                                        if (pr?.entidad_id) setFilterEntidadId(pr.entidad_id);
+                                        if (pr?.entidad_id && !filterEntidadId) {
+                                            setFilterEntidadId(pr.entidad_id);
+                                        }
                                         setSinClasificacionObra(false);
                                     }
                                 }}

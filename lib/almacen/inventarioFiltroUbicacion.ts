@@ -267,6 +267,16 @@ export function expandirDescendientesUbicacion(
   return Array.from(out.values());
 }
 
+/** IDs de la ubicación raíz y todos sus subsitios hijos (donde suele estar el stock físico). */
+export function ubicacionIdsRaizYDescendientes(
+  flat: UbicacionInventario[],
+  raizId: string,
+): string[] {
+  const raiz = flat.find((u) => u.id === raizId);
+  if (!raiz) return [raizId];
+  return expandirDescendientesUbicacion(flat, [raiz]).map((u) => u.id);
+}
+
 export function esUbicacionAlmacenFisico(tipo: string | undefined | null): boolean {
   return tipo === 'almacen_central' || tipo === 'almacen_movil' || !tipo || tipo === 'cuarentena';
 }

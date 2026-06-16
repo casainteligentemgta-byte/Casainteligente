@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  expandirUbicacionesHermanoObra,
+  ubicacionPerteneceAProyecto,
+} from '@/lib/almacen/inventarioFiltroUbicacion';
+import {
   buildArbolUbicaciones,
   mapUbicacionInventario,
   type InvUbicacionRow,
@@ -164,15 +168,30 @@ export async function listarUbicacionesParaSelector(
   propagarObraIdFlat(todas);
 
   const pid = opts.proyectoId;
-  const almacenes = todas.filter(esAlmacenIngreso);
+  let proyNombre: string | undefined;
+  if (pid) {
+    const { data: prRow } = await supabase
+      .from('ci_proyectos')
+      .select('nombre')
+      .eq('id', pid)
+      .maybeSingle();
+    proyNombre = String(prRow?.nombre ?? '').trim() || undefined;
+  }
+
   if (opts?.soloAlmacenes) {
-    return almacenes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    let candidatas = todas.filter(esAlmacenIngreso);
+    if (pid) {
+      candidatas = candidatas.filter((u) => ubicacionPerteneceAProyecto(u, pid, proyNombre));
+      candidatas = expandirUbicacionesHermanoObra(todas, candidatas);
+      candidatas = candidatas.filter(esAlmacenIngreso);
+    }
+    return candidatas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }
 
   const deObra = todas.filter((u) => u.obra_id === pid);
 
   const byId = new Map<string, UbicacionInventario>();
-  for (const u of [...almacenes, ...deObra]) {
+  for (const u of [...todas.filter(esAlmacenIngreso), ...deObra]) {
     byId.set(u.id, u);
   }
   return Array.from(byId.values()).sort((a, b) => {
