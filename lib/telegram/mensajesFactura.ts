@@ -3,6 +3,8 @@ import { formatTotalExtracted } from '@/lib/contabilidad/extractedCanal';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 import { setTelegramContexto } from '@/lib/telegram/estados';
 
+export type TipoImputacionFacturaComprador = 'obra' | 'entidad';
+
 /** URL base de la app (misma lógica que mediaHandlers). */
 export function baseUrlAppTelegram(): string {
   return (
@@ -19,8 +21,10 @@ export function mensajeModoFacturasActivado(): string {
   return (
     '✅ <b>COMPRADOR: cargar factura.</b>\n\n' +
     'Envía una <b>foto</b> de la factura de compra.\n' +
-    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, si es <b>contado</b> o <b>crédito</b>, elija obra y almacén de despacho.\n' +
-    'El sistema la enviará a <b>Contabilidad</b> y la <b>precargará en Almacén</b>.\n\n' +
+    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, si es <b>contado</b> o <b>crédito</b>.\n\n' +
+    'Luego elija destino:\n' +
+    '• <b>Obra (AD)</b> → obra + almacén → Contabilidad y precarga para ingreso físico.\n' +
+    '• <b>Gasto de entidad (OpEx)</b> → solo entidad y clasificación → Contabilidad (sin almacén).\n\n' +
     '<code>/cancelar</code> para salir de este modo.'
   );
 }
@@ -48,16 +52,40 @@ export function resumenFacturaCompradorHtml(
   );
 }
 
+export function mensajeCompradorFacturaConfirmadaHtml(
+  tipo: TipoImputacionFacturaComprador,
+  extracted: Record<string, unknown>,
+): string {
+  const resumen = resumenFacturaCompradorHtml(extracted);
+  if (tipo === 'entidad') {
+    return (
+      '✅ <b>Gasto de entidad registrado en Contabilidad</b>\n' +
+      '<i>Sin obra ni almacén — no aparece en /ingreso.</i>\n\n' +
+      resumen
+    );
+  }
+  return (
+    '✅ <b>Compra registrada en Contabilidad</b>\n' +
+    '<i>Precargada para ingreso físico del depositario (/ingreso).</i>\n\n' +
+    resumen
+  );
+}
+
 const FACTURA_OK_CALLBACK = 'fok:ack';
 
-export function tecladoFacturaRegistradaOk(): {
+export function tecladoFacturaRegistradaOk(
+  tipo: TipoImputacionFacturaComprador = 'obra',
+): {
   inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
 } {
+  const textoObra =
+    'OK — Registrada en Contabilidad (precargada para ingreso almacén)';
+  const textoEntidad = 'OK — Gasto de entidad en Contabilidad (sin almacén)';
   return {
     inline_keyboard: [
       [
         {
-          text: 'OK — Factura registrada en Contabilidad (precargada en almacén)',
+          text: tipo === 'entidad' ? textoEntidad : textoObra,
           callback_data: FACTURA_OK_CALLBACK,
         },
       ],
@@ -71,12 +99,14 @@ export function esCallbackFacturaOk(data: string): boolean {
 
 export async function manejarCallbackFacturaOkTelegram(params: {
   callbackId: string;
+  tipo?: TipoImputacionFacturaComprador;
 }): Promise<boolean> {
   const { answerCallbackQuery } = await import('@/lib/telegram/botApi');
-  await answerCallbackQuery(
-    params.callbackId,
-    'Factura registrada en Contabilidad (precargada en almacén)',
-  );
+  const msg =
+    params.tipo === 'entidad'
+      ? 'Gasto de entidad registrado en Contabilidad'
+      : 'Factura registrada en Contabilidad (precargada para ingreso)';
+  await answerCallbackQuery(params.callbackId, msg);
   return true;
 }
 

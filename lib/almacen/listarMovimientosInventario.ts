@@ -8,6 +8,10 @@ export type FiltrosMovimientosInventario = {
   proveedor?: string;
   destino?: string;
   proyectoId?: string;
+  /** Obras de la entidad cuando no hay proyecto concreto. */
+  proyectoIdsEntidad?: string[];
+  /** Restringir a materiales del catálogo (p. ej. categoría EPP). */
+  materialIdsCategoria?: string[];
   ubicacionId?: string;
   fechaDesde?: string;
   fechaHasta?: string;
@@ -679,7 +683,15 @@ function aplicarFiltros(
 
   return filas.filter((r) => {
     if (tipoVista && r.tipo !== tipoVista) return false;
-    if (f.proyectoId && r.proyecto_id !== f.proyectoId) return false;
+    if (f.proyectoId) {
+      if (r.proyecto_id !== f.proyectoId) return false;
+    } else if (f.proyectoIdsEntidad?.length) {
+      if (!r.proyecto_id || !f.proyectoIdsEntidad.includes(r.proyecto_id)) return false;
+    }
+
+    if (f.materialIdsCategoria?.length) {
+      if (!r.material_id || !f.materialIdsCategoria.includes(r.material_id)) return false;
+    }
 
     if (f.proveedor?.trim() && !incluye(r.proveedor ?? '', f.proveedor)) return false;
 

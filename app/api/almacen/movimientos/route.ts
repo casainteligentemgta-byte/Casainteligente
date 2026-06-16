@@ -11,6 +11,14 @@ function parseVista(v: string | null): VistaMovimientoInventario {
   return 'todos';
 }
 
+function parseCsvIds(raw: string | null): string[] | undefined {
+  const ids = String(raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.length ? ids : undefined;
+}
+
 async function resolveMovimientoId(req: Request): Promise<string | null> {
   const url = new URL(req.url);
   const fromQuery = url.searchParams.get('id')?.trim();
@@ -37,6 +45,8 @@ export async function GET(req: Request) {
       proveedor: url.searchParams.get('proveedor') ?? undefined,
       destino: url.searchParams.get('destino') ?? undefined,
       proyectoId: url.searchParams.get('proyecto_id') ?? undefined,
+      proyectoIdsEntidad: parseCsvIds(url.searchParams.get('proyecto_ids')),
+      materialIdsCategoria: parseCsvIds(url.searchParams.get('material_ids')),
       fechaDesde: url.searchParams.get('fecha_desde') ?? undefined,
       fechaHasta: url.searchParams.get('fecha_hasta') ?? undefined,
       material: url.searchParams.get('material') ?? undefined,

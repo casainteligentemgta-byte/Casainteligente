@@ -542,11 +542,15 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF9500]">
             Contabilidad · Canal
           </p>
-          <h1 className="text-base font-black text-white">Ingreso de mercancía al almacén</h1>
+          <h1 className="text-base font-black text-white">
+            {gastoEntidad ? 'Gasto de entidad (OpEx)' : 'Ingreso de mercancía al almacén'}
+          </h1>
           <p className="text-xs text-zinc-500">
-            {yaEnContabilidad
-              ? 'La compra ya está en contabilidad · indique el almacén de la obra'
-              : 'Obra, almacén e ingreso de stock en un solo paso'}
+            {gastoEntidad
+              ? 'Solo entidad y clasificación OpEx — sin obra ni almacén'
+              : yaEnContabilidad
+                ? 'La compra ya está en contabilidad · indique el almacén de la obra'
+                : 'Obra, almacén e ingreso de stock en un solo paso'}
           </p>
         </div>
       </header>
@@ -609,7 +613,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </div>
             )}
 
-            {yaEnContabilidad ? (
+            {yaEnContabilidad && !gastoEntidad ? (
               <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-3 text-xs text-emerald-200/90">
                 Compra registrada en contabilidad. Solo falta el ingreso de mercancía al almacén de la
                 obra.

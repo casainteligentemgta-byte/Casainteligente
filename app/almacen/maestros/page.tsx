@@ -11,7 +11,8 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { asegurarUbicacionDeposito } from '@/lib/almacen/ubicacionesInventario';
 import { GlassCard } from '@/components/inventory/GlassCard';
-import { ArrowLeft, Building2, Layers, Tag, Ruler, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Building2, Layers, Tag, Ruler, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import MaestrosStockMinimoPanel from '@/components/almacen/MaestrosStockMinimoPanel';
 
 type Deposit = { id: string; code: string; name: string; locality: string | null; is_default: boolean };
 type Furniture = {
@@ -34,7 +35,7 @@ const KINDS = [
 
 export default function AlmacenMaestrosPage() {
   const supabase = useMemo(() => createClient(), []);
-  const [tab, setTab] = useState<'depositos' | 'muebles' | 'categorias' | 'unidades'>('depositos');
+  const [tab, setTab] = useState<'depositos' | 'muebles' | 'categorias' | 'unidades' | 'stock_minimo'>('depositos');
   const [err, setErr] = useState<string | null>(null);
 
   const [deposits, setDeposits] = useState<Deposit[]>([]);
@@ -215,6 +216,7 @@ export default function AlmacenMaestrosPage() {
     { id: 'muebles', label: 'Armarios / estantes', icon: <Layers size={16} /> },
     { id: 'categorias', label: 'Categorías', icon: <Tag size={16} /> },
     { id: 'unidades', label: 'Unidades', icon: <Ruler size={16} /> },
+    { id: 'stock_minimo', label: 'Stock mínimo', icon: <AlertTriangle size={16} /> },
   ];
 
   return (
@@ -232,7 +234,7 @@ export default function AlmacenMaestrosPage() {
           <div>
             <h1 className="text-2xl font-black tracking-tighter">MAESTROS DE ALMACÉN</h1>
             <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">
-              Depósitos, ubicación física, categorías y unidades
+              Depósitos, ubicación física, categorías, unidades y stock mínimo por obra
             </p>
           </div>
         </div>
@@ -498,6 +500,8 @@ export default function AlmacenMaestrosPage() {
             </ul>
           </GlassCard>
         )}
+
+        {tab === 'stock_minimo' && <MaestrosStockMinimoPanel supabase={supabase} />}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi'
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import {
+  mensajeCompradorFacturaConfirmadaHtml,
   resumenFacturaCompradorHtml,
   tecladoFacturaRegistradaOk,
 } from '@/lib/telegram/mensajesFactura';
@@ -252,6 +253,7 @@ async function confirmarGastoEntidadFacturaTelegram(
     .maybeSingle();
   const extracted = (pendiente?.extracted ?? {}) as Record<string, unknown>;
 
+  let textoOk = false;
   let textoFinal =
     `✅ <b>${escHtml(label)}</b>\nEntidad: <b>${escHtml(entidadNombre)}</b>\n\n` +
     resumenFacturaCompradorHtml(extracted);
@@ -274,6 +276,7 @@ async function confirmarGastoEntidadFacturaTelegram(
       ? 'Gasto de entidad ya registrado (fuera de valuación AD).'
       : 'Gasto registrado a la entidad — no afecta administración delegada.';
     textoFinal = `✅ <b>${escHtml(label)}</b>\n${escHtml(msgOk)}\n\n` + resumenFacturaCompradorHtml(extracted);
+    textoOk = true;
   } catch (e) {
     const det = e instanceof Error ? e.message : 'Error al registrar en Contabilidad';
     textoFinal =
@@ -281,10 +284,14 @@ async function confirmarGastoEntidadFacturaTelegram(
       resumenFacturaCompradorHtml(extracted);
   }
 
-  await sendTelegramMessage(chatId, textoFinal, {
-    parse_mode: 'HTML',
-    reply_markup: tecladoFacturaRegistradaOk(),
-  });
+  await sendTelegramMessage(
+    chatId,
+    textoOk ? mensajeCompradorFacturaConfirmadaHtml('entidad', extracted) : textoFinal,
+    {
+      parse_mode: 'HTML',
+      reply_markup: textoOk ? tecladoFacturaRegistradaOk('entidad') : undefined,
+    },
+  );
 }
 
 export async function manejarCallbackFacturaEntidadDestinoTelegram(

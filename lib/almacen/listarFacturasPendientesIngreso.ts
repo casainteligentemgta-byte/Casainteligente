@@ -23,6 +23,9 @@ const ESTADOS_TRANSITO = ['extraido', 'aprobado_sistema', 'confirmado'] as const
 export type IndiceContabilidadIngreso = {
   ingresadasClaves: Set<string>;
   ingresadasPi: Set<string>;
+  /** Compras OpEx (imputacion entidad): no van a /ingreso ni recepción tránsito. */
+  gastoEntidadPi: Set<string>;
+  gastoEntidadClaves: Set<string>;
   abiertasPorClave: Map<
     string,
     { purchase_invoice_id: string; ubicacion_destino_id: string | null }
@@ -95,6 +98,8 @@ export async function cargarIndiceContabilidadIngreso(
 ): Promise<IndiceContabilidadIngreso> {
   const ingresadasClaves = new Set<string>();
   const ingresadasPi = new Set<string>();
+  const gastoEntidadPi = new Set<string>();
+  const gastoEntidadClaves = new Set<string>();
   const abiertasPorClave = new Map<
     string,
     { purchase_invoice_id: string; ubicacion_destino_id: string | null }
@@ -102,7 +107,9 @@ export async function cargarIndiceContabilidadIngreso(
 
   const { data: compras, error: cErr } = await supabase
     .from('contabilidad_compras')
-    .select('purchase_invoice_id, invoice_number, supplier_name, ingresado_almacen_at, ubicacion_destino_id')
+    .select(
+      'purchase_invoice_id, invoice_number, supplier_name, ingresado_almacen_at, ubicacion_destino_id, imputacion',
+    )
     .limit(2000);
 
   if (cErr && cErr.code !== '42P01') {
@@ -115,6 +122,13 @@ export async function cargarIndiceContabilidadIngreso(
     const pi = String(row.purchase_invoice_id ?? '').trim();
     const clave = claveFacturaCompra(row.supplier_name, row.invoice_number);
     const ingresada = Boolean((row as { ingresado_almacen_at?: string | null }).ingresado_almacen_at);
+    const imputacion = String((row as { imputacion?: string | null }).imputacion ?? 'obra').trim();
+
+    if (imputacion === 'entidad') {
+      if (pi) gastoEntidadPi.add(pi);
+      if (clave) gastoEntidadClaves.add(clave);
+      continue;
+    }
 
     if (ingresada) {
       if (pi) ingresadasPi.add(pi);
@@ -152,7 +166,21 @@ export async function cargarIndiceContabilidadIngreso(
     }
   }
 
-  return { ingresadasClaves, ingresadasPi, abiertasPorClave };
+  return { ingresadasClaves, ingresadasPi, gastoEntidadPi, gastoEntidadClaves, abiertasPorClave };
+}
+
+/** Compra OpEx (gasto entidad): excluida de ingreso físico y tránsito. */
+export function compraEsGastoEntidadIndice(
+  row: Pick<FilaCanalPendiente, 'purchase_invoice_id' | 'extracted'>,
+  indice: IndiceContabilidadIngreso,
+): boolean {
+  const pi = resolverPiEfectivo(row, indice);
+  if (pi && indice.gastoEntidadPi.has(pi)) return true;
+  const clave = claveFacturaCompra(
+    extraerProveedor(row.extracted ?? null),
+    extraerNumero(row.extracted ?? null),
+  );
+  return Boolean(clave && indice.gastoEntidadClaves.has(clave));
 }
 
 function resolverPiEfectivo(
@@ -254,6 +282,7 @@ type FilaCompraContabilidad = {
   origen?: string | null;
   created_at?: string | null;
   proyecto_id?: string | null;
+  imputacion?: string | null;
 };
 
 function labelOrigenContabilidad(
@@ -273,10 +302,15 @@ function mapCompraContabilidadAFactura(
   const pi = String(row.purchase_invoice_id ?? '').trim();
   if (!pi) return null;
   if (indice.ingresadasPi.has(pi)) return null;
+  if (indice.gastoEntidadPi.has(pi)) return null;
   if (pisEnLista.has(pi)) return null;
 
   const clave = claveFacturaCompra(row.supplier_name, row.invoice_number);
   if (clave && indice.ingresadasClaves.has(clave)) return null;
+  if (clave && indice.gastoEntidadClaves.has(clave)) return null;
+
+  const imputacion = String(row.imputacion ?? 'obra').trim();
+  if (imputacion === 'entidad') return null;
 
   const proveedor = String(row.supplier_name ?? '').trim() || null;
   const numero = String(row.invoice_number ?? '').trim() || null;
@@ -312,6 +346,7 @@ function mapFilaCanalAFactura(
   if (!proveedor && !numero) return null;
 
   if (facturaCanalYaIngresada(row, indice)) return null;
+  if (compraEsGastoEntidadIndice(row, indice)) return null;
 
   const accion = resolverAccionIngresoFactura(
     {
@@ -379,10 +414,11 @@ export async function listarFacturasPendientesIngreso(
   const { data: comprasAbiertas, error: comprasErr } = await supabase
     .from('contabilidad_compras')
     .select(
-      'id, purchase_invoice_id, invoice_number, supplier_name, fecha, ubicacion_destino_id, origen, created_at, proyecto_id',
+      'id, purchase_invoice_id, invoice_number, supplier_name, fecha, ubicacion_destino_id, origen, created_at, proyecto_id, imputacion',
     )
     .not('purchase_invoice_id', 'is', null)
     .is('ingresado_almacen_at', null)
+    .neq('imputacion', 'entidad')
     .order('fecha', { ascending: false })
     .limit(200);
 
@@ -442,10 +478,11 @@ export async function ampliarPendientesCanalConContabilidad(
   const { data: comprasAbiertas, error } = await supabase
     .from('contabilidad_compras')
     .select(
-      'id, purchase_invoice_id, invoice_number, supplier_name, fecha, ubicacion_destino_id, origen, created_at, proyecto_id',
+      'id, purchase_invoice_id, invoice_number, supplier_name, fecha, ubicacion_destino_id, origen, created_at, proyecto_id, imputacion',
     )
     .not('purchase_invoice_id', 'is', null)
     .is('ingresado_almacen_at', null)
+    .neq('imputacion', 'entidad')
     .order('fecha', { ascending: false })
     .limit(200);
 

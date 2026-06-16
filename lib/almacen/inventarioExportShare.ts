@@ -16,6 +16,8 @@ export type InventarioFilaExport = {
   categoria: string;
 };
 
+export type InventarioCuadroModo = 'inventario' | 'movimientos';
+
 export type InventarioShareState = {
   q?: string;
   cat?: string;
@@ -28,6 +30,10 @@ export type InventarioShareState = {
   sinObra?: boolean;
   sinAlmacen?: boolean;
   kpi?: string;
+  /** inventario (catálogo) | movimientos (ingreso/stock/salida) */
+  cuadro?: InventarioCuadroModo;
+  /** ingresado | almacenado | despachado | todos */
+  movVista?: string;
 };
 
 const SHARE_KEYS = [
@@ -41,6 +47,8 @@ const SHARE_KEYS = [
   'sinObra',
   'sinAlmacen',
   'kpi',
+  'cuadro',
+  'movVista',
 ] as const;
 
 const CSV_HEADERS = [
@@ -84,6 +92,11 @@ export function parseInventarioShareParams(params: URLSearchParams): InventarioS
     sinObra: params.get('sinObra') === '1',
     sinAlmacen: params.get('sinAlmacen') === '1',
     kpi: params.get('kpi')?.trim() || undefined,
+    cuadro:
+      params.get('cuadro') === 'movimientos' || params.get('cuadro') === 'inventario'
+        ? (params.get('cuadro') as InventarioCuadroModo)
+        : undefined,
+    movVista: params.get('movVista')?.trim() || undefined,
   };
 }
 
@@ -105,6 +118,8 @@ export function buildInventarioShareSearchParams(state: InventarioShareState): U
   setShareParam(qs, 'sinObra', state.sinObra);
   setShareParam(qs, 'sinAlmacen', state.sinAlmacen);
   setShareParam(qs, 'kpi', state.kpi);
+  setShareParam(qs, 'cuadro', state.cuadro);
+  setShareParam(qs, 'movVista', state.movVista);
   return qs;
 }
 

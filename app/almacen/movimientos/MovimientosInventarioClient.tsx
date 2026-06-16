@@ -128,12 +128,41 @@ const VISTA_LABEL: Record<VistaMovimientoInventario, string> = {
   todos: 'Todos',
 };
 
-export default function MovimientosInventarioClient() {
+export type MovimientosInventarioEmbedProps = {
+  /** Embebido en /almacen (sin cabecera de página completa). */
+  embedded?: boolean;
+  skipUrlSync?: boolean;
+  proyectoId?: string;
+  proyectoIdsEntidad?: string[];
+  materialIdsCategoria?: string[];
+  busquedaVinculada?: string;
+  vistaExterna?: VistaMovimientoInventario;
+  onVistaExternaChange?: (v: VistaMovimientoInventario) => void;
+};
+
+export default function MovimientosInventarioClient({
+  embedded = false,
+  skipUrlSync = false,
+  proyectoId: proyectoIdBloqueado,
+  proyectoIdsEntidad,
+  materialIdsCategoria,
+  busquedaVinculada,
+  vistaExterna,
+  onVistaExternaChange,
+}: MovimientosInventarioEmbedProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [hydrated, setHydrated] = useState(false);
-  const [vista, setVista] = useState<VistaMovimientoInventario>(() =>
-    parseVistaInicial(searchParams.get('vista')),
+  const [vistaLocal, setVistaLocal] = useState<VistaMovimientoInventario>(() =>
+    vistaExterna ?? parseVistaInicial(searchParams.get('vista')),
+  );
+  const vista = vistaExterna ?? vistaLocal;
+  const setVista = useCallback(
+    (next: VistaMovimientoInventario) => {
+      if (onVistaExternaChange) onVistaExternaChange(next);
+      else setVistaLocal(next);
+    },
+    [onVistaExternaChange],
   );
   const [proveedorInput, setProveedorInput] = useState('');
   const [destinoInput, setDestinoInput] = useState('');
@@ -156,6 +185,10 @@ export default function MovimientosInventarioClient() {
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (embedded || skipUrlSync) {
+      setHydrated(true);
+      return;
+    }
     if (!hasMovimientosCuadroShareParams(searchParams)) {
       setHydrated(true);
       return;
@@ -177,7 +210,11 @@ export default function MovimientosInventarioClient() {
     if (fromUrl.fechaDesde != null) setFechaDesde(fromUrl.fechaDesde);
     if (fromUrl.fechaHasta != null) setFechaHasta(fromUrl.fechaHasta);
     setHydrated(true);
-  }, [searchParams]);
+  }, [embedded, skipUrlSync, searchParams]);
+
+  useEffect(() => {
+    if (vistaExterna) setVistaLocal(vistaExterna);
+  }, [vistaExterna]);
 
   const filtrosActivos = useMemo(() => {
     const activos: string[] = [];
@@ -212,14 +249,34 @@ export default function MovimientosInventarioClient() {
   const query = useMemo(() => {
     const p = new URLSearchParams();
     p.set('vista', vista);
+    if (proyectoIdBloqueado?.trim()) {
+      p.set('proyecto_id', proyectoIdBloqueado.trim());
+    } else if (proyectoIdsEntidad?.length) {
+      p.set('proyecto_ids', proyectoIdsEntidad.join(','));
+    }
+    if (materialIdsCategoria?.length) {
+      p.set('material_ids', materialIdsCategoria.join(','));
+    }
     if (proveedor.trim()) p.set('proveedor', proveedor.trim());
     if (destino.trim()) p.set('destino', destino.trim());
-    if (material.trim()) p.set('material', material.trim());
+    const materialEfectivo = material.trim() || busquedaVinculada?.trim() || '';
+    if (materialEfectivo) p.set('material', materialEfectivo);
     if (fechaDesde) p.set('fecha_desde', fechaDesde);
     if (fechaHasta) p.set('fecha_hasta', fechaHasta);
     p.set('limite', '250');
     return p.toString();
-  }, [vista, proveedor, destino, material, fechaDesde, fechaHasta]);
+  }, [
+    vista,
+    proyectoIdBloqueado,
+    proyectoIdsEntidad,
+    materialIdsCategoria,
+    proveedor,
+    destino,
+    material,
+    busquedaVinculada,
+    fechaDesde,
+    fechaHasta,
+  ]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -384,10 +441,10 @@ export default function MovimientosInventarioClient() {
   );
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || embedded || skipUrlSync) return;
     const path = movimientosCuadroPathFromState(estadoCompartir);
     router.replace(path, { scroll: false });
-  }, [hydrated, estadoCompartir, router]);
+  }, [hydrated, embedded, skipUrlSync, estadoCompartir, router]);
 
   useEffect(() => {
     if (exportScope === 'seleccionado' && filasSeleccionadas.length === 0) {
@@ -507,9 +564,14 @@ export default function MovimientosInventarioClient() {
     ],
   );
 
+  const shellClass = embedded
+    ? 'text-white space-y-4'
+    : 'min-h-screen bg-[#050508] text-white p-4 md:p-6 pb-24';
+
   return (
-    <div className="min-h-screen bg-[#050508] text-white p-4 md:p-6 pb-24">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className={shellClass}>
+      <div className={embedded ? 'space-y-4' : 'max-w-6xl mx-auto space-y-6'}>
+        {!embedded ? (
         <div className="flex flex-wrap items-center gap-4">
           <Link
             href="/almacen"
@@ -556,6 +618,7 @@ export default function MovimientosInventarioClient() {
             </button>
           </div>
         </div>
+        ) : null}
 
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 p-4">
@@ -575,6 +638,19 @@ export default function MovimientosInventarioClient() {
           </div>
         </div>
 
+        {embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => void cargar()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           {VISTAS.map((v) => {
             const Icon = v.icon;
@@ -593,7 +669,7 @@ export default function MovimientosInventarioClient() {
           })}
         </div>
 
-        {filtrosAbiertos ? (
+        {filtrosAbiertos && !embedded ? (
           <div
             id="panel-filtros-movimientos"
             className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3"

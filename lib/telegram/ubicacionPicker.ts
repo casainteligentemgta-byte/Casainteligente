@@ -11,6 +11,7 @@ import {
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import {
+  mensajeCompradorFacturaConfirmadaHtml,
   resumenFacturaCompradorHtml,
   tecladoFacturaRegistradaOk,
 } from '@/lib/telegram/mensajesFactura';
@@ -235,6 +236,7 @@ export async function manejarCallbackUbicacionTelegram(
         pending_factura_id: null,
         metadata: {},
       });
+      textoFinal = mensajeCompradorFacturaConfirmadaHtml('obra', extracted);
     } catch (e) {
       const det = e instanceof Error ? e.message : 'Error al registrar en Contabilidad';
       textoFinal =
@@ -245,7 +247,7 @@ export async function manejarCallbackUbicacionTelegram(
 
   await sendTelegramMessage(params.chatId, textoFinal, {
     parse_mode: 'HTML',
-    reply_markup: tecladoFacturaRegistradaOk(),
+    reply_markup: tecladoFacturaRegistradaOk('obra'),
   });
   return true;
 }

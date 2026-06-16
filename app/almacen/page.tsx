@@ -15,11 +15,14 @@ import {
     ShieldCheck,
     History,
     Settings2,
+    ArrowRightLeft,
     Trash2,
     ArrowUpRight,
     Share2,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
+    ChevronUp,
     List,
     Pencil,
     Loader2,
@@ -99,6 +102,23 @@ import { obtenerCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 import CeldaStockEditable from '@/components/almacen/CeldaStockEditable';
 import { resolverUbicacionAjusteStock } from '@/lib/almacen/resolverUbicacionAjusteStock';
+import {
+    cargarReordenPorObra,
+    reorderPointEfectivo,
+} from '@/lib/almacen/inventarioReordenObra';
+import dynamic from 'next/dynamic';
+import type { VistaMovimientoInventario } from '@/lib/almacen/listarMovimientosInventario';
+import type { InventarioCuadroModo } from '@/lib/almacen/inventarioExportShare';
+
+const MovimientosInventarioClient = dynamic(
+    () => import('@/app/almacen/movimientos/MovimientosInventarioClient'),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="p-8 text-center text-zinc-500 text-sm">Cargando movimientos…</div>
+        ),
+    },
+);
 
 const INVENTORY_SELECT = `
   *,
@@ -442,6 +462,8 @@ export default function InventoryMasterPage() {
     /** Stock agregado de todas las ubicaciones (KPIs sin filtro de almacén). */
     const [stockGlobal, setStockGlobal] = useState<Map<string, StockEnUbicacionResumen>>(new Map());
     const [stockGlobalCargado, setStockGlobalCargado] = useState(false);
+    /** Umbral stock bajo por obra (migr. 246); fallback a global_inventory.reorder_point. */
+    const [reordenPorObra, setReordenPorObra] = useState<Map<string, number>>(new Map());
     const [statFlips, setStatFlips] = useState<Record<StatFlipKey, boolean>>({
         valor: false,
         bajo: false,
@@ -456,6 +478,10 @@ export default function InventoryMasterPage() {
     const [sapPrefijoEntidadFiltro, setSapPrefijoEntidadFiltro] = useState<string | null>(null);
     /** Inspecciones PENDIENTE (fuente operativa de cuarentena). */
     const [cuarentenaOperativa, setCuarentenaOperativa] = useState<InspeccionCuarentenaRow[]>([]);
+    /** Panel categorías + filtros avanzados (colapsable para ver más tabla). */
+    const [panelFiltrosExpandido, setPanelFiltrosExpandido] = useState(true);
+    const [cuadroModo, setCuadroModo] = useState<InventarioCuadroModo>('inventario');
+    const [movVista, setMovVista] = useState<VistaMovimientoInventario>('ingresado');
 
     const toggleStatFlip = useCallback((key: StatFlipKey) => {
         setStatFlips((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -483,10 +509,39 @@ export default function InventoryMasterPage() {
         ) {
             setKpiVista(parsed.kpi);
         }
+        if (parsed.cuadro === 'movimientos' || parsed.cuadro === 'inventario') {
+            setCuadroModo(parsed.cuadro);
+        }
+        if (
+            parsed.movVista === 'ingresado' ||
+            parsed.movVista === 'almacenado' ||
+            parsed.movVista === 'despachado' ||
+            parsed.movVista === 'todos'
+        ) {
+            setMovVista(parsed.movVista);
+        }
     }, []);
 
     useEffect(() => {
         setHydrated(true);
+        try {
+            const raw = localStorage.getItem('ci-inventario-panel-filtros-expandido');
+            if (raw === '0') setPanelFiltrosExpandido(false);
+        } catch {
+            /* modo privado */
+        }
+    }, []);
+
+    const alternarPanelFiltros = useCallback(() => {
+        setPanelFiltrosExpandido((prev) => {
+            const next = !prev;
+            try {
+                localStorage.setItem('ci-inventario-panel-filtros-expandido', next ? '1' : '0');
+            } catch {
+                /* ignore */
+            }
+            return next;
+        });
     }, []);
 
     const cargarCuarentenaOperativa = useCallback(async () => {
@@ -566,6 +621,25 @@ export default function InventoryMasterPage() {
 
     useEffect(() => {
         if (!filterProyectoId) {
+            setReordenPorObra(new Map());
+            return;
+        }
+        let cancelled = false;
+        void cargarReordenPorObra(supabase, filterProyectoId)
+            .then((map) => {
+                if (!cancelled) setReordenPorObra(map);
+            })
+            .catch((e) => {
+                console.warn('[inventario] reorden obra:', e);
+                if (!cancelled) setReordenPorObra(new Map());
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [filterProyectoId, supabase]);
+
+    useEffect(() => {
+        if (!filterProyectoId) {
             setPartidasFiltro([]);
             setFilterPartidaId('');
             return;
@@ -601,6 +675,14 @@ export default function InventoryMasterPage() {
     const proyectoIdsEntidad = useMemo(
         () => (filterEntidadId ? proyectoIdsDeEntidad(proyectos, filterEntidadId) : new Set<string>()),
         [filterEntidadId, proyectos],
+    );
+
+    const proyectoIdsEntidadArr = useMemo(
+        () =>
+            filterEntidadId && !filterProyectoId && proyectoIdsEntidad.size > 0
+                ? Array.from(proyectoIdsEntidad)
+                : undefined,
+        [filterEntidadId, filterProyectoId, proyectoIdsEntidad],
     );
 
     /** Stock por ubicación física con obra, gasto entidad o depósito; solo entidad usa stock de sus obras. */
@@ -696,6 +778,55 @@ export default function InventoryMasterPage() {
         sinAlmacenAsignado ||
         kpiVista !== 'ninguno';
 
+    const etiquetasResumenFiltros = useMemo(() => {
+        const chips: string[] = [];
+        if (activeCategory !== 'Todos') chips.push(activeCategory);
+        const ent = entidades.find((e) => e.id === filterEntidadId);
+        if (ent?.nombre) chips.push(ent.nombre);
+        if (filterClasificacionGastoEntidad) {
+            const g = OPCIONES_FILTRO_GASTO_ENTIDAD.find(
+                (o) => o.value === filterClasificacionGastoEntidad,
+            );
+            if (g) chips.push(g.label);
+        }
+        const pr = proyectos.find((p) => p.id === filterProyectoId);
+        if (pr?.nombre) chips.push(pr.nombre);
+        const dep = filterDepositId ? depositsById.get(filterDepositId) : undefined;
+        if (dep?.name) {
+            chips.push(dep.locality ? `${dep.name} (${dep.locality})` : dep.name);
+        }
+        const part = partidasFiltro.find((p) => p.id === filterPartidaId);
+        if (part) {
+            chips.push(
+                part.codigo_partida
+                    ? `${part.codigo_partida} · ${part.descripcion}`
+                    : part.descripcion,
+            );
+        }
+        if (sinClasificacionObra) chips.push('Sin obra');
+        if (sinAlmacenAsignado) chips.push('Sin almacén');
+        if (kpiVista === 'stock_bajo') chips.push('Stock bajo');
+        if (kpiVista === 'cuarentena') chips.push('Cuarentena');
+        if (kpiVista === 'sku') chips.push('SKU');
+        if (searchTerm.trim()) chips.push(`«${searchTerm.trim().slice(0, 28)}»`);
+        return chips;
+    }, [
+        activeCategory,
+        entidades,
+        filterEntidadId,
+        filterClasificacionGastoEntidad,
+        proyectos,
+        filterProyectoId,
+        filterDepositId,
+        depositsById,
+        partidasFiltro,
+        filterPartidaId,
+        sinClasificacionObra,
+        sinAlmacenAsignado,
+        kpiVista,
+        searchTerm,
+    ]);
+
     useEffect(() => {
         void fetchInventory();
         void cargarCuarentenaOperativa();
@@ -710,6 +841,14 @@ export default function InventoryMasterPage() {
         }
         return Array.from(byId.values());
     }, [items, itemsDesdeStock]);
+
+    const materialIdsCategoria = useMemo(() => {
+        if (activeCategory === 'Todos') return undefined;
+        const ids = itemsCatalogo
+            .filter((item) => categoriaCoincideFiltro(item, activeCategory))
+            .map((item) => item.id);
+        return ids.length > 0 ? ids : undefined;
+    }, [itemsCatalogo, activeCategory]);
 
     useEffect(() => {
         if (
@@ -1090,6 +1229,16 @@ export default function InventoryMasterPage() {
         [filtroStockPorUbicacion, filtroSoloEntidad, stockPorUbicacion, stockGlobal],
     );
 
+    const reorderPointItem = useCallback(
+        (item: InventoryItem): number =>
+            reorderPointEfectivo(
+                item.id,
+                Number(item.reorder_point),
+                filterProyectoId ? reordenPorObra : null,
+            ),
+        [filterProyectoId, reordenPorObra],
+    );
+
     const actualizarStockLocal = useCallback(
         (materialId: string, cantidadNueva: number) => {
             setStockPorUbicacion((prev) => {
@@ -1270,7 +1419,7 @@ export default function InventoryMasterPage() {
             }
 
             const qty = cantidadStockReal(item);
-            if (kpiVista === 'stock_bajo' && qty > Number(item.reorder_point)) return false;
+            if (kpiVista === 'stock_bajo' && qty > reorderPointItem(item)) return false;
             if (kpiVista === 'cuarentena') {
                 if (!materialIdsCuarentenaObra.has(item.id)) return false;
             } else {
@@ -1321,6 +1470,7 @@ export default function InventoryMasterPage() {
         stockGlobalCargado,
         cargandoStockUbicacion,
         cantidadStockReal,
+        reorderPointItem,
         kpiVista,
         cuarentenaFiltrada,
         materialIdsCuarentenaObra,
@@ -1376,6 +1526,9 @@ export default function InventoryMasterPage() {
             sinObra: sinClasificacionObra || undefined,
             sinAlmacen: sinAlmacenAsignado || undefined,
             kpi: kpiVista !== 'ninguno' ? kpiVista : undefined,
+            cuadro: cuadroModo !== 'inventario' ? cuadroModo : undefined,
+            movVista:
+                cuadroModo === 'movimientos' && movVista !== 'ingresado' ? movVista : undefined,
         };
     }, [
         searchTerm,
@@ -1388,6 +1541,8 @@ export default function InventoryMasterPage() {
         sinClasificacionObra,
         sinAlmacenAsignado,
         kpiVista,
+        cuadroModo,
+        movVista,
     ]);
 
     const stockParaExport = useCallback(
@@ -1589,7 +1744,7 @@ export default function InventoryMasterPage() {
             0,
         );
         const lowStock = base.filter(
-            (item) => cantidadStockReal(item) <= Number(item.reorder_point),
+            (item) => cantidadStockReal(item) <= reorderPointItem(item),
         ).length;
         const quarantineUnidades = (hayFiltrosActivos ? cuarentenaFiltrada : cuarentenaOperativa).reduce(
             (acc, i) => acc + (Number(i.quantity) || 0),
@@ -1606,6 +1761,7 @@ export default function InventoryMasterPage() {
         itemsCatalogo,
         hayFiltrosActivos,
         cantidadStockReal,
+        reorderPointItem,
         cuarentenaOperativa,
         cuarentenaFiltrada,
     ]);
@@ -1733,10 +1889,10 @@ export default function InventoryMasterPage() {
     const itemsStockBajo = useMemo(
         () =>
             baseItemsKpi
-                .filter((item) => cantidadStockReal(item) <= Number(item.reorder_point))
+                .filter((item) => cantidadStockReal(item) <= reorderPointItem(item))
                 .sort((a, b) => cantidadStockReal(a) - cantidadStockReal(b))
                 .slice(0, 8),
-        [baseItemsKpi, cantidadStockReal],
+        [baseItemsKpi, cantidadStockReal, reorderPointItem],
     );
 
     const itemsCuarentenaResumen = useMemo(() => {
@@ -2037,7 +2193,42 @@ export default function InventoryMasterPage() {
                 </div>
             ) : null}
 
-            {/* Stats Grid */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 shrink-0">
+                    Cuadro
+                </span>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setCuadroModo('inventario');
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-all ${
+                        cuadroModo === 'inventario'
+                            ? 'border-blue-500/50 bg-blue-600 text-white shadow-sm shadow-blue-600/25'
+                            : 'border-zinc-800 bg-zinc-900/80 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                    }`}
+                >
+                    <Package size={14} />
+                    Inventario
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setCuadroModo('movimientos');
+                        setKpiVista('ninguno');
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-all ${
+                        cuadroModo === 'movimientos'
+                            ? 'border-sky-500/50 bg-sky-600 text-white shadow-sm shadow-sky-600/25'
+                            : 'border-zinc-800 bg-zinc-900/80 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                    }`}
+                >
+                    <ArrowRightLeft size={14} />
+                    Movimientos
+                </button>
+            </div>
+
+            {cuadroModo === 'inventario' && panelFiltrosExpandido ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
                 <FlipStatCard
                     flipped={statFlips.valor}
@@ -2189,7 +2380,7 @@ export default function InventoryMasterPage() {
                                     >
                                         <span className="text-zinc-400 truncate">{item.name}</span>
                                         <span className="text-red-400 shrink-0">
-                                            {cantidadStockReal(item)} / {item.reorder_point}
+                                            {cantidadStockReal(item)} / {reorderPointItem(item)}
                                         </span>
                                     </button>
                                 ))
@@ -2304,6 +2495,7 @@ export default function InventoryMasterPage() {
                     }
                 />
             </div>
+            ) : null}
 
             {/* Filters & Search */}
             <div className="flex flex-col gap-2 mb-4">
@@ -2317,6 +2509,53 @@ export default function InventoryMasterPage() {
                         className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-11 pr-4 text-sm font-bold text-white outline-none focus:border-blue-500/50 focus:bg-zinc-900 transition-all"
                     />
                 </div>
+
+                {!panelFiltrosExpandido ? (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/90 px-3 py-2.5">
+                        <Filter className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 shrink-0">
+                            Filtros
+                        </span>
+                        {etiquetasResumenFiltros.length > 0 ? (
+                            <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+                                {etiquetasResumenFiltros.map((chip) => (
+                                    <span
+                                        key={chip}
+                                        className="inline-block max-w-[200px] truncate rounded-md border border-zinc-700/80 bg-zinc-900 px-2 py-0.5 text-[10px] font-bold text-zinc-300"
+                                        title={chip}
+                                    >
+                                        {chip}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <span className="text-[10px] font-bold text-zinc-600 flex-1">
+                                Sin filtros de entidad, obra o categoría
+                            </span>
+                        )}
+                        <span className="text-[10px] font-bold text-zinc-500 whitespace-nowrap">
+                            {filteredItems.length} / {itemsCatalogo.length}
+                        </span>
+                        {hayFiltrosActivos ? (
+                            <button
+                                type="button"
+                                onClick={limpiarFiltros}
+                                className="text-[10px] font-bold text-sky-400 hover:text-sky-300 whitespace-nowrap"
+                            >
+                                Limpiar
+                            </button>
+                        ) : null}
+                        <button
+                            type="button"
+                            onClick={alternarPanelFiltros}
+                            className="inline-flex items-center gap-1 rounded-lg border border-sky-500/35 bg-sky-500/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-sky-300 hover:bg-sky-500/20 whitespace-nowrap"
+                        >
+                            <ChevronDown size={14} />
+                            Mostrar filtros
+                        </button>
+                    </div>
+                ) : (
+                    <>
                 <div className="flex flex-wrap gap-1.5">
                     {CATEGORIAS_FILTRO.map((cat) => (
                         <button
@@ -2354,6 +2593,20 @@ export default function InventoryMasterPage() {
                             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                                 Filtrar visualización
                             </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 ml-auto">
+                            <span className="text-[10px] font-bold text-zinc-500">
+                                {filteredItems.length} de {itemsCatalogo.length} ítems
+                            </span>
+                            <button
+                                type="button"
+                                onClick={alternarPanelFiltros}
+                                className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-zinc-400 hover:text-zinc-200 hover:border-zinc-600"
+                                title="Ocultar panel de filtros y ganar espacio para la tabla"
+                            >
+                                <ChevronUp size={14} />
+                                Ocultar filtros
+                            </button>
                         </div>
                         {filterDepositId ? (
                             <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wide">
@@ -2579,6 +2832,7 @@ export default function InventoryMasterPage() {
                         ) : null}
                     </div>
 
+                    {cuadroModo === 'inventario' ? (
                     <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-3">
                         <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             Exportar / compartir
@@ -2631,9 +2885,25 @@ export default function InventoryMasterPage() {
                             </span>
                         ) : null}
                     </div>
+                    ) : null}
                 </div>
+                    </>
+                )}
             </div>
 
+            {cuadroModo === 'movimientos' ? (
+                <MovimientosInventarioClient
+                    embedded
+                    skipUrlSync
+                    proyectoId={filterProyectoId || undefined}
+                    proyectoIdsEntidad={proyectoIdsEntidadArr}
+                    materialIdsCategoria={materialIdsCategoria}
+                    busquedaVinculada={searchTerm.trim() || undefined}
+                    vistaExterna={movVista}
+                    onVistaExternaChange={setMovVista}
+                />
+            ) : (
+            <>
             {/* Items Table */}
             {!loading && filteredItems.length > 0 ? (
                 <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
@@ -2909,7 +3179,7 @@ export default function InventoryMasterPage() {
                                     <td className="px-2 py-2">
                                         <CeldaStockEditable
                                             cantidad={stockMostrar}
-                                            reorderPoint={Number(item.reorder_point)}
+                                            reorderPoint={reorderPointItem(item)}
                                             unidad={item.unit}
                                             saving={savingStockId === item.id}
                                             onSave={(qty) => guardarStockCuadro(item.id, qty)}
@@ -2981,6 +3251,8 @@ export default function InventoryMasterPage() {
                     </tbody>
                 </table>
             </GlassCard>
+            </>
+            )}
         </div>
     );
 }
