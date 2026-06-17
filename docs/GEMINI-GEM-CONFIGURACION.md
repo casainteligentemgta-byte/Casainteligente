@@ -18,7 +18,7 @@ Guía paso a paso para configurar **Arquitecto Casa Inteligente** en Gemini.
 |-------|----------------|
 | **Name** | Arquitecto Casa Inteligente |
 | **Description** | Asistente técnico del ERP Casa Inteligente: compras, almacén, Telegram, Supabase, Lulo y RRHH para obras en Venezuela. |
-| **Instructions** | Copia **todo** el contenido de `docs/GEMINI-GEM-INSTRUCCIONES.txt` |
+| **Instructions** | Copia **todo** `docs/GEMINI-GEM-INSTRUCTIONS-COMPLETO.txt` (recomendado) o la versión compacta `GEMINI-GEM-INSTRUCCIONES.txt` |
 
 > Si el campo Instructions tiene límite de caracteres, usa solo `GEMINI-GEM-INSTRUCCIONES.txt` y sube `GEMINI-MEGA-PROMPT.md` completo a Conocimiento.
 
@@ -49,8 +49,16 @@ supabase/migrations/180_inventario_compras_custodia_partidas.sql
 supabase/migrations/185_ci_facturas_canal_idempotencia_telegram.sql
 supabase/migrations/199_ci_recepciones_provisionales_campo.sql
 supabase/migrations/207_get_stock_real_obra_almacen_central.sql
+supabase/migrations/212_trazabilidad_stock_resultante_rpc.sql
+supabase/migrations/213_recepciones_campo_contabilidad_compra.sql
+supabase/migrations/214_recepcion_campo_stock_referencia.sql
 supabase/migrations/233_ci_telegram_ttl_pendiente_atomico.sql
 supabase/migrations/241_ci_catalogo_por_entidad.sql
+supabase/migrations/242_ci_material_aliases_inteligente.sql
+supabase/migrations/243_ci_procura_flujo_admin_pm.sql
+supabase/migrations/244_ci_procura_en_compra_solo_con_factura.sql
+supabase/migrations/245_ci_proyectos_naturaleza_gasto_entidad.sql
+supabase/migrations/249_ci_rrhh_views_conciliacion_compra.sql
 ```
 
 ### Por módulo (opcional)
@@ -85,10 +93,17 @@ Error: [pega aquí].
 ¿Qué tablas y migraciones reviso? ¿Hay FRM sin conciliar?
 ```
 
-**Flujo ingreso manual**
+**Flujo ingreso unificado (4×9 pasos)**
 ```
-Explícame el flujo completo de /ingreso → ingreso manual factura (9 pasos):
-qué RPC, qué tablas, y cómo evitar duplicar stock si ya hay recepción campo.
+Explícame /ingreso → los 4 flujos con esquema de 9 pasos en Telegram:
+RPC, tablas, contabilidad provisional y cómo evitar duplicar stock.
+```
+
+**Auditoría cuadros duplicados**
+```
+Ejecuta Fase 0 de limpieza: inventario de app/**/page.tsx,
+Top 10 duplicidades almacén/contabilidad, propuesta Fase 1 solo redirects.
+Ver sección LIMPIEZA en GEMINI-MEGA-PROMPT.md.
 ```
 
 **Nueva feature almacén**
@@ -129,4 +144,4 @@ Archivos a regenerar:
 
 ---
 
-*Configuración Gem v4 — Casa Inteligente — 2026-06-12*
+*Configuración Gem v5 — Casa Inteligente — 2026-06-07 · migr. hasta 249*
