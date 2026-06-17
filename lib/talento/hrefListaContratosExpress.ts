@@ -5,5 +5,5 @@
 export function hrefListaContratosExpress(): string {
   const custom = process.env.NEXT_PUBLIC_TALENTO_EXPRESS_LIST_URL?.trim();
   if (custom) return custom.replace(/\/$/, '');
-  return '/talento/admin/contratos/fast-list';
+  return '/rrhh';
 }

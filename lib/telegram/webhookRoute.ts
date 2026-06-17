@@ -25,6 +25,11 @@ import {
   handleTelegramCallbackQuery,
   type TelegramUpdate,
 } from '@/lib/telegram/webhook';
+import {
+  manejarCallbackConciliacionProcura,
+  manejarMensajeTicketProcura,
+  textoTieneTicketProcura,
+} from '@/lib/telegram/procuraConciliacionWebhook';
 
 /** Telegram exige HTTP 200; un 503/502 hace que marque el webhook como fallido. */
 function respuestaWebhook(body: Record<string, unknown>, status = 200) {
@@ -100,6 +105,11 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
       }
       return respuestaWebhook({ ok: true, denied: true });
     }
+    const adminPr = telegramSupabaseAdmin();
+    if (adminPr.ok) {
+      const conciliado = await manejarCallbackConciliacionProcura(adminPr.client, update);
+      if (conciliado) return respuestaWebhook({ ok: true, pr_conciliacion: true });
+    }
     return handleTelegramCallbackQuery(update);
   }
 
@@ -122,6 +132,12 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
 
   const text = msg.text?.trim() ?? '';
   const cmd = primerTokenComando(text);
+
+  const adminPrMsg = telegramSupabaseAdmin();
+  if (adminPrMsg.ok && text && textoTieneTicketProcura(text)) {
+    const handledPr = await manejarMensajeTicketProcura(adminPrMsg.client, chatId, text);
+    if (handledPr) return respuestaWebhook({ ok: true, pr_ticket_prompt: true });
+  }
 
   if (esComandoAgua(text)) {
     const admin = telegramSupabaseAdmin();

@@ -53,7 +53,21 @@ const nextConfig = {
   // ─── Redirecciones ──────────────────────────────────────────────────────────────
   async redirects() {
     return [
-      { source: '/reclutamiento/dashboard', destination: '/reclutamiento', permanent: true },
+      { source: '/reclutamiento/dashboard', destination: '/rrhh?vista=reclutamiento', permanent: true },
+      { source: '/reclutamiento', destination: '/rrhh?vista=reclutamiento', permanent: false },
+      { source: '/reclutamiento/:path*', destination: '/rrhh?vista=reclutamiento', permanent: false },
+      { source: '/registro', destination: '/rrhh/registro', permanent: false },
+      { source: '/registro/:path*', destination: '/rrhh/registro', permanent: false },
+      { source: '/talento', destination: '/rrhh', permanent: false },
+      { source: '/talento/:path*', destination: '/rrhh', permanent: false },
+      { source: '/operaciones/inventario', destination: '/almacen?cuadro=inventario', permanent: true },
+      { source: '/almacen/movimientos', destination: '/almacen?cuadro=movimientos', permanent: true },
+      { source: '/almacen/movimientos/:path*', destination: '/almacen?cuadro=movimientos', permanent: true },
+      { source: '/almacen/kardex', destination: '/almacen?cuadro=trazabilidad', permanent: true },
+      { source: '/almacen/kardex/:path*', destination: '/almacen?cuadro=trazabilidad', permanent: true },
+      { source: '/almacen/trazabilidad', destination: '/almacen?cuadro=trazabilidad', permanent: false },
+      { source: '/almacen/procurement', destination: '/almacen/recepcion?tab=transito', permanent: true },
+      { source: '/almacen/procurement/quality', destination: '/almacen/recepcion?tab=transito', permanent: true },
     ];
   },
 

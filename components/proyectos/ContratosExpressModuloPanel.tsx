@@ -157,7 +157,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
             <span className="ml-1.5 hidden sm:inline">Actualizar</span>
           </Button>
           <Link
-            href="/talento/admin/contratos/fast-create"
+            href="/rrhh/registro"
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-950/50 px-3 py-2 text-xs font-bold text-amber-50 transition hover:border-amber-400/70 hover:bg-amber-900/55"
           >
             <FileText className="size-3.5 shrink-0" aria-hidden />
@@ -175,7 +175,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
         ) : rows.length === 0 ? (
           <p className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
             No hay contratos express en este alcance. Crea uno en{' '}
-            <Link href="/talento/admin/contratos/fast-create" className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200">
+            <Link href="/rrhh/registro" className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200">
               Talento → Nuevo express
             </Link>
             .

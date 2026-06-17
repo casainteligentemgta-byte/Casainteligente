@@ -16,7 +16,7 @@ export default function SessionShareBar({ sessionId }: { sessionId: string }) {
     }
   }
 
-  const reclutamientoHref = `/reclutamiento?session=${encodeURIComponent(sessionId)}`;
+  const reclutamientoHref = `/rrhh?vista=reclutamiento&session=${encodeURIComponent(sessionId)}`;
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -31,7 +31,7 @@ export default function SessionShareBar({ sessionId }: { sessionId: string }) {
         href={reclutamientoHref}
         className="text-[11px] rounded-lg px-2 py-1 bg-sky-900/50 text-sky-200 border border-sky-700/60"
       >
-        Ir a reclutamiento
+        Ir a RRHH
       </Link>
     </div>
   );

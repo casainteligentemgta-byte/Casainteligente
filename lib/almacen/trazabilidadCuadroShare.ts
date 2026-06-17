@@ -76,8 +76,10 @@ export function buildTrazabilidadCuadroSearchParams(
 }
 
 export function trazabilidadCuadroPathFromState(state: TrazabilidadCuadroShareState): string {
-  const query = buildTrazabilidadCuadroSearchParams(state).toString();
-  return query ? `/almacen/trazabilidad?${query}` : '/almacen/trazabilidad';
+  const qs = buildTrazabilidadCuadroSearchParams(state);
+  qs.set('cuadro', 'trazabilidad');
+  const query = qs.toString();
+  return query ? `/almacen?${query}` : '/almacen?cuadro=trazabilidad';
 }
 
 export function parseTrazabilidadCuadroShareParams(

@@ -6,7 +6,7 @@ import { RECRUITMENT_OPENING_LINE } from '@/lib/recruitment/constants';
 import type { RecruitmentClientEvent } from '@/types/recruitment';
 import QuickSelectReplies from '@/components/reclutamiento/QuickSelectReplies';
 import ReclutamientoHojaVidaBlock from '@/components/reclutamiento/ReclutamientoHojaVidaBlock';
-import SessionShareBar from '@/app/reclutamiento/SessionShareBar';
+import SessionShareBar from '@/components/reclutamiento/SessionShareBar';
 
 type ChatLine = { role: 'user' | 'assistant'; content: string };
 

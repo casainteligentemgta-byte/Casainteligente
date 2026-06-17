@@ -443,7 +443,7 @@ export default function EditInventoryItemPage() {
               Modifica cantidad, serial y ubicación
             </p>
           </div>
-          <Link href={`/almacen/trazabilidad?materialId=${encodeURIComponent(id)}`}>
+          <Link href={`/almacen?cuadro=trazabilidad&materialId=${encodeURIComponent(id)}`}>
             <button
               type="button"
               className="flex items-center gap-2 p-3 bg-zinc-900 border border-amber-500/35 rounded-2xl hover:bg-zinc-800 transition-all text-xs font-bold uppercase text-amber-200"

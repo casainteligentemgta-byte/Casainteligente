@@ -5,8 +5,7 @@ import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
 const RUTAS_PUBLICAS = [
   '/login',
   '/auth',
-  '/registro',
-  '/reclutamiento',
+  '/rrhh/registro',
   '/nexus',
 ];
 
@@ -16,7 +15,6 @@ const RUTAS_PROTEGIDAS = [
   '/configuracion',
   '/admin',
   '/proyectos',
-  '/talento',
   '/rrhh',
   '/procura',
 ];

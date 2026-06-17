@@ -141,7 +141,7 @@ export type MovimientosInventarioEmbedProps = {
   onVistaExternaChange?: (v: VistaMovimientoInventario) => void;
 };
 
-export default function MovimientosInventarioClient({
+export default function MovimientosCuadro({
   embedded = false,
   skipUrlSync = false,
   proyectoId: proyectoIdBloqueado,

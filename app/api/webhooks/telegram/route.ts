@@ -1,6 +1,6 @@
 /**
- * Webhook de Telegram en producción (registrado con npm run telegram:webhook).
- * Siempre responde HTTP 200 para que Telegram no marque el webhook como caído.
+ * Webhook del bot oficial Casa Inteligente.
+ * Incluye conciliación PR-XXXX (ver lib/telegram/procuraConciliacionWebhook.ts vía webhookRoute).
  */
 import {
   handleTelegramWebhookGet,

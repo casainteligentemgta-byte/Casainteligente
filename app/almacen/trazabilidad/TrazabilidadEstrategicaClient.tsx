@@ -176,7 +176,7 @@ export default function TrazabilidadEstrategicaClient() {
     if (!hydrated || !filtrosPersistenciaLista.current) return;
     guardarTrazabilidadCuadroFiltros(estadoCompartir);
     const qs = buildTrazabilidadCuadroSearchParams(estadoCompartir).toString();
-    const next = qs ? `/almacen/trazabilidad?${qs}` : '/almacen/trazabilidad';
+    const next = qs ? `/almacen?cuadro=trazabilidad&${qs}` : '/almacen?cuadro=trazabilidad';
     router.replace(next, { scroll: false });
   }, [hydrated, estadoCompartir, router]);
 
@@ -581,7 +581,7 @@ export default function TrazabilidadEstrategicaClient() {
                             {f.materialCodigo ? `SAP ${f.materialCodigo}` : 'Sin código'}
                             {' · '}
                             <Link
-                              href={`/almacen/trazabilidad?materialId=${encodeURIComponent(f.materialId)}`}
+                              href={`/almacen?cuadro=trazabilidad&materialId=${encodeURIComponent(f.materialId)}`}
                               className="text-sky-400 hover:underline"
                             >
                               Ver ruta
@@ -659,7 +659,7 @@ export default function TrazabilidadEstrategicaClient() {
                           {f.materialCodigo ? `SAP ${f.materialCodigo}` : 'Sin código'}
                           {' · '}
                           <Link
-                            href={`/almacen/trazabilidad?materialId=${encodeURIComponent(f.materialId)}`}
+                            href={`/almacen?cuadro=trazabilidad&materialId=${encodeURIComponent(f.materialId)}`}
                             className="text-[#FF9500] hover:underline"
                           >
                             Ver ruta

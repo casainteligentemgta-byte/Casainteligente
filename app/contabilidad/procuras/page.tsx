@@ -2,32 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronUp, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, Loader2, RefreshCw, X } from 'lucide-react';
+import { apiUrl } from '@/lib/http/apiUrl';
 import {
   COLOR_ESTADO_PROCURA,
-  ESTADOS_PROCURA,
-  ESTADOS_PROCURA_SOLO_SISTEMA,
   etiquetaEstadoProcura,
-  type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
-import { MIN_MOTIVO_RECHAZO_PROCURA } from '@/lib/procuras/rechazarProcura';
-import {
-  etiquetaSolicitanteProcura,
-  type RelEmpleadoSolicitante,
-} from '@/lib/procuras/solicitanteProcura';
-import {
-  UNIDADES_PROCURA,
-  normalizarUnidadProcura,
-} from '@/lib/procuras/unidadesProcura';
-import BuscadorMaterialCampo, {
-  type MaterialCampoOpcion,
-} from '@/components/almacen/BuscadorMaterialCampo';
-import SelectorMaterialObraRecepcion from '@/components/almacen/SelectorMaterialObraRecepcion';
-import { etiquetaMaterialCatalogo } from '@/lib/almacen/buscarMaterialesCatalogo';
 
-type EntidadRow = { id: string; nombre: string };
-type ProyectoRow = { id: string; nombre: string; entidad_id?: string | null };
-type EmpleadoRow = { id: string; nombre_completo: string; oficio?: string | null };
+type TabProcura = 'pendientes' | 'aprobados' | 'comprados';
 
 type ProcuraRow = {
   id: string;
@@ -36,1125 +18,207 @@ type ProcuraRow = {
   material_txt: string;
   cantidad: number;
   unidad: string;
-  proyecto_id: string | null;
-  entidad_id: string | null;
-  motivo_ultimo: string | null;
-  observaciones: string | null;
+  monto_estimado_usd: number | null;
   solicitante_nombre: string | null;
-  solicitante_empleado_id: string | null;
   created_at: string;
-  updated_at: string;
-  solicitante?: RelEmpleadoSolicitante;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
-  ci_entidades?: { nombre: string } | { nombre: string }[] | null;
 };
 
-function relNombre(v: ProcuraRow['ci_proyectos']): string {
+const ESTADOS_PENDIENTES = new Set(['borrador', 'solicitada', 'pendiente_pm']);
+const ESTADOS_APROBADOS = new Set(['aprobada', 'aprobada_directa']);
+const ESTADOS_COMPRADOS = new Set(['en_compra', 'recibida_parcial', 'recibida']);
+
+function nombreProyecto(v: ProcuraRow['ci_proyectos']): string {
   if (!v) return '—';
   if (Array.isArray(v)) return v[0]?.nombre ?? '—';
   return v.nombre ?? '—';
 }
 
-const cardStyle: React.CSSProperties = {
-  background: 'rgba(28, 28, 30, 0.7)',
-  backdropFilter: 'blur(20px)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-  borderRadius: '16px',
-  padding: '16px',
-};
+function filaEnTab(estado: string, tab: TabProcura): boolean {
+  const e = estado.toLowerCase();
+  if (tab === 'pendientes') return ESTADOS_PENDIENTES.has(e);
+  if (tab === 'aprobados') return ESTADOS_APROBADOS.has(e);
+  return ESTADOS_COMPRADOS.has(e);
+}
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: '10px',
-  padding: '10px 12px',
-  color: 'white',
-  fontSize: '14px',
-};
-
-const btnPrimary: React.CSSProperties = {
-  background: '#FF3B30',
-  color: 'white',
-  border: 'none',
-  borderRadius: '12px',
-  padding: '10px 16px',
-  fontWeight: 700,
-  fontSize: '13px',
-  cursor: 'pointer',
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '8px',
-};
+const glassBtn = (active: boolean) =>
+  `px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all ${
+    active
+      ? 'bg-[#FF9500]/20 border-[#FF9500]/40 text-[#FF9500]'
+      : 'bg-white/[0.04] border-white/[0.06] text-zinc-400 hover:text-white'
+  }`;
 
 export default function ProcurasPage() {
-  const [procuras, setProcuras] = useState<ProcuraRow[]>([]);
-  const [entidades, setEntidades] = useState<EntidadRow[]>([]);
-  const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
+  const [tab, setTab] = useState<TabProcura>('pendientes');
+  const [filas, setFilas] = useState<ProcuraRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filtroEstado, setFiltroEstado] = useState('');
-  const [filtroProyecto, setFiltroProyecto] = useState('');
-  const [filtroEntidad, setFiltroEntidad] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [nuevoEstado, setNuevoEstado] = useState<EstadoProcura>('aprobada');
-  const [motivoLote, setMotivoLote] = useState('');
-  const [procesando, setProcesando] = useState(false);
-  const [eliminando, setEliminando] = useState(false);
-  const [msgOk, setMsgOk] = useState<string | null>(null);
-  const [showNueva, setShowNueva] = useState(false);
-  const [creando, setCreando] = useState(false);
+  const [procesandoId, setProcesandoId] = useState<string | null>(null);
 
-  const [formMaterial, setFormMaterial] = useState('');
-  const [formMaterialId, setFormMaterialId] = useState('');
-  const [modoMaterialLibre, setModoMaterialLibre] = useState(false);
-  const [busquedaGlobalAbierta, setBusquedaGlobalAbierta] = useState(false);
-  const [formCantidad, setFormCantidad] = useState('1');
-  const [formUnidad, setFormUnidad] = useState('UND');
-  const [formProyectoId, setFormProyectoId] = useState('');
-  const [formEntidadId, setFormEntidadId] = useState('');
-  const [formObs, setFormObs] = useState('');
-  const [formSolicitanteNombre, setFormSolicitanteNombre] = useState('');
-  const [formSolicitanteEmpleadoId, setFormSolicitanteEmpleadoId] = useState('');
-  const [empleadosObra, setEmpleadosObra] = useState<EmpleadoRow[]>([]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [eRes, pRes] = await Promise.all([
-          fetch('/api/almacen/entidades', { cache: 'no-store' }),
-          fetch('/api/almacen/proyectos', { cache: 'no-store' }),
-        ]);
-        const eJson = (await eRes.json()) as { entidades?: EntidadRow[] };
-        const pJson = (await pRes.json()) as { proyectos?: ProyectoRow[] };
-        setEntidades(eJson.entidades ?? []);
-        setProyectos(pJson.proyectos ?? []);
-      } catch {
-        /* opcional */
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      if (!formProyectoId.trim()) {
-        setEmpleadosObra([]);
-        return;
-      }
-      try {
-        const res = await fetch(
-          `/api/almacen/empleados-egreso?proyecto_id=${encodeURIComponent(formProyectoId.trim())}`,
-          { cache: 'no-store' },
-        );
-        const json = (await res.json()) as { empleados?: EmpleadoRow[] };
-        setEmpleadosObra(json.empleados ?? []);
-      } catch {
-        setEmpleadosObra([]);
-      }
-    })();
-  }, [formProyectoId]);
-
-  const catalogoEntidadId = useMemo(() => {
-    if (formEntidadId.trim()) return formEntidadId.trim();
-    const pr = proyectos.find((p) => p.id === formProyectoId.trim());
-    return pr?.entidad_id?.trim() || '';
-  }, [formEntidadId, formProyectoId, proyectos]);
-
-  const load = useCallback(async () => {
+  const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setMsgOk(null);
     try {
-      const q = new URLSearchParams();
-      if (filtroEstado) q.set('estado', filtroEstado);
-      if (filtroProyecto) q.set('proyecto_id', filtroProyecto);
-      if (filtroEntidad) q.set('entidad_id', filtroEntidad);
-      const res = await fetch(`/api/procuras?${q}`, { cache: 'no-store' });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        procuras?: ProcuraRow[];
-        error?: string;
-        hint?: string;
-      };
-      if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
-      setProcuras(json.procuras ?? []);
-      setSelected(new Set());
+      const res = await fetch(apiUrl('/api/compras/procuras?limit=300'), { cache: 'no-store' });
+      const json = (await res.json()) as { procuras?: ProcuraRow[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Error al cargar procuras');
+      setFilas(json.procuras ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al cargar');
-      setProcuras([]);
+      setError(e instanceof Error ? e.message : 'Error');
+      setFilas([]);
     } finally {
       setLoading(false);
     }
-  }, [filtroEntidad, filtroEstado, filtroProyecto]);
+  }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void cargar();
+  }, [cargar]);
 
-  const allSelected = procuras.length > 0 && selected.size === procuras.length;
-  const someSelected = selected.size > 0;
-
-  const toggleAll = () => {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(procuras.map((p) => p.id)));
-  };
-
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const resumenEstados = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of procuras) {
-      m.set(p.estado, (m.get(p.estado) ?? 0) + 1);
-    }
-    return m;
-  }, [procuras]);
-
-  const filasSeleccionadas = useMemo(
-    () => procuras.filter((p) => selected.has(p.id)),
-    [procuras, selected],
+  const visibles = useMemo(
+    () => filas.filter((f) => filaEnTab(f.estado, tab)),
+    [filas, tab],
   );
 
-  const todasSolicitada =
-    filasSeleccionadas.length > 0 &&
-    filasSeleccionadas.every((p) => p.estado === 'solicitada');
-  const todasPendientePm =
-    filasSeleccionadas.length > 0 &&
-    filasSeleccionadas.every((p) => p.estado === 'pendiente_pm');
-  const seleccionMixta =
-    filasSeleccionadas.length > 0 && !todasSolicitada && !todasPendientePm;
-
-  const procesarLote = async (estadoOverride?: EstadoProcura) => {
-    if (!someSelected) return;
-    const estadoEfectivo = estadoOverride ?? nuevoEstado;
-    const motivo = motivoLote.trim();
-
-    if (estadoEfectivo === 'rechazada' && motivo.length < MIN_MOTIVO_RECHAZO_PROCURA) {
-      setError(
-        `Indique el motivo del rechazo (mínimo ${MIN_MOTIVO_RECHAZO_PROCURA} caracteres) para avisar al solicitante.`,
-      );
-      return;
-    }
-
-    setProcesando(true);
-    setError(null);
-    setMsgOk(null);
+  const actualizarEstado = async (id: string, nuevoEstado: 'aprobada' | 'rechazada') => {
+    setProcesandoId(id);
     try {
-      const res = await fetch('/api/procuras/procesar-lote', {
-        method: 'POST',
+      const res = await fetch(apiUrl('/api/compras/procuras'), {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: Array.from(selected),
-          nuevoEstado: estadoEfectivo,
-          motivo: motivo || null,
-        }),
+        body: JSON.stringify({ ids: [id], nuevoEstado }),
       });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        count?: number;
-        estado?: string;
-        compradores_notificados?: number;
-        solicitantes_notificados?: number;
-        telegram?: { enviados: number; omitidos: number };
-        error?: string;
-        hint?: string;
-        errores?: string[];
-        pms_notificados?: number;
-        ordenes?: Array<{ ticket?: string; compradoresNotificados?: number; error?: string }>;
-      };
-      if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
-
-      if (estadoEfectivo === 'rechazada') {
-        setMsgOk(
-          `Rechazadas ${json.count ?? 0} procura(s). ` +
-            `Solicitantes avisados por Telegram: ${json.solicitantes_notificados ?? 0}.` +
-            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
-        );
-      } else if (estadoEfectivo === 'pendiente_pm') {
-        setMsgOk(
-          `Enviadas ${json.count ?? selected.size} procura(s) al PM. ` +
-            `PMs avisados por Telegram: ${json.pms_notificados ?? 0}.` +
-            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
-        );
-      } else if (
-        estadoEfectivo === 'aprobada' ||
-        estadoEfectivo === 'aprobada_directa'
-      ) {
-        const compradores =
-          json.compradores_notificados ??
-          (json.ordenes ?? []).reduce(
-            (acc, o) => acc + (o.compradoresNotificados ?? 0),
-            0,
-          );
-        setMsgOk(
-          `Procesadas ${json.count ?? selected.size} procura(s). ` +
-            `Aviso al comprador (pendiente factura): ${compradores}.` +
-            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
-        );
-      } else if (estadoEfectivo === 'en_compra') {
-        const compradores =
-          json.compradores_notificados ??
-          (json.ordenes ?? []).reduce(
-            (acc, o) => acc + (o.compradoresNotificados ?? 0),
-            0,
-          );
-        setMsgOk(
-          `Procesadas ${json.count ?? selected.size} procura(s). ` +
-            `Compradores notificados: ${compradores}.` +
-            (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
-        );
-      } else {
-        const tg = json.telegram;
-        setMsgOk(
-          `Actualizadas ${json.count ?? 0} procura(s). Telegram: ${tg?.enviados ?? 0} enviados, ${tg?.omitidos ?? 0} omitidos.`,
-        );
-      }
-      setMotivoLote('');
-      setSelected(new Set());
-      await load();
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo actualizar');
+      await cargar();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al procesar lote');
+      alert(e instanceof Error ? e.message : 'Error');
     } finally {
-      setProcesando(false);
-    }
-  };
-
-  const informarViabilidadAdmin = (viabilidad: 'si' | 'no') => {
-    setNuevoEstado('pendiente_pm');
-    void procesarLoteConViabilidad(viabilidad);
-  };
-
-  const procesarLoteConViabilidad = async (viabilidad: 'si' | 'no') => {
-    if (!someSelected) return;
-    setProcesando(true);
-    setError(null);
-    setMsgOk(null);
-    try {
-      const res = await fetch('/api/procuras/procesar-lote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: Array.from(selected),
-          nuevoEstado: 'pendiente_pm',
-          viabilidadPresupuestaria: viabilidad,
-          motivo: motivoLote.trim() || null,
-        }),
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        count?: number;
-        pms_notificados?: number;
-        errores?: string[];
-        error?: string;
-        hint?: string;
-      };
-      if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
-      setMsgOk(
-        `Enviadas ${json.count ?? selected.size} procura(s) al PM. ` +
-          `PMs avisados: ${json.pms_notificados ?? 0}.` +
-          (json.errores?.length ? ` Avisos: ${json.errores.join('; ')}` : ''),
-      );
-      setMotivoLote('');
-      setSelected(new Set());
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al informar viabilidad');
-    } finally {
-      setProcesando(false);
-    }
-  };
-
-  const aprobarComoPm = () => {
-    if (!todasPendientePm) {
-      setError('Solo puede aprobar procuras en estado «Pendiente PM».');
-      return;
-    }
-    setNuevoEstado('aprobada');
-    void procesarLote('aprobada');
-  };
-
-  const rechazarComoPm = () => {
-    if (!todasPendientePm) {
-      setError('Solo puede rechazar procuras en estado «Pendiente PM».');
-      return;
-    }
-    const motivo = motivoLote.trim();
-    if (motivo.length < MIN_MOTIVO_RECHAZO_PROCURA) {
-      setError(
-        `Escriba el motivo del rechazo abajo (mínimo ${MIN_MOTIVO_RECHAZO_PROCURA} caracteres) y pulse «Rechazar (PM)».`,
-      );
-      return;
-    }
-    setNuevoEstado('rechazada');
-    void procesarLote('rechazada');
-  };
-
-  const eliminarProcuras = async (ids: string[], confirmar = true) => {
-    if (!ids.length) return;
-    if (
-      confirmar &&
-      !window.confirm(
-        ids.length === 1
-          ? '¿Eliminar esta procura? No se puede deshacer.'
-          : `¿Eliminar ${ids.length} procuras seleccionadas? No se puede deshacer.`,
-      )
-    ) {
-      return;
-    }
-    setEliminando(true);
-    setError(null);
-    setMsgOk(null);
-    try {
-      const res = await fetch('/api/procuras', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        eliminadas?: number;
-        tickets?: string[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error ?? 'No se pudieron eliminar');
-      setMsgOk(`Eliminadas ${json.eliminadas ?? ids.length} procura(s).`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al eliminar');
-    } finally {
-      setEliminando(false);
-    }
-  };
-
-  const aplicarMaterialCatalogo = (m: MaterialCampoOpcion) => {
-    setFormMaterialId(m.id);
-    setFormMaterial(etiquetaMaterialCatalogo(m));
-    setFormUnidad(normalizarUnidadProcura(m.unit));
-    setModoMaterialLibre(false);
-    setBusquedaGlobalAbierta(false);
-  };
-
-  const crearProcura = async () => {
-    const solicitanteTxt = formSolicitanteNombre.trim();
-    const materialTxt = formMaterial.trim();
-    if (!formSolicitanteEmpleadoId.trim() && !solicitanteTxt) {
-      setError('Indique quién realiza la procura.');
-      return;
-    }
-    if (!materialTxt) {
-      setError('Indique el material (catálogo o descripción libre).');
-      return;
-    }
-    setCreando(true);
-    setError(null);
-    setMsgOk(null);
-    try {
-      const res = await fetch('/api/procuras', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          material_id: formMaterialId.trim() || null,
-          material_txt: materialTxt,
-          cantidad: formCantidad,
-          unidad: normalizarUnidadProcura(formUnidad),
-          proyecto_id: formProyectoId || null,
-          entidad_id: formEntidadId || null,
-          observaciones: formObs.trim() || null,
-          estado: 'solicitada',
-          solicitante_empleado_id: formSolicitanteEmpleadoId.trim() || null,
-          solicitante_nombre: solicitanteTxt || null,
-        }),
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        procura?: { ticket?: string };
-        error?: string;
-        hint?: string;
-      };
-      if (!res.ok) throw new Error([json.error, json.hint].filter(Boolean).join(' — '));
-      setMsgOk(`Procura ${json.procura?.ticket ?? ''} creada.`);
-      setFormMaterial('');
-      setFormMaterialId('');
-      setModoMaterialLibre(false);
-      setBusquedaGlobalAbierta(false);
-      setFormCantidad('1');
-      setFormObs('');
-      setFormSolicitanteNombre('');
-      setFormSolicitanteEmpleadoId('');
-      setShowNueva(false);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al crear');
-    } finally {
-      setCreando(false);
+      setProcesandoId(null);
     }
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
-      <div
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-          background: 'rgba(0,0,0,0.85)',
-          backdropFilter: 'blur(20px)',
-          padding: '16px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+    <div className="min-h-screen bg-[#0A0A0F] text-white px-4 py-6 pb-24">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <Link
-              href="/contabilidad"
-              style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', textDecoration: 'none' }}
-            >
-              ← Contabilidad
-            </Link>
-            <h1 style={{ color: 'white', fontSize: '22px', fontWeight: 800, marginTop: '4px' }}>Procuras</h1>
+            <h1 className="text-2xl font-black tracking-tight">Procuras</h1>
+            <p className="text-sm text-zinc-500 mt-1">
+              Control unificado · pendientes, aprobadas y compradas
+            </p>
           </div>
           <button
             type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            style={{
-              ...btnPrimary,
-              background: 'rgba(255,255,255,0.08)',
-              padding: '8px 12px',
-            }}
-            title="Actualizar"
+            onClick={() => void cargar()}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.06] bg-white/[0.04] text-xs font-bold text-zinc-300"
           >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Actualizar
           </button>
         </div>
-      </div>
 
-      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04]">
+          {(
+            [
+              ['pendientes', 'Pendientes'],
+              ['aprobados', 'Aprobados'],
+              ['comprados', 'Comprados'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={glassBtn(tab === id)}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {error ? (
-          <div style={{ ...cardStyle, borderColor: 'rgba(255,59,48,0.4)', color: '#FF6961', whiteSpace: 'pre-wrap' }}>
-            {error}
-          </div>
-        ) : null}
-        {msgOk ? (
-          <div style={{ ...cardStyle, borderColor: 'rgba(52,199,89,0.4)', color: '#34C759' }}>{msgOk}</div>
+          <p className="text-sm text-red-400 font-medium">{error}</p>
         ) : null}
 
-        <div style={{ ...cardStyle, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {ESTADOS_PROCURA.map((e) => {
-            const n = resumenEstados.get(e) ?? 0;
-            if (!n && filtroEstado !== e) return null;
-            const color = COLOR_ESTADO_PROCURA[e];
-            return (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setFiltroEstado(filtroEstado === e ? '' : e)}
-                style={{
-                  background: filtroEstado === e ? `${color}33` : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${filtroEstado === e ? color : 'rgba(255,255,255,0.1)'}`,
-                  borderRadius: '999px',
-                  padding: '6px 12px',
-                  color: 'white',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                {etiquetaEstadoProcura(e)} ({n})
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{ ...cardStyle, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <div>
-            <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>OBRA</label>
-            <select
-              value={filtroProyecto}
-              onChange={(e) => setFiltroProyecto(e.target.value)}
-              style={{ ...inputStyle, marginTop: '6px' }}
-            >
-              <option value="">Todas</option>
-              {proyectos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>ENTIDAD</label>
-            <select
-              value={filtroEntidad}
-              onChange={(e) => setFiltroEntidad(e.target.value)}
-              style={{ ...inputStyle, marginTop: '6px' }}
-            >
-              <option value="">Todas</option>
-              {entidades.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div style={cardStyle}>
-          <button
-            type="button"
-            onClick={() => setShowNueva((v) => !v)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              padding: 0,
-              fontWeight: 700,
-              fontSize: '14px',
-            }}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Plus size={18} /> Nueva procura
-            </span>
-            {showNueva ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </button>
-          {showNueva ? (
-            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    OBRA (opcional si hay entidad)
-                  </label>
-                  <select
-                    value={formProyectoId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setFormProyectoId(id);
-                      setFormMaterial('');
-                      setFormMaterialId('');
-                      setModoMaterialLibre(false);
-                      const pr = proyectos.find((p) => p.id === id);
-                      if (pr?.entidad_id) setFormEntidadId(pr.entidad_id);
-                    }}
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  >
-                    <option value="">—</option>
-                    {proyectos.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    ENTIDAD (opcional si hay obra)
-                  </label>
-                  <select
-                    value={formEntidadId}
-                    onChange={(e) => setFormEntidadId(e.target.value)}
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  >
-                    <option value="">—</option>
-                    {entidades.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                  MATERIAL — CATÁLOGO DE LA OBRA
-                </label>
-                <div style={{ marginTop: '6px' }}>
-                  <SelectorMaterialObraRecepcion
-                    proyectoId={formProyectoId}
-                    value={formMaterialId}
-                    onChange={(id) => {
-                      setFormMaterialId(id);
-                      if (!id) setFormMaterial('');
-                    }}
-                    onMaterialSeleccionado={(m) => {
-                      if (m) aplicarMaterialCatalogo(m);
-                    }}
-                    disabled={!formProyectoId.trim() || modoMaterialLibre}
-                    selectClassName="w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-4 py-3 text-sm text-zinc-100 outline-none min-h-[46px]"
-                    inputClassName="w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-4 py-3 text-sm text-zinc-100 outline-none min-h-[46px]"
-                  />
-                </div>
-                {!formProyectoId.trim() ? (
-                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '6px' }}>
-                    Seleccione una obra para ver el catálogo de materiales.
-                  </p>
-                ) : null}
-              </div>
-
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setBusquedaGlobalAbierta((v) => !v)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.45)',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  {busquedaGlobalAbierta ? '▾ Ocultar búsqueda por entidad' : '▸ Buscar en catálogo de la entidad (nombre/SKU)'}
-                </button>
-                {busquedaGlobalAbierta ? (
-                  <div style={{ marginTop: '8px' }}>
-                    <BuscadorMaterialCampo
-                      onSeleccionar={aplicarMaterialCatalogo}
-                      disabled={modoMaterialLibre || !catalogoEntidadId}
-                      entidadId={catalogoEntidadId || null}
-                      minChars={1}
-                      modoPrefijo
-                      placeholder={
-                        catalogoEntidadId
-                          ? 'Escribe desde 1 letra (catálogo de la entidad)'
-                          : 'Seleccione obra o entidad para buscar materiales'
-                      }
-                    />
-                  </div>
-                ) : null}
-              </div>
-
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModoMaterialLibre((v) => !v);
-                    if (!modoMaterialLibre) {
-                      setFormMaterialId('');
-                    }
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: modoMaterialLibre ? '#FF9500' : 'rgba(255,255,255,0.45)',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  {modoMaterialLibre ? '▾ Ocultar texto libre' : '✏️ Otro material (descripción libre)'}
-                </button>
-                {modoMaterialLibre ? (
-                  <input
-                    value={formMaterial}
-                    onChange={(e) => {
-                      setFormMaterial(e.target.value);
-                      setFormMaterialId('');
-                    }}
-                    placeholder="Ej. Cemento gris 42.5 kg, material especial"
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  />
-                ) : formMaterial.trim() ? (
-                  <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px', marginTop: '6px' }}>
-                    Seleccionado: <strong>{formMaterial}</strong>
-                  </p>
-                ) : null}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    CANTIDAD
-                  </label>
-                  <input
-                    type="number"
-                    min="0.0001"
-                    step="any"
-                    value={formCantidad}
-                    onChange={(e) => setFormCantidad(e.target.value)}
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    UNIDAD
-                  </label>
-                  <select
-                    value={formUnidad}
-                    onChange={(e) => setFormUnidad(e.target.value)}
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  >
-                    {UNIDADES_PROCURA.map((u) => (
-                      <option key={u.code} value={u.code}>
-                        {u.code} — {u.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    SOLICITADO POR (NOMBRE)
-                  </label>
-                  <input
-                    value={formSolicitanteNombre}
-                    onChange={(e) => setFormSolicitanteNombre(e.target.value)}
-                    placeholder="Nombre de quien solicita"
-                    style={{ ...inputStyle, marginTop: '6px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                    VINCULAR EMPLEADO (opcional)
-                  </label>
-                  <select
-                    value={formSolicitanteEmpleadoId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setFormSolicitanteEmpleadoId(id);
-                      const emp = empleadosObra.find((x) => x.id === id);
-                      if (emp?.nombre_completo) setFormSolicitanteNombre(emp.nombre_completo);
-                    }}
-                    disabled={!formProyectoId.trim()}
-                    style={{ ...inputStyle, marginTop: '6px', opacity: formProyectoId.trim() ? 1 : 0.5 }}
-                  >
-                    <option value="">
-                      {formProyectoId.trim() ? '— Sin vincular —' : 'Seleccione obra primero'}
-                    </option>
-                    {empleadosObra.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.nombre_completo}
-                        {e.oficio ? ` (${e.oficio})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                  OBSERVACIONES
-                </label>
-                <textarea
-                  value={formObs}
-                  onChange={(e) => setFormObs(e.target.value)}
-                  rows={2}
-                  style={{ ...inputStyle, marginTop: '6px', resize: 'vertical' }}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void crearProcura()}
-                disabled={
-                  creando ||
-                  !formMaterial.trim() ||
-                  (!formSolicitanteNombre.trim() && !formSolicitanteEmpleadoId.trim())
-                }
-                style={{ ...btnPrimary, opacity: creando ? 0.6 : 1 }}
-              >
-                {creando ? <Loader2 size={16} className="animate-spin" /> : null}
-                Crear solicitud
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        {someSelected ? (
-          <div style={{ ...cardStyle, borderColor: 'rgba(255,59,48,0.35)' }}>
-            {seleccionMixta ? (
-              <p style={{ color: '#FF9500', fontSize: '12px', marginBottom: '12px' }}>
-                Seleccione procuras del mismo paso: todas «Pendiente» (Admin) o todas «Pendiente PM».
-              </p>
-            ) : null}
-
-            {todasSolicitada ? (
-              <>
-                <p style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>
-                  Administrador — {selected.size} seleccionada(s)
-                </p>
-                <p
-                  style={{
-                    color: 'rgba(255,255,255,0.45)',
-                    fontSize: '11px',
-                    lineHeight: 1.45,
-                    marginBottom: '12px',
-                  }}
-                >
-                  Informe viabilidad presupuestaria. La procura pasa a <b>Pendiente PM</b> y se avisa al
-                  Project Manager por Telegram.
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
-                  <button
-                    type="button"
-                    onClick={() => informarViabilidadAdmin('si')}
-                    disabled={procesando || eliminando}
-                    style={{
-                      ...btnPrimary,
-                      background: '#34C759',
-                      opacity: procesando ? 0.6 : 1,
-                    }}
-                  >
-                    Hay disponibilidad (Admin)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => informarViabilidadAdmin('no')}
-                    disabled={procesando || eliminando}
-                    style={{
-                      ...btnPrimary,
-                      background: '#FF9500',
-                      opacity: procesando ? 0.6 : 1,
-                    }}
-                  >
-                    No hay disponibilidad (Admin)
-                  </button>
-                </div>
-              </>
-            ) : null}
-
-            {todasPendientePm ? (
-              <>
-                <p style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>
-                  Project Manager — {selected.size} seleccionada(s)
-                </p>
-                <p
-                  style={{
-                    color: 'rgba(255,255,255,0.45)',
-                    fontSize: '11px',
-                    lineHeight: 1.45,
-                    marginBottom: '12px',
-                  }}
-                >
-                  <b>Aprobar</b> verifica almacén y avisa al comprador (queda <b>Aprobada</b> hasta que
-                  cargue la factura). <b>Rechazar</b> exige motivo y avisa al solicitante.
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
-                  <button
-                    type="button"
-                    onClick={() => void aprobarComoPm()}
-                    disabled={procesando || eliminando}
-                    style={{
-                      ...btnPrimary,
-                      background: '#34C759',
-                      opacity: procesando ? 0.6 : 1,
-                    }}
-                  >
-                    {procesando && nuevoEstado === 'aprobada' ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : null}
-                    Aprobar (PM)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void rechazarComoPm()}
-                    disabled={procesando || eliminando}
-                    style={{
-                      ...btnPrimary,
-                      background: 'rgba(255,59,48,0.2)',
-                      border: '1px solid rgba(255,59,48,0.45)',
-                      opacity: procesando ? 0.6 : 1,
-                    }}
-                  >
-                    {procesando && nuevoEstado === 'rechazada' ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : null}
-                    Rechazar (PM)
-                  </button>
-                </div>
-              </>
-            ) : null}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <div>
-                <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                  OTRO ESTADO (avanzado)
-                </label>
-                <select
-                  value={nuevoEstado}
-                  onChange={(e) => setNuevoEstado(e.target.value as EstadoProcura)}
-                  style={{ ...inputStyle, marginTop: '6px' }}
-                >
-                  {ESTADOS_PROCURA.filter(
-                    (e) => !ESTADOS_PROCURA_SOLO_SISTEMA.includes(e),
-                  ).map((e) => (
-                    <option key={e} value={e}>
-                      {etiquetaEstadoProcura(e)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700 }}>
-                  MOTIVO {nuevoEstado === 'rechazada' ? '(obligatorio al rechazar)' : '(opcional)'}
-                </label>
-                <input
-                  value={motivoLote}
-                  onChange={(e) => setMotivoLote(e.target.value)}
-                  placeholder={
-                    nuevoEstado === 'rechazada'
-                      ? 'Motivo del rechazo para el solicitante…'
-                      : 'Nota para historial y Telegram'
-                  }
-                  style={{ ...inputStyle, marginTop: '6px' }}
-                />
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => void procesarLote()}
-                disabled={procesando || eliminando}
-                style={{ ...btnPrimary, opacity: procesando ? 0.6 : 1 }}
-              >
-                {procesando ? <Loader2 size={16} className="animate-spin" /> : null}
-                Aplicar estado avanzado
-              </button>
-              <button
-                type="button"
-                onClick={() => void eliminarProcuras(Array.from(selected))}
-                disabled={procesando || eliminando}
-                style={{
-                  ...btnPrimary,
-                  background: 'rgba(255,59,48,0.15)',
-                  border: '1px solid rgba(255,59,48,0.45)',
-                  opacity: eliminando ? 0.6 : 1,
-                }}
-              >
-                {eliminando ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                Eliminar seleccionadas
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] overflow-hidden">
           {loading ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.45)' }}>
-              <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} />
+            <div className="flex items-center justify-center gap-2 py-16 text-zinc-500">
+              <Loader2 className="animate-spin text-[#FF9500]" size={20} />
+              Cargando…
             </div>
-          ) : procuras.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.45)' }}>
-              No hay procuras con estos filtros.
-            </div>
+          ) : visibles.length === 0 ? (
+            <p className="py-16 text-center text-sm text-zinc-500">Sin procuras en esta vista.</p>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>
-                      <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Seleccionar todas" />
-                    </th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Ticket</th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Material</th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Solicitante</th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Cant.</th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Obra / Entidad</th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Estado</th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>Actualizado</th>
-                    <th style={{ padding: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'right' }} aria-label="Acciones" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {procuras.map((p) => {
-                    const color = COLOR_ESTADO_PROCURA[p.estado as EstadoProcura] ?? '#8E8E93';
-                    const destino = [relNombre(p.ci_proyectos), relNombre(p.ci_entidades)]
-                      .filter((x) => x !== '—')
-                      .join(' · ');
-                    return (
-                      <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ padding: '12px' }}>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(p.id)}
-                            onChange={() => toggleOne(p.id)}
-                            aria-label={`Seleccionar ${p.ticket}`}
-                          />
-                        </td>
-                        <td style={{ padding: '12px', color: 'white', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {p.ticket}
-                        </td>
-                        <td style={{ padding: '12px', color: 'rgba(255,255,255,0.85)', maxWidth: '180px' }}>
-                          {p.material_txt}
-                          {p.motivo_ultimo ? (
-                            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', marginTop: '4px' }}>
-                              {p.motivo_ultimo}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td style={{ padding: '12px', color: 'rgba(255,255,255,0.7)', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                          {etiquetaSolicitanteProcura({
-                            solicitante_nombre: p.solicitante_nombre,
-                            solicitante_empleado: p.solicitante,
-                          })}
-                        </td>
-                        <td style={{ padding: '12px', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
-                          {Number(p.cantidad).toLocaleString('es-VE')} {p.unidad}
-                        </td>
-                        <td style={{ padding: '12px', color: 'rgba(255,255,255,0.55)', fontSize: '11px' }}>
-                          {destino || '—'}
-                        </td>
-                        <td style={{ padding: '12px' }}>
-                          <span
-                            style={{
-                              background: `${color}22`,
-                              color,
-                              padding: '4px 8px',
-                              borderRadius: '999px',
-                              fontWeight: 700,
-                              fontSize: '10px',
-                              whiteSpace: 'nowrap',
-                            }}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.06] text-[10px] uppercase tracking-widest text-zinc-500">
+                  <th className="text-left p-3">Ticket</th>
+                  <th className="text-left p-3">Material</th>
+                  <th className="text-left p-3">Obra</th>
+                  <th className="text-right p-3">Cant.</th>
+                  <th className="text-left p-3">Estado</th>
+                  <th className="text-right p-3">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibles.map((f) => {
+                  const color =
+                    COLOR_ESTADO_PROCURA[f.estado as keyof typeof COLOR_ESTADO_PROCURA] ??
+                    '#8E8E93';
+                  const busy = procesandoId === f.id;
+                  return (
+                    <tr key={f.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                      <td className="p-3 font-mono text-xs text-[#FF9500]">{f.ticket}</td>
+                      <td className="p-3 max-w-[200px] truncate">{f.material_txt}</td>
+                      <td className="p-3 text-zinc-400">{nombreProyecto(f.ci_proyectos)}</td>
+                      <td className="p-3 text-right tabular-nums">
+                        {f.cantidad} {f.unidad}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className="text-[10px] font-black uppercase px-2 py-1 rounded-lg"
+                          style={{ background: `${color}22`, color }}
+                        >
+                          {etiquetaEstadoProcura(f.estado)}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        {tab === 'pendientes' ? (
+                          <div className="inline-flex gap-2">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void actualizarEstado(f.id, 'aprobada')}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase disabled:opacity-50"
+                            >
+                              {busy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                              Aprobar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void actualizarEstado(f.id, 'rechazada')}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[10px] font-black uppercase disabled:opacity-50"
+                            >
+                              <X size={12} />
+                              Rechazar
+                            </button>
+                          </div>
+                        ) : (
+                          <Link
+                            href={`/contabilidad/compras`}
+                            className="text-[10px] font-bold text-zinc-500 hover:text-[#FF9500]"
                           >
-                            {etiquetaEstadoProcura(p.estado)}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px', color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>
-                          {new Date(p.updated_at).toLocaleString('es-VE', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            onClick={() => void eliminarProcuras([p.id])}
-                            disabled={eliminando || procesando}
-                            title="Eliminar procura"
-                            aria-label={`Eliminar ${p.ticket}`}
-                            style={{
-                              background: 'rgba(255,59,48,0.12)',
-                              border: '1px solid rgba(255,59,48,0.35)',
-                              borderRadius: '8px',
-                              padding: '6px 8px',
-                              color: '#FF6961',
-                              cursor: eliminando || procesando ? 'not-allowed' : 'pointer',
-                              opacity: eliminando || procesando ? 0.5 : 1,
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            Ver compras
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
       </div>

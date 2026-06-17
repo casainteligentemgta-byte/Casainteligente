@@ -864,7 +864,7 @@ export default function RrhhGestionPersonalClient({
                             {nombreEmpleado.get(a.worker_id) ?? a.worker_id.slice(0, 8)}
                             {!obrerosConContrato.has(a.worker_id) ? (
                               <Link
-                                href={`/talento/admin/contratos/fast-create?worker=${encodeURIComponent(a.worker_id)}&proyecto=${encodeURIComponent(r.project_id)}`}
+                                href={`/rrhh/registro?worker=${encodeURIComponent(a.worker_id)}&proyecto=${encodeURIComponent(r.project_id)}`}
                                 className="mt-0.5 block text-[10px] font-semibold text-sky-400/90 hover:text-sky-300"
                               >
                                 Generar contrato express →
