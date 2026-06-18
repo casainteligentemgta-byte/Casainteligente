@@ -55,6 +55,244 @@ function getPresupuestoNumero(b: Budget, fallback?: number) {
     return `P-${b.id.slice(0, 8).toUpperCase()}`;
 }
 
+type VistaPresupuestos = 'filas' | 'columnas';
+const VISTA_PRESUPUESTOS_KEY = 'ci-presupuestos-vista-v1';
+
+function TarjetaPresupuesto({
+    b,
+    vista,
+    fallbackById,
+    glass,
+    onEditar,
+    onPreview,
+    onShare,
+    onDelete,
+    onUpdateStatus,
+}: {
+    b: Budget;
+    vista: VistaPresupuestos;
+    fallbackById: Record<string, number>;
+    glass: CSSProperties;
+    onEditar: () => void;
+    onPreview: () => void;
+    onShare: () => void;
+    onDelete: () => void;
+    onUpdateStatus: (status: ClasificacionPresupuesto) => void;
+}) {
+    const clasif = clasificarPresupuesto(b);
+    const clasifStyle = CLASIFICACION_COLORS[clasif];
+    const fecha = new Date(b.created_at).toLocaleDateString('es-VE');
+    const numero = getPresupuestoNumero(b, fallbackById[b.id]);
+    const esFilas = vista === 'filas';
+
+    const btnBase: CSSProperties = {
+        border: 'none',
+        borderRadius: '8px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: esFilas ? 'flex-start' : 'center',
+        gap: '6px',
+    };
+
+    const btnAccion: CSSProperties = {
+        ...btnBase,
+        width: esFilas ? '100%' : 'auto',
+        padding: esFilas ? '8px 10px' : '5px 6px',
+        fontSize: esFilas ? '12px' : '10px',
+        flexShrink: esFilas ? undefined : 0,
+    };
+
+    const btnEstado: CSSProperties = {
+        ...btnBase,
+        width: esFilas ? '100%' : 'auto',
+        padding: esFilas ? '7px 10px' : '4px 6px',
+        fontSize: esFilas ? '11px' : '9px',
+        flex: esFilas ? undefined : '1 1 auto',
+        minWidth: esFilas ? undefined : 'calc(50% - 2px)',
+        justifyContent: esFilas ? 'flex-start' : 'center',
+    };
+
+    return (
+        <div
+            style={{
+                ...glass,
+                padding: '12px',
+                position: 'relative',
+                borderRadius: '14px',
+                paddingBottom: esFilas ? '12px' : '36px',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+            }}
+        >
+            <span
+                style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    color: 'rgba(255,255,255,0.55)',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    fontFamily: 'monospace',
+                }}
+            >
+                {numero}
+            </span>
+
+            <div style={{ paddingRight: '56px', minHeight: esFilas ? undefined : '52px' }}>
+                <h3
+                    style={{
+                        color: 'white',
+                        fontSize: esFilas ? '16px' : '14px',
+                        fontWeight: 700,
+                        margin: 0,
+                        lineHeight: 1.25,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {b.customer_name}
+                </h3>
+                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', margin: '4px 0 0' }}>
+                    {fecha}
+                </p>
+                <p
+                    style={{
+                        color: 'rgba(255,255,255,0.35)',
+                        fontSize: '10px',
+                        margin: '2px 0 0',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {b.customer_rif}
+                </p>
+                <div
+                    style={{
+                        marginTop: '6px',
+                        ...clasifStyle,
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        padding: '3px 7px',
+                        borderRadius: '6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        width: 'fit-content',
+                    }}
+                >
+                    <span>{clasifStyle.icon}</span>
+                    <span>{clasifStyle.label}</span>
+                </div>
+            </div>
+
+            {esFilas ? (
+                <p
+                    style={{
+                        color: '#34C759',
+                        fontSize: '18px',
+                        fontWeight: 800,
+                        margin: '10px 0 0',
+                        textAlign: 'right',
+                        lineHeight: 1,
+                    }}
+                >
+                    ${formatUSD(b.subtotal)}
+                </p>
+            ) : null}
+
+            <div
+                style={{
+                    marginTop: '10px',
+                    marginBottom: esFilas ? 0 : '28px',
+                    display: 'flex',
+                    flexDirection: esFilas ? 'column' : 'row',
+                    flexWrap: esFilas ? 'nowrap' : 'wrap',
+                    gap: '4px',
+                    flex: esFilas ? undefined : 1,
+                    alignContent: esFilas ? undefined : 'flex-start',
+                }}
+            >
+                <button
+                    type="button"
+                    onClick={onEditar}
+                    style={{ ...btnAccion, background: 'rgba(0,122,255,0.12)', color: '#007AFF' }}
+                >
+                    ✏️ Editar
+                </button>
+                <button
+                    type="button"
+                    onClick={onPreview}
+                    style={{ ...btnAccion, background: 'rgba(88,86,214,0.12)', color: '#A78BFA' }}
+                    title="Vista previa"
+                >
+                    📄 {esFilas ? 'Vista previa' : ''}
+                </button>
+                <button
+                    type="button"
+                    onClick={onShare}
+                    style={{ ...btnAccion, background: 'rgba(52,199,89,0.1)', color: '#34C759' }}
+                    title="WhatsApp"
+                >
+                    📲 {esFilas ? 'WhatsApp' : ''}
+                </button>
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    style={{ ...btnAccion, background: 'rgba(255,59,48,0.1)', color: '#FF3B30' }}
+                    title="Eliminar"
+                >
+                    🗑️ {esFilas ? 'Eliminar' : ''}
+                </button>
+                {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => {
+                    const active = b.status === k;
+                    const c = CLASIFICACION_COLORS[k];
+                    return (
+                        <button
+                            key={k}
+                            type="button"
+                            onClick={() => onUpdateStatus(k)}
+                            style={{
+                                ...btnEstado,
+                                background: active ? c.bg : 'rgba(255,255,255,0.04)',
+                                color: active ? c.text : 'rgba(255,255,255,0.55)',
+                                border: active
+                                    ? `1px solid ${c.text}55`
+                                    : '1px solid rgba(255,255,255,0.06)',
+                            }}
+                            title={c.label}
+                        >
+                            <span>{c.icon}</span>
+                            <span>{c.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {!esFilas ? (
+                <p
+                    style={{
+                        position: 'absolute',
+                        bottom: '10px',
+                        right: '10px',
+                        color: '#34C759',
+                        fontSize: '15px',
+                        fontWeight: 800,
+                        margin: 0,
+                        lineHeight: 1,
+                    }}
+                >
+                    ${formatUSD(b.subtotal)}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
 export default function PresupuestosPage() {
     const router = useRouter();
     const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -76,6 +314,34 @@ export default function PresupuestosPage() {
     });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+    const [vista, setVista] = useState<VistaPresupuestos>('filas');
+    const [pantallaAncha, setPantallaAncha] = useState(true);
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(VISTA_PRESUPUESTOS_KEY);
+            if (saved === 'filas' || saved === 'columnas') setVista(saved);
+        } catch {
+            /* SSR / privado */
+        }
+    }, []);
+
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 900px)');
+        const actualizar = () => setPantallaAncha(mq.matches);
+        actualizar();
+        mq.addEventListener('change', actualizar);
+        return () => mq.removeEventListener('change', actualizar);
+    }, []);
+
+    const cambiarVista = (v: VistaPresupuestos) => {
+        setVista(v);
+        try {
+            localStorage.setItem(VISTA_PRESUPUESTOS_KEY, v);
+        } catch {
+            /* ignore */
+        }
+    };
 
     const fetchBudgets = async () => {
         setLoading(true);
@@ -252,8 +518,8 @@ export default function PresupuestosPage() {
                     </div>
                 </div>
 
-                {/* Barra: filtrar + orden */}
-                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                {/* Barra: filtrar + vista + orden */}
+                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <button
                         type="button"
                         onClick={() => setFiltrosAbiertos(true)}
@@ -288,7 +554,47 @@ export default function PresupuestosPage() {
                             </span>
                         ) : null}
                     </button>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Vista</p>
+                            <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => cambiarVista('filas')}
+                                    style={{
+                                        background: vista === 'filas' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                        color: vista === 'filas' ? 'white' : 'rgba(255,255,255,0.3)',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        padding: '6px 10px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                    }}
+                                    title="Un presupuesto por fila, botones apilados"
+                                >
+                                    ☰ Filas
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => cambiarVista('columnas')}
+                                    style={{
+                                        background: vista === 'columnas' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                        color: vista === 'columnas' ? 'white' : 'rgba(255,255,255,0.3)',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        padding: '6px 10px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                    }}
+                                    title="Tres presupuestos por fila, todos los botones visibles"
+                                >
+                                    ⊞ 3 cols
+                                </button>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Ordenar</p>
                         <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '10px' }}>
                             <button
@@ -313,6 +619,7 @@ export default function PresupuestosPage() {
                             >
                                 Nro
                             </button>
+                        </div>
                         </div>
                     </div>
                 </div>
@@ -349,221 +656,35 @@ export default function PresupuestosPage() {
                     <div
                         style={{
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                            gap: '10px',
+                            gridTemplateColumns:
+                                vista === 'filas'
+                                    ? '1fr'
+                                    : pantallaAncha
+                                      ? 'repeat(3, minmax(0, 1fr))'
+                                      : '1fr',
+                            gap: vista === 'filas' ? '8px' : '10px',
                         }}
                     >
-                        {budgets.map((b) => {
-                            const clasif = clasificarPresupuesto(b);
-                            const clasifStyle = CLASIFICACION_COLORS[clasif];
-                            const fecha = new Date(b.created_at).toLocaleDateString('es-VE');
-                            const numero = getPresupuestoNumero(b, fallbackById[b.id]);
-
-                            const btnAccion: CSSProperties = {
-                                flexShrink: 0,
-                                border: 'none',
-                                borderRadius: '8px',
-                                padding: '6px 8px',
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '4px',
-                                whiteSpace: 'nowrap',
-                            };
-
-                            return (
-                                <div
-                                    key={b.id}
-                                    style={{
-                                        ...glass,
-                                        padding: '12px',
-                                        position: 'relative',
-                                        borderRadius: '14px',
-                                        paddingBottom: '36px',
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            position: 'absolute',
-                                            top: '10px',
-                                            right: '10px',
-                                            color: 'rgba(255,255,255,0.55)',
-                                            fontSize: '11px',
-                                            fontWeight: 800,
-                                            fontFamily: 'monospace',
-                                        }}
-                                    >
-                                        {numero}
-                                    </span>
-
-                                    <div style={{ paddingRight: '56px', minHeight: '52px' }}>
-                                        <h3
-                                            style={{
-                                                color: 'white',
-                                                fontSize: '15px',
-                                                fontWeight: 700,
-                                                margin: 0,
-                                                lineHeight: 1.25,
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                        >
-                                            {b.customer_name}
-                                        </h3>
-                                        <p
-                                            style={{
-                                                color: 'rgba(255,255,255,0.45)',
-                                                fontSize: '11px',
-                                                margin: '4px 0 0',
-                                            }}
-                                        >
-                                            {fecha}
-                                        </p>
-                                        <p
-                                            style={{
-                                                color: 'rgba(255,255,255,0.35)',
-                                                fontSize: '10px',
-                                                margin: '2px 0 0',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                        >
-                                            {b.customer_rif}
-                                        </p>
-                                        <div
-                                            style={{
-                                                marginTop: '6px',
-                                                ...clasifStyle,
-                                                fontSize: '9px',
-                                                fontWeight: 700,
-                                                padding: '3px 7px',
-                                                borderRadius: '6px',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                width: 'fit-content',
-                                            }}
-                                        >
-                                            <span>{clasifStyle.icon}</span>
-                                            <span>{clasifStyle.label}</span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        style={{
-                                            marginTop: '8px',
-                                            marginBottom: '28px',
-                                            display: 'flex',
-                                            gap: '4px',
-                                            overflowX: 'auto',
-                                            paddingBottom: '2px',
-                                            WebkitOverflowScrolling: 'touch',
-                                        }}
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() => router.push(`/ventas?id=${b.id}`)}
-                                            style={{
-                                                ...btnAccion,
-                                                background: 'rgba(0,122,255,0.12)',
-                                                color: '#007AFF',
-                                            }}
-                                        >
-                                            ✏️ Editar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                window.open(
-                                                    `/ventas/preview?id=${encodeURIComponent(b.id)}`,
-                                                    '_blank',
-                                                    'noopener,noreferrer',
-                                                )
-                                            }
-                                            style={{
-                                                ...btnAccion,
-                                                background: 'rgba(88,86,214,0.12)',
-                                                color: '#A78BFA',
-                                            }}
-                                            title="Vista previa"
-                                        >
-                                            📄
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleShare(b)}
-                                            style={{
-                                                ...btnAccion,
-                                                background: 'rgba(52,199,89,0.1)',
-                                                color: '#34C759',
-                                            }}
-                                            title="WhatsApp"
-                                        >
-                                            📲
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => deleteBudget(b.id)}
-                                            style={{
-                                                ...btnAccion,
-                                                background: 'rgba(255,59,48,0.1)',
-                                                color: '#FF3B30',
-                                            }}
-                                            title="Eliminar"
-                                        >
-                                            🗑️
-                                        </button>
-                                        {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map(
-                                            (k) => {
-                                                const active = b.status === k;
-                                                const c = CLASIFICACION_COLORS[k];
-                                                return (
-                                                    <button
-                                                        key={k}
-                                                        type="button"
-                                                        onClick={() => updateStatus(b.id, k)}
-                                                        style={{
-                                                            ...btnAccion,
-                                                            background: active ? c.bg : 'rgba(255,255,255,0.04)',
-                                                            color: active ? c.text : 'rgba(255,255,255,0.55)',
-                                                            border: active
-                                                                ? `1px solid ${c.text}55`
-                                                                : '1px solid rgba(255,255,255,0.06)',
-                                                            fontSize: '10px',
-                                                            padding: '6px 7px',
-                                                        }}
-                                                        title={c.label}
-                                                    >
-                                                        <span>{c.icon}</span>
-                                                        <span>{c.label}</span>
-                                                    </button>
-                                                );
-                                            },
-                                        )}
-                                    </div>
-
-                                    <p
-                                        style={{
-                                            position: 'absolute',
-                                            bottom: '10px',
-                                            right: '10px',
-                                            color: '#34C759',
-                                            fontSize: '16px',
-                                            fontWeight: 800,
-                                            margin: 0,
-                                            lineHeight: 1,
-                                        }}
-                                    >
-                                        ${formatUSD(b.subtotal)}
-                                    </p>
-                                </div>
-                            );
-                        })}
+                        {budgets.map((b) => (
+                            <TarjetaPresupuesto
+                                key={b.id}
+                                b={b}
+                                vista={vista}
+                                fallbackById={fallbackById}
+                                glass={glass}
+                                onEditar={() => router.push(`/ventas?id=${b.id}`)}
+                                onPreview={() =>
+                                    window.open(
+                                        `/ventas/preview?id=${encodeURIComponent(b.id)}`,
+                                        '_blank',
+                                        'noopener,noreferrer',
+                                    )
+                                }
+                                onShare={() => handleShare(b)}
+                                onDelete={() => deleteBudget(b.id)}
+                                onUpdateStatus={(status) => updateStatus(b.id, status)}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
