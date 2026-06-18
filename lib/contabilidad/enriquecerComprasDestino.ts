@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CompraListaUnificada } from '@/lib/contabilidad/mapCanalPendienteCompra';
 
+function compraYaIngresoAlmacen(c: CompraListaUnificada): boolean {
+  return Boolean(c.ingresado_almacen_at?.trim() || c.compra_factura_id?.trim());
+}
+
 /** Completa nombres de entidad, proyecto y almacén para el listado de compras. */
 export async function enriquecerComprasConDestino(
   supabase: SupabaseClient,
@@ -14,8 +18,40 @@ export async function enriquecerComprasConDestino(
 
   for (const c of compras) {
     if (c.proyecto_id) proyectoIds.add(c.proyecto_id);
-    if (c.ubicacion_destino_id) ubicacionIds.add(c.ubicacion_destino_id);
+    if (c.ubicacion_destino_id?.trim()) ubicacionIds.add(c.ubicacion_destino_id.trim());
     if (c.entidad_id) entidadIds.add(c.entidad_id);
+  }
+
+  const proyectoUbicacionFallback = new Map<string, string>();
+  const proyectosIngresadosSinUbi = Array.from(
+    new Set(
+      compras
+        .filter(
+          (c) =>
+            c.proyecto_id &&
+            !c.ubicacion_destino_id?.trim() &&
+            compraYaIngresoAlmacen(c),
+        )
+        .map((c) => c.proyecto_id!),
+    ),
+  ).slice(0, 400);
+
+  if (proyectosIngresadosSinUbi.length) {
+    const { data: ubiObra } = await supabase
+      .from('inv_ubicaciones')
+      .select('id, ci_proyecto_id, nombre, tipo')
+      .in('ci_proyecto_id', proyectosIngresadosSinUbi)
+      .eq('tipo', 'obra')
+      .is('ubicacion_padre_id', null);
+
+    for (const u of ubiObra ?? []) {
+      const pid = String(u.ci_proyecto_id ?? '').trim();
+      const uid = String(u.id ?? '').trim();
+      if (pid && uid && !proyectoUbicacionFallback.has(pid)) {
+        proyectoUbicacionFallback.set(pid, uid);
+        ubicacionIds.add(uid);
+      }
+    }
   }
 
   const proyectosMap = new Map<string, { nombre: string; entidad_id: string | null }>();
@@ -74,13 +110,19 @@ export async function enriquecerComprasConDestino(
       proy?.nombre ??
       null;
 
+    const ubicacionDestinoId =
+      c.ubicacion_destino_id?.trim() ||
+      (c.proyecto_id ? proyectoUbicacionFallback.get(c.proyecto_id) : null) ||
+      null;
+
     return {
       ...c,
       entidad_id: entidadId,
       entidad_nombre: entidadId ? (entidadesMap.get(entidadId) ?? null) : null,
       proyecto_nombre: proyNombre?.trim() || null,
-      ubicacion_nombre: c.ubicacion_destino_id
-        ? (ubicacionesMap.get(c.ubicacion_destino_id) ?? c.ubicacion_nombre ?? null)
+      ubicacion_destino_id: ubicacionDestinoId,
+      ubicacion_nombre: ubicacionDestinoId
+        ? (ubicacionesMap.get(ubicacionDestinoId) ?? c.ubicacion_nombre ?? null)
         : (c.ubicacion_nombre ?? null),
     };
   });

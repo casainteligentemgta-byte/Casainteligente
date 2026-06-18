@@ -10,6 +10,7 @@ import {
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import { descargarTextoComoArchivo } from '@/lib/almacen/inventarioExportShare';
+import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 
 export type ComprasExportScope = 'filtrado' | 'completo';
 
@@ -40,6 +41,9 @@ export type CompraCuadroInput = {
   entidad_nombre?: string | null;
   proyecto_nombre?: string | null;
   ubicacion_nombre?: string | null;
+  ingresado_almacen_at?: string | null;
+  compra_factura_id?: string | null;
+  estado_logistica?: EstadoLogisticaCompra | null;
   entidad_id?: string | null;
   proyecto_id?: string | null;
   ci_proyectos?: { nombre?: string | null } | { nombre?: string | null }[] | null;
@@ -110,6 +114,8 @@ export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
     entidadNombre: c.entidad_nombre ?? undefined,
     proyectoNombre: proyectoNombreCompra(c) || undefined,
     almacenNombre: c.ubicacion_nombre ?? undefined,
+    almacenIngresado: Boolean(c.ingresado_almacen_at?.trim() || c.compra_factura_id?.trim()),
+    estadoLogistica: c.estado_logistica ?? null,
     entidadId: c.entidad_id ?? null,
     proyectoId: c.proyecto_id ?? null,
     alerta_fecha: c.alerta_fecha ?? null,

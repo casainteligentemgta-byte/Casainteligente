@@ -345,6 +345,8 @@ export default function ComprasLineasTable({
                     const { texto, pendienteIngreso } = etiquetaAlmacenIngresoCompra({
                       ubicacionNombre: row.almacen,
                       proyectoNombre: row.proyecto,
+                      yaIngresadoAlmacen: row.almacenIngresado,
+                      estadoLogistica: row.estadoLogistica,
                     });
                     return (
                       <span

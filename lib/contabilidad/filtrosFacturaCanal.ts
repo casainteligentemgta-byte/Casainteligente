@@ -9,6 +9,7 @@ import {
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
+import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 
 export type ExtractedInvoiceItem = {
   description?: string;
@@ -38,6 +39,9 @@ export type FilaFacturaCanal = {
   entidad?: string;
   proyecto?: string;
   almacen?: string;
+  /** true si la compra ya tiene ingreso físico (fallback columna almacén). */
+  almacenIngresado?: boolean;
+  estadoLogistica?: EstadoLogisticaCompra | null;
   entidadId?: string | null;
   proyectoId?: string | null;
   montoBs: number;
@@ -220,6 +224,8 @@ export type CompraConfirmadaParaLineas = {
   proyectoNombre?: string;
   entidadNombre?: string;
   almacenNombre?: string;
+  almacenIngresado?: boolean;
+  estadoLogistica?: EstadoLogisticaCompra | null;
   entidadId?: string | null;
   proyectoId?: string | null;
   alerta_fecha?: 'advertencia' | 'critico' | null;
@@ -344,6 +350,8 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       entidad: c.entidadNombre?.trim() || '',
       proyecto: c.proyectoNombre?.trim() || '',
       almacen: c.almacenNombre?.trim() || '',
+      almacenIngresado: c.almacenIngresado,
+      estadoLogistica: c.estadoLogistica,
       entidadId: c.entidadId ?? null,
       proyectoId: c.proyectoId ?? null,
       montoBs: montos.bs,

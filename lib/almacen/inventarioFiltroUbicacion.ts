@@ -376,8 +376,9 @@ export function resolverUbicacionIdsFiltroConMeta(
     candidatas,
     opts.depositId,
   );
+  const expandidas = expandirDescendientesUbicacion(flat, finales);
   return {
-    ubicacionIds: finales.map((u) => u.id),
+    ubicacionIds: expandidas.map((u) => u.id),
     depositoSinInterseccion,
   };
 }
@@ -437,13 +438,15 @@ export function resolverUbicacionIdsFiltroEntidadConMeta(
   }
 
   let result = Array.from(byId.values());
+  result = expandirDescendientesUbicacion(flat, result);
   const { candidatas: finales, depositoSinInterseccion } = aplicarFiltroDepositoUbicaciones(
     result,
     opts.depositId,
   );
+  const expandidas = expandirDescendientesUbicacion(flat, finales);
 
   return {
-    ubicacionIds: finales.map((u) => u.id),
+    ubicacionIds: expandidas.map((u) => u.id),
     depositoSinInterseccion,
   };
 }

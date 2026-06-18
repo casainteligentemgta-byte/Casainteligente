@@ -108,6 +108,7 @@ import {
 } from '@/lib/contabilidad/mapCanalPendienteCompra';
 import { enriquecerComprasConDestino } from '@/lib/contabilidad/enriquecerComprasDestino';
 import { enriquecerComprasPuenteInventario } from '@/lib/contabilidad/enriquecerComprasPuenteInventario';
+import { enriquecerComprasRecepcionCampo } from '@/lib/contabilidad/enriquecerComprasRecepcionCampo';
 import {
     coloresEstadoLogistica,
     compraMuestraBotonConfirmacionRecepcion,
@@ -733,8 +734,9 @@ export default function ComprasPage() {
                 canalPendientes,
             );
 
-            filas = await enriquecerComprasConDestino(supabase, filas);
             filas = await enriquecerComprasPuenteInventario(supabase, filas);
+            filas = await enriquecerComprasRecepcionCampo(supabase, filas);
+            filas = await enriquecerComprasConDestino(supabase, filas);
             filas = await enriquecerComprasEstadoLogistica(supabase, filas);
             setComprasCuadroBase(filas);
 
@@ -2882,6 +2884,11 @@ export default function ComprasPage() {
                                                         imputacionEntidad: esGastoEntidadImputacion(
                                                             c.imputacion,
                                                         ),
+                                                        yaIngresadoAlmacen: Boolean(
+                                                            c.ingresado_almacen_at ||
+                                                                c.compra_factura_id,
+                                                        ),
+                                                        estadoLogistica: c.estado_logistica,
                                                     });
                                                     if (almacen.texto === '—') return null;
                                                     return (

@@ -827,7 +827,6 @@ export default function InventarioCuadro() {
             !filterEntidadId
         ) {
             setStockPorUbicacion(new Map());
-            setItemsDesdeStock([]);
             setUbicacionIdsFiltro([]);
             setFiltroSinUbicaciones(false);
             setDepositoSinInterseccion(false);
@@ -1298,11 +1297,13 @@ export default function InventarioCuadro() {
                 depositIdsScope:
                     filterProyectoId && !filterDepositId ? depositIdsScope : undefined,
             });
-            if (filtroStockEntidadActivo && cargandoStockUbicacion && kpiVista !== 'cuarentena') {
-                if (
-                    !(filtroSoloEntidad && catalogEntidad) &&
-                    !depositoEnAlcance
-                ) {
+            if (
+                filtroStockEntidadActivo &&
+                cargandoStockUbicacion &&
+                kpiVista !== 'cuarentena' &&
+                filterDepositId
+            ) {
+                if (!(filtroSoloEntidad && catalogEntidad) && !depositoEnAlcance) {
                     return false;
                 }
             }
