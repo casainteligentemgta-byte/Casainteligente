@@ -66,7 +66,7 @@ export function mensajeCompradorFacturaConfirmadaHtml(
   }
   return (
     '✅ <b>Compra registrada en Contabilidad</b>\n' +
-    '<i>Precargada para ingreso físico del depositario (/ingreso).</i>\n\n' +
+    '<i>Precargada para ingreso físico con <code>/ingreso</code>.</i>\n\n' +
     resumen
   );
 }

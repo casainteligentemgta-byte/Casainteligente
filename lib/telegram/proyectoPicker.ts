@@ -10,6 +10,10 @@ import {
   type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
+import {
+  filtrarProyectosCatalogoParaChatTelegram,
+  modoTelegramUsaObraComprador,
+} from '@/lib/telegram/proyectosTelegramUsuario';
 
 /** Contextos en los que el usuario puede elegir proyecto desde Telegram. */
 export type ProyectoPickerModo =
@@ -209,6 +213,108 @@ function buildKeyboard(
   return { inline_keyboard: rows };
 }
 
+/** Aplica la selección de proyecto (sin callback de Telegram). */
+export async function aplicarSeleccionProyectoTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+  modo: ProyectoPickerModo,
+  proyectoId: string,
+  nombreObra: string,
+): Promise<void> {
+  if (modo === 'factura_compra') {
+    const estado = await import('@/lib/telegram/estados').then((m) =>
+      m.getTelegramEstado(supabase, chatId),
+    );
+    const pendingId = estado.pending_factura_id;
+    if (!pendingId) {
+      await sendTelegramMessage(
+        chatId,
+        '⚠️ Sin factura pendiente. Envía una foto con <code>/facturas</code>.',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+    await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update({
+        proyecto_id: proyectoId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', pendingId);
+    const { enviarPickerUbicacionesTelegram } = await import('@/lib/telegram/ubicacionPicker');
+    await enviarPickerUbicacionesTelegram(supabase, chatId, {
+      pendingId,
+      proyectoId,
+      nombreObra,
+    });
+    return;
+  }
+
+  if (modo === 'ingreso_manual') {
+    const { prepararIngresoManualTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararIngresoManualTrasObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'ingreso_factura_manual') {
+    const { prepararIngresoFacturaManualTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararIngresoFacturaManualTrasObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'nota_entrega') {
+    const { prepararNotaEntregaIngresoTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararNotaEntregaIngresoTrasObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'procura') {
+    const { prepararProcuraTrasObra } = await import('@/lib/telegram/procuraTelegram');
+    await prepararProcuraTrasObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'emergencia') {
+    const { prepararEmergenciaIngresoTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
+    await prepararEmergenciaIngresoTrasObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'salida_obra') {
+    const { iniciarSalidaEgresoTrasObra } = await import('@/lib/telegram/salidaEgresoFlujo');
+    await iniciarSalidaEgresoTrasObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'salida_almacen' || modo === 'salida_obra_despacho') {
+    const { prepararSalidaObraTrasProyecto } = await import('@/lib/telegram/salidaObraTelegram');
+    await prepararSalidaObraTrasProyecto(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'salida_almacen_dest') {
+    const { prepararObraDestinoSalidaAlmacen } = await import('@/lib/telegram/salidaObraTelegram');
+    await prepararObraDestinoSalidaAlmacen(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'memoria_obra') {
+    const { enviarPickerPartidasMemoriaObra } = await import('@/lib/telegram/memoriaObra');
+    await enviarPickerPartidasMemoriaObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  await setTelegramContexto(supabase, chatId, {
+    contexto: modo,
+    proyecto_id: proyectoId,
+  });
+
+  const msg = mensajeTrasSeleccion(modo, nombreObra);
+  if (msg) {
+    await sendTelegramMessage(chatId, msg, { parse_mode: 'HTML' });
+  }
+}
+
 export async function enviarPickerProyectosTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -233,13 +339,34 @@ export async function enviarPickerProyectosTelegram(
     return;
   }
 
-  const keyboard = buildKeyboard(proyectos, page, modo);
-  const totalPages = Math.max(1, Math.ceil(proyectos.length / PAGE_SIZE));
+  const permitidos = await filtrarProyectosCatalogoParaChatTelegram(supabase, chatId, proyectos);
+  if (permitidos.length === 0) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ Tu obra asignada no está disponible. Contacta al administrador.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  if (permitidos.length === 1 && modoTelegramUsaObraComprador(modo)) {
+    const unico = permitidos[0]!;
+    await sendTelegramMessage(
+      chatId,
+      `✅ Obra: <b>${unico.nombre}</b>`,
+      { parse_mode: 'HTML' },
+    );
+    await aplicarSeleccionProyectoTelegram(supabase, chatId, modo, unico.id, unico.nombre);
+    return;
+  }
+
+  const keyboard = buildKeyboard(permitidos, page, modo);
+  const totalPages = Math.max(1, Math.ceil(permitidos.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
 
   await sendTelegramMessage(
     chatId,
-    `${tituloPicker(modo)}\n<i>Toca un nombre abajo (${proyectos.length} proyectos)</i>`,
+    `${tituloPicker(modo)}\n<i>Toca un nombre abajo (${permitidos.length} proyectos)</i>`,
     { parse_mode: 'HTML', reply_markup: keyboard },
   );
 
@@ -266,111 +393,32 @@ export async function manejarCallbackProyectoTelegram(
   }
 
   const { proyectos } = await loadCatalogoProyectosApp(supabase);
-  const hit = proyectos.find((p) => p.id === parsed.proyectoId);
+  const permitidos = await filtrarProyectosCatalogoParaChatTelegram(
+    supabase,
+    params.chatId,
+    proyectos,
+  );
+  const hit = permitidos.find((p) => p.id === parsed.proyectoId);
   if (!hit) {
-    await answerCallbackQuery(params.callbackId, 'Proyecto no encontrado', true);
-    return true;
-  }
-
-  if (parsed.modo === 'factura_compra') {
-    const estado = await import('@/lib/telegram/estados').then((m) =>
-      m.getTelegramEstado(supabase, params.chatId),
-    );
-    const pendingId = estado.pending_factura_id;
-    if (!pendingId) {
-      await answerCallbackQuery(params.callbackId, 'Sin factura pendiente', true);
-      return true;
+    const ajeno = proyectos.find((p) => p.id === parsed.proyectoId);
+    if (ajeno && permitidos.length < proyectos.length) {
+      await answerCallbackQuery(params.callbackId, 'Solo puedes usar tu obra asignada', true);
+    } else {
+      await answerCallbackQuery(params.callbackId, 'Proyecto no encontrado', true);
     }
-    await supabase
-      .from('ci_facturas_canal_pendientes')
-      .update({
-        proyecto_id: parsed.proyectoId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', pendingId);
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { enviarPickerUbicacionesTelegram } = await import('@/lib/telegram/ubicacionPicker');
-    await enviarPickerUbicacionesTelegram(supabase, params.chatId, {
-      pendingId,
-      proyectoId: parsed.proyectoId,
-      nombreObra: hit.nombre,
-    });
     return true;
   }
 
-  if (parsed.modo === 'ingreso_manual') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { prepararIngresoManualTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
-    await prepararIngresoManualTrasObra(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'ingreso_factura_manual') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { prepararIngresoFacturaManualTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
-    await prepararIngresoFacturaManualTrasObra(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'nota_entrega') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { prepararNotaEntregaIngresoTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
-    await prepararNotaEntregaIngresoTrasObra(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'procura') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { prepararProcuraTrasObra } = await import('@/lib/telegram/procuraTelegram');
-    await prepararProcuraTrasObra(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'emergencia') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { prepararEmergenciaIngresoTrasObra } = await import('@/lib/telegram/ingresoManualTelegram');
-    await prepararEmergenciaIngresoTrasObra(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'salida_obra') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { iniciarSalidaEgresoTrasObra } = await import('@/lib/telegram/salidaEgresoFlujo');
-    await iniciarSalidaEgresoTrasObra(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'salida_almacen' || parsed.modo === 'salida_obra_despacho') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { prepararSalidaObraTrasProyecto } = await import('@/lib/telegram/salidaObraTelegram');
-    await prepararSalidaObraTrasProyecto(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'salida_almacen_dest') {
-    await answerCallbackQuery(params.callbackId, `Destino: ${hit.nombre}`);
-    const { prepararObraDestinoSalidaAlmacen } = await import('@/lib/telegram/salidaObraTelegram');
-    await prepararObraDestinoSalidaAlmacen(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  if (parsed.modo === 'memoria_obra') {
-    await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-    const { enviarPickerPartidasMemoriaObra } = await import('@/lib/telegram/memoriaObra');
-    await enviarPickerPartidasMemoriaObra(supabase, params.chatId, parsed.proyectoId);
-    return true;
-  }
-
-  await setTelegramContexto(supabase, params.chatId, {
-    contexto: parsed.modo,
-    proyecto_id: parsed.proyectoId,
-  });
-
-  await answerCallbackQuery(params.callbackId, `Obra: ${hit.nombre}`);
-  const msg = mensajeTrasSeleccion(parsed.modo, hit.nombre);
-  if (msg) {
-    await sendTelegramMessage(params.chatId, msg, { parse_mode: 'HTML' });
-  }
+  const etiquetaObra =
+    parsed.modo === 'salida_almacen_dest' ? `Destino: ${hit.nombre}` : `Obra: ${hit.nombre}`;
+  await answerCallbackQuery(params.callbackId, etiquetaObra);
+  await aplicarSeleccionProyectoTelegram(
+    supabase,
+    params.chatId,
+    parsed.modo,
+    parsed.proyectoId,
+    hit.nombre,
+  );
   return true;
 }
 

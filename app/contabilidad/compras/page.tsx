@@ -2890,7 +2890,7 @@ export default function ComprasPage() {
                                                         ),
                                                         estadoLogistica: c.estado_logistica,
                                                     });
-                                                    if (almacen.texto === '—') return null;
+                                                    if (!almacen.texto || almacen.texto === '—') return null;
                                                     return (
                                                         <span
                                                             style={{

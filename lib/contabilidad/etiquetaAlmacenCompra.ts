@@ -18,12 +18,9 @@ export function etiquetaAlmacenIngresoCompra(opts: {
     opts.estadoLogistica === 'en_almacen' ||
     opts.estadoLogistica === 'en_almacen_parcial';
 
-  if (ingresado) {
-    return { texto: '—', pendienteIngreso: false };
-  }
-
-  if (String(opts.proyectoNombre ?? '').trim()) {
+  if (!ingresado && String(opts.proyectoNombre ?? '').trim()) {
     return { texto: 'Pendiente ingreso', pendienteIngreso: true };
   }
+
   return { texto: '—', pendienteIngreso: false };
 }

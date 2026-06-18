@@ -64,7 +64,7 @@ export function parseTelegramChatIdInput(v: string | number | null | undefined):
 async function cargarChatIdsAutorizadosDb(supabase: SupabaseClient): Promise<Set<string>> {
   const ids = new Set<string>();
 
-  const [{ data: lista }, { data: nomina }] = await Promise.all([
+  const [{ data: lista }, { data: nomina }, { data: usuariosCompras }] = await Promise.all([
     supabase
       .from('ci_telegram_whitelist')
       .select('chat_id')
@@ -72,6 +72,10 @@ async function cargarChatIdsAutorizadosDb(supabase: SupabaseClient): Promise<Set
     supabase
       .from('ci_proyecto_nomina')
       .select('telegram_chat_id, empleado_id, ci_empleados(telegram_chat_id)')
+      .eq('activo', true),
+    supabase
+      .from('ci_usuarios_sistema_telegram')
+      .select('telegram_id')
       .eq('activo', true),
   ]);
 
@@ -88,6 +92,11 @@ async function cargarChatIdsAutorizadosDb(supabase: SupabaseClient): Promise<Set
     if (r.telegram_chat_id != null) ids.add(String(r.telegram_chat_id));
     const empChat = r.ci_empleados?.telegram_chat_id;
     if (empChat != null) ids.add(String(empChat));
+  }
+
+  for (const row of usuariosCompras ?? []) {
+    const tid = (row as { telegram_id?: number | null }).telegram_id;
+    if (tid != null) ids.add(String(tid));
   }
 
   return ids;
@@ -120,7 +129,7 @@ export async function telegramWhitelistEstaActiva(): Promise<boolean> {
 }
 
 /**
- * Autoriza chat si está en env, lista blanca BD o nómina activa.
+ * Autoriza chat si está en env, lista blanca BD, nómina activa o usuarios compras Telegram.
  * Sin reglas configuradas → permite todos (modo prueba).
  */
 export async function isChatAllowedAsync(chatId: string | number): Promise<boolean> {

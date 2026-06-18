@@ -5,6 +5,35 @@ function compraYaIngresoAlmacen(c: CompraListaUnificada): boolean {
   return Boolean(c.ingresado_almacen_at?.trim() || c.compra_factura_id?.trim());
 }
 
+function etiquetaTipoUbicacion(tipo: string | null | undefined): string {
+  if (tipo === 'obra') return 'Obra';
+  if (tipo === 'almacen_movil') return 'Móvil';
+  if (tipo === 'almacen_central') return 'Almacén';
+  return String(tipo ?? '').trim() || 'Ubicación';
+}
+
+function preferirUbicacionProyecto(
+  rows: Array<{
+    id?: string | null;
+    ci_proyecto_id?: string | null;
+    nombre?: string | null;
+    tipo?: string | null;
+    ubicacion_padre_id?: string | null;
+  }>,
+  proyectoId: string,
+): string | null {
+  const delProyecto = rows.filter((u) => String(u.ci_proyecto_id ?? '').trim() === proyectoId);
+  if (!delProyecto.length) return null;
+
+  const preferida =
+    delProyecto.find((u) => u.tipo === 'almacen_central') ??
+    delProyecto.find((u) => u.tipo === 'almacen_movil') ??
+    delProyecto.find((u) => u.tipo === 'obra' && !u.ubicacion_padre_id) ??
+    delProyecto[0];
+
+  return String(preferida?.id ?? '').trim() || null;
+}
+
 /** Completa nombres de entidad, proyecto y almacén para el listado de compras. */
 export async function enriquecerComprasConDestino(
   supabase: SupabaseClient,
@@ -23,7 +52,7 @@ export async function enriquecerComprasConDestino(
   }
 
   const proyectoUbicacionFallback = new Map<string, string>();
-  const proyectosIngresadosSinUbi = Array.from(
+  const proyectosSinUbicacion = Array.from(
     new Set(
       compras
         .filter(
@@ -36,18 +65,16 @@ export async function enriquecerComprasConDestino(
     ),
   ).slice(0, 400);
 
-  if (proyectosIngresadosSinUbi.length) {
-    const { data: ubiObra } = await supabase
+  if (proyectosSinUbicacion.length) {
+    const { data: ubisProyecto } = await supabase
       .from('inv_ubicaciones')
-      .select('id, ci_proyecto_id, nombre, tipo')
-      .in('ci_proyecto_id', proyectosIngresadosSinUbi)
-      .eq('tipo', 'obra')
-      .is('ubicacion_padre_id', null);
+      .select('id, ci_proyecto_id, nombre, tipo, ubicacion_padre_id')
+      .in('ci_proyecto_id', proyectosSinUbicacion)
+      .eq('activo', true);
 
-    for (const u of ubiObra ?? []) {
-      const pid = String(u.ci_proyecto_id ?? '').trim();
-      const uid = String(u.id ?? '').trim();
-      if (pid && uid && !proyectoUbicacionFallback.has(pid)) {
+    for (const pid of proyectosSinUbicacion) {
+      const uid = preferirUbicacionProyecto(ubisProyecto ?? [], pid);
+      if (uid && !proyectoUbicacionFallback.has(pid)) {
         proyectoUbicacionFallback.set(pid, uid);
         ubicacionIds.add(uid);
       }
@@ -76,15 +103,10 @@ export async function enriquecerComprasConDestino(
       .select('id, nombre, tipo')
       .in('id', Array.from(ubicacionIds).slice(0, 400));
     for (const u of data ?? []) {
-      const tipo =
-        u.tipo === 'obra'
-          ? 'Obra'
-          : u.tipo === 'almacen_movil'
-            ? 'Móvil'
-            : u.tipo === 'almacen_central'
-              ? 'Almacén'
-              : String(u.tipo ?? '');
-      ubicacionesMap.set(String(u.id), `${String(u.nombre ?? '').trim()} (${tipo})`);
+      const nombre = String(u.nombre ?? '').trim();
+      if (!nombre) continue;
+      const tipo = etiquetaTipoUbicacion(u.tipo);
+      ubicacionesMap.set(String(u.id), `${nombre} (${tipo})`);
     }
   }
 
@@ -115,15 +137,17 @@ export async function enriquecerComprasConDestino(
       (c.proyecto_id ? proyectoUbicacionFallback.get(c.proyecto_id) : null) ||
       null;
 
+    const ubicacionNombre = ubicacionDestinoId
+      ? (ubicacionesMap.get(ubicacionDestinoId) ?? c.ubicacion_nombre ?? null)
+      : (c.ubicacion_nombre ?? null);
+
     return {
       ...c,
       entidad_id: entidadId,
       entidad_nombre: entidadId ? (entidadesMap.get(entidadId) ?? null) : null,
       proyecto_nombre: proyNombre?.trim() || null,
       ubicacion_destino_id: ubicacionDestinoId,
-      ubicacion_nombre: ubicacionDestinoId
-        ? (ubicacionesMap.get(ubicacionDestinoId) ?? c.ubicacion_nombre ?? null)
-        : (c.ubicacion_nombre ?? null),
+      ubicacion_nombre: ubicacionNombre?.trim() || null,
     };
   });
 }
