@@ -118,7 +118,6 @@ function TarjetaPresupuesto({
                 padding: '12px',
                 position: 'relative',
                 borderRadius: '14px',
-                paddingBottom: esFilas ? '12px' : '36px',
                 display: 'flex',
                 flexDirection: 'column',
                 height: '100%',
@@ -138,7 +137,7 @@ function TarjetaPresupuesto({
                 {numero}
             </span>
 
-            <div style={{ paddingRight: '56px', minHeight: esFilas ? undefined : '52px' }}>
+            <div style={{ paddingRight: '56px', minHeight: esFilas ? undefined : '44px' }}>
                 <h3
                     style={{
                         color: 'white',
@@ -152,69 +151,71 @@ function TarjetaPresupuesto({
                     }}
                 >
                     {b.customer_name}
+                    {b.customer_rif ? (
+                        <span
+                            style={{
+                                color: 'rgba(255,255,255,0.35)',
+                                fontWeight: 500,
+                                fontSize: '0.82em',
+                                marginLeft: '8px',
+                            }}
+                        >
+                            {b.customer_rif}
+                        </span>
+                    ) : null}
                 </h3>
-                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', margin: '4px 0 0' }}>
-                    {fecha}
-                </p>
-                <p
-                    style={{
-                        color: 'rgba(255,255,255,0.35)',
-                        fontSize: '10px',
-                        margin: '2px 0 0',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    {b.customer_rif}
-                </p>
                 <div
                     style={{
-                        marginTop: '6px',
-                        ...clasifStyle,
-                        fontSize: '9px',
-                        fontWeight: 700,
-                        padding: '3px 7px',
-                        borderRadius: '6px',
-                        display: 'inline-flex',
+                        display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        width: 'fit-content',
+                        gap: '8px',
+                        flexWrap: 'wrap',
+                        marginTop: '4px',
                     }}
                 >
-                    <span>{clasifStyle.icon}</span>
-                    <span>{clasifStyle.label}</span>
+                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', margin: 0 }}>
+                        {fecha}
+                    </p>
+                    <div
+                        style={{
+                            ...clasifStyle,
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            padding: '3px 7px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            width: 'fit-content',
+                        }}
+                    >
+                        <span>{clasifStyle.icon}</span>
+                        <span>{clasifStyle.label}</span>
+                    </div>
                 </div>
             </div>
 
-            {esFilas ? (
-                <p
-                    style={{
-                        color: '#34C759',
-                        fontSize: '18px',
-                        fontWeight: 800,
-                        margin: '10px 0 0',
-                        textAlign: 'right',
-                        lineHeight: 1,
-                    }}
-                >
-                    ${formatUSD(b.subtotal)}
-                </p>
-            ) : null}
-
             <div
                 style={{
-                    marginTop: '10px',
-                    marginBottom: compacto ? '28px' : 0,
+                    marginTop: '6px',
                     display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'nowrap',
-                    gap: '4px',
-                    overflowX: 'auto',
-                    WebkitOverflowScrolling: 'touch',
-                    paddingBottom: '2px',
+                    alignItems: 'center',
+                    gap: '8px',
                 }}
             >
+                <div
+                    style={{
+                        flex: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        flexDirection: 'row',
+                        flexWrap: 'nowrap',
+                        gap: '4px',
+                        overflowX: 'auto',
+                        WebkitOverflowScrolling: 'touch',
+                        paddingBottom: '2px',
+                    }}
+                >
                 <button
                     type="button"
                     onClick={onEditar}
@@ -270,24 +271,20 @@ function TarjetaPresupuesto({
                         </button>
                     );
                 })}
-            </div>
-
-            {!esFilas ? (
-                <p
+                </div>
+                <span
                     style={{
-                        position: 'absolute',
-                        bottom: '10px',
-                        right: '10px',
                         color: '#34C759',
-                        fontSize: '15px',
+                        fontSize: compacto ? '14px' : '17px',
                         fontWeight: 800,
-                        margin: 0,
                         lineHeight: 1,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
                     }}
                 >
                     ${formatUSD(b.subtotal)}
-                </p>
-            ) : null}
+                </span>
+            </div>
         </div>
     );
 }
