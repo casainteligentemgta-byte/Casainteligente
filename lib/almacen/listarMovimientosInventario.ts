@@ -178,7 +178,6 @@ async function cargarIngresosRecepcionCampo(
       created_at,
       proyecto_id,
       ubicacion_id,
-      contabilidad_compra:contabilidad_compras ( supplier_name ),
       proyecto:ci_proyectos ( id, nombre ),
       ubicacion:inv_ubicaciones ( id, nombre ),
       lineas:ci_recepciones_campo_lineas (
@@ -195,6 +194,9 @@ async function cargarIngresosRecepcionCampo(
     .limit(Math.min(limite, 150));
 
   if (error?.code === '42P01') return [];
+  if (error && /relationship between|schema cache|PGRST200/i.test(error.message ?? '')) {
+    return [];
+  }
   if (error) throw new Error(error.message);
 
   const filas: FilaMovimientoInventario[] = [];
@@ -208,14 +210,7 @@ async function cargarIngresosRecepcionCampo(
     const tipoLabel = etiquetaTipoRecepcionCampo(String(rec.tipo ?? ''), rec.observaciones);
     const obs = String(rec.observaciones ?? '').trim();
     const notasBase = tipoLabel + (obs ? ` · ${obs.slice(0, 200)}` : '');
-    const compraRaw = (rec as { contabilidad_compra?: unknown }).contabilidad_compra;
-    const compraRow = Array.isArray(compraRaw) ? compraRaw[0] : compraRaw;
-    const proveedorContabilidad =
-      compraRow && typeof compraRow === 'object'
-        ? String((compraRow as { supplier_name?: string | null }).supplier_name ?? '').trim()
-        : '';
-    const proveedorRecepcion =
-      String(rec.proveedor_nombre ?? '').trim() || proveedorContabilidad || null;
+    const proveedorRecepcion = String(rec.proveedor_nombre ?? '').trim() || null;
 
     const lineas = (rec.lineas ?? []) as Array<{
       id: string;

@@ -28,7 +28,15 @@ export async function enriquecerComprasRecepcionCampo(
     .in('contabilidad_compra_id', compraIds)
     .eq('estado', 'registrado');
 
-  if (error?.code === '42P01' || error) return compras;
+  if (
+    error &&
+    /contabilidad_compra_id|relationship between|schema cache|PGRST200|42703|42P01/i.test(
+      error.message ?? '',
+    )
+  ) {
+    return compras;
+  }
+  if (error) return compras;
 
   const porCompra = new Map<string, { ubicacion_id: string; ingresado_at: string }>();
 

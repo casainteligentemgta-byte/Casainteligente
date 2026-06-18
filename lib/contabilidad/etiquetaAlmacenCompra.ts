@@ -19,11 +19,7 @@ export function etiquetaAlmacenIngresoCompra(opts: {
     opts.estadoLogistica === 'en_almacen_parcial';
 
   if (ingresado) {
-    const proy = String(opts.proyectoNombre ?? '').trim();
-    return {
-      texto: proy ? `Ingresado · ${proy}` : 'Ingresado en almacén',
-      pendienteIngreso: false,
-    };
+    return { texto: '—', pendienteIngreso: false };
   }
 
   if (String(opts.proyectoNombre ?? '').trim()) {
