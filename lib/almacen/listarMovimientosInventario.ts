@@ -671,7 +671,7 @@ function filtrarStockPorProveedor(
   const needle = proveedor?.trim();
   if (!needle) return stock;
   const mats = materialIdsDeIngresosConProveedor(ingresos, needle);
-  for (const id of materialIdsContabilidad ?? []) mats.add(id);
+  materialIdsContabilidad?.forEach((id) => mats.add(id));
   return stock.filter(
     (r) =>
       (r.material_id && mats.has(r.material_id)) || incluye(r.proveedor ?? '', needle),
