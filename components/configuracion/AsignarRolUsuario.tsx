@@ -14,13 +14,13 @@ import { cn } from '@/lib/utils';
 
 const ROLES_SUGERIDOS = [
   { value: 'admin', label: 'Administrador' },
-  { value: 'pm_obra', label: 'Project manager / coordinador' },
-  { value: 'contador', label: 'Contador / contabilidad' },
-  { value: 'comprador', label: 'Comprador / procura' },
-  { value: 'almacen_central', label: 'Almacén central' },
-  { value: 'rrhh', label: 'RRHH' },
-  { value: 'solo_lectura', label: 'Solo lectura' },
+  { value: 'pm_obra', label: 'Project Manager' },
+  { value: 'contador', label: 'Administrador financiero / Contador' },
 ] as const;
+
+function etiquetaRolAsignacion(slug: string): string {
+  return ROLES_SUGERIDOS.find((r) => r.value === slug)?.label ?? slug;
+}
 
 const campoClase =
   'mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#FF9500]/50 focus:ring-2 focus:ring-[#FF9500]/15 disabled:opacity-50';
@@ -38,14 +38,13 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState('');
   const [rol, setRol] = useState<string>(ROLES_SUGERIDOS[0].value);
-  const [rolPersonalizado, setRolPersonalizado] = useState('');
   const [entidadId, setEntidadId] = useState(entidadIdInicial ?? '');
   const [entidades, setEntidades] = useState<EntidadOpcion[]>([]);
   const [cargandoEntidades, setCargandoEntidades] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [ultimoOk, setUltimoOk] = useState<{ email: string; rol: string } | null>(null);
 
-  const rolEfectivo = rol === '__otro__' ? rolPersonalizado.trim() : rol;
+  const rolEfectivo = rol;
 
   const cargarEntidades = useCallback(async () => {
     setCargandoEntidades(true);
@@ -114,7 +113,7 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
         return;
       }
 
-      setUltimoOk({ email: data.email ?? emailTrim, rol: rolEfectivo });
+      setUltimoOk({ email: data.email ?? emailTrim, rol: etiquetaRolAsignacion(rolEfectivo) });
       toast.success('Rol asignado correctamente');
       onAsignado?.({
         usuario_id: data.usuario_id ?? '',
@@ -144,7 +143,7 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
           <div>
             <CardTitle className="text-lg font-bold tracking-tight text-white">Asignar rol a usuario</CardTitle>
             <CardDescription className="mt-1 text-zinc-500">
-              Vincula un correo de Supabase Auth con un rol dentro de una entidad patrono. Requiere sesión activa.
+              Roles disponibles: Administrador, Project Manager o Administrador financiero / Contador.
             </CardDescription>
           </div>
         </div>
@@ -185,7 +184,6 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
                     {r.label}
                   </option>
                 ))}
-                <option value="__otro__">Otro (personalizado)</option>
               </select>
             </div>
 
@@ -213,25 +211,6 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
               </select>
             </div>
           </div>
-
-          {rol === '__otro__' ? (
-            <div className="space-y-2">
-              <Label
-                htmlFor="asignar-rol-custom"
-                className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
-              >
-                Nombre del rol personalizado
-              </Label>
-              <Input
-                id="asignar-rol-custom"
-                value={rolPersonalizado}
-                onChange={(e) => setRolPersonalizado(e.target.value)}
-                placeholder="ej. supervisor_obra"
-                disabled={enviando}
-                className="h-10 border-white/10 bg-zinc-900/80 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-[#FF9500]/40"
-              />
-            </div>
-          ) : null}
 
           {ultimoOk ? (
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-950/25 px-3 py-2 text-sm">
@@ -269,7 +248,6 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
             onClick={() => {
               setEmail('');
               setRol(ROLES_SUGERIDOS[0].value);
-              setRolPersonalizado('');
               setUltimoOk(null);
             }}
             className="rounded-xl border-white/15 text-zinc-300"

@@ -30,6 +30,7 @@ export default function EntidadesPatronoClient() {
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<CiEntidad | null>(null);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
+  const [rolPanelOpen, setRolPanelOpen] = useState(false);
   const [entidadIdParaRol, setEntidadIdParaRol] = useState<string | undefined>(undefined);
 
   const cargar = useCallback(async () => {
@@ -97,11 +98,7 @@ export default function EntidadesPatronoClient() {
                 <Building2 className="h-6 w-6 text-[#FFD60A]" aria-hidden />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">Patronos / entidades legales</h1>
-                <p className="mt-1 max-w-xl text-sm text-zinc-500">
-                  Gestión centralizada para contratos de obreros y planillas. RIF, representante, registro mercantil y
-                  permisología. Al crear una entidad se inicializa automáticamente su catálogo de materiales.
-                </p>
+                <h1 className="text-2xl font-bold tracking-tight text-white">ENTIDADES</h1>
               </div>
             </div>
           </div>
@@ -117,10 +114,6 @@ export default function EntidadesPatronoClient() {
             Nueva entidad
           </button>
         </div>
-
-        <section id="asignar-rol-usuario" className="mb-8">
-          <AsignarRolUsuario entidadIdInicial={entidadIdParaRol} />
-        </section>
 
         {cargando ? (
           <p className="text-sm text-zinc-500">Cargando entidades…</p>
@@ -180,7 +173,7 @@ export default function EntidadesPatronoClient() {
                     type="button"
                     onClick={() => {
                       setEntidadIdParaRol(row.id);
-                      document.getElementById('asignar-rol-usuario')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      setRolPanelOpen(true);
                     }}
                     className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:bg-[#FF9500]/20 sm:flex-none"
                   >
@@ -224,6 +217,30 @@ export default function EntidadesPatronoClient() {
           entidad={editando}
           onGuardado={() => void cargar()}
         />
+      ) : null}
+
+      {rolPanelOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 px-4 pb-6 pt-10 backdrop-blur-sm sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Asignar rol a usuario"
+          onClick={() => setRolPanelOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setRolPanelOpen(false)}
+              className="absolute -top-10 right-0 rounded-lg border border-white/10 bg-zinc-900/90 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 sm:-right-2 sm:-top-2 sm:top-auto"
+            >
+              Cerrar
+            </button>
+            <AsignarRolUsuario entidadIdInicial={entidadIdParaRol} />
+          </div>
+        </div>
       ) : null}
     </div>
   );

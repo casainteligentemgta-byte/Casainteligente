@@ -31,6 +31,8 @@ export type ResumenObrerosProyectoModuloProps = {
   subtituloSeccion?: string | null;
   /** Oculta el enlace «Hojas de vida RRHH» (p. ej. en la propia pantalla de hojas de vida). */
   ocultarEnlaceHojasVida?: boolean;
+  /** Oculta tarjeta de ingeniero residente (se muestra en lista colapsable de hojas-vida). */
+  ocultarIngenieroResidente?: boolean;
   /** Varios módulos: agrega datos (p. ej. «Todos» en SMART RRHH). Si no se pasa, solo `proyectoModuloId`. */
   proyectosModuloIds?: string[];
   /** Filtro en enlaces del cuadro; `null` = sin filtro por proyecto (alcance «Todos»). */
@@ -336,6 +338,7 @@ export default function ResumenObrerosProyectoModulo({
   tituloSeccion = 'Cuadro de obreros — RRHH del proyecto',
   subtituloSeccion = SUBTITULO_CUADRO_DEFAULT,
   ocultarEnlaceHojasVida = false,
+  ocultarIngenieroResidente = false,
   proyectosModuloIds,
   proyectoModuloIdFiltroEnlaces,
   selectorObra,
@@ -863,7 +866,7 @@ export default function ResumenObrerosProyectoModulo({
 
   return (
     <>
-      {!proyectosModuloIds?.length ? (
+      {!ocultarIngenieroResidente && !proyectosModuloIds?.length ? (
         <IngenieroResidenteObraCard proyectoId={proyectoModuloId} className="mb-4" />
       ) : null}
     <section

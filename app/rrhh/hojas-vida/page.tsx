@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { useEffect, useMemo, useState } from 'react';
+import ListaEmpleosHojasVida from '@/app/rrhh/hojas-vida/components/ListaEmpleosHojasVida';
 import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import {
@@ -109,6 +110,8 @@ export default function RrhhHojasVidaPage() {
   }, [supabase, proyectosModulo]);
 
   const resumenKey = proyectoModuloIdsActivos.join(',') || 'sin-proyecto';
+  const proyectoEmpleosId = alcanceObra || proyectoModuloIdPrincipal;
+  const mostrarListaEmpleos = Boolean(proyectoEmpleosId) && proyectoModuloIdsActivos.length <= 1;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6">
@@ -142,6 +145,10 @@ export default function RrhhHojasVidaPage() {
             </p>
           ) : null}
 
+          {mostrarListaEmpleos ? (
+            <ListaEmpleosHojasVida proyectoModuloId={proyectoEmpleosId} />
+          ) : null}
+
           <ResumenObrerosProyectoModulo
             key={resumenKey}
             proyectoModuloId={proyectoModuloIdPrincipal}
@@ -154,6 +161,7 @@ export default function RrhhHojasVidaPage() {
             tituloSeccion="SMART RRHH"
             subtituloSeccion={null}
             ocultarEnlaceHojasVida
+            ocultarIngenieroResidente
             selectorObra={{
               valor: alcanceObra,
               onChange: setAlcanceObra,

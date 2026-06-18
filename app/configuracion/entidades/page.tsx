@@ -2,8 +2,8 @@ import { Suspense } from 'react';
 import EntidadesPatronoClient from './EntidadesPatronoClient';
 
 export const metadata = {
-  title: 'Entidades legales | Casa Inteligente',
-  description: 'Patronos: razón social, RIF, representante, registro mercantil y permisología para contratos.',
+  title: 'Entidades | Casa Inteligente',
+  description: 'Patronos y entidades legales.',
 };
 
 export default function ConfiguracionEntidadesPage() {

@@ -305,25 +305,52 @@ export async function asegurarUbicacionObra(
   proyectoId: string,
   nombreObra: string,
 ): Promise<string> {
+  const pid = proyectoId?.trim();
+  if (!pid) {
+    throw new Error('Proyecto no indicado; no se puede crear ubicación de obra.');
+  }
+
+  const nombre = nombreObra?.trim() || 'Obra';
+
+  const { data: rpcId, error: rpcErr } = await supabase.rpc('ci_asegurar_ubicacion_obra', {
+    p_proyecto_id: pid,
+    p_nombre: nombre,
+  });
+
+  if (!rpcErr && rpcId) {
+    return String(rpcId);
+  }
+
+  const rpcMissing =
+    rpcErr?.code === 'PGRST202' ||
+    /ci_asegurar_ubicacion_obra|does not exist|Could not find the function/i.test(
+      rpcErr?.message ?? '',
+    );
+
+  if (!rpcMissing) {
+    throw new Error(rpcErr?.message ?? 'No se pudo asegurar ubicación de obra.');
+  }
+
   const { data: existing, error: selErr } = await supabase
     .from('inv_ubicaciones')
     .select('id')
-    .eq('ci_proyecto_id', proyectoId)
+    .eq('ci_proyecto_id', pid)
     .eq('tipo', 'obra')
     .is('ubicacion_padre_id', null)
+    .limit(1)
     .maybeSingle();
   if (selErr?.code === '42P01') throw new Error('Tabla inv_ubicaciones no existe. Aplique migración 180.');
   if (selErr) throw new Error(selErr.message);
   if (existing?.id) return String(existing.id);
 
-  const codigo = `OBRA-${proyectoId.replace(/-/g, '').slice(0, 12)}`;
+  const codigo = `OBRA-${pid.replace(/-/g, '')}`;
   const { data: created, error } = await supabase
     .from('inv_ubicaciones')
     .insert({
       codigo,
-      nombre: nombreObra.trim() || 'Obra',
+      nombre,
       tipo: 'obra',
-      ci_proyecto_id: proyectoId,
+      ci_proyecto_id: pid,
       descripcion: 'Ubicación de obra (auto)',
     })
     .select('id')

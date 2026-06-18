@@ -196,11 +196,10 @@ function materialPasaFiltroEntidad(
         return false;
     }
 
-    if (!catalogMatch) return false;
-
-    if (item.proyecto_id === opts.filterProyectoId) return true;
-    if (opts.materialIdsCuarentenaObra?.has(item.id)) return true;
     if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0) return true;
+    if (opts.materialIdsCuarentenaObra?.has(item.id)) return true;
+    if (!catalogMatch) return false;
+    if (item.proyecto_id === opts.filterProyectoId) return true;
     return false;
 }
 
@@ -861,17 +860,12 @@ export default function InventarioCuadro() {
                     ids = res.ubicacionIds;
                     depositoFallback = res.depositoSinInterseccion;
                 } else if (filterEntidadId) {
-                    if (filtroSoloEntidad) {
-                        /** Catálogo por entidad; stock en cualquier ubicación activa (p. ej. Di Máquinas en Rancho). */
-                        ids = ubicaciones.filter((u) => u.activo !== false).map((u) => u.id);
-                    } else {
-                        const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
-                            entidadId: filterEntidadId,
-                            proyectos,
-                        });
-                        ids = res.ubicacionIds;
-                        depositoFallback = res.depositoSinInterseccion;
-                    }
+                    const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
+                        entidadId: filterEntidadId,
+                        proyectos,
+                    });
+                    ids = res.ubicacionIds;
+                    depositoFallback = res.depositoSinInterseccion;
                 } else {
                     return;
                 }
@@ -1142,16 +1136,14 @@ export default function InventarioCuadro() {
 
     const cantidadStockReal = useCallback(
         (item: InventoryItem): number => {
-            if (filtroStockPorUbicacion || filtroSoloEntidad) {
-                const fromUb = stockPorUbicacion.get(item.id)?.cantidad_disponible;
-                if (fromUb != null && fromUb > 0) return fromUb;
-                if (filtroStockPorUbicacion) return fromUb ?? 0;
+            if (filtroStockEntidadActivo) {
+                return stockPorUbicacion.get(item.id)?.cantidad_disponible ?? 0;
             }
             const fromStock = stockGlobal.get(item.id)?.cantidad_disponible;
             if (fromStock != null) return fromStock;
             return 0;
         },
-        [filtroStockPorUbicacion, filtroSoloEntidad, stockPorUbicacion, stockGlobal],
+        [filtroStockEntidadActivo, stockPorUbicacion, stockGlobal],
     );
 
     const reorderPointItem = useCallback(
@@ -2508,6 +2500,11 @@ export default function InventarioCuadro() {
                                     setFilterEntidadId(id);
                                     setFilterPartidaId('');
                                     if (id) setSinClasificacionObra(false);
+                                    if (id && filterProyectoId) {
+                                        const pr = proyectos.find((p) => p.id === filterProyectoId);
+                                        if (pr?.entidad_id !== id) setFilterProyectoId('');
+                                    }
+                                    if (!id) setFilterProyectoId('');
                                 }}
                                 className="w-full rounded-xl border border-violet-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
                             >

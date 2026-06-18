@@ -476,10 +476,48 @@ export default function PresupuestosPage() {
                 position: 'sticky', top: 0, zIndex: 50,
                 background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
                 padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr',
+                alignItems: 'center',
+                gap: '12px',
             }}>
-                <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 800 }}>Presupuestos</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 800, margin: 0 }}>Presupuestos</h1>
+                <button
+                    type="button"
+                    onClick={() => setFiltrosAbiertos(true)}
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: hayFiltrosActivos ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.06)',
+                        color: hayFiltrosActivos ? '#007AFF' : 'rgba(255,255,255,0.85)',
+                        border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        padding: '10px 20px',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        justifySelf: 'center',
+                    }}
+                >
+                    <span aria-hidden>🔍</span>
+                    Filtrar
+                    {hayFiltrosActivos ? (
+                        <span style={{
+                            background: '#007AFF',
+                            color: 'white',
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            borderRadius: '999px',
+                            padding: '2px 7px',
+                            minWidth: '18px',
+                            textAlign: 'center',
+                        }}>
+                            ●
+                        </span>
+                    ) : null}
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'end' }}>
                     <Link href="/presupuesto/demo" target="_blank" rel="noopener noreferrer">
                         <button type="button" style={{
                             background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.12)',
@@ -514,42 +552,8 @@ export default function PresupuestosPage() {
                     </div>
                 </div>
 
-                {/* Barra: filtrar + vista + orden */}
-                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <button
-                        type="button"
-                        onClick={() => setFiltrosAbiertos(true)}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            background: hayFiltrosActivos ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.06)',
-                            color: hayFiltrosActivos ? '#007AFF' : 'rgba(255,255,255,0.85)',
-                            border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: '12px',
-                            padding: '10px 16px',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <span aria-hidden>🔍</span>
-                        Filtrar
-                        {hayFiltrosActivos ? (
-                            <span style={{
-                                background: '#007AFF',
-                                color: 'white',
-                                fontSize: '10px',
-                                fontWeight: 800,
-                                borderRadius: '999px',
-                                padding: '2px 7px',
-                                minWidth: '18px',
-                                textAlign: 'center',
-                            }}>
-                                ●
-                            </span>
-                        ) : null}
-                    </button>
+                {/* Barra: vista + orden */}
+                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Vista</p>

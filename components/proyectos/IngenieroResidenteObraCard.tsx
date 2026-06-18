@@ -8,6 +8,9 @@ import type { IngenieroResidente } from '@/types/campo';
 type Props = {
   proyectoId: string;
   className?: string;
+  /** Dentro de acordeón en hojas-vida: sin borde ni título duplicado. */
+  embedded?: boolean;
+  onGuardado?: () => void;
 };
 
 function datosDesdeIngeniero(ing: IngenieroResidente | null) {
@@ -23,7 +26,12 @@ function datosDesdeIngeniero(ing: IngenieroResidente | null) {
   };
 }
 
-export default function IngenieroResidenteObraCard({ proyectoId, className = '' }: Props) {
+export default function IngenieroResidenteObraCard({
+  proyectoId,
+  className = '',
+  embedded = false,
+  onGuardado,
+}: Props) {
   const [asignado, setAsignado] = useState<IngenieroResidente | null>(null);
   const [nombres, setNombres] = useState('');
   const [primerApellido, setPrimerApellido] = useState('');
@@ -86,6 +94,7 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
       if (!res.ok) throw new Error(json.error ?? 'No se pudo guardar');
       setAsignado(json.ingenieroAsignado ?? null);
       setOk('Ingeniero residente guardado.');
+      onGuardado?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -116,6 +125,7 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
       setSegundoApellido('');
       setCedula('');
       setOk('Ingeniero residente eliminado.');
+      onGuardado?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -128,24 +138,30 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
 
   return (
     <section
-      id="ingeniero-residente"
-      className={`rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-zinc-900/80 p-4 ${className}`}
+      id={embedded ? undefined : 'ingeniero-residente'}
+      className={
+        embedded
+          ? className
+          : `rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-zinc-900/80 p-4 ${className}`
+      }
     >
-      <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-emerald-500/20 p-2 text-emerald-300">
-          <HardHat className="h-5 w-5" />
+      {!embedded ? (
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-emerald-500/20 p-2 text-emerald-300">
+            <HardHat className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-bold text-emerald-100">Ingeniero residente de obra</h3>
+            <p className="mt-1 text-xs text-zinc-400">
+              Registre nombre, apellidos y cédula. Recibirá el recordatorio diario de avance por
+              Telegram (5:00 PM) tras vincular su cuenta en Equipo y alertas.
+            </p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-emerald-100">Ingeniero residente de obra</h3>
-          <p className="mt-1 text-xs text-zinc-400">
-            Registre nombre, apellidos y cédula. Recibirá el recordatorio diario de avance por
-            Telegram (5:00 PM) tras vincular su cuenta en Equipo y alertas.
-          </p>
-        </div>
-      </div>
+      ) : null}
 
       {loading ? (
-        <div className="mt-4 flex justify-center py-4">
+        <div className={`flex justify-center py-4 ${embedded ? '' : 'mt-4'}`}>
           <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
         </div>
       ) : (
@@ -161,7 +177,7 @@ export default function IngenieroResidenteObraCard({ proyectoId, className = '' 
             </p>
           ) : null}
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className={embedded ? 'grid gap-3 sm:grid-cols-2' : 'mt-4 grid gap-3 sm:grid-cols-2'}>
             <label className="block sm:col-span-2">
               <span className="text-xs font-semibold text-zinc-500">Nombres *</span>
               <input
