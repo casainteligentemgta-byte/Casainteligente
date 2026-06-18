@@ -141,7 +141,9 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
     estado:
       p.estado === 'extraido'
         ? 'PENDIENTE_CONFIRMACION'
-        : p.estado === 'confirmado'
+        : p.estado === 'procesando'
+          ? 'PROCESANDO_OCR'
+          : p.estado === 'confirmado'
           ? 'REGISTRADA'
           : p.estado === 'error'
             ? 'ERROR_EXTRACCION'

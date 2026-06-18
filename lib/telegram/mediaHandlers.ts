@@ -3,7 +3,7 @@ import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInv
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
-import { reservarFacturaCanalTelegram } from '@/lib/canal/reservarFacturaCanalTelegram';
+import { reservarFacturaCanalTelegram, liberarProcesamientoObsoletoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { processTelegramInvoicePhoto } from '@/lib/telegram/processInvoiceFromTelegram';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { setTelegramContexto } from '@/lib/telegram/estados';
@@ -57,7 +57,28 @@ export async function manejarFacturaTelegram(params: {
     pending_factura_id: reserva.pendingId,
   });
 
+  const debeReprocesar = async (): Promise<boolean> => {
+    const { data: prev } = await params.supabase
+      .from('ci_facturas_canal_pendientes')
+      .select('estado, extracted')
+      .eq('id', reserva.pendingId)
+      .maybeSingle();
+    const estado = String(prev?.estado ?? '');
+    if (prev?.extracted) return false;
+    if (estado === 'procesando') {
+      await liberarProcesamientoObsoletoFacturaCanal(params.supabase, reserva.pendingId);
+    }
+    return ['recibido', 'pendiente', 'procesando', 'error'].includes(estado);
+  };
+
   if (reserva.duplicate) {
+    if (await debeReprocesar()) {
+      await processTelegramInvoicePhoto({
+        pendingId: reserva.pendingId,
+        chatId: params.chatId,
+        fileId: params.fileId,
+      });
+    }
     return { duplicate: true, pendingId: reserva.pendingId };
   }
 

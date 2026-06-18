@@ -1,5 +1,5 @@
 import { processInvoiceFromCanal, type ProgresoFacturaCanal } from '@/lib/canal/processInvoiceFromCanal';
-import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
+import { reclamarProcesamientoFacturaCanal, liberarProcesamientoObsoletoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import { downloadTelegramFile, mimeFromTelegramPath, sendTelegramMessage } from '@/lib/telegram/botApi';
 import {
@@ -32,8 +32,25 @@ export async function processTelegramInvoicePhoto(params: {
 
   const admin = telegramSupabaseAdmin();
   if (admin.ok) {
-    const claim = await reclamarProcesamientoFacturaCanal(admin.client, params.pendingId);
-    if (claim === 'already_done' || claim === 'already_processing') {
+    let claim = await reclamarProcesamientoFacturaCanal(admin.client, params.pendingId);
+    if (claim === 'already_processing') {
+      const liberada = await liberarProcesamientoObsoletoFacturaCanal(
+        admin.client,
+        params.pendingId,
+      );
+      if (liberada) {
+        claim = await reclamarProcesamientoFacturaCanal(admin.client, params.pendingId);
+      }
+    }
+    if (claim === 'already_done') {
+      return;
+    }
+    if (claim === 'already_processing') {
+      await sendTelegramMessage(
+        params.chatId,
+        '⏳ Esta factura aún se está leyendo. Espere 1–2 minutos y, si no avanza, reenvíe la foto con <code>/facturas</code>.',
+        { parse_mode: 'HTML' },
+      );
       return;
     }
     if (claim === 'not_found') {

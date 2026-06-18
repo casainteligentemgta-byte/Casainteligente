@@ -76,7 +76,10 @@ export async function reclamarProcesamientoFacturaCanal(
   if (selErr || !row) return 'not_found';
   const estado = String(row.estado ?? '');
   if (estado === 'extraido' || estado === 'confirmado') return 'already_done';
-  if (estado === 'procesando') return 'already_processing';
+  if (estado === 'procesando') {
+    const liberada = await liberarProcesamientoObsoletoFacturaCanal(supabase, pendingId);
+    if (!liberada) return 'already_processing';
+  }
 
   const { data: claimed, error: updErr } = await supabase
     .from('ci_facturas_canal_pendientes')
@@ -102,6 +105,44 @@ export type ReclamoConfirmacionCompra =
 
 const ESTADOS_CONFIRMAR = ['extraido', 'error', 'aprobado_sistema'] as const;
 
+/** Tiempo tras el cual un OCR en `procesando` se considera abandonado (timeout serverless). */
+const PROCESANDO_STALE_MS = 2 * 60 * 1000;
+
+function procesandoEsObsoleto(updatedAt: string | null | undefined): boolean {
+  const t = Date.parse(String(updatedAt ?? ''));
+  if (!Number.isFinite(t)) return true;
+  return Date.now() - t > PROCESANDO_STALE_MS;
+}
+
+/** Libera locks OCR abandonados para permitir reintento. */
+export async function liberarProcesamientoObsoletoFacturaCanal(
+  supabase: SupabaseClient,
+  pendingId: string,
+): Promise<boolean> {
+  const { data: row } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('estado, updated_at, extracted')
+    .eq('id', pendingId)
+    .maybeSingle();
+
+  if (!row || String(row.estado ?? '') !== 'procesando') return false;
+  if (!procesandoEsObsoleto(String(row.updated_at ?? ''))) return false;
+
+  const { data: liberada } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .update({
+      estado: 'recibido',
+      mensaje_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', pendingId)
+    .eq('estado', 'procesando')
+    .select('id')
+    .maybeSingle();
+
+  return Boolean(liberada?.id);
+}
+
 /** Bloqueo optimista: una sola confirmación contable por pendingId. */
 export async function reclamarConfirmacionCompraCanal(
   supabase: SupabaseClient,
@@ -122,7 +163,10 @@ export async function reclamarConfirmacionCompraCanal(
       purchaseInvoiceId: String(row.purchase_invoice_id ?? '').trim() || null,
     };
   }
-  if (estado === 'procesando') return { status: 'busy' };
+  if (estado === 'procesando') {
+    const liberada = await liberarProcesamientoObsoletoFacturaCanal(supabase, pendingId);
+    if (!liberada) return { status: 'busy' };
+  }
   if (!ESTADOS_CONFIRMAR.includes(estado as (typeof ESTADOS_CONFIRMAR)[number])) {
     return { status: 'invalid', estado };
   }
