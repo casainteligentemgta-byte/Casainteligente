@@ -23,6 +23,7 @@ type InyeccionBody = {
   soporte_storage_path?: string;
   seriales_billetes?: string[];
   creado_por?: string;
+  fecha_ingreso?: string;
 };
 
 async function firmarSoporte(
@@ -68,6 +69,7 @@ function mapRow(
       : [],
     creado_por: raw.creado_por != null ? String(raw.creado_por) : null,
     creado_al: String(raw.creado_al ?? ''),
+    fecha_ingreso: raw.fecha_ingreso != null ? String(raw.fecha_ingreso).slice(0, 10) : null,
     proyecto_nombre: proyecto?.nombre?.trim() || null,
   };
 }
@@ -151,8 +153,12 @@ export async function POST(req: Request) {
   const tipoTasa = body.tipo_tasa === 'PERSONALIZADA' ? 'PERSONALIZADA' : 'BCV';
   const metodoPago = body.metodo_pago === 'EFECTIVO' ? 'EFECTIVO' : 'TRANSFERENCIA';
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const bcv = await obtenerTasaBcvVesPorUsd(hoy);
+  const fechaIngreso = body.fecha_ingreso?.trim() ?? '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaIngreso)) {
+    return NextResponse.json({ error: 'Fecha de ingreso al banco inválida.' }, { status: 400 });
+  }
+
+  const bcv = await obtenerTasaBcvVesPorUsd(fechaIngreso);
   const tasaBcv = body.tasa_bcv != null && body.tasa_bcv > 0 ? body.tasa_bcv : bcv.tasa_bcv_ves_por_usd;
 
   let tasaAplicada = Number(body.tasa_aplicada);
@@ -202,6 +208,7 @@ export async function POST(req: Request) {
     p_soporte_path: body.soporte_storage_path?.trim() || null,
     p_seriales: seriales,
     p_creado_por: body.creado_por?.trim() || 'Administrador',
+    p_fecha_ingreso: fechaIngreso,
   });
 
   if (error) {

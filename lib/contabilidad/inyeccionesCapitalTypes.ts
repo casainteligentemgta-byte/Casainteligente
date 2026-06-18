@@ -18,5 +18,6 @@ export type InyeccionCapitalRow = {
   seriales_billetes: string[];
   creado_por: string | null;
   creado_al: string;
+  fecha_ingreso: string | null;
   proyecto_nombre: string | null;
 };

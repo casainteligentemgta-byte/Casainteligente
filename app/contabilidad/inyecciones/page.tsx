@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { InyeccionCapitalRow } from '@/lib/contabilidad/inyeccionesCapitalTypes';
 import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
+import { calcularGastoBimonetario } from '@/lib/finanzas/currency-converter';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
 type ObraRow = { id: string; nombre: string };
@@ -22,6 +23,106 @@ function fmtBs(n: number): string {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function hoyIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function PanelConversionTasa({
+  titulo,
+  tasa,
+  cargando,
+  seleccionado,
+  onSeleccionar,
+  moneda,
+  montoN,
+  editable,
+  valorEditable,
+  onValorEditable,
+}: {
+  titulo: string;
+  tasa: number | null;
+  cargando?: boolean;
+  seleccionado: boolean;
+  onSeleccionar: () => void;
+  moneda: 'USD' | 'VES';
+  montoN: number | null;
+  editable?: boolean;
+  valorEditable?: string;
+  onValorEditable?: (v: string) => void;
+}) {
+  const conversion =
+    montoN != null && montoN > 0 && tasa != null && tasa > 0
+      ? calcularGastoBimonetario(montoN, moneda, tasa)
+      : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onSeleccionar}
+      className={`w-full text-left rounded-lg border p-3 transition-all ${
+        seleccionado
+          ? 'border-[#FF9500]/50 bg-orange-500/10 ring-1 ring-[#FF9500]/30'
+          : 'border-white/5 bg-white/[0.02] hover:border-white/10'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className={`text-[10px] font-bold uppercase ${seleccionado ? 'text-[#FF9500]' : 'text-zinc-500'}`}>
+          {titulo}
+        </span>
+        <span
+          className={`text-[9px] px-1.5 py-0.5 rounded ${
+            seleccionado ? 'bg-[#FF9500] text-black' : 'bg-white/5 text-zinc-500'
+          }`}
+        >
+          {seleccionado ? 'Aplicar' : 'Elegir'}
+        </span>
+      </div>
+
+      {editable ? (
+        <input
+          type="number"
+          step="0.01"
+          value={valorEditable ?? ''}
+          onChange={(e) => {
+            e.stopPropagation();
+            onValorEditable?.(e.target.value);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-full bg-[#12121A] border border-white/[0.06] rounded-md px-3 py-2 text-xs text-white text-center focus:border-[#FF9500] focus:outline-none mb-2"
+          placeholder="Tasa Bs/USD"
+        />
+      ) : (
+        <p className="text-sm font-mono font-bold text-white mb-2">
+          {cargando ? '…' : tasa != null ? `${tasa.toFixed(2)} Bs/USD` : '—'}
+        </p>
+      )}
+
+      {conversion ? (
+        <div className="space-y-1 text-[11px] font-mono border-t border-white/5 pt-2">
+          <div className="flex justify-between text-zinc-400">
+            <span>Depositado</span>
+            <span className="text-zinc-200">
+              {moneda === 'USD' ? `$${fmtUsd(montoN!)}` : `Bs. ${fmtBs(montoN!)}`}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-zinc-500">
+              {moneda === 'USD' ? 'Equivalente Bs.' : 'Equivalente USD'}
+            </span>
+            <span className={`font-bold ${seleccionado ? 'text-[#FF9500]' : 'text-emerald-400'}`}>
+              {moneda === 'USD'
+                ? `Bs. ${fmtBs(conversion.montoVes)}`
+                : `$${fmtUsd(conversion.montoUsd)}`}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-[10px] text-zinc-600">Indique monto para ver el total convertido.</p>
+      )}
+    </button>
+  );
+}
+
 export default function InyeccionesAvanzadasPage() {
   const [inyecciones, setInyecciones] = useState<InyeccionCapitalRow[]>([]);
   const [obras, setObras] = useState<ObraRow[]>([]);
@@ -30,6 +131,7 @@ export default function InyeccionesAvanzadasPage() {
 
   const [obraSel, setObraSel] = useState('');
   const [origen, setOrigen] = useState('');
+  const [fechaIngreso, setFechaIngreso] = useState(hoyIso);
   const [moneda, setMoneda] = useState<'USD' | 'VES'>('USD');
   const [monto, setMonto] = useState('');
   const [tipoTasa, setTipoTasa] = useState<'BCV' | 'PERSONALIZADA'>('BCV');
@@ -44,16 +146,23 @@ export default function InyeccionesAvanzadasPage() {
   const [soporteUrl, setSoporteUrl] = useState('');
   const [serialesIa, setSerialesIa] = useState<string[]>([]);
 
-  const { tasa: tasaBcv, loading: cargandoTasa } = useTasaBcvHoy();
+  const { tasa: tasaBcv, loading: cargandoTasa, fuente: fuenteBcv } = useTasaBcvHoy(fechaIngreso);
   const { isSubmitting, runLocked } = useSyncSubmitLock();
 
+  const montoN = useMemo(() => {
+    const n = Number(monto);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [monto]);
+
+  const tasaPersonalN = useMemo(() => {
+    const n = Number(tasaPersonalizada);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [tasaPersonalizada]);
+
   const tasaAplicada = useMemo(() => {
-    if (tipoTasa === 'PERSONALIZADA') {
-      const n = Number(tasaPersonalizada);
-      return Number.isFinite(n) && n > 0 ? n : null;
-    }
+    if (tipoTasa === 'PERSONALIZADA') return tasaPersonalN;
     return tasaBcv && tasaBcv > 0 ? tasaBcv : null;
-  }, [tipoTasa, tasaPersonalizada, tasaBcv]);
+  }, [tipoTasa, tasaPersonalN, tasaBcv]);
 
   const cargarHistorial = useCallback(async () => {
     setCargando(true);
@@ -87,6 +196,7 @@ export default function InyeccionesAvanzadasPage() {
   const resetFormulario = () => {
     setObraSel('');
     setOrigen('');
+    setFechaIngreso(hoyIso());
     setMoneda('USD');
     setMonto('');
     setTipoTasa('BCV');
@@ -161,7 +271,15 @@ export default function InyeccionesAvanzadasPage() {
       return;
     }
     if (!tasaAplicada) {
-      toast.error('Espere la tasa BCV o indique tasa personalizada.');
+      toast.error(
+        tipoTasa === 'PERSONALIZADA'
+          ? 'Indique tasa personalizada válida.'
+          : 'Espere la tasa BCV del día del ingreso.',
+      );
+      return;
+    }
+    if (!fechaIngreso) {
+      toast.error('Indique fecha de ingreso al banco.');
       return;
     }
 
@@ -178,6 +296,7 @@ export default function InyeccionesAvanzadasPage() {
             tipo_tasa: tipoTasa,
             tasa_aplicada: tasaAplicada,
             tasa_bcv: tasaBcv,
+            fecha_ingreso: fechaIngreso,
             metodo_pago: metodoPago,
             banco_origen: banco,
             cuenta_bancaria_destino: cuentaDestino,
@@ -279,6 +398,20 @@ export default function InyeccionesAvanzadasPage() {
               />
             </div>
 
+            <div>
+              <label className={LABEL}>Fecha ingreso al banco / caja</label>
+              <input
+                type="date"
+                value={fechaIngreso}
+                onChange={(e) => setFechaIngreso(e.target.value)}
+                className={INPUT}
+                required
+              />
+              <p className="mt-1 text-[10px] text-zinc-600">
+                La tasa BCV se toma del día del depósito, no del registro en sistema.
+              </p>
+            </div>
+
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2">
                 <label className={LABEL}>Monto</label>
@@ -305,42 +438,31 @@ export default function InyeccionesAvanzadasPage() {
               </div>
             </div>
 
-            <div className="border border-white/5 bg-white/[0.01] p-3 rounded-lg space-y-3">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500">
-                  TASA BCV:{' '}
-                  <b className="text-white">
-                    {cargandoTasa ? '…' : tasaBcv != null ? tasaBcv.toFixed(2) : '—'}
-                  </b>
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTipoTasa('BCV')}
-                    className={`px-2 py-0.5 rounded text-[10px] ${tipoTasa === 'BCV' ? 'bg-orange-500/20 text-[#FF9500] border border-[#FF9500]/30' : 'text-zinc-500'}`}
-                  >
-                    Usar BCV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTipoTasa('PERSONALIZADA')}
-                    className={`px-2 py-0.5 rounded text-[10px] ${tipoTasa === 'PERSONALIZADA' ? 'bg-orange-500/20 text-[#FF9500] border border-[#FF9500]/30' : 'text-zinc-500'}`}
-                  >
-                    Personalizar
-                  </button>
-                </div>
-              </div>
-              {tipoTasa === 'PERSONALIZADA' ? (
-                <input
-                  type="number"
-                  step="0.01"
-                  value={tasaPersonalizada}
-                  onChange={(e) => setTasaPersonalizada(e.target.value)}
-                  className={`${INPUT} text-center`}
-                  placeholder="Introduce tasa especial"
-                  required
-                />
+            <div className="space-y-2">
+              <p className={LABEL}>Conversión bimonetaria (elige cuál aplicar al guardar)</p>
+              <PanelConversionTasa
+                titulo={`Tasa BCV · ${fechaIngreso}`}
+                tasa={tasaBcv}
+                cargando={cargandoTasa}
+                seleccionado={tipoTasa === 'BCV'}
+                onSeleccionar={() => setTipoTasa('BCV')}
+                moneda={moneda}
+                montoN={montoN}
+              />
+              {fuenteBcv && tipoTasa === 'BCV' ? (
+                <p className="text-[9px] text-zinc-600 text-center">Fuente: {fuenteBcv}</p>
               ) : null}
+              <PanelConversionTasa
+                titulo="Tasa personalizada"
+                tasa={tasaPersonalN}
+                seleccionado={tipoTasa === 'PERSONALIZADA'}
+                onSeleccionar={() => setTipoTasa('PERSONALIZADA')}
+                moneda={moneda}
+                montoN={montoN}
+                editable
+                valorEditable={tasaPersonalizada}
+                onValorEditable={setTasaPersonalizada}
+              />
             </div>
 
             {metodoPago === 'TRANSFERENCIA' ? (
@@ -456,9 +578,11 @@ export default function InyeccionesAvanzadasPage() {
                           {iny.proyecto_nombre ?? 'Obra'}
                         </div>
                         <div className="text-zinc-500 font-mono mt-1">
-                          {iny.creado_al
-                            ? new Date(iny.creado_al).toLocaleString('es-VE')
-                            : '—'}
+                          {iny.fecha_ingreso
+                            ? `Ingreso: ${iny.fecha_ingreso}`
+                            : iny.creado_al
+                              ? new Date(iny.creado_al).toLocaleString('es-VE')
+                              : '—'}
                         </div>
                         <div className="text-[10px] text-zinc-600 mt-1">{iny.origen_fondo}</div>
                       </td>
