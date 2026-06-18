@@ -18,10 +18,11 @@ export function chatIdPruebasTelegram(): string | null {
   return v || null;
 }
 
+/** Solo activo con TELEGRAM_PRUEBAS_REDIRECT=true|1 (evita redirigir prod por tener solo CHAT_ID). */
 export function modoPruebasTelegramActivo(): boolean {
   const flag = process.env.TELEGRAM_PRUEBAS_REDIRECT?.trim().toLowerCase();
   if (flag === 'false' || flag === '0') return false;
-  if (flag === 'true' || flag === '1') return Boolean(chatIdPruebasTelegram());
+  if (flag !== 'true' && flag !== '1') return false;
   return Boolean(chatIdPruebasTelegram());
 }
 
