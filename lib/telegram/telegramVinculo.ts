@@ -45,7 +45,7 @@ export async function manejarStartVinculoTelegram(
     chatId,
     `✅ <b>¡Telegram sincronizado!</b>\n\nHola <b>${result.nombre ?? 'ingeniero'}</b>. ` +
       `Recibirás el recordatorio diario a las 5:00 PM. ` +
-      `También puedes reportar cuando quieras con el botón de abajo o escribiendo <code>/avance</code>.`,
+      `También puedes reportar cuando quieras con el botón de abajo.`,
     { parse_mode: 'HTML' },
   );
 

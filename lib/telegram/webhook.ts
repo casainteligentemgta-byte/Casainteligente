@@ -94,12 +94,10 @@ import {
 import {
   esCallbackComprasObra,
   manejarCallbackComprasObraTelegram,
-  manejarComandoComprasObraTelegram,
 } from '@/lib/telegram/comprasObraTelegram';
 import {
   esCallbackComprasPeriodo,
   manejarCallbackComprasPeriodoTelegram,
-  manejarComandoComprasPeriodoTelegram,
 } from '@/lib/telegram/comprasPeriodoTelegram';
 import {
   esCallbackLiberarCuarentena,
@@ -139,10 +137,7 @@ import {
   manejarCallbackAvanceCampo,
   manejarTextoAvanceCampo,
 } from '@/lib/telegram/avanceCampo';
-import {
-  manejarComandoAvanceCampo,
-  manejarStartVinculoTelegram,
-} from '@/lib/telegram/telegramVinculo';
+import { manejarStartVinculoTelegram } from '@/lib/telegram/telegramVinculo';
 import {
   esCallbackUbicacion,
   manejarCallbackUbicacionTelegram,
@@ -169,7 +164,6 @@ import {
   esCallbackSalidaObraTelegram,
   manejarCallbackSalidaObraTelegram,
   esFlujoSalidaObraTelegram,
-  manejarComandoSalidaObraTelegram,
   manejarFotoSalidaAlmacenTelegram,
   manejarTextoSalidaObraTelegram,
 } from '@/lib/telegram/salidaObraTelegram';
@@ -181,7 +175,6 @@ import {
 import {
   esCallbackTraspasoTelegram,
   manejarCallbackTraspasoTelegram,
-  manejarComandoTraspasoTelegram,
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
 import {
@@ -203,7 +196,6 @@ import {
 } from '@/lib/telegram/stockCommand';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
-const CMD_AVANCE = /^\/avance(@\S+)?\s*$/i;
 
 export type TelegramUpdate = {
   message?: {
@@ -267,37 +259,12 @@ function resolveArchivoTelegram(
   return null;
 }
 
-async function mensajeEstado(
-  supabase: SupabaseClient,
-  chatId: string,
-  contexto: TelegramContexto,
-  proyectoId: string | null,
-) {
-  const nombre = await nombreProyectoTelegram(supabase, proyectoId);
-  const proy = nombre
-    ? `\nObra: <b>${nombre}</b>`
-    : proyectoId
-      ? `\nProyecto: <code>${proyectoId}</code>`
-      : '';
-  await sendTelegramMessage(
-    chatId,
-    `📌 Contexto: <b>${etiquetaContexto(contexto)}</b>${proy}`,
-    { parse_mode: 'HTML' },
-  );
-}
-
 async function aplicarComando(
   supabase: SupabaseClient,
   chatId: string,
   cmd: ReturnType<typeof procesarComandoTelegram>,
   userId?: string,
 ): Promise<void> {
-  if (cmd.mensaje === '__ESTADO__') {
-    const est = await getTelegramEstado(supabase, chatId);
-    await mensajeEstado(supabase, chatId, est.contexto, est.proyecto_id);
-    return;
-  }
-
   if (cmd.comandoAgua) {
     await manejarComandoAguaTelegram(supabase, chatId);
     return;
@@ -328,43 +295,13 @@ async function aplicarComando(
     return;
   }
 
-  if (cmd.comandoComprasPeriodo) {
-    try {
-      await manejarComandoComprasPeriodoTelegram(supabase, chatId, cmd.comandoComprasPeriodo);
-    } catch (err) {
-      console.error('[telegram compras periodo]', err);
-      await avisoErrorTelegram(chatId, err);
-    }
-    return;
-  }
-
-  if (cmd.comandoComprasObra !== undefined) {
-    try {
-      await manejarComandoComprasObraTelegram(supabase, chatId, cmd.comandoComprasObra);
-    } catch (err) {
-      console.error('[telegram compras obra]', err);
-      await avisoErrorTelegram(chatId, err);
-    }
-    return;
-  }
-
   if (cmd.comandoMenuSalida) {
     await enviarMenuSalidaTelegram(chatId);
     return;
   }
 
-  if (cmd.comandoSalidaObra) {
-    await manejarComandoSalidaObraTelegram(supabase, chatId);
-    return;
-  }
-
   if (cmd.comandoSalida) {
     await manejarComandoSalidaEgresoTelegram(supabase, chatId);
-    return;
-  }
-
-  if (cmd.comandoTraspaso) {
-    await manejarComandoTraspasoTelegram(supabase, chatId);
     return;
   }
 
@@ -928,11 +865,6 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       }
     }
 
-    if (texto && CMD_AVANCE.test(texto)) {
-      await manejarComandoAvanceCampo(supabase, chatId);
-      return NextResponse.json({ ok: true, command: 'avance' });
-    }
-
     const estadoPrevio = await getTelegramEstado(supabase, chatId);
     if (texto && !texto.startsWith('/')) {
       const avanceTexto = await manejarTextoAvanceCampo(
@@ -1401,7 +1333,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       case 'memoria_obra':
         await sendTelegramMessage(
           chatId,
-          '📋 Elige primero la <b>partida</b> en los botones anteriores, o usa /memoria de nuevo.',
+          '📋 Elige primero la <b>partida</b> en los botones anteriores, o usa /menu para reiniciar.',
           { parse_mode: 'HTML' },
         );
         break;

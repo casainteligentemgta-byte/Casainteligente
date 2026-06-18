@@ -13,6 +13,13 @@ function parseCuadro(raw: string | null): CuadroAlmacen {
   return 'inventario';
 }
 
+const SUBTITULO_CUADRO: Record<CuadroAlmacen, string> = {
+  inventario:
+    'Existencias por obra y almacén. El catálogo de materiales (altas y SKU) está en Maestros.',
+  movimientos: 'Historial de entradas y salidas que explican el stock actual.',
+  trazabilidad: 'Kardex y ruta del material en obra.',
+};
+
 function AlmacenHubInner() {
   const searchParams = useSearchParams();
   const cuadro = parseCuadro(searchParams.get('cuadro'));
@@ -22,6 +29,9 @@ function AlmacenHubInner() {
     <div className="min-h-screen bg-[#0A0A0F] text-white">
       <div className="px-3 py-4 sm:px-4 lg:px-5 max-w-[100vw] overflow-x-hidden">
         <AlmacenCuadroNav activo={cuadro} search={searchString} />
+        <p className="mb-4 text-[11px] leading-relaxed text-zinc-500 max-w-2xl">
+          {SUBTITULO_CUADRO[cuadro]}
+        </p>
         {cuadro === 'inventario' ? <InventarioCuadro /> : null}
         {cuadro === 'movimientos' ? <MovimientosCuadro /> : null}
         {cuadro === 'trazabilidad' ? <TrazabilidadKardex /> : null}

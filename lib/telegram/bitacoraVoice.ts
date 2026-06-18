@@ -104,7 +104,7 @@ function formatearResumenBitacora(
     transcripcion.length > 400 ? `${transcripcion.slice(0, 400)}…` : transcripcion;
   lineas.push(`📝 <b>Transcripción</b>\n<i>${escapeHtml(preview)}</i>`);
   lineas.push('');
-  lineas.push('Puedes enviar otra nota con /bitacora o volver con /obra / /menu.');
+  lineas.push('Puedes enviar otra nota con /bitacora o volver con /menu.');
 
   return lineas.join('\n');
 }

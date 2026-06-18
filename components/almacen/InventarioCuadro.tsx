@@ -252,7 +252,7 @@ const NAV_ALMACEN = [
     { href: '/almacen/procurement', label: 'Compras', icon: Truck, className: 'border-blue-500/40 bg-blue-600/20 text-blue-100' },
     { href: '/almacen/recepcion', label: 'Ingreso', icon: Package, className: 'border-[#FF9500]/40 bg-[#FF9500]/10 text-[#FF9500]' },
     { href: '/almacen/despacho', label: 'SALIDA', icon: ArrowUpRight, className: 'border-orange-500/35 text-orange-200' },
-    { href: '/almacen?cuadro=inventario', label: 'Catálogo SKU', icon: Package, className: 'border-blue-500/35 text-blue-200' },
+    { href: '/almacen/maestros', label: 'Catálogo', icon: Package, className: 'border-blue-500/35 text-blue-200' },
     { href: '/almacen?cuadro=trazabilidad', label: 'Trazabilidad / Kardex', icon: Route, className: 'border-amber-500/35 bg-amber-500/10 text-amber-200' },
     { href: '/almacen/maestros', label: 'Configuración', icon: Settings2, className: 'border-zinc-800 text-zinc-300' },
     { href: null, label: 'Compartir', icon: Share2, className: 'border-zinc-800 text-zinc-300', action: 'share' as const },
@@ -1552,7 +1552,7 @@ export default function InventarioCuadro() {
                     ? buildInventarioShareUrl(window.location.origin, estadoCompartir)
                     : `${window.location.origin}/almacen`;
             const totalValor = filas.reduce((s, f) => s + f.valorStock, 0);
-            const titulo = '📦 Inventario de almacenes — Casa Inteligente';
+            const titulo = '📦 Stock por obra — Casa Inteligente';
             const resumen = inventarioFilasATextoResumen(filas, {
                 titulo,
                 scopeLabel: etiquetaScopeExport(scope),
@@ -1563,7 +1563,7 @@ export default function InventarioCuadro() {
             if (typeof navigator.share === 'function') {
                 try {
                     await navigator.share({
-                        title: 'Inventario de almacenes',
+                        title: 'Stock por obra',
                         text: resumen,
                         url,
                     });
@@ -2055,7 +2055,10 @@ export default function InventarioCuadro() {
         <div className="text-white pb-20 font-sans max-w-[100vw] overflow-x-hidden">
             {/* Header Section */}
             <div className="mb-4">
-                <h1 className="text-2xl lg:text-3xl font-black tracking-tighter mb-2">ALMACENES</h1>
+                <h1 className="text-2xl lg:text-3xl font-black tracking-tighter mb-1">STOCK</h1>
+                <p className="text-[11px] text-zinc-500 mb-2 max-w-xl">
+                    Cantidades por obra y depósito · ajuste inline en la tabla
+                </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                     {NAV_ALMACEN.map((nav) => {
                         const Icon = nav.icon;

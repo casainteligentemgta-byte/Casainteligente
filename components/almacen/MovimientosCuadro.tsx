@@ -544,7 +544,7 @@ export default function MovimientosCuadro({
       if (!exportFilas.length && !filas.length) return;
       const url = buildMovimientosCuadroShareUrl(window.location.origin, estadoCompartir);
       const resumenTexto = `${etiquetaScopeExport(scope)} · ${subtituloCuadro}`;
-      const titulo = 'Movimientos de almacén — Casa Inteligente';
+      const titulo = 'Entradas y salidas — Casa Inteligente';
       if (typeof navigator.share === 'function') {
         try {
           await navigator.share({ title: titulo, text: resumenTexto, url });
@@ -586,7 +586,7 @@ export default function MovimientosCuadro({
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight">Movimientos de almacén</h1>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight">Entradas y salidas</h1>
             <p className="text-xs text-zinc-500 mt-1">
               Ingresos: compras, cuarentena y recepción en campo (manual, nota, emergencia, tránsito). Salidas: egresos. Stock: ingresado − salido.
             </p>

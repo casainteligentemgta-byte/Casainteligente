@@ -139,7 +139,7 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
       return (
         `✅ Obra: <b>${nombre}</b>\n\n` +
         'Modo <b>evidencia de obra</b> activo. Envía fotos (avance, planos, etc.).\n' +
-        'También puedes usar /gasto o /bitacora con este proyecto.'
+        'También puedes usar /bitacora con este proyecto.'
       );
     case 'gasto_obra':
       return (
@@ -390,5 +390,5 @@ export async function nombreProyectoTelegram(
 }
 
 export function hintElegirProyecto(): string {
-  return 'Usa <code>/obra</code> o <code>/proyecto</code> para elegir la obra desde una lista.';
+  return 'Usa <code>/bitacora</code>, <code>/ingreso</code> o <code>/salida</code> para elegir la obra desde una lista.';
 }

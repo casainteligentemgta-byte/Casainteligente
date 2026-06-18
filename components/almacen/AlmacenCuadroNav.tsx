@@ -6,8 +6,8 @@ import { Package, ArrowLeftRight, Route } from 'lucide-react';
 export type CuadroAlmacen = 'inventario' | 'movimientos' | 'trazabilidad';
 
 const TABS: { id: CuadroAlmacen; label: string; icon: typeof Package }[] = [
-  { id: 'inventario', label: 'Inventario', icon: Package },
-  { id: 'movimientos', label: 'Movimientos', icon: ArrowLeftRight },
+  { id: 'inventario', label: 'Stock', icon: Package },
+  { id: 'movimientos', label: 'Entradas y salidas', icon: ArrowLeftRight },
   { id: 'trazabilidad', label: 'Trazabilidad', icon: Route },
 ];
 

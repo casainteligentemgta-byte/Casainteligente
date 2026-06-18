@@ -1,10 +1,13 @@
-import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import type { TelegramContexto } from '@/lib/telegram/estados';
 import type { ProyectoPickerModo } from '@/lib/telegram/proyectoPicker';
 import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
-import type { PeriodoComprasTelegram } from '@/lib/telegram/comprasPeriodoTelegram';
 import { esComandoAgua, primerTokenComando } from '@/lib/telegram/parseComandoTelegram';
-import { MENSAJE_AYUDA_TELEGRAM, MENSAJE_MENU_TELEGRAM } from '@/lib/telegram/botCommands';
+import {
+  MENSAJE_AYUDA_TELEGRAM,
+  MENSAJE_COMANDO_RETIRADO_TELEGRAM,
+  MENSAJE_MENU_TELEGRAM,
+  TELEGRAM_COMANDOS_RETIRADOS,
+} from '@/lib/telegram/botCommands';
 
 export type ComandoTelegramResult = {
   handled: boolean;
@@ -33,14 +36,6 @@ export type ComandoTelegramResult = {
   comandoNotaEntrega?: boolean;
   /** Ingreso emergencia: mismo flujo, tipo emergencia en recepción de campo. */
   comandoEmergencia?: boolean;
-  /** Despacho desde almacén: obra → almacén → observaciones → stock → cantidades. */
-  comandoSalidaObra?: boolean;
-  /** Lista materiales comprados en el día, semana o mes (app + Telegram). */
-  comandoComprasPeriodo?: PeriodoComprasTelegram;
-  /** Traspaso / préstamo entre ubicaciones de inventario. */
-  comandoTraspaso?: boolean;
-  /** Resumen compras + stock por obra: /compras &lt;nombre obra&gt; */
-  comandoComprasObra?: string;
   /** Solicitud de procura / abastecimiento. */
   comandoProcura?: boolean;
 };
@@ -50,6 +45,11 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
   const lower = t.toLowerCase();
   const parts = t.split(/\s+/);
   const cmd = primerTokenComando(t);
+  const cmdKey = cmd.replace(/^\//, '');
+
+  if (TELEGRAM_COMANDOS_RETIRADOS.has(cmdKey)) {
+    return { handled: true, mensaje: MENSAJE_COMANDO_RETIRADO_TELEGRAM };
+  }
 
   if (cmd === '/start' || cmd === '/menu' || cmd === '/inicio') {
     return {
@@ -74,7 +74,7 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       contexto: 'menu',
       proyectoId: null,
       resetProyecto: true,
-      mensaje: '↩️ Volviste al menú. Usa /ingreso, /facturas, /obra, /salida o /agua.',
+      mensaje: '↩️ Volviste al menú. Usa /ingreso, /facturas, /salida, /stock o /agua.',
     };
   }
 
@@ -83,37 +83,6 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       handled: true,
       contexto: 'factura',
       mensaje: mensajeModoFacturasActivado(),
-    };
-  }
-
-  if (cmd === '/obra' || cmd === '/proyecto') {
-    const uuid = parts[1]?.trim();
-    if (uuid) {
-      if (!isValidProyectoUuid(uuid)) {
-        return { handled: true, mensaje: '❌ UUID de proyecto inválido.' };
-      }
-      return {
-        handled: true,
-        contexto: 'obra',
-        proyectoId: uuid,
-        mensaje: `🏗 Obra vinculada (<code>${uuid.slice(0, 8)}…</code>).\nEnvía fotos o usa /gasto /bitacora.`,
-      };
-    }
-    return {
-      handled: true,
-      mostrarPickerProyecto: 'obra',
-      mensaje: '🏗 <b>Selecciona tu obra</b> en la lista de abajo:',
-    };
-  }
-
-  if (cmd === '/gasto') {
-    return {
-      handled: true,
-      contexto: 'gasto_obra',
-      mostrarPickerProyecto: 'gasto_obra',
-      mensaje:
-        '💸 Modo <b>gasto de obra</b>.\n' +
-        'Elige la obra abajo (si aún no hay una activa) y envía foto del comprobante.',
     };
   }
 
@@ -156,47 +125,12 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
     return { handled: true, comandoIngresoFactura: true };
   }
 
-  if (cmd === '/comprasdia') {
-    return { handled: true, comandoComprasPeriodo: 'dia' };
-  }
-  if (cmd === '/comprassemana') {
-    return { handled: true, comandoComprasPeriodo: 'semana' };
-  }
-  if (cmd === '/comprasmes') {
-    return { handled: true, comandoComprasPeriodo: 'mes' };
-  }
-
-  if (cmd === '/compras') {
-    const obra = parts.slice(1).join(' ').trim();
-    return { handled: true, comandoComprasObra: obra };
-  }
-
-  if (cmd === '/salidaalmacen' || cmd === '/salidaobra' || cmd === '/despacho') {
-    return { handled: true, comandoSalidaObra: true };
-  }
-
   if (cmd === '/salida' || cmd === '/salid') {
     return { handled: true, comandoMenuSalida: true };
   }
 
   if (cmd === '/egreso') {
     return { handled: true, comandoSalida: true };
-  }
-
-  if (cmd === '/traspaso') {
-    return { handled: true, comandoTraspaso: true };
-  }
-
-  if (cmd === '/memoria') {
-    return {
-      handled: true,
-      contexto: 'memoria_obra',
-      mostrarPickerProyecto: 'memoria_obra',
-      mensaje:
-        '📸 <b>Memoria descriptiva de avance</b>\n\n' +
-        'Documenta el avance físico con fotos vinculadas a cada partida del presupuesto.\n' +
-        'Elige la obra abajo → partida → envía la foto.',
-    };
   }
 
   if (cmd === '/bitacora') {
@@ -209,10 +143,6 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         'Elige la obra abajo y envía una <b>nota de voz</b> con avances y novedades.\n' +
         'Gemini transcribirá y guardará el reporte.',
     };
-  }
-
-  if (cmd === '/estado') {
-    return { handled: true, mensaje: '__ESTADO__' };
   }
 
   if (cmd === '/stock') {

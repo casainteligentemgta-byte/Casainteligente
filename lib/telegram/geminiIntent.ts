@@ -23,7 +23,7 @@ export async function interpretarTextoTelegramGemini(
         'Asistente del bot Telegram de Casa Inteligente (construcción, compras, obra). Interpreta mensajes en español y decide si el usuario quiere cambiar de modo.',
       prompt: [
         `Contexto actual del chat: ${contextoActual}.`,
-        'Comandos válidos: /menu, /facturas, /obra, /proyecto, /gasto, /agua, /bitacora, /cancelar, /estado, /ayuda.',
+        'Comandos válidos: /menu, /facturas, /ingreso, /salida, /stock, /agua, /bitacora, /procura, /cancelar, /ayuda.',
         'Si pide registro de agua, camión cisterna o prueba de agua → indicar que use /agua (no cambiar contexto).',
         'Si el usuario pide subir factura, facturas, compra o proveedor → contexto factura.',
         'Si pide foto de obra, avance o proyecto → contexto obra (proyecto_id si menciona UUID).',
