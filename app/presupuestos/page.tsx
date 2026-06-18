@@ -346,137 +346,224 @@ export default function PresupuestosPage() {
                         </p>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gap: '12px' }}>
-                        {budgets.map(b => (
-                            <div key={b.id} style={{ ...glass, padding: '16px', position: 'relative' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                            <h3 style={{ color: 'white', fontSize: '17px', fontWeight: 700 }}>
-                                                {b.customer_name}
-                                            </h3>
-                                        </div>
-                                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginBottom: '8px' }}>
-                                            {b.customer_rif} · <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{getPresupuestoNumero(b, fallbackById[b.id])}</span>
-                                        </p>
-                                        <div style={{
-                                            ...CLASIFICACION_COLORS[clasificarPresupuesto(b)],
-                                            marginTop: '6px',
-                                            fontSize: '11px',
-                                            fontWeight: 700,
-                                            padding: '4px 10px',
-                                            borderRadius: '8px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            width: 'fit-content'
-                                        }}>
-                                            <span>{CLASIFICACION_COLORS[clasificarPresupuesto(b)].icon}</span>
-                                            <span>{CLASIFICACION_COLORS[clasificarPresupuesto(b)].label}</span>
-                                        </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <p style={{ color: '#34C759', fontSize: '20px', fontWeight: 800 }}>${formatUSD(b.subtotal)}</p>
-                                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>
-                                            {new Date(b.created_at).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                </div>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                            gap: '10px',
+                        }}
+                    >
+                        {budgets.map((b) => {
+                            const clasif = clasificarPresupuesto(b);
+                            const clasifStyle = CLASIFICACION_COLORS[clasif];
+                            const fecha = new Date(b.created_at).toLocaleDateString('es-VE');
+                            const numero = getPresupuestoNumero(b, fallbackById[b.id]);
 
-                                <div style={{
-                                    display: 'flex', gap: '8px', marginTop: '16px',
-                                    borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px'
-                                }}>
-                                    <button
-                                        onClick={() => router.push(`/ventas?id=${b.id}`)}
+                            const btnAccion: CSSProperties = {
+                                flexShrink: 0,
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '6px 8px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '4px',
+                                whiteSpace: 'nowrap',
+                            };
+
+                            return (
+                                <div
+                                    key={b.id}
+                                    style={{
+                                        ...glass,
+                                        padding: '12px',
+                                        position: 'relative',
+                                        borderRadius: '14px',
+                                        paddingBottom: '36px',
+                                    }}
+                                >
+                                    <span
                                         style={{
-                                            flex: 1.5, background: 'rgba(0,122,255,0.1)', color: '#007AFF',
-                                            border: 'none', borderRadius: '10px', padding: '10px',
-                                            fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                                            position: 'absolute',
+                                            top: '10px',
+                                            right: '10px',
+                                            color: 'rgba(255,255,255,0.55)',
+                                            fontSize: '11px',
+                                            fontWeight: 800,
+                                            fontFamily: 'monospace',
                                         }}
                                     >
-                                        ✏️ Editar
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            window.open(
-                                                `/ventas/preview?id=${encodeURIComponent(b.id)}`,
-                                                '_blank',
-                                                'noopener,noreferrer',
-                                            )
-                                        }
+                                        {numero}
+                                    </span>
+
+                                    <div style={{ paddingRight: '56px', minHeight: '52px' }}>
+                                        <h3
+                                            style={{
+                                                color: 'white',
+                                                fontSize: '15px',
+                                                fontWeight: 700,
+                                                margin: 0,
+                                                lineHeight: 1.25,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {b.customer_name}
+                                        </h3>
+                                        <p
+                                            style={{
+                                                color: 'rgba(255,255,255,0.45)',
+                                                fontSize: '11px',
+                                                margin: '4px 0 0',
+                                            }}
+                                        >
+                                            {fecha}
+                                        </p>
+                                        <p
+                                            style={{
+                                                color: 'rgba(255,255,255,0.35)',
+                                                fontSize: '10px',
+                                                margin: '2px 0 0',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {b.customer_rif}
+                                        </p>
+                                        <div
+                                            style={{
+                                                marginTop: '6px',
+                                                ...clasifStyle,
+                                                fontSize: '9px',
+                                                fontWeight: 700,
+                                                padding: '3px 7px',
+                                                borderRadius: '6px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                width: 'fit-content',
+                                            }}
+                                        >
+                                            <span>{clasifStyle.icon}</span>
+                                            <span>{clasifStyle.label}</span>
+                                        </div>
+                                    </div>
+
+                                    <div
                                         style={{
-                                            minWidth: '44px', background: 'rgba(88,86,214,0.12)', color: '#A78BFA',
-                                            border: 'none', borderRadius: '10px', padding: '10px',
-                                            fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            marginTop: '8px',
+                                            marginBottom: '28px',
+                                            display: 'flex',
+                                            gap: '4px',
+                                            overflowX: 'auto',
+                                            paddingBottom: '2px',
+                                            WebkitOverflowScrolling: 'touch',
                                         }}
-                                        title="Vista previa del documento"
                                     >
-                                        📄
-                                    </button>
-                                    <button
-                                        onClick={() => handleShare(b)}
+                                        <button
+                                            type="button"
+                                            onClick={() => router.push(`/ventas?id=${b.id}`)}
+                                            style={{
+                                                ...btnAccion,
+                                                background: 'rgba(0,122,255,0.12)',
+                                                color: '#007AFF',
+                                            }}
+                                        >
+                                            ✏️ Editar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                window.open(
+                                                    `/ventas/preview?id=${encodeURIComponent(b.id)}`,
+                                                    '_blank',
+                                                    'noopener,noreferrer',
+                                                )
+                                            }
+                                            style={{
+                                                ...btnAccion,
+                                                background: 'rgba(88,86,214,0.12)',
+                                                color: '#A78BFA',
+                                            }}
+                                            title="Vista previa"
+                                        >
+                                            📄
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleShare(b)}
+                                            style={{
+                                                ...btnAccion,
+                                                background: 'rgba(52,199,89,0.1)',
+                                                color: '#34C759',
+                                            }}
+                                            title="WhatsApp"
+                                        >
+                                            📲
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteBudget(b.id)}
+                                            style={{
+                                                ...btnAccion,
+                                                background: 'rgba(255,59,48,0.1)',
+                                                color: '#FF3B30',
+                                            }}
+                                            title="Eliminar"
+                                        >
+                                            🗑️
+                                        </button>
+                                        {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map(
+                                            (k) => {
+                                                const active = b.status === k;
+                                                const c = CLASIFICACION_COLORS[k];
+                                                return (
+                                                    <button
+                                                        key={k}
+                                                        type="button"
+                                                        onClick={() => updateStatus(b.id, k)}
+                                                        style={{
+                                                            ...btnAccion,
+                                                            background: active ? c.bg : 'rgba(255,255,255,0.04)',
+                                                            color: active ? c.text : 'rgba(255,255,255,0.55)',
+                                                            border: active
+                                                                ? `1px solid ${c.text}55`
+                                                                : '1px solid rgba(255,255,255,0.06)',
+                                                            fontSize: '10px',
+                                                            padding: '6px 7px',
+                                                        }}
+                                                        title={c.label}
+                                                    >
+                                                        <span>{c.icon}</span>
+                                                        <span>{c.label}</span>
+                                                    </button>
+                                                );
+                                            },
+                                        )}
+                                    </div>
+
+                                    <p
                                         style={{
-                                            width: '44px', background: 'rgba(52,199,89,0.1)', color: '#34C759',
-                                            border: 'none', borderRadius: '10px', padding: '10px',
-                                            fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            position: 'absolute',
+                                            bottom: '10px',
+                                            right: '10px',
+                                            color: '#34C759',
+                                            fontSize: '16px',
+                                            fontWeight: 800,
+                                            margin: 0,
+                                            lineHeight: 1,
                                         }}
-                                        title="Compartir por WhatsApp"
                                     >
-                                        📲
-                                    </button>
-                                    <button
-                                        onClick={() => deleteBudget(b.id)}
-                                        style={{
-                                            width: '44px', background: 'rgba(255,59,48,0.1)', color: '#FF3B30',
-                                            border: 'none', borderRadius: '10px', padding: '10px',
-                                            fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                        }}
-                                        title="Eliminar"
-                                    >
-                                        🗑️
-                                    </button>
+                                        ${formatUSD(b.subtotal)}
+                                    </p>
                                 </div>
-                                <div style={{
-                                    display: 'flex',
-                                    gap: '6px',
-                                    marginTop: '10px',
-                                    flexWrap: 'wrap',
-                                }}>
-                                    {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => {
-                                        const active = b.status === k;
-                                        return (
-                                            <button
-                                                key={k}
-                                                type="button"
-                                                onClick={() => updateStatus(b.id, k)}
-                                                style={{
-                                                    background: active ? CLASIFICACION_COLORS[k].bg : 'rgba(255,255,255,0.04)',
-                                                    color: active ? CLASIFICACION_COLORS[k].text : 'rgba(255,255,255,0.65)',
-                                                    border: active ? `1px solid ${CLASIFICACION_COLORS[k].text}55` : '1px solid rgba(255,255,255,0.08)',
-                                                    borderRadius: '999px',
-                                                    padding: '6px 10px',
-                                                    fontSize: '11px',
-                                                    fontWeight: 700,
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                }}
-                                            >
-                                                <span>{CLASIFICACION_COLORS[k].icon}</span>
-                                                <span>{CLASIFICACION_COLORS[k].label}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
