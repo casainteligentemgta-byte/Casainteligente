@@ -136,6 +136,44 @@ export function compraPermiteIngresoAlmacen(estado: EstadoLogisticaCompra | null
 
 
 
+/** Recepción física ya cerrada (no mostrar «Confirmación recepción»). */
+
+export function compraRecepcionYaConfirmada(c: {
+
+  estado_logistica?: EstadoLogisticaCompra | null;
+
+  ingresado_almacen_at?: string | null;
+
+}): boolean {
+
+  const estado = c.estado_logistica;
+
+  if (estado === 'en_almacen') return true;
+
+  if (estado === 'cuarentena' || estado === 'en_almacen_parcial') return false;
+
+  return Boolean(c.ingresado_almacen_at?.trim());
+
+}
+
+
+
+/** Botón «Confirmación recepción» / «Liberar pendiente» en cuadro compras. */
+
+export function compraMuestraBotonConfirmacionRecepcion(c: {
+
+  estado_logistica?: EstadoLogisticaCompra | null;
+
+  ingresado_almacen_at?: string | null;
+
+}): boolean {
+
+  return compraPermiteIngresoAlmacen(c.estado_logistica) && !compraRecepcionYaConfirmada(c);
+
+}
+
+
+
 type ConteosPorInvoice = Map<string, LogisticaConteos>;
 
 
@@ -341,11 +379,19 @@ export async function enriquecerComprasEstadoLogistica(
 
     const conteos = invId ? conteosMap.get(invId) : undefined;
 
+    const ingresadoContabilidad = Boolean(
+
+      c.ingresado_almacen_at?.trim() || c.compra_factura_id?.trim(),
+
+    );
+
     const estado_logistica = resolverEstadoLogistica({
 
       invId,
 
-      enAlmacen: Boolean(invId && enAlmacenSet.has(invId)),
+      enAlmacen:
+
+        Boolean(invId && enAlmacenSet.has(invId)) || ingresadoContabilidad,
 
       conteos,
 

@@ -6,6 +6,7 @@ import {
   proyectoDesdeUbicacionRow,
   type ProyectoRef,
 } from '@/lib/almacen/resolverProyectoMovimiento';
+import { cargarFilasStockFisico } from '@/lib/almacen/stockFisicoMovimientos';
 
 export type VistaMovimientoInventario = 'ingresado' | 'despachado' | 'almacenado' | 'todos';
 
@@ -68,10 +69,17 @@ function norm(s: string): string {
   return s.trim().toLowerCase();
 }
 
+/** Búsqueda insensible a mayúsculas y tildes (p. ej. Ingenieria ≈ Ingeniería). */
+function normBusqueda(s: string): string {
+  return norm(s)
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+}
+
 function incluye(haystack: string, needle: string | undefined): boolean {
-  const n = norm(needle ?? '');
+  const n = normBusqueda(needle ?? '');
   if (!n) return true;
-  return norm(haystack).includes(n);
+  return normBusqueda(haystack).includes(n);
 }
 
 function enRangoFecha(fecha: string, desde?: string, hasta?: string): boolean {
@@ -170,6 +178,7 @@ async function cargarIngresosRecepcionCampo(
       created_at,
       proyecto_id,
       ubicacion_id,
+      contabilidad_compra:contabilidad_compras ( supplier_name ),
       proyecto:ci_proyectos ( id, nombre ),
       ubicacion:inv_ubicaciones ( id, nombre ),
       lineas:ci_recepciones_campo_lineas (
@@ -199,6 +208,14 @@ async function cargarIngresosRecepcionCampo(
     const tipoLabel = etiquetaTipoRecepcionCampo(String(rec.tipo ?? ''), rec.observaciones);
     const obs = String(rec.observaciones ?? '').trim();
     const notasBase = tipoLabel + (obs ? ` · ${obs.slice(0, 200)}` : '');
+    const compraRaw = (rec as { contabilidad_compra?: unknown }).contabilidad_compra;
+    const compraRow = Array.isArray(compraRaw) ? compraRaw[0] : compraRaw;
+    const proveedorContabilidad =
+      compraRow && typeof compraRow === 'object'
+        ? String((compraRow as { supplier_name?: string | null }).supplier_name ?? '').trim()
+        : '';
+    const proveedorRecepcion =
+      String(rec.proveedor_nombre ?? '').trim() || proveedorContabilidad || null;
 
     const lineas = (rec.lineas ?? []) as Array<{
       id: string;
@@ -226,7 +243,7 @@ async function cargarIngresosRecepcionCampo(
         material_codigo: mat.sap,
         unidad: String(ln.unidad ?? mat.unit ?? 'UND'),
         cantidad: Number(ln.cantidad ?? 0),
-        proveedor: String(rec.proveedor_nombre ?? '').trim() || null,
+        proveedor: proveedorRecepcion,
         origen: null,
         destino: dest || null,
         proyecto_id: proyId,
@@ -616,6 +633,80 @@ function claveStock(materialId: string, ubicacionId: string): string {
   return `${materialId}|${ubicacionId}`;
 }
 
+/** Último proveedor conocido por material+ubicación (desde ingresos del cuadro). */
+function enriquecerStockConProveedor(
+  stock: FilaMovimientoInventario[],
+  ingresos: FilaMovimientoInventario[],
+): FilaMovimientoInventario[] {
+  const proveedorPorClave = new Map<string, string>();
+  for (const r of ingresos) {
+    if (!r.material_id || !r.ubicacion_id || !r.proveedor?.trim()) continue;
+    proveedorPorClave.set(claveStock(r.material_id, r.ubicacion_id), r.proveedor.trim());
+  }
+  return stock.map((s) => {
+    if (!s.material_id || !s.ubicacion_id) return s;
+    const prov = proveedorPorClave.get(claveStock(s.material_id, s.ubicacion_id));
+    return prov ? { ...s, proveedor: prov } : s;
+  });
+}
+
+function materialIdsDeIngresosConProveedor(
+  ingresos: FilaMovimientoInventario[],
+  proveedor: string,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const r of ingresos) {
+    if (!r.material_id?.trim()) continue;
+    if (incluye(r.proveedor ?? '', proveedor)) ids.add(r.material_id);
+  }
+  return ids;
+}
+
+function filtrarStockPorProveedor(
+  stock: FilaMovimientoInventario[],
+  ingresos: FilaMovimientoInventario[],
+  proveedor: string | undefined,
+  materialIdsContabilidad?: Set<string>,
+): FilaMovimientoInventario[] {
+  const needle = proveedor?.trim();
+  if (!needle) return stock;
+  const mats = materialIdsDeIngresosConProveedor(ingresos, needle);
+  for (const id of materialIdsContabilidad ?? []) mats.add(id);
+  return stock.filter(
+    (r) =>
+      (r.material_id && mats.has(r.material_id)) || incluye(r.proveedor ?? '', needle),
+  );
+}
+
+async function materialIdsPorProveedorEnContabilidad(
+  supabase: SupabaseClient,
+  proveedor: string,
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const needle = proveedor.trim();
+  if (!needle) return ids;
+
+  const { data, error } = await supabase
+    .from('contabilidad_compras')
+    .select('contabilidad_compra_lineas(material_id)')
+    .ilike('supplier_name', `%${needle.replace(/[%_]/g, '')}%`)
+    .order('fecha', { ascending: false })
+    .limit(120);
+
+  if (error?.code === '42P01') return ids;
+  if (error) return ids;
+
+  for (const row of data ?? []) {
+    const lineas = (row as { contabilidad_compra_lineas?: { material_id?: string | null }[] })
+      .contabilidad_compra_lineas;
+    for (const ln of lineas ?? []) {
+      const mid = String(ln.material_id ?? '').trim();
+      if (mid) ids.add(mid);
+    }
+  }
+  return ids;
+}
+
 /** Stock = Σ ingresos − Σ salidas por material y ubicación (cuadro de movimientos). */
 export function calcularFilasStock(
   ingresos: FilaMovimientoInventario[],
@@ -740,7 +831,7 @@ function aplicarFiltros(
       if (!matchMaterial) return false;
     }
 
-    if (!enRangoFecha(r.fecha, f.fechaDesde, f.fechaHasta)) return false;
+    if (r.tipo !== 'almacenado' && !enRangoFecha(r.fecha, f.fechaDesde, f.fechaHasta)) return false;
     return true;
   });
 }
@@ -782,24 +873,42 @@ export async function listarMovimientosInventario(
     ),
     proyectos,
   );
-  const filasStock = enriquecerFilasProyecto(
-    calcularFilasStock(todosIngresos, todosDespachos),
+
+  const matsProveedorContabilidad = filtros.proveedor?.trim()
+    ? await materialIdsPorProveedorEnContabilidad(supabase, filtros.proveedor)
+    : undefined;
+
+  const filasStockFisico = enriquecerFilasProyecto(
+    filtrarStockPorProveedor(
+      enriquecerStockConProveedor(
+        await cargarFilasStockFisico(supabase, filtros),
+        todosIngresos,
+      ),
+      todosIngresos,
+      filtros.proveedor,
+      matsProveedorContabilidad,
+    ),
     proyectos,
   );
 
   let merged: FilaMovimientoInventario[];
   if (vista === 'ingresado') merged = todosIngresos;
   else if (vista === 'despachado') merged = todosDespachos;
-  else if (vista === 'almacenado') merged = filasStock;
+  else if (vista === 'almacenado') merged = filasStockFisico;
   else merged = [...todosIngresos, ...todosDespachos];
 
-  const filtradas = aplicarFiltros(merged, filtros, proyectos);
+  const filtrosAplicar =
+    vista === 'almacenado' && filtros.proveedor?.trim()
+      ? { ...filtros, proveedor: undefined }
+      : filtros;
+
+  const filtradas = aplicarFiltros(merged, filtrosAplicar, proyectos);
   const filas = filtradas.slice(0, limite);
 
   const filtrosResumen = { ...filtros, vista: undefined as VistaMovimientoInventario | undefined };
   const ingresosResumen = aplicarFiltros(todosIngresos, filtrosResumen, proyectos);
   const despachosResumen = aplicarFiltros(todosDespachos, filtrosResumen, proyectos);
-  const stockResumen = aplicarFiltros(filasStock, filtrosResumen, proyectos);
+  const stockResumen = aplicarFiltros(filasStockFisico, filtrosAplicar, proyectos);
 
   const resumen = {
     ingresado: ingresosResumen.length,

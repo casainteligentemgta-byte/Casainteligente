@@ -111,9 +111,10 @@ import { enriquecerComprasConDestino } from '@/lib/contabilidad/enriquecerCompra
 import { enriquecerComprasPuenteInventario } from '@/lib/contabilidad/enriquecerComprasPuenteInventario';
 import {
     coloresEstadoLogistica,
-    compraPermiteIngresoAlmacen,
+    compraMuestraBotonConfirmacionRecepcion,
     enriquecerComprasEstadoLogistica,
     etiquetaEstadoLogistica,
+    type EstadoLogisticaCompra,
 } from '@/lib/contabilidad/estadoLogisticaCompra';
 import {
     compraTieneDetallePuenteInventario,
@@ -1179,6 +1180,20 @@ export default function ComprasPage() {
                 sinMatch?: string[];
             };
             if (!res.ok) throw new Error(data.error || 'No se pudo registrar ingreso');
+            const estadoTrasIngreso =
+                (data as { estadoLogistica?: EstadoLogisticaCompra }).estadoLogistica ??
+                (data.yaExistia || !data.viaCuarentena ? 'en_almacen' : 'en_almacen_parcial');
+            const ingresadoAt = new Date().toISOString();
+            const patchIngreso = (row: CompraRow): CompraRow =>
+                row.id === c.id
+                    ? {
+                          ...row,
+                          estado_logistica: estadoTrasIngreso,
+                          ingresado_almacen_at: row.ingresado_almacen_at ?? ingresadoAt,
+                      }
+                    : row;
+            setCompras((prev) => prev.map(patchIngreso));
+            setComprasCuadroBase((prev) => prev.map(patchIngreso));
             if (data.yaExistia) {
                 setError('Esta compra ya tenía ingreso registrado en almacén.');
             } else if (data.viaCuarentena) {
@@ -2957,7 +2972,7 @@ export default function ComprasPage() {
                                                 </button>
                                             ) : null}
                                             {c.purchase_invoice_id &&
-                                            compraPermiteIngresoAlmacen(c.estado_logistica) &&
+                                            compraMuestraBotonConfirmacionRecepcion(c) &&
                                             !esGastoEntidadImputacion(c.imputacion) ? (
                                                 !c.ubicacion_destino_id ? (
                                                     <button
