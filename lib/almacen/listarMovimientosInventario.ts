@@ -73,7 +73,7 @@ function norm(s: string): string {
 function normBusqueda(s: string): string {
   return norm(s)
     .normalize('NFD')
-    .replace(/\p{M}/gu, '');
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 function incluye(haystack: string, needle: string | undefined): boolean {
