@@ -152,6 +152,31 @@ export function materialCoincideCatalogoEntidad(
   return false;
 }
 
+/** Catálogo o stock físico en el depósito filtrado o en algún almacén del alcance obra/entidad. */
+export function materialAsignadoDepositoEnAlcance(
+  item: { deposit_id?: string | null },
+  stockUb: { deposit_ids?: string[] } | undefined,
+  opts: {
+    filterDepositId?: string;
+    depositIdsScope?: readonly string[];
+  },
+): boolean {
+  const depId = opts.filterDepositId?.trim();
+  if (depId) {
+    if (String(item.deposit_id ?? '').trim() === depId) return true;
+    if (stockUb?.deposit_ids?.includes(depId)) return true;
+    return false;
+  }
+
+  const scope = opts.depositIdsScope?.filter(Boolean) ?? [];
+  if (!scope.length) return false;
+  const scopeSet = new Set(scope);
+  const catalogDep = String(item.deposit_id ?? '').trim();
+  if (catalogDep && scopeSet.has(catalogDep)) return true;
+  if (stockUb?.deposit_ids?.some((id) => scopeSet.has(id))) return true;
+  return false;
+}
+
 /** Stock físico o asignación de catálogo en el depósito filtrado. */
 export function materialPasaFiltroDeposito(
   item: { deposit_id?: string | null },
