@@ -40,7 +40,6 @@ import ComprasFiltrosPanel, {
     ComprasFiltrosSeleccionObra,
     type EntidadOpcion,
 } from '@/components/contabilidad/ComprasFiltrosPanel';
-import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 import {
     loadCatalogoProyectosApp,
     mergeProyectosCatalogo,
