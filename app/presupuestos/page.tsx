@@ -84,6 +84,7 @@ function TarjetaPresupuesto({
     const fecha = new Date(b.created_at).toLocaleDateString('es-VE');
     const numero = getPresupuestoNumero(b, fallbackById[b.id]);
     const esFilas = vista === 'filas';
+    const compacto = vista === 'columnas';
 
     const btnBase: CSSProperties = {
         border: 'none',
@@ -92,26 +93,22 @@ function TarjetaPresupuesto({
         cursor: 'pointer',
         display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: esFilas ? 'flex-start' : 'center',
-        gap: '6px',
+        justifyContent: 'center',
+        gap: '4px',
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
     };
 
     const btnAccion: CSSProperties = {
         ...btnBase,
-        width: esFilas ? '100%' : 'auto',
-        padding: esFilas ? '8px 10px' : '5px 6px',
-        fontSize: esFilas ? '12px' : '10px',
-        flexShrink: esFilas ? undefined : 0,
+        padding: compacto ? '5px 7px' : '6px 10px',
+        fontSize: compacto ? '10px' : '11px',
     };
 
     const btnEstado: CSSProperties = {
         ...btnBase,
-        width: esFilas ? '100%' : 'auto',
-        padding: esFilas ? '7px 10px' : '4px 6px',
-        fontSize: esFilas ? '11px' : '9px',
-        flex: esFilas ? undefined : '1 1 auto',
-        minWidth: esFilas ? undefined : 'calc(50% - 2px)',
-        justifyContent: esFilas ? 'flex-start' : 'center',
+        padding: compacto ? '5px 6px' : '5px 8px',
+        fontSize: compacto ? '10px' : '10px',
     };
 
     return (
@@ -208,21 +205,23 @@ function TarjetaPresupuesto({
             <div
                 style={{
                     marginTop: '10px',
-                    marginBottom: esFilas ? 0 : '28px',
+                    marginBottom: compacto ? '28px' : 0,
                     display: 'flex',
-                    flexDirection: esFilas ? 'column' : 'row',
-                    flexWrap: esFilas ? 'nowrap' : 'wrap',
+                    flexDirection: 'row',
+                    flexWrap: 'nowrap',
                     gap: '4px',
-                    flex: esFilas ? undefined : 1,
-                    alignContent: esFilas ? undefined : 'flex-start',
+                    overflowX: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                    paddingBottom: '2px',
                 }}
             >
                 <button
                     type="button"
                     onClick={onEditar}
                     style={{ ...btnAccion, background: 'rgba(0,122,255,0.12)', color: '#007AFF' }}
+                    title="Editar"
                 >
-                    ✏️ Editar
+                    ✏️{compacto ? '' : ' Editar'}
                 </button>
                 <button
                     type="button"
@@ -230,7 +229,7 @@ function TarjetaPresupuesto({
                     style={{ ...btnAccion, background: 'rgba(88,86,214,0.12)', color: '#A78BFA' }}
                     title="Vista previa"
                 >
-                    📄 {esFilas ? 'Vista previa' : ''}
+                    📄{compacto ? '' : ' Vista'}
                 </button>
                 <button
                     type="button"
@@ -238,7 +237,7 @@ function TarjetaPresupuesto({
                     style={{ ...btnAccion, background: 'rgba(52,199,89,0.1)', color: '#34C759' }}
                     title="WhatsApp"
                 >
-                    📲 {esFilas ? 'WhatsApp' : ''}
+                    📲{compacto ? '' : ' WA'}
                 </button>
                 <button
                     type="button"
@@ -246,7 +245,7 @@ function TarjetaPresupuesto({
                     style={{ ...btnAccion, background: 'rgba(255,59,48,0.1)', color: '#FF3B30' }}
                     title="Eliminar"
                 >
-                    🗑️ {esFilas ? 'Eliminar' : ''}
+                    🗑️
                 </button>
                 {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => {
                     const active = b.status === k;
@@ -267,7 +266,7 @@ function TarjetaPresupuesto({
                             title={c.label}
                         >
                             <span>{c.icon}</span>
-                            <span>{c.label}</span>
+                            {!compacto ? <span>{c.label}</span> : null}
                         </button>
                     );
                 })}

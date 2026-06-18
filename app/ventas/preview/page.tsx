@@ -354,23 +354,6 @@ export default function PreviewPage() {
             paddingBottom: '40px',
         }}>
 
-            {/* Modo demo: cómo editar el diseño */}
-            {isDemo && (
-                <div className="no-print" style={{
-                    background: 'linear-gradient(90deg, rgba(0,122,255,0.2), rgba(88,86,214,0.15))',
-                    borderBottom: '1px solid rgba(0,122,255,0.25)',
-                    padding: '10px 20px', fontSize: '12px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5,
-                }}>
-                    <strong style={{ color: '#5AC8FA' }}>Modo ejemplo (local)</strong>
-                    {' · '}Datos en <code style={{ fontSize: '11px', color: '#FF9500' }}>lib/presupuesto/demo-data.ts</code>
-                    {' · '}Marca y textos legales: <code style={{ fontSize: '11px', color: '#34C759' }}>lib/presupuesto/brand.ts</code>
-                    {' · '}Vista impresa/PDF: <code style={{ fontSize: '11px', color: '#AF52DE' }}>lib/presupuesto/html-impresion.ts</code>
-                    <span style={{ display: 'block', marginTop: '6px', opacity: 0.75 }}>
-                        Las <strong>notas</strong> puedes editarlas abajo en esta pantalla (solo en memoria en modo ejemplo). Tras cambiar código en Cursor, recarga (F5).
-                    </span>
-                </div>
-            )}
-
             {/* ── Toolbar (no se imprime) ── */}
             <div className="no-print" style={{
                 position: 'sticky', top: 0, zIndex: 50,
