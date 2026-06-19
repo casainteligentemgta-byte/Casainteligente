@@ -61,6 +61,41 @@ export async function processInvoiceFromCanal(params: {
   progreso?: ProgresoFacturaCanal;
 }): Promise<void> {
   const supabase = supabaseAdmin();
+  try {
+    await processInvoiceFromCanalCore(supabase, params);
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    const { data: row } = await supabase
+      .from('ci_facturas_canal_pendientes')
+      .select('estado, chat_label')
+      .eq('id', params.pendingId)
+      .maybeSingle();
+
+    if (String(row?.estado ?? '') === 'procesando') {
+      const { notificarFacturaCanalAtascadaAsync } = await import('@/lib/telegram/notifyErrorBot');
+      notificarFacturaCanalAtascadaAsync({
+        pendingId: params.pendingId,
+        chatLabel: row?.chat_label,
+        detalle: raw.slice(0, 300),
+      });
+    }
+    throw e;
+  }
+}
+
+async function processInvoiceFromCanalCore(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  params: {
+    canal: CanalFactura;
+    pendingId: string;
+    chatId: string;
+    buffer: Buffer;
+    mimeType: string;
+    fileName: string;
+    sendReply: (text: string, html?: boolean) => Promise<void>;
+    progreso?: ProgresoFacturaCanal;
+  },
+): Promise<void> {
   const prog = params.progreso;
   const ext =
     params.fileName.split('.').pop()?.toLowerCase() ||
