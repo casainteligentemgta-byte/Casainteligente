@@ -31,6 +31,8 @@
     "telegram:local": "node scripts/replay-telegram-local.mjs",
     "telegram:replay-local": "node scripts/replay-telegram-local.mjs",
     "telegram:diag": "node scripts/diag-facturas-canal.mjs",
+    "clientes:diag": "node scripts/diag-clientes-obras.mjs",
+    "clientes:backfill-customer": "node scripts/backfill-proyectos-customer-id.mjs",
     "verify:ci-empleados": "node scripts/verify-ci-empleados.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

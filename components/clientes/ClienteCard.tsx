@@ -22,6 +22,7 @@ interface Cliente {
     /** Hex; si falta, la tarjeta usa #007AFF */
     color?: string;
     imagen?: string;
+    obraCount?: number;
 }
 
 const statusConfig: Record<ClienteStatus, { label: string; dot: string; bg: string; text: string }> = {
@@ -262,6 +263,16 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
 
                             {/* Badges */}
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                {(cliente.obraCount ?? 0) > 0 ? (
+                                    <div
+                                        className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+                                        style={{ background: 'rgba(90,200,250,0.12)', border: '1px solid rgba(90,200,250,0.25)' }}
+                                    >
+                                        <span style={{ color: '#5AC8FA', fontSize: '10px', fontWeight: 700 }}>
+                                            {cliente.obraCount} obra{cliente.obraCount === 1 ? '' : 's'}
+                                        </span>
+                                    </div>
+                                ) : null}
                                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: status.bg }}>
                                     <div className="rounded-full" style={{ width: '5px', height: '5px', background: status.dot }} />
                                     <span className="font-medium" style={{ color: status.text, fontSize: '11px' }}>{status.label}</span>

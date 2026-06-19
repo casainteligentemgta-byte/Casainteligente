@@ -60,6 +60,8 @@ export type CompraListaUnificada = {
   entidad_id?: string | null;
   entidad_nombre?: string | null;
   proyecto_nombre?: string | null;
+  /** Nombre display del cliente CRM si la obra tiene customer_id. */
+  cliente_crm_nombre?: string | null;
   invoice_number: string;
   supplier_rif: string;
   supplier_name: string;

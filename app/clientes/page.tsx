@@ -97,6 +97,26 @@ export default function ClientesPage() {
                 return;
             }
 
+            const ids = data.map((c) => String(c.id ?? '')).filter(Boolean);
+            const obraCountPorCliente = new Map<string, number>();
+            if (ids.length) {
+                const { data: proys } = await withTimeout(
+                    Promise.resolve(
+                        supabase
+                            .from('ci_proyectos')
+                            .select('customer_id')
+                            .in('customer_id', ids),
+                    ),
+                    CUSTOMERS_LOAD_TIMEOUT_MS,
+                    'Conteo obras por cliente',
+                );
+                for (const p of proys ?? []) {
+                    const cid = String(p.customer_id ?? '');
+                    if (!cid) continue;
+                    obraCountPorCliente.set(cid, (obraCountPorCliente.get(cid) ?? 0) + 1);
+                }
+            }
+
             const mapped = data.map((c: Record<string, unknown>) => {
                 const nombreSafe = (typeof c.nombre === 'string' && c.nombre.trim()) ? c.nombre.trim() : 'Sin nombre';
                 const partes = nombreSafe.split(/\s+/).filter(Boolean);
@@ -121,6 +141,7 @@ export default function ClientesPage() {
                     imagen: c.imagen || null,
                     initials,
                     color: colorPorId(idStr),
+                    obraCount: obraCountPorCliente.get(idStr) ?? 0,
                 };
             });
             setLista(mapped);
@@ -240,6 +261,19 @@ export default function ClientesPage() {
                             </p>
                         </div>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <Link
+                        href="/clientes/crm"
+                        style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '0 12px', height: '36px', borderRadius: '18px',
+                            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                            color: 'rgba(255,255,255,0.75)', fontSize: '11px', fontWeight: 600,
+                            textDecoration: 'none',
+                        }}
+                    >
+                        Vista CRM
+                    </Link>
                     <Link
                         href="/clientes/nuevo"
                         style={{
@@ -253,6 +287,7 @@ export default function ClientesPage() {
                             <path d="M8 2v12M2 8h12" stroke="white" strokeWidth="2" strokeLinecap="round" />
                         </svg>
                     </Link>
+                    </div>
                 </div>
 
                 {/* Search */}

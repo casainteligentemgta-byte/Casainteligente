@@ -3,6 +3,7 @@
 import 'leaflet/dist/leaflet.css';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { etiquetaCliente, idCliente, rifCliente } from '@/lib/clientes/etiquetaCliente';
@@ -97,6 +98,9 @@ const ProjectLocationPicker = dynamic(
 );
 
 export default function NuevoProyectoModuloPage() {
+  const searchParams = useSearchParams();
+  const customerIdFromUrl = searchParams.get('customerId')?.trim() ?? '';
+
   /** Cliente solo en el navegador (evita instanciar @supabase/ssr durante el SSR del componente). */
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const getSupabase = useCallback(() => {
@@ -139,6 +143,11 @@ export default function NuevoProyectoModuloPage() {
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [entidadId, setEntidadId] = useState('');
   const [entidadesHint, setEntidadesHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!customerIdFromUrl) return;
+    setCustomerId((prev) => prev || customerIdFromUrl);
+  }, [customerIdFromUrl]);
 
   useEffect(() => {
     let cancelled = false;

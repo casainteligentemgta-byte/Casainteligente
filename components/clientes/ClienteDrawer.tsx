@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { X, MessageCircle, MapPin, Mail, Phone, Briefcase, Plus, Map as MapIcon, Crown, CheckCircle2 } from 'lucide-react';
+import { hrefProyectoObra } from '@/lib/clientes/proyectosClienteDisplay';
 
 interface ClienteDrawerProps {
   cliente: any;
@@ -9,6 +12,8 @@ interface ClienteDrawerProps {
 }
 
 export default function ClienteDrawer({ cliente, onClose }: ClienteDrawerProps) {
+  const router = useRouter();
+
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = 'unset'; };
@@ -26,8 +31,11 @@ export default function ClienteDrawer({ cliente, onClose }: ClienteDrawerProps) 
   };
 
   const handleNuevoProyecto = () => {
-    alert(`Redirigiendo a Nuevo Proyecto con ID pre-cargado: ${cliente.id}`);
+    onClose();
+    router.push(`/proyectos/modulo/nuevo?customerId=${encodeURIComponent(cliente.id)}`);
   };
+
+  const clienteId = String(cliente.id ?? '');
 
   return (
     <>
@@ -120,8 +128,13 @@ export default function ClienteDrawer({ cliente, onClose }: ClienteDrawerProps) 
               <Briefcase className="w-4 h-4" /> Proyectos Asociados ({cliente.proyectos.length})
             </h3>
             <div className="space-y-3">
-              {cliente.proyectos.map((proy: any) => (
-                <div key={proy.id} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex justify-between items-center group hover:border-blue-300 dark:hover:border-blue-700 transition-colors cursor-pointer">
+              {cliente.proyectos.map((proy: { id: string; nombre: string; costo: number; estado: string; tipo_proyecto?: string | null }) => (
+                <Link
+                  key={proy.id}
+                  href={hrefProyectoObra(proy.id, proy.tipo_proyecto)}
+                  onClick={onClose}
+                  className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex justify-between items-center group hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                >
                   <div>
                     <h4 className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{proy.nombre}</h4>
                     <p className="text-sm text-slate-500 font-medium">${(proy.costo).toLocaleString('es-MX')}</p>
@@ -133,14 +146,21 @@ export default function ClienteDrawer({ cliente, onClose }: ClienteDrawerProps) 
                   `}>
                     {proy.estado}
                   </span>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
 
         </div>
 
-        <div className="p-6 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+        <div className="p-6 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 space-y-2">
+          <Link
+            href={`/clientes/${clienteId}`}
+            onClick={onClose}
+            className="block w-full py-2.5 text-center text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            Ver ficha completa →
+          </Link>
           <button 
             onClick={handleNuevoProyecto}
             className={`w-full py-3.5 rounded-xl font-bold shadow-lg transition-all flex justify-center items-center gap-2 group text-white

@@ -1,5 +1,8 @@
 /**
  * Registro de módulos core Nexus Home (rutas y descripción para navegación y docs).
+ *
+ * Clientes operativos de construcción: tabla `customers` (/clientes), no `nexus_clients`.
+ * Puente futuro nexus → customers documentado en docs/NEXUS-HOME.md (sin sync implementado).
  */
 import type { LucideIcon } from 'lucide-react';
 import {

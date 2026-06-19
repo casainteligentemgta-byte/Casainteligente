@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CompraListaUnificada } from '@/lib/contabilidad/mapCanalPendienteCompra';
+import { nombreDisplayCustomer } from '@/lib/clientes/proyectosClienteDisplay';
 
 function compraYaIngresoAlmacen(c: CompraListaUnificada): boolean {
   return Boolean(c.ingresado_almacen_at?.trim() || c.compra_factura_id?.trim());
@@ -81,18 +82,38 @@ export async function enriquecerComprasConDestino(
     }
   }
 
-  const proyectosMap = new Map<string, { nombre: string; entidad_id: string | null }>();
+  const proyectosMap = new Map<
+    string,
+    { nombre: string; entidad_id: string | null; customer_id: string | null }
+  >();
   if (proyectoIds.size) {
     const { data } = await supabase
       .from('ci_proyectos')
-      .select('id, nombre, entidad_id')
+      .select('id, nombre, entidad_id, customer_id')
       .in('id', Array.from(proyectoIds).slice(0, 400));
     for (const p of data ?? []) {
       proyectosMap.set(String(p.id), {
         nombre: String(p.nombre ?? '').trim() || 'Obra',
         entidad_id: p.entidad_id ? String(p.entidad_id) : null,
+        customer_id: p.customer_id ? String(p.customer_id) : null,
       });
       if (p.entidad_id) entidadIds.add(String(p.entidad_id));
+    }
+  }
+
+  const customerIds = new Set<string>();
+  for (const proy of Array.from(proyectosMap.values())) {
+    if (proy.customer_id) customerIds.add(proy.customer_id);
+  }
+  const customersMap = new Map<string, string>();
+  if (customerIds.size) {
+    const { data } = await supabase
+      .from('customers')
+      .select('id, nombre, apellido, razon_social')
+      .in('id', Array.from(customerIds).slice(0, 200));
+    for (const c of data ?? []) {
+      const label = nombreDisplayCustomer(c);
+      if (label) customersMap.set(String(c.id), label);
     }
   }
 
@@ -141,11 +162,15 @@ export async function enriquecerComprasConDestino(
       ? (ubicacionesMap.get(ubicacionDestinoId) ?? c.ubicacion_nombre ?? null)
       : (c.ubicacion_nombre ?? null);
 
+    const customerId = proy?.customer_id ?? null;
+    const clienteCrmNombre = customerId ? (customersMap.get(customerId) ?? null) : null;
+
     return {
       ...c,
       entidad_id: entidadId,
       entidad_nombre: entidadId ? (entidadesMap.get(entidadId) ?? null) : null,
       proyecto_nombre: proyNombre?.trim() || null,
+      cliente_crm_nombre: clienteCrmNombre,
       ubicacion_destino_id: ubicacionDestinoId,
       ubicacion_nombre: ubicacionNombre?.trim() || null,
     };

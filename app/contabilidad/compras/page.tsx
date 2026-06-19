@@ -69,6 +69,7 @@ import { etiquetaClasificacionGastoEntidad } from '@/lib/contabilidad/clasificac
 import VerificarFechaCompraModal from '@/components/contabilidad/VerificarFechaCompraModal';
 import ReporteClienteComprasModal from '@/components/contabilidad/ReporteClienteComprasModal';
 import { buildReporteClienteDesdeCompras } from '@/lib/contabilidad/reporteClienteCompras';
+import { tooltipClienteCrmCompra } from '@/lib/clientes/tooltipClienteCrmCompra';
 import EditarFacturaCanalModal, {
     type DestinoCompraEdicion,
     type GuardarFacturaCanalOpts,
@@ -2864,6 +2865,10 @@ export default function ComprasPage() {
                                                 ) : null}
                                                 {c.proyecto_nombre ? (
                                                     <span
+                                                        title={tooltipClienteCrmCompra({
+                                                            clienteCrmNombre: c.cliente_crm_nombre,
+                                                            entidadNombre: c.entidad_nombre,
+                                                        })}
                                                         style={{
                                                             fontSize: '10px',
                                                             fontWeight: 700,
@@ -2871,9 +2876,41 @@ export default function ComprasPage() {
                                                             borderRadius: '8px',
                                                             background: 'rgba(167,139,250,0.12)',
                                                             color: '#c4b5fd',
+                                                            cursor: 'help',
                                                         }}
                                                     >
                                                         {c.proyecto_nombre}
+                                                    </span>
+                                                ) : null}
+                                                {c.proyecto_nombre && c.cliente_crm_nombre ? (
+                                                    <span
+                                                        style={{
+                                                            fontSize: '10px',
+                                                            fontWeight: 600,
+                                                            padding: '4px 8px',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(0,122,255,0.12)',
+                                                            color: '#7cb9ff',
+                                                        }}
+                                                        title="Cliente CRM vinculado a la obra (compras imputan a obra + patrono)"
+                                                    >
+                                                        CRM: {c.cliente_crm_nombre}
+                                                    </span>
+                                                ) : c.proyecto_nombre && !c.cliente_crm_nombre ? (
+                                                    <span
+                                                        style={{
+                                                            fontSize: '10px',
+                                                            fontWeight: 600,
+                                                            padding: '4px 8px',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(255,255,255,0.04)',
+                                                            color: 'rgba(255,255,255,0.4)',
+                                                        }}
+                                                        title={tooltipClienteCrmCompra({
+                                                            entidadNombre: c.entidad_nombre,
+                                                        })}
+                                                    >
+                                                        Sin cliente CRM
                                                     </span>
                                                 ) : null}
                                                 {(() => {

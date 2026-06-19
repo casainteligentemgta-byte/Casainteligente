@@ -1,6 +1,7 @@
 import { GlassCard } from '@/components/nexus/GlassCard';
 import { Mono } from '@/components/nexus/Mono';
 import { NexusAlert } from '@/components/nexus/NexusAlert';
+import { NexusCrmOperativoAviso } from '@/components/nexus/NexusCrmOperativoAviso';
 import { NexusSkeletonCard } from '@/components/nexus/NexusSkeleton';
 import { db } from '@/lib/db';
 import { nexusClients } from '@/lib/db/schema';
@@ -53,6 +54,7 @@ export default async function NexusClientesPage() {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-white">Directorio de clientes</h1>
+        <NexusCrmOperativoAviso />
         <NexusAlert variant="info" title="Configura la base de datos">
           Añade <Mono className="text-[var(--nexus-cyan)]">DATABASE_URL</Mono> para listar clientes B2C/B2B e inmuebles.
         </NexusAlert>
@@ -80,6 +82,8 @@ export default async function NexusClientesPage() {
           <Mono>nexus_client_properties</Mono>).
         </p>
       </div>
+
+      <NexusCrmOperativoAviso />
 
       {err ? (
         <NexusAlert variant="error" title="Error de lectura">

@@ -1,4 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+/**
+ * Confirmación de compras desde canal Telegram / web.
+ *
+ * Imputación contable: las filas en `contabilidad_compras` usan `proyecto_id` y
+ * `entidad_id` (patrono fiscal en `ci_entidades`). No hay `customer_id` en compras;
+ * el vínculo al CRM es indirecto vía `ci_proyectos.customer_id` → `customers`
+ * (puede ser null en obras tipo talento / patrono DIMAQUINAS).
+ */
 import {
   liberarConfirmacionCompraCanal,
   reclamarConfirmacionCompraCanal,
