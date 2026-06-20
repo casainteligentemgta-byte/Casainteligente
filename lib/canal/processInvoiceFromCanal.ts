@@ -191,6 +191,22 @@ async function processInvoiceFromCanalCore(
     })
     .eq('id', params.pendingId);
 
+  const { data: rowLog } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('chat_id, chat_label')
+    .eq('id', params.pendingId)
+    .maybeSingle();
+
+  const facturaNumLog = String(datosOcr.invoice_number ?? 'S/N').trim();
+  const { notificarEventoSistemaLogAsync } = await import('@/lib/telegram/logBotAuditoria');
+  notificarEventoSistemaLogAsync({
+    chatId: rowLog?.chat_id != null ? String(rowLog.chat_id) : null,
+    chatLabel: rowLog?.chat_label,
+    modulo: 'Compras · OCR',
+    evento: 'Factura extraída (OCR listo)',
+    detalle: `Nº ${facturaNumLog} · ${datosOcr.supplier_name?.trim() || '—'} · RIF ${datosOcr.supplier_rif?.trim() || '—'}`,
+  });
+
   const facturaNum = String(datosOcr.invoice_number ?? 'S/N').trim();
   const dupParams = {
     invoice_number: facturaNum,

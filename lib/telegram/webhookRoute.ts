@@ -30,6 +30,7 @@ import {
   manejarMensajeTicketProcura,
   textoTieneTicketProcura,
 } from '@/lib/telegram/procuraConciliacionWebhook';
+import { auditarUpdateTelegramAsync } from '@/lib/telegram/logBotAuditoria';
 
 /** Telegram exige HTTP 200; un 503/502 hace que marque el webhook como fallido. */
 function respuestaWebhook(body: Record<string, unknown>, status = 200) {
@@ -106,6 +107,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
       return respuestaWebhook({ ok: true, denied: true });
     }
     const adminPr = telegramSupabaseAdmin();
+    void auditarUpdateTelegramAsync(update, adminPr.ok ? adminPr.client : null);
     if (adminPr.ok) {
       const conciliado = await manejarCallbackConciliacionProcura(adminPr.client, update);
       if (conciliado) return respuestaWebhook({ ok: true, pr_conciliacion: true });
@@ -134,6 +136,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
   const cmd = primerTokenComando(text);
 
   const adminPrMsg = telegramSupabaseAdmin();
+  void auditarUpdateTelegramAsync(update, adminPrMsg.ok ? adminPrMsg.client : null);
   if (adminPrMsg.ok && text && textoTieneTicketProcura(text)) {
     const handledPr = await manejarMensajeTicketProcura(adminPrMsg.client, chatId, text);
     if (handledPr) return respuestaWebhook({ ok: true, pr_ticket_prompt: true });

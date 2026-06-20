@@ -71,7 +71,27 @@ type PendienteRow = {
   document_file_name: string | null;
   document_mime_type: string | null;
   purchase_invoice_id: string | null;
+  chat_id?: string | number | null;
+  chat_label?: string | null;
 };
+
+function auditarCompraConfirmadaCanal(params: {
+  row: PendienteRow;
+  compraId: string;
+  facturaNum: string;
+  yaExistia: boolean;
+}): void {
+  if (params.yaExistia) return;
+  void import('@/lib/telegram/logBotAuditoria').then(({ notificarEventoSistemaLogAsync }) => {
+    notificarEventoSistemaLogAsync({
+      chatId: params.row.chat_id != null ? String(params.row.chat_id) : null,
+      chatLabel: params.row.chat_label,
+      modulo: 'Contabilidad · Compra',
+      evento: 'Compra confirmada en cuadro',
+      detalle: `Nº ${params.facturaNum} · compra ${params.compraId}`,
+    });
+  });
+}
 
 function lineasDesdeExtracted(ex: ExtractedCanalHeader): LineaCompraContabilidadInput[] {
   return (ex.items ?? [])
@@ -167,7 +187,7 @@ export async function confirmarCompraDesdeCanal(
   const { data: pendiente, error: pErr } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select(
-      'id,estado,extracted,entidad_id,proyecto_id,ubicacion_destino_id,document_storage_path,document_file_name,document_mime_type,purchase_invoice_id',
+      'id,estado,extracted,entidad_id,proyecto_id,ubicacion_destino_id,document_storage_path,document_file_name,document_mime_type,purchase_invoice_id,chat_id,chat_label',
     )
     .eq('id', params.pendingId)
     .single();
@@ -518,6 +538,12 @@ async function confirmarCompraDesdeCanalInterno(
     .eq('id', params.pendingId);
 
   if (gastoEntidad) {
+    auditarCompraConfirmadaCanal({
+      row,
+      compraId,
+      facturaNum: (extracted.invoice_number ?? 'S/N').trim(),
+      yaExistia,
+    });
     return {
       compraId,
       purchaseInvoiceId,
@@ -544,6 +570,13 @@ async function confirmarCompraDesdeCanalInterno(
     const notify = await notificarCuarentenaParaInvoice(supabase, purchaseInvoiceId);
     notificado = Boolean(notify.ok && !notify.skipped);
   }
+
+  auditarCompraConfirmadaCanal({
+    row,
+    compraId,
+    facturaNum: (extracted.invoice_number ?? 'S/N').trim(),
+    yaExistia,
+  });
 
   return {
     compraId,

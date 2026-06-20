@@ -56,7 +56,7 @@ function etiquetaRolNomina(rol: string): string {
   return ETIQUETA_ROL_NOMINA[k] ?? rol.replace(/_/g, ' ');
 }
 
-async function resolverEtiquetaRolDestinatario(chatId: string | number): Promise<string> {
+export async function resolverEtiquetaRolDestinatario(chatId: string | number): Promise<string> {
   const key = String(Math.trunc(Number(chatId)));
   const cached = ROL_CACHE.get(key);
   if (cached) return cached;
