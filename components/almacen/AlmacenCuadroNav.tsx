@@ -36,7 +36,7 @@ export default function AlmacenCuadroNav({
 }) {
   return (
     <nav
-      className="flex flex-wrap gap-2 mb-4 p-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04] backdrop-blur-xl"
+      className="flex flex-wrap gap-2 mb-4 p-2 sm:p-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04] backdrop-blur-xl"
       aria-label="Vistas de almacén"
     >
       {TABS.map(({ id, label, icon: Icon }) => {

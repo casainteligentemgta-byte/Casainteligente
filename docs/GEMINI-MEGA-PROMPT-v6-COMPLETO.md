@@ -6,7 +6,7 @@
 > 3. Sube a **Conocimiento** este archivo + los de §12 (o el subset del módulo).
 > 4. Para tareas puntuales, pega también el diff, error SQL o captura Telegram.
 >
-> **Actualizado:** 2026-06-19 · migraciones hasta **254** · bot logs auditoría · CRM clientes unificado.
+> **Actualizado:** 2026-06-11 · migraciones hasta **254** · FK **254** verificada en prod · bot logs auditoría · CRM clientes unificado.
 
 ---
 
@@ -253,7 +253,7 @@ Auditoría log bot: cada mensaje/callback + eventos OCR y confirmación compra.
 | `inv_ubicaciones` | Central, móvil, obra, cuarentena, subsitios (181) |
 | `inventario_stock` | Stock físico material+ubicación (fuente de verdad) |
 | `inv_movimientos` | Ledger append-only (203) |
-| `ci_recepciones_campo` | FRM recepción campo; `contabilidad_compra_id` (213/254) |
+| `ci_recepciones_campo` | FRM recepción campo; `contabilidad_compra_id` → FK `contabilidad_compras(id)` ON DELETE SET NULL (213/254; **prod OK 2026-06-11**) |
 | `ci_recepciones_campo_lineas` | Líneas FRM; `forma_ingreso` (210) |
 | `inv_egresos_campo` | Despachos campo con fotos jsonb (206) |
 | `transferencias_inventario` | Traspasos entre ubicaciones |
@@ -495,6 +495,28 @@ GET       /api/cron/avance-diario-campo
 | 253 | `ci_asegurar_ubicacion_obra` |
 | 254 | Repair `ci_recepciones_campo.contabilidad_compra_id` |
 
+### Estado prod verificado (2026-06-11)
+
+| Migr. | Objeto | Prod |
+|-------|--------|------|
+| **254** | FK `ci_recepciones_campo_contabilidad_compra_id_fkey` → `contabilidad_compras(id)` SET NULL | ✅ Confirmado (SQL Editor) |
+| **250** | RPC `ci_conciliar_frm_con_factura_canal` | ⚠️ Verificar con consulta 3 o `npm run db:diag:254` |
+
+Consulta SQL (solo lectura) para revalidar FK:
+
+```sql
+SELECT tc.constraint_name, kcu.column_name, ccu.table_name AS ref_table, rc.delete_rule
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_schema = kcu.constraint_schema AND tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_schema = tc.constraint_schema AND ccu.constraint_name = tc.constraint_name
+JOIN information_schema.referential_constraints rc
+  ON rc.constraint_schema = tc.constraint_schema AND rc.constraint_name = tc.constraint_name
+WHERE tc.table_schema = 'public' AND tc.table_name = 'ci_recepciones_campo'
+  AND tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name = 'contabilidad_compra_id';
+```
+
 ---
 
 ## §10 — ERRORES FRECUENTES
@@ -509,6 +531,7 @@ GET       /api/cron/avance-diario-campo
 | Doble prompt procura | Migr. 233 `ci_telegram_marcar_ttl_pendiente` |
 | Hydration failed | Patrón `montado`; `npm run clean:next` |
 | Compra sin `proyecto_id` | Posible gasto entidad; reubicar manual |
+| PGRST200 recepciones ↔ compras | FK **254** ya aplicada en prod (2026-06-11); si persiste, `notify pgrst, 'reload schema'` o revisar migr. **250** |
 
 ---
 
@@ -516,6 +539,7 @@ GET       /api/cron/avance-diario-campo
 
 ```
 npm run clientes:diag          # Diagnóstico customers ↔ ci_proyectos
+npm run db:diag:254            # FK 254 + RPC 250 en prod (requiere DATABASE_URL)
 npm run clientes:backfill-customer  # Backfill customer_id en proyectos
 npx tsc --noEmit               # Typecheck
 npx vercel --prod --yes        # Deploy (solo si Luis pide)

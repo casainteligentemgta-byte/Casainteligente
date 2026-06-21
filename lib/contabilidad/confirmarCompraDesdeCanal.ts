@@ -33,6 +33,7 @@ import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacion
 import {
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
+  type MontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
 import { copiarDocumentoProcurementAInvoice } from '@/lib/almacen/procurementDocumentStorage';
 import {
@@ -75,11 +76,28 @@ type PendienteRow = {
   chat_label?: string | null;
 };
 
+function detalleLogCompraBimonetaria(
+  facturaNum: string,
+  compraId: string,
+  montos: MontosCompraBimonetario,
+): string {
+  const fmt = (n: number) =>
+    Number.isFinite(n) ? n.toLocaleString('es-VE', { maximumFractionDigits: 2 }) : '—';
+  return (
+    `Nº ${facturaNum} · compra ${compraId}\n` +
+    `Moneda origen: ${montos.monedaOriginal}\n` +
+    `Total Bs: ${fmt(montos.montoVes)}\n` +
+    `Total USD: ${fmt(montos.montoUsd)}\n` +
+    `Tasa BCV: ${fmt(montos.tasaApplied)} Bs/USD`
+  );
+}
+
 function auditarCompraConfirmadaCanal(params: {
   row: PendienteRow;
   compraId: string;
   facturaNum: string;
   yaExistia: boolean;
+  montos: MontosCompraBimonetario;
 }): void {
   if (params.yaExistia) return;
   void import('@/lib/telegram/logBotAuditoria').then(({ notificarEventoSistemaLogAsync }) => {
@@ -88,7 +106,7 @@ function auditarCompraConfirmadaCanal(params: {
       chatLabel: params.row.chat_label,
       modulo: 'Contabilidad · Compra',
       evento: 'Compra confirmada en cuadro',
-      detalle: `Nº ${params.facturaNum} · compra ${params.compraId}`,
+      detalle: detalleLogCompraBimonetaria(params.facturaNum, params.compraId, params.montos),
     });
   });
 }
@@ -543,6 +561,7 @@ async function confirmarCompraDesdeCanalInterno(
       compraId,
       facturaNum: (extracted.invoice_number ?? 'S/N').trim(),
       yaExistia,
+      montos,
     });
     return {
       compraId,
@@ -576,6 +595,7 @@ async function confirmarCompraDesdeCanalInterno(
     compraId,
     facturaNum: (extracted.invoice_number ?? 'S/N').trim(),
     yaExistia,
+    montos,
   });
 
   return {

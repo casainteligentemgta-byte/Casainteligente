@@ -170,7 +170,7 @@ Si no hay modo claro, pregunta una sola cosa: *«¿Auditoría del último cambio
 
 **OCR atascado:** `ci_facturas_canal_pendientes.estado = procesando` sin `extracted` → timeout Vercel; destrabe manual, botón logs, o `scripts/liberar-facturas-canal-atascadas.mjs`.
 
-**Migración pendiente frecuente:** **254** (`contabilidad_compra_id` en `ci_recepciones_campo`).
+**Migración 254:** FK `ci_recepciones_campo_contabilidad_compra_id_fkey` ✅ confirmada en prod (2026-06-11). Pendiente frecuente si conciliación falla: migr. **250** (`ci_conciliar_frm_con_factura_canal`).
 
 **Neo (comprador):** chat `8684897057` · Flamboyant · debe completar `/facturas` hasta confirmar obra/almacén para ver fila en contabilidad.
 

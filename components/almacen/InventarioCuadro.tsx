@@ -2069,7 +2069,7 @@ export default function InventarioCuadro() {
         'inline-flex items-center gap-1.5 bg-zinc-900/80 border border-zinc-800 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide hover:bg-zinc-800 transition-all whitespace-nowrap';
 
     return (
-        <div className="text-white pb-20 font-sans max-w-[100vw] overflow-x-hidden">
+        <div className="text-white pb-6 font-sans max-w-[100vw] overflow-x-hidden">
             {/* Header Section */}
             <div className="mb-4">
                 <h1 className="text-2xl lg:text-3xl font-black tracking-tighter mb-1">STOCK</h1>
@@ -2793,7 +2793,8 @@ export default function InventarioCuadro() {
             ) : null}
 
             <GlassCard className="overflow-hidden">
-                <table className="w-full table-fixed border-collapse text-sm">
+                <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
+                <table className="w-full min-w-[640px] table-fixed border-collapse text-sm">
                     <colgroup>
                         <col className="w-9" />
                         <col className="w-[26%]" />
@@ -3077,6 +3078,7 @@ export default function InventarioCuadro() {
                         )}
                     </tbody>
                 </table>
+                </div>
             </GlassCard>
             </>
         </div>

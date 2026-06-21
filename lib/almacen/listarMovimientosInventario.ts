@@ -892,10 +892,12 @@ export async function listarMovimientosInventario(
   else if (vista === 'almacenado') merged = filasStockFisico;
   else merged = [...todosIngresos, ...todosDespachos];
 
+  // Stock físico no trae proveedor en fila; no aplicar filtro proveedor a tabla ni KPI stock.
+  const filtrosSinProveedorStock =
+    filtros.proveedor?.trim() ? { ...filtros, proveedor: undefined } : filtros;
+
   const filtrosAplicar =
-    vista === 'almacenado' && filtros.proveedor?.trim()
-      ? { ...filtros, proveedor: undefined }
-      : filtros;
+    vista === 'almacenado' ? filtrosSinProveedorStock : filtros;
 
   const filtradas = aplicarFiltros(merged, filtrosAplicar, proyectos);
   const filas = filtradas.slice(0, limite);
@@ -903,7 +905,11 @@ export async function listarMovimientosInventario(
   const filtrosResumen = { ...filtros, vista: undefined as VistaMovimientoInventario | undefined };
   const ingresosResumen = aplicarFiltros(todosIngresos, filtrosResumen, proyectos);
   const despachosResumen = aplicarFiltros(todosDespachos, filtrosResumen, proyectos);
-  const stockResumen = aplicarFiltros(filasStockFisico, filtrosAplicar, proyectos);
+  const stockResumen = aplicarFiltros(
+    filasStockFisico,
+    { ...filtrosResumen, proveedor: undefined },
+    proyectos,
+  );
 
   const resumen = {
     ingresado: ingresosResumen.length,

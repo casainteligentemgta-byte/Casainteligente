@@ -36,10 +36,7 @@ export function buildMovimientosCuadroSearchParams(
 export function movimientosCuadroPathFromState(state: MovimientosCuadroShareState): string {
   const qs = buildMovimientosCuadroSearchParams(state);
   qs.set('cuadro', 'movimientos');
-  if (state.vista && state.vista !== 'todos') {
-    qs.set('movVista', state.vista);
-    qs.delete('vista');
-  }
+  qs.delete('movVista');
   const query = qs.toString();
   return query ? `/almacen?${query}` : '/almacen';
 }
@@ -57,7 +54,7 @@ export function parseMovimientosCuadroShareParams(
   params: URLSearchParams,
 ): Partial<MovimientosCuadroShareState> {
   const out: Partial<MovimientosCuadroShareState> = {};
-  const vista = params.get('vista');
+  const vista = params.get('vista') ?? params.get('movVista');
   if (
     vista === 'ingresado' ||
     vista === 'despachado' ||

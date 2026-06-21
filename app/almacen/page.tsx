@@ -27,7 +27,7 @@ function AlmacenHubInner() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
-      <div className="px-3 py-4 sm:px-4 lg:px-5 max-w-[100vw] overflow-x-hidden">
+      <div className="px-4 py-4 pb-28 sm:px-5 sm:pb-24 lg:px-6 max-w-[100vw] overflow-x-hidden">
         <AlmacenCuadroNav activo={cuadro} search={searchString} />
         <p className="mb-4 text-[11px] leading-relaxed text-zinc-500 max-w-2xl">
           {SUBTITULO_CUADRO[cuadro]}

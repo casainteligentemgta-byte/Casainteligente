@@ -114,9 +114,13 @@ function etiquetaOrigenDestino(f: FilaMovimientoInventario): string {
   return f.destino ?? f.origen ?? '—';
 }
 
-function parseVistaInicial(raw: string | null): VistaMovimientoInventario {
-  if (raw === 'ingresado' || raw === 'despachado' || raw === 'almacenado' || raw === 'todos') {
-    return raw;
+function parseVistaInicial(
+  raw: string | null,
+  legacyMovVista: string | null = null,
+): VistaMovimientoInventario {
+  const v = raw ?? legacyMovVista;
+  if (v === 'ingresado' || v === 'despachado' || v === 'almacenado' || v === 'todos') {
+    return v;
   }
   return 'todos';
 }
@@ -156,7 +160,8 @@ export default function MovimientosCuadro({
   const searchParams = useSearchParams();
   const [hydrated, setHydrated] = useState(false);
   const [vistaLocal, setVistaLocal] = useState<VistaMovimientoInventario>(() =>
-    vistaExterna ?? parseVistaInicial(searchParams.get('vista')),
+    vistaExterna ??
+    parseVistaInicial(searchParams.get('vista'), searchParams.get('movVista')),
   );
   const vista = vistaExterna ?? vistaLocal;
   const setVista = useCallback(
@@ -588,7 +593,7 @@ export default function MovimientosCuadro({
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl md:text-3xl font-black tracking-tight">Entradas y salidas</h1>
             <p className="text-xs text-zinc-500 mt-1">
-              Ingresos: compras, cuarentena y recepción en campo (manual, nota, emergencia, tránsito). Salidas: egresos. Stock: ingresado − salido.
+              Ingresos: compras, cuarentena y recepción en campo. Salidas: egresos. Stock: saldo físico en inventario (inventario_stock).
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -626,21 +631,27 @@ export default function MovimientosCuadro({
         </div>
         ) : null}
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/80">Ingresos</p>
             <p className="text-2xl font-black text-emerald-200">{resumen.ingresado}</p>
-            <p className="text-[11px] text-zinc-500">compras, cuarentena y recepción en campo</p>
+            <p className="text-[11px] text-zinc-500">
+              {resumen.ingresado === 1 ? 'movimiento' : 'movimientos'} · compras, cuarentena y recepción
+            </p>
           </div>
           <div className="rounded-xl border border-sky-500/25 bg-sky-950/20 p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/80">Stock</p>
             <p className="text-2xl font-black text-sky-100">{resumen.almacenado}</p>
-            <p className="text-[11px] text-zinc-500">materiales con saldo ingresado − salido</p>
+            <p className="text-[11px] text-zinc-500">
+              {resumen.almacenado === 1 ? 'material con saldo' : 'materiales con saldo'} · inventario físico
+            </p>
           </div>
           <div className="rounded-xl border border-red-500/30 bg-red-950/25 p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/90">Salidas</p>
             <p className="text-2xl font-black text-red-100">{resumen.despachado}</p>
-            <p className="text-[11px] text-zinc-500">egresos del almacén (transferencias y Telegram)</p>
+            <p className="text-[11px] text-zinc-500">
+              {resumen.despachado === 1 ? 'egreso' : 'egresos'} · transferencias y Telegram
+            </p>
           </div>
         </div>
 

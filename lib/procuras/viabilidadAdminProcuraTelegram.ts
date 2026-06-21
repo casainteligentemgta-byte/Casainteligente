@@ -162,6 +162,8 @@ export async function manejarCallbackViabilidadAdminProcuraTelegram(
     viabilidad: parsed.viabilidad,
     adminNombre: auth.usuario.nombre,
     adminTelegramId: auth.usuario.telegram_id,
+    adminUsuarioId: String(auth.usuario.telegram_id ?? params.userId),
+    origen: 'telegram_admin_viabilidad',
   });
 
   if (!resultado.ok) {

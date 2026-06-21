@@ -3,7 +3,7 @@
 > **Uso:** crea una Gem en [Google AI Studio](https://aistudio.google.com) llamada **Socio Cursor Auto · Casa Inteligente**.  
 > Pega el bloque **INSTRUCCIONES** abajo en *Instructions*.  
 > Sube a *Conocimiento*: este archivo + `docs/GEMINI-MEGA-PROMPT.md` + `.cursor/rules/casa-inteligente-app.mdc`.  
-> **Actualizado:** 2026-06-18 · migraciones hasta **254**.
+> **Actualizado:** 2026-06-11 · migraciones hasta **254** · FK 254 verificada en prod.
 
 ---
 
@@ -140,13 +140,14 @@ Usa esto para no repetir diagnósticos obsoletos:
 | Comprador en `/facturas` y `/ingreso` | `chatWhitelist` + `proyectosTelegramUsuario` + auto-selección obra en picker |
 | Columna Almacén en «—» | Enriquecimiento recepción campo + nombre en `inv_ubicaciones` |
 | Factura no en contabilidad | OCR atascado en `procesando` (timeout Vercel); fix en `liberarProcesamientoObsoletoFacturaCanal`; reenviar foto |
-| PGRST200 recepciones ↔ compras | Migración **254** pendiente si no ejecutada |
+| PGRST200 recepciones ↔ compras | FK **254** ✅ en prod (2026-06-11); si persiste error, revisar migr. **250** + `notify pgrst` |
 | Comprador debe completar flujo | Solo foto sin confirmar obra/almacén **no** crea fila en `contabilidad_compras` |
 
 **Scripts útiles que Auto puede ejecutar:**
 - `node scripts/diag-factura-reciente.mjs` — canal + compras 24h
 - `node scripts/reparar-canal-procesando-atascado.mjs` — libera OCR colgado
 - `node scripts/diag-comprador-telegram-flamboyant.mjs` — Neo / whitelist
+- `npm run db:diag:254` — FK 254 + RPC 250 (requiere `DATABASE_URL` en `.env.local`)
 
 ---
 

@@ -33,10 +33,20 @@ export function isLogBotAuditoriaActiva(): boolean {
   return flag !== 'false' && flag !== '0';
 }
 
+const MAX_DETALLE_LOG_DEFAULT = 200;
+const MAX_DETALLE_SISTEMA_CONTABILIDAD = 600;
+
 function truncar(s: string, max = 280): string {
   const t = s.trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
+}
+
+function maxDetalleLog(tipo: TipoAccionTelegramLog, modulo?: string | null): number {
+  if (tipo === 'sistema' && (modulo?.includes('Contabilidad') ?? false)) {
+    return MAX_DETALLE_SISTEMA_CONTABILIDAD;
+  }
+  return MAX_DETALLE_LOG_DEFAULT;
 }
 
 /** Etiqueta legible para callback_data de botones inline. */
@@ -86,7 +96,9 @@ export async function notificarAccionTelegramLog(params: {
     `Chat: ${params.chatId}`,
   ];
   if (params.contexto?.trim()) lineas.push(`Flujo: ${params.contexto.trim()}`);
-  if (params.detalle?.trim()) lineas.push(truncar(params.detalle.trim(), 200));
+  if (params.detalle?.trim()) {
+    lineas.push(truncar(params.detalle.trim(), maxDetalleLog(params.tipo, params.modulo)));
+  }
 
   notifyErrorBotAsync(lineas.join('\n'), {
     origen: params.modulo?.trim() || 'Telegram · Acción',
@@ -125,7 +137,9 @@ export function notificarEventoSistemaLogAsync(params: {
 
   const actor = params.chatLabel?.trim() || 'Sistema';
   const lineas = [`⚙️ ${params.evento}`, `Personaje: ${actor}`];
-  if (params.detalle?.trim()) lineas.push(truncar(params.detalle.trim(), 200));
+  if (params.detalle?.trim()) {
+    lineas.push(truncar(params.detalle.trim(), maxDetalleLog('sistema', params.modulo)));
+  }
   notifyErrorBotAsync(lineas.join('\n'), { origen: params.modulo });
 }
 

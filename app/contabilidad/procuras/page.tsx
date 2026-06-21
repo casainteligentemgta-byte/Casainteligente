@@ -8,8 +8,9 @@ import {
   COLOR_ESTADO_PROCURA,
   etiquetaEstadoProcura,
 } from '@/lib/procuras/procuraEstados';
+import PanelAuditoriaProcuras from '@/components/contabilidad/PanelAuditoriaProcuras';
 
-type TabProcura = 'pendientes' | 'aprobados' | 'comprados';
+type TabProcura = 'pendientes' | 'aprobados' | 'comprados' | 'control_interno';
 
 type ProcuraRow = {
   id: string;
@@ -35,6 +36,7 @@ function nombreProyecto(v: ProcuraRow['ci_proyectos']): string {
 }
 
 function filaEnTab(estado: string, tab: TabProcura): boolean {
+  if (tab === 'control_interno') return false;
   const e = estado.toLowerCase();
   if (tab === 'pendientes') return ESTADOS_PENDIENTES.has(e);
   if (tab === 'aprobados') return ESTADOS_APROBADOS.has(e);
@@ -124,6 +126,7 @@ export default function ProcurasPage() {
               ['pendientes', 'Pendientes'],
               ['aprobados', 'Aprobados'],
               ['comprados', 'Comprados'],
+              ['control_interno', 'Control interno'],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -137,11 +140,15 @@ export default function ProcurasPage() {
           ))}
         </div>
 
-        {error ? (
-          <p className="text-sm text-red-400 font-medium">{error}</p>
-        ) : null}
+        {tab === 'control_interno' ? (
+          <PanelAuditoriaProcuras />
+        ) : (
+          <>
+            {error ? (
+              <p className="text-sm text-red-400 font-medium">{error}</p>
+            ) : null}
 
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] overflow-hidden">
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-16 text-zinc-500">
               <Loader2 className="animate-spin text-[#FF9500]" size={20} />
@@ -220,7 +227,9 @@ export default function ProcurasPage() {
               </tbody>
             </table>
           )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -23,9 +23,32 @@ export type NotifyErrorBotOptions = {
   origen?: string;
 };
 
-/** Escapa caracteres reservados de Markdown (modo legacy de Telegram). */
-function escMarkdown(s: string): string {
-  return s.replace(/([_*[`\\])/g, '\\$1');
+/** Escapa caracteres reservados de HTML (modo Telegram). */
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Etiquetas de bloque bimonetario en alertas de compra confirmada. */
+const ETIQUETAS_BIMONET_BOLD = /^(Moneda origen|Total Bs|Total USD|Tasa BCV):/;
+
+function formatearCuerpoLogBot(mensaje: string): string {
+  return mensaje
+    .split('\n')
+    .map((linea) => {
+      const t = linea.trimEnd();
+      if (!t) return '';
+      const idx = t.indexOf(':');
+      if (idx > 0 && ETIQUETAS_BIMONET_BOLD.test(t.slice(0, idx + 1))) {
+        const etiqueta = t.slice(0, idx);
+        const valor = t.slice(idx + 1).trimStart();
+        return `<b>${escHtml(etiqueta)}:</b> ${escHtml(valor)}`;
+      }
+      return escHtml(t);
+    })
+    .join('\n');
 }
 
 /**
@@ -41,11 +64,11 @@ export async function notifyErrorBot(
   }
 
   const chatId = getTelegramLogChatId()!;
-  const prefijo = opts?.origen ? `*\\[${escMarkdown(opts.origen)}\\]*\n` : '';
-  const text = `${prefijo}${escMarkdown(mensaje)}`;
+  const prefijo = opts?.origen ? `<b>[${escHtml(opts.origen)}]</b>\n` : '';
+  const text = `${prefijo}${formatearCuerpoLogBot(mensaje)}`;
 
   await sendLogBotMessage(chatId, text, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     reply_markup: opts?.reply_markup,
   });
   return true;

@@ -48,6 +48,7 @@ export async function POST(request: Request) {
 
     const auth = await requirePermisoWeb('procura.aprobar');
     let actorNombre = 'Usuario web';
+    let actorUserId: string | null = null;
 
     if (!auth.ok) {
       const permAlt =
@@ -63,11 +64,13 @@ export async function POST(request: Request) {
           : authAlt.response;
       }
       actorNombre = authAlt.actor.nombre?.trim() || actorNombre;
+      actorUserId = authAlt.userId;
     } else {
       if (!puedeProcesarEstadoProcuraWeb(auth.actor, nuevoEstado)) {
         return NextResponse.json({ error: 'No tiene permiso para este cambio de estado.' }, { status: 403 });
       }
       actorNombre = auth.actor.nombre?.trim() || actorNombre;
+      actorUserId = auth.userId;
     }
 
     const admin = supabaseAdminForRoute();
@@ -88,6 +91,9 @@ export async function POST(request: Request) {
           procuraId: id,
           viabilidad,
           adminNombre: actorNombre,
+          adminUsuarioId: actorUserId,
+          observaciones: motivo,
+          origen: 'web_contabilidad_procuras',
         });
         resultados.push(
           r.ok
