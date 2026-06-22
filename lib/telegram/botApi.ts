@@ -78,6 +78,17 @@ export async function sendTelegramMessageWithId(
     body.parse_mode = parse_mode ?? 'HTML';
   }
   const result = await telegramApi<{ message_id: number }>('sendMessage', body);
+
+  void import('@/lib/telegram/espejoSalidaLogBot').then(({ espejarSalidaTelegramLogAsync }) => {
+    espejarSalidaTelegramLogAsync({
+      chatIdDestinoOriginal: chatId,
+      textoEnviado: enrutado.text,
+      rolDestinatario: extra?.rolDestinatario,
+      plain: extra?.plain,
+      reply_markup: extra?.reply_markup,
+    });
+  });
+
   return result.message_id;
 }
 
