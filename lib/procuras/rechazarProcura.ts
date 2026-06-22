@@ -56,7 +56,7 @@ export async function rechazarProcuraConMotivo(
       ok: false,
       error:
         estadoActual === 'solicitada'
-          ? 'La procura espera validación del Administrador.'
+          ? 'La procura espera revisión de fondos del Contador.'
           : 'La procura ya fue resuelta.',
     };
   }

@@ -5,13 +5,14 @@ import {
   debeAlertarProcura,
   prioridadProcuraDesdeObs,
 } from '@/lib/alertas/alertasConfig';
-import { listarAdministradoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
+import { listarContadoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
 import {
   construirMensajeAdminViabilidadProcura,
   resumenStockDesdeEvaluacion,
   type FilaProcuraMensaje,
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 import { tecladoViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
+import { replicarAlertaProcuraAdminEnLogBotAsync } from '@/lib/telegram/espejoSalidaLogBot';
 
 export type AlertaProcuraAdminRow = {
   id: string;
@@ -41,7 +42,7 @@ function esChatSolicitante(chatId: string | number, solicitanteChatId?: number |
   return String(chatId) === String(Math.trunc(solicitanteChatId));
 }
 
-/** Solo Administrador: informar viabilidad presupuestaria (vía larga). */
+/** Contador / revisor de fondos: informar viabilidad presupuestaria (vía larga). */
 export async function enviarAlertaProcuraPendienteAdmin(
   supabase: SupabaseClient,
   procuraId: string,
@@ -86,27 +87,39 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const replyMarkup = tecladoViabilidadAdmin(row.id);
 
   const proyectoId = row.proyecto_id?.trim() || null;
-  let administradores: Awaited<ReturnType<typeof listarAdministradoresProcuraTelegram>> = [];
+  let contadores: Awaited<ReturnType<typeof listarContadoresProcuraTelegram>> = [];
   try {
-    administradores = await listarAdministradoresProcuraTelegram(supabase, proyectoId);
+    contadores = await listarContadoresProcuraTelegram(supabase, proyectoId);
   } catch (e) {
-    console.warn('[alertaAdminProcura] listar administradores', e);
+    console.warn('[alertaAdminProcura] listar contadores', e);
   }
 
   let dmsEnviados = 0;
-  for (const adm of administradores) {
-    if (esChatSolicitante(adm.chatId, solicitanteChatId)) continue;
+  const destinatariosEnviados: { nombre: string; chatId: number }[] = [];
+  for (const cont of contadores) {
+    if (esChatSolicitante(cont.chatId, solicitanteChatId)) continue;
 
     try {
-      await sendTelegramMessage(String(adm.chatId), mensaje, {
+      await sendTelegramMessage(String(cont.chatId), mensaje, {
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
-        rolDestinatario: 'Administrador',
+        rolDestinatario: 'Contador',
+        skipLogEspejo: true,
       });
       dmsEnviados += 1;
+      destinatariosEnviados.push({ nombre: cont.nombre, chatId: cont.chatId });
     } catch (e) {
-      console.warn('[alertaAdminProcura] DM administrador', adm.nombre, adm.chatId, e);
+      console.warn('[alertaAdminProcura] DM contador', cont.nombre, cont.chatId, e);
     }
+  }
+
+  if (destinatariosEnviados.length > 0) {
+    replicarAlertaProcuraAdminEnLogBotAsync({
+      mensaje,
+      ticket: String(row.ticket ?? ''),
+      destinatarios: destinatariosEnviados,
+      reply_markup: replyMarkup,
+    });
   }
 
   return {

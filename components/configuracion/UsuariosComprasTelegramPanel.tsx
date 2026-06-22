@@ -29,9 +29,10 @@ type UsuarioRow = {
 
 const ROL_HINT: Record<RolComprasTelegram, string> = {
   Solicitante: 'Puede usar /procura',
-  Aprobador: 'Aprueba vía larga en canal admin',
+  Aprobador: 'Aprueba vía larga (Project Manager)',
   Comprador: 'Facturas y ejecución de compra',
-  Administrador: 'Acceso completo departamento',
+  Contador: 'Revisa fondos / viabilidad presupuestaria',
+  Administrador: 'Legacy — alias del contador en viabilidad',
 };
 
 export default function UsuariosComprasTelegramPanel() {

@@ -331,7 +331,7 @@ export async function resolverProcuraDepartamento(
         ok: false,
         error:
           est === 'solicitada'
-            ? 'La procura espera validación del Administrador.'
+            ? 'La procura espera revisión de fondos del Contador.'
             : 'La procura ya fue resuelta.',
       };
     }
@@ -365,7 +365,7 @@ export async function resolverProcuraDepartamento(
       ok: false,
       error:
         estAprob === 'solicitada'
-          ? 'La procura espera validación del Administrador.'
+          ? 'La procura espera revisión de fondos del Contador.'
           : 'La procura ya fue resuelta.',
     };
   }

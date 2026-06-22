@@ -48,6 +48,8 @@ export type TelegramMessageExtra = {
   plain?: boolean;
   /** Etiqueta del rol destinatario (modo pruebas TELEGRAM_PRUEBAS_REDIRECT). */
   rolDestinatario?: string;
+  /** No duplicar en espejo global (réplica dedicada en el caller). */
+  skipLogEspejo?: boolean;
 };
 
 export async function sendTelegramMessage(
@@ -79,15 +81,17 @@ export async function sendTelegramMessageWithId(
   }
   const result = await telegramApi<{ message_id: number }>('sendMessage', body);
 
-  void import('@/lib/telegram/espejoSalidaLogBot').then(({ espejarSalidaTelegramLogAsync }) => {
-    espejarSalidaTelegramLogAsync({
-      chatIdDestinoOriginal: chatId,
-      textoEnviado: enrutado.text,
-      rolDestinatario: extra?.rolDestinatario,
-      plain: extra?.plain,
-      reply_markup: extra?.reply_markup,
+  if (!extra?.skipLogEspejo) {
+    void import('@/lib/telegram/espejoSalidaLogBot').then(({ espejarSalidaTelegramLogAsync }) => {
+      espejarSalidaTelegramLogAsync({
+        chatIdDestinoOriginal: chatId,
+        textoEnviado: enrutado.text,
+        rolDestinatario: extra?.rolDestinatario,
+        plain: extra?.plain,
+        reply_markup: extra?.reply_markup,
+      });
     });
-  });
+  }
 
   return result.message_id;
 }

@@ -36,7 +36,8 @@ const ETIQUETA_ROL_SISTEMA: Record<string, string> = {
   Solicitante: 'Solicitante',
   Aprobador: 'Project Manager',
   Comprador: 'Comprador',
-  Administrador: 'Administrador',
+  Contador: 'Contador',
+  Administrador: 'Contador',
 };
 
 const ETIQUETA_ROL_NOMINA: Record<string, string> = {

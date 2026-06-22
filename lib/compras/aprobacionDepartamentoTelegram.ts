@@ -19,8 +19,8 @@ import {
 } from '@/lib/compras/telegramMetadata';
 import {
   exigirUsuarioSistemaTelegram,
-  usuarioEsAdministradorProcura,
   usuarioEsProjectManagerProcura,
+  usuarioPuedeInformarViabilidadProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { esPmNominaProyecto } from '@/lib/procuras/aprobadoresProcuraTelegram';
 
@@ -103,11 +103,11 @@ async function puedeActuarComoProjectManager(
     return { ok: true, nombre: pmNomina.nombre, telegramId: tid };
   }
 
-  if (auth.ok && usuarioEsAdministradorProcura(auth.usuario)) {
+  if (auth.ok && usuarioPuedeInformarViabilidadProcura(auth.usuario)) {
     return {
       ok: false,
       mensaje:
-        '⛔ El Administrador informa viabilidad presupuestaria; la aprobación la hace el Project Manager.',
+        '⛔ El Contador informa viabilidad presupuestaria; la aprobación la hace el Project Manager.',
     };
   }
 

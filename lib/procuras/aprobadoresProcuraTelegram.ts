@@ -18,6 +18,8 @@ export function rolSistemaTelegramDesdeSlugApp(slug: string): RolComprasTelegram
     pm_obra: 'Aprobador',
     admin: 'Administrador',
     comprador: 'Comprador',
+    contador: 'Contador',
+    contabilidad: 'Contador',
   };
   return map[slug.trim()] ?? null;
 }
@@ -28,7 +30,7 @@ export type AprobadorProcuraTelegram = {
   chatId: number;
   nombre: string;
   origen: 'sistema' | 'nomina';
-  rol: 'Aprobador' | 'Administrador';
+  rol: 'Aprobador' | 'Administrador' | 'Contador';
 };
 
 /** Upsert en ci_usuarios_sistema_telegram (permite aprobar /procura). */
@@ -146,13 +148,47 @@ export async function listarAprobadoresProcuraTelegram(
   return Array.from(out.values());
 }
 
-/** Solo Administradores (validación de viabilidad presupuestaria). */
+/** Solo Contador / revisor de fondos (viabilidad presupuestaria, vía larga). */
+export async function listarContadoresProcuraTelegram(
+  supabase: SupabaseClient,
+  _proyectoId: string | null,
+): Promise<AprobadorProcuraTelegram[]> {
+  const out = new Map<number, AprobadorProcuraTelegram>();
+
+  const { data: sistema, error: errSis } = await supabase
+    .from('ci_usuarios_sistema_telegram')
+    .select('nombre, telegram_id, rol, proyecto_id')
+    .eq('activo', true)
+    .in('rol', ['Contador', 'Administrador']);
+
+  if (errSis?.code === '42P01') {
+    /* tabla ausente */
+  } else if (errSis) {
+    throw new Error(errSis.message);
+  } else {
+    for (const row of sistema ?? []) {
+      const chatId = parseTelegramIdNumerico(row.telegram_id);
+      if (chatId == null) continue;
+      const rolRaw = String(row.rol ?? '').trim();
+      if (rolRaw !== 'Contador' && rolRaw !== 'Administrador') continue;
+
+      const nombreRaw = String(row.nombre ?? '').trim() || 'Contador';
+      const nombre = corregirNombreDisplayTelegram(
+        await resolverNombreMostrarTelegram(supabase, chatId, nombreRaw, _proyectoId),
+      );
+      out.set(chatId, { chatId, nombre, origen: 'sistema', rol: 'Contador' });
+    }
+  }
+
+  return Array.from(out.values());
+}
+
+/** @deprecated Usar {@link listarContadoresProcuraTelegram} — «Administrador» era el contador/revisor de fondos. */
 export async function listarAdministradoresProcuraTelegram(
   supabase: SupabaseClient,
   proyectoId: string | null,
 ): Promise<AprobadorProcuraTelegram[]> {
-  const todos = await listarAprobadoresProcuraTelegram(supabase, proyectoId);
-  return todos.filter((a) => a.rol === 'Administrador');
+  return listarContadoresProcuraTelegram(supabase, proyectoId);
 }
 
 /** Solo Project Managers / Aprobadores (decisión final de procura). */

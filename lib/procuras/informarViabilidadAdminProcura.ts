@@ -42,8 +42,8 @@ export function metadatosHistorialViabilidadAdmin(params: {
 /** Texto legible en columna motivo (auditoría humana). */
 export function motivoHistorialViabilidadAdmin(viabilidad: 'si' | 'no'): string {
   return viabilidad === 'si'
-    ? 'Viabilidad presupuestaria confirmada por administrador'
-    : 'Sin viabilidad presupuestaria (administrador)';
+    ? 'Viabilidad presupuestaria confirmada por contador'
+    : 'Sin viabilidad presupuestaria (contador)';
 }
 
 async function insertarHistorialViabilidadAdmin(

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import {
   exigirUsuarioSistemaTelegram,
-  usuarioEsAdministradorProcura,
+  usuarioPuedeInformarViabilidadProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import {
   prioridadProcuraDesdeObs,
@@ -79,7 +79,7 @@ function esChatSolicitante(chatId: string | number, solicitanteChatId?: number |
   return String(chatId) === String(Math.trunc(solicitanteChatId));
 }
 
-/** Notifica a PMs tras informe de viabilidad del Administrador. */
+/** Notifica a PMs tras informe de viabilidad del Contador. */
 export async function enviarAlertaPmTrasViabilidadAdmin(
   supabase: SupabaseClient,
   procuraId: string,
@@ -148,10 +148,10 @@ export async function manejarCallbackViabilidadAdminProcuraTelegram(
     await answerCallbackQuery(params.callbackId, auth.error.slice(0, 180), true);
     return true;
   }
-  if (!usuarioEsAdministradorProcura(auth.usuario)) {
+  if (!usuarioPuedeInformarViabilidadProcura(auth.usuario)) {
     await answerCallbackQuery(
       params.callbackId,
-      'Solo el Administrador puede informar disponibilidad presupuestaria.',
+      'Solo el Contador puede informar disponibilidad presupuestaria.',
       true,
     );
     return true;
@@ -163,7 +163,7 @@ export async function manejarCallbackViabilidadAdminProcuraTelegram(
     adminNombre: auth.usuario.nombre,
     adminTelegramId: auth.usuario.telegram_id,
     adminUsuarioId: String(auth.usuario.telegram_id ?? params.userId),
-    origen: 'telegram_admin_viabilidad',
+    origen: 'telegram_contador_viabilidad',
   });
 
   if (!resultado.ok) {

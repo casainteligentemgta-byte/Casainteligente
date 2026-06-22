@@ -4,6 +4,7 @@ export type RolComprasTelegram =
   | 'Solicitante'
   | 'Aprobador'
   | 'Comprador'
+  | 'Contador'
   | 'Administrador';
 
 export type UsuarioSistemaTelegram = {
@@ -19,6 +20,7 @@ export const ROLES_COMPRAS_TELEGRAM: RolComprasTelegram[] = [
   'Solicitante',
   'Aprobador',
   'Comprador',
+  'Contador',
   'Administrador',
 ];
 
@@ -68,7 +70,7 @@ export async function obtenerUsuarioSistemaTelegram(
 }
 
 export function usuarioPuedeSolicitarProcura(u: UsuarioSistemaTelegram): boolean {
-  return u.activo && ['Solicitante', 'Aprobador', 'Comprador', 'Administrador'].includes(u.rol);
+  return u.activo && ['Solicitante', 'Aprobador', 'Comprador', 'Contador', 'Administrador'].includes(u.rol);
 }
 
 export function usuarioPuedeAprobarProcura(u: UsuarioSistemaTelegram): boolean {
@@ -77,6 +79,16 @@ export function usuarioPuedeAprobarProcura(u: UsuarioSistemaTelegram): boolean {
 
 export function usuarioPuedeRechazarProcura(u: UsuarioSistemaTelegram): boolean {
   return usuarioPuedeAprobarProcura(u);
+}
+
+/** Legacy: rol «Administrador» en Telegram = alias histórico del contador. */
+export function usuarioEsContadorProcura(u: UsuarioSistemaTelegram): boolean {
+  return u.activo && (u.rol === 'Contador' || u.rol === 'Administrador');
+}
+
+/** Revisor de fondos: informa viabilidad presupuestaria antes del PM. */
+export function usuarioPuedeInformarViabilidadProcura(u: UsuarioSistemaTelegram): boolean {
+  return usuarioEsContadorProcura(u);
 }
 
 export function usuarioEsAdministradorProcura(u: UsuarioSistemaTelegram): boolean {

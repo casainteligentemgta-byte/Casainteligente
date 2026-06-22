@@ -80,3 +80,46 @@ export function espejarSalidaTelegramLogAsync(
     console.warn('[espejoSalidaLogBot]', e instanceof Error ? e.message : e);
   });
 }
+
+/** Réplica dedicada: alerta de viabilidad procura → contador(es). Siempre si hay log bot. */
+export async function replicarAlertaProcuraAdminEnLogBot(params: {
+  mensaje: string;
+  ticket: string;
+  destinatarios: { nombre: string; chatId: number }[];
+  reply_markup?: unknown;
+}): Promise<void> {
+  if (!isLogBotConfigured()) return;
+
+  const logChat = getTelegramLogChatId();
+  if (!logChat) return;
+
+  const destinos =
+    params.destinatarios.length > 0
+      ? params.destinatarios
+          .map(
+            (d) =>
+              `• ${escHtml(d.nombre.trim() || 'Contador')} (<i>chat ${escHtml(String(d.chatId))}</i>)`,
+          )
+          .join('\n')
+      : '<i>Sin destinatarios</i>';
+
+  const lineasCabecera = [
+    '<b>[Procura · Contador · viabilidad]</b>',
+    `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
+    '<b>Para:</b>',
+    destinos,
+  ];
+  const teclado = resumirTecladoInline(params.reply_markup);
+  if (teclado) lineasCabecera.push(`🔘 ${escHtml(teclado)}`);
+
+  const texto = truncar(`${lineasCabecera.join('\n')}\n\n${params.mensaje}`, MAX_TEXTO_LOG);
+  await sendLogBotMessage(logChat, texto, { parse_mode: 'HTML' });
+}
+
+export function replicarAlertaProcuraAdminEnLogBotAsync(
+  params: Parameters<typeof replicarAlertaProcuraAdminEnLogBot>[0],
+): void {
+  void replicarAlertaProcuraAdminEnLogBot(params).catch((e) => {
+    console.warn('[espejoSalidaLogBot] alerta admin procura', e instanceof Error ? e.message : e);
+  });
+}

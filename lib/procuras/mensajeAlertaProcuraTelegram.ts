@@ -109,31 +109,31 @@ function etiquetaViabilidad(v: string | null | undefined): string {
   return '—';
 }
 
-/** Ticket para Administrador: informar viabilidad presupuestaria (manual). */
+/** Ticket para Contador: informar viabilidad presupuestaria (manual). */
 export function construirMensajeAdminViabilidadProcura(
   row: FilaProcuraMensaje,
   prioridad: string,
   stock?: ResumenStockProcuraTicket | null,
 ): string {
   return (
-    '🏛️ <b>PROCURA — validación Administrador</b>\n\n' +
+    '📊 <b>PROCURA — revisión de fondos (Contador)</b>\n\n' +
     cuerpoDetalleProcura(row, prioridad, stock) +
     '\n\n¿Hay <b>disponibilidad presupuestaria</b> para la compra?'
   );
 }
 
-/** Ticket para PM tras informe del Administrador. */
+/** Ticket para PM tras informe del Contador. */
 export function construirMensajePmDecisionProcura(
   row: FilaProcuraMensaje,
   prioridad: string,
   stock?: ResumenStockProcuraTicket | null,
 ): string {
-  const admin = row.viabilidad_informada_por?.trim() || 'Administrador';
+  const contador = row.viabilidad_informada_por?.trim() || 'Contador';
   return (
     '🏗️ <b>PROCURA — decisión Project Manager</b>\n\n' +
     cuerpoDetalleProcura(row, prioridad, stock) +
     `\n💰 <b>Disponibilidad presupuestaria:</b> ${escHtml(etiquetaViabilidad(row.viabilidad_presupuestaria))}\n` +
-    `👤 <b>Informó:</b> ${escHtml(admin)} (Administrador)\n\n` +
+    `👤 <b>Informó:</b> ${escHtml(contador)} (Contador)\n\n` +
     '¿Aprueba la procura?'
   );
 }
@@ -143,7 +143,7 @@ export function construirMensajeSolicitanteProcuraViaLarga(ticket: string): stri
   return (
     '✅ <b>PROCURA REGISTRADA</b>\n\n' +
     `🎫 <b>Ticket:</b> ${escHtml(ticket)}\n` +
-    '⏳ Pendiente del <b>Administrador</b>.'
+    '⏳ Pendiente del <b>Contador</b> (revisión de fondos).'
   );
 }
 
@@ -205,7 +205,7 @@ export function construirMensajeSolicitanteProcuraCompra(params: {
   if (params.viaRapida) {
     cuerpo += `\n⚡ <b>Vía rápida</b> — ${escHtml(params.motivoVia ?? 'monto bajo techo')}`;
   } else {
-    cuerpo += '\n⏳ Pendiente del <b>Administrador</b>.';
+    cuerpo += '\n⏳ Pendiente del <b>Contador</b> (revisión de fondos).';
   }
 
   return cuerpo;

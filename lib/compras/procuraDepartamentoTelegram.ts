@@ -589,7 +589,7 @@ export async function manejarComandoProcuraDepartamentoTelegram(
   if (!activo) return false;
 
   const auth = await exigirUsuarioSistemaTelegram(supabase, telegramUserId, {
-    permitirRoles: ['Solicitante', 'Aprobador', 'Comprador', 'Administrador'],
+    permitirRoles: ['Solicitante', 'Aprobador', 'Comprador', 'Contador', 'Administrador'],
   });
   if (!auth.ok) {
     await sendTelegramMessage(chatId, auth.error, { parse_mode: 'HTML' });

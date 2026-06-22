@@ -418,7 +418,7 @@ export async function procesarAbastecimientoProcuraAprobada(
   } else if (estado === 'solicitada') {
     return {
       ok: false,
-      error: 'La procura espera validación del Administrador (viabilidad presupuestaria).',
+      error: 'La procura espera revisión de fondos del Contador (viabilidad presupuestaria).',
     };
   }
 
