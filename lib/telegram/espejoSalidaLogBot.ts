@@ -86,6 +86,8 @@ export async function replicarAlertaProcuraAdminEnLogBot(params: {
   mensaje: string;
   ticket: string;
   destinatarios: { nombre: string; chatId: number }[];
+  /** Sin filas Contador/Administrador en ci_usuarios_sistema_telegram. */
+  sinContadorConfigurado?: boolean;
   reply_markup?: unknown;
 }): Promise<void> {
   if (!isLogBotConfigured()) return;
@@ -93,21 +95,28 @@ export async function replicarAlertaProcuraAdminEnLogBot(params: {
   const logChat = getTelegramLogChatId();
   if (!logChat) return;
 
-  const destinos =
-    params.destinatarios.length > 0
-      ? params.destinatarios
-          .map(
-            (d) =>
-              `• ${escHtml(d.nombre.trim() || 'Contador')} (<i>chat ${escHtml(String(d.chatId))}</i>)`,
-          )
-          .join('\n')
-      : '<i>Sin destinatarios</i>';
+  let bloquePara: string;
+  if (params.sinContadorConfigurado) {
+    bloquePara =
+      '⚠️ <i>Sin contador Telegram configurado</i>\n' +
+      '<b>Para:</b> Contador (revisor de fondos)';
+  } else if (params.destinatarios.length > 0) {
+    bloquePara =
+      '<b>Para:</b>\n' +
+      params.destinatarios
+        .map(
+          (d) =>
+            `• ${escHtml(d.nombre.trim() || 'Contador')} (<i>chat ${escHtml(String(d.chatId))}</i>)`,
+        )
+        .join('\n');
+  } else {
+    bloquePara = '<b>Para:</b> <i>Contador — sin destinatario disponible</i>';
+  }
 
   const lineasCabecera = [
     '<b>[Procura · Contador · viabilidad]</b>',
     `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
-    '<b>Para:</b>',
-    destinos,
+    bloquePara,
   ];
   const teclado = resumirTecladoInline(params.reply_markup);
   if (teclado) lineasCabecera.push(`🔘 ${escHtml(teclado)}`);

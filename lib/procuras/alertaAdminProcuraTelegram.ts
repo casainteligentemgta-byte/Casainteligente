@@ -13,6 +13,7 @@ import {
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 import { tecladoViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
 import { replicarAlertaProcuraAdminEnLogBotAsync } from '@/lib/telegram/espejoSalidaLogBot';
+import { isLogBotConfigured } from '@/lib/telegram/logBotApi';
 
 export type AlertaProcuraAdminRow = {
   id: string;
@@ -35,6 +36,8 @@ export type ResultadoAlertaProcuraPendiente = {
   enviado: boolean;
   canalAdmin: boolean;
   dmsEnviados: number;
+  /** Copia enviada al bot de logs (p. ej. sin contador configurado). */
+  logReplicado?: boolean;
 };
 
 function esChatSolicitante(chatId: string | number, solicitanteChatId?: number | null): boolean {
@@ -113,18 +116,21 @@ export async function enviarAlertaProcuraPendienteAdmin(
     }
   }
 
-  if (destinatariosEnviados.length > 0) {
-    replicarAlertaProcuraAdminEnLogBotAsync({
-      mensaje,
-      ticket: String(row.ticket ?? ''),
-      destinatarios: destinatariosEnviados,
-      reply_markup: replyMarkup,
-    });
-  }
+  const sinContadorConfigurado = contadores.length === 0;
+  const logActivo = isLogBotConfigured();
+
+  replicarAlertaProcuraAdminEnLogBotAsync({
+    mensaje,
+    ticket: String(row.ticket ?? ''),
+    destinatarios: destinatariosEnviados,
+    sinContadorConfigurado,
+    reply_markup: replyMarkup,
+  });
 
   return {
-    enviado: dmsEnviados > 0,
+    enviado: dmsEnviados > 0 || (sinContadorConfigurado && logActivo),
     canalAdmin: false,
     dmsEnviados,
+    logReplicado: logActivo,
   };
 }
