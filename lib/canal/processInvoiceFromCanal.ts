@@ -178,14 +178,23 @@ async function processInvoiceFromCanalCore(
   await prog?.reportar(95, 'Guardando en la aplicación…');
 
   const datosOcr = extracted as DatosOcrFastTrack;
-  /** El comprador confirma Bs/USD tras el OCR; no asumir bolívares por defecto. */
-  const datosSinMoneda = { ...datosOcr, moneda: undefined };
+  /** El comprador confirma Bs/USD y contado/crédito tras el OCR (no asumir valores). */
+  const datosSinConfirmacionComprador = {
+    ...datosOcr,
+    moneda: null,
+    condicion_pago: null,
+    dias_credito: null,
+  } as DatosOcrFastTrack & {
+    moneda: null;
+    condicion_pago: null;
+    dias_credito: null;
+  };
 
   await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
       estado: 'extraido',
-      extracted: datosSinMoneda,
+      extracted: datosSinConfirmacionComprador,
       mensaje_error: null,
       updated_at: new Date().toISOString(),
     })
@@ -273,7 +282,7 @@ async function processInvoiceFromCanalCore(
 
   await prog?.reportar(100, 'Completado');
 
-  const inv = datosSinMoneda;
+  const inv = datosSinConfirmacionComprador;
   const nItems = Array.isArray(inv.items) ? inv.items.length : 0;
   const plain =
     `✅ Factura recibida\n\n` +
@@ -287,8 +296,22 @@ async function processInvoiceFromCanalCore(
   if (prog) {
     await prog.ok('');
     if (params.canal === 'telegram' && !fastTrackMsg) {
-      const { continuarPostOcrFacturaTelegram } = await import('@/lib/telegram/fechaFacturaPicker');
-      await continuarPostOcrFacturaTelegram(supabase, params.chatId, params.pendingId, datosSinMoneda);
+      try {
+        const { avanzarFlujoFacturaCompradorTelegram } = await import(
+          '@/lib/telegram/flujoFacturaCompradorTelegram'
+        );
+        await avanzarFlujoFacturaCompradorTelegram(
+          supabase,
+          params.chatId,
+          params.pendingId,
+        );
+      } catch (e) {
+        console.error('[processInvoiceFromCanal] flujo comprador post-OCR:', e);
+        await params.sendReply(
+          '✅ Factura leída. Si no ve los botones de <b>moneda</b> y <b>forma de pago</b>, reenvíe la foto con <code>/facturas</code>.',
+          true,
+        );
+      }
     }
   } else {
     await params.sendReply(plain, false);

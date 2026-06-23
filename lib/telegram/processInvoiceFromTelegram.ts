@@ -43,6 +43,25 @@ export async function processTelegramInvoicePhoto(params: {
       }
     }
     if (claim === 'already_done') {
+      const { avanzarFlujoFacturaCompradorTelegram, flujoFacturaCompradorIncompleto } =
+        await import('@/lib/telegram/flujoFacturaCompradorTelegram');
+      const { data: row } = await admin.client
+        .from('ci_facturas_canal_pendientes')
+        .select('extracted, proyecto_id, entidad_id, imputacion_entidad, estado')
+        .eq('id', params.pendingId)
+        .maybeSingle();
+      const estado = String(row?.estado ?? '').toLowerCase();
+      if (
+        row?.extracted &&
+        (estado === 'extraido' || estado === 'error') &&
+        flujoFacturaCompradorIncompleto(row.extracted as never, row)
+      ) {
+        await avanzarFlujoFacturaCompradorTelegram(
+          admin.client,
+          params.chatId,
+          params.pendingId,
+        );
+      }
       return;
     }
     if (claim === 'already_processing') {

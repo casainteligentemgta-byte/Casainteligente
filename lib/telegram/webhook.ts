@@ -386,6 +386,34 @@ async function manejarComandoFacturasDirecto(chatId: string): Promise<{
 
   try {
     await setTelegramContexto(admin.client, chatId, { contexto: 'factura' });
+
+    const { data: pendiente } = await admin.client
+      .from('ci_facturas_canal_pendientes')
+      .select('id, extracted, proyecto_id, entidad_id, imputacion_entidad, estado')
+      .eq('chat_id', chatId)
+      .in('estado', ['extraido', 'error'])
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pendiente?.id && pendiente.extracted) {
+      const { avanzarFlujoFacturaCompradorTelegram, flujoFacturaCompradorIncompleto } =
+        await import('@/lib/telegram/flujoFacturaCompradorTelegram');
+      if (
+        flujoFacturaCompradorIncompleto(pendiente.extracted as never, pendiente) &&
+        (String(pendiente.estado) === 'extraido' || String(pendiente.estado) === 'error')
+      ) {
+        await setTelegramContexto(admin.client, chatId, {
+          contexto: 'factura',
+          pending_factura_id: String(pendiente.id),
+        });
+        await avanzarFlujoFacturaCompradorTelegram(
+          admin.client,
+          chatId,
+          String(pendiente.id),
+        );
+      }
+    }
   } catch (err) {
     console.error('[telegram /facturas estado]', err);
     return { ok: true, warn: 'estado_db' };

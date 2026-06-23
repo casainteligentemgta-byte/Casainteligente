@@ -60,15 +60,39 @@ export async function manejarFacturaTelegram(params: {
   const debeReprocesar = async (): Promise<boolean> => {
     const { data: prev } = await params.supabase
       .from('ci_facturas_canal_pendientes')
-      .select('estado, extracted')
+      .select('estado, extracted, proyecto_id, entidad_id, imputacion_entidad')
       .eq('id', reserva.pendingId)
       .maybeSingle();
     const estado = String(prev?.estado ?? '');
-    if (prev?.extracted) return false;
+    if (prev?.extracted) {
+      return false;
+    }
     if (estado === 'procesando') {
       await liberarProcesamientoObsoletoFacturaCanal(params.supabase, reserva.pendingId);
     }
     return ['recibido', 'pendiente', 'procesando', 'error'].includes(estado);
+  };
+
+  const reanudarFlujoSiPendiente = async (): Promise<void> => {
+    const { avanzarFlujoFacturaCompradorTelegram, flujoFacturaCompradorIncompleto } =
+      await import('@/lib/telegram/flujoFacturaCompradorTelegram');
+    const { data: prev } = await params.supabase
+      .from('ci_facturas_canal_pendientes')
+      .select('extracted, proyecto_id, entidad_id, imputacion_entidad, estado')
+      .eq('id', reserva.pendingId)
+      .maybeSingle();
+    const estado = String(prev?.estado ?? '').toLowerCase();
+    if (
+      prev?.extracted &&
+      (estado === 'extraido' || estado === 'error') &&
+      flujoFacturaCompradorIncompleto(prev.extracted as never, prev)
+    ) {
+      await avanzarFlujoFacturaCompradorTelegram(
+        params.supabase,
+        params.chatId,
+        reserva.pendingId,
+      );
+    }
   };
 
   if (reserva.duplicate) {
@@ -78,6 +102,8 @@ export async function manejarFacturaTelegram(params: {
         chatId: params.chatId,
         fileId: params.fileId,
       });
+    } else {
+      await reanudarFlujoSiPendiente();
     }
     return { duplicate: true, pendingId: reserva.pendingId };
   }

@@ -156,6 +156,15 @@ async function guardarDiasCreditoYContinuar(
   return null;
 }
 
+/** Pregunta días de crédito (exportado para reanudar flujo). */
+export async function enviarPreguntaDiasCreditoFacturaTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+  pendingId: string,
+): Promise<void> {
+  await enviarPreguntaDiasCreditoTelegram(supabase, chatId, pendingId);
+}
+
 export async function manejarCallbackCondicionPagoFacturaTelegram(
   supabase: SupabaseClient,
   params: { chatId: string; callbackId: string; data: string },

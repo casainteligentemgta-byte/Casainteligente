@@ -133,19 +133,3 @@ export async function manejarCallbackFechaFacturaTelegram(
   await continuarAMoneda(supabase, params.chatId, pendingId);
   return true;
 }
-
-/** Tras OCR: confirma fecha si es sospechosa; si no, pasa directo a moneda. */
-export async function continuarPostOcrFacturaTelegram(
-  supabase: SupabaseClient,
-  chatId: string,
-  pendingId: string,
-  extracted: ExtractedCanalHeader,
-): Promise<void> {
-  const fecha = String(extracted.date ?? '').slice(0, 10);
-  if (fechaFacturaRequiereConfirmacion(fecha)) {
-    await enviarConfirmacionFechaFacturaTelegram(supabase, chatId, pendingId);
-    return;
-  }
-  const { enviarPickerMonedaFacturaTelegram } = await import('@/lib/telegram/monedaFacturaPicker');
-  await enviarPickerMonedaFacturaTelegram(supabase, chatId, pendingId);
-}
