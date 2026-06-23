@@ -54,6 +54,13 @@ export function resumirCallbackTelegram(data: string): string {
   const d = data.trim();
   if (!d) return 'Botón (sin datos)';
   if (d.startsWith('liberar_factura:')) return 'Destrabar factura OCR';
+  if (d.startsWith('log:via:si:')) return 'Viabilidad procura: hay disponibilidad (supervisor)';
+  if (d.startsWith('log:via:no:')) return 'Viabilidad procura: sin disponibilidad (supervisor)';
+  if (d.startsWith('log:pm:apr:')) return 'Aprobar procura (supervisor)';
+  if (d.startsWith('log:pm:rech:')) return 'Rechazar procura (supervisor)';
+  if (d.startsWith('log:dep:abas:')) return 'Verificación almacén (supervisor)';
+  if (d.startsWith('log:com:orden:')) return 'Reenviar orden compra (supervisor)';
+  if (d.startsWith('cmp:via:')) return 'Viabilidad procura (contador)';
   if (d.startsWith('factura_ok')) return 'Confirmar factura OCR';
   if (d.startsWith('factura_moneda:')) return `Moneda factura: ${d.split(':')[1] ?? '—'}`;
   if (d.startsWith('factura_fecha:')) return 'Fecha de factura';

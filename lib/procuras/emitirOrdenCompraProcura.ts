@@ -10,6 +10,7 @@ import {
   parseEstadoProcura,
   type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
+import { replicarOrdenCompraProcuraDesdeFila } from '@/lib/procuras/supervisorLogBotProcura';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 
 const ESTADOS_ORIGEN_ORDEN: readonly EstadoProcura[] = [
@@ -119,27 +120,40 @@ export async function notificarCompradoresOrdenCompra(
   params: { autorNombre: string; motivo?: string | null; cantidadCompra?: number | null },
 ): Promise<{ enviados: number; omitidos: number }> {
   const compradores = await listarUsuariosOrdenCompraTelegram(supabase);
-  if (!compradores.length) {
-    console.warn('[ordenCompraProcura] Sin compradores Telegram activos');
-    return { enviados: 0, omitidos: 0 };
-  }
-
   const texto = mensajeOrdenCompraComprador(procura, params);
   let enviados = 0;
   let omitidos = 0;
 
-  for (const u of compradores) {
-    try {
-      await sendTelegramMessage(String(u.telegram_id), texto, {
-        parse_mode: 'HTML',
-        rolDestinatario: u.rol === 'Administrador' ? 'Administrador' : 'Comprador',
-      });
-      enviados += 1;
-    } catch (e) {
-      console.warn('[ordenCompraProcura] notify', u.nombre, e);
-      omitidos += 1;
+  if (!compradores.length) {
+    console.warn('[ordenCompraProcura] Sin compradores Telegram activos');
+  } else {
+    for (const u of compradores) {
+      try {
+        await sendTelegramMessage(String(u.telegram_id), texto, {
+          parse_mode: 'HTML',
+          rolDestinatario: u.rol === 'Administrador' ? 'Administrador' : 'Comprador',
+          skipLogEspejo: true,
+        });
+        enviados += 1;
+      } catch (e) {
+        console.warn('[ordenCompraProcura] notify', u.nombre, e);
+        omitidos += 1;
+      }
     }
   }
+
+  void replicarOrdenCompraProcuraDesdeFila(supabase, {
+    procuraId: procura.id,
+    autorNombre: params.autorNombre,
+    motivo: params.motivo,
+    cantidadCompra: params.cantidadCompra,
+    compradores: compradores.map((u) => ({
+      nombre: u.nombre,
+      telegram_id: u.telegram_id,
+    })),
+  }).catch((e) => {
+    console.warn('[ordenCompraProcura] réplica log supervisor', e);
+  });
 
   return { enviados, omitidos };
 }

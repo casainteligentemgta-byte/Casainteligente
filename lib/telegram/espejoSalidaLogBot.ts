@@ -1,5 +1,9 @@
 import { getTelegramLogChatId, isLogBotConfigured, sendLogBotMessage } from '@/lib/telegram/logBotApi';
 import {
+  mapearTecladoOperativoASupervisorLog,
+  tecladoViabilidadSupervisorLog,
+} from '@/lib/procuras/supervisorLogBotProcura';
+import {
   modoPruebasTelegramActivo,
   resolverEtiquetaRolDestinatario,
 } from '@/lib/telegram/enrutamientoPruebasTelegram';
@@ -64,13 +68,24 @@ export async function espejarSalidaTelegramLog(params: {
   if (modoPruebasTelegramActivo()) {
     lineasCabecera.push('<i>↪ redirigido en modo pruebas</i>');
   }
-  const teclado = resumirTecladoInline(params.reply_markup);
-  if (teclado) lineasCabecera.push(`🔘 ${escHtml(teclado)}`);
+
+  const tecladoSupervisor = mapearTecladoOperativoASupervisorLog(params.reply_markup);
+  if (tecladoSupervisor) {
+    lineasCabecera.push(
+      '<b>Supervisor (log):</b> puede actuar en nombre del destinatario.',
+    );
+  } else {
+    const teclado = resumirTecladoInline(params.reply_markup);
+    if (teclado) lineasCabecera.push(`🔘 ${escHtml(teclado)}`);
+  }
 
   const cuerpo = params.plain ? escHtml(params.textoEnviado) : params.textoEnviado;
   const texto = truncar(`${lineasCabecera.join('\n')}\n\n${cuerpo}`, MAX_TEXTO_LOG);
 
-  await sendLogBotMessage(logChat, texto, { parse_mode: 'HTML' });
+  await sendLogBotMessage(logChat, texto, {
+    parse_mode: 'HTML',
+    ...(tecladoSupervisor ? { reply_markup: tecladoSupervisor } : {}),
+  });
 }
 
 export function espejarSalidaTelegramLogAsync(
@@ -81,14 +96,14 @@ export function espejarSalidaTelegramLogAsync(
   });
 }
 
-/** Réplica dedicada: alerta de viabilidad procura → contador(es). Siempre si hay log bot. */
+/** Réplica dedicada: alerta de viabilidad procura → contador(es) + supervisor en log bot. */
 export async function replicarAlertaProcuraAdminEnLogBot(params: {
+  procuraId: string;
   mensaje: string;
   ticket: string;
   destinatarios: { nombre: string; chatId: number }[];
   /** Sin filas Contador/Administrador en ci_usuarios_sistema_telegram. */
   sinContadorConfigurado?: boolean;
-  reply_markup?: unknown;
 }): Promise<void> {
   if (!isLogBotConfigured()) return;
 
@@ -102,7 +117,7 @@ export async function replicarAlertaProcuraAdminEnLogBot(params: {
       '<b>Para:</b> Contador (revisor de fondos)';
   } else if (params.destinatarios.length > 0) {
     bloquePara =
-      '<b>Para:</b>\n' +
+      '<b>Para contador:</b>\n' +
       params.destinatarios
         .map(
           (d) =>
@@ -110,19 +125,19 @@ export async function replicarAlertaProcuraAdminEnLogBot(params: {
         )
         .join('\n');
   } else {
-    bloquePara = '<b>Para:</b> <i>Contador — sin destinatario disponible</i>';
+    bloquePara = '<b>Para contador:</b> <i>sin destinatario disponible</i>';
   }
 
   const lineasCabecera = [
-    '<b>[Procura · Contador · viabilidad]</b>',
+    '<b>[Procura · viabilidad presupuestaria]</b>',
     `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
     bloquePara,
+    '<b>Supervisor (log):</b> puede actuar en nombre del contador si no responde.',
   ];
-  const teclado = resumirTecladoInline(params.reply_markup);
-  if (teclado) lineasCabecera.push(`🔘 ${escHtml(teclado)}`);
 
   const texto = truncar(`${lineasCabecera.join('\n')}\n\n${params.mensaje}`, MAX_TEXTO_LOG);
-  await sendLogBotMessage(logChat, texto, { parse_mode: 'HTML' });
+  const replyMarkup = tecladoViabilidadSupervisorLog(params.procuraId.trim());
+  await sendLogBotMessage(logChat, texto, { parse_mode: 'HTML', reply_markup: replyMarkup });
 }
 
 export function replicarAlertaProcuraAdminEnLogBotAsync(

@@ -120,11 +120,11 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const logActivo = isLogBotConfigured();
 
   replicarAlertaProcuraAdminEnLogBotAsync({
+    procuraId: row.id,
     mensaje,
     ticket: String(row.ticket ?? ''),
     destinatarios: destinatariosEnviados,
     sinContadorConfigurado,
-    reply_markup: replyMarkup,
   });
 
   return {

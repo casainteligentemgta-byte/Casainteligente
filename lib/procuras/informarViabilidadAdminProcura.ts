@@ -9,6 +9,8 @@ export type InformarViabilidadAdminResult = {
   pmsNotificados?: number;
 };
 
+export type InformadoPorRolViabilidad = 'contador' | 'supervisor';
+
 export type InformarViabilidadAdminParams = {
   procuraId: string;
   viabilidad: 'si' | 'no';
@@ -18,6 +20,8 @@ export type InformarViabilidadAdminParams = {
   adminUsuarioId?: string | null;
   observaciones?: string | null;
   origen?: string;
+  /** Supervisor = contador operativo vía log bot; no sustituye al contador formal en auditoría. */
+  informadoPorRol?: InformadoPorRolViabilidad;
 };
 
 /** Metadatos estructurados de viabilidad en historial (migración 257). */
@@ -26,11 +30,15 @@ export function metadatosHistorialViabilidadAdmin(params: {
   origen: string;
   adminUsuarioId?: string | null;
   observaciones?: string | null;
+  informadoPorRol?: InformadoPorRolViabilidad;
 }): Record<string, string> {
   const payload: Record<string, string> = {
     viabilidad_presupuestaria: params.viabilidad,
     origen: params.origen,
   };
+  if (params.informadoPorRol) {
+    payload.informado_por_rol = params.informadoPorRol;
+  }
   if (params.adminUsuarioId?.trim()) {
     payload.admin_usuario_id = params.adminUsuarioId.trim();
   }
@@ -40,10 +48,14 @@ export function metadatosHistorialViabilidadAdmin(params: {
 }
 
 /** Texto legible en columna motivo (auditoría humana). */
-export function motivoHistorialViabilidadAdmin(viabilidad: 'si' | 'no'): string {
+export function motivoHistorialViabilidadAdmin(
+  viabilidad: 'si' | 'no',
+  rol: InformadoPorRolViabilidad = 'contador',
+): string {
+  const actor = rol === 'supervisor' ? 'supervisor (log bot)' : 'contador';
   return viabilidad === 'si'
-    ? 'Viabilidad presupuestaria confirmada por contador'
-    : 'Sin viabilidad presupuestaria (contador)';
+    ? `Viabilidad presupuestaria confirmada por ${actor}`
+    : `Sin viabilidad presupuestaria (${actor})`;
 }
 
 async function insertarHistorialViabilidadAdmin(
@@ -55,19 +67,22 @@ async function insertarHistorialViabilidadAdmin(
     origen: string;
     adminUsuarioId?: string | null;
     observaciones?: string | null;
+    informadoPorRol?: InformadoPorRolViabilidad;
   },
 ): Promise<string | null> {
+  const rol = params.informadoPorRol ?? 'contador';
   const { error: histError } = await supabase.from('ci_procura_estados_historial').insert({
     procura_id: params.procuraId,
     estado_anterior: 'solicitada',
     estado_nuevo: 'pendiente_pm',
     usuario: params.adminNombre.slice(0, 150),
-    motivo: motivoHistorialViabilidadAdmin(params.viabilidad),
+    motivo: motivoHistorialViabilidadAdmin(params.viabilidad, rol),
     metadatos: metadatosHistorialViabilidadAdmin({
       viabilidad: params.viabilidad,
       origen: params.origen,
       adminUsuarioId: params.adminUsuarioId,
       observaciones: params.observaciones,
+      informadoPorRol: rol,
     }),
   });
 
@@ -132,6 +147,8 @@ export async function informarViabilidadAdminProcura(
     };
   }
 
+  const informadoPorRol = params.informadoPorRol ?? 'contador';
+
   const histErr = await insertarHistorialViabilidadAdmin(supabase, {
     procuraId,
     adminNombre: params.adminNombre,
@@ -139,6 +156,7 @@ export async function informarViabilidadAdminProcura(
     origen,
     adminUsuarioId: params.adminUsuarioId,
     observaciones: params.observaciones,
+    informadoPorRol,
   });
   if (histErr) {
     console.error('[informarViabilidadAdminProcura] historial:', histErr);
@@ -148,7 +166,9 @@ export async function informarViabilidadAdminProcura(
     };
   }
 
-  const alerta = await enviarAlertaPmTrasViabilidadAdmin(supabase, procuraId);
+  const alerta = await enviarAlertaPmTrasViabilidadAdmin(supabase, procuraId, {
+    informadoPorRol,
+  });
 
   return {
     ok: true,

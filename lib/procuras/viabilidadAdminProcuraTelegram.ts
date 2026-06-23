@@ -17,6 +17,7 @@ import { listarProjectManagersProcuraTelegram } from '@/lib/procuras/aprobadores
 import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
 import { informarViabilidadAdminProcura } from '@/lib/procuras/informarViabilidadAdminProcura';
+import type { InformadoPorRolViabilidad } from '@/lib/procuras/informarViabilidadAdminProcura';
 
 export const CB_CMP_VIAB_SI = 'cmp:via:si:';
 export const CB_CMP_VIAB_NO = 'cmp:via:no:';
@@ -79,10 +80,11 @@ function esChatSolicitante(chatId: string | number, solicitanteChatId?: number |
   return String(chatId) === String(Math.trunc(solicitanteChatId));
 }
 
-/** Notifica a PMs tras informe de viabilidad del Contador. */
+/** Notifica a PMs tras informe de viabilidad (contador o supervisor). */
 export async function enviarAlertaPmTrasViabilidadAdmin(
   supabase: SupabaseClient,
   procuraId: string,
+  opts?: { informadoPorRol?: InformadoPorRolViabilidad },
 ): Promise<{ enviados: number }> {
   const row = await cargarFilaProcuraMensaje(supabase, procuraId);
   if (!row || String(row.estado ?? '').toLowerCase() !== 'pendiente_pm') {
@@ -101,7 +103,7 @@ export async function enviarAlertaPmTrasViabilidadAdmin(
     row.unidad,
   );
 
-  const texto = construirMensajePmDecisionProcura(row, prioridad, stock);
+  const texto = construirMensajePmDecisionProcura(row, prioridad, stock, opts?.informadoPorRol);
   const replyMarkup = tecladoAprobacionDepartamento(row.id);
   const solicitanteChatId =
     row.solicitante_telegram_chat_id != null
@@ -164,6 +166,7 @@ export async function manejarCallbackViabilidadAdminProcuraTelegram(
     adminTelegramId: auth.usuario.telegram_id,
     adminUsuarioId: String(auth.usuario.telegram_id ?? params.userId),
     origen: 'telegram_contador_viabilidad',
+    informadoPorRol: 'contador',
   });
 
   if (!resultado.ok) {

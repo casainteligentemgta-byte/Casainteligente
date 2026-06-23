@@ -122,18 +122,20 @@ export function construirMensajeAdminViabilidadProcura(
   );
 }
 
-/** Ticket para PM tras informe del Contador. */
+/** Ticket para PM tras informe de viabilidad (contador o supervisor). */
 export function construirMensajePmDecisionProcura(
   row: FilaProcuraMensaje,
   prioridad: string,
   stock?: ResumenStockProcuraTicket | null,
+  informadoPorRol: 'contador' | 'supervisor' = 'contador',
 ): string {
-  const contador = row.viabilidad_informada_por?.trim() || 'Contador';
+  const informante = row.viabilidad_informada_por?.trim() || (informadoPorRol === 'supervisor' ? 'Supervisor' : 'Contador');
+  const rolLabel = informadoPorRol === 'supervisor' ? 'Supervisor' : 'Contador';
   return (
     '🏗️ <b>PROCURA — decisión Project Manager</b>\n\n' +
     cuerpoDetalleProcura(row, prioridad, stock) +
     `\n💰 <b>Disponibilidad presupuestaria:</b> ${escHtml(etiquetaViabilidad(row.viabilidad_presupuestaria))}\n` +
-    `👤 <b>Informó:</b> ${escHtml(contador)} (Contador)\n\n` +
+    `👤 <b>Informó:</b> ${escHtml(informante)} (${rolLabel})\n\n` +
     '¿Aprueba la procura?'
   );
 }
