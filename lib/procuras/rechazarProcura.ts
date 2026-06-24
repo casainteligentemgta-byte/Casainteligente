@@ -1,4 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  metadatosAuditoriaSupervisor,
+  motivoAuditoriaSupervisor,
+  nombreActorSupervisorFormal,
+  type ContextoAuditoriaSupervisor,
+} from '@/lib/procuras/auditoriaSupervisorProcura';
 import { notificarRechazoProcuraSolicitante } from '@/lib/procuras/notificarRechazoProcura';
 
 export const MIN_MOTIVO_RECHAZO_PROCURA = 3;
@@ -7,6 +13,7 @@ export type RechazarProcuraParams = {
   procuraId: string;
   motivo: string;
   aprobadorNombre: string;
+  auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
 };
 
 export type RechazarProcuraResult = {
@@ -64,12 +71,22 @@ export async function rechazarProcuraConMotivo(
   const motivoFinal =
     motivo.length > 2000 ? motivo.slice(0, 2000) : motivo;
 
+  const motivoRpc = params.auditoriaSupervisor
+    ? motivoAuditoriaSupervisor(motivoFinal, params.auditoriaSupervisor)
+    : motivoFinal;
+
   const { data, error } = await supabase.rpc(
     'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
     {
       p_ids: [procuraId],
       p_nuevo_estado: 'rechazada',
-      p_motivo: motivoFinal,
+      p_motivo: motivoRpc,
+      p_metadatos: params.auditoriaSupervisor
+        ? metadatosAuditoriaSupervisor(params.auditoriaSupervisor)
+        : {},
+      p_usuario: params.auditoriaSupervisor
+        ? nombreActorSupervisorFormal(params.auditoriaSupervisor.actorNombre)
+        : aprobadorNombre.slice(0, 150),
     } as never,
   );
 

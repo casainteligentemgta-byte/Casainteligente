@@ -130,7 +130,8 @@ export function construirMensajePmDecisionProcura(
   informadoPorRol: 'contador' | 'supervisor' = 'contador',
 ): string {
   const informante = row.viabilidad_informada_por?.trim() || (informadoPorRol === 'supervisor' ? 'Supervisor' : 'Contador');
-  const rolLabel = informadoPorRol === 'supervisor' ? 'Supervisor' : 'Contador';
+  const rolLabel =
+    informadoPorRol === 'supervisor' ? 'Supervisor (auditoría formal)' : 'Contador';
   return (
     '🏗️ <b>PROCURA — decisión Project Manager</b>\n\n' +
     cuerpoDetalleProcura(row, prioridad, stock) +

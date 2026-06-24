@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { obtenerConfigTelegramAlmacenProyecto } from '@/lib/almacen/depositarioObra';
+import {
+  ejecutarTransicionProcuraLote,
+  metadatosAuditoriaSupervisor,
+  motivoAuditoriaSupervisor,
+  nombreActorSupervisorFormal,
+  type ContextoAuditoriaSupervisor,
+} from '@/lib/procuras/auditoriaSupervisorProcura';
 import { completarTransferenciaInventario } from '@/lib/almacen/completarTransferenciaInventario';
 import { crearTransferenciaInventario } from '@/lib/almacen/crearTransferenciaInventario';
 import { esUbicacionAlmacenFisico } from '@/lib/almacen/inventarioFiltroUbicacion';
@@ -374,16 +381,16 @@ async function transicionProcura(
   procuraId: string,
   nuevoEstado: string,
   motivo: string,
+  auditoria?: ContextoAuditoriaSupervisor | null,
 ): Promise<void> {
-  const { error } = await supabase.rpc(
-    'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
-    {
-      p_ids: [procuraId.trim()],
-      p_nuevo_estado: nuevoEstado,
-      p_motivo: motivo.slice(0, 500),
-    } as never,
-  );
-  if (error) throw new Error(error.message);
+  const motivoFinal = auditoria ? motivoAuditoriaSupervisor(motivo, auditoria) : motivo;
+  await ejecutarTransicionProcuraLote(supabase, {
+    procuraId,
+    nuevoEstado,
+    motivo: motivoFinal,
+    usuario: auditoria ? nombreActorSupervisorFormal(auditoria.actorNombre) : null,
+    metadatos: auditoria ? metadatosAuditoriaSupervisor(auditoria) : undefined,
+  });
 }
 
 export type ResultadoAbastecimientoProcura = {
@@ -400,7 +407,11 @@ export type ResultadoAbastecimientoProcura = {
 /** PM aprueba: evalúa stock, orden al depositario y (si no hay depositario) ejecuta de inmediato. */
 export async function procesarAbastecimientoProcuraAprobada(
   supabase: SupabaseClient,
-  params: { procuraId: string; autorNombre: string },
+  params: {
+    procuraId: string;
+    autorNombre: string;
+    auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
+  },
 ): Promise<ResultadoAbastecimientoProcura> {
   const procuraId = params.procuraId.trim();
   let procura = await cargarProcuraAbastecimiento(supabase, procuraId);
@@ -413,6 +424,7 @@ export async function procesarAbastecimientoProcuraAprobada(
       procuraId,
       'aprobada',
       `Aprobada por ${params.autorNombre} — verificación de almacén`,
+      params.auditoriaSupervisor,
     );
     procura = (await cargarProcuraAbastecimiento(supabase, procuraId)) ?? procura;
   } else if (estado === 'solicitada') {
@@ -444,13 +456,18 @@ export async function procesarAbastecimientoProcuraAprobada(
   return confirmarAbastecimientoProcura(supabase, {
     procuraId,
     autorNombre: params.autorNombre,
+    auditoriaSupervisor: params.auditoriaSupervisor,
   });
 }
 
 /** Depositario confirma (o fallback sin depositario): despacho + orden de compra según stock. */
 export async function confirmarAbastecimientoProcura(
   supabase: SupabaseClient,
-  params: { procuraId: string; autorNombre: string },
+  params: {
+    procuraId: string;
+    autorNombre: string;
+    auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
+  },
 ): Promise<ResultadoAbastecimientoProcura> {
   const procuraId = params.procuraId.trim();
   const procura = await cargarProcuraAbastecimiento(supabase, procuraId);
@@ -479,6 +496,7 @@ export async function confirmarAbastecimientoProcura(
       procuraId,
       'recibida_parcial',
       `Despacho parcial ${despacho.codigo ?? ''}; compra pendiente por saldo`,
+      params.auditoriaSupervisor,
     );
     estadoFinal = 'recibida_parcial';
   } else if (soloDespacho) {
@@ -487,6 +505,7 @@ export async function confirmarAbastecimientoProcura(
       procuraId,
       'recibida',
       `Material despachado desde almacén (${despacho.codigo ?? 'SAL'})`,
+      params.auditoriaSupervisor,
     );
     estadoFinal = 'recibida';
   }

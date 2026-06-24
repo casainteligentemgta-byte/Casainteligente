@@ -54,6 +54,17 @@ export function resumirCallbackTelegram(data: string): string {
   const d = data.trim();
   if (!d) return 'Botón (sin datos)';
   if (d.startsWith('liberar_factura:')) return 'Destrabar factura OCR';
+  if (d.startsWith('log:fnd:')) {
+    const parts = d.split(':');
+    const fnd = parts[parts.length - 2] ?? '';
+    const map: Record<string, string> = { fin: 'financiera', fis: 'física', amb: 'ambas' };
+    const label = map[fnd] ?? fnd;
+    if (d.includes(':via:si:')) return `Viabilidad procura: confirmar (${label})`;
+    if (d.includes(':pm:apr:')) return `Aprobar procura: confirmar (${label})`;
+    if (d.includes(':dep:abas:')) return `Verificación almacén: confirmar (${label})`;
+    if (d.includes(':com:ord:')) return `Reenviar orden: confirmar (${label})`;
+    return `Confirmar supervisor (${label})`;
+  }
   if (d.startsWith('log:via:si:')) return 'Viabilidad procura: hay disponibilidad (supervisor)';
   if (d.startsWith('log:via:no:')) return 'Viabilidad procura: sin disponibilidad (supervisor)';
   if (d.startsWith('log:pm:apr:')) return 'Aprobar procura (supervisor)';

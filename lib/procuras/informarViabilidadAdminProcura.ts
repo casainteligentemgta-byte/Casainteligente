@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { FundamentoDisponibilidad } from '@/lib/procuras/auditoriaSupervisorProcura';
+import { etiquetaFundamento } from '@/lib/procuras/auditoriaSupervisorProcura';
 import { transicionEstadoProcuraValida } from '@/lib/procuras/procuraEstados';
 import { enviarAlertaPmTrasViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
 
@@ -20,8 +22,10 @@ export type InformarViabilidadAdminParams = {
   adminUsuarioId?: string | null;
   observaciones?: string | null;
   origen?: string;
-  /** Supervisor = contador operativo vía log bot; no sustituye al contador formal en auditoría. */
+  /** Supervisor vía log bot: auditoría formal con mismo efecto que contador. */
   informadoPorRol?: InformadoPorRolViabilidad;
+  /** Fundamento declarado por supervisor (financiera / física / ambas). */
+  fundamento?: FundamentoDisponibilidad | null;
 };
 
 /** Metadatos estructurados de viabilidad en historial (migración 257). */
@@ -31,13 +35,21 @@ export function metadatosHistorialViabilidadAdmin(params: {
   adminUsuarioId?: string | null;
   observaciones?: string | null;
   informadoPorRol?: InformadoPorRolViabilidad;
+  fundamento?: FundamentoDisponibilidad | null;
 }): Record<string, string> {
   const payload: Record<string, string> = {
     viabilidad_presupuestaria: params.viabilidad,
     origen: params.origen,
   };
+  if (params.informadoPorRol === 'supervisor') {
+    payload.auditoria_formal = 'true';
+    payload.rol_facultado = 'contador';
+  }
   if (params.informadoPorRol) {
     payload.informado_por_rol = params.informadoPorRol;
+  }
+  if (params.fundamento) {
+    payload.fundamento = params.fundamento;
   }
   if (params.adminUsuarioId?.trim()) {
     payload.admin_usuario_id = params.adminUsuarioId.trim();
@@ -51,11 +63,18 @@ export function metadatosHistorialViabilidadAdmin(params: {
 export function motivoHistorialViabilidadAdmin(
   viabilidad: 'si' | 'no',
   rol: InformadoPorRolViabilidad = 'contador',
+  fundamento?: FundamentoDisponibilidad | null,
 ): string {
-  const actor = rol === 'supervisor' ? 'supervisor (log bot)' : 'contador';
+  if (rol === 'supervisor') {
+    if (viabilidad === 'si') {
+      const fnd = fundamento ? etiquetaFundamento(fundamento) : 'disponibilidad presupuestaria';
+      return `Viabilidad confirmada por supervisor (auditoría formal) — ${fnd}`;
+    }
+    return 'Sin viabilidad presupuestaria — supervisor (auditoría formal, canal log)';
+  }
   return viabilidad === 'si'
-    ? `Viabilidad presupuestaria confirmada por ${actor}`
-    : `Sin viabilidad presupuestaria (${actor})`;
+    ? 'Viabilidad presupuestaria confirmada por contador'
+    : 'Sin viabilidad presupuestaria (contador)';
 }
 
 async function insertarHistorialViabilidadAdmin(
@@ -68,6 +87,7 @@ async function insertarHistorialViabilidadAdmin(
     adminUsuarioId?: string | null;
     observaciones?: string | null;
     informadoPorRol?: InformadoPorRolViabilidad;
+    fundamento?: FundamentoDisponibilidad | null;
   },
 ): Promise<string | null> {
   const rol = params.informadoPorRol ?? 'contador';
@@ -76,13 +96,14 @@ async function insertarHistorialViabilidadAdmin(
     estado_anterior: 'solicitada',
     estado_nuevo: 'pendiente_pm',
     usuario: params.adminNombre.slice(0, 150),
-    motivo: motivoHistorialViabilidadAdmin(params.viabilidad, rol),
+    motivo: motivoHistorialViabilidadAdmin(params.viabilidad, rol, params.fundamento),
     metadatos: metadatosHistorialViabilidadAdmin({
       viabilidad: params.viabilidad,
       origen: params.origen,
       adminUsuarioId: params.adminUsuarioId,
       observaciones: params.observaciones,
       informadoPorRol: rol,
+      fundamento: params.fundamento,
     }),
   });
 
@@ -157,6 +178,7 @@ export async function informarViabilidadAdminProcura(
     adminUsuarioId: params.adminUsuarioId,
     observaciones: params.observaciones,
     informadoPorRol,
+    fundamento: params.fundamento,
   });
   if (histErr) {
     console.error('[informarViabilidadAdminProcura] historial:', histErr);

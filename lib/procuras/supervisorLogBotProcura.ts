@@ -3,6 +3,17 @@ import { CB_CMP_APROBAR, CB_CMP_RECHAZAR } from '@/lib/compras/aprobacionDeparta
 import { resolverProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
 import {
+  type AccionFundamentoSupervisor,
+  type ContextoAuditoriaSupervisor,
+  type FundamentoDisponibilidad,
+  ORIGEN_SUPERVISOR_LOG,
+  callbackFundamentoSupervisor,
+  esCallbackFundamentoSupervisor,
+  etiquetaFundamento,
+  nombreActorSupervisorFormal,
+  parseCallbackFundamentoSupervisor,
+} from '@/lib/procuras/auditoriaSupervisorProcura';
+import {
   CB_PROCURA_ABASTECIMIENTO_OK,
   confirmarAbastecimientoProcura,
   etiquetaResultadoAbastecimiento,
@@ -34,6 +45,15 @@ export const CB_LOG_DEP_ABASTECER = 'log:dep:abas:';
 export const CB_LOG_COM_ORDEN = 'log:com:orden:';
 
 const MAX_TEXTO_LOG = 3800;
+
+type ParamsCallbackSupervisor = {
+  data: string;
+  callbackId: string;
+  chatId: string | number;
+  messageId: number;
+  textoOriginal: string;
+  from?: { id?: number; first_name?: string; username?: string };
+};
 
 function escHtml(s: string): string {
   return s
@@ -75,6 +95,21 @@ function extraerProcuraIdDesdeCallback(data: string, prefijo: string): string | 
   return esUuidProcura(id) ? id : null;
 }
 
+function contextoAuditoria(
+  params: ParamsCallbackSupervisor,
+  rolFacultado: ContextoAuditoriaSupervisor['rolFacultado'],
+  accion: string,
+  fundamento?: FundamentoDisponibilidad | null,
+): ContextoAuditoriaSupervisor {
+  return {
+    actorNombre: nombreSupervisorDesdeCallback(params.from),
+    actorTelegramId: params.from?.id ?? null,
+    fundamento: fundamento ?? null,
+    rolFacultado,
+    accion,
+  };
+}
+
 export function esCallbackSupervisorLogProcura(data: string): boolean {
   return (
     data.startsWith(CB_LOG_VIAB_SI) ||
@@ -82,13 +117,40 @@ export function esCallbackSupervisorLogProcura(data: string): boolean {
     data.startsWith(CB_LOG_PM_APROBAR) ||
     data.startsWith(CB_LOG_PM_RECHAZAR) ||
     data.startsWith(CB_LOG_DEP_ABASTECER) ||
-    data.startsWith(CB_LOG_COM_ORDEN)
+    data.startsWith(CB_LOG_COM_ORDEN) ||
+    esCallbackFundamentoSupervisor(data)
   );
 }
 
 /** @deprecated usar esCallbackSupervisorLogProcura */
 export function esCallbackViabilidadSupervisorLog(data: string): boolean {
   return data.startsWith(CB_LOG_VIAB_SI) || data.startsWith(CB_LOG_VIAB_NO);
+}
+
+export function tecladoFundamentoSupervisorLog(
+  accion: AccionFundamentoSupervisor,
+  procuraId: string,
+) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: '💰 Financiera',
+          callback_data: callbackFundamentoSupervisor(accion, 'financiero', procuraId),
+        },
+        {
+          text: '📦 Física',
+          callback_data: callbackFundamentoSupervisor(accion, 'fisico', procuraId),
+        },
+      ],
+      [
+        {
+          text: '💰📦 Ambas',
+          callback_data: callbackFundamentoSupervisor(accion, 'ambos', procuraId),
+        },
+      ],
+    ],
+  };
 }
 
 export function tecladoViabilidadSupervisorLog(procuraId: string) {
@@ -185,16 +247,71 @@ async function finalizarMensajeLogSupervisor(params: {
   );
 }
 
-async function manejarViabilidadSupervisor(
+async function mostrarSubmenuFundamento(
+  params: ParamsCallbackSupervisor,
+  accion: AccionFundamentoSupervisor,
+  procuraId: string,
+  etiquetaAccion: string,
+): Promise<void> {
+  await answerLogBotCallbackQuery(params.callbackId, 'Seleccione fundamento…');
+  await editLogBotMessage(
+    params.chatId,
+    params.messageId,
+    `${params.textoOriginal}\n\n` +
+      `🔎 <b>Auditoría formal — ${escHtml(etiquetaAccion)}</b>\n` +
+      'Indique el <b>fundamento</b> de la disponibilidad confirmada:',
+    {
+      parse_mode: 'HTML',
+      reply_markup: tecladoFundamentoSupervisorLog(accion, procuraId),
+    },
+  );
+}
+
+async function ejecutarViabilidadSupervisor(
   supabase: SupabaseClient,
-  params: {
-    data: string;
-    callbackId: string;
-    chatId: string | number;
-    messageId: number;
-    textoOriginal: string;
-    from?: { id?: number; first_name?: string; username?: string };
-  },
+  params: ParamsCallbackSupervisor,
+  viabilidad: 'si' | 'no',
+  procuraId: string,
+  fundamento?: FundamentoDisponibilidad | null,
+): Promise<void> {
+  const supervisorNombre = nombreSupervisorDesdeCallback(params.from);
+
+  const resultado = await informarViabilidadAdminProcura(supabase, {
+    procuraId,
+    viabilidad,
+    adminNombre: supervisorNombre,
+    adminTelegramId: params.from?.id ?? null,
+    adminUsuarioId: params.from?.id != null ? String(params.from.id) : null,
+    origen: ORIGEN_SUPERVISOR_LOG,
+    informadoPorRol: 'supervisor',
+    fundamento: viabilidad === 'si' ? fundamento : 'financiero',
+  });
+
+  const label =
+    viabilidad === 'si'
+      ? `Hay disponibilidad (${fundamento ? etiquetaFundamento(fundamento) : 'auditoría formal'})`
+      : 'No hay disponibilidad (auditoría formal)';
+
+  if (!resultado.ok) {
+    await finalizarMensajeLogSupervisor({
+      ...params,
+      ok: false,
+      detalle: resultado.error ?? 'Error',
+    });
+    return;
+  }
+
+  const pmNota =
+    resultado.pmsNotificados && resultado.pmsNotificados > 0
+      ? `${label}. PM notificado (${resultado.pmsNotificados}).`
+      : `${label}. Sin PM Telegram para notificar.`;
+
+  await finalizarMensajeLogSupervisor({ ...params, ok: true, detalle: pmNota });
+}
+
+async function manejarIntentoViabilidadSupervisor(
+  supabase: SupabaseClient,
+  params: ParamsCallbackSupervisor,
 ): Promise<boolean> {
   const viabilidad = params.data.startsWith(CB_LOG_VIAB_SI) ? 'si' : 'no';
   const procuraId = extraerProcuraIdDesdeCallback(
@@ -206,48 +323,19 @@ async function manejarViabilidadSupervisor(
     return true;
   }
 
-  const supervisorNombre = nombreSupervisorDesdeCallback(params.from);
-  await answerLogBotCallbackQuery(params.callbackId, 'Registrando viabilidad…');
-
-  const resultado = await informarViabilidadAdminProcura(supabase, {
-    procuraId,
-    viabilidad,
-    adminNombre: supervisorNombre,
-    adminTelegramId: params.from?.id ?? null,
-    adminUsuarioId: params.from?.id != null ? String(params.from.id) : null,
-    origen: 'telegram_log_supervisor',
-    informadoPorRol: 'supervisor',
-  });
-
-  const label = viabilidad === 'si' ? 'Hay disponibilidad' : 'No hay disponibilidad';
-  if (!resultado.ok) {
-    await finalizarMensajeLogSupervisor({
-      ...params,
-      ok: false,
-      detalle: resultado.error ?? 'Error',
-    });
+  if (viabilidad === 'no') {
+    await answerLogBotCallbackQuery(params.callbackId, 'Registrando…');
+    await ejecutarViabilidadSupervisor(supabase, params, 'no', procuraId, 'financiero');
     return true;
   }
 
-  const pmNota =
-    resultado.pmsNotificados && resultado.pmsNotificados > 0
-      ? `${label}. PM notificado (${resultado.pmsNotificados}).`
-      : `${label}. Sin PM Telegram para notificar.`;
-
-  await finalizarMensajeLogSupervisor({ ...params, ok: true, detalle: pmNota });
+  await mostrarSubmenuFundamento(params, 'via:si', procuraId, 'viabilidad presupuestaria');
   return true;
 }
 
-async function manejarPmSupervisor(
+async function manejarPmSupervisorIntento(
   supabase: SupabaseClient,
-  params: {
-    data: string;
-    callbackId: string;
-    chatId: string | number;
-    messageId: number;
-    textoOriginal: string;
-    from?: { id?: number; first_name?: string; username?: string };
-  },
+  params: ParamsCallbackSupervisor,
 ): Promise<boolean> {
   const aprobar = params.data.startsWith(CB_LOG_PM_APROBAR);
   const procuraId = extraerProcuraIdDesdeCallback(
@@ -259,21 +347,54 @@ async function manejarPmSupervisor(
     return true;
   }
 
+  if (!aprobar) {
+    const supervisorNombre = nombreSupervisorDesdeCallback(params.from);
+    const telegramId = params.from?.id ?? 0;
+    await answerLogBotCallbackQuery(params.callbackId, 'Rechazando procura…');
+
+    const auditoria = contextoAuditoria(params, 'pm', 'pm_rechazar');
+    const resultado = await resolverProcuraDepartamento(supabase, {
+      procuraId,
+      accion: 'rechazar',
+      aprobadorTelegramId: telegramId,
+      aprobadorNombre: nombreActorSupervisorFormal(supervisorNombre),
+      motivoRechazo: `Rechazada por supervisor (auditoría formal, canal log) — ${supervisorNombre}`,
+      auditoriaSupervisor: auditoria,
+    });
+
+    if (!resultado.ok) {
+      await finalizarMensajeLogSupervisor({
+        ...params,
+        ok: false,
+        detalle: resultado.error ?? 'Error',
+      });
+      return true;
+    }
+
+    await finalizarMensajeLogSupervisor({ ...params, ok: true, detalle: 'Procura rechazada (auditoría formal).' });
+    return true;
+  }
+
+  await mostrarSubmenuFundamento(params, 'pm:apr', procuraId, 'aprobación PM');
+  return true;
+}
+
+async function ejecutarPmAprobacionSupervisor(
+  supabase: SupabaseClient,
+  params: ParamsCallbackSupervisor,
+  procuraId: string,
+  fundamento: FundamentoDisponibilidad,
+): Promise<void> {
   const supervisorNombre = nombreSupervisorDesdeCallback(params.from);
   const telegramId = params.from?.id ?? 0;
-  await answerLogBotCallbackQuery(
-    params.callbackId,
-    aprobar ? 'Aprobando procura…' : 'Rechazando procura…',
-  );
+  const auditoria = contextoAuditoria(params, 'pm', 'pm_aprobar', fundamento);
 
   const resultado = await resolverProcuraDepartamento(supabase, {
     procuraId,
-    accion: aprobar ? 'aprobar' : 'rechazar',
+    accion: 'aprobar',
     aprobadorTelegramId: telegramId,
-    aprobadorNombre: `Supervisor: ${supervisorNombre}`,
-    motivoRechazo: aprobar
-      ? undefined
-      : `Rechazada por supervisor desde log bot (${supervisorNombre})`,
+    aprobadorNombre: nombreActorSupervisorFormal(supervisorNombre),
+    auditoriaSupervisor: auditoria,
   });
 
   if (!resultado.ok) {
@@ -282,26 +403,19 @@ async function manejarPmSupervisor(
       ok: false,
       detalle: resultado.error ?? 'Error',
     });
-    return true;
+    return;
   }
 
-  const detalle = aprobar
-    ? `Procura aprobada. ${resultado.estado ?? 'aprobada'}.`
-    : `Procura rechazada.`;
-  await finalizarMensajeLogSupervisor({ ...params, ok: true, detalle });
-  return true;
+  await finalizarMensajeLogSupervisor({
+    ...params,
+    ok: true,
+    detalle: `Procura aprobada (${etiquetaFundamento(fundamento)}). ${resultado.estado ?? 'aprobada'}.`,
+  });
 }
 
-async function manejarDepositarioSupervisor(
+async function manejarDepositarioSupervisorIntento(
   supabase: SupabaseClient,
-  params: {
-    data: string;
-    callbackId: string;
-    chatId: string | number;
-    messageId: number;
-    textoOriginal: string;
-    from?: { id?: number; first_name?: string; username?: string };
-  },
+  params: ParamsCallbackSupervisor,
 ): Promise<boolean> {
   const procuraId = extraerProcuraIdDesdeCallback(params.data, CB_LOG_DEP_ABASTECER);
   if (!procuraId) {
@@ -309,12 +423,23 @@ async function manejarDepositarioSupervisor(
     return true;
   }
 
+  await mostrarSubmenuFundamento(params, 'dep:abas', procuraId, 'verificación de almacén');
+  return true;
+}
+
+async function ejecutarDepositarioSupervisor(
+  supabase: SupabaseClient,
+  params: ParamsCallbackSupervisor,
+  procuraId: string,
+  fundamento: FundamentoDisponibilidad,
+): Promise<void> {
   const supervisorNombre = nombreSupervisorDesdeCallback(params.from);
-  await answerLogBotCallbackQuery(params.callbackId, 'Verificando almacén…');
+  const auditoria = contextoAuditoria(params, 'depositario', 'depositario_abastecer', fundamento);
 
   const resultado = await confirmarAbastecimientoProcura(supabase, {
     procuraId,
-    autorNombre: `Supervisor: ${supervisorNombre}`,
+    autorNombre: nombreActorSupervisorFormal(supervisorNombre),
+    auditoriaSupervisor: auditoria,
   });
 
   if (!resultado.ok) {
@@ -323,27 +448,19 @@ async function manejarDepositarioSupervisor(
       ok: false,
       detalle: resultado.error ?? 'Error',
     });
-    return true;
+    return;
   }
 
   await finalizarMensajeLogSupervisor({
     ...params,
     ok: true,
-    detalle: etiquetaResultadoAbastecimiento(resultado),
+    detalle: `${etiquetaResultadoAbastecimiento(resultado)} (${etiquetaFundamento(fundamento)}).`,
   });
-  return true;
 }
 
-async function manejarCompradorSupervisor(
+async function manejarCompradorSupervisorIntento(
   supabase: SupabaseClient,
-  params: {
-    data: string;
-    callbackId: string;
-    chatId: string | number;
-    messageId: number;
-    textoOriginal: string;
-    from?: { id?: number; first_name?: string; username?: string };
-  },
+  params: ParamsCallbackSupervisor,
 ): Promise<boolean> {
   const procuraId = extraerProcuraIdDesdeCallback(params.data, CB_LOG_COM_ORDEN);
   if (!procuraId) {
@@ -351,13 +468,24 @@ async function manejarCompradorSupervisor(
     return true;
   }
 
+  await mostrarSubmenuFundamento(params, 'com:ord', procuraId, 'reenvío orden de compra');
+  return true;
+}
+
+async function ejecutarCompradorSupervisor(
+  supabase: SupabaseClient,
+  params: ParamsCallbackSupervisor,
+  procuraId: string,
+  fundamento: FundamentoDisponibilidad,
+): Promise<void> {
   const supervisorNombre = nombreSupervisorDesdeCallback(params.from);
-  await answerLogBotCallbackQuery(params.callbackId, 'Reenviando orden…');
+  const auditoria = contextoAuditoria(params, 'comprador', 'comprador_orden', fundamento);
 
   const resultado = await emitirOrdenCompraProcura(supabase, {
     procuraId,
-    autorNombre: `Supervisor: ${supervisorNombre}`,
-    motivo: 'Reenvío de orden por supervisor (log bot)',
+    autorNombre: nombreActorSupervisorFormal(supervisorNombre),
+    motivo: 'Reenvío de orden por supervisor (auditoría formal, canal log)',
+    auditoriaSupervisor: auditoria,
   });
 
   if (!resultado.ok) {
@@ -366,21 +494,58 @@ async function manejarCompradorSupervisor(
       ok: false,
       detalle: resultado.error ?? 'Error',
     });
-    return true;
+    return;
   }
 
   const notif = resultado.compradoresNotificados ?? 0;
   const detalle =
     notif > 0
-      ? `Orden reenviada a ${notif} comprador(es).`
-      : 'Orden registrada; sin compradores Telegram activos.';
+      ? `Orden reenviada a ${notif} comprador(es) (${etiquetaFundamento(fundamento)}).`
+      : `Orden registrada; sin compradores Telegram (${etiquetaFundamento(fundamento)}).`;
   await finalizarMensajeLogSupervisor({ ...params, ok: true, detalle });
+}
+
+async function manejarConfirmacionFundamentoSupervisor(
+  supabase: SupabaseClient,
+  params: ParamsCallbackSupervisor,
+): Promise<boolean> {
+  const parsed = parseCallbackFundamentoSupervisor(params.data);
+  if (!parsed) {
+    await answerLogBotCallbackQuery(params.callbackId, 'Datos inválidos', true);
+    return true;
+  }
+
+  await answerLogBotCallbackQuery(params.callbackId, 'Registrando auditoría formal…');
+
+  switch (parsed.accion) {
+    case 'via:si':
+      await ejecutarViabilidadSupervisor(
+        supabase,
+        params,
+        'si',
+        parsed.procuraId,
+        parsed.fundamento,
+      );
+      break;
+    case 'pm:apr':
+      await ejecutarPmAprobacionSupervisor(supabase, params, parsed.procuraId, parsed.fundamento);
+      break;
+    case 'dep:abas':
+      await ejecutarDepositarioSupervisor(supabase, params, parsed.procuraId, parsed.fundamento);
+      break;
+    case 'com:ord':
+      await ejecutarCompradorSupervisor(supabase, params, parsed.procuraId, parsed.fundamento);
+      break;
+    default:
+      await answerLogBotCallbackQuery(params.callbackId, 'Acción desconocida', true);
+  }
+
   return true;
 }
 
 /**
  * Supervisor del flujo procura en el bot de logs.
- * Puede actuar como contador operativo, PM, depositario o comprador (reenvío).
+ * Auditoría formal: confirma fundamento (financiera / física / ambas) antes de ejecutar.
  */
 export async function manejarCallbackSupervisorLogProcura(
   supabase: SupabaseClient,
@@ -401,17 +566,20 @@ export async function manejarCallbackSupervisorLogProcura(
     return true;
   }
 
+  if (esCallbackFundamentoSupervisor(params.data)) {
+    return manejarConfirmacionFundamentoSupervisor(supabase, params);
+  }
   if (params.data.startsWith(CB_LOG_VIAB_SI) || params.data.startsWith(CB_LOG_VIAB_NO)) {
-    return manejarViabilidadSupervisor(supabase, params);
+    return manejarIntentoViabilidadSupervisor(supabase, params);
   }
   if (params.data.startsWith(CB_LOG_PM_APROBAR) || params.data.startsWith(CB_LOG_PM_RECHAZAR)) {
-    return manejarPmSupervisor(supabase, params);
+    return manejarPmSupervisorIntento(supabase, params);
   }
   if (params.data.startsWith(CB_LOG_DEP_ABASTECER)) {
-    return manejarDepositarioSupervisor(supabase, params);
+    return manejarDepositarioSupervisorIntento(supabase, params);
   }
   if (params.data.startsWith(CB_LOG_COM_ORDEN)) {
-    return manejarCompradorSupervisor(supabase, params);
+    return manejarCompradorSupervisorIntento(supabase, params);
   }
 
   return false;
@@ -452,7 +620,7 @@ export async function replicarOrdenCompraProcuraEnLogBot(params: {
     '<b>[Procura · orden de compra]</b>',
     `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
     bloquePara,
-    '<b>Supervisor (log):</b> puede reenviar la orden si el comprador no responde.',
+    '<b>Supervisor (log):</b> auditoría formal — puede reenviar la orden si el comprador no responde.',
   ];
 
   const texto = truncar(`${lineasCabecera.join('\n')}\n\n${params.mensaje}`, MAX_TEXTO_LOG);

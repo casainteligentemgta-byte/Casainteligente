@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
+import type { ContextoAuditoriaSupervisor } from '@/lib/procuras/auditoriaSupervisorProcura';
 import { obtenerCapituloMaestroPorId } from '@/lib/compras/capitulosMaestro';
 import { marcarTtlPendienteAtomico } from '@/lib/compras/telegramTtlAtomico';
 import type { PrioridadProcura } from '@/lib/compras/viaRapidaProcura';
@@ -306,6 +307,7 @@ export async function resolverProcuraDepartamento(
     aprobadorTelegramId: number;
     aprobadorNombre: string;
     motivoRechazo?: string | null;
+    auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
   },
 ): Promise<{
   ok: boolean;
@@ -340,6 +342,7 @@ export async function resolverProcuraDepartamento(
       procuraId: params.procuraId,
       motivo,
       aprobadorNombre: params.aprobadorNombre,
+      auditoriaSupervisor: params.auditoriaSupervisor,
     });
 
     if (!resultado.ok) {
@@ -385,6 +388,7 @@ export async function resolverProcuraDepartamento(
   const abas = await procesarAbastecimientoProcuraAprobada(supabase, {
     procuraId: params.procuraId,
     autorNombre: params.aprobadorNombre,
+    auditoriaSupervisor: params.auditoriaSupervisor,
   });
 
   if (!abas.ok) {

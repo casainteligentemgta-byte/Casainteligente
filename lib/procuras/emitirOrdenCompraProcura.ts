@@ -4,6 +4,13 @@ import {
   type UsuarioSistemaTelegram,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
+import {
+  insertarAuditoriaProcuraSinTransicion,
+  metadatosAuditoriaSupervisor,
+  motivoAuditoriaSupervisor,
+  nombreActorSupervisorFormal,
+  type ContextoAuditoriaSupervisor,
+} from '@/lib/procuras/auditoriaSupervisorProcura';
 import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
 import {
   etiquetaEstadoProcura,
@@ -176,6 +183,7 @@ export async function emitirOrdenCompraProcura(
     motivo?: string | null;
     /** Cantidad a comprar (saldo tras despacho parcial). */
     cantidadCompra?: number | null;
+    auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
   },
 ): Promise<EmitirOrdenCompraProcuraResult> {
   const procuraId = params.procuraId.trim();
@@ -199,6 +207,22 @@ export async function emitirOrdenCompraProcura(
       motivo: params.motivo,
       cantidadCompra: params.cantidadCompra,
     });
+    if (params.auditoriaSupervisor) {
+      const motivoAudit = motivoAuditoriaSupervisor(
+        params.motivo?.trim() || 'Reenvío de orden de compra por supervisor',
+        params.auditoriaSupervisor,
+      );
+      const histErr = await insertarAuditoriaProcuraSinTransicion(supabase, {
+        procuraId,
+        estado: estadoActual,
+        motivo: motivoAudit,
+        usuario: nombreActorSupervisorFormal(params.auditoriaSupervisor.actorNombre),
+        metadatos: metadatosAuditoriaSupervisor(params.auditoriaSupervisor),
+      });
+      if (histErr) {
+        console.error('[emitirOrdenCompraProcura] auditoría supervisor reenvío:', histErr);
+      }
+    }
     return {
       ok: true,
       ticket: procura.ticket,
@@ -224,6 +248,23 @@ export async function emitirOrdenCompraProcura(
     motivo: motivoOrden,
     cantidadCompra: params.cantidadCompra,
   });
+
+  if (params.auditoriaSupervisor) {
+    const motivoAudit = motivoAuditoriaSupervisor(
+      params.motivo?.trim() || 'Reenvío de orden de compra por supervisor',
+      params.auditoriaSupervisor,
+    );
+    const histErr = await insertarAuditoriaProcuraSinTransicion(supabase, {
+      procuraId,
+      estado: estadoActual,
+      motivo: motivoAudit,
+      usuario: nombreActorSupervisorFormal(params.auditoriaSupervisor.actorNombre),
+      metadatos: metadatosAuditoriaSupervisor(params.auditoriaSupervisor),
+    });
+    if (histErr) {
+      console.error('[emitirOrdenCompraProcura] auditoría supervisor:', histErr);
+    }
+  }
 
   if (procura.solicitante_telegram_chat_id) {
     await notificarProcurasTelegram(
