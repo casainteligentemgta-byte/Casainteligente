@@ -341,6 +341,9 @@ export default function ComprasPage() {
     const shareParamsAplicados = useRef(false);
     const filtrosPersistenciaLista = useRef(false);
     const autoAbrirFiltrosHecho = useRef(false);
+    const compraDeepLinkHandled = useRef(false);
+
+    const compraDeepLinkId = searchParams.get('compra')?.trim() || null;
 
     const aplicarFiltrosCuadro = useCallback((parsed: Partial<ComprasCuadroFiltrosState>) => {
         if (parsed.fuenteFiltro) setFuenteFiltro(parsed.fuenteFiltro);
@@ -386,8 +389,28 @@ export default function ComprasPage() {
         aplicarFiltrosCuadro(parsed);
         if (!parsed.fechaRef) setFechaRef(todayIso());
 
+        if (compraDeepLinkId) {
+            setPeriodo('todas');
+            setProyectoFiltro('');
+            setEntidadFiltro('');
+            setProveedorFiltro('');
+            setRifFiltro('');
+            setArticuloFiltro('');
+            setCantidadMin('');
+            setCantidadMax('');
+            setMontoMinBs('');
+            setMontoMaxBs('');
+            setMontoMinUsd('');
+            setMontoMaxUsd('');
+            setBusqueda('');
+            setBusquedaAplicada('');
+            setFuenteFiltro('todos');
+            setEstadoLogisticaFiltro('');
+            setVistaListado('facturas');
+        }
+
         filtrosPersistenciaLista.current = true;
-    }, [hydrated, searchParams, aplicarFiltrosCuadro]);
+    }, [hydrated, searchParams, aplicarFiltrosCuadro, compraDeepLinkId]);
 
     const fechaRefActiva = fechaRef || (hydrated ? todayIso() : '');
 
@@ -695,6 +718,71 @@ export default function ComprasPage() {
                 });
             }
 
+            if (compraDeepLinkId && !filas.some((f) => f.id === compraDeepLinkId)) {
+                let extraRow: unknown = null;
+                let extraErr: { message?: string } | null = null;
+                const primera = await supabase
+                    .from('contabilidad_compras')
+                    .select(
+                        `${selectCompraBase}${selectAuditoriaFecha}${selectClasificacionEntidad},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${selectLogistica},${lineasSelect}`,
+                    )
+                    .eq('id', compraDeepLinkId)
+                    .maybeSingle();
+                extraRow = primera.data;
+                extraErr = primera.error;
+                if (
+                    extraErr &&
+                    /compra_factura_id|ingresado_almacen_at|cuarentena_rechazo_total|compra_factura|42703|schema cache/i.test(
+                        extraErr.message ?? '',
+                    )
+                ) {
+                    const retry = await supabase
+                        .from('contabilidad_compras')
+                        .select(
+                            `${selectCompraBase}${selectAuditoriaFecha}${selectClasificacionEntidad},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${lineasSelect}`,
+                        )
+                        .eq('id', compraDeepLinkId)
+                        .maybeSingle();
+                    extraRow = retry.data;
+                    extraErr = retry.error;
+                }
+                if (
+                    extraErr &&
+                    /alerta_fecha|fecha_confirmada_manual/i.test(extraErr.message ?? '')
+                ) {
+                    const retry = await supabase
+                        .from('contabilidad_compras')
+                        .select(
+                            `${selectCompraBase},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${selectLogistica},${lineasSelect}`,
+                        )
+                        .eq('id', compraDeepLinkId)
+                        .maybeSingle();
+                    extraRow = retry.data;
+                    extraErr = retry.error;
+                }
+                if (!extraErr && extraRow) {
+                    const r = extraRow as unknown as CompraRow & {
+                        purchase_invoice?: {
+                            proyecto_id?: string | null;
+                            entidad_id?: string | null;
+                            ubicacion_destino_id?: string | null;
+                        } | null;
+                    };
+                    const pi = r.purchase_invoice;
+                    filas = [
+                        {
+                            ...r,
+                            fuente_lista: r.fuente_lista ?? 'app',
+                            proyecto_id: r.proyecto_id ?? pi?.proyecto_id ?? null,
+                            entidad_id: r.entidad_id ?? pi?.entidad_id ?? null,
+                            ubicacion_destino_id:
+                                r.ubicacion_destino_id ?? pi?.ubicacion_destino_id ?? null,
+                        },
+                        ...filas,
+                    ];
+                }
+            }
+
             const idsConocidos = proyectosIdsRef.current;
             const faltantes: string[] = [];
             const vistos = new Set<string>();
@@ -792,6 +880,7 @@ export default function ComprasPage() {
         busquedaAplicada,
         fuenteFiltro,
         estadoLogisticaFiltro,
+        compraDeepLinkId,
     ]);
 
     useEffect(() => {
@@ -1731,7 +1820,7 @@ export default function ComprasPage() {
         return tasaParaCompra(c);
     }
 
-    const scrollToCompra = (compraId: string) => {
+    const scrollToCompra = useCallback((compraId: string) => {
         setVistaListado('facturas');
         setImagenFacturaAbierta(compraId);
         requestAnimationFrame(() => {
@@ -1740,7 +1829,14 @@ export default function ComprasPage() {
                 block: 'center',
             });
         });
-    };
+    }, []);
+
+    useEffect(() => {
+        if (!compraDeepLinkId || loading || compraDeepLinkHandled.current) return;
+        if (!compras.some((c) => c.id === compraDeepLinkId)) return;
+        compraDeepLinkHandled.current = true;
+        scrollToCompra(compraDeepLinkId);
+    }, [compraDeepLinkId, loading, compras, scrollToCompra]);
 
     const abrirVerificarFechaCompra = useCallback((c: CompraRow) => {
         const meta = metaAlertaFechaCompra({

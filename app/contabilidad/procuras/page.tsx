@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Check, Loader2, RefreshCw, X } from 'lucide-react';
+import { Check, FileImage, Loader2, RefreshCw, X } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
   COLOR_ESTADO_PROCURA,
@@ -34,6 +34,12 @@ type ProcuraRow = {
     | { codigo?: string; nombre?: string }
     | { codigo?: string; nombre?: string }[]
     | null;
+  purchase_invoice_id?: string | null;
+  contabilidad_compra?: {
+    id: string;
+    invoice_number?: string | null;
+    document_storage_path?: string | null;
+  } | null;
 };
 
 const ESTADOS_PENDIENTES = new Set(['borrador', 'solicitada', 'pendiente_pm']);
@@ -72,6 +78,16 @@ function filaEnTab(estado: string, tab: TabProcura): boolean {
   if (tab === 'pendientes') return ESTADOS_PENDIENTES.has(e);
   if (tab === 'aprobados') return ESTADOS_APROBADOS.has(e);
   return ESTADOS_COMPRADOS.has(e);
+}
+
+function compraIdProcura(f: ProcuraRow): string | null {
+  return f.contabilidad_compra?.id?.trim() || null;
+}
+
+function etiquetaFacturaProcura(f: ProcuraRow): string {
+  const num = f.contabilidad_compra?.invoice_number?.trim();
+  if (num) return num.startsWith('#') ? num : `#${num}`;
+  return 'Factura';
 }
 
 const glassBtn = (active: boolean) =>
@@ -273,12 +289,36 @@ export default function ProcurasPage() {
                             </button>
                           </div>
                         ) : (
-                          <Link
-                            href={`/contabilidad/compras`}
-                            className="text-[10px] font-bold text-zinc-500 hover:text-[#FF9500]"
-                          >
-                            Ver compras
-                          </Link>
+                          (() => {
+                            const compraId = compraIdProcura(f);
+                            if (compraId) {
+                              return (
+                                <Link
+                                  href={`/contabilidad/compras?compra=${encodeURIComponent(compraId)}`}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#5856D6]/15 border border-[#5856D6]/30 text-[#a5a3ff] text-[10px] font-black uppercase hover:bg-[#5856D6]/25 transition-colors"
+                                  title={`Abrir ${etiquetaFacturaProcura(f)} en cuadro compras`}
+                                >
+                                  <FileImage size={12} />
+                                  Ver factura
+                                </Link>
+                              );
+                            }
+                            if (ESTADOS_COMPRADOS.has(f.estado.toLowerCase())) {
+                              return (
+                                <span className="text-[10px] font-medium text-zinc-600">
+                                  Sin factura
+                                </span>
+                              );
+                            }
+                            return (
+                              <Link
+                                href="/contabilidad/compras"
+                                className="text-[10px] font-bold text-zinc-500 hover:text-[#FF9500]"
+                              >
+                                Ver compras
+                              </Link>
+                            );
+                          })()
                         )}
                       </td>
                     </tr>
