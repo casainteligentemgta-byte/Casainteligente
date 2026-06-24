@@ -107,6 +107,9 @@ export async function enviarAlertaProcuraPendienteAdmin(
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
         rolDestinatario: 'Contador',
+        nombreDestinatario: cont.nombre,
+        accionLogDestinatario: 'informar_viabilidad',
+        contextoLogEspejo: '[Procura · viabilidad presupuestaria]',
         skipLogEspejo: true,
       });
       dmsEnviados += 1;

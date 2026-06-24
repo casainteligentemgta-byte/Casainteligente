@@ -123,6 +123,9 @@ export async function enviarAlertaPmTrasViabilidadAdmin(
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
         rolDestinatario: 'Project Manager',
+        nombreDestinatario: pm.nombre,
+        accionLogDestinatario: 'aprobar_rechazar',
+        contextoLogEspejo: '[Procura · decisión PM]',
       });
       enviados += 1;
     } catch (e) {

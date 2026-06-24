@@ -1,3 +1,9 @@
+import type { AccionDestinatarioLog } from '@/lib/telegram/pieDestinatarioLog';
+import {
+  anexarPieDestinatarioOperativo,
+  debeMostrarPieDestinatario,
+} from '@/lib/telegram/pieDestinatarioLog';
+
 const TELEGRAM_API = 'https://api.telegram.org';
 
 export function getTelegramBotToken(): string | null {
@@ -48,6 +54,12 @@ export type TelegramMessageExtra = {
   plain?: boolean;
   /** Etiqueta del rol destinatario (modo pruebas TELEGRAM_PRUEBAS_REDIRECT). */
   rolDestinatario?: string;
+  /** Nombre del destinatario en pie del mensaje. */
+  nombreDestinatario?: string | null;
+  /** Acción esperada en pie del mensaje. */
+  accionLogDestinatario?: AccionDestinatarioLog;
+  /** Cabecera contextual en espejo del log bot (p. ej. [Procura · decisión PM]). */
+  contextoLogEspejo?: string;
   /** No duplicar en espejo global (réplica dedicada en el caller). */
   skipLogEspejo?: boolean;
 };
@@ -66,10 +78,33 @@ export async function sendTelegramMessageWithId(
   text: string,
   extra?: TelegramMessageExtra,
 ): Promise<number> {
-  const { prepararEnvioPruebasTelegram } = await import('@/lib/telegram/enrutamientoPruebasTelegram');
-  const enrutado = await prepararEnvioPruebasTelegram(chatId, text, extra);
+  let textConPie = text;
+  if (debeMostrarPieDestinatario(extra)) {
+    const { resolverEtiquetaRolDestinatario } = await import(
+      '@/lib/telegram/enrutamientoPruebasTelegram'
+    );
+    const rol =
+      extra?.rolDestinatario?.trim() || (await resolverEtiquetaRolDestinatario(chatId));
+    textConPie = anexarPieDestinatarioOperativo(text, {
+      rol,
+      nombre: extra?.nombreDestinatario,
+      accion: extra?.accionLogDestinatario,
+    });
+  }
 
-  const { plain, parse_mode, rolDestinatario: _rol, ...rest } = extra ?? {};
+  const { prepararEnvioPruebasTelegram } = await import('@/lib/telegram/enrutamientoPruebasTelegram');
+  const enrutado = await prepararEnvioPruebasTelegram(chatId, textConPie, extra);
+
+  const {
+    plain,
+    parse_mode,
+    rolDestinatario: _rol,
+    nombreDestinatario: _nom,
+    accionLogDestinatario: _acc,
+    contextoLogEspejo: _ctx,
+    skipLogEspejo: _skip,
+    ...rest
+  } = extra ?? {};
   const body: Record<string, unknown> = {
     chat_id: enrutado.chatId,
     text: enrutado.text,
@@ -87,8 +122,12 @@ export async function sendTelegramMessageWithId(
         chatIdDestinoOriginal: chatId,
         textoEnviado: enrutado.text,
         rolDestinatario: extra?.rolDestinatario,
+        nombreDestinatario: extra?.nombreDestinatario,
+        accionLogDestinatario: extra?.accionLogDestinatario,
+        contextoLogEspejo: extra?.contextoLogEspejo,
         plain: extra?.plain,
         reply_markup: extra?.reply_markup,
+        pieYaIncluido: true,
       });
     });
   }

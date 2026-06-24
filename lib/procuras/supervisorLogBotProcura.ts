@@ -32,6 +32,7 @@ import {
   isLogBotConfigured,
   sendLogBotMessage,
 } from '@/lib/telegram/logBotApi';
+import { pieDestinatariosLog } from '@/lib/telegram/pieDestinatarioLog';
 
 /** Viabilidad (contador operativo). */
 export const CB_LOG_VIAB_SI = 'log:via:si:';
@@ -605,25 +606,26 @@ export async function replicarOrdenCompraProcuraEnLogBot(params: {
   const logChat = getTelegramLogChatId();
   if (!logChat) return;
 
-  const bloquePara =
-    params.destinatarios.length > 0
-      ? '<b>Para comprador:</b>\n' +
-        params.destinatarios
-          .map(
-            (d) =>
-              `• ${escHtml(d.nombre.trim() || 'Comprador')} (<i>chat ${escHtml(String(d.chatId))}</i>)`,
-          )
-          .join('\n')
-      : '<b>Para comprador:</b> <i>sin destinatario Telegram activo</i>';
-
   const lineasCabecera = [
     '<b>[Procura · orden de compra]</b>',
     `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
-    bloquePara,
-    '<b>Supervisor (log):</b> auditoría formal — puede reenviar la orden si el comprador no responde.',
   ];
 
-  const texto = truncar(`${lineasCabecera.join('\n')}\n\n${params.mensaje}`, MAX_TEXTO_LOG);
+  const pie = pieDestinatariosLog(
+    params.destinatarios.map((d) => ({
+      rol: 'Comprador',
+      nombre: d.nombre.trim() || 'Comprador',
+      chatId: d.chatId,
+    })),
+    'ejecutar_compra',
+  );
+
+  const supervisor =
+    '\n\n<b>Supervisor (log):</b> auditoría formal — puede reenviar la orden si el comprador no responde.';
+  const texto = truncar(
+    `${lineasCabecera.join('\n')}\n\n${params.mensaje}${pie}${supervisor}`,
+    MAX_TEXTO_LOG,
+  );
   await sendLogBotMessage(logChat, texto, {
     parse_mode: 'HTML',
     reply_markup: tecladoCompradorSupervisorLog(params.procuraId.trim()),

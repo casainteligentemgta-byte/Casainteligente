@@ -9,6 +9,7 @@ export type ProcuraAprobadaNotificacion = {
   ticket: string;
   material_txt: string;
   solicitante_telegram_chat_id?: number | string | null;
+  solicitante_nombre?: string | null;
 };
 
 /** Mensaje breve al solicitante tras aprobación del PM. */
@@ -26,7 +27,13 @@ export async function notificarAprobadoProcuraSolicitante(
       `🎫 <b>Ticket:</b> ${escHtml(String(procura.ticket))}\n` +
         `📦 ${escHtml(material)}\n` +
         `<b>APROBADO</b>`,
-      { parse_mode: 'HTML', rolDestinatario: 'Solicitante' },
+      {
+        parse_mode: 'HTML',
+        rolDestinatario: 'Solicitante',
+        nombreDestinatario: procura.solicitante_nombre,
+        accionLogDestinatario: 'solo_notificacion',
+        contextoLogEspejo: '[Procura · aprobada]',
+      },
     );
     return true;
   } catch (e) {

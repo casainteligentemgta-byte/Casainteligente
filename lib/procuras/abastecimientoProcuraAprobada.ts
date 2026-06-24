@@ -190,6 +190,7 @@ export async function enviarOrdenVerificacionDepositarioProcura(
   const destinos = new Set<string>();
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
+  const depNombre = config?.depositarioAsignado?.nombre ?? null;
   if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
@@ -229,10 +230,20 @@ export async function enviarOrdenVerificacionDepositarioProcura(
     ],
   };
 
+  const grupoId = grupo != null && Number.isFinite(grupo) ? String(grupo) : null;
+
   let enviados = 0;
   for (const chatId of Array.from(destinos)) {
+    const esGrupo = grupoId != null && chatId === grupoId;
     try {
-      await sendTelegramMessage(chatId, msg, { parse_mode: 'HTML', reply_markup });
+      await sendTelegramMessage(chatId, msg, {
+        parse_mode: 'HTML',
+        reply_markup,
+        rolDestinatario: esGrupo ? 'Grupo de almacén' : 'Depositario',
+        nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
+        accionLogDestinatario: 'confirmar_almacen',
+        contextoLogEspejo: '[Procura · verificación almacén]',
+      });
       enviados += 1;
     } catch (e) {
       console.warn('[abastecimientoProcura] verificación depositario', chatId, e);
@@ -258,6 +269,7 @@ export async function enviarOrdenDespachoDepositarioProcura(
   const destinos = new Set<string>();
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
+  const depNombre = config?.depositarioAsignado?.nombre ?? null;
   if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
@@ -296,10 +308,20 @@ export async function enviarOrdenDespachoDepositarioProcura(
     ],
   };
 
+  const grupoId = grupo != null && Number.isFinite(grupo) ? String(grupo) : null;
+
   let enviados = 0;
   for (const chatId of Array.from(destinos)) {
+    const esGrupo = grupoId != null && chatId === grupoId;
     try {
-      await sendTelegramMessage(chatId, msg, { parse_mode: 'HTML', reply_markup });
+      await sendTelegramMessage(chatId, msg, {
+        parse_mode: 'HTML',
+        reply_markup,
+        rolDestinatario: esGrupo ? 'Grupo de almacén' : 'Depositario',
+        nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
+        accionLogDestinatario: 'confirmar_almacen',
+        contextoLogEspejo: '[Procura · despacho almacén]',
+      });
       enviados += 1;
     } catch (e) {
       console.warn('[abastecimientoProcura] despacho depositario', chatId, e);

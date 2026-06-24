@@ -13,6 +13,7 @@ export type ProcuraNotificacionRow = {
   material_txt: string;
   nuevo_est: string;
   telegram_id: string | null;
+  solicitante_nombre?: string | null;
 };
 
 export async function notificarProcurasTelegram(
@@ -37,7 +38,13 @@ export async function notificarProcurasTelegram(
       msg += `📝 <b>Nota:</b> ${escapeHtml(motivoTxt)}\n`;
     }
     try {
-      await sendTelegramMessage(p.telegram_id, msg);
+      await sendTelegramMessage(p.telegram_id, msg, {
+        parse_mode: 'HTML',
+        rolDestinatario: 'Solicitante',
+        nombreDestinatario: p.solicitante_nombre,
+        accionLogDestinatario: 'solo_notificacion',
+        contextoLogEspejo: '[Procura · actualización]',
+      });
       enviados += 1;
     } catch (e) {
       console.warn('[notificarProcuraTelegram]', p.ticket, e);

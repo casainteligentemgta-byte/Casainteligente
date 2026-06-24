@@ -7,6 +7,11 @@ import {
   modoPruebasTelegramActivo,
   resolverEtiquetaRolDestinatario,
 } from '@/lib/telegram/enrutamientoPruebasTelegram';
+import {
+  type AccionDestinatarioLog,
+  pieDestinatarioLog,
+  pieDestinatariosLog,
+} from '@/lib/telegram/pieDestinatarioLog';
 
 const MAX_TEXTO_LOG = 3800;
 
@@ -46,6 +51,11 @@ export async function espejarSalidaTelegramLog(params: {
   chatIdDestinoOriginal: string | number;
   textoEnviado: string;
   rolDestinatario?: string | null;
+  nombreDestinatario?: string | null;
+  accionLogDestinatario?: AccionDestinatarioLog;
+  contextoLogEspejo?: string | null;
+  /** El pie ya va en textoEnviado (bot operativo); no duplicar. */
+  pieYaIncluido?: boolean;
   plain?: boolean;
   reply_markup?: unknown;
 }): Promise<void> {
@@ -57,14 +67,12 @@ export async function espejarSalidaTelegramLog(params: {
   const destinoOriginal = String(Math.trunc(Number(params.chatIdDestinoOriginal)));
   if (destinoOriginal === logChat.trim()) return;
 
-  const actor =
-    params.rolDestinatario?.trim() ||
-    (await resolverEtiquetaRolDestinatario(params.chatIdDestinoOriginal));
-
-  const lineasCabecera = [
-    `📤 <b>Para: ${escHtml(actor)}</b>`,
-    `<i>chat ${escHtml(destinoOriginal)}</i>`,
-  ];
+  const lineasCabecera: string[] = [];
+  const contexto = params.contextoLogEspejo?.trim();
+  if (contexto) {
+    lineasCabecera.push(`<b>${escHtml(contexto)}</b>`);
+  }
+  lineasCabecera.push(`<i>chat destino ${escHtml(destinoOriginal)}</i>`);
   if (modoPruebasTelegramActivo()) {
     lineasCabecera.push('<i>↪ redirigido en modo pruebas</i>');
   }
@@ -80,7 +88,21 @@ export async function espejarSalidaTelegramLog(params: {
   }
 
   const cuerpo = params.plain ? escHtml(params.textoEnviado) : params.textoEnviado;
-  const texto = truncar(`${lineasCabecera.join('\n')}\n\n${cuerpo}`, MAX_TEXTO_LOG);
+  let pie = '';
+  if (!params.pieYaIncluido) {
+    const rol =
+      params.rolDestinatario?.trim() ||
+      (await resolverEtiquetaRolDestinatario(params.chatIdDestinoOriginal));
+    pie = pieDestinatarioLog({
+      rol,
+      nombre: params.nombreDestinatario,
+      chatId: params.chatIdDestinoOriginal,
+      accion: params.accionLogDestinatario,
+    });
+  }
+
+  const prefijo = lineasCabecera.length ? `${lineasCabecera.join('\n')}\n\n` : '';
+  const texto = truncar(`${prefijo}${cuerpo}${pie}`, MAX_TEXTO_LOG);
 
   await sendLogBotMessage(logChat, texto, {
     parse_mode: 'HTML',
@@ -110,32 +132,35 @@ export async function replicarAlertaProcuraAdminEnLogBot(params: {
   const logChat = getTelegramLogChatId();
   if (!logChat) return;
 
-  let bloquePara: string;
-  if (params.sinContadorConfigurado) {
-    bloquePara =
-      '⚠️ <i>Sin contador Telegram configurado</i>\n' +
-      '<b>Para:</b> Contador (revisor de fondos)';
-  } else if (params.destinatarios.length > 0) {
-    bloquePara =
-      '<b>Para contador:</b>\n' +
-      params.destinatarios
-        .map(
-          (d) =>
-            `• ${escHtml(d.nombre.trim() || 'Contador')} (<i>chat ${escHtml(String(d.chatId))}</i>)`,
-        )
-        .join('\n');
-  } else {
-    bloquePara = '<b>Para contador:</b> <i>sin destinatario disponible</i>';
-  }
-
   const lineasCabecera = [
     '<b>[Procura · viabilidad presupuestaria]</b>',
     `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
-    bloquePara,
-    '<b>Supervisor (log):</b> puede actuar en nombre del contador si no responde.',
   ];
 
-  const texto = truncar(`${lineasCabecera.join('\n')}\n\n${params.mensaje}`, MAX_TEXTO_LOG);
+  let pie: string;
+  if (params.sinContadorConfigurado) {
+    pie = pieDestinatarioLog({
+      rol: 'Contador (revisor de fondos)',
+      accion: 'informar_viabilidad',
+    });
+    lineasCabecera.push('⚠️ <i>Sin contador Telegram configurado</i>');
+  } else {
+    pie = pieDestinatariosLog(
+      params.destinatarios.map((d) => ({
+        rol: 'Contador',
+        nombre: d.nombre.trim() || 'Contador',
+        chatId: d.chatId,
+      })),
+      'informar_viabilidad',
+    );
+  }
+
+  const supervisor =
+    '\n\n<b>Supervisor (log):</b> puede actuar en nombre del contador si no responde.';
+  const texto = truncar(
+    `${lineasCabecera.join('\n')}\n\n${params.mensaje}${pie}${supervisor}`,
+    MAX_TEXTO_LOG,
+  );
   const replyMarkup = tecladoViabilidadSupervisorLog(params.procuraId.trim());
   await sendLogBotMessage(logChat, texto, { parse_mode: 'HTML', reply_markup: replyMarkup });
 }

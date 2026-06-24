@@ -139,6 +139,9 @@ export async function notificarCompradoresOrdenCompra(
         await sendTelegramMessage(String(u.telegram_id), texto, {
           parse_mode: 'HTML',
           rolDestinatario: u.rol === 'Administrador' ? 'Administrador' : 'Comprador',
+          nombreDestinatario: u.nombre,
+          accionLogDestinatario: 'ejecutar_compra',
+          contextoLogEspejo: '[Procura · orden de compra]',
           skipLogEspejo: true,
         });
         enviados += 1;
@@ -274,6 +277,7 @@ export async function emitirOrdenCompraProcura(
           material_txt: procura.material_txt,
           nuevo_est: estadoActual,
           telegram_id: String(procura.solicitante_telegram_chat_id),
+          solicitante_nombre: procura.solicitante_nombre,
         },
       ],
       `Orden de compra enviada al comprador. Estado: ${etiquetaEstadoProcura(estadoActual)}.`,

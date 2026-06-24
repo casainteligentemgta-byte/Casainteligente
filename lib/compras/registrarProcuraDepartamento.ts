@@ -376,6 +376,7 @@ export async function resolverProcuraDepartamento(
   const filaPrev = prevAprob as {
     ticket: string;
     material_txt: string;
+    solicitante_nombre?: string | null;
     solicitante_telegram_chat_id: number | null;
   };
 
@@ -383,6 +384,7 @@ export async function resolverProcuraDepartamento(
     ticket: filaPrev.ticket,
     material_txt: filaPrev.material_txt,
     solicitante_telegram_chat_id: filaPrev.solicitante_telegram_chat_id,
+    solicitante_nombre: filaPrev.solicitante_nombre,
   });
 
   const abas = await procesarAbastecimientoProcuraAprobada(supabase, {
