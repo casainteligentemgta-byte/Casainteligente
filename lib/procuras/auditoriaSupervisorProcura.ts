@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { rpcProcesarProcurasLote } from '@/lib/procuras/rpcProcesarProcurasLote';
 
 /** Disponibilidad confirmada por el supervisor al desbloquear el flujo. */
 export type FundamentoDisponibilidad = 'financiero' | 'fisico' | 'ambos';
@@ -140,17 +141,13 @@ export async function ejecutarTransicionProcuraLote(
     metadatos?: Record<string, string>;
   },
 ): Promise<void> {
-  const { error } = await supabase.rpc(
-    'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
-    {
-      p_ids: [params.procuraId.trim()],
-      p_nuevo_estado: params.nuevoEstado,
-      p_motivo: params.motivo.slice(0, 500),
-      p_metadatos: params.metadatos ?? {},
-      p_usuario: params.usuario?.slice(0, 150) ?? null,
-    } as never,
-  );
-  if (error) throw new Error(error.message);
+  await rpcProcesarProcurasLote(supabase, {
+    p_ids: [params.procuraId.trim()],
+    p_nuevo_estado: params.nuevoEstado,
+    p_motivo: params.motivo.slice(0, 500),
+    p_metadatos: params.metadatos,
+    p_usuario: params.usuario?.slice(0, 150) ?? null,
+  });
 }
 
 /** Registro de auditoría sin cambio de estado (p. ej. reenvío de orden). */

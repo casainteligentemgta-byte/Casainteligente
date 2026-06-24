@@ -5,6 +5,7 @@ import {
   nombreActorSupervisorFormal,
   type ContextoAuditoriaSupervisor,
 } from '@/lib/procuras/auditoriaSupervisorProcura';
+import { rpcProcesarProcurasLote } from '@/lib/procuras/rpcProcesarProcurasLote';
 import { notificarRechazoProcuraSolicitante } from '@/lib/procuras/notificarRechazoProcura';
 
 export const MIN_MOTIVO_RECHAZO_PROCURA = 3;
@@ -75,20 +76,23 @@ export async function rechazarProcuraConMotivo(
     ? motivoAuditoriaSupervisor(motivoFinal, params.auditoriaSupervisor)
     : motivoFinal;
 
-  const { data, error } = await supabase.rpc(
-    'procesar_procuras_lote' as 'ci_registrar_ingreso_manual_campo',
-    {
+  let data: Awaited<ReturnType<typeof rpcProcesarProcurasLote>> | null = null;
+  let error: Error | null = null;
+  try {
+    data = await rpcProcesarProcurasLote(supabase, {
       p_ids: [procuraId],
       p_nuevo_estado: 'rechazada',
       p_motivo: motivoRpc,
-      p_metadatos: params.auditoriaSupervisor
-        ? metadatosAuditoriaSupervisor(params.auditoriaSupervisor)
-        : {},
-      p_usuario: params.auditoriaSupervisor
-        ? nombreActorSupervisorFormal(params.auditoriaSupervisor.actorNombre)
-        : aprobadorNombre.slice(0, 150),
-    } as never,
-  );
+      ...(params.auditoriaSupervisor
+        ? {
+            p_metadatos: metadatosAuditoriaSupervisor(params.auditoriaSupervisor),
+            p_usuario: nombreActorSupervisorFormal(params.auditoriaSupervisor.actorNombre),
+          }
+        : {}),
+    });
+  } catch (e) {
+    error = e instanceof Error ? e : new Error('Error al rechazar procura');
+  }
 
   if (error) {
     return { ok: false, error: error.message };
