@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Check, FileImage, Loader2, RefreshCw, X } from 'lucide-react';
+import { Check, FileImage, Link2, Loader2, RefreshCw, X } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
   COLOR_ESTADO_PROCURA,
@@ -13,6 +13,9 @@ import {
   nombreMaterialProcuraVisible,
 } from '@/lib/compras/procuraMaterialTexto';
 import PanelAuditoriaProcuras from '@/components/contabilidad/PanelAuditoriaProcuras';
+import VincularFacturaProcuraModal, {
+  type ProcuraVinculoFactura,
+} from '@/components/contabilidad/VincularFacturaProcuraModal';
 
 type TabProcura = 'pendientes' | 'aprobados' | 'comprados' | 'control_interno';
 
@@ -90,6 +93,12 @@ function etiquetaFacturaProcura(f: ProcuraRow): string {
   return 'Factura';
 }
 
+function procuraPendienteFactura(f: ProcuraRow): boolean {
+  if (compraIdProcura(f)) return false;
+  if (f.purchase_invoice_id?.trim()) return false;
+  return ESTADOS_APROBADOS.has(f.estado.toLowerCase());
+}
+
 const glassBtn = (active: boolean) =>
   `px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all ${
     active
@@ -103,6 +112,7 @@ export default function ProcurasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
+  const [vincularProcura, setVincularProcura] = useState<ProcuraVinculoFactura | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -310,6 +320,27 @@ export default function ProcurasPage() {
                                 </span>
                               );
                             }
+                            if (procuraPendienteFactura(f)) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setVincularProcura({
+                                      id: f.id,
+                                      ticket: f.ticket,
+                                      material_txt: f.material_txt,
+                                      proyecto_id: f.proyecto_id,
+                                      ci_proyectos: f.ci_proyectos,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase hover:bg-amber-500/25 transition-colors"
+                                  title="Enlazar con factura del cuadro de contabilidad"
+                                >
+                                  <Link2 size={12} />
+                                  Pendiente por factura
+                                </button>
+                              );
+                            }
                             return (
                               <Link
                                 href="/contabilidad/compras"
@@ -331,6 +362,13 @@ export default function ProcurasPage() {
           </>
         )}
       </div>
+
+      <VincularFacturaProcuraModal
+        open={Boolean(vincularProcura)}
+        procura={vincularProcura}
+        onClose={() => setVincularProcura(null)}
+        onVinculada={() => void cargar()}
+      />
     </div>
   );
 }
