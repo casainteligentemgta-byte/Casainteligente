@@ -1,8 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { etiquetaContexto, getTelegramEstado } from '@/lib/telegram/estados';
-import { resolverEtiquetaRolDestinatario } from '@/lib/telegram/enrutamientoPruebasTelegram';
+import type { PasoProcuraDepartamento } from '@/lib/compras/telegramMetadata';
+import {
+  etiquetaContexto,
+  type TelegramContexto,
+  type TelegramEstado,
+  getTelegramEstado,
+} from '@/lib/telegram/estados';
 import { isLogBotConfigured } from '@/lib/telegram/logBotApi';
 import { notifyErrorBotAsync } from '@/lib/telegram/notifyErrorBot';
+import { primerTokenComando } from '@/lib/telegram/parseComandoTelegram';
+import { FLUJO_STOCK_CONSULTA } from '@/lib/telegram/stockConsultaTelegram';
 import type { TelegramUpdate } from '@/lib/telegram/webhook';
 
 export type TipoAccionTelegramLog =
@@ -14,17 +21,6 @@ export type TipoAccionTelegramLog =
   | 'voz'
   | 'video'
   | 'sistema';
-
-const ICONO_TIPO: Record<TipoAccionTelegramLog, string> = {
-  comando: '⌨️',
-  callback: '🔘',
-  texto: '💬',
-  foto: '📷',
-  documento: '📎',
-  voz: '🎙️',
-  video: '🎬',
-  sistema: '⚙️',
-};
 
 /** Activa auditoría al chat de logs cuando el bot está configurado (opt-out con TELEGRAM_LOG_AUDITORIA=false). */
 export function isLogBotAuditoriaActiva(): boolean {
@@ -60,21 +56,178 @@ export type TelegramLogChat = {
   id?: number | string;
 };
 
-function personajeDesdeTelegram(
-  from?: TelegramLogActor | null,
-  rolLabel?: string | null,
-): string {
+function personajeCortoLog(from?: TelegramLogActor | null): string {
   const firstName = from?.first_name?.trim() ?? '';
   const lastName = from?.last_name?.trim() ?? '';
-  const nombreCompleto = `${firstName} ${lastName}`.trim();
-  const alias = from?.username?.trim() ? ` (@${from.username.trim()})` : '';
-  const base = nombreCompleto
-    ? `${nombreCompleto}${alias}`
-    : from?.id != null
-      ? `Usuario ${from.id}`
-      : 'Desconocido';
-  const rol = rolLabel?.trim();
-  return rol && !base.includes(rol) ? `${base} · ${rol}` : base;
+  if (firstName && lastName) {
+    return `${firstName} ${lastName.charAt(0).toUpperCase()}`;
+  }
+  if (firstName) return firstName;
+  if (from?.username?.trim()) return from.username.trim();
+  return 'Desconocido';
+}
+
+const COMANDO_A_CONTEXTO: Record<string, TelegramContexto> = {
+  procura: 'procura_solicitud',
+  procuras: 'procura_solicitud',
+  stock: 'consulta_stock',
+  factura: 'factura',
+  facturas: 'factura',
+  sinnota: 'entrada_obra',
+  ingresomanual: 'entrada_obra',
+  ingreso: 'entrada_obra',
+  ingresofactura: 'entrada_obra',
+  ingresofacturas: 'entrada_obra',
+  nota: 'entrada_obra',
+  notaentrega: 'entrada_obra',
+  entrada: 'entrada_obra',
+  emergencia: 'entrada_obra',
+  urgente: 'entrada_obra',
+  ingresoemergencia: 'entrada_obra',
+  emergencias: 'entrada_obra',
+  salida: 'salida_obra',
+  salid: 'salida_obra',
+  egreso: 'salida_obra',
+  bitacora: 'esperando_audio_bitacora',
+  agua: 'obra',
+  start: 'menu',
+  menu: 'menu',
+  inicio: 'menu',
+  cancelar: 'menu',
+  ayuda: 'menu',
+  help: 'menu',
+};
+
+function flujoProcuraDepartamentoPorPaso(paso?: PasoProcuraDepartamento): string {
+  switch (paso) {
+    case 'capitulo':
+    case 'nuevo_capitulo':
+      return 'Procura · elegir capítulo de obra';
+    case 'material':
+      return 'Procura · indicar material';
+    case 'cantidad':
+      return 'Procura · indicar cantidad';
+    case 'unidad':
+    case 'unidad_texto':
+      return 'Procura · elegir unidad';
+    case 'prioridad':
+      return 'Procura · elegir prioridad';
+    case 'consumible':
+    case 'monto':
+      return 'Procura · confirmar datos';
+    case 'confirm':
+      return 'Procura · confirmar solicitud';
+    default:
+      return 'Procura · solicitud';
+  }
+}
+
+function flujoStockPorPaso(paso?: string): string {
+  switch (paso) {
+    case 'entidad':
+      return 'Consulta de stock · elegir entidad';
+    case 'obra':
+      return 'Consulta de stock · elegir obra';
+    case 'almacen':
+      return 'Consulta de stock · elegir almacén';
+    case 'listado':
+      return 'Consulta de stock · listado';
+    default:
+      return 'Consulta de stock';
+  }
+}
+
+function esCallbackProcuraCapitulo(raw: string): boolean {
+  return raw.startsWith('cmp:cap:') || raw === 'cmp:cap:nuevo';
+}
+
+function esCallbackProcuraObra(raw: string): boolean {
+  return raw.startsWith('ps:r:') || raw.startsWith('pp:r:');
+}
+
+/** Flujo legible según comando, callback y paso guardado en ci_telegram_estados. */
+export function resolverFlujoLogAccion(
+  accionCruda: string,
+  contextoEstado: string,
+  estado?: TelegramEstado | null,
+): string {
+  const raw = accionCruda.trim();
+
+  if (raw.startsWith('/')) {
+    const cmdKey = primerTokenComando(raw).replace(/^\//, '').toLowerCase();
+    if (cmdKey === 'procura' || cmdKey === 'procuras') {
+      return 'Procura · escoger obra';
+    }
+    if (cmdKey === 'stock') {
+      return 'Consulta de stock';
+    }
+    const ctx = COMANDO_A_CONTEXTO[cmdKey];
+    if (ctx === 'consulta_stock') return 'Consulta de stock';
+    if (ctx) return etiquetaContexto(ctx);
+  }
+
+  if (esCallbackProcuraObra(raw)) {
+    return 'Procura · escoger obra';
+  }
+
+  if (esCallbackProcuraCapitulo(raw)) {
+    return 'Procura · elegir capítulo de obra';
+  }
+
+  if (estado) {
+    if (estado.contexto === 'consulta_stock') {
+      const m = (estado.metadata ?? {}) as { flujo?: string; paso?: string };
+      if (m.flujo === FLUJO_STOCK_CONSULTA || raw.startsWith('st:')) {
+        return flujoStockPorPaso(m.paso);
+      }
+      return 'Consulta de stock';
+    }
+
+    if (estado.contexto === 'procura_departamento') {
+      const metaDep = (estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento };
+      return flujoProcuraDepartamentoPorPaso(metaDep.paso);
+    }
+
+    if (estado.contexto === 'procura_solicitud') {
+      const metaSol = (estado.metadata ?? {}) as { paso?: string };
+      const paso = metaSol.paso ?? '';
+      if (!estado.proyecto_id && (raw.startsWith('ps:') || raw.startsWith('pp:'))) {
+        return 'Procura · escoger obra';
+      }
+      if (paso === 'material_elegir' || raw.startsWith('prc:')) {
+        return 'Procura · elegir material';
+      }
+      if (paso === 'cantidad') return 'Procura · indicar cantidad';
+      if (paso === 'unidad') return 'Procura · elegir unidad';
+      if (paso === 'observaciones') return 'Procura · observaciones';
+      if (estado.proyecto_id) return 'Procura · solicitud por obra';
+      return 'Procura · escoger obra';
+    }
+  }
+
+  if (raw.startsWith('st:')) {
+    return 'Consulta de stock';
+  }
+
+  return contextoEstado.trim() || etiquetaContexto('menu');
+}
+
+function detalleDesdeAccionCruda(accionCruda: string): string {
+  const raw = accionCruda?.trim() ?? '';
+  if (!raw) return 'Sin datos';
+  if (raw.startsWith('/')) {
+    return raw.split(/\s+/)[0] ?? raw;
+  }
+  if (raw === '[foto]') return 'Foto';
+  if (raw === '[documento]' || raw.startsWith('[documento:')) {
+    return raw.startsWith('[documento:') ? raw.slice('[documento:'.length, -1) : 'Documento';
+  }
+  if (raw === '[nota de voz]') return 'Nota de voz';
+  if (raw === '[video]') return 'Video';
+  if (raw.includes(':')) {
+    return resumirCallbackTelegram(raw);
+  }
+  return truncar(raw, 200);
 }
 
 function truncarUuidCallback(uuid: string): string {
@@ -125,23 +278,18 @@ export function traducirAccionCruda(accionCruda: string): {
 
 /**
  * Log estructurado para acciones del bot operativo (chat de logs).
- * Usa HTML vía notifyErrorBot (etiquetas Personaje/Chat/Flujo/Detalle en negrita).
+ * Usa HTML vía notifyErrorBot (etiquetas Personaje/Flujo/Detalle en negrita).
  */
 export function generarLogAccion(
   from: TelegramLogActor | null | undefined,
-  chat: TelegramLogChat | null | undefined,
   flujo: string,
   accionCruda: string,
-  rolLabel?: string | null,
 ): string {
-  const { tipoAccion, detalleAccion } = traducirAccionCruda(accionCruda);
-  const personaje = personajeDesdeTelegram(from, rolLabel);
-  const flujoTxt = flujo?.trim() || '—';
+  const personaje = personajeCortoLog(from);
+  const detalleAccion = detalleDesdeAccionCruda(accionCruda);
   return [
-    tipoAccion,
     `Personaje: ${personaje}`,
-    `Chat: ${chat?.id ?? 'N/A'}`,
-    `Flujo: ${flujoTxt}`,
+    `Flujo: ${flujo}`,
     `Detalle: ${detalleAccion}`,
   ].join('\n');
 }
@@ -202,37 +350,31 @@ export async function notificarAccionTelegramLog(params: {
   modulo?: string;
   from?: TelegramLogActor | null;
   chat?: TelegramLogChat | null;
+  estadoTelegram?: TelegramEstado | null;
   /** Texto del mensaje o callback_data para generarLogAccion. */
   accionCruda?: string | null;
 }): Promise<void> {
   if (!isLogBotAuditoriaActiva()) return;
 
-  const actor = await resolverEtiquetaRolDestinatario(params.chatId);
-  const flujo = params.contexto?.trim() || params.modulo?.trim() || '—';
+  const contextoBase =
+    params.contexto?.trim() || params.modulo?.trim() || etiquetaContexto('menu');
+  const flujoResuelto =
+    params.accionCruda != null && params.accionCruda !== ''
+      ? resolverFlujoLogAccion(params.accionCruda, contextoBase, params.estadoTelegram)
+      : contextoBase;
 
   let mensaje: string;
   if (params.accionCruda != null && params.accionCruda !== '') {
-    mensaje = generarLogAccion(
-      params.from,
-      params.chat ?? { id: params.chatId },
-      flujo,
-      params.accionCruda,
-      actor,
-    );
+    mensaje = generarLogAccion(params.from, flujoResuelto, params.accionCruda);
   } else {
-    const icono = ICONO_TIPO[params.tipo];
-    const lineas = [
-      `${icono} ${params.accion}`,
-      `Personaje: ${actor}`,
-      `Chat: ${params.chatId}`,
-    ];
-    if (params.contexto?.trim()) lineas.push(`Flujo: ${params.contexto.trim()}`);
-    if (params.detalle?.trim()) {
-      lineas.push(
-        `Detalle: ${truncar(params.detalle.trim(), maxDetalleLog(params.tipo, params.modulo))}`,
-      );
-    }
-    mensaje = lineas.join('\n');
+    const detalle = params.detalle?.trim()
+      ? truncar(params.detalle.trim(), maxDetalleLog(params.tipo, params.modulo))
+      : params.accion;
+    mensaje = [
+      `Personaje: ${personajeCortoLog(params.from)}`,
+      `Flujo: ${flujoResuelto}`,
+      `Detalle: ${detalle}`,
+    ].join('\n');
   }
 
   notifyErrorBotAsync(mensaje, {
@@ -271,9 +413,13 @@ export function notificarEventoSistemaLogAsync(params: {
   }
 
   const actor = params.chatLabel?.trim() || 'Sistema';
-  const lineas = [`⚙️ ${params.evento}`, `Personaje: ${actor}`];
+  const lineas = [
+    `Personaje: ${actor}`,
+    `Flujo: ${params.modulo.trim()}`,
+    `Detalle: ${params.evento}`,
+  ];
   if (params.detalle?.trim()) {
-    lineas.push(truncar(params.detalle.trim(), maxDetalleLog('sistema', params.modulo)));
+    lineas[2] = `Detalle: ${truncar(params.detalle.trim(), maxDetalleLog('sistema', params.modulo))}`;
   }
   notifyErrorBotAsync(lineas.join('\n'), { origen: params.modulo });
 }
@@ -318,9 +464,11 @@ export async function auditarUpdateTelegramAsync(
   if (cq?.data) {
     const chatId = String(cq.message?.chat?.id ?? cq.from.id);
     let contexto: string | null = null;
+    let estadoTelegram: TelegramEstado | null = null;
     if (supabase) {
       try {
         const est = await getTelegramEstado(supabase, chatId);
+        estadoTelegram = est;
         contexto = etiquetaContexto(est.contexto);
       } catch {
         /* ignore */
@@ -333,6 +481,7 @@ export async function auditarUpdateTelegramAsync(
       contexto,
       from: cq.from,
       chat: cq.message?.chat,
+      estadoTelegram,
       accionCruda: cq.data,
     });
     return;
@@ -343,9 +492,11 @@ export async function auditarUpdateTelegramAsync(
 
   const chatId = String(msg.chat.id);
   let contexto: string | null = null;
+  let estadoTelegram: TelegramEstado | null = null;
   if (supabase) {
     try {
       const est = await getTelegramEstado(supabase, chatId);
+      estadoTelegram = est;
       contexto = etiquetaContexto(est.contexto);
     } catch {
       /* ignore */
@@ -359,6 +510,7 @@ export async function auditarUpdateTelegramAsync(
     contexto,
     from: msg.from,
     chat: msg.chat,
+    estadoTelegram,
     accionCruda: accionCrudaDesdeMensaje(msg),
   });
 }
