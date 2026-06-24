@@ -12,7 +12,7 @@ import {
   evaluarStockProcuraRegistro,
   procesarAbastecimientoProcuraAprobada,
 } from '@/lib/procuras/abastecimientoProcuraAprobada';
-import { notificarAprobadoProcuraSolicitante } from '@/lib/procuras/notificarAprobadoProcuraSolicitante';
+import { actualizarTicketProcuraSolicitante } from '@/lib/procuras/ticketProcuraSolicitanteTelegram';
 import {
   evaluarStockRegistroProcura,
   montoUsdSaldoCompra,
@@ -55,6 +55,7 @@ export type RegistrarProcuraDepartamentoResult = {
   alertaPmAdminEnviada?: boolean;
   alertaPmAdminDms?: number;
   compraEmitidaViaRapida?: boolean;
+  necesitaAbastecimientoViaRapida?: boolean;
 };
 
 export async function registrarProcuraDepartamento(
@@ -287,21 +288,7 @@ export async function registrarProcuraDepartamento(
   }
 
   let compraEmitidaViaRapida = false;
-  if (via.califica && out.id) {
-    try {
-      const abas = await confirmarAbastecimientoProcura(supabase, {
-        procuraId: String(out.id),
-        autorNombre: 'Vía rápida',
-      });
-      if (!abas.ok) {
-        console.warn('[registrarProcuraDepartamento] vía rápida abastecimiento', abas.error);
-      } else {
-        compraEmitidaViaRapida = Boolean(abas.compraEmitida);
-      }
-    } catch (e) {
-      console.warn('[registrarProcuraDepartamento] vía rápida abastecimiento', e);
-    }
-  }
+  const necesitaAbastecimientoViaRapida = Boolean(via.califica && out.id);
 
   return {
     data: {
@@ -317,6 +304,7 @@ export async function registrarProcuraDepartamento(
       alertaPmAdminEnviada,
       alertaPmAdminDms,
       compraEmitidaViaRapida,
+      necesitaAbastecimientoViaRapida,
     },
     error: null,
   };
@@ -397,20 +385,6 @@ export async function resolverProcuraDepartamento(
     };
   }
 
-  const filaPrev = prevAprob as {
-    ticket: string;
-    material_txt: string;
-    solicitante_nombre?: string | null;
-    solicitante_telegram_chat_id: number | null;
-  };
-
-  await notificarAprobadoProcuraSolicitante({
-    ticket: filaPrev.ticket,
-    material_txt: filaPrev.material_txt,
-    solicitante_telegram_chat_id: filaPrev.solicitante_telegram_chat_id,
-    solicitante_nombre: filaPrev.solicitante_nombre,
-  });
-
   const abas = await procesarAbastecimientoProcuraAprobada(supabase, {
     procuraId: params.procuraId,
     autorNombre: params.aprobadorNombre,
@@ -420,6 +394,12 @@ export async function resolverProcuraDepartamento(
   if (!abas.ok) {
     return { ok: false, error: abas.error };
   }
+
+  await actualizarTicketProcuraSolicitante(supabase, params.procuraId, {
+    pmAprobadorNombre: params.aprobadorNombre,
+    ordenCompraEmitida: Boolean(abas.compraEmitida),
+    despachoCodigo: abas.despachoCodigo ?? null,
+  });
 
   return {
     ok: true,

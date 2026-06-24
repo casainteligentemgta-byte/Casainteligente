@@ -5,10 +5,6 @@ import {
   evaluarAbastecimientoProcura,
   evaluarStockProcuraRegistro,
 } from '@/lib/procuras/abastecimientoProcuraAprobada';
-import {
-  construirMensajeSolicitanteProcuraStockSuficiente,
-} from '@/lib/procuras/mensajeAlertaProcuraTelegram';
-import { sendTelegramMessage } from '@/lib/telegram/botApi';
 
 export type EvaluacionStockRegistroProcura = Awaited<
   ReturnType<typeof evaluarAbastecimientoProcura>
@@ -51,30 +47,9 @@ export async function procesarProcuraStockSuficiente(
     cantidad: Number(procura.cantidad),
   });
 
-  let solicitanteNotificado = false;
-  const chatSol = procura.solicitante_telegram_chat_id;
-  if (chatSol != null) {
-    try {
-      await sendTelegramMessage(
-        String(chatSol),
-        construirMensajeSolicitanteProcuraStockSuficiente({
-          ticket: procura.ticket,
-          materialTxt: procura.material_txt,
-          cantidad: Number(procura.cantidad),
-          unidad: procura.unidad,
-          almacenNombre: evaluacion.origenUbicacionNombre,
-        }),
-        { parse_mode: 'HTML', rolDestinatario: 'Solicitante' },
-      );
-      solicitanteNotificado = true;
-    } catch (e) {
-      console.warn('[procuraRegistroStock] solicitante', procura.ticket, e);
-    }
-  }
-
   const dep = await enviarOrdenDespachoDepositarioProcura(supabase, procura, evaluacion);
   return {
-    solicitanteNotificado,
+    solicitanteNotificado: false,
     depositarioNotificado: dep.enviado,
   };
 }

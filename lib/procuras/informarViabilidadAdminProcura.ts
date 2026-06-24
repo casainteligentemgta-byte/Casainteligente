@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FundamentoDisponibilidad } from '@/lib/procuras/auditoriaSupervisorProcura';
 import { etiquetaFundamento } from '@/lib/procuras/auditoriaSupervisorProcura';
 import { transicionEstadoProcuraValida } from '@/lib/procuras/procuraEstados';
+import { actualizarTicketProcuraSolicitante } from '@/lib/procuras/ticketProcuraSolicitanteTelegram';
 import { enviarAlertaPmTrasViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
 
 export type InformarViabilidadAdminResult = {
@@ -191,6 +192,10 @@ export async function informarViabilidadAdminProcura(
   const alerta = await enviarAlertaPmTrasViabilidadAdmin(supabase, procuraId, {
     informadoPorRol,
   });
+
+  if (params.viabilidad === 'si' || params.viabilidad === 'no') {
+    await actualizarTicketProcuraSolicitante(supabase, procuraId);
+  }
 
   return {
     ok: true,

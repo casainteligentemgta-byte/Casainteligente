@@ -12,7 +12,7 @@ import {
   nombreActorSupervisorFormal,
   type ContextoAuditoriaSupervisor,
 } from '@/lib/procuras/auditoriaSupervisorProcura';
-import { notificarProcurasTelegram } from '@/lib/procuras/notificarProcuraTelegram';
+import { actualizarTicketProcuraSolicitante } from '@/lib/procuras/ticketProcuraSolicitanteTelegram';
 import {
   etiquetaEstadoProcura,
   parseEstadoProcura,
@@ -310,18 +310,9 @@ export async function emitirOrdenCompraProcura(
   }
 
   if (procura.solicitante_telegram_chat_id) {
-    await notificarProcurasTelegram(
-      [
-        {
-          ticket: procura.ticket,
-          material_txt: procura.material_txt,
-          nuevo_est: estadoActual,
-          telegram_id: String(procura.solicitante_telegram_chat_id),
-          solicitante_nombre: procura.solicitante_nombre,
-        },
-      ],
-      `Orden de compra enviada al comprador. Estado: ${etiquetaEstadoProcura(estadoActual)}.`,
-    );
+    await actualizarTicketProcuraSolicitante(supabase, procuraId, {
+      ordenCompraEmitida: true,
+    });
   }
 
   return {

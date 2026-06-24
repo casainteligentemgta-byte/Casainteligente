@@ -6,7 +6,7 @@ import {
   type ContextoAuditoriaSupervisor,
 } from '@/lib/procuras/auditoriaSupervisorProcura';
 import { rpcProcesarProcurasLote } from '@/lib/procuras/rpcProcesarProcurasLote';
-import { notificarRechazoProcuraSolicitante } from '@/lib/procuras/notificarRechazoProcura';
+import { actualizarTicketProcuraSolicitante } from '@/lib/procuras/ticketProcuraSolicitanteTelegram';
 
 export const MIN_MOTIVO_RECHAZO_PROCURA = 3;
 
@@ -112,11 +112,7 @@ export async function rechazarProcuraConMotivo(
     solicitante_telegram_chat_id: number | null;
   };
 
-  const solicitanteNotificado = await notificarRechazoProcuraSolicitante(
-    row,
-    motivoFinal,
-    aprobadorNombre,
-  );
+  const solicitanteNotificado = await actualizarTicketProcuraSolicitante(supabase, procuraId);
 
   return {
     ok: true,

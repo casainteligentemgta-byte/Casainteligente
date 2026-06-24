@@ -58,9 +58,9 @@ import {
   parseCallbackAbastecimientoProcura,
 } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import {
-  construirMensajeSolicitanteProcuraCompra,
-  construirMensajeSolicitanteProcuraStockSuficiente,
-} from '@/lib/procuras/mensajeAlertaProcuraTelegram';
+  actualizarTicketProcuraSolicitante,
+  publicarTicketProcuraSolicitante,
+} from '@/lib/procuras/ticketProcuraSolicitanteTelegram';
 import {
   consultarDisponibilidadMaterialProcura,
   lineaDisponibilidadMaterialProcura,
@@ -1255,42 +1255,25 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       return true;
     }
 
-    let textoConfirmacion: string;
-    if (data.stockSuficiente) {
-      textoConfirmacion = construirMensajeSolicitanteProcuraStockSuficiente({
-        ticket: data.ticket,
-        materialTxt: m.material_txt ?? '',
-        cantidad: Number(m.cantidad),
-        unidad: m.unidad ?? 'UND',
-        almacenNombre: data.almacenNombre,
-      });
-    } else if (data.errorConsultaHistorico && !data.viaRapida) {
-      textoConfirmacion =
-        construirMensajeSolicitanteProcuraCompra({
-          ticket: data.ticket,
-          materialTxt: m.material_txt ?? '',
-          cantidad: Number(m.cantidad),
-          unidad: m.unidad ?? 'UND',
-          stockDisponible: data.stockDisponible ?? 0,
-          cantidadCompra: data.cantidadCompra ?? Number(m.cantidad),
-          viaRapida: false,
-        }) + '\n\n⚠️ No se pudo verificar el costo histórico; la oficina revisará la solicitud.';
-    } else {
-      textoConfirmacion = construirMensajeSolicitanteProcuraCompra({
-        ticket: data.ticket,
-        materialTxt: m.material_txt ?? '',
-        cantidad: Number(m.cantidad),
-        unidad: m.unidad ?? 'UND',
-        stockDisponible: data.stockDisponible ?? 0,
-        cantidadCompra: data.cantidadCompra ?? Number(m.cantidad),
-        viaRapida: data.viaRapida,
-        motivoVia: data.viaRapida
-          ? `${data.motivoVia}`
-          : undefined,
-      });
+    await publicarTicketProcuraSolicitante(supabase, data.id);
+
+    if (data.necesitaAbastecimientoViaRapida) {
+      try {
+        const abas = await confirmarAbastecimientoProcura(supabase, {
+          procuraId: data.id,
+          autorNombre: 'Vía rápida',
+        });
+        if (abas.ok) {
+          await actualizarTicketProcuraSolicitante(supabase, data.id, {
+            ordenCompraEmitida: Boolean(abas.compraEmitida),
+            despachoCodigo: abas.despachoCodigo ?? null,
+          });
+        }
+      } catch (e) {
+        console.warn('[procuraDepartamento] vía rápida abastecimiento', e);
+      }
     }
 
-    await sendTelegramMessage(params.chatId, textoConfirmacion, { parse_mode: 'HTML' });
     return true;
   }
 
