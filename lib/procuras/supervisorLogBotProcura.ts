@@ -300,8 +300,11 @@ async function ejecutarViabilidadSupervisor(
     return;
   }
 
-  const pmNota =
-    resultado.pmsNotificados && resultado.pmsNotificados > 0
+  const pmNota = resultado.aprobacionDirectaSupervisor
+    ? resultado.compraEmitida
+      ? `${label}. Aprobada y orden al comprador (sin paso PM).`
+      : `${label}. Aprobada por supervisor (sin paso PM).`
+    : resultado.pmsNotificados && resultado.pmsNotificados > 0
       ? `${label}. PM notificado (${resultado.pmsNotificados}).`
       : `${label}. Sin PM Telegram para notificar.`;
 

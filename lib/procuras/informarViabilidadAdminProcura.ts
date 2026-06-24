@@ -1,6 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FundamentoDisponibilidad } from '@/lib/procuras/auditoriaSupervisorProcura';
-import { etiquetaFundamento } from '@/lib/procuras/auditoriaSupervisorProcura';
+import {
+  etiquetaFundamento,
+  insertarAuditoriaProcuraSinTransicion,
+  metadatosAuditoriaSupervisor,
+  motivoAuditoriaSupervisor,
+  nombreActorSupervisorFormal,
+  ORIGEN_SUPERVISOR_LOG,
+  type ContextoAuditoriaSupervisor,
+} from '@/lib/procuras/auditoriaSupervisorProcura';
+import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { transicionEstadoProcuraValida } from '@/lib/procuras/procuraEstados';
 import { actualizarTicketProcuraSolicitante } from '@/lib/procuras/ticketProcuraSolicitanteTelegram';
 import { enviarAlertaPmTrasViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
@@ -10,6 +19,9 @@ export type InformarViabilidadAdminResult = {
   ticket?: string;
   error?: string;
   pmsNotificados?: number;
+  /** Supervisor con viabilidad sí: misma función que PM (orden de compra). */
+  aprobacionDirectaSupervisor?: boolean;
+  compraEmitida?: boolean;
 };
 
 export type InformadoPorRolViabilidad = 'contador' | 'supervisor';
@@ -111,7 +123,103 @@ async function insertarHistorialViabilidadAdmin(
   return histError?.message ?? null;
 }
 
-/** Administrador informa viabilidad presupuestaria → pendiente_pm + alerta al PM. */
+function contextoAuditoriaDesdeViabilidadSupervisor(
+  params: InformarViabilidadAdminParams,
+): ContextoAuditoriaSupervisor {
+  return {
+    actorNombre: params.adminNombre,
+    actorTelegramId: params.adminTelegramId,
+    fundamento: params.fundamento ?? 'financiero',
+    rolFacultado: 'pm',
+    accion: 'via:si_aprobacion_directa',
+  };
+}
+
+/** Supervisor + viabilidad sí: salta PM y ejecuta aprobación + orden de compra. */
+async function informarViabilidadSupervisorConAprobacion(
+  supabase: SupabaseClient,
+  params: InformarViabilidadAdminParams,
+  ticket: string,
+): Promise<InformarViabilidadAdminResult> {
+  const procuraId = params.procuraId.trim();
+  const ahora = new Date().toISOString();
+  const origen = params.origen?.trim() || ORIGEN_SUPERVISOR_LOG;
+  const auditoria = contextoAuditoriaDesdeViabilidadSupervisor(params);
+  const actorFormal = nombreActorSupervisorFormal(params.adminNombre);
+
+  const { data: updated, error: updErr } = await supabase
+    .from('ci_procuras')
+    .update({
+      viabilidad_presupuestaria: 'si',
+      viabilidad_informada_por: params.adminNombre.slice(0, 150),
+      viabilidad_informada_telegram_id: params.adminTelegramId ?? null,
+      viabilidad_informada_at: ahora,
+      updated_at: ahora,
+    } as never)
+    .eq('id', procuraId)
+    .eq('estado', 'solicitada')
+    .select('id')
+    .maybeSingle();
+
+  if (updErr) return { ok: false, error: updErr.message };
+  if (!updated) {
+    return {
+      ok: false,
+      error: 'La procura ya no está en estado solicitada (concurrencia o transición previa).',
+    };
+  }
+
+  const histVia = await insertarAuditoriaProcuraSinTransicion(supabase, {
+    procuraId,
+    estado: 'solicitada',
+    motivo: motivoAuditoriaSupervisor(
+      motivoHistorialViabilidadAdmin('si', 'supervisor', params.fundamento),
+      auditoria,
+    ),
+    usuario: actorFormal.slice(0, 150),
+    metadatos: {
+      ...metadatosHistorialViabilidadAdmin({
+        viabilidad: 'si',
+        origen,
+        adminUsuarioId: params.adminUsuarioId,
+        observaciones: params.observaciones,
+        informadoPorRol: 'supervisor',
+        fundamento: params.fundamento,
+      }),
+      ...metadatosAuditoriaSupervisor(auditoria),
+    },
+  });
+  if (histVia) {
+    console.error('[informarViabilidadSupervisorConAprobacion] historial viabilidad:', histVia);
+  }
+
+  const abas = await procesarAbastecimientoProcuraAprobada(supabase, {
+    procuraId,
+    autorNombre: actorFormal,
+    auditoriaSupervisor: auditoria,
+    aprobarDesdeViabilidadSupervisor: true,
+  });
+
+  if (!abas.ok) {
+    return { ok: false, error: abas.error ?? 'No se pudo aprobar ni emitir orden de compra.' };
+  }
+
+  await actualizarTicketProcuraSolicitante(supabase, procuraId, {
+    pmAprobadorNombre: actorFormal,
+    ordenCompraEmitida: Boolean(abas.compraEmitida),
+    despachoCodigo: abas.despachoCodigo ?? null,
+  });
+
+  return {
+    ok: true,
+    ticket,
+    pmsNotificados: 0,
+    aprobacionDirectaSupervisor: true,
+    compraEmitida: abas.compraEmitida,
+  };
+}
+
+/** Administrador informa viabilidad presupuestaria → pendiente_pm + alerta al PM (contador). */
 export async function informarViabilidadAdminProcura(
   supabase: SupabaseClient,
   params: InformarViabilidadAdminParams,
@@ -137,6 +245,16 @@ export async function informarViabilidadAdminProcura(
           ? 'La procura ya fue enviada al Project Manager.'
           : 'La procura ya fue resuelta.',
     };
+  }
+
+  const informadoPorRol = params.informadoPorRol ?? 'contador';
+
+  if (informadoPorRol === 'supervisor' && params.viabilidad === 'si') {
+    return informarViabilidadSupervisorConAprobacion(
+      supabase,
+      params,
+      String(row.ticket ?? ''),
+    );
   }
 
   if (!transicionEstadoProcuraValida('solicitada', 'pendiente_pm')) {
@@ -168,8 +286,6 @@ export async function informarViabilidadAdminProcura(
       error: 'La procura ya no está en estado solicitada (concurrencia o transición previa).',
     };
   }
-
-  const informadoPorRol = params.informadoPorRol ?? 'contador';
 
   const histErr = await insertarHistorialViabilidadAdmin(supabase, {
     procuraId,

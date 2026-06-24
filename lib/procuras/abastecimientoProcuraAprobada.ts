@@ -58,7 +58,7 @@ export async function cargarProcuraAbastecimiento(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,viabilidad_presupuestaria,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -433,6 +433,8 @@ export async function procesarAbastecimientoProcuraAprobada(
     procuraId: string;
     autorNombre: string;
     auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
+    /** Supervisor con viabilidad sí: aprueba desde solicitada sin paso PM. */
+    aprobarDesdeViabilidadSupervisor?: boolean;
   },
 ): Promise<ResultadoAbastecimientoProcura> {
   const procuraId = params.procuraId.trim();
@@ -446,6 +448,24 @@ export async function procesarAbastecimientoProcuraAprobada(
       procuraId,
       'aprobada',
       `Aprobada por ${params.autorNombre} — verificación de almacén`,
+      params.auditoriaSupervisor,
+    );
+    procura = (await cargarProcuraAbastecimiento(supabase, procuraId)) ?? procura;
+  } else if (estado === 'solicitada' && params.aprobarDesdeViabilidadSupervisor) {
+    const viab = String(
+      (procura as { viabilidad_presupuestaria?: string | null }).viabilidad_presupuestaria ?? '',
+    ).toLowerCase();
+    if (viab !== 'si') {
+      return {
+        ok: false,
+        error: 'La viabilidad del supervisor no quedó registrada antes de aprobar.',
+      };
+    }
+    await transicionProcura(
+      supabase,
+      procuraId,
+      'aprobada',
+      `Aprobada por ${params.autorNombre} — viabilidad supervisor (equivale a PM + compra)`,
       params.auditoriaSupervisor,
     );
     procura = (await cargarProcuraAbastecimiento(supabase, procuraId)) ?? procura;

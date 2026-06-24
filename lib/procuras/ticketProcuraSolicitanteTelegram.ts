@@ -57,10 +57,27 @@ function lineasFirmasAprobacion(
 
   const via = row.viabilidad_presupuestaria?.trim().toLowerCase();
   const informante = row.viabilidad_informada_por?.trim();
+  const transSupervisorDirecta = historial.find(
+    (h) =>
+      String(h.estado_anterior).toLowerCase() === 'solicitada' &&
+      String(h.estado_nuevo).toLowerCase() === 'aprobada' &&
+      /supervisor/i.test(String(h.motivo ?? '')),
+  );
+
   if (via === 'si' && informante) {
-    lineas.push(`✅ Contador: disponibilidad confirmada (${escHtml(informante)})`);
+    if (transSupervisorDirecta || /supervisor/i.test(informante)) {
+      lineas.push(
+        `✅ Supervisor: viabilidad y aprobación (${escHtml(informante)})`,
+      );
+    } else {
+      lineas.push(`✅ Contador: disponibilidad confirmada (${escHtml(informante)})`);
+    }
   } else if (via === 'no' && informante) {
-    lineas.push(`⚠️ Contador: sin disponibilidad (${escHtml(informante)})`);
+    if (/supervisor/i.test(informante)) {
+      lineas.push(`⚠️ Supervisor: sin disponibilidad (${escHtml(informante)})`);
+    } else {
+      lineas.push(`⚠️ Contador: sin disponibilidad (${escHtml(informante)})`);
+    }
   }
 
   if (row.via_rapida) {
@@ -72,13 +89,28 @@ function lineasFirmasAprobacion(
       String(h.estado_anterior).toLowerCase() === 'pendiente_pm' &&
       String(h.estado_nuevo).toLowerCase() === 'aprobada',
   );
+  const transPmDesdeSolicitada = historial.find(
+    (h) =>
+      String(h.estado_anterior).toLowerCase() === 'solicitada' &&
+      String(h.estado_nuevo).toLowerCase() === 'aprobada',
+  );
   if (transPm) {
     const quien =
       opts?.pmAprobadorNombre?.trim() ||
       transPm.usuario?.trim() ||
       'Project Manager';
     lineas.push(`✅ PM: aprobada (${escHtml(quien)})`);
-  } else if (opts?.pmAprobadorNombre?.trim()) {
+  } else if (
+    transPmDesdeSolicitada &&
+    !transSupervisorDirecta &&
+    !/supervisor/i.test(informante ?? '')
+  ) {
+    const quien =
+      opts?.pmAprobadorNombre?.trim() ||
+      transPmDesdeSolicitada.usuario?.trim() ||
+      'Aprobador';
+    lineas.push(`✅ Aprobada (${escHtml(quien)})`);
+  } else if (opts?.pmAprobadorNombre?.trim() && !transSupervisorDirecta) {
     lineas.push(`✅ PM: aprobada (${escHtml(opts.pmAprobadorNombre.trim())})`);
   }
 
