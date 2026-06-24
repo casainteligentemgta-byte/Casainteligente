@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   listarUsuariosOrdenCompraTelegram,
-  type UsuarioSistemaTelegram,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
 import { nombreMaterialProcuraVisible } from '@/lib/compras/procuraMaterialTexto';
@@ -18,12 +17,12 @@ import {
   parseEstadoProcura,
   type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
-import { replicarOrdenCompraProcuraDesdeFila } from '@/lib/procuras/supervisorLogBotProcura';
 import {
   listarAlmacenesStockMaterialEntidad,
   notaLogisticaStockEntidadComprador,
   type AlmacenStockEntidad,
 } from '@/lib/procuras/disponibilidadMaterialProcura';
+import { replicarOrdenCompraProcuraEnLogBot } from '@/lib/telegram/espejoSalidaLogBot';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 
 const ESTADOS_ORIGEN_ORDEN: readonly EstadoProcura[] = [
@@ -172,21 +171,16 @@ export async function notificarCompradoresOrdenCompra(
     }
   }
 
-  try {
-    await replicarOrdenCompraProcuraDesdeFila(supabase, {
-      procuraId: procura.id,
-      autorNombre: params.autorNombre,
-      motivo: params.motivo,
-      cantidadCompra: params.cantidadCompra,
-      almacenesEntidad: params.almacenesEntidad,
-      compradores: compradores.map((u) => ({
-        nombre: u.nombre,
-        telegram_id: u.telegram_id,
-      })),
-    });
-  } catch (e) {
-    console.warn('[ordenCompraProcura] réplica log supervisor', e);
-  }
+  await replicarOrdenCompraProcuraEnLogBot({
+    procuraId: procura.id,
+    mensaje: texto,
+    ticket: String(procura.ticket ?? ''),
+    destinatarios: compradores.map((u) => ({
+      nombre: u.nombre,
+      chatId: u.telegram_id,
+    })),
+    sinCompradorConfigurado: compradores.length === 0,
+  });
 
   return { enviados, omitidos };
 }

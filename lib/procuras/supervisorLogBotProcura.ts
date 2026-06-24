@@ -30,10 +30,7 @@ import {
   answerLogBotCallbackQuery,
   editLogBotMessage,
   getTelegramLogChatId,
-  isLogBotConfigured,
-  sendLogBotMessage,
 } from '@/lib/telegram/logBotApi';
-import { pieDestinatariosLog } from '@/lib/telegram/pieDestinatarioLog';
 
 /** Viabilidad (contador operativo). */
 export const CB_LOG_VIAB_SI = 'log:via:si:';
@@ -597,51 +594,11 @@ export async function manejarCallbackViabilidadSupervisorLogBot(
   return manejarCallbackSupervisorLogProcura(supabase, params);
 }
 
-/** Réplica dedicada: orden de compra → comprador(es) + supervisor en log bot. */
-export async function replicarOrdenCompraProcuraEnLogBot(params: {
-  procuraId: string;
-  mensaje: string;
-  ticket: string;
-  destinatarios: { nombre: string; chatId: number }[];
-}): Promise<void> {
-  if (!isLogBotConfigured()) return;
-
-  const logChat = getTelegramLogChatId();
-  if (!logChat) return;
-
-  const lineasCabecera = [
-    '<b>[Procura · orden de compra]</b>',
-    `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
-  ];
-
-  const pie = pieDestinatariosLog(
-    params.destinatarios.map((d) => ({
-      rol: 'Comprador',
-      nombre: d.nombre.trim() || 'Comprador',
-      chatId: d.chatId,
-    })),
-    'ejecutar_compra',
-  );
-
-  const supervisor =
-    '\n\n<b>Supervisor (log):</b> auditoría formal — puede reenviar la orden si el comprador no responde.';
-  const texto = truncar(
-    `${lineasCabecera.join('\n')}\n\n${params.mensaje}${pie}${supervisor}`,
-    MAX_TEXTO_LOG,
-  );
-  await sendLogBotMessage(logChat, texto, {
-    parse_mode: 'HTML',
-    reply_markup: tecladoCompradorSupervisorLog(params.procuraId.trim()),
-  });
-}
-
-export function replicarOrdenCompraProcuraEnLogBotAsync(
-  params: Parameters<typeof replicarOrdenCompraProcuraEnLogBot>[0],
-): void {
-  void replicarOrdenCompraProcuraEnLogBot(params).catch((e) => {
-    console.warn('[supervisorLogBot] orden compra', e instanceof Error ? e.message : e);
-  });
-}
+/** Réplica orden de compra en log bot (implementación en espejoSalidaLogBot). */
+export {
+  replicarOrdenCompraProcuraEnLogBot,
+  replicarOrdenCompraProcuraEnLogBotAsync,
+} from '@/lib/telegram/espejoSalidaLogBot';
 
 export async function replicarOrdenCompraProcuraDesdeFila(
   supabase: SupabaseClient,
@@ -654,6 +611,9 @@ export async function replicarOrdenCompraProcuraDesdeFila(
     compradores: { nombre: string; telegram_id: number }[];
   },
 ): Promise<void> {
+  const { replicarOrdenCompraProcuraEnLogBot: replicar } = await import(
+    '@/lib/telegram/espejoSalidaLogBot'
+  );
   const procura = await cargarProcuraOrdenCompra(supabase, params.procuraId);
   if (!procura) return;
 
@@ -664,7 +624,7 @@ export async function replicarOrdenCompraProcuraDesdeFila(
     almacenesEntidad: params.almacenesEntidad,
   });
 
-  await replicarOrdenCompraProcuraEnLogBot({
+  await replicar({
     procuraId: params.procuraId,
     mensaje,
     ticket: String(procura.ticket ?? ''),
@@ -672,5 +632,6 @@ export async function replicarOrdenCompraProcuraDesdeFila(
       nombre: c.nombre,
       chatId: c.telegram_id,
     })),
+    sinCompradorConfigurado: params.compradores.length === 0,
   });
 }

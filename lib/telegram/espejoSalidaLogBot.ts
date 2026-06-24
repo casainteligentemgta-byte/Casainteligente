@@ -1,6 +1,7 @@
 import { getTelegramLogChatId, isLogBotConfigured, sendLogBotMessage } from '@/lib/telegram/logBotApi';
 import {
   mapearTecladoOperativoASupervisorLog,
+  tecladoCompradorSupervisorLog,
   tecladoPmSupervisorLog,
   tecladoViabilidadSupervisorLog,
 } from '@/lib/procuras/supervisorLogBotProcura';
@@ -218,4 +219,60 @@ export async function replicarAlertaPmProcuraEnLogBot(params: {
   );
   const replyMarkup = tecladoPmSupervisorLog(params.procuraId.trim());
   await sendLogBotMessage(logChat, texto, { parse_mode: 'HTML', reply_markup: replyMarkup });
+}
+
+/** Réplica dedicada: orden de compra → comprador(es) + supervisor en log bot. */
+export async function replicarOrdenCompraProcuraEnLogBot(params: {
+  procuraId: string;
+  mensaje: string;
+  ticket: string;
+  destinatarios: { nombre: string; chatId: number }[];
+  sinCompradorConfigurado?: boolean;
+}): Promise<void> {
+  if (!isLogBotConfigured()) return;
+
+  const logChat = getTelegramLogChatId();
+  if (!logChat) return;
+
+  const lineasCabecera = [
+    '<b>[Procura · orden de compra]</b>',
+    `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
+  ];
+
+  let pie: string;
+  if (params.sinCompradorConfigurado) {
+    pie = pieDestinatarioLog({
+      rol: 'Comprador',
+      accion: 'ejecutar_compra',
+    });
+    lineasCabecera.push('⚠️ <i>Sin comprador Telegram activo</i>');
+  } else {
+    pie = pieDestinatariosLog(
+      params.destinatarios.map((d) => ({
+        rol: 'Comprador',
+        nombre: d.nombre.trim() || 'Comprador',
+        chatId: d.chatId,
+      })),
+      'ejecutar_compra',
+    );
+  }
+
+  const supervisor =
+    '\n\n<b>Supervisor (log):</b> auditoría formal — puede reenviar la orden si el comprador no responde.';
+  const texto = truncar(
+    `${lineasCabecera.join('\n')}\n\n${params.mensaje}${pie}${supervisor}`,
+    MAX_TEXTO_LOG,
+  );
+  await sendLogBotMessage(logChat, texto, {
+    parse_mode: 'HTML',
+    reply_markup: tecladoCompradorSupervisorLog(params.procuraId.trim()),
+  });
+}
+
+export function replicarOrdenCompraProcuraEnLogBotAsync(
+  params: Parameters<typeof replicarOrdenCompraProcuraEnLogBot>[0],
+): void {
+  void replicarOrdenCompraProcuraEnLogBot(params).catch((e) => {
+    console.warn('[espejoSalidaLogBot] orden compra', e instanceof Error ? e.message : e);
+  });
 }

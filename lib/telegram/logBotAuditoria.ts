@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { obtenerUsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { esUuidProcura, type PasoProcuraDepartamento } from '@/lib/compras/telegramMetadata';
 import {
   etiquetaContexto,
@@ -102,7 +103,7 @@ function flujoProcuraDepartamentoPorPaso(paso?: PasoProcuraDepartamento): string
   switch (paso) {
     case 'capitulo':
     case 'nuevo_capitulo':
-      return 'Procura · elegir capítulo de obra';
+      return 'Procura · escoger capítulo';
     case 'material':
       return 'Procura · indicar material';
     case 'cantidad':
@@ -118,7 +119,7 @@ function flujoProcuraDepartamentoPorPaso(paso?: PasoProcuraDepartamento): string
     case 'confirm':
       return 'Procura · confirmar solicitud';
     default:
-      return 'Procura · solicitud';
+      return 'Procura · escoger capítulo';
   }
 }
 
@@ -145,6 +146,41 @@ function esCallbackProcuraObra(raw: string): boolean {
   return raw.startsWith('ps:r:') || raw.startsWith('pp:r:');
 }
 
+function esComandoProcura(raw: string): boolean {
+  if (!raw.startsWith('/')) return false;
+  const cmdKey = primerTokenComando(raw).replace(/^\//, '').toLowerCase();
+  return cmdKey === 'procura' || cmdKey === 'procuras';
+}
+
+/** Alinea el flujo del log con manejarComandoProcuraDepartamentoTelegram (obra en estado o en usuario). */
+async function enriquecerEstadoParaLogProcura(
+  supabase: SupabaseClient,
+  telegramUserId: string | number,
+  estado: TelegramEstado | null,
+): Promise<TelegramEstado | null> {
+  if (estado?.proyecto_id?.trim()) return estado;
+  const usuario = await obtenerUsuarioSistemaTelegram(supabase, telegramUserId);
+  const pid = usuario?.proyecto_id?.trim();
+  if (!pid) return estado;
+  if (!estado) {
+    return {
+      chat_id: String(telegramUserId),
+      contexto: 'menu',
+      proyecto_id: pid,
+      pending_factura_id: null,
+      metadata: {},
+    };
+  }
+  return { ...estado, proyecto_id: pid };
+}
+
+function flujoProcuraTrasComando(estado?: TelegramEstado | null): string {
+  if (estado?.proyecto_id?.trim()) {
+    return 'Procura · escoger capítulo';
+  }
+  return 'Procura · escoger obra';
+}
+
 /** Flujo legible según comando, callback y paso guardado en ci_telegram_estados. */
 export function resolverFlujoLogAccion(
   accionCruda: string,
@@ -156,7 +192,7 @@ export function resolverFlujoLogAccion(
   if (raw.startsWith('/')) {
     const cmdKey = primerTokenComando(raw).replace(/^\//, '').toLowerCase();
     if (cmdKey === 'procura' || cmdKey === 'procuras') {
-      return 'Procura · escoger obra';
+      return flujoProcuraTrasComando(estado);
     }
     if (cmdKey === 'stock') {
       return 'Consulta de stock';
@@ -171,7 +207,10 @@ export function resolverFlujoLogAccion(
   }
 
   if (esCallbackProcuraCapitulo(raw)) {
-    return 'Procura · elegir capítulo de obra';
+    if (raw === 'cmp:cap:nuevo') {
+      return 'Procura · nuevo capítulo';
+    }
+    return 'Procura · capítulo elegido';
   }
 
   if (estado) {
@@ -183,13 +222,16 @@ export function resolverFlujoLogAccion(
       return 'Consulta de stock';
     }
 
-  if (estado.contexto === 'procura_departamento') {
-    const metaDep = (estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento };
-    if (raw === 'ps:q:' || raw.startsWith('ps:q:')) {
-      return 'Procura · escoger obra';
+    if (estado.contexto === 'procura_departamento') {
+      const metaDep = (estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento };
+      if (raw === 'ps:q:' || raw.startsWith('ps:q:')) {
+        return 'Procura · escoger obra';
+      }
+      if (!metaDep.paso && estado.proyecto_id?.trim()) {
+        return 'Procura · escoger capítulo';
+      }
+      return flujoProcuraDepartamentoPorPaso(metaDep.paso);
     }
-    return flujoProcuraDepartamentoPorPaso(metaDep.paso);
-  }
 
     if (estado.contexto === 'procura_solicitud') {
       const metaSol = (estado.metadata ?? {}) as { paso?: string };
@@ -217,6 +259,7 @@ export function resolverFlujoLogAccion(
 
 const PREFIJO_CALLBACK_CAPITULO = 'cmp:cap:';
 const PREFIJO_CMP = 'cmp:';
+const DETALLE_PROCURA_MATERIAL_MANUAL = 'Se ingresó material de manera manual';
 
 /** Detalle legible para callbacks cmp: del flujo procura departamento (sin prefijo técnico). */
 function resolverDetalleCmpProcuraDepartamentoLog(
@@ -228,7 +271,7 @@ function resolverDetalleCmpProcuraDepartamentoLog(
     return undefined;
   }
 
-  if (raw === 'cmp:mat:txt') return 'Se ingresó material';
+  if (raw === 'cmp:mat:txt') return DETALLE_PROCURA_MATERIAL_MANUAL;
   if (raw === 'cmp:ok') return 'OK';
   if (raw === 'cmp:no') return 'Cancelar';
   if (raw === 'cmp:mat:canon') return 'Usar material sugerido';
@@ -256,7 +299,7 @@ function resolverDetalleMensajeProcuraDepartamento(
   const texto = accionCruda.trim();
   if (!texto || texto.startsWith('/') || texto.startsWith('[')) return undefined;
   const paso = ((estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento }).paso;
-  if (paso === 'material') return 'Se ingresó material';
+  if (paso === 'material') return DETALLE_PROCURA_MATERIAL_MANUAL;
   return undefined;
 }
 
@@ -391,7 +434,7 @@ export function traducirAccionCruda(accionCruda: string): {
     };
   }
   if (raw === 'cmp:mat:txt') {
-    return { tipoAccion: '⚙️ Tipo de Entrada', detalleAccion: 'Se ingresó material' };
+    return { tipoAccion: '⚙️ Tipo de Entrada', detalleAccion: DETALLE_PROCURA_MATERIAL_MANUAL };
   }
   if (raw.startsWith('cmp:uni:')) {
     const suffix = raw.slice('cmp:uni:'.length);
@@ -675,7 +718,19 @@ export async function auditarUpdateTelegramAsync(
   }
 
   const accionCruda = accionCrudaDesdeMensaje(msg);
-  const detalleLog = resolverDetalleMensajeProcuraDepartamento(accionCruda, estadoTelegram);
+  let estadoParaLog = estadoTelegram;
+  if (supabase && esComandoProcura(accionCruda)) {
+    try {
+      estadoParaLog = await enriquecerEstadoParaLogProcura(
+        supabase,
+        msg.from?.id ?? chatId,
+        estadoTelegram,
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+  const detalleLog = resolverDetalleMensajeProcuraDepartamento(accionCruda, estadoParaLog);
 
   notificarAccionTelegramLogAsync({
     chatId,
@@ -684,7 +739,7 @@ export async function auditarUpdateTelegramAsync(
     contexto,
     from: msg.from,
     chat: msg.chat,
-    estadoTelegram,
+    estadoTelegram: estadoParaLog,
     accionCruda,
     detalleLog,
   });
