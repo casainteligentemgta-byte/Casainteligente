@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { PasoProcuraDepartamento } from '@/lib/compras/telegramMetadata';
+import { esUuidProcura, type PasoProcuraDepartamento } from '@/lib/compras/telegramMetadata';
 import {
   etiquetaContexto,
   type TelegramContexto,
@@ -212,11 +212,68 @@ export function resolverFlujoLogAccion(
   return contextoEstado.trim() || etiquetaContexto('menu');
 }
 
-function detalleDesdeAccionCruda(accionCruda: string): string {
+const PREFIJO_CALLBACK_CAPITULO = 'cmp:cap:';
+
+function textoBotonInlineDesdeCallback(data: string, reply_markup?: unknown): string | null {
+  if (!reply_markup || typeof reply_markup !== 'object') return null;
+  const kb = reply_markup as { inline_keyboard?: { text?: string; callback_data?: string }[][] };
+  for (const row of kb.inline_keyboard ?? []) {
+    for (const btn of row) {
+      if (btn.callback_data === data && btn.text?.trim()) {
+        return btn.text.trim();
+      }
+    }
+  }
+  return null;
+}
+
+/** Nombre del capítulo para Detalle del log (BD → texto del botón → genérico). */
+export async function resolverDetalleCapituloProcuraLog(
+  supabase: SupabaseClient | null | undefined,
+  accionCruda: string,
+  reply_markup?: unknown,
+): Promise<string | undefined> {
+  const raw = accionCruda.trim();
+  if (!raw.startsWith(PREFIJO_CALLBACK_CAPITULO)) return undefined;
+
+  const capId = raw.slice(PREFIJO_CALLBACK_CAPITULO.length);
+  if (capId === 'nuevo') return 'Crear capítulo';
+  if (capId === 'cancel') return 'Cancelar';
+
+  if (supabase && esUuidProcura(capId)) {
+    try {
+      const { obtenerCapituloMaestroPorId, etiquetaCapituloMaestro } = await import(
+        '@/lib/compras/capitulosMaestro'
+      );
+      const cap = await obtenerCapituloMaestroPorId(supabase, capId);
+      if (cap) return etiquetaCapituloMaestro(cap);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const textoBoton = textoBotonInlineDesdeCallback(raw, reply_markup);
+  if (textoBoton) {
+    return textoBoton.replace(/^➕\s*/, '').trim() || textoBoton;
+  }
+
+  return undefined;
+}
+
+function detalleDesdeAccionCruda(accionCruda: string, detalleOverride?: string | null): string {
+  const override = detalleOverride?.trim();
+  if (override) return override;
+
   const raw = accionCruda?.trim() ?? '';
   if (!raw) return 'Sin datos';
   if (raw.startsWith('/')) {
     return raw.split(/\s+/)[0] ?? raw;
+  }
+  if (raw.startsWith(PREFIJO_CALLBACK_CAPITULO)) {
+    const capId = raw.slice(PREFIJO_CALLBACK_CAPITULO.length);
+    if (capId === 'nuevo') return 'Crear capítulo';
+    if (capId === 'cancel') return 'Cancelar';
+    return 'Capítulo seleccionado';
   }
   if (raw === '[foto]') return 'Foto';
   if (raw === '[documento]' || raw.startsWith('[documento:')) {
@@ -284,9 +341,10 @@ export function generarLogAccion(
   from: TelegramLogActor | null | undefined,
   flujo: string,
   accionCruda: string,
+  detalleOverride?: string | null,
 ): string {
   const personaje = personajeCortoLog(from);
-  const detalleAccion = detalleDesdeAccionCruda(accionCruda);
+  const detalleAccion = detalleDesdeAccionCruda(accionCruda, detalleOverride);
   return [
     `Personaje: ${personaje}`,
     `Flujo: ${flujo}`,
@@ -317,6 +375,7 @@ export function resumirCallbackTelegram(data: string): string {
   if (d.startsWith('log:dep:abas:')) return 'Verificación almacén (supervisor)';
   if (d.startsWith('log:com:orden:')) return 'Reenviar orden compra (supervisor)';
   if (d.startsWith('cmp:via:')) return 'Viabilidad procura (contador)';
+  if (d.startsWith(PREFIJO_CALLBACK_CAPITULO)) return 'Selección de capítulo';
   if (d.startsWith('factura_ok')) return 'Confirmar factura OCR';
   if (d.startsWith('factura_moneda:')) return `Moneda factura: ${d.split(':')[1] ?? '—'}`;
   if (d.startsWith('factura_fecha:')) return 'Fecha de factura';
@@ -353,6 +412,8 @@ export async function notificarAccionTelegramLog(params: {
   estadoTelegram?: TelegramEstado | null;
   /** Texto del mensaje o callback_data para generarLogAccion. */
   accionCruda?: string | null;
+  /** Detalle resuelto (p. ej. nombre de capítulo). */
+  detalleLog?: string | null;
 }): Promise<void> {
   if (!isLogBotAuditoriaActiva()) return;
 
@@ -365,7 +426,12 @@ export async function notificarAccionTelegramLog(params: {
 
   let mensaje: string;
   if (params.accionCruda != null && params.accionCruda !== '') {
-    mensaje = generarLogAccion(params.from, flujoResuelto, params.accionCruda);
+    mensaje = generarLogAccion(
+      params.from,
+      flujoResuelto,
+      params.accionCruda,
+      params.detalleLog,
+    );
   } else {
     const detalle = params.detalle?.trim()
       ? truncar(params.detalle.trim(), maxDetalleLog(params.tipo, params.modulo))
@@ -474,6 +540,11 @@ export async function auditarUpdateTelegramAsync(
         /* ignore */
       }
     }
+    const detalleLog = await resolverDetalleCapituloProcuraLog(
+      supabase,
+      cq.data,
+      (cq.message as { reply_markup?: unknown } | undefined)?.reply_markup,
+    );
     notificarAccionTelegramLogAsync({
       chatId,
       tipo: 'callback',
@@ -483,6 +554,7 @@ export async function auditarUpdateTelegramAsync(
       chat: cq.message?.chat,
       estadoTelegram,
       accionCruda: cq.data,
+      detalleLog,
     });
     return;
   }
