@@ -8,6 +8,10 @@ import {
   COLOR_ESTADO_PROCURA,
   etiquetaEstadoProcura,
 } from '@/lib/procuras/procuraEstados';
+import {
+  materialProcuraPendienteCatalogo,
+  nombreMaterialProcuraVisible,
+} from '@/lib/compras/procuraMaterialTexto';
 import PanelAuditoriaProcuras from '@/components/contabilidad/PanelAuditoriaProcuras';
 
 type TabProcura = 'pendientes' | 'aprobados' | 'comprados' | 'control_interno';
@@ -17,6 +21,7 @@ type ProcuraRow = {
   ticket: string;
   estado: string;
   material_txt: string;
+  material_id?: string | null;
   cantidad: number;
   unidad: string;
   monto_estimado_usd: number | null;
@@ -220,7 +225,16 @@ export default function ProcurasPage() {
                   return (
                     <tr key={f.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                       <td className="p-3 font-mono text-xs text-[#FF9500]">{f.ticket}</td>
-                      <td className="p-3 max-w-[200px] truncate">{f.material_txt}</td>
+                      <td className="p-3 max-w-[200px]">
+                        <div className="truncate" title={f.material_txt}>
+                          {nombreMaterialProcuraVisible(f.material_txt)}
+                        </div>
+                        {materialProcuraPendienteCatalogo(f.material_txt, f.material_id) ? (
+                          <span className="text-[9px] font-bold uppercase tracking-wide text-amber-400/90">
+                            Sin catálogo
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="p-3 text-zinc-400">{etiquetaObra(f)}</td>
                       <td className="p-3 text-zinc-500 text-xs max-w-[140px] truncate">
                         {etiquetaCapitulo(f)}

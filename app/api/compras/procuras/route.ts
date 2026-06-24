@@ -7,7 +7,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 export const dynamic = 'force-dynamic';
 
 const SELECT_LISTADO = `
-  id,ticket,estado,material_txt,cantidad,unidad,prioridad,monto_estimado_usd,
+  id,ticket,estado,material_txt,material_id,cantidad,unidad,prioridad,monto_estimado_usd,
   via_rapida,es_consumible,motivo_rechazo,solicitante_nombre,observaciones,
   proyecto_id,entidad_id,
   created_at,updated_at,

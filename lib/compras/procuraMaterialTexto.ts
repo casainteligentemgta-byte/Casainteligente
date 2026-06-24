@@ -26,6 +26,21 @@ export function limpiarDescripcionProcura(descripcion: string): string {
   return s;
 }
 
+/** true si el material no está vinculado a global_inventory (texto libre / por verificar catálogo). */
+export function materialProcuraPendienteCatalogo(
+  materialTxt: string,
+  materialId?: string | null,
+): boolean {
+  if (materialId?.trim()) return false;
+  const t = materialTxt.trim();
+  if (!t) return false;
+  const prefijo = PREFIJO_POR_VERIFICAR_PROCURA;
+  if (t.length >= prefijo.length && t.slice(0, prefijo.length).toUpperCase() === prefijo.toUpperCase()) {
+    return true;
+  }
+  return /\bpor\s+verificar\b/i.test(t);
+}
+
 /** Nombre visible en confirmaciones (sin prefijo, «por verificar» ni código SAP). */
 export function nombreMaterialProcuraVisible(materialTxt: string): string {
   let limpio = limpiarDescripcionProcura(materialTxt);
