@@ -659,7 +659,7 @@ export async function replicarOrdenCompraProcuraDesdeFila(
     cantidadCompra: params.cantidadCompra,
   });
 
-  replicarOrdenCompraProcuraEnLogBotAsync({
+  await replicarOrdenCompraProcuraEnLogBot({
     procuraId: params.procuraId,
     mensaje,
     ticket: String(procura.ticket ?? ''),

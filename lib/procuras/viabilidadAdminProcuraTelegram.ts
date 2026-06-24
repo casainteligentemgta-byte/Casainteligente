@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
+import { replicarAlertaPmProcuraEnLogBot } from '@/lib/telegram/espejoSalidaLogBot';
+import { isLogBotConfigured } from '@/lib/telegram/logBotApi';
 import {
   exigirUsuarioSistemaTelegram,
   usuarioPuedeInformarViabilidadProcura,
@@ -116,6 +118,7 @@ export async function enviarAlertaPmTrasViabilidadAdmin(
   );
 
   let enviados = 0;
+  const destinatariosEnviados: { nombre: string; chatId: number }[] = [];
   for (const pm of pms) {
     if (esChatSolicitante(pm.chatId, solicitanteChatId)) continue;
     try {
@@ -126,11 +129,24 @@ export async function enviarAlertaPmTrasViabilidadAdmin(
         nombreDestinatario: pm.nombre,
         accionLogDestinatario: 'aprobar_rechazar',
         contextoLogEspejo: '[Procura · decisión PM]',
+        skipLogEspejo: true,
       });
       enviados += 1;
+      destinatariosEnviados.push({ nombre: pm.nombre, chatId: pm.chatId });
     } catch (e) {
       console.warn('[viabilidadAdminProcura] PM', pm.nombre, e);
     }
+  }
+
+  const sinPmConfigurado = pms.length === 0;
+  if (isLogBotConfigured()) {
+    await replicarAlertaPmProcuraEnLogBot({
+      procuraId: row.id,
+      mensaje: texto,
+      ticket: String(row.ticket ?? ''),
+      destinatarios: destinatariosEnviados,
+      sinPmConfigurado,
+    });
   }
 
   return { enviados };

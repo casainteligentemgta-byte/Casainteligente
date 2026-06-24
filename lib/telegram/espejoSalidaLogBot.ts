@@ -1,6 +1,7 @@
 import { getTelegramLogChatId, isLogBotConfigured, sendLogBotMessage } from '@/lib/telegram/logBotApi';
 import {
   mapearTecladoOperativoASupervisorLog,
+  tecladoPmSupervisorLog,
   tecladoViabilidadSupervisorLog,
 } from '@/lib/procuras/supervisorLogBotProcura';
 import {
@@ -171,4 +172,50 @@ export function replicarAlertaProcuraAdminEnLogBotAsync(
   void replicarAlertaProcuraAdminEnLogBot(params).catch((e) => {
     console.warn('[espejoSalidaLogBot] alerta admin procura', e instanceof Error ? e.message : e);
   });
+}
+
+/** Réplica dedicada: decisión PM tras viabilidad + supervisor en log bot. */
+export async function replicarAlertaPmProcuraEnLogBot(params: {
+  procuraId: string;
+  mensaje: string;
+  ticket: string;
+  destinatarios: { nombre: string; chatId: number }[];
+  sinPmConfigurado?: boolean;
+}): Promise<void> {
+  if (!isLogBotConfigured()) return;
+
+  const logChat = getTelegramLogChatId();
+  if (!logChat) return;
+
+  const lineasCabecera = [
+    '<b>[Procura · decisión PM]</b>',
+    `<b>Ticket:</b> ${escHtml(params.ticket.trim() || '—')}`,
+  ];
+
+  let pie: string;
+  if (params.sinPmConfigurado) {
+    pie = pieDestinatarioLog({
+      rol: 'Project Manager',
+      accion: 'aprobar_rechazar',
+    });
+    lineasCabecera.push('⚠️ <i>Sin PM con Telegram activo</i>');
+  } else {
+    pie = pieDestinatariosLog(
+      params.destinatarios.map((d) => ({
+        rol: 'Project Manager',
+        nombre: d.nombre.trim() || 'Project Manager',
+        chatId: d.chatId,
+      })),
+      'aprobar_rechazar',
+    );
+  }
+
+  const supervisor =
+    '\n\n<b>Supervisor (log):</b> puede aprobar o rechazar en nombre del PM si no responde.';
+  const texto = truncar(
+    `${lineasCabecera.join('\n')}\n\n${params.mensaje}${pie}${supervisor}`,
+    MAX_TEXTO_LOG,
+  );
+  const replyMarkup = tecladoPmSupervisorLog(params.procuraId.trim());
+  await sendLogBotMessage(logChat, texto, { parse_mode: 'HTML', reply_markup: replyMarkup });
 }

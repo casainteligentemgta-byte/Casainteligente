@@ -22,17 +22,43 @@ type ProcuraRow = {
   monto_estimado_usd: number | null;
   solicitante_nombre: string | null;
   created_at: string;
+  proyecto_id?: string | null;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
+  ci_entidades?: { nombre: string } | { nombre: string }[] | null;
+  ci_compras_capitulos_maestro?:
+    | { codigo?: string; nombre?: string }
+    | { codigo?: string; nombre?: string }[]
+    | null;
 };
 
 const ESTADOS_PENDIENTES = new Set(['borrador', 'solicitada', 'pendiente_pm']);
 const ESTADOS_APROBADOS = new Set(['aprobada', 'aprobada_directa']);
 const ESTADOS_COMPRADOS = new Set(['en_compra', 'recibida_parcial', 'recibida']);
 
-function nombreProyecto(v: ProcuraRow['ci_proyectos']): string {
-  if (!v) return '—';
-  if (Array.isArray(v)) return v[0]?.nombre ?? '—';
-  return v.nombre ?? '—';
+function nombreRel(
+  v: { nombre?: string } | { nombre?: string }[] | null | undefined,
+): string {
+  if (!v) return '';
+  if (Array.isArray(v)) return v[0]?.nombre?.trim() ?? '';
+  return v.nombre?.trim() ?? '';
+}
+
+function etiquetaObra(f: ProcuraRow): string {
+  const obra = nombreRel(f.ci_proyectos);
+  if (obra) return obra;
+  const entidad = nombreRel(f.ci_entidades);
+  if (entidad) return entidad;
+  return '—';
+}
+
+function etiquetaCapitulo(f: ProcuraRow): string {
+  const cap = f.ci_compras_capitulos_maestro;
+  if (!cap) return '—';
+  const row = Array.isArray(cap) ? cap[0] : cap;
+  const codigo = row?.codigo?.trim() ?? '';
+  const nombre = row?.nombre?.trim() ?? '';
+  if (codigo && nombre) return `${codigo} · ${nombre}`;
+  return nombre || codigo || '—';
 }
 
 function filaEnTab(estado: string, tab: TabProcura): boolean {
@@ -82,6 +108,15 @@ export default function ProcurasPage() {
     [filas, tab],
   );
 
+  const conteosTab = useMemo(
+    () => ({
+      pendientes: filas.filter((f) => filaEnTab(f.estado, 'pendientes')).length,
+      aprobados: filas.filter((f) => filaEnTab(f.estado, 'aprobados')).length,
+      comprados: filas.filter((f) => filaEnTab(f.estado, 'comprados')).length,
+    }),
+    [filas],
+  );
+
   const actualizarEstado = async (id: string, nuevoEstado: 'aprobada' | 'rechazada') => {
     setProcesandoId(id);
     try {
@@ -123,9 +158,9 @@ export default function ProcurasPage() {
         <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04]">
           {(
             [
-              ['pendientes', 'Pendientes'],
-              ['aprobados', 'Aprobados'],
-              ['comprados', 'Comprados'],
+              ['pendientes', `Pendientes (${conteosTab.pendientes})`],
+              ['aprobados', `Aprobados (${conteosTab.aprobados})`],
+              ['comprados', `Comprados (${conteosTab.comprados})`],
               ['control_interno', 'Control interno'],
             ] as const
           ).map(([id, label]) => (
@@ -155,7 +190,14 @@ export default function ProcurasPage() {
               Cargando…
             </div>
           ) : visibles.length === 0 ? (
-            <p className="py-16 text-center text-sm text-zinc-500">Sin procuras en esta vista.</p>
+            <p className="py-16 text-center text-sm text-zinc-500">
+              Sin procuras en esta vista.
+              {filas.length > 0 ? (
+                <span className="block mt-2 text-xs text-zinc-600">
+                  Hay {filas.length} en otras pestañas — revise Aprobados o Comprados.
+                </span>
+              ) : null}
+            </p>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -163,6 +205,7 @@ export default function ProcurasPage() {
                   <th className="text-left p-3">Ticket</th>
                   <th className="text-left p-3">Material</th>
                   <th className="text-left p-3">Obra</th>
+                  <th className="text-left p-3">Capítulo</th>
                   <th className="text-right p-3">Cant.</th>
                   <th className="text-left p-3">Estado</th>
                   <th className="text-right p-3">Acciones</th>
@@ -178,7 +221,10 @@ export default function ProcurasPage() {
                     <tr key={f.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                       <td className="p-3 font-mono text-xs text-[#FF9500]">{f.ticket}</td>
                       <td className="p-3 max-w-[200px] truncate">{f.material_txt}</td>
-                      <td className="p-3 text-zinc-400">{nombreProyecto(f.ci_proyectos)}</td>
+                      <td className="p-3 text-zinc-400">{etiquetaObra(f)}</td>
+                      <td className="p-3 text-zinc-500 text-xs max-w-[140px] truncate">
+                        {etiquetaCapitulo(f)}
+                      </td>
                       <td className="p-3 text-right tabular-nums">
                         {f.cantidad} {f.unidad}
                       </td>

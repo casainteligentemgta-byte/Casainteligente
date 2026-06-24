@@ -183,10 +183,13 @@ export function resolverFlujoLogAccion(
       return 'Consulta de stock';
     }
 
-    if (estado.contexto === 'procura_departamento') {
-      const metaDep = (estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento };
-      return flujoProcuraDepartamentoPorPaso(metaDep.paso);
+  if (estado.contexto === 'procura_departamento') {
+    const metaDep = (estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento };
+    if (raw === 'ps:q:' || raw.startsWith('ps:q:')) {
+      return 'Procura · escoger obra';
     }
+    return flujoProcuraDepartamentoPorPaso(metaDep.paso);
+  }
 
     if (estado.contexto === 'procura_solicitud') {
       const metaSol = (estado.metadata ?? {}) as { paso?: string };
@@ -213,6 +216,49 @@ export function resolverFlujoLogAccion(
 }
 
 const PREFIJO_CALLBACK_CAPITULO = 'cmp:cap:';
+const PREFIJO_CMP = 'cmp:';
+
+/** Detalle legible para callbacks cmp: del flujo procura departamento (sin prefijo técnico). */
+function resolverDetalleCmpProcuraDepartamentoLog(
+  accionCruda: string,
+  _reply_markup?: unknown,
+): string | undefined {
+  const raw = accionCruda.trim();
+  if (!raw.startsWith(PREFIJO_CMP) || raw.startsWith(PREFIJO_CALLBACK_CAPITULO)) {
+    return undefined;
+  }
+
+  if (raw === 'cmp:mat:txt') return 'Se ingresó material';
+  if (raw === 'cmp:ok') return 'OK';
+  if (raw === 'cmp:no') return 'Cancelar';
+  if (raw === 'cmp:mat:canon') return 'Usar material sugerido';
+  if (raw === 'cmp:mat:keep') return 'Mantener texto ingresado';
+  if (raw === 'cmp:mat:list') return 'Ver catálogo';
+
+  if (raw.startsWith('cmp:uni:')) {
+    const suffix = raw.slice('cmp:uni:'.length);
+    if (suffix === 'txt') return 'Escribir unidad';
+    return suffix;
+  }
+
+  if (raw.startsWith('cmp:pri:')) {
+    return raw.slice('cmp:pri:'.length);
+  }
+
+  return undefined;
+}
+
+function resolverDetalleMensajeProcuraDepartamento(
+  accionCruda: string,
+  estado?: TelegramEstado | null,
+): string | undefined {
+  if (!estado || estado.contexto !== 'procura_departamento') return undefined;
+  const texto = accionCruda.trim();
+  if (!texto || texto.startsWith('/') || texto.startsWith('[')) return undefined;
+  const paso = ((estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento }).paso;
+  if (paso === 'material') return 'Se ingresó material';
+  return undefined;
+}
 
 function textoBotonInlineDesdeCallback(data: string, reply_markup?: unknown): string | null {
   if (!reply_markup || typeof reply_markup !== 'object') return null;
@@ -260,6 +306,40 @@ export async function resolverDetalleCapituloProcuraLog(
   return undefined;
 }
 
+/** Detalle del log para callbacks procura (capítulo, material, unidad, prioridad, confirmar). */
+export async function resolverDetalleCallbackProcuraLog(
+  supabase: SupabaseClient | null | undefined,
+  accionCruda: string,
+  reply_markup?: unknown,
+  estadoTelegram?: TelegramEstado | null,
+): Promise<string | undefined> {
+  const cap = await resolverDetalleCapituloProcuraLog(supabase, accionCruda, reply_markup);
+  if (cap) return cap;
+
+  const cmp = resolverDetalleCmpProcuraDepartamentoLog(accionCruda, reply_markup);
+  if (cmp) return cmp;
+
+  const raw = accionCruda.trim();
+  if (raw.startsWith('cmp:mat_id:') && supabase) {
+    const matId = raw.slice('cmp:mat_id:'.length).trim();
+    if (esUuidProcura(matId)) {
+      try {
+        const { data } = await supabase
+          .from('global_inventory')
+          .select('nombre')
+          .eq('id', matId)
+          .maybeSingle();
+        const nombre = (data as { nombre?: string } | null)?.nombre?.trim();
+        if (nombre) return nombre;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  return resolverDetalleMensajeProcuraDepartamento(accionCruda, estadoTelegram);
+}
+
 function detalleDesdeAccionCruda(accionCruda: string, detalleOverride?: string | null): string {
   const override = detalleOverride?.trim();
   if (override) return override;
@@ -275,6 +355,8 @@ function detalleDesdeAccionCruda(accionCruda: string, detalleOverride?: string |
     if (capId === 'cancel') return 'Cancelar';
     return 'Capítulo seleccionado';
   }
+  const cmpDet = resolverDetalleCmpProcuraDepartamentoLog(raw);
+  if (cmpDet) return cmpDet;
   if (raw === '[foto]') return 'Foto';
   if (raw === '[documento]' || raw.startsWith('[documento:')) {
     return raw.startsWith('[documento:') ? raw.slice('[documento:'.length, -1) : 'Documento';
@@ -309,7 +391,23 @@ export function traducirAccionCruda(accionCruda: string): {
     };
   }
   if (raw === 'cmp:mat:txt') {
-    return { tipoAccion: '⚙️ Tipo de Entrada', detalleAccion: 'Modo: Texto Libre' };
+    return { tipoAccion: '⚙️ Tipo de Entrada', detalleAccion: 'Se ingresó material' };
+  }
+  if (raw.startsWith('cmp:uni:')) {
+    const suffix = raw.slice('cmp:uni:'.length);
+    return {
+      tipoAccion: '📏 Unidad de Medida',
+      detalleAccion: suffix === 'txt' ? 'Escribir unidad' : suffix,
+    };
+  }
+  if (raw.startsWith('cmp:pri:')) {
+    return {
+      tipoAccion: '⚡ Prioridad',
+      detalleAccion: raw.slice('cmp:pri:'.length),
+    };
+  }
+  if (raw === 'cmp:ok') {
+    return { tipoAccion: '✅ Confirmación', detalleAccion: 'OK' };
   }
   if (raw === '[foto]') {
     return { tipoAccion: '📷 Foto', detalleAccion: 'Imagen enviada' };
@@ -540,10 +638,11 @@ export async function auditarUpdateTelegramAsync(
         /* ignore */
       }
     }
-    const detalleLog = await resolverDetalleCapituloProcuraLog(
+    const detalleLog = await resolverDetalleCallbackProcuraLog(
       supabase,
       cq.data,
       (cq.message as { reply_markup?: unknown } | undefined)?.reply_markup,
+      estadoTelegram,
     );
     notificarAccionTelegramLogAsync({
       chatId,
@@ -575,6 +674,9 @@ export async function auditarUpdateTelegramAsync(
     }
   }
 
+  const accionCruda = accionCrudaDesdeMensaje(msg);
+  const detalleLog = resolverDetalleMensajeProcuraDepartamento(accionCruda, estadoTelegram);
+
   notificarAccionTelegramLogAsync({
     chatId,
     tipo: tipoMensajeTelegram(msg),
@@ -583,6 +685,7 @@ export async function auditarUpdateTelegramAsync(
     from: msg.from,
     chat: msg.chat,
     estadoTelegram,
-    accionCruda: accionCrudaDesdeMensaje(msg),
+    accionCruda,
+    detalleLog,
   });
 }

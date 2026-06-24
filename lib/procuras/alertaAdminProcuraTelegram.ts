@@ -12,7 +12,7 @@ import {
   type FilaProcuraMensaje,
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 import { tecladoViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
-import { replicarAlertaProcuraAdminEnLogBotAsync } from '@/lib/telegram/espejoSalidaLogBot';
+import { replicarAlertaProcuraAdminEnLogBot } from '@/lib/telegram/espejoSalidaLogBot';
 import { isLogBotConfigured } from '@/lib/telegram/logBotApi';
 
 export type AlertaProcuraAdminRow = {
@@ -122,7 +122,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const sinContadorConfigurado = contadores.length === 0;
   const logActivo = isLogBotConfigured();
 
-  replicarAlertaProcuraAdminEnLogBotAsync({
+  await replicarAlertaProcuraAdminEnLogBot({
     procuraId: row.id,
     mensaje,
     ticket: String(row.ticket ?? ''),

@@ -9,10 +9,12 @@ export const dynamic = 'force-dynamic';
 const SELECT_LISTADO = `
   id,ticket,estado,material_txt,cantidad,unidad,prioridad,monto_estimado_usd,
   via_rapida,es_consumible,motivo_rechazo,solicitante_nombre,observaciones,
+  proyecto_id,entidad_id,
   created_at,updated_at,
   capitulo_maestro_id,
   ci_compras_capitulos_maestro(codigo,nombre),
-  ci_proyectos(nombre)
+  ci_proyectos(nombre),
+  ci_entidades(nombre)
 `;
 
 /** GET — Procuras del departamento de compras (con capítulo). */

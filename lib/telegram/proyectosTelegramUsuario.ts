@@ -14,7 +14,8 @@ export function modoTelegramUsaObraComprador(modo: string): boolean {
     modo === 'ingreso_factura_manual' ||
     modo === 'nota_entrega' ||
     modo === 'emergencia' ||
-    modo === 'procura'
+    modo === 'procura' ||
+    modo === 'procura_departamento'
   );
 }
 

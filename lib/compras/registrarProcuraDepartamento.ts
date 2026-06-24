@@ -7,9 +7,11 @@ import type { PrioridadProcura } from '@/lib/compras/viaRapidaProcura';
 import { evaluarViaRapidaProcura } from '@/lib/compras/viaRapidaProcura';
 import type { UsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { enviarAlertaProcuraPendienteAdmin } from '@/lib/procuras/alertaAdminProcuraTelegram';
-import { evaluarStockProcuraRegistro } from '@/lib/procuras/abastecimientoProcuraAprobada';
-import { procesarAbastecimientoProcuraAprobada } from '@/lib/procuras/abastecimientoProcuraAprobada';
-import { emitirOrdenCompraProcura } from '@/lib/procuras/emitirOrdenCompraProcura';
+import {
+  confirmarAbastecimientoProcura,
+  evaluarStockProcuraRegistro,
+  procesarAbastecimientoProcuraAprobada,
+} from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { notificarAprobadoProcuraSolicitante } from '@/lib/procuras/notificarAprobadoProcuraSolicitante';
 import {
   evaluarStockRegistroProcura,
@@ -24,6 +26,8 @@ const PREFIJO_POR_VERIFICAR = '[POR VERIFICAR]';
 
 export type RegistrarProcuraDepartamentoInput = {
   usuario: UsuarioSistemaTelegram;
+  /** Obra de la sesión Telegram (prioridad sobre usuario.proyecto_id). */
+  proyectoId?: string | null;
   capituloMaestroId: string;
   descripcionMaterial: string;
   cantidad: number;
@@ -50,6 +54,7 @@ export type RegistrarProcuraDepartamentoResult = {
   depositarioNotificado?: boolean;
   alertaPmAdminEnviada?: boolean;
   alertaPmAdminDms?: number;
+  compraEmitidaViaRapida?: boolean;
 };
 
 export async function registrarProcuraDepartamento(
@@ -60,7 +65,12 @@ export async function registrarProcuraDepartamento(
   if (chatId) {
     const { marked, error: errRpc } = await marcarTtlPendienteAtomico(supabase, chatId);
     if (!errRpc && !marked) {
-      return { data: null, error: null };
+      return {
+        data: null,
+        error: new Error(
+          'La solicitud ya se está registrando. Espere unos segundos antes de confirmar de nuevo.',
+        ),
+      };
     }
   }
 
@@ -82,12 +92,19 @@ export async function registrarProcuraDepartamento(
     return { data: null, error: new Error('Cantidad inválida.') };
   }
 
-  const proyectoId = input.usuario.proyecto_id?.trim() || null;
+  const proyectoId =
+    input.proyectoId?.trim() || input.usuario.proyecto_id?.trim() || null;
   const materialId = input.materialId?.trim() || null;
   let entidadId: string | null = null;
-  if (proyectoId) {
-    entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
+  if (!proyectoId) {
+    return {
+      data: null,
+      error: new Error(
+        'Indique la obra para la procura. Use /procura y elija la obra al inicio del flujo.',
+      ),
+    };
   }
+  entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
 
   const evalStock = await evaluarStockRegistroProcura(supabase, {
     proyecto_id: proyectoId,
@@ -269,15 +286,21 @@ export async function registrarProcuraDepartamento(
     }
   }
 
+  let compraEmitidaViaRapida = false;
   if (via.califica && out.id) {
-    void emitirOrdenCompraProcura(supabase, {
-      procuraId: String(out.id),
-      autorNombre: 'Vía rápida',
-      motivo: via.motivo,
-      cantidadCompra,
-    }).catch((e) => {
-      console.warn('[registrarProcuraDepartamento] orden compra vía rápida', e);
-    });
+    try {
+      const abas = await confirmarAbastecimientoProcura(supabase, {
+        procuraId: String(out.id),
+        autorNombre: 'Vía rápida',
+      });
+      if (!abas.ok) {
+        console.warn('[registrarProcuraDepartamento] vía rápida abastecimiento', abas.error);
+      } else {
+        compraEmitidaViaRapida = Boolean(abas.compraEmitida);
+      }
+    } catch (e) {
+      console.warn('[registrarProcuraDepartamento] vía rápida abastecimiento', e);
+    }
   }
 
   return {
@@ -293,6 +316,7 @@ export async function registrarProcuraDepartamento(
       stockDisponible: evalStock.stockDisponible,
       alertaPmAdminEnviada,
       alertaPmAdminDms,
+      compraEmitidaViaRapida,
     },
     error: null,
   };

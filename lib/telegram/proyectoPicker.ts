@@ -27,6 +27,7 @@ export type ProyectoPickerModo =
   | 'nota_entrega'
   | 'emergencia'
   | 'procura'
+  | 'procura_departamento'
   | 'salida_almacen'
   | 'salida_almacen_dest'
   | 'salida_obra_despacho';
@@ -49,6 +50,7 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   nota_entrega: 't',
   emergencia: 'e',
   procura: 'r',
+  procura_departamento: 'q',
 };
 
 const MODO_LARGO: Record<string, ProyectoPickerModo> = {
@@ -67,6 +69,7 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   t: 'nota_entrega',
   e: 'emergencia',
   r: 'procura',
+  q: 'procura_departamento',
 };
 
 function truncarNombre(nombre: string, max = 28): string {
@@ -123,6 +126,8 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '🚨 <b>Elige el proyecto</b> (emergencia sin papeles → almacén):';
     case 'procura':
       return '📦 <b>Elige la obra</b> para la solicitud de procura:';
+    case 'procura_departamento':
+      return '📦 <b>Elige la obra</b> para la nueva procura:';
     case 'salida_obra':
       return '📤 <b>Elige la obra</b> (salida de material):';
     case 'salida_almacen':
@@ -161,6 +166,7 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
     case 'nota_entrega':
     case 'emergencia':
     case 'procura':
+    case 'procura_departamento':
     case 'salida_obra':
     case 'salida_almacen':
     case 'salida_almacen_dest':
@@ -271,6 +277,33 @@ export async function aplicarSeleccionProyectoTelegram(
   if (modo === 'procura') {
     const { prepararProcuraTrasObra } = await import('@/lib/telegram/procuraTelegram');
     await prepararProcuraTrasObra(supabase, chatId, proyectoId);
+    return;
+  }
+
+  if (modo === 'procura_departamento') {
+    const estado = await import('@/lib/telegram/estados').then((m) =>
+      m.getTelegramEstado(supabase, chatId),
+    );
+    const meta = (estado.metadata ?? {}) as { usuario_id?: string; usuario_nombre?: string };
+    const { continuarProcuraDepartamentoTrasObra } = await import(
+      '@/lib/compras/procuraDepartamentoTelegram'
+    );
+    const { exigirUsuarioSistemaTelegram } = await import(
+      '@/lib/compras/usuariosSistemaTelegram'
+    );
+    let usuarioId = meta.usuario_id?.trim();
+    let usuarioNombre = meta.usuario_nombre?.trim();
+    if (!usuarioId) {
+      const auth = await exigirUsuarioSistemaTelegram(supabase, chatId);
+      if (auth.ok) {
+        usuarioId = auth.usuario.id;
+        usuarioNombre = auth.usuario.nombre;
+      }
+    }
+    await continuarProcuraDepartamentoTrasObra(supabase, chatId, proyectoId, {
+      id: usuarioId ?? 'telegram',
+      nombre: usuarioNombre ?? nombreObra,
+    });
     return;
   }
 

@@ -67,6 +67,10 @@ import {
 } from '@/lib/procuras/disponibilidadMaterialProcura';
 import { resolverMaterialProcuraPorId } from '@/lib/telegram/procuraMaterialPicker';
 import {
+  enviarPickerProyectosTelegram,
+  nombreProyectoTelegram,
+} from '@/lib/telegram/proyectoPicker';
+import {
   callbackDataTelegramValido,
   esUuidProcura,
   parseMetadataProcuraDepartamento,
@@ -580,6 +584,46 @@ export function esCallbackProcuraDepartamentoTelegram(data: string): boolean {
   return data.startsWith(PREFIX);
 }
 
+export async function continuarProcuraDepartamentoTrasObra(
+  supabase: SupabaseClient,
+  chatId: string,
+  proyectoId: string,
+  usuario: { id: string; nombre: string },
+): Promise<void> {
+  const capitulos = await listarCapitulosMaestro(supabase);
+  if (!capitulos.length) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ No hay capítulos configurados. Ejecute migración 230 en Supabase.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  const nombreObra = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
+
+  await setTelegramContexto(supabase, chatId, {
+    contexto: 'procura_departamento',
+    proyecto_id: proyectoId,
+    reemplazarMetadata: true,
+    metadata: {
+      paso: 'capitulo',
+      usuario_id: usuario.id,
+      usuario_nombre: usuario.nombre,
+      nombre_obra: nombreObra,
+    },
+  });
+
+  await sendTelegramMessage(
+    chatId,
+    `📦 <b>Nueva procura</b>\n\n🏗 Obra: <b>${escHtml(nombreObra)}</b>\n\n1️⃣ Elige el <b>capítulo</b> de obra:`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: tecladoCapitulosMaestro(capitulos, CB_CAP),
+    },
+  );
+}
+
 export async function manejarComandoProcuraDepartamentoTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -618,25 +662,17 @@ export async function manejarComandoProcuraDepartamentoTelegram(
     if (ttl === 'interceptado') return true;
   }
 
-  await setTelegramContexto(supabase, chatId, {
-    contexto: 'procura_departamento',
-    proyecto_id: auth.usuario.proyecto_id,
-    reemplazarMetadata: true,
-    metadata: {
-      paso: 'capitulo',
-      usuario_id: auth.usuario.id,
-      usuario_nombre: auth.usuario.nombre,
-    },
-  });
+  const proyectoId =
+    auth.usuario.proyecto_id?.trim() || estadoPre.proyecto_id?.trim() || null;
+  if (!proyectoId) {
+    await enviarPickerProyectosTelegram(supabase, chatId, 'procura_departamento');
+    return true;
+  }
 
-  await sendTelegramMessage(
-    chatId,
-    `📦 <b>Nueva procura</b>\n\n1️⃣ Elige el <b>capítulo</b> de obra:`,
-    {
-      parse_mode: 'HTML',
-      reply_markup: tecladoCapitulosMaestro(capitulos, CB_CAP),
-    },
-  );
+  await continuarProcuraDepartamentoTrasObra(supabase, chatId, proyectoId, {
+    id: auth.usuario.id,
+    nombre: auth.usuario.nombre,
+  });
   return true;
 }
 
@@ -1174,8 +1210,20 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       return true;
     }
 
+    const proyectoId =
+      fresh.proyecto_id?.trim() || auth.usuario.proyecto_id?.trim() || null;
+    if (!proyectoId) {
+      await sendTelegramMessage(
+        params.chatId,
+        '❌ Falta la obra. Use /procura y elija la obra al inicio.',
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+
     const { data, error } = await registrarProcuraDepartamento(supabase, {
       usuario: auth.usuario,
+      proyectoId,
       capituloMaestroId: m.capitulo_id,
       descripcionMaterial: m.material_txt,
       cantidad: m.cantidad,
@@ -1188,6 +1236,11 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     });
 
     if (!data && !error) {
+      await sendTelegramMessage(
+        params.chatId,
+        '⚠️ La solicitud ya se está registrando. Espere unos segundos.',
+        { parse_mode: 'HTML' },
+      );
       return true;
     }
 
