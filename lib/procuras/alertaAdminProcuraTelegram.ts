@@ -8,7 +8,7 @@ import {
 import { listarContadoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
 import {
   construirMensajeAdminViabilidadProcura,
-  resumenStockDesdeEvaluacion,
+  construirResumenStockProcuraMensaje,
   type FilaProcuraMensaje,
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 import { tecladoViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
@@ -55,7 +55,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,solicitante_nombre,solicitante_telegram_chat_id,material_txt,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,solicitante_nombre,solicitante_telegram_chat_id,material_txt,material_id,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,entidad_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -77,15 +77,7 @@ export async function enviarAlertaProcuraPendienteAdmin(
 
   const prioridad =
     row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
-  const stock = resumenStockDesdeEvaluacion(
-    {
-      cantidadSolicitada: Number(row.cantidad),
-      cantidadDespacho: Number(row.cantidad_despacho ?? 0),
-      cantidadCompra: Number(row.cantidad_compra ?? row.cantidad),
-      stockDisponible: Number(row.stock_almacen_detectado ?? 0),
-    },
-    row.unidad,
-  );
+  const stock = await construirResumenStockProcuraMensaje(supabase, row);
   const mensaje = construirMensajeAdminViabilidadProcura(row, prioridad, stock);
   const replyMarkup = tecladoViabilidadAdmin(row.id);
 

@@ -24,6 +24,7 @@ import {
   mensajeOrdenCompraComprador,
   cargarProcuraOrdenCompra,
 } from '@/lib/procuras/emitirOrdenCompraProcura';
+import type { AlmacenStockEntidad } from '@/lib/procuras/disponibilidadMaterialProcura';
 import { CB_CMP_VIAB_NO, CB_CMP_VIAB_SI } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
 import {
   answerLogBotCallbackQuery,
@@ -169,8 +170,8 @@ export function tecladoPmSupervisorLog(procuraId: string) {
   return {
     inline_keyboard: [
       [
-        { text: '🟢 Aprobar (supervisor)', callback_data: `${CB_LOG_PM_APROBAR}${procuraId}` },
-        { text: '🔴 Rechazar (supervisor)', callback_data: `${CB_LOG_PM_RECHAZAR}${procuraId}` },
+        { text: '🟢 Aprobar', callback_data: `${CB_LOG_PM_APROBAR}${procuraId}` },
+        { text: '🔴 Rechazar', callback_data: `${CB_LOG_PM_RECHAZAR}${procuraId}` },
       ],
     ],
   };
@@ -290,7 +291,7 @@ async function ejecutarViabilidadSupervisor(
 
   const label =
     viabilidad === 'si'
-      ? `Hay disponibilidad (${fundamento ? etiquetaFundamento(fundamento) : 'auditoría formal'})`
+      ? 'Hay disponibilidad presupuestaria (stock físico verificado en sistema)'
       : 'No hay disponibilidad (auditoría formal)';
 
   if (!resultado.ok) {
@@ -330,7 +331,8 @@ async function manejarIntentoViabilidadSupervisor(
     return true;
   }
 
-  await mostrarSubmenuFundamento(params, 'via:si', procuraId, 'viabilidad presupuestaria');
+  await answerLogBotCallbackQuery(params.callbackId, 'Registrando viabilidad…');
+  await ejecutarViabilidadSupervisor(supabase, params, 'si', procuraId, 'financiero');
   return true;
 }
 
@@ -376,7 +378,8 @@ async function manejarPmSupervisorIntento(
     return true;
   }
 
-  await mostrarSubmenuFundamento(params, 'pm:apr', procuraId, 'aprobación PM');
+  await answerLogBotCallbackQuery(params.callbackId, 'Aprobando procura…');
+  await ejecutarPmAprobacionSupervisor(supabase, params, procuraId, 'financiero');
   return true;
 }
 
@@ -410,7 +413,7 @@ async function ejecutarPmAprobacionSupervisor(
   await finalizarMensajeLogSupervisor({
     ...params,
     ok: true,
-    detalle: `Procura aprobada (${etiquetaFundamento(fundamento)}). ${resultado.estado ?? 'aprobada'}.`,
+    detalle: `Procura aprobada. ${resultado.estado ?? 'aprobada'}.`,
   });
 }
 
@@ -546,7 +549,7 @@ async function manejarConfirmacionFundamentoSupervisor(
 
 /**
  * Supervisor del flujo procura en el bot de logs.
- * Auditoría formal: confirma fundamento (financiera / física / ambas) antes de ejecutar.
+ * Viabilidad y PM: un solo clic (sin submenú financiera/física; el stock se verifica en sistema).
  */
 export async function manejarCallbackSupervisorLogProcura(
   supabase: SupabaseClient,
@@ -647,6 +650,7 @@ export async function replicarOrdenCompraProcuraDesdeFila(
     autorNombre: string;
     motivo?: string | null;
     cantidadCompra?: number | null;
+    almacenesEntidad?: AlmacenStockEntidad[];
     compradores: { nombre: string; telegram_id: number }[];
   },
 ): Promise<void> {
@@ -657,6 +661,7 @@ export async function replicarOrdenCompraProcuraDesdeFila(
     autorNombre: params.autorNombre,
     motivo: params.motivo,
     cantidadCompra: params.cantidadCompra,
+    almacenesEntidad: params.almacenesEntidad,
   });
 
   await replicarOrdenCompraProcuraEnLogBot({

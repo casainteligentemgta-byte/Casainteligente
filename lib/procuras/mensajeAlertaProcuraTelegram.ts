@@ -1,9 +1,15 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AlertaProcuraAdminRow } from '@/lib/procuras/alertaAdminProcuraTelegram';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
 import {
   limpiarDescripcionProcura,
   nombreMaterialProcuraVisible,
 } from '@/lib/compras/procuraMaterialTexto';
+import type { AlmacenStockEntidad } from '@/lib/procuras/disponibilidadMaterialProcura';
+import {
+  lineasAlmacenesEntidadProcura,
+  listarAlmacenesStockMaterialEntidad,
+} from '@/lib/procuras/disponibilidadMaterialProcura';
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -23,6 +29,7 @@ export type ResumenStockProcuraTicket = {
   cantidadCompra: number;
   stockDisponible: number;
   unidad: string;
+  almacenesEntidad?: AlmacenStockEntidad[];
 };
 
 export type FilaProcuraMensaje = AlertaProcuraAdminRow & {
@@ -32,6 +39,8 @@ export type FilaProcuraMensaje = AlertaProcuraAdminRow & {
   stock_almacen_detectado?: number | null;
   viabilidad_presupuestaria?: string | null;
   viabilidad_informada_por?: string | null;
+  material_id?: string | null;
+  entidad_id?: string | null;
 };
 
 function materialVisible(row: FilaProcuraMensaje): string {
@@ -65,9 +74,10 @@ function lineasStockTicket(
 
   return (
     `\n📦 <b>Solicitado:</b> ${qtySol} ${escHtml(unidad)}\n` +
-    `🏪 <b>En almacén:</b> ${qtyAlm} ${escHtml(unidad)}\n` +
+    `🏪 <b>En almacén obra:</b> ${qtyAlm} ${escHtml(unidad)}\n` +
     `🚚 <b>Despacho almacén:</b> ${qtyDesp} ${escHtml(unidad)}\n` +
-    `🛒 <b>A comprar:</b> ${qtyComp} ${escHtml(unidad)}`
+    `🛒 <b>A comprar:</b> ${qtyComp} ${escHtml(unidad)}` +
+    lineasAlmacenesEntidadProcura(stock?.almacenesEntidad ?? [], unidad, escHtml)
   );
 }
 
@@ -85,7 +95,6 @@ function cuerpoDetalleProcura(
     : null;
   const obra = capLabel || nombreObra(row.ci_proyectos);
   const solicitante = row.solicitante_nombre?.trim() || '—';
-  const cantidad = Number(row.cantidad).toLocaleString('es-VE');
   const material = materialVisible(row);
   const montoUsd =
     row.monto_estimado_usd != null && Number.isFinite(Number(row.monto_estimado_usd))
@@ -96,7 +105,7 @@ function cuerpoDetalleProcura(
   return (
     `🎫 <b>Ticket:</b> ${escHtml(row.ticket)}\n` +
     `👷 <b>Solicitante:</b> ${escHtml(solicitante)}\n` +
-    `📦 <b>Material:</b> ${cantidad} ${escHtml(row.unidad)} de ${escHtml(material)}\n` +
+    `📦 <b>Material:</b> ${escHtml(material)}\n` +
     `📁 <b>Capítulo / Obra:</b> ${escHtml(obra)}\n` +
     `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${montoUsd}${stockBlock}`
   );
@@ -304,6 +313,7 @@ export function resumenStockDesdeEvaluacion(
     stockDisponible: number;
   },
   unidad: string,
+  almacenesEntidad?: AlmacenStockEntidad[],
 ): ResumenStockProcuraTicket {
   return {
     cantidadSolicitada: evaluacion.cantidadSolicitada,
@@ -311,5 +321,37 @@ export function resumenStockDesdeEvaluacion(
     cantidadCompra: evaluacion.cantidadCompra,
     stockDisponible: evaluacion.stockDisponible,
     unidad,
+    almacenesEntidad,
   };
+}
+
+/** Stock obra + almacenes de la entidad para mensajes de viabilidad / PM. */
+export async function construirResumenStockProcuraMensaje(
+  supabase: SupabaseClient,
+  row: {
+    cantidad: number;
+    cantidad_despacho?: number | null;
+    cantidad_compra?: number | null;
+    stock_almacen_detectado?: number | null;
+    unidad: string;
+    material_id?: string | null;
+    entidad_id?: string | null;
+    proyecto_id?: string | null;
+  },
+): Promise<ResumenStockProcuraTicket> {
+  const almacenesEntidad = await listarAlmacenesStockMaterialEntidad(supabase, {
+    materialId: row.material_id,
+    entidadId: row.entidad_id,
+    proyectoId: row.proyecto_id,
+  });
+  return resumenStockDesdeEvaluacion(
+    {
+      cantidadSolicitada: Number(row.cantidad),
+      cantidadDespacho: Number(row.cantidad_despacho ?? 0),
+      cantidadCompra: Number(row.cantidad_compra ?? row.cantidad),
+      stockDisponible: Number(row.stock_almacen_detectado ?? 0),
+    },
+    row.unidad?.trim() || 'UND',
+    almacenesEntidad,
+  );
 }

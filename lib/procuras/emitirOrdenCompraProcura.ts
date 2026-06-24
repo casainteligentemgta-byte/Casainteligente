@@ -4,6 +4,7 @@ import {
   type UsuarioSistemaTelegram,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
+import { nombreMaterialProcuraVisible } from '@/lib/compras/procuraMaterialTexto';
 import {
   insertarAuditoriaProcuraSinTransicion,
   metadatosAuditoriaSupervisor,
@@ -18,6 +19,11 @@ import {
   type EstadoProcura,
 } from '@/lib/procuras/procuraEstados';
 import { replicarOrdenCompraProcuraDesdeFila } from '@/lib/procuras/supervisorLogBotProcura';
+import {
+  listarAlmacenesStockMaterialEntidad,
+  notaLogisticaStockEntidadComprador,
+  type AlmacenStockEntidad,
+} from '@/lib/procuras/disponibilidadMaterialProcura';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 
 const ESTADOS_ORIGEN_ORDEN: readonly EstadoProcura[] = [
@@ -32,6 +38,7 @@ export type ProcuraOrdenCompraRow = {
   ticket: string;
   estado: string;
   material_txt: string;
+  material_id?: string | null;
   cantidad: number;
   unidad: string;
   solicitante_nombre: string | null;
@@ -39,6 +46,8 @@ export type ProcuraOrdenCompraRow = {
   prioridad: string | null;
   monto_estimado_usd: number | null;
   observaciones: string | null;
+  proyecto_id?: string | null;
+  entidad_id?: string | null;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
   ci_entidades?: { nombre: string } | { nombre: string }[] | null;
   ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
@@ -68,7 +77,7 @@ export async function cargarProcuraOrdenCompra(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -80,7 +89,12 @@ export async function cargarProcuraOrdenCompra(
 
 export function mensajeOrdenCompraComprador(
   procura: ProcuraOrdenCompraRow,
-  params: { autorNombre: string; motivo?: string | null; cantidadCompra?: number | null },
+  params: {
+    autorNombre: string;
+    motivo?: string | null;
+    cantidadCompra?: number | null;
+    almacenesEntidad?: AlmacenStockEntidad[];
+  },
 ): string {
   const cap = procura.ci_compras_capitulos_maestro;
   const capLabel = cap
@@ -107,14 +121,15 @@ export function mensajeOrdenCompraComprador(
   const motivo = params.motivo?.trim()
     ? `\n📝 ${escHtml(params.motivo.trim())}`
     : '';
+  const notaLogistica = notaLogisticaStockEntidadComprador(params.almacenesEntidad ?? []);
 
   return (
     '🛒 <b>Nueva orden de compra</b>\n\n' +
     `🎫 <b>${escHtml(procura.ticket)}</b>\n` +
-    `📦 <b>${escHtml(cantidad)}</b> · ${escHtml(procura.material_txt)}\n` +
+    `📦 <b>${escHtml(cantidad)}</b> · ${escHtml(nombreMaterialProcuraVisible(procura.material_txt))}\n` +
     `👷 <b>Solicitante:</b> ${escHtml(procura.solicitante_nombre?.trim() || '—')}\n` +
     `📁 <b>Obra / capítulo:</b> ${escHtml(obra)}\n` +
-    `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${monto}\n` +
+    `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${monto}${notaLogistica}\n` +
     `✅ <b>Autorizó:</b> ${escHtml(params.autorNombre)}${motivo}\n\n` +
     'Ejecute la compra y registre la factura con <code>/facturas</code>.\n' +
     `<a href="${escHtml(urlCuadroProcuras())}">Ver cuadro de procuras</a>`
@@ -124,7 +139,12 @@ export function mensajeOrdenCompraComprador(
 export async function notificarCompradoresOrdenCompra(
   supabase: SupabaseClient,
   procura: ProcuraOrdenCompraRow,
-  params: { autorNombre: string; motivo?: string | null; cantidadCompra?: number | null },
+  params: {
+    autorNombre: string;
+    motivo?: string | null;
+    cantidadCompra?: number | null;
+    almacenesEntidad?: AlmacenStockEntidad[];
+  },
 ): Promise<{ enviados: number; omitidos: number }> {
   const compradores = await listarUsuariosOrdenCompraTelegram(supabase);
   const texto = mensajeOrdenCompraComprador(procura, params);
@@ -158,6 +178,7 @@ export async function notificarCompradoresOrdenCompra(
       autorNombre: params.autorNombre,
       motivo: params.motivo,
       cantidadCompra: params.cantidadCompra,
+      almacenesEntidad: params.almacenesEntidad,
       compradores: compradores.map((u) => ({
         nombre: u.nombre,
         telegram_id: u.telegram_id,
@@ -207,10 +228,18 @@ export async function emitirOrdenCompraProcura(
   }
 
   if (estadoActual === 'en_compra') {
+    const almacenesEntidad = procura.material_id?.trim()
+      ? await listarAlmacenesStockMaterialEntidad(supabase, {
+          materialId: procura.material_id,
+          entidadId: procura.entidad_id,
+          proyectoId: procura.proyecto_id,
+        })
+      : [];
     const notify = await notificarCompradoresOrdenCompra(supabase, procura, {
       autorNombre: params.autorNombre,
       motivo: params.motivo,
       cantidadCompra: params.cantidadCompra,
+      almacenesEntidad,
     });
     if (params.auditoriaSupervisor) {
       const motivoAudit = motivoAuditoriaSupervisor(
@@ -244,6 +273,14 @@ export async function emitirOrdenCompraProcura(
     };
   }
 
+  const almacenesEntidad = procura.material_id?.trim()
+    ? await listarAlmacenesStockMaterialEntidad(supabase, {
+        materialId: procura.material_id,
+        entidadId: procura.entidad_id,
+        proyectoId: procura.proyecto_id,
+      })
+    : [];
+
   const motivoOrden =
     params.motivo?.trim() ||
     `Orden de compra emitida por ${params.autorNombre}`.slice(0, 500);
@@ -252,6 +289,7 @@ export async function emitirOrdenCompraProcura(
     autorNombre: params.autorNombre,
     motivo: motivoOrden,
     cantidadCompra: params.cantidadCompra,
+    almacenesEntidad,
   });
 
   if (params.auditoriaSupervisor) {

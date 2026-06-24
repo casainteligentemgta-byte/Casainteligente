@@ -12,7 +12,7 @@ import {
 } from '@/lib/alertas/alertasConfig';
 import {
   construirMensajePmDecisionProcura,
-  resumenStockDesdeEvaluacion,
+  construirResumenStockProcuraMensaje,
   type FilaProcuraMensaje,
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
 import { listarProjectManagersProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
@@ -25,8 +25,8 @@ export const CB_CMP_VIAB_SI = 'cmp:via:si:';
 export const CB_CMP_VIAB_NO = 'cmp:via:no:';
 
 const SELECT_PROCURA_ALERTA = `
-  id,ticket,estado,solicitante_nombre,solicitante_telegram_chat_id,material_txt,cantidad,unidad,
-  observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,
+  id,ticket,estado,solicitante_nombre,solicitante_telegram_chat_id,material_txt,material_id,cantidad,unidad,
+  observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,entidad_id,
   cantidad_despacho,cantidad_compra,stock_almacen_detectado,
   viabilidad_presupuestaria,viabilidad_informada_por,
   ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)
@@ -95,15 +95,7 @@ export async function enviarAlertaPmTrasViabilidadAdmin(
 
   const { config: alertas } = await cargarAlertasConfig(supabase);
   const prioridad = row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
-  const stock = resumenStockDesdeEvaluacion(
-    {
-      cantidadSolicitada: Number(row.cantidad),
-      cantidadDespacho: Number(row.cantidad_despacho ?? 0),
-      cantidadCompra: Number(row.cantidad_compra ?? row.cantidad),
-      stockDisponible: Number(row.stock_almacen_detectado ?? 0),
-    },
-    row.unidad,
-  );
+  const stock = await construirResumenStockProcuraMensaje(supabase, row);
 
   const texto = construirMensajePmDecisionProcura(row, prioridad, stock, opts?.informadoPorRol);
   const replyMarkup = tecladoAprobacionDepartamento(row.id);
