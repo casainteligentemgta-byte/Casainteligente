@@ -152,18 +152,20 @@ export async function notificarCompradoresOrdenCompra(
     }
   }
 
-  void replicarOrdenCompraProcuraDesdeFila(supabase, {
-    procuraId: procura.id,
-    autorNombre: params.autorNombre,
-    motivo: params.motivo,
-    cantidadCompra: params.cantidadCompra,
-    compradores: compradores.map((u) => ({
-      nombre: u.nombre,
-      telegram_id: u.telegram_id,
-    })),
-  }).catch((e) => {
+  try {
+    await replicarOrdenCompraProcuraDesdeFila(supabase, {
+      procuraId: procura.id,
+      autorNombre: params.autorNombre,
+      motivo: params.motivo,
+      cantidadCompra: params.cantidadCompra,
+      compradores: compradores.map((u) => ({
+        nombre: u.nombre,
+        telegram_id: u.telegram_id,
+      })),
+    });
+  } catch (e) {
     console.warn('[ordenCompraProcura] réplica log supervisor', e);
-  });
+  }
 
   return { enviados, omitidos };
 }

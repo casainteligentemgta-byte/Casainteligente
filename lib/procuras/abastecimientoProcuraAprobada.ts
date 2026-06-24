@@ -459,6 +459,24 @@ export async function procesarAbastecimientoProcuraAprobada(
   const evaluacion = await evaluarAbastecimientoProcura(supabase, procura);
   await persistirEvaluacionAbastecimiento(supabase, procuraId, evaluacion);
 
+  let compraEmitida = false;
+  if (evaluacion.cantidadCompra > 0) {
+    const oc = await emitirOrdenCompraProcura(supabase, {
+      procuraId,
+      autorNombre: params.autorNombre,
+      motivo:
+        evaluacion.cantidadDespacho > 0
+          ? `Orden de compra por saldo (${evaluacion.cantidadCompra} ${procura.unidad}) tras aprobación PM`
+          : 'Orden de compra — sin stock en almacén',
+      cantidadCompra: evaluacion.cantidadCompra,
+      auditoriaSupervisor: params.auditoriaSupervisor,
+    });
+    if (!oc.ok) {
+      return { ok: false, error: oc.error ?? 'No se pudo emitir orden de compra.' };
+    }
+    compraEmitida = true;
+  }
+
   const verificacion = await enviarOrdenVerificacionDepositarioProcura(
     supabase,
     procura,
@@ -471,6 +489,7 @@ export async function procesarAbastecimientoProcuraAprobada(
       ticket: procura.ticket,
       estado: 'aprobada',
       verificacionEnviada: true,
+      compraEmitida,
       modo: 'pendiente_depositario',
     };
   }
@@ -479,6 +498,7 @@ export async function procesarAbastecimientoProcuraAprobada(
     procuraId,
     autorNombre: params.autorNombre,
     auditoriaSupervisor: params.auditoriaSupervisor,
+    skipOrdenCompra: compraEmitida,
   });
 }
 
@@ -489,6 +509,8 @@ export async function confirmarAbastecimientoProcura(
     procuraId: string;
     autorNombre: string;
     auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
+    /** Evita duplicar orden si ya se emitió al aprobar el PM. */
+    skipOrdenCompra?: boolean;
   },
 ): Promise<ResultadoAbastecimientoProcura> {
   const procuraId = params.procuraId.trim();
@@ -532,7 +554,7 @@ export async function confirmarAbastecimientoProcura(
     estadoFinal = 'recibida';
   }
 
-  if (soloCompra || parcial) {
+  if ((soloCompra || parcial) && !params.skipOrdenCompra) {
     const oc = await emitirOrdenCompraProcura(supabase, {
       procuraId,
       autorNombre: params.autorNombre,
@@ -546,6 +568,8 @@ export async function confirmarAbastecimientoProcura(
     }
     compraEmitida = true;
     estadoFinal = parcial ? 'recibida_parcial' : 'aprobada';
+  } else if (params.skipOrdenCompra && (soloCompra || parcial)) {
+    compraEmitida = true;
   }
 
   return {
@@ -571,7 +595,9 @@ export function parseCallbackAbastecimientoProcura(data: string): string | null 
 export function etiquetaResultadoAbastecimiento(r: ResultadoAbastecimientoProcura): string {
   if (!r.ok) return r.error ?? 'Error de abastecimiento';
   if (r.modo === 'pendiente_depositario') {
-    return 'Aprobada — orden de verificación enviada al depositario.';
+    const partes = ['Aprobada — orden de verificación enviada al depositario.'];
+    if (r.compraEmitida) partes.push('Orden enviada al comprador (pendiente factura).');
+    return partes.join(' ');
   }
   const partes: string[] = [];
   if (r.despachoCodigo) partes.push(`Despacho ${r.despachoCodigo}`);
