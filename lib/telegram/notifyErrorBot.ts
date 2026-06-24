@@ -31,8 +31,9 @@ function escHtml(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
-/** Etiquetas de bloque bimonetario en alertas de compra confirmada. */
-const ETIQUETAS_BIMONET_BOLD = /^(Moneda origen|Total Bs|Total USD|Tasa BCV):/;
+/** Etiquetas de bloque bimonetario y logs de acción Telegram. */
+const ETIQUETAS_LOG_BOLD =
+  /^(Personaje|Chat|Flujo|Detalle|Moneda origen|Total Bs|Total USD|Tasa BCV):/;
 
 function formatearCuerpoLogBot(mensaje: string): string {
   return mensaje
@@ -41,7 +42,7 @@ function formatearCuerpoLogBot(mensaje: string): string {
       const t = linea.trimEnd();
       if (!t) return '';
       const idx = t.indexOf(':');
-      if (idx > 0 && ETIQUETAS_BIMONET_BOLD.test(t.slice(0, idx + 1))) {
+      if (idx > 0 && ETIQUETAS_LOG_BOLD.test(t.slice(0, idx + 1))) {
         const etiqueta = t.slice(0, idx);
         const valor = t.slice(idx + 1).trimStart();
         return `<b>${escHtml(etiqueta)}:</b> ${escHtml(valor)}`;
