@@ -552,6 +552,51 @@ export default function PresupuestosPage() {
                     </div>
                 </div>
 
+                {/* Filtro por estado */}
+                <div style={{ overflowX: 'auto', marginBottom: '16px', paddingBottom: '2px' }}>
+                    <div style={{ display: 'flex', gap: '7px', width: 'max-content' }}>
+                        {(['todos', 'no_enviado', 'enviado', 'aprobado', 'no_aprobado', 'cobrado', 'pagado'] as const).map((f) => {
+                            const active = filter === f;
+                            const chipStyle =
+                                f !== 'todos' && active
+                                    ? {
+                                          bg: CLASIFICACION_COLORS[f].bg,
+                                          text: CLASIFICACION_COLORS[f].text,
+                                          border: `1px solid ${CLASIFICACION_COLORS[f].text}55`,
+                                      }
+                                    : {
+                                          bg: active ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
+                                          text: active ? '#007AFF' : 'rgba(255,255,255,0.55)',
+                                          border: active ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                      };
+                            return (
+                                <button
+                                    key={f}
+                                    type="button"
+                                    onClick={() => setFilter(f)}
+                                    style={{
+                                        background: chipStyle.bg,
+                                        color: chipStyle.text,
+                                        border: chipStyle.border,
+                                        borderRadius: '999px',
+                                        padding: '7px 12px',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                    }}
+                                >
+                                    {f !== 'todos' ? <span aria-hidden>{CLASIFICACION_COLORS[f].icon}</span> : null}
+                                    {f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 {/* Barra: vista + orden */}
                 <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>

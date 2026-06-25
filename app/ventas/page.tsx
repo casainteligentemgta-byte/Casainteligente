@@ -681,7 +681,7 @@ function VentasContent() {
 
                 {/* ── Cliente (solo desde tabla `customers`) ── */}
                 <div style={{ ...glass, padding: '16px', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                             Cliente
                         </label>
@@ -689,7 +689,7 @@ function VentasContent() {
                             href="/clientes"
                             style={{ fontSize: '11px', fontWeight: 600, color: '#007AFF', textDecoration: 'none' }}
                         >
-                            Gestionar clientes →
+                            Gestionar cliente
                         </Link>
                     </div>
 
@@ -741,11 +741,10 @@ function VentasContent() {
                         </div>
                     ) : (
                         <>
-                            <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginBottom: '10px', lineHeight: 1.4 }}>
-                                Elige un cliente registrado. La lista se guarda en este navegador (hasta 14 días) y se actualiza con la base de datos.
-                                Escribe al menos una letra o pulsa <strong style={{ color: 'var(--label-primary)' }}>↓</strong> / el botón ▼ para abrir el listado.
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.4px', textTransform: 'uppercase', marginBottom: '8px' }}>
+                                Selección del cliente
                             </p>
-                            <div style={{ position: 'relative', marginBottom: customerDropdownOpen ? '6px' : '10px' }}>
+                            <div style={{ position: 'relative', marginBottom: customerDropdownOpen ? '6px' : 0 }}>
                                 <input
                                     ref={customerInputRef}
                                     type="search"
@@ -754,6 +753,7 @@ function VentasContent() {
                                     onChange={(e) => {
                                         setCustomerQuery(e.target.value);
                                     }}
+                                    onFocus={() => setPickerForceOpen(true)}
                                     onKeyDown={(e) => {
                                         if (e.key === 'ArrowDown') {
                                             e.preventDefault();
@@ -867,11 +867,7 @@ function VentasContent() {
                                         ))
                                     )}
                                 </div>
-                            ) : (
-                                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', marginBottom: '10px' }}>
-                                    Escribe o pulsa ↓ / ▼ para ver clientes ({customers.length} en caché).
-                                </p>
-                            )}
+                            ) : null}
                         </>
                     )}
                 </div>

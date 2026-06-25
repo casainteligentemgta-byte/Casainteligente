@@ -11,7 +11,7 @@ const CUSTOMERS_LOAD_TIMEOUT_MS = 22_000;
 // En clientes solo mostramos clasificación por tipo:
 // - Personas naturales
 // - Personas jurídicas (empresas)
-const FILTERS = ['Personas', 'Empresas'];
+const FILTERS = ['Ambos', 'Personas', 'Empresas'];
 
 type ClienteTipoCard = 'V' | 'J' | 'E';
 type ClienteStatusCard = 'activo' | 'inactivo' | 'pendiente';
@@ -39,7 +39,7 @@ function normalizarStatus(s: string | null | undefined): ClienteStatusCard {
 
 export default function ClientesPage() {
     const [search, setSearch] = useState('');
-    const [filtro, setFiltro] = useState('Personas');
+    const [filtro, setFiltro] = useState('Ambos');
     const [lista, setLista] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -166,7 +166,11 @@ export default function ClientesPage() {
             (c.movil && String(c.movil).includes(search));
 
         const matchFiltro =
-            filtro === 'Personas' ? c.categoria === 'personal' : c.categoria === 'empresa';
+            filtro === 'Ambos'
+                ? true
+                : filtro === 'Personas'
+                  ? c.categoria === 'personal'
+                  : c.categoria === 'empresa';
 
         return matchSearch && matchFiltro;
     });
@@ -389,12 +393,12 @@ export default function ClientesPage() {
                                 <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
                                     Hay {lista.length} en total; prueba otro término o filtro.
                                 </p>
-                                {(search || filtro !== 'Personas') && (
+                                {(search || filtro !== 'Ambos') && (
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setSearch('');
-                                            setFiltro('Personas');
+                                            setFiltro('Ambos');
                                         }}
                                         style={{
                                             marginTop: '16px', padding: '10px 20px', borderRadius: '12px',
