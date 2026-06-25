@@ -10,6 +10,7 @@ const ROLES_OBRA_ASIGNADA = ['Comprador', 'Solicitante'] as const;
 export function modoTelegramUsaObraComprador(modo: string): boolean {
   return (
     modo === 'factura_compra' ||
+    modo === 'factura_comprador_manual' ||
     modo === 'ingreso_manual' ||
     modo === 'ingreso_factura_manual' ||
     modo === 'nota_entrega' ||

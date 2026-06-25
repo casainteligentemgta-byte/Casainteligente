@@ -16,11 +16,14 @@ export function baseUrlAppTelegram(): string {
     .replace(/\/$/, '');
 }
 
-/** Mensaje al activar modo recepción de facturas por Telegram (/facturas). */
-export function mensajeModoFacturasActivado(): string {
+/** Mensaje al activar modo recepción de facturas por Telegram (/facturas → foto). */
+export function mensajeModoFacturasActivado(opts?: { ticket?: string | null }): string {
+  const ticket = opts?.ticket?.trim();
+  const procuraHint = ticket ? `\n🎫 Procura vinculada: <b>${ticket}</b>\n` : '';
   return (
-    '✅ <b>COMPRADOR: cargar factura.</b>\n\n' +
-    'Envía una <b>foto</b> de la factura de compra.\n' +
+    '✅ <b>COMPRADOR: cargar factura.</b>\n' +
+    procuraHint +
+    '\nEnvía una <b>foto</b> de la factura de compra.\n' +
     'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, si es <b>contado</b> o <b>crédito</b>.\n\n' +
     'Luego elija destino:\n' +
     '• <b>Obra (AD)</b> → obra + almacén → Contabilidad y precarga para ingreso físico.\n' +
@@ -114,7 +117,16 @@ export async function manejarCallbackFacturaOkTelegram(params: {
 export async function iniciarModoCargaFacturasTelegram(
   supabase: SupabaseClient,
   chatId: string,
+  opts?: { procuraId?: string | null; ticket?: string | null },
 ): Promise<void> {
-  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), { parse_mode: 'HTML' });
-  await setTelegramContexto(supabase, chatId, { contexto: 'factura' });
+  await sendTelegramMessage(chatId, mensajeModoFacturasActivado({ ticket: opts?.ticket }), {
+    parse_mode: 'HTML',
+  });
+  const meta: Record<string, unknown> = {};
+  if (opts?.procuraId?.trim()) meta.procura_id = opts.procuraId.trim();
+  if (opts?.ticket?.trim()) meta.procura_ticket = opts.ticket.trim();
+  await setTelegramContexto(supabase, chatId, {
+    contexto: 'factura',
+    ...(Object.keys(meta).length ? { metadata: meta } : {}),
+  });
 }

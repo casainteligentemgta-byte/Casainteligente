@@ -8,7 +8,7 @@ export const TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO: Array<{
   description: string;
 }> = [
   { command: 'procura', description: 'Solicitar material (procura de abastecimiento)' },
-  { command: 'facturas', description: 'Foto/PDF factura → Contabilidad + precarga almacén' },
+  { command: 'facturas', description: 'Foto o carga manual → Contabilidad + precarga almacén' },
 ];
 
 export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
@@ -30,7 +30,7 @@ function lineasComprasMenuTelegram(): string {
     const hint =
       c.command === 'procura'
         ? 'solicitar material (ticket PR-…)'
-        : 'foto/PDF → Contabilidad + precarga almacén';
+        : 'foto o manual → Contabilidad + precarga almacén';
     return `• /${c.command} — ${hint}`;
   }).join('\n');
 }

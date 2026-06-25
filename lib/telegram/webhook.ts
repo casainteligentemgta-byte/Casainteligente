@@ -27,8 +27,23 @@ import {
 import {
   esCallbackFacturaOk,
   manejarCallbackFacturaOkTelegram,
-  mensajeModoFacturasActivado,
 } from '@/lib/telegram/mensajesFactura';
+import {
+  esCallbackMenuFacturasComprador,
+  manejarCallbackMenuFacturasCompradorTelegram,
+  enviarMenuFacturasCompradorTelegram,
+} from '@/lib/telegram/menuFacturasCompradorTelegram';
+import {
+  esCallbackFacturaOrdenCompraProcura,
+  manejarCallbackFacturaOrdenCompraProcura,
+} from '@/lib/telegram/facturaOrdenCompraTelegram';
+import {
+  esCallbackFacturaCompradorManual,
+  esFlujoFacturaCompradorManual,
+  manejarCallbackFacturaCompradorManual,
+  manejarFotoFacturaCompradorManual,
+  manejarTextoFacturaCompradorManual,
+} from '@/lib/telegram/facturaCompradorManualTelegram';
 import {
   esCallbackCondicionPagoFactura,
   esCallbackDiasCreditoFactura,
@@ -371,54 +386,20 @@ async function avisoErrorTelegram(chatId: string, err: unknown): Promise<void> {
   }
 }
 
-/** /facturas (alias /factura): responde siempre por Telegram aunque falle Supabase. */
-async function manejarComandoFacturasDirecto(chatId: string): Promise<{
+/** /facturas (alias /factura): menú foto o carga manual. */
+async function manejarComandoFacturasDirecto(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<{
   ok: boolean;
   warn?: string;
 }> {
-  await sendTelegramMessage(chatId, mensajeModoFacturasActivado(), { parse_mode: 'HTML' });
-
-  const admin = telegramSupabaseAdmin();
-  if (!admin.ok) {
-    console.warn('[telegram /facturas] sin SUPABASE_SERVICE_ROLE_KEY');
-    return { ok: true, warn: 'supabase_config' };
-  }
-
   try {
-    await setTelegramContexto(admin.client, chatId, { contexto: 'factura' });
-
-    const { data: pendiente } = await admin.client
-      .from('ci_facturas_canal_pendientes')
-      .select('id, extracted, proyecto_id, entidad_id, imputacion_entidad, estado')
-      .eq('chat_id', chatId)
-      .in('estado', ['extraido', 'error'])
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (pendiente?.id && pendiente.extracted) {
-      const { avanzarFlujoFacturaCompradorTelegram, flujoFacturaCompradorIncompleto } =
-        await import('@/lib/telegram/flujoFacturaCompradorTelegram');
-      if (
-        flujoFacturaCompradorIncompleto(pendiente.extracted as never, pendiente) &&
-        (String(pendiente.estado) === 'extraido' || String(pendiente.estado) === 'error')
-      ) {
-        await setTelegramContexto(admin.client, chatId, {
-          contexto: 'factura',
-          pending_factura_id: String(pendiente.id),
-        });
-        await avanzarFlujoFacturaCompradorTelegram(
-          admin.client,
-          chatId,
-          String(pendiente.id),
-        );
-      }
-    }
+    await enviarMenuFacturasCompradorTelegram(supabase, chatId);
   } catch (err) {
-    console.error('[telegram /facturas estado]', err);
-    return { ok: true, warn: 'estado_db' };
+    console.error('[telegram /facturas menu]', err);
+    return { ok: true, warn: 'menu' };
   }
-
   return { ok: true };
 }
 
@@ -579,6 +560,42 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledIngresoManual) {
         return NextResponse.json({ ok: true, callback: 'ingreso_manual' });
+      }
+    }
+
+    if (esCallbackMenuFacturasComprador(cq.data)) {
+      const handledFacturasMenu = await manejarCallbackMenuFacturasCompradorTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledFacturasMenu) {
+        return NextResponse.json({ ok: true, callback: 'menu_facturas' });
+      }
+    }
+
+    if (esCallbackFacturaOrdenCompraProcura(cq.data)) {
+      const handledOcFactura = await manejarCallbackFacturaOrdenCompraProcura(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledOcFactura) {
+        return NextResponse.json({ ok: true, callback: 'oc_factura' });
+      }
+    }
+
+    if (esCallbackFacturaCompradorManual(cq.data)) {
+      const handledFcm = await manejarCallbackFacturaCompradorManual(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        chatLabel: cq.from?.username
+          ? `@${cq.from.username}`
+          : [cq.from?.first_name].filter(Boolean).join(' ') || chatId,
+      });
+      if (handledFcm) {
+        return NextResponse.json({ ok: true, callback: 'factura_comprador_manual' });
       }
     }
 
@@ -877,7 +894,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     if (texto && CMD_FACTURAS.test(texto)) {
       await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);
-      const r = await manejarComandoFacturasDirecto(chatId);
+      const r = await manejarComandoFacturasDirecto(supabase, chatId);
       return NextResponse.json({ ok: true, command: 'facturas', warn: r.warn });
     }
 
@@ -926,6 +943,16 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       const textoIngresoFactura = await manejarTextoIngresoFactura(supabase, chatId, texto);
       if (textoIngresoFactura) {
         return NextResponse.json({ ok: true, ingreso_factura_texto: true });
+      }
+
+      const textoFacturaManual = await manejarTextoFacturaCompradorManual(
+        supabase,
+        chatId,
+        texto,
+        label,
+      );
+      if (textoFacturaManual) {
+        return NextResponse.json({ ok: true, factura_comprador_manual_texto: true });
       }
 
       const textoDiasCredito = await manejarTextoDiasCreditoFacturaTelegram(
@@ -1109,6 +1136,38 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
             pendingId: factura.pendingId,
           });
         }
+      }
+
+      const fotoFacturaManual = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoFcm = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoFacturaCompradorManual(estadoFcm)) return false;
+        const paso = (estadoFcm.metadata as { paso?: string })?.paso;
+        if (paso !== 'foto') return false;
+        const fileId = photos[photos.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          await manejarFotoFacturaCompradorManual({
+            supabase,
+            chatId,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+            chatLabel: label,
+          });
+          return true;
+        } catch (err) {
+          console.error('[telegram factura comprador manual foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoFacturaManual) {
+        return NextResponse.json({ ok: true, factura_comprador_manual_foto: true });
       }
 
       const fotoIngresoManual = await (async () => {

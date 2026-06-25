@@ -197,7 +197,23 @@ export async function listarProjectManagersProcuraTelegram(
   proyectoId: string | null,
 ): Promise<AprobadorProcuraTelegram[]> {
   const todos = await listarAprobadoresProcuraTelegram(supabase, proyectoId);
-  return todos.filter((a) => a.rol === 'Aprobador');
+  const pmNominaChatIds = new Set<number>();
+
+  if (proyectoId) {
+    const nomina = await listarNominaProyecto(supabase, proyectoId);
+    for (const f of nomina) {
+      if (f.rol !== 'pm_obra' && f.rol !== 'coordinador') continue;
+      const chatId =
+        f.telegram_chat_id != null
+          ? Number(f.telegram_chat_id)
+          : f.empleado_telegram_chat_id != null
+            ? Number(f.empleado_telegram_chat_id)
+            : null;
+      if (chatId != null && Number.isFinite(chatId)) pmNominaChatIds.add(chatId);
+    }
+  }
+
+  return todos.filter((a) => a.rol === 'Aprobador' || pmNominaChatIds.has(a.chatId));
 }
 
 /** ¿PM de obra vía nómina (pm_obra / coordinador)? */

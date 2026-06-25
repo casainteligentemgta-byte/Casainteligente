@@ -52,9 +52,24 @@ export async function manejarFacturaTelegram(params: {
     throw new Error(reserva.error);
   }
 
+  const estadoPrev = await params.supabase
+    .from('ci_telegram_estados')
+    .select('metadata, proyecto_id')
+    .eq('chat_id', params.chatId)
+    .maybeSingle();
+  const metaPrev = (estadoPrev.data?.metadata ?? {}) as Record<string, unknown>;
+  const procuraId = String(metaPrev.procura_id ?? '').trim() || null;
+  const procuraTicket = String(metaPrev.procura_ticket ?? '').trim() || null;
+
   await setTelegramContexto(params.supabase, params.chatId, {
     contexto: 'factura',
     pending_factura_id: reserva.pendingId,
+    proyecto_id: estadoPrev.data?.proyecto_id ?? null,
+    metadata: {
+      ...metaPrev,
+      ...(procuraId ? { procura_id: procuraId } : {}),
+      ...(procuraTicket ? { procura_ticket: procuraTicket } : {}),
+    },
   });
 
   const debeReprocesar = async (): Promise<boolean> => {

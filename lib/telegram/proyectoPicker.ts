@@ -22,6 +22,7 @@ export type ProyectoPickerModo =
       'obra' | 'gasto_obra' | 'esperando_audio_bitacora' | 'entrada_obra' | 'salida_obra' | 'memoria_obra'
     >
   | 'factura_compra'
+  | 'factura_comprador_manual'
   | 'ingreso_manual'
   | 'ingreso_factura_manual'
   | 'nota_entrega'
@@ -45,6 +46,7 @@ const MODO_CORTO: Record<ProyectoPickerModo, string> = {
   salida_obra_despacho: 'd',
   memoria_obra: 'm',
   factura_compra: 'f',
+  factura_comprador_manual: 'c',
   ingreso_manual: 'h',
   ingreso_factura_manual: 'v',
   nota_entrega: 't',
@@ -64,6 +66,7 @@ const MODO_LARGO: Record<string, ProyectoPickerModo> = {
   d: 'salida_obra_despacho',
   m: 'memoria_obra',
   f: 'factura_compra',
+  c: 'factura_comprador_manual',
   h: 'ingreso_manual',
   v: 'ingreso_factura_manual',
   t: 'nota_entrega',
@@ -137,6 +140,8 @@ function tituloPicker(modo: ProyectoPickerModo): string {
       return '🏗 <b>Elige la obra de destino</b>:';
     case 'factura_compra':
       return '🏗 <b>Elige la obra</b> de esta compra:';
+    case 'factura_comprador_manual':
+      return '🏗 <b>Elige la obra</b> (factura manual comprador):';
     case 'memoria_obra':
       return '📸 <b>Elige la obra</b> para memoria descriptiva de avance:';
   }
@@ -163,6 +168,7 @@ function mensajeTrasSeleccion(modo: ProyectoPickerModo, nombre: string): string 
     case 'entrada_obra':
     case 'ingreso_manual':
     case 'ingreso_factura_manual':
+    case 'factura_comprador_manual':
     case 'nota_entrega':
     case 'emergencia':
     case 'procura':
@@ -253,6 +259,14 @@ export async function aplicarSeleccionProyectoTelegram(
       proyectoId,
       nombreObra,
     });
+    return;
+  }
+
+  if (modo === 'factura_comprador_manual') {
+    const { prepararFacturaCompradorManualTrasObra } = await import(
+      '@/lib/telegram/facturaCompradorManualTelegram'
+    );
+    await prepararFacturaCompradorManualTrasObra(supabase, chatId, proyectoId);
     return;
   }
 

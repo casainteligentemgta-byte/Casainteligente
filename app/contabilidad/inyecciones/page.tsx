@@ -6,6 +6,10 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { InyeccionCapitalRow } from '@/lib/contabilidad/inyeccionesCapitalTypes';
 import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
+import {
+  esFuenteTasaBcvConfiable,
+  etiquetaFuenteTasaBcv,
+} from '@/lib/finanzas/bcvTasaPorFecha';
 import { calcularGastoBimonetario } from '@/lib/finanzas/currency-converter';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
@@ -450,7 +454,21 @@ export default function InyeccionesAvanzadasPage() {
                 montoN={montoN}
               />
               {fuenteBcv && tipoTasa === 'BCV' ? (
-                <p className="text-[9px] text-zinc-600 text-center">Fuente: {fuenteBcv}</p>
+                <p
+                  className={`text-[9px] text-center ${
+                    esFuenteTasaBcvConfiable(fuenteBcv) ? 'text-zinc-600' : 'text-amber-400'
+                  }`}
+                >
+                  Fuente: {etiquetaFuenteTasaBcv(fuenteBcv)}
+                  {!esFuenteTasaBcvConfiable(fuenteBcv) ? (
+                    <>
+                      {' '}
+                      — use <b>tasa personalizada</b> o actualice{' '}
+                      <code className="text-[8px]">ci_config_nomina</code> /{' '}
+                      <code className="text-[8px]">NEXT_PUBLIC_TASA_BCV_VES_POR_USD</code>
+                    </>
+                  ) : null}
+                </p>
               ) : null}
               <PanelConversionTasa
                 titulo="Tasa personalizada"

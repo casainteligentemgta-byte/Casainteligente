@@ -158,7 +158,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Fecha de ingreso al banco inválida.' }, { status: 400 });
   }
 
-  const bcv = await obtenerTasaBcvVesPorUsd(fechaIngreso);
+  const supabase = await createClient();
+  const bcv = await obtenerTasaBcvVesPorUsd(fechaIngreso, { supabase });
   const tasaBcv = body.tasa_bcv != null && body.tasa_bcv > 0 ? body.tasa_bcv : bcv.tasa_bcv_ves_por_usd;
 
   let tasaAplicada = Number(body.tasa_aplicada);
@@ -192,7 +193,6 @@ export async function POST(req: Request) {
     ? body.seriales_billetes.map((s) => String(s).trim()).filter(Boolean)
     : [];
 
-  const supabase = await createClient();
   const { data: id, error } = await supabase.rpc('ci_registrar_inyeccion_capital', {
     p_proyecto_id: proyectoId,
     p_origen_fondo: origen,

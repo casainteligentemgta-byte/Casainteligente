@@ -28,6 +28,8 @@
     "telegram:webhook": "node scripts/set-telegram-webhook.mjs",
     "telegram:commands": "node scripts/sync-telegram-commands.mjs",
     "telegram:check": "node scripts/check-telegram-webhook.mjs",
+    "deploy:notify": "node scripts/notificar-deploy-log.mjs",
+    "deploy:prod": "npx vercel --prod --yes && node scripts/notificar-deploy-log.mjs",
     "telegram:local": "node scripts/replay-telegram-local.mjs",
     "telegram:replay-local": "node scripts/replay-telegram-local.mjs",
     "telegram:diag": "node scripts/diag-facturas-canal.mjs",

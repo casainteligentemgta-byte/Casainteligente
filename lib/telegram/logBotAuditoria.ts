@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { obtenerUsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
-import { esUuidProcura, type PasoProcuraDepartamento } from '@/lib/compras/telegramMetadata';
+import { esUuidProcura, parseMetadataProcuraDepartamento, type PasoProcuraDepartamento } from '@/lib/compras/telegramMetadata';
 import {
   etiquetaContexto,
   type TelegramContexto,
@@ -261,6 +261,13 @@ const PREFIJO_CALLBACK_CAPITULO = 'cmp:cap:';
 const PREFIJO_CMP = 'cmp:';
 const DETALLE_PROCURA_MATERIAL_MANUAL = 'Se ingresó material de manera manual';
 
+function materialProcuraDesdeEstado(estado?: TelegramEstado | null): string | undefined {
+  if (!estado) return undefined;
+  const m = parseMetadataProcuraDepartamento(estado);
+  const txt = m.material_txt?.trim() || m.material_busqueda_borrador?.trim() || '';
+  return txt ? truncar(txt, 200) : undefined;
+}
+
 /** Detalle legible para callbacks cmp: del flujo procura departamento (sin prefijo técnico). */
 function resolverDetalleCmpProcuraDepartamentoLog(
   accionCruda: string,
@@ -271,7 +278,6 @@ function resolverDetalleCmpProcuraDepartamentoLog(
     return undefined;
   }
 
-  if (raw === 'cmp:mat:txt') return DETALLE_PROCURA_MATERIAL_MANUAL;
   if (raw === 'cmp:ok') return 'OK';
   if (raw === 'cmp:no') return 'Cancelar';
   if (raw === 'cmp:mat:canon') return 'Usar material sugerido';
@@ -299,7 +305,7 @@ function resolverDetalleMensajeProcuraDepartamento(
   const texto = accionCruda.trim();
   if (!texto || texto.startsWith('/') || texto.startsWith('[')) return undefined;
   const paso = ((estado.metadata ?? {}) as { paso?: PasoProcuraDepartamento }).paso;
-  if (paso === 'material') return DETALLE_PROCURA_MATERIAL_MANUAL;
+  if (paso === 'material') return truncar(texto, 200);
   return undefined;
 }
 
@@ -359,10 +365,18 @@ export async function resolverDetalleCallbackProcuraLog(
   const cap = await resolverDetalleCapituloProcuraLog(supabase, accionCruda, reply_markup);
   if (cap) return cap;
 
+  const raw = accionCruda.trim();
+  if (raw === 'cmp:mat:txt') {
+    return materialProcuraDesdeEstado(estadoTelegram) ?? DETALLE_PROCURA_MATERIAL_MANUAL;
+  }
+  if (raw === 'cmp:mat:keep' || raw === 'cmp:mat:canon') {
+    const mat = materialProcuraDesdeEstado(estadoTelegram);
+    if (mat) return mat;
+  }
+
   const cmp = resolverDetalleCmpProcuraDepartamentoLog(accionCruda, reply_markup);
   if (cmp) return cmp;
 
-  const raw = accionCruda.trim();
   if (raw.startsWith('cmp:mat_id:') && supabase) {
     const matId = raw.slice('cmp:mat_id:'.length).trim();
     if (esUuidProcura(matId)) {

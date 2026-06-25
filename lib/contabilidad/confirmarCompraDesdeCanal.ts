@@ -195,6 +195,7 @@ export async function confirmarCompraDesdeCanal(
     lineasOverride?: LineaCompraContabilidadInput[];
     confirmarFechaAnomala?: boolean;
     clasificacionGastoEntidad?: ClasificacionGastoEntidad | null;
+    procuraId?: string | null;
   },
 ): Promise<{
   compraId: string;
@@ -296,6 +297,7 @@ async function confirmarCompraDesdeCanalInterno(
     lineasOverride?: LineaCompraContabilidadInput[];
     confirmarFechaAnomala?: boolean;
     clasificacionGastoEntidad?: ClasificacionGastoEntidad | null;
+    procuraId?: string | null;
   },
   row: PendienteRow,
   _estadoPrevio: string,
@@ -529,6 +531,7 @@ async function confirmarCompraDesdeCanalInterno(
     clasificacion_gasto_entidad: gastoEntidad
       ? params.clasificacionGastoEntidad ?? null
       : null,
+    procura_id: params.procuraId?.trim() || null,
   });
 
   const patchAuditoria = {

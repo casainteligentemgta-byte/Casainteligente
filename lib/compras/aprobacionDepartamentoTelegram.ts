@@ -12,7 +12,7 @@ import {
 import { esChatCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { resolverProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
-import { etiquetaResultadoAbastecimiento } from '@/lib/procuras/abastecimientoProcuraAprobada';
+import { etiquetaResultadoAbastecimiento, mensajeResolucionAprobacionPm } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import {
   esUuidProcura,
   parseMetadataMotivoRechazo,
@@ -549,7 +549,7 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
 
     const pie =
       `\n\n🟢 <b>Aprobada</b> por <b>${escHtml(perm.nombre)}</b>\n` +
-      `${escHtml(etiquetaResultadoAbastecimiento({ ok: true, estado: resultado.estado, ticket: resultado.ticket, modo: resultado.estado === 'aprobada' ? 'pendiente_depositario' : 'ejecutado', compraEmitida: (resultado.compradoresNotificados ?? 0) > 0 }))}\n` +
+      `${escHtml(mensajeResolucionAprobacionPm(resultado))}\n` +
       `Estado: <b>${escHtml(etiquetaEstadoProcura(resultado.estado ?? 'aprobada'))}</b>`;
 
     if (params.messageId != null && procura) {

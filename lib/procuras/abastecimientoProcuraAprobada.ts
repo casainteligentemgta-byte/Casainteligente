@@ -423,6 +423,7 @@ export type ResultadoAbastecimientoProcura = {
   verificacionEnviada?: boolean;
   despachoCodigo?: string;
   compraEmitida?: boolean;
+  compradoresNotificados?: number;
   modo?: 'pendiente_depositario' | 'ejecutado';
 };
 
@@ -480,6 +481,7 @@ export async function procesarAbastecimientoProcuraAprobada(
   await persistirEvaluacionAbastecimiento(supabase, procuraId, evaluacion);
 
   let compraEmitida = false;
+  let compradoresNotificados = 0;
   if (evaluacion.cantidadCompra > 0) {
     const oc = await emitirOrdenCompraProcura(supabase, {
       procuraId,
@@ -495,6 +497,7 @@ export async function procesarAbastecimientoProcuraAprobada(
       return { ok: false, error: oc.error ?? 'No se pudo emitir orden de compra.' };
     }
     compraEmitida = true;
+    compradoresNotificados = oc.compradoresNotificados ?? 0;
   }
 
   const verificacion = await enviarOrdenVerificacionDepositarioProcura(
@@ -510,6 +513,7 @@ export async function procesarAbastecimientoProcuraAprobada(
       estado: 'aprobada',
       verificacionEnviada: true,
       compraEmitida,
+      compradoresNotificados,
       modo: 'pendiente_depositario',
     };
   }
@@ -588,6 +592,15 @@ export async function confirmarAbastecimientoProcura(
     }
     compraEmitida = true;
     estadoFinal = parcial ? 'recibida_parcial' : 'aprobada';
+    return {
+      ok: true,
+      ticket: procura.ticket,
+      estado: estadoFinal,
+      despachoCodigo: despacho.codigo,
+      compraEmitida,
+      compradoresNotificados: oc.compradoresNotificados ?? 0,
+      modo: 'ejecutado',
+    };
   } else if (params.skipOrdenCompra && (soloCompra || parcial)) {
     compraEmitida = true;
   }
@@ -616,12 +629,41 @@ export function etiquetaResultadoAbastecimiento(r: ResultadoAbastecimientoProcur
   if (!r.ok) return r.error ?? 'Error de abastecimiento';
   if (r.modo === 'pendiente_depositario') {
     const partes = ['Aprobada — orden de verificación enviada al depositario.'];
-    if (r.compraEmitida) partes.push('Orden enviada al comprador (pendiente factura).');
+    if (r.compraEmitida) {
+      partes.push(
+        r.compradoresNotificados && r.compradoresNotificados > 0
+          ? `Orden de compra enviada al comprador (${r.compradoresNotificados}).`
+          : 'Orden de compra registrada en log (sin comprador Telegram).',
+      );
+    }
     return partes.join(' ');
   }
   const partes: string[] = [];
   if (r.despachoCodigo) partes.push(`Despacho ${r.despachoCodigo}`);
-  if (r.compraEmitida) partes.push('Orden enviada al comprador (pendiente factura)');
+  if (r.compraEmitida) {
+    partes.push(
+      r.compradoresNotificados && r.compradoresNotificados > 0
+        ? `Orden de compra enviada al comprador (${r.compradoresNotificados})`
+        : 'Orden de compra en log bot (sin comprador Telegram)',
+    );
+  }
   if (r.estado) partes.push(etiquetaEstadoProcura(r.estado));
   return partes.join(' · ') || 'Abastecimiento procesado';
+}
+
+/** Texto breve tras aprobar procura como PM. */
+export function mensajeResolucionAprobacionPm(resultado: {
+  estado?: string;
+  compraEmitida?: boolean;
+  compradoresNotificados?: number;
+  verificacionEnviada?: boolean;
+}): string {
+  return etiquetaResultadoAbastecimiento({
+    ok: true,
+    estado: resultado.estado,
+    compraEmitida: resultado.compraEmitida,
+    compradoresNotificados: resultado.compradoresNotificados,
+    verificacionEnviada: resultado.verificacionEnviada,
+    modo: resultado.verificacionEnviada ? 'pendiente_depositario' : 'ejecutado',
+  });
 }

@@ -452,11 +452,15 @@ export default function ContabilidadPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                         <PanelDesglose
                             titulo="INGRESOS"
-                            subtitulo="Abonos de clientes · por entidad"
+                            subtitulo={
+                                balance?.countInyecciones
+                                    ? `Inyecciones de capital · ${balance.countInyecciones} en el mes`
+                                    : 'Inyecciones de capital · por entidad'
+                            }
                             color="#34C759"
                             filas={balance?.ingresosPorEntidad ?? []}
-                            vacio="Sin abonos este mes"
-                            verMasHref="/proyectos/modulo"
+                            vacio="Sin inyecciones este mes"
+                            verMasHref="/contabilidad/inyecciones"
                         />
                         <PanelDesglose
                             titulo="EGRESOS"

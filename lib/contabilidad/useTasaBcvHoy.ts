@@ -26,7 +26,10 @@ export function useTasaBcvHoy(fecha?: string) {
         setFuente(r.fuente);
       })
       .catch(() => {
-        if (!cancelled) setTasa(null);
+        if (!cancelled) {
+          setTasa(null);
+          setFuente(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

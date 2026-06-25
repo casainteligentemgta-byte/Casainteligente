@@ -15,6 +15,7 @@ import {
   resumenFacturaCompradorHtml,
   tecladoFacturaRegistradaOk,
 } from '@/lib/telegram/mensajesFactura';
+import { procuraIdDesdeMetadataFactura } from '@/lib/telegram/facturaCompradorManualTelegram';
 import {
   esNotaEntregaExtracted,
   mensajeNotaEntregaFinalizada,
@@ -226,10 +227,13 @@ export async function manejarCallbackUbicacionTelegram(
 
   if (proyectoId) {
     try {
+      const estadoPrev = await getTelegramEstado(supabase, params.chatId);
+      const procuraId = procuraIdDesdeMetadataFactura(estadoPrev);
       await confirmarCompraDesdeCanal(supabase, {
         pendingId,
         proyectoId,
         ubicacionDestinoId: parsed.ubicacionId,
+        procuraId,
       });
       await setTelegramContexto(supabase, params.chatId, {
         contexto: 'menu',

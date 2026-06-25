@@ -17,6 +17,7 @@ import {
   CB_PROCURA_ABASTECIMIENTO_OK,
   confirmarAbastecimientoProcura,
   etiquetaResultadoAbastecimiento,
+  mensajeResolucionAprobacionPm,
 } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import { informarViabilidadAdminProcura } from '@/lib/procuras/informarViabilidadAdminProcura';
 import {
@@ -300,13 +301,10 @@ async function ejecutarViabilidadSupervisor(
     return;
   }
 
-  const pmNota = resultado.aprobacionDirectaSupervisor
-    ? resultado.compraEmitida
-      ? `${label}. Aprobada y orden al comprador (sin paso PM).`
-      : `${label}. Aprobada por supervisor (sin paso PM).`
-    : resultado.pmsNotificados && resultado.pmsNotificados > 0
+  const pmNota =
+    resultado.pmsNotificados && resultado.pmsNotificados > 0
       ? `${label}. PM notificado (${resultado.pmsNotificados}).`
-      : `${label}. Sin PM Telegram para notificar.`;
+      : `${label}. Sin PM Telegram para notificar — revise nómina (pm_obra) o rol Aprobador.`;
 
   await finalizarMensajeLogSupervisor({ ...params, ok: true, detalle: pmNota });
 }
@@ -413,7 +411,12 @@ async function ejecutarPmAprobacionSupervisor(
   await finalizarMensajeLogSupervisor({
     ...params,
     ok: true,
-    detalle: `Procura aprobada. ${resultado.estado ?? 'aprobada'}.`,
+    detalle: mensajeResolucionAprobacionPm({
+      estado: resultado.estado,
+      compraEmitida: resultado.compraEmitida,
+      compradoresNotificados: resultado.compradoresNotificados,
+      verificacionEnviada: resultado.verificacionEnviada,
+    }),
   });
 }
 

@@ -23,6 +23,7 @@ import {
   type AlmacenStockEntidad,
 } from '@/lib/procuras/disponibilidadMaterialProcura';
 import { replicarOrdenCompraProcuraEnLogBot } from '@/lib/telegram/espejoSalidaLogBot';
+import { tecladoFacturaOrdenCompraProcura } from '@/lib/telegram/facturaOrdenCompraTelegram';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 
 const ESTADOS_ORIGEN_ORDEN: readonly EstadoProcura[] = [
@@ -130,9 +131,15 @@ export function mensajeOrdenCompraComprador(
     `📁 <b>Obra / capítulo:</b> ${escHtml(obra)}\n` +
     `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${monto}${notaLogistica}\n` +
     `✅ <b>Autorizó:</b> ${escHtml(params.autorNombre)}${motivo}\n\n` +
-    'Ejecute la compra y registre la factura con <code>/facturas</code>.\n' +
+    'Registre la factura con los botones o con <code>/facturas</code> (foto o manual).\n' +
     `<a href="${escHtml(urlCuadroProcuras())}">Ver cuadro de procuras</a>`
   );
+}
+
+export function opcionesMensajeOrdenCompraComprador(procuraId: string): {
+  reply_markup: ReturnType<typeof tecladoFacturaOrdenCompraProcura>;
+} {
+  return { reply_markup: tecladoFacturaOrdenCompraProcura(procuraId) };
 }
 
 export async function notificarCompradoresOrdenCompra(
@@ -162,6 +169,7 @@ export async function notificarCompradoresOrdenCompra(
           accionLogDestinatario: 'ejecutar_compra',
           contextoLogEspejo: '[Procura · orden de compra]',
           skipLogEspejo: true,
+          ...opcionesMensajeOrdenCompraComprador(procura.id),
         });
         enviados += 1;
       } catch (e) {

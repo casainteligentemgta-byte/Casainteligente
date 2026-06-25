@@ -146,7 +146,8 @@ export function construirMensajePmDecisionProcura(
     cuerpoDetalleProcura(row, prioridad, stock) +
     `\n💰 <b>Disponibilidad presupuestaria:</b> ${escHtml(etiquetaViabilidad(row.viabilidad_presupuestaria))}\n` +
     `👤 <b>Informó:</b> ${escHtml(informante)} (${rolLabel})\n\n` +
-    '¿Aprueba la procura?'
+    '¿Aprueba la procura?\n' +
+    '<i>Tras aprobar: orden de compra al comprador y/o verificación de almacén según stock.</i>'
   );
 }
 

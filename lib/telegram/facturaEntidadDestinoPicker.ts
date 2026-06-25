@@ -16,6 +16,7 @@ import {
   resumenFacturaCompradorHtml,
   tecladoFacturaRegistradaOk,
 } from '@/lib/telegram/mensajesFactura';
+import { procuraIdDesdeMetadataFactura } from '@/lib/telegram/facturaCompradorManualTelegram';
 
 export const FLUJO_FACTURA_ENTIDAD = 'factura_compra_entidad';
 
@@ -259,6 +260,8 @@ async function confirmarGastoEntidadFacturaTelegram(
     resumenFacturaCompradorHtml(extracted);
 
   try {
+    const estadoPrev = await getTelegramEstado(supabase, chatId);
+    const procuraId = procuraIdDesdeMetadataFactura(estadoPrev);
     const r = await confirmarCompraDesdeCanal(supabase, {
       pendingId,
       proyectoId: '',
@@ -266,6 +269,7 @@ async function confirmarGastoEntidadFacturaTelegram(
       entidadId,
       imputacionEntidad: true,
       clasificacionGastoEntidad: clasificacion,
+      procuraId,
     });
     await setTelegramContexto(supabase, chatId, {
       contexto: 'menu',

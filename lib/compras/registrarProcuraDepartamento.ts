@@ -326,7 +326,9 @@ export async function resolverProcuraDepartamento(
   ticket?: string;
   estado?: string;
   error?: string;
+  compraEmitida?: boolean;
   compradoresNotificados?: number;
+  verificacionEnviada?: boolean;
 }> {
   if (params.accion === 'rechazar') {
     const motivo =
@@ -405,6 +407,8 @@ export async function resolverProcuraDepartamento(
     ok: true,
     ticket: abas.ticket,
     estado: abas.estado ?? 'aprobada',
-    compradoresNotificados: abas.compraEmitida ? 1 : 0,
+    compraEmitida: Boolean(abas.compraEmitida),
+    compradoresNotificados: abas.compradoresNotificados ?? 0,
+    verificacionEnviada: abas.verificacionEnviada,
   };
 }

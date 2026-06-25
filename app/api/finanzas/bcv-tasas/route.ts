@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
 export const runtime = 'nodejs';
@@ -21,10 +22,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ tasas: {} as Record<string, number> });
     }
 
+    const supabase = await createClient();
+
     const entries = await Promise.all(
       fechas.map(async (fecha) => {
         try {
-          const r = await obtenerTasaBcvVesPorUsd(fecha);
+          const r = await obtenerTasaBcvVesPorUsd(fecha, { supabase });
           return [fecha, r.tasa_bcv_ves_por_usd] as const;
         } catch {
           return [fecha, null] as const;

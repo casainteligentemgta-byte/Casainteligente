@@ -28,11 +28,50 @@ export type ResumenBalanceContabilidad = {
   balanceBs: number;
   ingresosPorEntidad: FilaIngresoEntidad[];
   egresosPorObra: FilaEgresoObra[];
+  /** Inyecciones de capital registradas en el periodo. */
+  totalInyeccionesUsd: number;
+  totalInyeccionesBs: number;
+  countInyecciones: number;
 };
 
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function esTablaInyeccionesFaltante(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(
+    error?.code === '42P01' || /ci_inyecciones_capital|does not exist|schema cache/i.test(error?.message ?? ''),
+  );
+}
+
+function fechaInyeccionEnRango(
+  row: { fecha_ingreso?: string | null; creado_al?: string | null },
+  desde: string,
+  hasta: string,
+): boolean {
+  const raw = row.fecha_ingreso?.trim() || String(row.creado_al ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
+  return raw >= desde && raw <= hasta;
+}
+
+function acumularIngresoEntidad(
+  map: Map<string, FilaIngresoEntidad>,
+  entidadId: string,
+  usd: number,
+  bs: number,
+): void {
+  const prev = map.get(entidadId) ?? {
+    entidad_id: entidadId,
+    entidad_nombre: entidadId === 'sin_entidad' ? 'Sin entidad' : '',
+    total_usd: 0,
+    total_bs: 0,
+    count: 0,
+  };
+  prev.total_usd += usd;
+  prev.total_bs += bs;
+  prev.count += 1;
+  map.set(entidadId, prev);
 }
 
 export function rangoMesActual(): { desde: string; hasta: string } {
@@ -107,29 +146,58 @@ export async function cargarResumenBalanceContabilidad(
     }))
     .sort((a, b) => b.total_usd - a.total_usd);
 
-  const { data: abonos, error: aErr } = await supabase
-    .from('ci_proyecto_abonos')
-    .select('id,proyecto_id,monto_usd,monto_recibido,moneda,fecha_abono')
-    .gte('fecha_abono', fechaDesde)
-    .lte('fecha_abono', fechaHasta)
-    .limit(5000);
+  const ingresosMap = new Map<string, FilaIngresoEntidad>();
 
-  if (aErr) throw aErr;
+  let totalInyeccionesUsd = 0;
+  let totalInyeccionesBs = 0;
+  let countInyecciones = 0;
 
-  const proyectoIdsAbonos = Array.from(
+  const [{ data: inyConFecha, error: iErr }, { data: inySinFecha, error: iErr2 }] =
+    await Promise.all([
+      supabase
+        .from('ci_inyecciones_capital')
+        .select('id,proyecto_id,monto_usd,monto_ves,monto_recibido,moneda_recibida,fecha_ingreso,creado_al')
+        .gte('fecha_ingreso', fechaDesde)
+        .lte('fecha_ingreso', fechaHasta)
+        .limit(5000),
+      supabase
+        .from('ci_inyecciones_capital')
+        .select('id,proyecto_id,monto_usd,monto_ves,monto_recibido,moneda_recibida,fecha_ingreso,creado_al')
+        .is('fecha_ingreso', null)
+        .gte('creado_al', `${fechaDesde}T00:00:00`)
+        .lte('creado_al', `${fechaHasta}T23:59:59.999Z`)
+        .limit(5000),
+    ]);
+
+  if ((iErr && !esTablaInyeccionesFaltante(iErr)) || (iErr2 && !esTablaInyeccionesFaltante(iErr2))) {
+    throw iErr ?? iErr2;
+  }
+
+  const inyecciones = [
+    ...(inyConFecha ?? []),
+    ...(inySinFecha ?? []).filter((row) =>
+      fechaInyeccionEnRango(
+        row as { fecha_ingreso?: string | null; creado_al?: string | null },
+        fechaDesde,
+        fechaHasta,
+      ),
+    ),
+  ];
+
+  const proyectoIdsUnion = Array.from(
     new Set(
-      (abonos ?? [])
-        .map((a) => String((a as { proyecto_id?: string }).proyecto_id ?? '').trim())
+      inyecciones
+        .map((row) => String((row as { proyecto_id?: string }).proyecto_id ?? '').trim())
         .filter(Boolean),
     ),
   );
 
   const proyectoEntidad = new Map<string, { nombre: string; entidad_id: string | null }>();
-  if (proyectoIdsAbonos.length) {
+  if (proyectoIdsUnion.length) {
     const { data: proyRows } = await supabase
       .from('ci_proyectos')
       .select('id,nombre,entidad_id')
-      .in('id', proyectoIdsAbonos.slice(0, 200));
+      .in('id', proyectoIdsUnion.slice(0, 200));
     for (const p of proyRows ?? []) {
       const id = String((p as { id: string }).id);
       proyectoEntidad.set(id, {
@@ -139,27 +207,21 @@ export async function cargarResumenBalanceContabilidad(
     }
   }
 
-  const ingresosMap = new Map<string, FilaIngresoEntidad>();
-  for (const row of abonos ?? []) {
+  for (const row of inyecciones) {
     const proyectoId = String((row as { proyecto_id?: string }).proyecto_id ?? '').trim();
     const meta = proyectoEntidad.get(proyectoId);
     const entidadId = meta?.entidad_id?.trim() || 'sin_entidad';
     const usd = num((row as { monto_usd?: number }).monto_usd);
-    const moneda = String((row as { moneda?: string }).moneda ?? 'USD').toUpperCase();
-    const recibido = num((row as { monto_recibido?: number }).monto_recibido);
-    const bs = moneda === 'VES' ? recibido : 0;
-
-    const prev = ingresosMap.get(entidadId) ?? {
-      entidad_id: entidadId,
-      entidad_nombre: entidadId === 'sin_entidad' ? 'Sin entidad' : '',
-      total_usd: 0,
-      total_bs: 0,
-      count: 0,
-    };
-    prev.total_usd += usd;
-    prev.total_bs += bs;
-    prev.count += 1;
-    ingresosMap.set(entidadId, prev);
+    let bs = num((row as { monto_ves?: number }).monto_ves);
+    if (bs <= 0) {
+      const moneda = String((row as { moneda_recibida?: string }).moneda_recibida ?? 'USD').toUpperCase();
+      const recibido = num((row as { monto_recibido?: number }).monto_recibido);
+      if (moneda === 'VES' && recibido > 0) bs = recibido;
+    }
+    acumularIngresoEntidad(ingresosMap, entidadId, usd, bs);
+    totalInyeccionesUsd += usd;
+    totalInyeccionesBs += bs;
+    countInyecciones += 1;
   }
 
   const entidadIds = Array.from(ingresosMap.keys()).filter((id) => id !== 'sin_entidad');
@@ -198,5 +260,8 @@ export async function cargarResumenBalanceContabilidad(
     balanceBs: totalIngresosBs - totalEgresosBs,
     ingresosPorEntidad,
     egresosPorObra,
+    totalInyeccionesUsd,
+    totalInyeccionesBs,
+    countInyecciones,
   };
 }
