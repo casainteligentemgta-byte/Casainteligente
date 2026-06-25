@@ -154,7 +154,7 @@ export async function POST(req: Request) {
   }
 }
 
-/** DELETE — Elimina procuras seleccionadas (sin compra ni recepción vinculada). */
+/** DELETE — Elimina procuras seleccionadas (desvincula factura contable sin borrarla). */
 export async function DELETE(req: Request) {
   try {
     const auth = await requirePermisoWeb('procura.aprobar');
@@ -169,7 +169,7 @@ export async function DELETE(req: Request) {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
-    const result = await eliminarProcurasPorIds(admin.client, ids);
+    const result = await eliminarProcurasPorIds(admin.client, ids, { desvincularVinculos: true });
     return NextResponse.json({ ok: true, ...result });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'No se pudieron eliminar las procuras';

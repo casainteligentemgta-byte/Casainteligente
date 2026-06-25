@@ -19,7 +19,7 @@ const SELECT_COMPRA = `
   ci_proyectos(nombre)
 `;
 
-/** GET — Facturas de contabilidad disponibles para vincular a una procura. */
+/** GET — Facturas de contabilidad para vincular procura(s) (incluye facturas ya parcialmente vinculadas en la misma obra). */
 export async function GET(req: Request) {
   const auth = await requirePermisoWeb('procura.ejecutar_compra');
   if (!auth.ok) {
@@ -40,13 +40,15 @@ export async function GET(req: Request) {
     .from('contabilidad_compras')
     .select(SELECT_COMPRA)
     .not('purchase_invoice_id', 'is', null)
-    .is('procura_id', null)
     .order('fecha', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit);
 
   if (soloObra && proyectoId) {
     query = query.eq('proyecto_id', proyectoId);
+  } else {
+    // Sin filtro de obra: solo facturas aún sin ninguna procura principal
+    query = query.is('procura_id', null);
   }
 
   if (q.length >= 2) {

@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { listarCapitulosMaestro } from '@/lib/compras/capitulosMaestro';
 import { puedeProcesarEstadoProcuraWeb } from '@/lib/auth/permisos';
+import { eliminarProcurasPorIds } from '@/lib/procuras/eliminarProcuras';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -180,4 +181,28 @@ export async function PATCH(req: Request) {
   }
 
   return NextResponse.json({ ok: true, procuras: data ?? [] });
+}
+
+/** DELETE — Elimina procuras (desvincula factura contable sin borrarla). */
+export async function DELETE(req: Request) {
+  const auth = await requirePermisoWeb('procura.aprobar');
+  if (!auth.ok) return auth.response;
+
+  try {
+    const body = (await req.json()) as { ids?: string[] };
+    const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).trim()).filter(Boolean) : [];
+    if (!ids.length) {
+      return NextResponse.json({ error: 'Indique ids.' }, { status: 400 });
+    }
+
+    const admin = supabaseAdminForRoute();
+    if (!admin.ok) return admin.response;
+
+    const result = await eliminarProcurasPorIds(admin.client, ids, { desvincularVinculos: true });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'No se pudieron eliminar las procuras';
+    const status = /Indique|No se pueden|no existen|material ya recibido/i.test(message) ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
 }

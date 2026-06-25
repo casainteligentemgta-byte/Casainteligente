@@ -123,13 +123,13 @@ export default function CompraProductosToggle({
     setLineas(lineasIniciales ?? []);
     setAbierto(false);
     setError(null);
-  }, [compraId, moneda]);
+  }, [compraId, moneda, lineasIniciales]);
 
   useEffect(() => {
     if (!abierto) setLineas(lineasIniciales ?? []);
   }, [lineasIniciales, abierto]);
 
-  const totalLineas = lineas.length || lineCountHint;
+  const totalLineas = lineas.length || lineCountHint || (lineasIniciales?.length ?? 0);
 
   const montosBoton = useMemo(
     () => ({
@@ -146,6 +146,12 @@ export default function CompraProductosToggle({
 
   const cargarLineas = useCallback(async () => {
     if (lineas.length > 0) return;
+    const iniciales = lineasIniciales ?? [];
+    if (iniciales.length > 0) {
+      setLineas(iniciales);
+      return;
+    }
+    if (compraId.startsWith('canal-')) return;
     setCargando(true);
     setError(null);
     try {
@@ -166,7 +172,7 @@ export default function CompraProductosToggle({
     } finally {
       setCargando(false);
     }
-  }, [compraId, lineas.length]);
+  }, [compraId, lineas.length, lineasIniciales]);
 
   async function handleToggle() {
     const next = !abierto;

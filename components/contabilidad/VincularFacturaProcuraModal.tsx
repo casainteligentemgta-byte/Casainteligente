@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, Link2, Loader2, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
@@ -28,7 +28,8 @@ type FacturaOpcion = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  procura: ProcuraVinculoFactura | null;
+  /** Una o varias procuras a vincular a la misma factura. */
+  procuras: ProcuraVinculoFactura[];
   onVinculada?: () => void;
 };
 
@@ -54,7 +55,7 @@ function fmtFecha(iso: string | null): string {
 export default function VincularFacturaProcuraModal({
   open,
   onClose,
-  procura,
+  procuras,
   onVinculada,
 }: Props) {
   const [busqueda, setBusqueda] = useState('');
@@ -64,14 +65,21 @@ export default function VincularFacturaProcuraModal({
   const [facturas, setFacturas] = useState<FacturaOpcion[]>([]);
   const [seleccionId, setSeleccionId] = useState<string | null>(null);
 
+  const lista = useMemo(() => procuras.filter((p) => p.id?.trim()), [procuras]);
+  const referencia = lista[0] ?? null;
+  const proyectoId = useMemo(() => {
+    const ids = new Set(lista.map((p) => p.proyecto_id?.trim()).filter(Boolean));
+    return ids.size === 1 ? Array.from(ids)[0]! : referencia?.proyecto_id?.trim() || null;
+  }, [lista, referencia]);
+
   const buscar = useCallback(async () => {
-    if (!procura) return;
+    if (!lista.length) return;
     setCargando(true);
     try {
       const params = new URLSearchParams();
       if (busqueda.trim()) params.set('q', busqueda.trim());
-      if (procura.proyecto_id?.trim()) params.set('proyecto_id', procura.proyecto_id.trim());
-      params.set('solo_obra', soloObra && procura.proyecto_id ? '1' : '0');
+      if (proyectoId) params.set('proyecto_id', proyectoId);
+      params.set('solo_obra', soloObra && proyectoId ? '1' : '0');
       params.set('limit', '30');
 
       const res = await fetch(apiUrl(`/api/compras/procuras/buscar-facturas?${params}`), {
@@ -89,41 +97,51 @@ export default function VincularFacturaProcuraModal({
     } finally {
       setCargando(false);
     }
-  }, [busqueda, procura, soloObra]);
+  }, [busqueda, lista.length, proyectoId, soloObra]);
 
   useEffect(() => {
-    if (!open || !procura) return;
+    if (!open || !lista.length) return;
     setBusqueda('');
     setSeleccionId(null);
-    setSoloObra(Boolean(procura.proyecto_id?.trim()));
-  }, [open, procura]);
+    setSoloObra(Boolean(proyectoId));
+  }, [open, lista, proyectoId]);
 
   useEffect(() => {
-    if (!open || !procura) return;
+    if (!open || !lista.length) return;
     const t = window.setTimeout(() => void buscar(), open ? 120 : 0);
     return () => window.clearTimeout(t);
-  }, [open, procura, buscar]);
+  }, [open, lista.length, buscar]);
 
   const vincular = async () => {
-    if (!procura || !seleccionId) return;
+    if (!lista.length || !seleccionId) return;
     setVinculando(true);
     try {
       const res = await fetch(apiUrl('/api/compras/procuras/vincular-factura'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          procura_id: procura.id,
+          procura_ids: lista.map((p) => p.id),
           contabilidad_compra_id: seleccionId,
         }),
       });
-      const json = (await res.json()) as { error?: string; ticket?: string; invoice_number?: string };
+      const json = (await res.json()) as {
+        error?: string;
+        tickets?: string[];
+        invoice_number?: string;
+        vinculadas?: Array<{ ticket: string }>;
+        errores?: string[];
+      };
       if (!res.ok) throw new Error(json.error ?? 'No se pudo vincular');
       const num = json.invoice_number?.trim();
+      const n = json.vinculadas?.length ?? json.tickets?.length ?? lista.length;
       toast.success(
         num
-          ? `Procura ${json.ticket ?? procura.ticket} vinculada a factura #${num}`
-          : `Procura ${json.ticket ?? procura.ticket} vinculada`,
+          ? `${n} procura(s) vinculada(s) a factura #${num}`
+          : `${n} procura(s) vinculada(s)`,
       );
+      if (json.errores?.length) {
+        toast.warning(json.errores.join(' · '));
+      }
       onVinculada?.();
       onClose();
     } catch (e) {
@@ -133,9 +151,10 @@ export default function VincularFacturaProcuraModal({
     }
   };
 
-  if (!open || !procura) return null;
+  if (!open || !lista.length) return null;
 
-  const obra = nombreObra(procura.ci_proyectos);
+  const obra = referencia ? nombreObra(referencia.ci_proyectos) : '';
+  const varias = lista.length > 1;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70">
@@ -149,11 +168,12 @@ export default function VincularFacturaProcuraModal({
             <Link2 className="h-5 w-5 text-[#FF9500] shrink-0" />
             <div className="min-w-0">
               <h2 id="vincular-factura-procura-title" className="text-base font-bold text-white">
-                Vincular factura
+                {varias ? 'Vincular factura (varias procuras)' : 'Vincular factura'}
               </h2>
               <p className="text-[11px] text-zinc-500 truncate">
-                {procura.ticket}
-                {obra ? ` · ${obra}` : ''}
+                {varias
+                  ? `${lista.length} procuras${obra ? ` · ${obra}` : ''}`
+                  : `${lista[0].ticket}${obra ? ` · ${obra}` : ''}`}
               </p>
             </div>
           </div>
@@ -166,11 +186,32 @@ export default function VincularFacturaProcuraModal({
           </button>
         </div>
 
-        <p className="text-xs text-zinc-500 mb-4 leading-relaxed shrink-0">
-          Material:{' '}
-          <span className="text-zinc-300">{nombreMaterialProcuraVisible(procura.material_txt)}</span>
-          . Elija la factura del cuadro de contabilidad que corresponde a esta procura.
-        </p>
+        <div className="text-xs text-zinc-500 mb-4 leading-relaxed shrink-0 space-y-2">
+          {varias ? (
+            <>
+              <p>
+                Una misma factura del proveedor puede cubrir varias solicitudes. Se vincularán:
+              </p>
+              <ul className="max-h-24 overflow-y-auto rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2 space-y-1">
+                {lista.map((p) => (
+                  <li key={p.id} className="text-zinc-300">
+                    <span className="font-mono text-[#FF9500]">{p.ticket}</span>
+                    {' · '}
+                    {nombreMaterialProcuraVisible(p.material_txt)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p>
+              Material:{' '}
+              <span className="text-zinc-300">
+                {nombreMaterialProcuraVisible(lista[0].material_txt)}
+              </span>
+              . Elija la factura del cuadro de contabilidad que corresponde.
+            </p>
+          )}
+        </div>
 
         <div className="space-y-3 shrink-0">
           <div className="relative">
@@ -183,7 +224,7 @@ export default function VincularFacturaProcuraModal({
               className={`${inputClass} pl-9`}
             />
           </div>
-          {procura.proyecto_id ? (
+          {proyectoId ? (
             <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
               <input
                 type="checkbox"
@@ -191,7 +232,7 @@ export default function VincularFacturaProcuraModal({
                 onChange={(e) => setSoloObra(e.target.checked)}
                 className="rounded border-white/20"
               />
-              Solo facturas de la misma obra
+              Solo facturas de la misma obra (incluye ya vinculadas parcialmente)
             </label>
           ) : null}
         </div>
@@ -262,7 +303,7 @@ export default function VincularFacturaProcuraModal({
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#FF9500] px-4 py-2.5 text-sm font-black uppercase text-black disabled:opacity-50"
           >
             {vinculando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-            Vincular
+            Vincular{varias ? ` (${lista.length})` : ''}
           </button>
         </div>
       </div>

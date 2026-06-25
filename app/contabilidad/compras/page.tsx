@@ -228,6 +228,18 @@ function lineCount(row: CompraRow): number {
     return 0;
 }
 
+function lineasParaProductosToggle(row: CompraRow) {
+    return lineasDetalle(row).map((l) => ({
+        descripcion: l.descripcion,
+        item_code: l.item_code,
+        subtotal: l.subtotal,
+        cantidad: l.cantidad,
+        unidad: null,
+        precio_unitario:
+            l.precio_unitario ?? (l.cantidad > 0 ? l.subtotal / l.cantidad : null),
+    }));
+}
+
 function puedeReubicarCompra(c: CompraRow): boolean {
     return (
         c.fuente_lista === 'app' ||
@@ -3328,59 +3340,36 @@ export default function ComprasPage() {
                                             })()}{' '}
                                             · {lineCount(c)} producto(s)
                                         </p>
-                                        {!c.pendiente_canal_id ? (
-                                            (() => {
-                                                const tasaProductos = tasaDisplayCompra(c);
-                                                const montosProductos = montosBimonetariosLista(
-                                                    c,
-                                                    tasaProductos,
-                                                );
-                                                return (
-                                                    <CompraProductosToggle
-                                                        compraId={c.id}
-                                                        tasaBcv={tasaProductos}
-                                                        tasaEsDelDia={
-                                                            !tasaBcvCompra(c) && !!tasaParaCompra(c)
-                                                        }
-                                                        montoBsFactura={montosProductos.bs}
-                                                        montoUsdFactura={montosProductos.usd}
-                                                        monedaOriginal={montosProductos.moneda}
-                                                        filaMoneda={{
-                                                            total_amount: Number(c.total_amount) || 0,
-                                                            total_amount_usd: c.total_amount_usd,
-                                                            tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
-                                                            moneda: c.moneda,
-                                                            moneda_original: c.moneda_original,
-                                                            monto_ves: c.monto_ves,
-                                                            monto_usd: c.monto_usd,
-                                                        }}
-                                                        lineCountHint={lineCount(c)}
-                                                        lineasIniciales={lineasDetalle(c).map((l) => ({
-                                                            descripcion: l.descripcion,
-                                                            item_code: l.item_code,
-                                                            subtotal: l.subtotal,
-                                                            cantidad: l.cantidad,
-                                                            unidad: null,
-                                                            precio_unitario:
-                                                                l.precio_unitario ??
-                                                                (l.cantidad > 0
-                                                                    ? l.subtotal / l.cantidad
-                                                                    : null),
-                                                        }))}
-                                                    />
-                                                );
-                                            })()
-                                        ) : lineCount(c) > 0 ? (
-                                            <p
-                                                style={{
-                                                    marginTop: '8px',
-                                                    fontSize: '11px',
-                                                    color: 'rgba(255,255,255,0.45)',
-                                                }}
-                                            >
-                                                {lineCount(c)} línea(s) extraída(s) por IA
-                                            </p>
-                                        ) : null}
+                                        {(() => {
+                                            const tasaProductos = tasaDisplayCompra(c);
+                                            const montosProductos = montosBimonetariosLista(
+                                                c,
+                                                tasaProductos,
+                                            );
+                                            return (
+                                                <CompraProductosToggle
+                                                    compraId={c.id}
+                                                    tasaBcv={tasaProductos}
+                                                    tasaEsDelDia={
+                                                        !tasaBcvCompra(c) && !!tasaParaCompra(c)
+                                                    }
+                                                    montoBsFactura={montosProductos.bs}
+                                                    montoUsdFactura={montosProductos.usd}
+                                                    monedaOriginal={montosProductos.moneda}
+                                                    filaMoneda={{
+                                                        total_amount: Number(c.total_amount) || 0,
+                                                        total_amount_usd: c.total_amount_usd,
+                                                        tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
+                                                        moneda: c.moneda,
+                                                        moneda_original: c.moneda_original,
+                                                        monto_ves: c.monto_ves,
+                                                        monto_usd: c.monto_usd,
+                                                    }}
+                                                    lineCountHint={lineCount(c)}
+                                                    lineasIniciales={lineasParaProductosToggle(c)}
+                                                />
+                                            );
+                                        })()}
                                         {compraPuedeVerImagen(c) ? (
                                             <CompraFacturaImagen
                                                 compraId={c.id}
