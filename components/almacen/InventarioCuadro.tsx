@@ -95,6 +95,7 @@ import {
 import { obtenerCatalogoEntidad } from '@/lib/almacen/catalogoEntidad';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 import CeldaStockEditable from '@/components/almacen/CeldaStockEditable';
+import { useAlmacenFiltros } from '@/components/almacen/AlmacenFiltrosProvider';
 import { resolverUbicacionAjusteStock } from '@/lib/almacen/resolverUbicacionAjusteStock';
 import {
     cargarReordenPorObra,
@@ -174,6 +175,14 @@ function materialPasaFiltroEntidad(
         stockDepositIds?: string[];
     },
 ): boolean {
+    /** Con filtro de almacén/obra: si hay stock físico, mostrar aunque el catálogo no coincida. */
+    if (
+        opts.stockEnFiltro > 0 &&
+        (opts.filtroStockPorUbicacion || opts.filtroSoloEntidad)
+    ) {
+        return true;
+    }
+
     if (!opts.filterEntidadId) {
         if (opts.filtroStockPorUbicacion && opts.stockEnFiltro > 0 && opts.filterProyectoId) {
             return true;
@@ -407,6 +416,31 @@ function resolverDepositoValorItem(
 export default function InventarioCuadro() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const {
+        entidades,
+        proyectos,
+        depositsById,
+        proyectosFiltro,
+        depositsFiltrados,
+        filterEntidadId,
+        filterProyectoId,
+        filterDepositId,
+        setFilterEntidadId,
+        setFilterProyectoId,
+        setFilterDepositId,
+        nombreEntidadFiltro,
+        nombreProyectoFiltro,
+        ubicacionIdsFiltro,
+        ubicacionesInventario,
+        filtroSinUbicaciones,
+        depositoSinInterseccion,
+        cargandoUbicaciones: cargandoStockUbicacion,
+        filtroStockPorUbicacion,
+        filtroSoloEntidad,
+        filtroStockEntidadActivo,
+        proyectoIdsEntidadArr,
+        proyectoIdsEntidad,
+    } = useAlmacenFiltros();
     const shareParamsApplied = useRef(false);
     const filtrosPersistenciaLista = useRef(false);
     const [hydrated, setHydrated] = useState(false);
@@ -428,16 +462,10 @@ export default function InventarioCuadro() {
     const [catalogImagenByName, setCatalogImagenByName] = useState<Record<string, string>>({});
     /** `products.imagen` por `products.id` cuando el ítem tiene `product_id`. */
     const [catalogImagenByProductId, setCatalogImagenByProductId] = useState<Record<number, string>>({});
-    const [depositsById, setDepositsById] = useState<Map<string, DepositRow>>(new Map());
     const [furnitureById, setFurnitureById] = useState<Map<string, FurnitureRow>>(new Map());
     const [mastersWarning, setMastersWarning] = useState<string | null>(null);
-    const [entidades, setEntidades] = useState<EntidadRow[]>([]);
-    const [proyectos, setProyectos] = useState<ProyectoRow[]>([]);
     const [partidasFiltro, setPartidasFiltro] = useState<PartidaRow[]>([]);
-    const [filterEntidadId, setFilterEntidadId] = useState('');
-    const [filterProyectoId, setFilterProyectoId] = useState('');
     const [filterPartidaId, setFilterPartidaId] = useState('');
-    const [filterDepositId, setFilterDepositId] = useState('');
     const [sinClasificacionObra, setSinClasificacionObra] = useState(false);
     const [sinAlmacenAsignado, setSinAlmacenAsignado] = useState(false);
     /** Stock en `inventario_stock` (compras registradas por ubicación, migr. 180). */
@@ -445,11 +473,8 @@ export default function InventarioCuadro() {
         Map<string, StockEnUbicacionResumen>
     >(new Map());
     const [itemsDesdeStock, setItemsDesdeStock] = useState<InventoryItem[]>([]);
-    const [cargandoStockUbicacion, setCargandoStockUbicacion] = useState(false);
-    const [ubicacionIdsFiltro, setUbicacionIdsFiltro] = useState<string[]>([]);
-    const [ubicacionesInventario, setUbicacionesInventario] = useState<UbicacionInventario[]>([]);
-    const [depositoSinInterseccion, setDepositoSinInterseccion] = useState(false);
-    const [filtroSinUbicaciones, setFiltroSinUbicaciones] = useState(false);
+    const [cargandoStockUbicacionLocal, setCargandoStockUbicacionLocal] = useState(false);
+    const cargandoStockFiltro = cargandoStockUbicacion || cargandoStockUbicacionLocal;
     const [savingStockId, setSavingStockId] = useState<string | null>(null);
     /** Stock agregado de todas las ubicaciones (KPIs sin filtro de almacén). */
     const [stockGlobal, setStockGlobal] = useState<Map<string, StockEnUbicacionResumen>>(new Map());
@@ -484,10 +509,7 @@ export default function InventarioCuadro() {
         if (parsed.cat && (CATEGORIAS_FILTRO as readonly string[]).includes(parsed.cat)) {
             setActiveCategory(parsed.cat);
         }
-        if (parsed.entidad) setFilterEntidadId(parsed.entidad);
-        if (parsed.proyecto) setFilterProyectoId(parsed.proyecto);
         if (parsed.partida) setFilterPartidaId(parsed.partida);
-        if (parsed.deposito) setFilterDepositId(parsed.deposito);
         if (parsed.sinObra) setSinClasificacionObra(true);
         if (parsed.sinAlmacen) setSinAlmacenAsignado(true);
         if (
@@ -536,18 +558,6 @@ export default function InventarioCuadro() {
     }, []);
 
     useEffect(() => {
-        void (async () => {
-            try {
-                const [e, p] = await Promise.all([loadEntidades(supabase), loadProyectos(supabase)]);
-                setEntidades(e);
-                setProyectos(p);
-            } catch {
-                /* filtros opcionales */
-            }
-        })();
-    }, [supabase]);
-
-    useEffect(() => {
         if (!hydrated || shareParamsApplied.current) return;
         shareParamsApplied.current = true;
 
@@ -560,19 +570,9 @@ export default function InventarioCuadro() {
     }, [hydrated, searchParams, aplicarFiltrosInventario]);
 
     useEffect(() => {
-        let cancelled = false;
-        void (async () => {
-            try {
-                const ubicaciones = await listarUbicacionesParaFiltroInventario(supabase);
-                if (!cancelled) setUbicacionesInventario(ubicaciones);
-            } catch (e) {
-                console.warn('[inventario] ubicaciones maestro:', e);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [supabase]);
+        if (depositsById.size === 0) return;
+        setMastersWarning(null);
+    }, [depositsById.size]);
 
     useEffect(() => {
         let cancelled = false;
@@ -624,45 +624,10 @@ export default function InventarioCuadro() {
         void loadPartidasPorProyecto(supabase, filterProyectoId).then(setPartidasFiltro).catch(() => setPartidasFiltro([]));
     }, [filterProyectoId, supabase]);
 
-    const nombreEntidadFiltro = useMemo(
-        () => entidades.find((e) => e.id === filterEntidadId)?.nombre ?? '',
-        [entidades, filterEntidadId],
-    );
-
-    const proyectosFiltro = useMemo(() => {
-        const base = filtrarObrasConstruccion(
-            filtrarProyectosPorEntidad(proyectos, filterEntidadId || null),
-        );
-        if (!filterProyectoId) return base;
-        if (base.some((p) => p.id === filterProyectoId)) return base;
-        const extra = proyectos.find((p) => p.id === filterProyectoId);
-        return extra ? [...base, extra] : base;
-    }, [proyectos, filterEntidadId, filterProyectoId]);
-
     const proyectosById = useMemo(
         () => new Map(proyectos.map((p) => [p.id, p])),
         [proyectos],
     );
-
-    const proyectoIdsEntidad = useMemo(
-        () => (filterEntidadId ? proyectoIdsDeEntidad(proyectos, filterEntidadId) : new Set<string>()),
-        [filterEntidadId, proyectos],
-    );
-
-    const proyectoIdsEntidadArr = useMemo(
-        () =>
-            filterEntidadId && !filterProyectoId && proyectoIdsEntidad.size > 0
-                ? Array.from(proyectoIdsEntidad)
-                : undefined,
-        [filterEntidadId, filterProyectoId, proyectoIdsEntidad],
-    );
-
-    /** Stock por ubicación física con obra, entidad o depósito. */
-    const filtroStockPorUbicacion = Boolean(filterProyectoId || filterDepositId);
-    const filtroSoloEntidad = Boolean(
-        filterEntidadId && !filterProyectoId && !filterDepositId,
-    );
-    const filtroStockEntidadActivo = filtroStockPorUbicacion || filtroSoloEntidad;
 
     useEffect(() => {
         if (!filterEntidadId) {
@@ -688,9 +653,15 @@ export default function InventarioCuadro() {
         );
     }, [depositsById]);
 
-    const nombreProyectoFiltro = useMemo(
-        () => proyectos.find((p) => p.id === filterProyectoId)?.nombre ?? '',
-        [proyectos, filterProyectoId],
+    const depositIdsScope = useMemo(
+        () =>
+            listarDepositIdsParaFiltroInventario(ubicacionesInventario, {
+                entidadId: filterEntidadId || undefined,
+                proyectoId: filterProyectoId || undefined,
+                proyectoNombre: nombreProyectoFiltro || undefined,
+                proyectos,
+            }),
+        [ubicacionesInventario, filterEntidadId, filterProyectoId, nombreProyectoFiltro, proyectos],
     );
 
     const hrefDespacho = useMemo(() => {
@@ -711,40 +682,6 @@ export default function InventarioCuadro() {
         const qs = q.toString();
         return qs ? `/almacen/despacho?${qs}` : '/almacen/despacho';
     }, [filterProyectoId, filterDepositId, ubicacionesInventario]);
-
-    const depositIdsScope = useMemo(
-        () =>
-            listarDepositIdsParaFiltroInventario(ubicacionesInventario, {
-                entidadId: filterEntidadId || undefined,
-                proyectoId: filterProyectoId || undefined,
-                proyectoNombre: nombreProyectoFiltro || undefined,
-                proyectos,
-            }),
-        [ubicacionesInventario, filterEntidadId, filterProyectoId, nombreProyectoFiltro, proyectos],
-    );
-
-    /** Almacenes acotados a la entidad/obra seleccionada (si hay mapeo en inv_ubicaciones). */
-    const depositsFiltrados = useMemo(() => {
-        if (!filterEntidadId && !filterProyectoId) return depositsLista;
-        if (!depositIdsScope.length) return depositsLista;
-        const scope = new Set(depositIdsScope);
-        const scoped = depositsLista.filter((d) => scope.has(d.id));
-        return scoped.length ? scoped : depositsLista;
-    }, [depositsLista, filterEntidadId, filterProyectoId, depositIdsScope]);
-
-    useEffect(() => {
-        if (!filterDepositId) return;
-        if (!depositsFiltrados.some((d) => d.id === filterDepositId)) {
-            if (depositsLista.some((d) => d.id === filterDepositId)) return;
-            setFilterDepositId('');
-        }
-    }, [filterDepositId, depositsFiltrados, depositsLista]);
-
-    useEffect(() => {
-        if (!filterProyectoId || filterEntidadId) return;
-        const pr = proyectos.find((p) => p.id === filterProyectoId);
-        if (pr?.entidad_id) setFilterEntidadId(pr.entidad_id);
-    }, [filterProyectoId, filterEntidadId, proyectos]);
 
     useEffect(() => {
         if (filtroStockPorUbicacion && sinClasificacionObra) {
@@ -817,83 +754,55 @@ export default function InventarioCuadro() {
         for (const it of itemsDesdeStock) {
             if (!byId.has(it.id)) byId.set(it.id, it);
         }
-        return Array.from(byId.values());
-    }, [items, itemsDesdeStock]);
+
+        const desdeMapaStock = (map: Map<string, StockEnUbicacionResumen>): InventoryItem[] => {
+            const conStock: InventoryItem[] = [];
+            for (const [materialId, row] of Array.from(map.entries())) {
+                if (row.cantidad_disponible <= 0) continue;
+                const item = byId.get(materialId);
+                if (item) conStock.push(item);
+            }
+            return conStock.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        };
+
+        /** Almacén / obra / entidad seleccionados → inventario_stock en esas ubicaciones. */
+        if (filtroStockEntidadActivo) {
+            if (cargandoStockFiltro) return [];
+            return desdeMapaStock(stockPorUbicacion);
+        }
+
+        /** Sin filtro de ubicación: solo materiales con stock físico (suma global). */
+        if (!stockGlobalCargado) return [];
+        return desdeMapaStock(stockGlobal);
+    }, [
+        items,
+        itemsDesdeStock,
+        filtroStockEntidadActivo,
+        stockPorUbicacion,
+        stockGlobal,
+        stockGlobalCargado,
+        cargandoStockFiltro,
+    ]);
 
     useEffect(() => {
-        if (
-            !filterProyectoId &&
-            !filterDepositId &&
-            !filterEntidadId
-        ) {
+        if (cargandoStockUbicacion) return;
+        if (!filtroStockEntidadActivo) {
             setStockPorUbicacion(new Map());
-            setUbicacionIdsFiltro([]);
-            setFiltroSinUbicaciones(false);
-            setDepositoSinInterseccion(false);
+            setItemsDesdeStock([]);
+            return;
+        }
+        if (ubicacionIdsFiltro.length === 0) {
+            setStockPorUbicacion(new Map());
+            setItemsDesdeStock([]);
             return;
         }
 
+        const ids = ubicacionIdsFiltro;
         let cancelled = false;
         void (async () => {
-            setCargandoStockUbicacion(true);
+            setCargandoStockUbicacionLocal(true);
             try {
-                const ubicaciones = ubicacionesInventario.length
-                    ? ubicacionesInventario
-                    : await listarUbicacionesParaFiltroInventario(supabase);
-                if (!ubicacionesInventario.length && ubicaciones.length && !cancelled) {
-                    setUbicacionesInventario(ubicaciones);
-                }
-
-                let nombreObraFiltro = nombreProyectoFiltro;
-                if (filterProyectoId && !nombreObraFiltro.trim()) {
-                    const { data: prRow } = await supabase
-                        .from('ci_proyectos')
-                        .select('nombre')
-                        .eq('id', filterProyectoId)
-                        .maybeSingle();
-                    nombreObraFiltro = String(prRow?.nombre ?? '').trim();
-                }
-
-                let ids: string[];
-                let depositoFallback = false;
-                if (filterProyectoId) {
-                    const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
-                        proyectoId: filterProyectoId,
-                        proyectoNombre: nombreObraFiltro || undefined,
-                        depositId: filterDepositId || undefined,
-                    });
-                    ids = res.ubicacionIds;
-                    depositoFallback = res.depositoSinInterseccion;
-                } else if (filterDepositId) {
-                    const res = resolverUbicacionIdsFiltroConMeta(ubicaciones, {
-                        depositId: filterDepositId,
-                        proyectoId: filterProyectoId || undefined,
-                        proyectoNombre: nombreObraFiltro || undefined,
-                    });
-                    ids = res.ubicacionIds;
-                    depositoFallback = res.depositoSinInterseccion;
-                } else if (filterEntidadId) {
-                    const res = resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, {
-                        entidadId: filterEntidadId,
-                        proyectos,
-                    });
-                    ids = res.ubicacionIds;
-                    depositoFallback = res.depositoSinInterseccion;
-                } else {
-                    return;
-                }
-
-                if (cancelled) return;
-                setUbicacionIdsFiltro(ids);
-                setFiltroSinUbicaciones(ids.length === 0);
-                setDepositoSinInterseccion(depositoFallback);
-
-                if (ids.length === 0) {
-                    setStockPorUbicacion(new Map());
-                    setItemsDesdeStock([]);
-                    return;
-                }
-
+                const ubicaciones = ubicacionesInventario;
                 const ubicacionesFiltro = ubicaciones.filter((u) => ids.includes(u.id));
                 const nombresUbicacionFiltro = ubicacionesFiltro
                     .map((u) => u.nombre)
@@ -901,7 +810,7 @@ export default function InventarioCuadro() {
 
                 let stockMap = new Map<string, StockEnUbicacionResumen>();
                 const etiquetaUb =
-                    nombresUbicacionFiltro[0] ?? nombreObraFiltro ?? 'Obra';
+                    nombresUbicacionFiltro[0] ?? nombreProyectoFiltro ?? 'Obra';
 
                 if (filterProyectoId) {
                     stockMap = await cargarStockPorUbicaciones(supabase, ids);
@@ -909,7 +818,7 @@ export default function InventarioCuadro() {
                         const agg = await getStockAgregadoPorMaterialObra(
                             supabase,
                             filterProyectoId,
-                            nombreObraFiltro || undefined,
+                            nombreProyectoFiltro || undefined,
                         );
                         agg.forEach((qty, materialId) => {
                             if (qty <= 0) return;
@@ -919,7 +828,7 @@ export default function InventarioCuadro() {
                                     cantidad: qty,
                                     ubicacionNombre: etiquetaUb,
                                     proyectoId: filterProyectoId,
-                                    proyectoNombre: nombreObraFiltro || undefined,
+                                    proyectoNombre: nombreProyectoFiltro || undefined,
                                 });
                             } else if (prev.cantidad_disponible < qty) {
                                 stockMap.set(materialId, {
@@ -963,7 +872,7 @@ export default function InventarioCuadro() {
                 if (filterProyectoId) {
                     enriquecerMapaStockConProyectoFiltro(stockMap, {
                         proyectoId: filterProyectoId,
-                        proyectoNombre: nombreObraFiltro || undefined,
+                        proyectoNombre: nombreProyectoFiltro || undefined,
                     });
                 }
                 if (cancelled) return;
@@ -1011,11 +920,9 @@ export default function InventarioCuadro() {
                 if (!cancelled) {
                     setStockPorUbicacion(new Map());
                     setItemsDesdeStock([]);
-                    setFiltroSinUbicaciones(false);
-                    setDepositoSinInterseccion(false);
                 }
             } finally {
-                if (!cancelled) setCargandoStockUbicacion(false);
+                if (!cancelled) setCargandoStockUbicacionLocal(false);
             }
         })();
 
@@ -1023,10 +930,12 @@ export default function InventarioCuadro() {
             cancelled = true;
         };
     }, [
+        cargandoStockUbicacion,
+        filtroStockEntidadActivo,
+        ubicacionIdsFiltro,
         filterProyectoId,
         filterDepositId,
         filterEntidadId,
-        proyectosById,
         supabase,
         items,
         proyectos,
@@ -1074,12 +983,6 @@ export default function InventarioCuadro() {
             const inventoryItems = (invRes.data ?? []) as InventoryItem[];
             setItems(inventoryItems);
 
-            const depMap = new Map<string, DepositRow>();
-            for (const d of (depRes.data ?? []) as DepositRow[]) {
-                if (d.id) depMap.set(d.id, d);
-            }
-            setDepositsById(depMap);
-
             const furMap = new Map<string, FurnitureRow>();
             for (const f of (furRes.data ?? []) as FurnitureRow[]) {
                 if (f.id) furMap.set(f.id, f);
@@ -1090,7 +993,7 @@ export default function InventarioCuadro() {
                 setMastersWarning(
                     `No se cargaron depósitos (ubicación): ${depRes.error.message}. Ejecute migración 014 en Supabase.`
                 );
-            } else if (depMap.size === 0) {
+            } else if (depositsById.size === 0 && (depRes.data ?? []).length === 0) {
                 setMastersWarning(
                     'No hay depósitos en inventory_deposits. Cree al menos uno en Almacén → Maestros.'
                 );
@@ -1262,6 +1165,14 @@ export default function InventarioCuadro() {
         const term = searchTerm.trim().toLowerCase();
 
         return itemsCatalogo.filter((item) => {
+            if (
+                filtroStockEntidadActivo &&
+                cargandoStockFiltro &&
+                kpiVista !== 'cuarentena'
+            ) {
+                return false;
+            }
+
             const dep = item.deposit_id ? depositsById.get(item.deposit_id) : undefined;
             const depLabel = dep
                 ? `${dep.name} ${dep.locality ?? ''}`.toLowerCase()
@@ -1284,29 +1195,6 @@ export default function InventarioCuadro() {
 
             if (!textMatch) return false;
             if (!categoriaCoincideFiltro(item, activeCategory)) return false;
-            const catalogEntidad =
-                filterEntidadId &&
-                materialCoincideCatalogoEntidad(item, {
-                    filterEntidadId,
-                    filterEntidadNombre: nombreEntidadFiltro,
-                    proyectoIdsEntidad,
-                    sapPrefijoEntidad: sapPrefijoEntidadFiltro,
-                });
-            const depositoEnAlcance = materialAsignadoDepositoEnAlcance(item, stockUb, {
-                filterDepositId: filterDepositId || undefined,
-                depositIdsScope:
-                    filterProyectoId && !filterDepositId ? depositIdsScope : undefined,
-            });
-            if (
-                filtroStockEntidadActivo &&
-                cargandoStockUbicacion &&
-                kpiVista !== 'cuarentena' &&
-                filterDepositId
-            ) {
-                if (!(filtroSoloEntidad && catalogEntidad) && !depositoEnAlcance) {
-                    return false;
-                }
-            }
             if (
                 !materialPasaFiltroEntidad(item, {
                     filterEntidadId,
@@ -1332,7 +1220,7 @@ export default function InventarioCuadro() {
                     filterDepositId,
                     filtroStockPorUbicacion,
                     filtroSinUbicaciones,
-                    cargandoStockUbicacion,
+                    cargandoStockUbicacion: cargandoStockFiltro,
                 })
             ) {
                 return false;
@@ -1352,17 +1240,9 @@ export default function InventarioCuadro() {
                 if (!materialIdsCuarentenaObra.has(item.id)) return false;
             } else {
                 const stockDatosListos = filtroStockEntidadActivo
-                    ? !cargandoStockUbicacion
+                    ? !cargandoStockFiltro
                     : stockGlobalCargado;
-                if (stockDatosListos && qty <= 0) {
-                    if (filtroSoloEntidad && catalogEntidad) {
-                        /* Catálogo de la entidad aunque aún no tenga stock */
-                    } else if (depositoEnAlcance) {
-                        /* Asignado a almacén del filtro o de la obra */
-                    } else {
-                        return false;
-                    }
-                }
+                if (stockDatosListos && qty <= 0) return false;
             }
 
             return true;
@@ -1387,8 +1267,7 @@ export default function InventarioCuadro() {
         filtroSinUbicaciones,
         stockPorUbicacion,
         stockGlobalCargado,
-        cargandoStockUbicacion,
-        cantidadStockReal,
+        cargandoStockFiltro,
         reorderPointItem,
         kpiVista,
         cuarentenaFiltrada,
@@ -1880,8 +1759,9 @@ export default function InventarioCuadro() {
     const mensajeVacio = useMemo(
         () =>
             mensajeVacioCuadroAlmacen({
-                cargandoStockUbicacion,
+                cargandoStockUbicacion: cargandoStockFiltro,
                 filtroStockPorUbicacion,
+                filtroSoloEntidad,
                 filtroSinUbicaciones,
                 filterDepositId: Boolean(filterDepositId),
                 filterProyectoId: Boolean(filterProyectoId),
@@ -1890,8 +1770,9 @@ export default function InventarioCuadro() {
                 kpiCuarentena: kpiVista === 'cuarentena',
             }),
         [
-            cargandoStockUbicacion,
+            cargandoStockFiltro,
             filtroStockPorUbicacion,
+            filtroSoloEntidad,
             filtroSinUbicaciones,
             filterDepositId,
             filterProyectoId,
@@ -2074,7 +1955,9 @@ export default function InventarioCuadro() {
             <div className="mb-4">
                 <h1 className="text-2xl lg:text-3xl font-black tracking-tighter mb-1">STOCK</h1>
                 <p className="text-[11px] text-zinc-500 mb-2 max-w-xl">
-                    Cantidades por obra y depósito · ajuste inline en la tabla
+                    {filtroStockEntidadActivo
+                        ? 'Stock físico del almacén seleccionado (inventario_stock) · ajuste inline en la tabla'
+                        : 'Stock físico en todas las ubicaciones · seleccione entidad, obra o almacén arriba para acotar'}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                     {NAV_ALMACEN.map((nav) => {
@@ -2347,7 +2230,7 @@ export default function InventarioCuadro() {
                             <h2 className="text-2xl font-black tracking-tight">{statsFiltrados.totalItems}</h2>
                             {hayFiltrosActivos && statsFiltrados.totalItems !== stats.totalItems ? (
                                 <p className="text-[9px] text-zinc-600 font-bold mt-0.5">
-                                    de {stats.totalItems} en catálogo
+                                    de {itemsCatalogo.length} con stock físico
                                 </p>
                             ) : (
                                 <p className="text-[9px] text-zinc-600 font-bold mt-1">Clic para ver por categoría</p>
@@ -2416,6 +2299,11 @@ export default function InventarioCuadro() {
                         )}
                         <span className="text-[10px] font-bold text-zinc-500 whitespace-nowrap">
                             {filteredItems.length} / {itemsCatalogo.length}
+                            {filtroStockEntidadActivo ? (
+                                <span className="text-emerald-500/90"> · stock físico</span>
+                            ) : (
+                                <span className="text-zinc-600"> · con existencia</span>
+                            )}
                         </span>
                         {hayFiltrosActivos ? (
                             <button
@@ -2514,87 +2402,7 @@ export default function InventarioCuadro() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <label className="block">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-violet-400 mb-1.5 block">
-                                Entidad
-                            </span>
-                            <select
-                                value={filterEntidadId}
-                                onChange={(e) => {
-                                    const id = e.target.value;
-                                    setFilterEntidadId(id);
-                                    setFilterPartidaId('');
-                                    if (id) setSinClasificacionObra(false);
-                                    if (id && filterProyectoId) {
-                                        const pr = proyectos.find((p) => p.id === filterProyectoId);
-                                        if (pr?.entidad_id !== id) setFilterProyectoId('');
-                                    }
-                                    if (!id) setFilterProyectoId('');
-                                }}
-                                className="w-full rounded-xl border border-violet-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
-                            >
-                                <option value="">Todas las entidades</option>
-                                {entidades.map((en) => (
-                                    <option key={en.id} value={en.id}>{en.nombre}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="block">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 mb-1.5 block">
-                                Obra (construcción)
-                            </span>
-                            <select
-                                value={filterProyectoId}
-                                onChange={(e) => {
-                                    const id = e.target.value;
-                                    setFilterProyectoId(id);
-                                    setFilterPartidaId('');
-                                    if (id) {
-                                        const pr = proyectos.find((p) => p.id === id);
-                                        if (pr?.entidad_id && !filterEntidadId) {
-                                            setFilterEntidadId(pr.entidad_id);
-                                        }
-                                        setSinClasificacionObra(false);
-                                    }
-                                }}
-                                className="w-full rounded-xl border border-sky-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
-                            >
-                                <option value="">
-                                    {filterEntidadId
-                                        ? 'Todas las obras de la entidad'
-                                        : 'Todas las obras'}
-                                </option>
-                                {proyectosFiltro.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.nombre}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="block">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1.5 block">
-                                Almacén / depósito
-                            </span>
-                            <select
-                                value={filterDepositId}
-                                onChange={(e) => {
-                                    setFilterDepositId(e.target.value);
-                                    if (e.target.value) setSinAlmacenAsignado(false);
-                                }}
-                                disabled={sinAlmacenAsignado}
-                                className="w-full rounded-xl border border-emerald-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-                            >
-                                <option value="">
-                                    {filterEntidadId || filterProyectoId
-                                        ? 'Todos los almacenes de la selección'
-                                        : 'Todos los almacenes'}
-                                </option>
-                                {depositsFiltrados.map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                        {d.locality ? `${d.name} (${d.locality})` : d.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="block">
+                        <label className="block sm:col-span-2 lg:col-span-1">
                             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5 block">
                                 Partida Lulo
                             </span>
@@ -2614,17 +2422,7 @@ export default function InventarioCuadro() {
 
                     {depositoSinInterseccion && filterDepositId ? (
                         <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-200">
-                            El almacén elegido no tiene ubicaciones vinculadas
-                            {filterProyectoId ? ' a la obra seleccionada' : filterEntidadId ? ' a la entidad seleccionada' : ''}.
-                            Revise maestros (inv_ubicaciones) o elija otro almacén.
-                            {' '}
-                            <button
-                                type="button"
-                                onClick={() => setFilterDepositId('')}
-                                className="underline hover:text-amber-100"
-                            >
-                                Quitar filtro de almacén
-                            </button>
+                            El almacén elegido (barra superior) no coincide con la obra/entidad. Revise maestros o quite el filtro de almacén.
                         </div>
                     ) : null}
 
@@ -2818,10 +2616,14 @@ export default function InventarioCuadro() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/50">
-                        {loading && items.length === 0 ? (
+                        {loading || cargandoStockFiltro ? (
                             [1, 2, 3].map(i => (
                                 <tr key={i} className="animate-pulse">
-                                    <td colSpan={7} className="p-6 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">Loading material data...</td>
+                                    <td colSpan={7} className="p-6 text-center text-zinc-500 font-bold uppercase tracking-widest text-xs">
+                                        {cargandoStockFiltro
+                                            ? 'Cargando stock del almacén…'
+                                            : 'Cargando materiales…'}
+                                    </td>
                                 </tr>
                             ))
                         ) : filteredItems.length === 0 ? (

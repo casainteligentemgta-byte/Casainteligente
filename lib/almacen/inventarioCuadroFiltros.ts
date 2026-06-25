@@ -46,10 +46,19 @@ export function mensajeVacioCuadroAlmacen(opts: {
   filterDepositId: boolean;
   filterProyectoId: boolean;
   filterEntidadId: boolean;
+  filtroSoloEntidad?: boolean;
   filtroGastoEntidad?: boolean;
   hayFiltrosActivos: boolean;
   kpiCuarentena?: boolean;
 }): MensajeVacioCuadroAlmacen | null {
+  if (!opts.filterEntidadId && !opts.filterProyectoId && !opts.filterDepositId && !opts.hayFiltrosActivos) {
+    return {
+      titulo: 'Seleccione un almacén',
+      subtitulo:
+        'Use la barra superior (entidad · obra · almacén) para ver el stock físico de ese depósito.',
+    };
+  }
+
   if (opts.cargandoStockUbicacion) return null;
 
   if (opts.filtroSinUbicaciones && opts.filtroStockPorUbicacion) {
@@ -75,7 +84,15 @@ export function mensajeVacioCuadroAlmacen(opts: {
     };
   }
 
-  if (opts.hayFiltrosActivos && !opts.filtroStockPorUbicacion && opts.filterEntidadId) {
+  if (opts.filtroSoloEntidad && !opts.filtroSinUbicaciones) {
+    return {
+      titulo: 'Sin stock en esta entidad',
+      subtitulo:
+        'No hay materiales con cantidad en los almacenes de la entidad. Elija una obra o almacén concreto.',
+    };
+  }
+
+  if (opts.hayFiltrosActivos && !opts.filtroStockPorUbicacion && !opts.filtroSoloEntidad && opts.filterEntidadId) {
     return {
       titulo: 'Sin materiales para esta entidad',
       subtitulo:

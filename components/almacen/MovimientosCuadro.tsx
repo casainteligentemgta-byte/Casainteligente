@@ -39,15 +39,18 @@ import type {
   FilaMovimientoInventario,
   VistaMovimientoInventario,
 } from '@/lib/almacen/listarMovimientosInventario';
+import { useAlmacenFiltrosOptional } from '@/components/almacen/AlmacenFiltrosProvider';
+
+const PAGE_SIZE = 50;
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
 
-const VISTAS: { id: VistaMovimientoInventario; label: string; icon: typeof Package }[] = [
+const VISTAS: { id: VistaMovimientoInventario; label: string; icon: typeof Box }[] = [
   { id: 'ingresado', label: 'Ingresos', icon: ArrowDownRight },
-  { id: 'almacenado', label: 'Stock', icon: Package },
   { id: 'despachado', label: 'Salidas', icon: ArrowUpRight },
-  { id: 'todos', label: 'Todos', icon: Box },
+  { id: 'almacenado', label: 'Stock', icon: Package },
+  { id: 'todos', label: 'Movimientos', icon: Box },
 ];
 
 function clasesBotonVista(id: VistaMovimientoInventario, active: boolean): string {
@@ -129,7 +132,7 @@ const VISTA_LABEL: Record<VistaMovimientoInventario, string> = {
   ingresado: 'Ingresos',
   almacenado: 'Stock',
   despachado: 'Salidas',
-  todos: 'Todos',
+  todos: 'Movimientos',
 };
 
 export type MovimientosInventarioEmbedProps = {
@@ -158,6 +161,15 @@ export default function MovimientosCuadro({
 }: MovimientosInventarioEmbedProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const almacenFiltros = useAlmacenFiltrosOptional();
+  const ubicacionIdsEfectivos =
+    ubicacionIds ?? (almacenFiltros?.ubicacionIdsFiltro.length ? almacenFiltros.ubicacionIdsFiltro : undefined);
+  const proyectoIdEfectivo = proyectoIdBloqueado?.trim() || almacenFiltros?.filterProyectoId || undefined;
+  const proyectoIdsEntidadEfectivos =
+    proyectoIdsEntidad ?? almacenFiltros?.proyectoIdsEntidadArr;
+  const esperandoUbicaciones =
+    Boolean(almacenFiltros?.filtroStockEntidadActivo && almacenFiltros.cargandoUbicaciones);
+
   const [hydrated, setHydrated] = useState(false);
   const [vistaLocal, setVistaLocal] = useState<VistaMovimientoInventario>(() =>
     vistaExterna ??
@@ -181,7 +193,11 @@ export default function MovimientosCuadro({
   const [fechaHasta, setFechaHasta] = useState('');
   const [filas, setFilas] = useState<FilaMovimientoInventario[]>([]);
   const [resumen, setResumen] = useState({ ingresado: 0, despachado: 0, almacenado: 0 });
+  const [totalFilas, setTotalFilas] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [eliminandoBulk, setEliminandoBulk] = useState(false);
@@ -190,6 +206,8 @@ export default function MovimientosCuadro({
   const [exportScope, setExportScope] = useState<MovimientosExportScope>('filtrado');
   const [compartidoOk, setCompartidoOk] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const scrollSentinelRef = useRef<HTMLDivElement>(null);
+  const fetchGenRef = useRef(0);
 
   useEffect(() => {
     if (embedded || skipUrlSync) {
@@ -253,19 +271,19 @@ export default function MovimientosCuadro({
     setFechaHasta('');
   }, []);
 
-  const query = useMemo(() => {
+  const queryBase = useMemo(() => {
     const p = new URLSearchParams();
     p.set('vista', vista);
-    if (proyectoIdBloqueado?.trim()) {
-      p.set('proyecto_id', proyectoIdBloqueado.trim());
-    } else if (proyectoIdsEntidad?.length) {
-      p.set('proyecto_ids', proyectoIdsEntidad.join(','));
+    if (proyectoIdEfectivo) {
+      p.set('proyecto_id', proyectoIdEfectivo);
+    } else if (proyectoIdsEntidadEfectivos?.length) {
+      p.set('proyecto_ids', proyectoIdsEntidadEfectivos.join(','));
     }
     if (materialIdsCategoria?.length) {
       p.set('material_ids', materialIdsCategoria.join(','));
     }
-    if (ubicacionIds?.length) {
-      p.set('ubicacion_ids', ubicacionIds.join(','));
+    if (ubicacionIdsEfectivos?.length) {
+      p.set('ubicacion_ids', ubicacionIdsEfectivos.join(','));
     }
     if (proveedor.trim()) p.set('proveedor', proveedor.trim());
     if (destino.trim()) p.set('destino', destino.trim());
@@ -273,14 +291,14 @@ export default function MovimientosCuadro({
     if (materialEfectivo) p.set('material', materialEfectivo);
     if (fechaDesde) p.set('fecha_desde', fechaDesde);
     if (fechaHasta) p.set('fecha_hasta', fechaHasta);
-    p.set('limite', '250');
+    p.set('page_size', String(PAGE_SIZE));
     return p.toString();
   }, [
     vista,
-    proyectoIdBloqueado,
-    proyectoIdsEntidad,
+    proyectoIdEfectivo,
+    proyectoIdsEntidadEfectivos,
     materialIdsCategoria,
-    ubicacionIds,
+    ubicacionIdsEfectivos,
     proveedor,
     destino,
     material,
@@ -289,26 +307,69 @@ export default function MovimientosCuadro({
     fechaHasta,
   ]);
 
+  const cargarPagina = useCallback(
+    async (nextOffset: number, append: boolean) => {
+      if (esperandoUbicaciones) return;
+      const gen = ++fetchGenRef.current;
+      if (append) setLoadingMore(true);
+      else {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const p = new URLSearchParams(queryBase);
+        p.set('offset', String(nextOffset));
+        const res = await fetch(`/api/almacen/movimientos?${p.toString()}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (gen !== fetchGenRef.current) return;
+        if (!res.ok) throw new Error(json.error ?? 'Error al cargar');
+        const nuevas = (json.filas ?? []) as FilaMovimientoInventario[];
+        setFilas((prev) => (append ? [...prev, ...nuevas] : nuevas));
+        setResumen(json.resumen ?? { ingresado: 0, despachado: 0, almacenado: 0 });
+        setTotalFilas(Number(json.total ?? nuevas.length));
+        setHasMore(Boolean(json.hasMore));
+        setOffset(Number(json.nextOffset ?? nextOffset + nuevas.length));
+      } catch (e) {
+        if (gen !== fetchGenRef.current) return;
+        setError(e instanceof Error ? e.message : 'Error');
+        if (!append) setFilas([]);
+      } finally {
+        if (gen === fetchGenRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [queryBase, esperandoUbicaciones],
+  );
+
   const cargar = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/almacen/movimientos?${query}`, { cache: 'no-store' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Error al cargar');
-      setFilas(json.filas ?? []);
-      setResumen(json.resumen ?? { ingresado: 0, despachado: 0, almacenado: 0 });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error');
-      setFilas([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [query]);
+    setOffset(0);
+    await cargarPagina(0, false);
+  }, [cargarPagina]);
+
+  const cargarMas = useCallback(() => {
+    if (!hasMore || loading || loadingMore || esperandoUbicaciones) return;
+    void cargarPagina(offset, true);
+  }, [hasMore, loading, loadingMore, esperandoUbicaciones, cargarPagina, offset]);
 
   useEffect(() => {
+    if (!hydrated) return;
     void cargar();
-  }, [cargar]);
+  }, [hydrated, cargar]);
+
+  useEffect(() => {
+    const el = scrollSentinelRef.current;
+    if (!el || !hasMore) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) cargarMas();
+      },
+      { rootMargin: '240px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, cargarMas, filas.length]);
 
   const todasSeleccionadas = useMemo(
     () => filas.length > 0 && filas.every((f) => selectedIds.has(f.id)),
@@ -593,7 +654,7 @@ export default function MovimientosCuadro({
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl md:text-3xl font-black tracking-tight">Entradas y salidas</h1>
             <p className="text-xs text-zinc-500 mt-1">
-              Ingresos: compras, cuarentena y recepción en campo. Salidas: egresos. Stock: saldo físico en inventario (inventario_stock).
+              Ingresos: compras, cuarentena y recepción. Salidas: egresos. Stock: saldo físico. Movimientos: historial completo.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -766,7 +827,8 @@ export default function MovimientosCuadro({
         {!loading && filas.length > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
             <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 m-0">
-              Cuadro ({filas.length} movimiento{filas.length === 1 ? '' : 's'})
+              Cuadro ({filas.length}{totalFilas > filas.length ? ` de ${totalFilas}` : ''} movimiento
+              {totalFilas === 1 ? '' : 's'})
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <select
@@ -985,6 +1047,21 @@ export default function MovimientosCuadro({
               </tbody>
             </table>
           </div>
+          <div ref={scrollSentinelRef} className="h-4 shrink-0" aria-hidden />
+          {loadingMore ? (
+            <div className="flex items-center justify-center gap-2 py-4 text-zinc-500 text-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-400" />
+              Cargando más movimientos…
+            </div>
+          ) : hasMore ? (
+            <p className="text-center text-[11px] text-zinc-600 py-3">
+              Desplácese para cargar más ({filas.length} de {totalFilas})
+            </p>
+          ) : totalFilas > 0 && filas.length >= totalFilas ? (
+            <p className="text-center text-[11px] text-zinc-600 py-3">
+              Historial completo · {totalFilas} movimiento{totalFilas === 1 ? '' : 's'}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

@@ -16,6 +16,9 @@ import PanelAuditoriaProcuras from '@/components/contabilidad/PanelAuditoriaProc
 import VincularFacturaProcuraModal, {
   type ProcuraVinculoFactura,
 } from '@/components/contabilidad/VincularFacturaProcuraModal';
+import VerFacturaProcuraModal, {
+  type FacturaProcuraVista,
+} from '@/components/contabilidad/VerFacturaProcuraModal';
 
 type TabProcura = 'pendientes' | 'aprobados' | 'comprados' | 'control_interno';
 
@@ -113,6 +116,7 @@ export default function ProcurasPage() {
   const [error, setError] = useState<string | null>(null);
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [vincularProcura, setVincularProcura] = useState<ProcuraVinculoFactura | null>(null);
+  const [verFactura, setVerFactura] = useState<FacturaProcuraVista | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -303,14 +307,25 @@ export default function ProcurasPage() {
                             const compraId = compraIdProcura(f);
                             if (compraId) {
                               return (
-                                <Link
-                                  href={`/contabilidad/compras?compra=${encodeURIComponent(compraId)}`}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setVerFactura({
+                                      compraId,
+                                      ticket: f.ticket,
+                                      invoiceNumber: f.contabilidad_compra?.invoice_number,
+                                      tieneDocumento: Boolean(
+                                        f.contabilidad_compra?.document_storage_path ||
+                                          f.purchase_invoice_id,
+                                      ),
+                                    })
+                                  }
                                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#5856D6]/15 border border-[#5856D6]/30 text-[#a5a3ff] text-[10px] font-black uppercase hover:bg-[#5856D6]/25 transition-colors"
-                                  title={`Abrir ${etiquetaFacturaProcura(f)} en cuadro compras`}
+                                  title={`Ver documento ${etiquetaFacturaProcura(f)}`}
                                 >
                                   <FileImage size={12} />
                                   Ver factura
-                                </Link>
+                                </button>
                               );
                             }
                             if (ESTADOS_COMPRADOS.has(f.estado.toLowerCase())) {
@@ -368,6 +383,12 @@ export default function ProcurasPage() {
         procura={vincularProcura}
         onClose={() => setVincularProcura(null)}
         onVinculada={() => void cargar()}
+      />
+
+      <VerFacturaProcuraModal
+        open={Boolean(verFactura)}
+        factura={verFactura}
+        onClose={() => setVerFactura(null)}
       />
     </div>
   );

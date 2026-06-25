@@ -4,26 +4,30 @@ import { Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import AlmacenCuadroNav, { type CuadroAlmacen } from '@/components/almacen/AlmacenCuadroNav';
+import { AlmacenFiltrosProvider } from '@/components/almacen/AlmacenFiltrosProvider';
+import AlmacenFiltrosUbicacionBar from '@/components/almacen/AlmacenFiltrosUbicacionBar';
 import InventarioCuadro from '@/components/almacen/InventarioCuadro';
 import MovimientosCuadro from '@/components/almacen/MovimientosCuadro';
 import TrazabilidadKardex from '@/components/almacen/TrazabilidadKardex';
 
 function parseCuadro(raw: string | null): CuadroAlmacen {
   if (raw === 'movimientos' || raw === 'trazabilidad' || raw === 'inventario') return raw;
-  return 'inventario';
+  return 'movimientos';
 }
 
 const SUBTITULO_CUADRO: Record<CuadroAlmacen, string> = {
   inventario:
-    'Existencias por obra y almacén. El catálogo de materiales (altas y SKU) está en Maestros.',
-  movimientos: 'Historial de entradas y salidas que explican el stock actual.',
+    'Stock físico del almacén seleccionado (inventario_stock). El catálogo de materiales está en Maestros.',
+  movimientos:
+    'Entradas, salidas, stock y movimientos del almacén seleccionado. Desplácese para cargar más.',
   trazabilidad: 'Kardex y ruta del material en obra.',
 };
 
-function AlmacenHubInner() {
+function AlmacenHubContent() {
   const searchParams = useSearchParams();
   const cuadro = parseCuadro(searchParams.get('cuadro'));
   const searchString = useMemo(() => searchParams.toString(), [searchParams]);
+  const muestraFiltrosUbicacion = cuadro === 'inventario' || cuadro === 'movimientos';
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
@@ -32,11 +36,28 @@ function AlmacenHubInner() {
         <p className="mb-4 text-[11px] leading-relaxed text-zinc-500 max-w-2xl">
           {SUBTITULO_CUADRO[cuadro]}
         </p>
+        {muestraFiltrosUbicacion ? (
+          <AlmacenFiltrosUbicacionBar
+            hint={
+              cuadro === 'movimientos'
+                ? 'Ingresos, salidas, stock y movimientos del almacén seleccionado.'
+                : undefined
+            }
+          />
+        ) : null}
         {cuadro === 'inventario' ? <InventarioCuadro /> : null}
-        {cuadro === 'movimientos' ? <MovimientosCuadro /> : null}
+        {cuadro === 'movimientos' ? <MovimientosCuadro embedded skipUrlSync /> : null}
         {cuadro === 'trazabilidad' ? <TrazabilidadKardex /> : null}
       </div>
     </div>
+  );
+}
+
+function AlmacenHubInner() {
+  return (
+    <AlmacenFiltrosProvider>
+      <AlmacenHubContent />
+    </AlmacenFiltrosProvider>
   );
 }
 

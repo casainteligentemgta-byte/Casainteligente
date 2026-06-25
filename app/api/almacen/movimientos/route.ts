@@ -52,7 +52,8 @@ export async function GET(req: Request) {
       fechaDesde: url.searchParams.get('fecha_desde') ?? undefined,
       fechaHasta: url.searchParams.get('fecha_hasta') ?? undefined,
       material: url.searchParams.get('material') ?? undefined,
-      limite: Number(url.searchParams.get('limite') ?? 200),
+      pageSize: Number(url.searchParams.get('page_size') ?? 50),
+      offset: Number(url.searchParams.get('offset') ?? 0),
     });
 
     return NextResponse.json({ ok: true, ...result });

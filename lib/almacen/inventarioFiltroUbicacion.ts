@@ -287,21 +287,56 @@ export type ResultadoResolverUbicacionFiltro = {
   depositoSinInterseccion: boolean;
 };
 
+function ubicacionesPorDepositoFisico(
+  flat: UbicacionInventario[],
+  depositId: string,
+  depositNombre?: string,
+): UbicacionInventario[] {
+  const did = depositId.trim();
+  const porId = flat.filter((u) => u.deposit_id === did);
+  if (porId.length) return porId;
+
+  const nomDep = normalizarEtiquetaUbicacion(depositNombre ?? '');
+  if (!nomDep) return [];
+
+  return flat.filter((u) => {
+    const etiquetas = [u.nombre, u.deposit_name ?? '']
+      .map(normalizarEtiquetaUbicacion)
+      .filter(Boolean);
+    return etiquetas.some((e) => nombresCompatiblesObraAlmacen(e, nomDep));
+  });
+}
+
 function aplicarFiltroDepositoUbicaciones(
   candidatas: UbicacionInventario[],
   depositId?: string,
+  flat?: UbicacionInventario[],
+  depositNombre?: string,
 ): { candidatas: UbicacionInventario[]; depositoSinInterseccion: boolean } {
   if (!depositId?.trim()) {
     return { candidatas, depositoSinInterseccion: false };
   }
   const did = depositId.trim();
-  const antesDeposito = candidatas;
   const filtradas = candidatas.filter((u) => u.deposit_id === did);
   if (filtradas.length) {
     return { candidatas: filtradas, depositoSinInterseccion: false };
   }
-  /** Sin fallback a toda la obra: evita mezclar stock de otros almacenes. */
-  if (antesDeposito.length) {
+
+  const enFlat = flat ? ubicacionesPorDepositoFisico(flat, did, depositNombre) : [];
+  if (enFlat.length) {
+    const idsFlat = new Set(enFlat.map((u) => u.id));
+    const inter = candidatas.filter((u) => idsFlat.has(u.id));
+    if (inter.length) {
+      return { candidatas: inter, depositoSinInterseccion: false };
+    }
+    /** Almacén elegido explícitamente: usar su ubicación aunque no cruce con la obra. */
+    return {
+      candidatas: enFlat,
+      depositoSinInterseccion: candidatas.length > 0,
+    };
+  }
+
+  if (candidatas.length) {
     return { candidatas: [], depositoSinInterseccion: true };
   }
   return { candidatas: [], depositoSinInterseccion: false };
@@ -358,7 +393,12 @@ export function listarDepositIdsParaFiltroInventario(
 /** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */
 export function resolverUbicacionIdsFiltroConMeta(
   ubicaciones: UbicacionInventario[],
-  opts: { proyectoId?: string; proyectoNombre?: string; depositId?: string },
+  opts: {
+    proyectoId?: string;
+    proyectoNombre?: string;
+    depositId?: string;
+    depositNombre?: string;
+  },
 ): ResultadoResolverUbicacionFiltro {
   const flat = [...ubicaciones];
   propagarObraIdFlat(flat);
@@ -375,6 +415,8 @@ export function resolverUbicacionIdsFiltroConMeta(
   const { candidatas: finales, depositoSinInterseccion } = aplicarFiltroDepositoUbicaciones(
     candidatas,
     opts.depositId,
+    flat,
+    opts.depositNombre,
   );
   const expandidas = expandirDescendientesUbicacion(flat, finales);
   return {
@@ -386,7 +428,12 @@ export function resolverUbicacionIdsFiltroConMeta(
 /** Ubicaciones que aplican al filtro proyecto y/o depósito del maestro de inventario. */
 export function resolverUbicacionIdsFiltro(
   ubicaciones: UbicacionInventario[],
-  opts: { proyectoId?: string; proyectoNombre?: string; depositId?: string },
+  opts: {
+    proyectoId?: string;
+    proyectoNombre?: string;
+    depositId?: string;
+    depositNombre?: string;
+  },
 ): string[] {
   return resolverUbicacionIdsFiltroConMeta(ubicaciones, opts).ubicacionIds;
 }
@@ -414,6 +461,7 @@ export function resolverUbicacionIdsFiltroEntidadConMeta(
     proyectos: ProyectoFiltroUbicacion[];
     proyectoId?: string;
     depositId?: string;
+    depositNombre?: string;
   },
 ): ResultadoResolverUbicacionFiltro {
   const flat = [...ubicaciones];
@@ -442,6 +490,8 @@ export function resolverUbicacionIdsFiltroEntidadConMeta(
   const { candidatas: finales, depositoSinInterseccion } = aplicarFiltroDepositoUbicaciones(
     result,
     opts.depositId,
+    flat,
+    opts.depositNombre,
   );
   const expandidas = expandirDescendientesUbicacion(flat, finales);
 
@@ -459,6 +509,7 @@ export function resolverUbicacionIdsFiltroEntidad(
     proyectos: ProyectoFiltroUbicacion[];
     proyectoId?: string;
     depositId?: string;
+    depositNombre?: string;
   },
 ): string[] {
   return resolverUbicacionIdsFiltroEntidadConMeta(ubicaciones, opts).ubicacionIds;

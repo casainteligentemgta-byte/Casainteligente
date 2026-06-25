@@ -1,17 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { Package, ArrowLeftRight, Route } from 'lucide-react';
+import { ArrowLeftRight, Route } from 'lucide-react';
 
 export type CuadroAlmacen = 'inventario' | 'movimientos' | 'trazabilidad';
 
-const TABS: { id: CuadroAlmacen; label: string; icon: typeof Package }[] = [
-  { id: 'inventario', label: 'Stock', icon: Package },
+const TABS: { id: Exclude<CuadroAlmacen, 'inventario'>; label: string; icon: typeof Route }[] = [
   { id: 'movimientos', label: 'Entradas y salidas', icon: ArrowLeftRight },
   { id: 'trazabilidad', label: 'Trazabilidad', icon: Route },
 ];
 
-function hrefCuadro(id: CuadroAlmacen, search: string): string {
+function hrefCuadro(id: Exclude<CuadroAlmacen, 'inventario'>, search: string): string {
   const qs = new URLSearchParams(search);
   qs.set('cuadro', id);
   if (id !== 'movimientos') {

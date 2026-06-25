@@ -4,6 +4,7 @@ export type DepositRow = {
   id: string;
   name: string;
   locality: string | null;
+  code?: string | null;
 };
 
 export type FurnitureRow = {

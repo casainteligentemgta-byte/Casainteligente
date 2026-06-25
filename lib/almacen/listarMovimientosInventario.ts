@@ -25,8 +25,21 @@ export type FiltrosMovimientosInventario = {
   fechaDesde?: string;
   fechaHasta?: string;
   material?: string;
+  /** @deprecated usar pageSize + offset */
   limite?: number;
+  pageSize?: number;
+  offset?: number;
 };
+
+function limiteFetchPorAlcance(filtros: FiltrosMovimientosInventario): number {
+  const scoped = Boolean(
+    filtros.ubicacionIds?.length ||
+      filtros.ubicacionId?.trim() ||
+      filtros.proyectoId?.trim() ||
+      filtros.proyectoIdsEntidad?.length,
+  );
+  return scoped ? 5000 : 600;
+}
 
 export type FilaMovimientoInventario = {
   id: string;
@@ -165,8 +178,9 @@ function etiquetaTipoRecepcionCampo(tipo: string, observaciones?: string | null)
 async function cargarIngresosRecepcionCampo(
   supabase: SupabaseClient,
   limite: number,
+  ubicacionIds?: string[],
 ): Promise<FilaMovimientoInventario[]> {
-  const { data, error } = await supabase
+  let q = supabase
     .from('ci_recepciones_campo')
     .select(
       `
@@ -189,9 +203,13 @@ async function cargarIngresosRecepcionCampo(
       )
     `,
     )
-    .eq('estado', 'registrado')
+    .eq('estado', 'registrado');
+  if (ubicacionIds?.length) {
+    q = q.in('ubicacion_id', ubicacionIds);
+  }
+  const { data, error } = await q
     .order('created_at', { ascending: false })
-    .limit(Math.min(limite, 150));
+    .limit(Math.min(limite, ubicacionIds?.length ? 5000 : 150));
 
   if (error?.code === '42P01') return [];
   if (error && /relationship between|schema cache|PGRST200/i.test(error.message ?? '')) {
@@ -258,8 +276,9 @@ async function cargarIngresos(
   supabase: SupabaseClient,
   limite: number,
   proyectos: ProyectoRef[],
+  ubicacionIds?: string[],
 ): Promise<FilaMovimientoInventario[]> {
-  const { data, error } = await supabase
+  let q = supabase
     .from('compras_facturas')
     .select(
       `
@@ -280,9 +299,13 @@ async function cargarIngresos(
       )
     `,
     )
-    .eq('estado', 'registrada')
+    .eq('estado', 'registrada');
+  if (ubicacionIds?.length) {
+    q = q.in('ubicacion_destino_id', ubicacionIds);
+  }
+  const { data, error } = await q
     .order('fecha_emision', { ascending: false })
-    .limit(Math.min(limite, 150));
+    .limit(Math.min(limite, ubicacionIds?.length ? 5000 : 150));
 
   if (error?.code === '42P01') return [];
   if (error) throw new Error(error.message);
@@ -363,6 +386,7 @@ async function cargarIngresosCuarentena(
   supabase: SupabaseClient,
   limite: number,
   proyectos: ProyectoRef[],
+  ubicacionIds?: string[],
 ): Promise<FilaMovimientoInventario[]> {
   const { data, error } = await supabase
     .from('purchase_details')
@@ -391,11 +415,12 @@ async function cargarIngresosCuarentena(
     )
     .gt('quantity', 0)
     .order('id', { ascending: false })
-    .limit(Math.min(limite, 120));
+    .limit(Math.min(limite, ubicacionIds?.length ? 3000 : 120));
 
   if (error?.code === '42P01') return [];
   if (error) throw new Error(error.message);
 
+  const ubicacionSet = ubicacionIds?.length ? new Set(ubicacionIds) : null;
   const filas: FilaMovimientoInventario[] = [];
   for (const row of data ?? []) {
     const detailId = String(row.id ?? '').trim();
@@ -421,6 +446,8 @@ async function cargarIngresosCuarentena(
     const inv = Array.isArray(invRaw) ? invRaw[0] : invRaw;
     const ubiRaw = inv?.ubicacion;
     const ubi = Array.isArray(ubiRaw) ? ubiRaw[0] : ubiRaw;
+    const ubicacionIdRow = String(inv?.ubicacion_destino_id ?? ubi?.id ?? '') || null;
+    if (ubicacionSet && (!ubicacionIdRow || !ubicacionSet.has(ubicacionIdRow))) continue;
     const proy = proyectoDesdeUbicacionRow(ubi, proyectos);
     const filaId = `ing-pd-${invoiceId}_${detailId}`;
 
@@ -443,7 +470,7 @@ async function cargarIngresosCuarentena(
       referencia: String(inv?.invoice_number ?? ''),
       capitulo: null,
       notas: 'Factura en tránsito (pendiente de recepción física)',
-      ubicacion_id: String(inv?.ubicacion_destino_id ?? ubi?.id ?? '') || null,
+      ubicacion_id: ubicacionIdRow,
       eliminable: movimientoInventarioEsEliminable(filaId),
     });
   }
@@ -453,8 +480,9 @@ async function cargarIngresosCuarentena(
 async function cargarDespachosTransferencia(
   supabase: SupabaseClient,
   limite: number,
+  ubicacionIds?: string[],
 ): Promise<FilaMovimientoInventario[]> {
-  const { data, error } = await supabase
+  let q = supabase
     .from('transferencias_inventario')
     .select(
       `
@@ -481,9 +509,14 @@ async function cargarDespachosTransferencia(
       )
     `,
     )
-    .in('estado', ['completado', 'en_transito', 'pendiente'])
+    .in('estado', ['completado', 'en_transito', 'pendiente']);
+  if (ubicacionIds?.length) {
+    const csv = ubicacionIds.join(',');
+    q = q.or(`origen_ubicacion_id.in.(${csv}),destino_ubicacion_id.in.(${csv})`);
+  }
+  const { data, error } = await q
     .order('created_at', { ascending: false })
-    .limit(Math.min(limite, 120));
+    .limit(Math.min(limite, ubicacionIds?.length ? 5000 : 120));
 
   if (error?.code === '42P01') return [];
   if (error) throw new Error(error.message);
@@ -837,9 +870,15 @@ export async function listarMovimientosInventario(
 ): Promise<{
   filas: FilaMovimientoInventario[];
   resumen: { ingresado: number; despachado: number; almacenado: number };
+  total: number;
+  hasMore: boolean;
+  nextOffset: number;
 }> {
-  const limite = Math.min(Math.max(filtros.limite ?? 200, 20), 400);
+  const pageSize = Math.min(Math.max(filtros.pageSize ?? filtros.limite ?? 50, 10), 200);
+  const offset = Math.max(filtros.offset ?? 0, 0);
+  const limiteFetch = limiteFetchPorAlcance(filtros);
   const vista = filtros.vista ?? 'todos';
+  const ubicacionIds = filtros.ubicacionIds;
   const proyectos = await cargarProyectosCatalogo(supabase);
 
   const [
@@ -849,11 +888,11 @@ export async function listarMovimientosInventario(
     despachosTransferencia,
     despachosTelegram,
   ] = await Promise.all([
-    cargarIngresos(supabase, limite, proyectos),
-    cargarIngresosCuarentena(supabase, limite, proyectos),
-    cargarIngresosRecepcionCampo(supabase, limite),
-    cargarDespachosTransferencia(supabase, limite),
-    cargarDespachosTelegram(supabase, limite),
+    cargarIngresos(supabase, limiteFetch, proyectos, ubicacionIds),
+    cargarIngresosCuarentena(supabase, limiteFetch, proyectos, ubicacionIds),
+    cargarIngresosRecepcionCampo(supabase, limiteFetch, ubicacionIds),
+    cargarDespachosTransferencia(supabase, limiteFetch, ubicacionIds),
+    cargarDespachosTelegram(supabase, limiteFetch),
   ]);
 
   const todosIngresos = enriquecerFilasProyecto(
@@ -890,7 +929,13 @@ export async function listarMovimientosInventario(
   if (vista === 'ingresado') merged = todosIngresos;
   else if (vista === 'despachado') merged = todosDespachos;
   else if (vista === 'almacenado') merged = filasStockFisico;
-  else merged = [...todosIngresos, ...todosDespachos];
+  else {
+    merged = [...todosIngresos, ...todosDespachos].sort((a, b) => {
+      const cmp = b.fecha.localeCompare(a.fecha);
+      if (cmp !== 0) return cmp;
+      return (b.hora ?? '').localeCompare(a.hora ?? '');
+    });
+  }
 
   // Stock físico no trae proveedor en fila; no aplicar filtro proveedor a tabla ni KPI stock.
   const filtrosSinProveedorStock =
@@ -900,7 +945,10 @@ export async function listarMovimientosInventario(
     vista === 'almacenado' ? filtrosSinProveedorStock : filtros;
 
   const filtradas = aplicarFiltros(merged, filtrosAplicar, proyectos);
-  const filas = filtradas.slice(0, limite);
+  const total = filtradas.length;
+  const filas = filtradas.slice(offset, offset + pageSize);
+  const hasMore = total > offset + pageSize;
+  const nextOffset = hasMore ? offset + pageSize : offset + filas.length;
 
   const filtrosResumen = { ...filtros, vista: undefined as VistaMovimientoInventario | undefined };
   const ingresosResumen = aplicarFiltros(todosIngresos, filtrosResumen, proyectos);
@@ -917,5 +965,5 @@ export async function listarMovimientosInventario(
     almacenado: stockResumen.length,
   };
 
-  return { filas, resumen };
+  return { filas, resumen, total, hasMore, nextOffset };
 }
