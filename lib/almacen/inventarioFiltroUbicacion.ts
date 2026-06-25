@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { depositIdsPorEntidad, type DepositoEntidadRow } from '@/lib/almacen/depositosEntidad';
 import {
   listarUbicacionesInventario,
   propagarObraIdFlat,
@@ -350,6 +351,7 @@ export function listarDepositIdsParaFiltroInventario(
     proyectoId?: string;
     proyectoNombre?: string;
     proyectos: ProyectoFiltroUbicacion[];
+    deposits?: DepositoEntidadRow[];
   },
 ): string[] {
   const flat = [...ubicaciones];
@@ -373,6 +375,9 @@ export function listarDepositIdsParaFiltroInventario(
     candidatas = expandirDescendientesUbicacion(flat, candidatas);
     collect(candidatas);
   } else if (opts.entidadId) {
+    for (const did of depositIdsPorEntidad(opts.deposits ?? [], opts.entidadId)) {
+      ids.add(did);
+    }
     for (const pr of opts.proyectos.filter((p) => p.entidad_id === opts.entidadId)) {
       let candidatas = flat.filter((u) =>
         ubicacionPerteneceAProyecto(u, pr.id, pr.nombre),
@@ -462,6 +467,7 @@ export function resolverUbicacionIdsFiltroEntidadConMeta(
     proyectoId?: string;
     depositId?: string;
     depositNombre?: string;
+    deposits?: DepositoEntidadRow[];
   },
 ): ResultadoResolverUbicacionFiltro {
   const flat = [...ubicaciones];
@@ -477,6 +483,10 @@ export function resolverUbicacionIdsFiltroEntidadConMeta(
   }
 
   const byId = new Map<string, UbicacionInventario>();
+  for (const did of depositIdsPorEntidad(opts.deposits ?? [], eid)) {
+    const candidatasDep = flat.filter((u) => u.deposit_id === did);
+    for (const u of candidatasDep) byId.set(u.id, u);
+  }
   for (const pr of proys) {
     let candidatas = flat.filter((u) =>
       ubicacionPerteneceAProyecto(u, pr.id, pr.nombre),

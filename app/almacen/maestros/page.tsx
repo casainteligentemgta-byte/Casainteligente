@@ -14,7 +14,15 @@ import { GlassCard } from '@/components/inventory/GlassCard';
 import { ArrowLeft, Building2, Layers, Tag, Ruler, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import MaestrosStockMinimoPanel from '@/components/almacen/MaestrosStockMinimoPanel';
 
-type Deposit = { id: string; code: string; name: string; locality: string | null; is_default: boolean };
+type Deposit = {
+  id: string;
+  code: string;
+  name: string;
+  locality: string | null;
+  is_default: boolean;
+  entidad_id?: string | null;
+};
+type EntidadRow = { id: string; nombre: string };
 type Furniture = {
   id: string;
   deposit_id: string;
@@ -39,11 +47,18 @@ export default function AlmacenMaestrosPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [entidades, setEntidades] = useState<EntidadRow[]>([]);
   const [furniture, setFurniture] = useState<Furniture[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<UnitRow[]>([]);
 
-  const [depForm, setDepForm] = useState({ code: '', name: '', locality: '', is_default: false });
+  const [depForm, setDepForm] = useState({
+    code: '',
+    name: '',
+    locality: '',
+    is_default: false,
+    entidad_id: '',
+  });
   const [furDepositId, setFurDepositId] = useState('');
   const [furForm, setFurForm] = useState({
     kind: 'armario',
@@ -57,11 +72,12 @@ export default function AlmacenMaestrosPage() {
 
   const loadAll = useCallback(async () => {
     setErr(null);
-    const [d, f, c, u] = await Promise.all([
+    const [d, f, c, u, ent] = await Promise.all([
       supabase.from('inventory_deposits').select('*').order('is_default', { ascending: false }).order('name'),
       supabase.from('inventory_furniture').select('*').order('sort_order').order('name'),
       supabase.from('material_categories').select('*').order('name'),
       supabase.from('inventory_units').select('*').eq('active', true).order('sort_order').order('code'),
+      supabase.from('ci_entidades').select('id,nombre').order('nombre'),
     ]);
     if (d.error) setErr(d.error.message);
     else if (f.error) setErr(f.error.message);
@@ -79,6 +95,7 @@ export default function AlmacenMaestrosPage() {
     if (f.data) setFurniture(f.data as Furniture[]);
     if (c.data) setCategories(c.data as Category[]);
     if (u.data) setUnits(u.data as UnitRow[]);
+    if (!ent.error && ent.data) setEntidades(ent.data as EntidadRow[]);
   }, [supabase]);
 
   useEffect(() => {
@@ -107,6 +124,7 @@ export default function AlmacenMaestrosPage() {
         name,
         locality: depForm.locality.trim() || null,
         is_default: depForm.is_default,
+        entidad_id: depForm.entidad_id.trim() || null,
       })
       .select('id,code,name')
       .single();
@@ -127,8 +145,17 @@ export default function AlmacenMaestrosPage() {
           : 'Depósito guardado, pero falló la sincronización con inv_ubicaciones.',
       );
     }
-    setDepForm({ code: '', name: '', locality: '', is_default: false });
+    setDepForm({ code: '', name: '', locality: '', is_default: false, entidad_id: '' });
     loadAll();
+  }
+
+  async function actualizarEntidadDeposito(depositId: string, entidadId: string) {
+    const { error } = await supabase
+      .from('inventory_deposits')
+      .update({ entidad_id: entidadId.trim() || null })
+      .eq('id', depositId);
+    if (error) alert(error.message);
+    else loadAll();
   }
 
   async function deleteDeposit(id: string) {
@@ -287,6 +314,18 @@ export default function AlmacenMaestrosPage() {
                 value={depForm.locality}
                 onChange={(e) => setDepForm({ ...depForm, locality: e.target.value })}
               />
+              <select
+                className="bg-black border border-zinc-800 rounded-xl p-3 font-bold sm:col-span-2"
+                value={depForm.entidad_id}
+                onChange={(e) => setDepForm({ ...depForm, entidad_id: e.target.value })}
+              >
+                <option value="">Patrono / entidad (opcional)</option>
+                {entidades.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.nombre}
+                  </option>
+                ))}
+              </select>
               <label className="flex items-center gap-2 text-sm text-zinc-400 sm:col-span-2">
                 <input
                   type="checkbox"
@@ -314,6 +353,21 @@ export default function AlmacenMaestrosPage() {
                       )}
                     </p>
                     {d.locality && <p className="text-xs text-zinc-500">{d.locality}</p>}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <label className="text-[10px] uppercase tracking-wider text-zinc-500">Patrono</label>
+                      <select
+                        className="bg-black border border-zinc-700 rounded-lg px-2 py-1 text-xs font-bold max-w-[220px]"
+                        value={d.entidad_id ?? ''}
+                        onChange={(e) => void actualizarEntidadDeposito(d.id, e.target.value)}
+                      >
+                        <option value="">Sin asignar</option>
+                        {entidades.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <button
                     type="button"

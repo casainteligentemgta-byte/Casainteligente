@@ -12,6 +12,8 @@ import {
   moduloProyectosStickyHeader,
 } from '@/lib/ui/moduloProyectosTheme';
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
+import { esNombreDepositoAlmacenCentral } from '@/lib/almacen/depositosEntidad';
+import { parseNaturalezaProyecto } from '@/lib/proyectos/naturalezaProyecto';
 import { withTimeout } from '@/lib/http/withTimeout';
 import ProyectoAccionesConfigRoles from '@/components/proyectos/ProyectoAccionesConfigRoles';
 
@@ -105,7 +107,14 @@ type ProyectoDbRow = {
   obra_precio_venta_usd?: number | null;
   obra_presupuesto_ves?: number | null;
   limite_fast_track_usd?: number | string | null;
+  naturaleza_proyecto?: string | null;
 };
+
+function filaVisibleEnListadoProyectos(r: ProyectoDbRow): boolean {
+  if (parseNaturalezaProyecto(r.naturaleza_proyecto) === 'centro_costo_entidad') return false;
+  if (esNombreDepositoAlmacenCentral(r.nombre)) return false;
+  return true;
+}
 
 type FilaProyectoLegacy = {
   id: string;
@@ -186,7 +195,7 @@ export default function ModuloProyectosPage() {
       let modRows: ProyectoDbRow[] = [];
 
       if (!pRes.error) {
-        modRows = (pRes.data ?? []) as ProyectoDbRow[];
+        modRows = ((pRes.data ?? []) as ProyectoDbRow[]).filter(filaVisibleEnListadoProyectos);
       } else {
         const msg = pRes.error?.message ?? 'Error al leer ci_proyectos.';
         const leg1 = await withTimeout(

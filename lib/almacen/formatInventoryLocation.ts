@@ -5,6 +5,7 @@ export type DepositRow = {
   name: string;
   locality: string | null;
   code?: string | null;
+  entidad_id?: string | null;
 };
 
 export type FurnitureRow = {
