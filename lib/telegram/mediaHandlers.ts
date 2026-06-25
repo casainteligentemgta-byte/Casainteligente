@@ -75,7 +75,7 @@ export async function manejarFacturaTelegram(params: {
   const debeReprocesar = async (): Promise<boolean> => {
     const { data: prev } = await params.supabase
       .from('ci_facturas_canal_pendientes')
-      .select('estado, extracted, proyecto_id, entidad_id, imputacion_entidad')
+      .select('estado, extracted, proyecto_id, entidad_id')
       .eq('id', reserva.pendingId)
       .maybeSingle();
     const estado = String(prev?.estado ?? '');
@@ -93,7 +93,7 @@ export async function manejarFacturaTelegram(params: {
       await import('@/lib/telegram/flujoFacturaCompradorTelegram');
     const { data: prev } = await params.supabase
       .from('ci_facturas_canal_pendientes')
-      .select('extracted, proyecto_id, entidad_id, imputacion_entidad, ubicacion_destino_id, estado')
+      .select('extracted, proyecto_id, entidad_id, ubicacion_destino_id, estado')
       .eq('id', reserva.pendingId)
       .maybeSingle();
     const estado = String(prev?.estado ?? '').toLowerCase();

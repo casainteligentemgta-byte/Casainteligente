@@ -143,7 +143,7 @@ export async function enviarPickerEntidadesFacturaTelegram(
   );
 }
 
-async function enviarPickerDestinoFacturaTelegram(
+export async function enviarPickerDestinoFacturaTelegram(
   supabase: SupabaseClient,
   chatId: string,
   entidadId: string,
@@ -178,15 +178,7 @@ async function enviarPickerDestinoFacturaTelegram(
     return;
   }
 
-  const buttons: Array<Array<{ text: string; callback_data: string }>> = [
-    ...CLASIFICACIONES_GASTO_ENTIDAD.map((c) => [
-      {
-        text: truncar(ETIQUETAS_GASTO_ENTIDAD_TELEGRAM[c], 40),
-        callback_data: `${PREFIX}g:${c}`,
-      },
-    ]),
-    [{ text: truncar(ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD, 40), callback_data: CB_GASTO_SIN }],
-  ];
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
 
   if (proyectos.length) {
     const totalPages = Math.max(1, Math.ceil(proyectos.length / PICKER_SIZE));
@@ -211,15 +203,24 @@ async function enviarPickerDestinoFacturaTelegram(
     }
   }
 
+  buttons.push(
+    ...CLASIFICACIONES_GASTO_ENTIDAD.map((c) => [
+      {
+        text: truncar(`OpEx · ${ETIQUETAS_GASTO_ENTIDAD_TELEGRAM[c]}`, 40),
+        callback_data: `${PREFIX}g:${c}`,
+      },
+    ]),
+    [{ text: truncar(`OpEx · ${ETIQUETA_SIN_CLASIFICAR_GASTO_ENTIDAD}`, 40), callback_data: CB_GASTO_SIN }],
+  );
+
   const hintObras = proyectos.length
-    ? `\n\n<i>O elija una obra de la entidad (${proyectos.length})</i>`
-    : '\n\n<i>Esta entidad no tiene obras; elija un tipo de gasto OpEx.</i>';
+    ? `\n\n<i>Elija la obra; luego el almacén de ingreso.</i>`
+    : '\n\n<i>Esta entidad no tiene obras de construcción; use OpEx si aplica.</i>';
 
   await sendTelegramMessage(
     chatId,
     `🏢 Entidad: <b>${escHtml(entidadNombre)}</b>\n\n` +
-      `¿Imputamos a <b>gasto de entidad</b> (OpEx) o a una <b>obra</b>?\n\n` +
-      `<b>Tipos OpEx:</b> operativo · administrativo · servicios · sin clasificar` +
+      `<b>¿A qué obra imputamos la compra?</b>` +
       hintObras,
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
@@ -431,6 +432,11 @@ export async function manejarCallbackFacturaEntidadDestinoTelegram(
       .eq('id', pendingId);
 
     await answerCallbackQuery(params.callbackId, hit.nombre);
+    await sendTelegramMessage(
+      params.chatId,
+      `✅ Obra: <b>${escHtml(hit.nombre)}</b>\n\n<i>Ahora elija el almacén de ingreso.</i>`,
+      { parse_mode: 'HTML' },
+    );
     const { enviarPickerUbicacionesTelegram } = await import('@/lib/telegram/ubicacionPicker');
     await enviarPickerUbicacionesTelegram(supabase, params.chatId, {
       pendingId,

@@ -54,7 +54,7 @@ export function crearNotificadorProgresoFacturaTelegram(
     const text =
       `✅ <b>Análisis completado</b>\n` +
       `<code>${barraProgreso(100)}</code>\n` +
-      `<i>Indique moneda (Bs o USD), forma de pago y almacén…</i>`;
+      `<i>Siguiente: moneda (Bs/USD), forma de pago y destino (entidad → obra → almacén).</i>`;
     if (messageId != null) {
       await editTelegramMessage(chatId, messageId, text, { parse_mode: 'HTML' });
     } else {
