@@ -47,8 +47,17 @@ export function siguientePasoFlujoFacturaComprador(
   ) {
     return 'fecha';
   }
-  if (!monedaExtractedConfirmada(extracted.moneda)) return 'moneda';
-  if (!condicionPagoExtractedConfirmada(extracted.condicion_pago)) return 'condicion';
+  if (!monedaExtractedConfirmada(extracted.moneda, extracted.comprador_confirmo_moneda)) {
+    return 'moneda';
+  }
+  if (
+    !condicionPagoExtractedConfirmada(
+      extracted.condicion_pago,
+      extracted.comprador_confirmo_pago,
+    )
+  ) {
+    return 'condicion';
+  }
   if (!diasCreditoExtractedValido(extracted)) return 'dias_credito';
 
   const proyectoId = row?.proyecto_id?.trim() || '';

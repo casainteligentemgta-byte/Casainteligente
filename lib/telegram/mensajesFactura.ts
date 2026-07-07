@@ -122,6 +122,7 @@ export async function iniciarModoCargaFacturasTelegram(
   if (opts?.ticket?.trim()) meta.procura_ticket = opts.ticket.trim();
   await setTelegramContexto(supabase, chatId, {
     contexto: 'factura',
+    pending_factura_id: null,
     ...(Object.keys(meta).length ? { metadata: meta } : {}),
   });
 }

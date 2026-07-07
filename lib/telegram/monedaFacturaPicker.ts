@@ -75,6 +75,7 @@ export async function manejarCallbackMonedaFacturaTelegram(
   const nextExtracted: ExtractedCanalHeader = {
     ...prev,
     moneda: normalizarMonedaExtracted(moneda),
+    comprador_confirmo_moneda: true,
   };
 
   const { error } = await supabase

@@ -266,6 +266,8 @@ async function finalizarFacturaCompradorManual(
     total_amount: totalLineas(lineas),
     items,
     fromGemini: false,
+    comprador_confirmo_moneda: false,
+    comprador_confirmo_pago: false,
   };
 
   const reserva = await reservarFacturaCanalTelegram(supabase, {
