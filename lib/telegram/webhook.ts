@@ -5,7 +5,7 @@ import {
   sendTelegramMessage,
   verifyTelegramWebhookSecret,
 } from '@/lib/telegram/botApi';
-import { enviarAyudaAgendaTelegram, manejarAgendaTelegram } from '@/lib/telegram/agendaHandler';
+import { enviarAyudaAgendaTelegram, limpiarHistorialAgendaTelegram, manejarAgendaTelegram } from '@/lib/telegram/agendaHandler';
 
 type TelegramUpdate = {
   message?: {
@@ -64,16 +64,21 @@ export async function handleTelegramWebhookPost(req: Request) {
     if (lower === '/agenda') {
       await sendTelegramMessage(
         chatId,
-        '📅 <b>Modo agenda activo.</b>\nEscribe lo que quieras guardar o consultar.',
+        '📅 <b>Modo agenda activo.</b>\nEscribe lo que quieras guardar o consultar.\nRecuerdo los últimos mensajes de esta conversación.',
         { parse_mode: 'HTML' },
       );
       return NextResponse.json({ ok: true, command: 'agenda' });
     }
 
+    if (lower === '/limpiar' || lower === '/nueva' || lower === '/reset') {
+      await limpiarHistorialAgendaTelegram(chatId);
+      return NextResponse.json({ ok: true, command: 'limpiar' });
+    }
+
     if (lower.startsWith('/')) {
       await sendTelegramMessage(
         chatId,
-        'Comando no reconocido. Usa /agenda o /ayuda.',
+        'Comando no reconocido. Usa /agenda, /limpiar o /ayuda.',
       );
       return NextResponse.json({ ok: true, command: 'unknown' });
     }
