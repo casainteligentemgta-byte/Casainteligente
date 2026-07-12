@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getOrCreateAgendaSessionId } from '@/lib/agenda/session';
+import { createClient } from '@/lib/supabase/client';
 import {
   CATEGORIA_LABELS,
   type AgendaChatMessage,
@@ -30,7 +32,8 @@ function formatTime(time: string | null): string {
 }
 
 export default function AgendaPage() {
-  const [sessionId, setSessionId] = useState('');
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [events, setEvents] = useState<SpecialDate[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [provider, setProvider] = useState<LlmProvider>('gemini');
@@ -40,10 +43,14 @@ export default function AgendaPage() {
   const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const loadEvents = useCallback(async (sid: string) => {
+  const loadEvents = useCallback(async () => {
     setLoadingEvents(true);
     try {
-      const res = await fetch(`/api/agenda/events?sessionId=${encodeURIComponent(sid)}`);
+      const res = await fetch('/api/agenda/events');
+      if (res.status === 401) {
+        router.push('/login?next=/agenda');
+        return;
+      }
       const json = (await res.json()) as { data?: SpecialDate[]; error?: string };
       if (!res.ok) throw new Error(json.error ?? 'Error al cargar eventos');
       setEvents(json.data ?? []);
@@ -52,21 +59,33 @@ export default function AgendaPage() {
     } finally {
       setLoadingEvents(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    const sid = getOrCreateAgendaSessionId();
-    setSessionId(sid);
-    loadEvents(sid);
-  }, [loadEvents]);
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        router.push('/login?next=/agenda');
+        return;
+      }
+      setUserEmail(user.email ?? null);
+      loadEvents();
+    });
+  }, [loadEvents, router]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending]);
 
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login?next=/agenda');
+  };
+
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || !sessionId || sending) return;
+    if (!text || sending) return;
 
     const nextMessages: AgendaChatMessage[] = [...messages, { role: 'user', text }];
     setMessages(nextMessages);
@@ -78,17 +97,13 @@ export default function AgendaPage() {
       const res = await fetch('/api/agenda/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          provider,
-          messages: nextMessages,
-        }),
+        body: JSON.stringify({ provider, messages: nextMessages }),
       });
       const json = (await res.json()) as { reply?: string; error?: string };
       if (!res.ok) throw new Error(json.error ?? 'Error en el chat');
 
       setMessages((prev) => [...prev, { role: 'assistant', text: json.reply ?? 'Listo.' }]);
-      await loadEvents(sessionId);
+      await loadEvents();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al enviar');
     } finally {
@@ -97,12 +112,9 @@ export default function AgendaPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!sessionId) return;
     try {
       const res = await fetch(`/api/agenda/events?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
@@ -121,16 +133,37 @@ export default function AgendaPage() {
       style={{ background: 'var(--bg-primary)', paddingBottom: '100px' }}
     >
       <div className="px-5 pt-14 pb-4">
-        <p style={{ fontSize: '15px', color: 'var(--label-tertiary)', margin: 0 }}>Personal</p>
-        <h1
-          className="font-bold tracking-tight"
-          style={{ fontSize: '34px', color: 'var(--label-primary)', margin: '4px 0 0' }}
-        >
-          Agenda
-        </h1>
-        <p style={{ fontSize: '14px', color: 'var(--label-secondary)', marginTop: '6px' }}>
-          Cumpleaños, citas y recordatorios · {monthLabel}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p style={{ fontSize: '15px', color: 'var(--label-tertiary)', margin: 0 }}>Personal</p>
+            <h1
+              className="font-bold tracking-tight"
+              style={{ fontSize: '34px', color: 'var(--label-primary)', margin: '4px 0 0' }}
+            >
+              Agenda
+            </h1>
+            <p style={{ fontSize: '14px', color: 'var(--label-secondary)', marginTop: '6px' }}>
+              {monthLabel}
+              {userEmail ? ` · ${userEmail}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid var(--glass-border)',
+              color: 'var(--label-secondary)',
+              borderRadius: '12px',
+              padding: '8px 12px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Salir
+          </button>
+        </div>
       </div>
 
       <div className="px-5 mb-4">
@@ -159,6 +192,9 @@ export default function AgendaPage() {
             </button>
           ))}
         </div>
+        <p style={{ margin: '10px 0 0', fontSize: '12px', color: 'var(--label-tertiary)' }}>
+          Recordatorios por Telegram: 1 día antes y el mismo día (si guardaste eventos desde el bot).
+        </p>
       </div>
 
       <div className="px-5 grid gap-4 lg:grid-cols-2">
@@ -266,10 +302,7 @@ export default function AgendaPage() {
             minHeight: '420px',
           }}
         >
-          <div
-            className="px-4 py-3"
-            style={{ borderBottom: '1px solid var(--glass-border)' }}
-          >
+          <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--glass-border)' }}>
             <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--label-primary)' }}>
               Asistente de agenda
             </p>
@@ -278,7 +311,10 @@ export default function AgendaPage() {
             </p>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3" style={{ maxHeight: '320px' }}>
+          <div
+            className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3"
+            style={{ maxHeight: '320px' }}
+          >
             {messages.length === 0 ? (
               <p style={{ color: 'var(--label-tertiary)', fontSize: '13px', margin: 0 }}>
                 Ej: &quot;Guarda el cumpleaños de María el 15 de agosto&quot;
@@ -317,10 +353,7 @@ export default function AgendaPage() {
             <p style={{ margin: '0 16px 8px', fontSize: '12px', color: '#FF3B30' }}>{error}</p>
           ) : null}
 
-          <div
-            className="p-3 flex gap-2"
-            style={{ borderTop: '1px solid var(--glass-border)' }}
-          >
+          <div className="p-3 flex gap-2" style={{ borderTop: '1px solid var(--glass-border)' }}>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -358,6 +391,12 @@ export default function AgendaPage() {
             </button>
           </div>
         </section>
+      </div>
+
+      <div className="px-5 mt-4">
+        <Link href="/" style={{ color: 'var(--label-tertiary)', fontSize: '13px' }}>
+          ← Volver al inicio
+        </Link>
       </div>
     </div>
   );

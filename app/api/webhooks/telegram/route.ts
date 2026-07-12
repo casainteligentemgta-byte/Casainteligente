@@ -1,16 +1,16 @@
 import {
   handleTelegramWebhookGet,
-  handleTelegramWebhookPost,
-} from '@/lib/telegram/webhook';
+  handleTelegramWebhookRoutePost,
+} from '@/lib/telegram/webhookRoute';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 export async function GET() {
   return handleTelegramWebhookGet();
 }
 
 export async function POST(req: Request) {
-  return handleTelegramWebhookPost(req);
+  return handleTelegramWebhookRoutePost(req);
 }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { listSpecialDates, deleteSpecialDate } from '@/lib/agenda/listSpecialDates';
 import { ownerFromAppSession, ownerFromTelegramChat, ownerFromUserId } from '@/lib/agenda/owner';
 import { createClient } from '@/lib/supabase/server';
@@ -23,8 +22,7 @@ function parseOwner(searchParams: URLSearchParams, bodyOwner?: {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore);
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -49,7 +47,7 @@ export async function GET(req: NextRequest) {
       categoria: categoria ?? undefined,
       mes: Number.isFinite(mes) ? mes : undefined,
     });
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, userId: user?.id ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al listar eventos';
     return NextResponse.json({ error: message }, { status: 500 });
@@ -70,8 +68,7 @@ export async function DELETE(req: NextRequest) {
     // body opcional
   }
 
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore);
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

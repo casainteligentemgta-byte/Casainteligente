@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import {
   ownerFromAppSession,
   ownerFromTelegramChat,
@@ -40,8 +39,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore);
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -70,6 +68,6 @@ export async function POST(req: NextRequest) {
     const status =
       message.includes('API_KEY') || message.includes('SUPABASE_') ? 500 : 502;
     console.error('[api/agenda/chat]', err);
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
