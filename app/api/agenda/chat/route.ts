@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   let body: {
     messages?: AgendaChatMessage[];
     model?: string;
+    userId?: string;
   };
 
   try {
@@ -36,18 +37,20 @@ export async function POST(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  try {
-    const response = await runAgendaChat(
-      supabase,
-      user?.id ?? null,
-      validMessages,
-      body.model,
+  const userId = user?.id ?? body.userId?.trim();
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Se requiere un usuario autenticado o userId en el cuerpo de la petición.' },
+      { status: 401 },
     );
+  }
 
+  try {
+    const response = await runAgendaChat(userId, validMessages, body.model);
     return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al procesar la agenda.';
-    const status = message.includes('GEMINI_API_KEY') ? 500 : 502;
+    const status = message.includes('GEMINI_API_KEY') || message.includes('SUPABASE_') ? 500 : 502;
     console.error('[api/agenda/chat]', err);
     return NextResponse.json({ error: message }, { status });
   }

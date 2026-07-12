@@ -4,9 +4,9 @@ import {
   type FunctionCall,
   type Part,
 } from '@google/generative-ai';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { executeAgendaTool } from '@/lib/agenda/executeAgendaTool';
+import { ejecutarToolDeAgenda } from '@/lib/agenda/ejecutarToolDeAgenda';
 import { AGENDA_TOOL_NAMES, agendaTools, type AgendaToolName } from '@/lib/gemini/agendaTools';
+import type { AgendaToolArgs, AgendaToolResult } from '@/types/agenda';
 
 const DEFAULT_MODEL = 'gemini-2.0-flash';
 const MAX_TOOL_ROUNDS = 5;
@@ -61,8 +61,7 @@ function extractFunctionCalls(parts: Part[] | undefined): FunctionCall[] {
 }
 
 export async function runAgendaChat(
-  supabase: SupabaseClient,
-  userId: string | null,
+  userId: string,
   messages: AgendaChatMessage[],
   model = DEFAULT_MODEL,
 ): Promise<AgendaChatResponse> {
@@ -93,19 +92,25 @@ export async function runAgendaChat(
 
     for (const call of calls) {
       const name = call.name ?? '';
-      const args = (call.args ?? {}) as Record<string, unknown>;
+      const args = (call.args ?? {}) as AgendaToolArgs;
 
       if (!isAgendaToolName(name)) {
         functionResponses.push({
           functionResponse: {
             name,
-            response: { success: false, message: `Herramienta no soportada: ${name}` },
+            response: { status: 'error', message: `Herramienta no soportada: ${name}` },
           },
         });
         continue;
       }
 
-      const toolResult = await executeAgendaTool(supabase, userId, name, args);
+      let toolResult: AgendaToolResult | { status: 'error'; message: string };
+      try {
+        toolResult = await ejecutarToolDeAgenda(name, args, userId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Error al ejecutar la herramienta.';
+        toolResult = { status: 'error', message };
+      }
       toolCalls.push({ name, result: toolResult });
       functionResponses.push({
         functionResponse: {
