@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import {
+  ownerFromAppSession,
+  ownerFromTelegramChat,
+  ownerFromUserId,
+} from '@/lib/agenda/owner';
+import { runAgendaChat } from '@/lib/agenda/runAgendaChat';
 import { createClient } from '@/lib/supabase/server';
-import { runAgendaChat, type AgendaChatMessage } from '@/lib/gemini/agendaChat';
+import type { AgendaChatMessage, LlmProvider } from '@/types/agenda';
 
 export async function POST(req: NextRequest) {
   let body: {
     messages?: AgendaChatMessage[];
     model?: string;
+    provider?: LlmProvider;
     userId?: string;
+    sessionId?: string;
+    telegramChatId?: string;
   };
 
   try {
@@ -19,7 +28,7 @@ export async function POST(req: NextRequest) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const validMessages = messages.filter(
     (message): message is AgendaChatMessage =>
-      (message.role === 'user' || message.role === 'model') &&
+      (message.role === 'user' || message.role === 'assistant') &&
       typeof message.text === 'string' &&
       message.text.trim().length > 0,
   );
@@ -37,20 +46,29 @@ export async function POST(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const userId = user?.id ?? body.userId?.trim();
-  if (!userId) {
+  const owner =
+    (user?.id ? ownerFromUserId(user.id) : null) ??
+    (body.userId?.trim() ? ownerFromUserId(body.userId) : null) ??
+    (body.telegramChatId?.trim() ? ownerFromTelegramChat(body.telegramChatId) : null) ??
+    (body.sessionId?.trim() ? ownerFromAppSession(body.sessionId) : null);
+
+  if (!owner) {
     return NextResponse.json(
-      { error: 'Se requiere un usuario autenticado o userId en el cuerpo de la petición.' },
+      { error: 'Se requiere usuario autenticado, userId, sessionId o telegramChatId.' },
       { status: 401 },
     );
   }
 
   try {
-    const response = await runAgendaChat(userId, validMessages, body.model);
+    const response = await runAgendaChat(owner, validMessages, {
+      provider: body.provider,
+      model: body.model,
+    });
     return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al procesar la agenda.';
-    const status = message.includes('GEMINI_API_KEY') || message.includes('SUPABASE_') ? 500 : 502;
+    const status =
+      message.includes('API_KEY') || message.includes('SUPABASE_') ? 500 : 502;
     console.error('[api/agenda/chat]', err);
     return NextResponse.json({ error: message }, { status });
   }

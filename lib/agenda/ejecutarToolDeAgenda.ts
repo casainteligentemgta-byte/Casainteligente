@@ -1,5 +1,6 @@
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import type { AgendaToolArgs, AgendaToolResult } from '@/types/agenda';
+import { applyOwnerFilter, assertAgendaOwner, ownerInsertPayload } from '@/lib/agenda/owner';
+import type { AgendaOwner, AgendaToolArgs, AgendaToolResult } from '@/types/agenda';
 
 function getSupabase() {
   return createSupabaseAdminClient();
@@ -14,13 +15,15 @@ function asMes(value: unknown): number | undefined {
 export const ejecutarToolDeAgenda = async (
   name: string,
   args: AgendaToolArgs,
-  userId: string,
+  owner: AgendaOwner,
 ): Promise<AgendaToolResult> => {
+  assertAgendaOwner(owner);
+
   switch (name) {
     case 'guardarFechaEspecial': {
       const { error: insertError } = await getSupabase().from('special_dates').insert([
         {
-          user_id: userId,
+          ...ownerInsertPayload(owner),
           title: args.titulo,
           category: args.categoria,
           event_date: args.fecha,
@@ -37,7 +40,10 @@ export const ejecutarToolDeAgenda = async (
     }
 
     case 'consultarFechasEspeciales': {
-      let query = getSupabase().from('special_dates').select('*').eq('user_id', userId);
+      let query = applyOwnerFilter(
+        getSupabase().from('special_dates').select('*'),
+        owner,
+      );
 
       if (args.categoria) {
         query = query.eq('category', args.categoria);
