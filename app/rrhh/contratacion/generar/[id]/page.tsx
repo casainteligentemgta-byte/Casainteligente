@@ -76,30 +76,33 @@ export default function GenerarContrato({ params }: { params: { id: string } }) 
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
-      // 1. Insertar contrato
-      const { error: contratoError } = await supabase.from('ci_contratos').insert({
-        empleado_id: params.id,
-        cargo_acordado: formData.cargo,
-        salario_base: parseFloat(formData.salarioBase),
-        bonificaciones: formData.bonificaciones ? parseFloat(formData.bonificaciones) : 0,
-        fecha_ingreso: formData.fechaIngreso,
-        estado: 'activo'
+      const response = await fetch('/api/generate-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empleado_id: params.id,
+          cargo_acordado: formData.cargo,
+          salario_base: parseFloat(formData.salarioBase),
+          bonificaciones: formData.bonificaciones ? parseFloat(formData.bonificaciones) : 0,
+          fecha_ingreso: formData.fechaIngreso,
+          estado: 'activo',
+          nombre: formData.nombre,
+          cedula: formData.cedula,
+          telefono: formData.telefono,
+          direccion: formData.direccion,
+        }),
       });
 
-      if (contratoError) throw contratoError;
+      const result = await response.json();
 
-      // 2. Actualizar estado del empleado a completado
-      const { error: empleadoError } = await supabase
-        .from('ci_empleados')
-        .update({ estado_proceso: 'examen_completado' })
-        .eq('id', params.id);
-
-      if (empleadoError) throw empleadoError;
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al generar contrato');
+      }
 
       setGenerated(true);
     } catch (error) {
       console.error('Error generating contract:', error);
-      alert('Error al generar contrato. Revisa la consola.');
+      alert(error instanceof Error ? error.message : 'Error al generar contrato. Revisa la consola.');
     } finally {
       setIsGenerating(false);
     }

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contrato Individual de Trabajo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11pt;
+      color: #1C1C1E;
+      line-height: 1.5;
+      margin: 0;
+      padding: 0;
+    }
+    .header {
+      margin-bottom: 20px;
+      border-bottom: 1px solid #E5E5EA;
+      padding-bottom: 10px;
+      text-align: center;
+    }
+    .title {
+      font-size: 18pt;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 12pt;
+      color: #8E8E93;
+    }
+    .section { margin-bottom: 15px; }
+    .section-title {
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 15px;
+      margin-bottom: 5px;
+      background: #F2F2F7;
+      padding: 5px 8px;
+    }
+    p { margin: 0 0 8px; text-align: justify; }
+    .bold { font-weight: bold; }
+    .signatures {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 50px;
+      gap: 20px;
+    }
+    .signature-block {
+      width: 45%;
+      border-top: 1px solid #000;
+      padding-top: 8px;
+      text-align: center;
+    }
+    .signature-meta {
+      font-size: 9pt;
+      color: #8E8E93;
+      margin-top: 5px;
+    }
+    .digital-stamp {
+      margin-top: 10px;
+      font-size: 9pt;
+      color: #34C759;
+      border: 1px solid #34C759;
+      padding: 6px;
+      border-radius: 4px;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #8E8E93;
+      font-size: 9pt;
+      border-top: 1px solid #E5E5EA;
+      padding-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">CONTRATO INDIVIDUAL DE TRABAJO</div>
+    <div class="subtitle">{{empresa}}</div>
+  </div>
+
+  <div class="section">
+    <p>
+      Entre la empresa <span class="bold">{{empresa}}</span>, en lo sucesivo "EL EMPLEADOR",
+      y por la otra parte, el(la) ciudadano(a) <span class="bold">{{nombre}}</span>, titular de la Cédula
+      de Identidad Nro. <span class="bold">{{cedula}}</span>, domiciliado(a) en <span class="bold">{{direccion}}</span>,
+      y número telefónico de contacto <span class="bold">{{telefono}}</span>, en lo sucesivo "EL TRABAJADOR",
+      se ha convenido en celebrar el presente Contrato de Trabajo de acuerdo a las siguientes cláusulas:
+    </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">PRIMERA: OBJETO Y CARGO</div>
+    <p>
+      EL TRABAJADOR prestará sus servicios a EL EMPLEADOR desempeñando el cargo de <span class="bold">{{cargo}}</span>,
+      ejecutando todas las labores inherentes al mismo y cualquier otra vinculada que EL EMPLEADOR le asigne de manera lícita y razonable.
+    </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">SEGUNDA: REMUNERACIÓN</div>
+    <p>
+      EL EMPLEADOR pagará a EL TRABAJADOR una remuneración mensual base de
+      <span class="bold">${{salario_base}}</span> USD{{#if bonificaciones}}, más bonificaciones por un monto de
+      <span class="bold">${{bonificaciones}}</span> USD{{/if}}, pagaderos mediante depósitos bancarios o según acuerdo entre las partes,
+      conforme a los tabuladores salariales vigentes correspondientes a su cargo.
+    </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">TERCERA: JORNADA</div>
+    <p>
+      La jornada de trabajo será la estipulada por la legislación vigente, respetando los horarios administrativos y operativos
+      que EL EMPLEADOR defina según las necesidades del servicio.
+    </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">CUARTA: CONDICIÓN RESOLUTORIA</div>
+    <p>
+      El incumplimiento grave de las obligaciones laborales, la violación de normas de seguridad o conductas que afecten
+      la operación de EL EMPLEADOR podrán dar lugar a la terminación del presente contrato conforme a la legislación laboral aplicable.
+    </p>
+  </div>
+
+  <div class="section">
+    <p>
+      En señal de conformidad y aceptación digital de todos los términos de este contrato, se firma electrónicamente a los
+      <span class="bold">{{fecha_firma}}</span>, con fecha de ingreso pactada para el <span class="bold">{{fecha_ingreso}}</span>.
+    </p>
+  </div>
+
+  <div class="signatures">
+    <div class="signature-block">
+      <div>Por EL EMPLEADOR</div>
+      <div class="signature-meta">Representante Legal</div>
+    </div>
+    <div class="signature-block">
+      <div>Por EL TRABAJADOR</div>
+      <div class="signature-meta">{{nombre}}</div>
+      {{#if digital_signature}}
+      <div class="digital-stamp">
+        ✓ Aceptación Digital Registrada<br />
+        Ref: {{digital_signature}}
+      </div>
+      {{/if}}
+    </div>
+  </div>
+
+  <div class="footer">
+    Documento generado electrónicamente por Sistema Casa Inteligente. Válido para expediente RRHH.
+  </div>
+</body>
+</html>

@@ -19,16 +19,20 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "framer-motion": "^12.34.2",
+    "handlebars": "^4.7.9",
     "lucide-react": "^0.309.0",
     "next": "14.2.29",
     "papaparse": "^5.5.3",
+    "puppeteer": "^25.3.0",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^3.8.0",
     "tailwind-merge": "^2.2.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/handlebars": "^4.0.40",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18",
