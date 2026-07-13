@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     description: "Sistema de Gestión de Clientes · Security & Domotics",
 };
 
+// Evita pre-render estático de páginas que usan Supabase en el cliente.
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
     children,
 }: Readonly<{
