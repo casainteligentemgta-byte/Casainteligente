@@ -69,7 +69,7 @@ export default function IOSNavBar() {
     const [showMore, setShowMore] = useState(false);
 
     // Rutas donde la barra de navegación NO debe aparecer (Onboarding, Test, Login, 404)
-    const hideOnPaths = ['/onboarding', '/test', '/login', '/404'];
+    const hideOnPaths = ['/onboarding', '/test', '/login', '/cambiar-password', '/404'];
     if (hideOnPaths.some(p => pathname?.startsWith(p))) return null;
 
     const isMoreActive = moreItems.some(item => pathname.startsWith(item.href));

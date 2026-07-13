@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { resetPasswordEmpleadoClient } from '@/lib/auth/clientEmployeeAccess';
+import { TEMP_PASSWORD } from '@/lib/auth/passwordPolicy';
 
 const statusColors: Record<string, { bg: string; text: string }> = {
     activo:     { bg: 'rgba(52,199,89,0.15)',  text: '#34C759' },
@@ -43,6 +45,8 @@ export default function EmpleadoDetailPage() {
     const [evaluations, setEvaluations] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+    const [canResetPassword, setCanResetPassword] = useState(false);
+    const [resetting, setResetting] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -57,6 +61,16 @@ export default function EmpleadoDetailPage() {
                 .order('created_at', { ascending: false });
             setEvaluations(evData || []);
 
+            try {
+                const meRes = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+                if (meRes.ok) {
+                    const me = (await meRes.json()) as { can_reset_password?: boolean };
+                    setCanResetPassword(Boolean(me.can_reset_password));
+                }
+            } catch {
+                setCanResetPassword(false);
+            }
+
             setLoading(false);
         }
         load();
@@ -67,6 +81,24 @@ export default function EmpleadoDetailPage() {
         const supabase = createClient();
         await supabase.from('employees').delete().eq('id', id);
         router.push('/empleados');
+    }
+
+    async function handleResetPassword() {
+        if (!emp?.email) {
+            alert('Este empleado no tiene correo. Agrégalo antes de habilitar el acceso.');
+            return;
+        }
+        if (
+            !confirm(
+                `¿Restablecer la clave de ${emp.email} a ${TEMP_PASSWORD}?\n\nEl empleado deberá cambiarla al ingresar.`,
+            )
+        ) {
+            return;
+        }
+        setResetting(true);
+        const result = await resetPasswordEmpleadoClient(String(id));
+        setResetting(false);
+        alert(result.ok ? result.message : result.error);
     }
 
     const glass = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', backdropFilter: 'blur(20px)' };
@@ -118,6 +150,26 @@ export default function EmpleadoDetailPage() {
                         <button onClick={() => router.push(`/empleados/${id}/editar`)} style={{ padding: '10px 18px', borderRadius: '12px', border: '1px solid rgba(0,174,239,0.4)', background: 'rgba(0,174,239,0.1)', color: '#00AEEF', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '14px' }}>
                             ✏️ Editar
                         </button>
+                        {canResetPassword ? (
+                            <button
+                                onClick={() => void handleResetPassword()}
+                                disabled={resetting}
+                                style={{
+                                    padding: '10px 18px',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(52,199,89,0.4)',
+                                    background: 'rgba(52,199,89,0.1)',
+                                    color: '#34C759',
+                                    cursor: resetting ? 'wait' : 'pointer',
+                                    fontFamily: 'inherit',
+                                    fontWeight: 600,
+                                    fontSize: '14px',
+                                    opacity: resetting ? 0.6 : 1,
+                                }}
+                            >
+                                {resetting ? 'Reseteando…' : '🔑 Reset clave'}
+                            </button>
+                        ) : null}
                         <button onClick={deleteEmployee} style={{ padding: '10px 18px', borderRadius: '12px', border: '1px solid rgba(255,59,48,0.3)', background: 'rgba(255,59,48,0.08)', color: '#FF3B30', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '14px' }}>
                             🗑
                         </button>
