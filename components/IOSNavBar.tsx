@@ -55,6 +55,7 @@ const mainItems = [
 
 // ── Ítems secundarios (en el panel "Más") ─────────────────────
 const moreItems = [
+    { href: '/agenda',       label: 'Agenda',       emoji: '📅', color: '#FF2D55' },
     { href: '/presupuestos', label: 'Presupuestos', emoji: '📄', color: '#007AFF' },
     { href: '/productos',    label: 'Productos',    emoji: '📦', color: '#FF9500' },
     { href: '/almacen',      label: 'Inventario',   emoji: '🏭', color: '#FF2D55' },
