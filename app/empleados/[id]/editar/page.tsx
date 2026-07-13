@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { provisionarAccesoEmpleadoClient } from '@/lib/auth/clientEmployeeAccess';
+import { TEMP_PASSWORD } from '@/lib/auth/passwordPolicy';
 
 const SECTIONS = ['Personales', 'Laboral', 'Estudios', 'Experiencia', 'Cursos', 'Conocimientos', 'Médicos', 'Vehículo', 'Referencias'];
 
@@ -237,8 +239,31 @@ export default function EditarEmpleadoPage() {
         };
 
         const { error } = await supabase.from('employees').update(payload).eq('id', id);
-        setSaving(false);
-        if (error) return alert('Error al actualizar: ' + error.message);
+        if (error) {
+            setSaving(false);
+            return alert('Error al actualizar: ' + error.message);
+        }
+
+        if (email.trim()) {
+            const provision = await provisionarAccesoEmpleadoClient({
+                employeeId: String(id),
+                email: email.trim(),
+                nombres,
+                apellidos,
+            });
+            setSaving(false);
+            if (!provision.ok) {
+                alert(
+                    `Empleado actualizado, pero no se pudo sincronizar el acceso: ${provision.error}\n\n` +
+                        `Clave temporal: ${TEMP_PASSWORD}`,
+                );
+            } else {
+                alert(provision.message);
+            }
+        } else {
+            setSaving(false);
+        }
+
         router.push(`/empleados/${id}`);
     }
 

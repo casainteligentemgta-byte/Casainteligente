@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { provisionarAccesoEmpleadoClient } from '@/lib/auth/clientEmployeeAccess';
+import { TEMP_PASSWORD } from '@/lib/auth/passwordPolicy';
 
 const SECTIONS = ['Personales', 'Laboral', 'Estudios', 'Experiencia', 'Cursos', 'Conocimientos', 'Médicos', 'Vehículo', 'Referencias'];
 
@@ -179,13 +181,37 @@ export default function NuevoEmpleadoPage() {
             referencias: referencias.filter(r => r.nombre),
             afiliaciones: afiliaciones.filter(a => a.gremio),
         };
-        const { error } = await supabase.from('employees').insert([payload]);
-        setSaving(false);
+        const { data: inserted, error } = await supabase
+            .from('employees')
+            .insert([payload])
+            .select('id')
+            .single();
         if (error) {
+            setSaving(false);
             console.error('Error details:', error);
-            // Show the raw error message to the user for debugging
             return alert('Error de Base de Datos: ' + error.message);
         }
+
+        if (email.trim() && inserted?.id) {
+            const provision = await provisionarAccesoEmpleadoClient({
+                employeeId: inserted.id,
+                email: email.trim(),
+                nombres,
+                apellidos,
+            });
+            setSaving(false);
+            if (!provision.ok) {
+                alert(
+                    `Empleado guardado, pero no se pudo habilitar el acceso: ${provision.error}\n\n` +
+                        `Puedes reintentarlo editando el empleado. Clave temporal esperada: ${TEMP_PASSWORD}`,
+                );
+            } else {
+                alert(provision.message);
+            }
+        } else {
+            setSaving(false);
+        }
+
         router.push('/empleados');
     }
 
