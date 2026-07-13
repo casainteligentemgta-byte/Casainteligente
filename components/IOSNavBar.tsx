@@ -56,7 +56,7 @@ const mainItems = [
 // ── Ítems secundarios (en el panel "Más") ─────────────────────
 const moreItems = [
     { href: '/presupuestos', label: 'Presupuestos', emoji: '📄', color: '#007AFF' },
-    { href: '/contratos/administracion-delegada', label: 'Contratos AD', emoji: '📝', color: '#5856D6' },
+    { href: '/dashboard/contracts', label: 'Contratos AD', emoji: '📝', color: '#5856D6' },
     { href: '/productos',    label: 'Productos',    emoji: '📦', color: '#FF9500' },
     { href: '/almacen',      label: 'Inventario',   emoji: '🏭', color: '#FF2D55' },
     { href: '/operaciones/proyectos', label: 'Proyectos', emoji: '🏗️', color: '#32ADE6' },
