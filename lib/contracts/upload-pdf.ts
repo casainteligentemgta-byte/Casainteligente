@@ -9,11 +9,12 @@ export interface UploadContractPdfResult {
 
 export async function uploadContractPdf(
     pdfBuffer: Buffer,
-    empleadoId: string
+    clientCi: string
 ): Promise<UploadContractPdfResult> {
     const supabase = createAdminClient();
     const timestamp = Date.now();
-    const filePath = `${empleadoId}/contrato-${timestamp}.pdf`;
+    const safeCi = clientCi.replace(/[^a-zA-Z0-9_-]/g, '');
+    const filePath = `admin-delegada/${safeCi || 'sin-ci'}/contrato-${timestamp}.pdf`;
 
     const { error: uploadError } = await supabase.storage
         .from(BUCKET_NAME)

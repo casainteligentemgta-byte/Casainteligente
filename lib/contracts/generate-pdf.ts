@@ -16,7 +16,15 @@ function getTemplate(): HandlebarsTemplateDelegate {
     return compiledTemplate;
 }
 
+function registerHelpers() {
+    Handlebars.registerHelper('formatUSD', (value: number) => {
+        const n = Number(value) || 0;
+        return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
+}
+
 export async function generateContractPdf(context: ContractTemplateContext): Promise<Buffer> {
+    registerHelpers();
     const html = getTemplate()(context);
 
     const browser = await puppeteer.launch({
@@ -31,7 +39,7 @@ export async function generateContractPdf(context: ContractTemplateContext): Pro
         const pdf = await page.pdf({
             format: 'A4',
             printBackground: true,
-            margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
+            margin: { top: '18mm', right: '14mm', bottom: '18mm', left: '14mm' },
         });
 
         return Buffer.from(pdf);

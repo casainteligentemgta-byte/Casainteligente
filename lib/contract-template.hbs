@@ -2,47 +2,55 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Contrato Individual de Trabajo</title>
+  <title>Contrato de Administración Delegada</title>
   <style>
     * { box-sizing: border-box; }
     body {
       font-family: Helvetica, Arial, sans-serif;
-      font-size: 11pt;
+      font-size: 10.5pt;
       color: #1C1C1E;
-      line-height: 1.5;
+      line-height: 1.45;
       margin: 0;
       padding: 0;
     }
     .header {
-      margin-bottom: 20px;
+      margin-bottom: 18px;
       border-bottom: 1px solid #E5E5EA;
       padding-bottom: 10px;
       text-align: center;
     }
     .title {
-      font-size: 18pt;
+      font-size: 16pt;
       font-weight: bold;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
-    .subtitle {
-      font-size: 12pt;
-      color: #8E8E93;
-    }
-    .section { margin-bottom: 15px; }
+    .subtitle { font-size: 11pt; color: #8E8E93; }
+    .section { margin-bottom: 12px; }
     .section-title {
-      font-size: 12pt;
+      font-size: 11pt;
       font-weight: bold;
-      margin-top: 15px;
-      margin-bottom: 5px;
+      margin: 14px 0 6px;
       background: #F2F2F7;
       padding: 5px 8px;
     }
-    p { margin: 0 0 8px; text-align: justify; }
+    p { margin: 0 0 7px; text-align: justify; }
     .bold { font-weight: bold; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 12px;
+      font-size: 10pt;
+    }
+    th, td {
+      border: 1px solid #E5E5EA;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    th { background: #F2F2F7; width: 45%; }
     .signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 50px;
+      margin-top: 42px;
       gap: 20px;
     }
     .signature-block {
@@ -51,105 +59,103 @@
       padding-top: 8px;
       text-align: center;
     }
-    .signature-meta {
-      font-size: 9pt;
-      color: #8E8E93;
-      margin-top: 5px;
-    }
-    .digital-stamp {
-      margin-top: 10px;
-      font-size: 9pt;
-      color: #34C759;
-      border: 1px solid #34C759;
-      padding: 6px;
-      border-radius: 4px;
-    }
+    .signature-meta { font-size: 9pt; color: #8E8E93; margin-top: 4px; }
     .footer {
-      margin-top: 40px;
+      margin-top: 28px;
       text-align: center;
       color: #8E8E93;
-      font-size: 9pt;
+      font-size: 8.5pt;
       border-top: 1px solid #E5E5EA;
-      padding-top: 10px;
+      padding-top: 8px;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="title">CONTRATO INDIVIDUAL DE TRABAJO</div>
+    <div class="title">CONTRATO DE ADMINISTRACIÓN DELEGADA</div>
     <div class="subtitle">{{empresa}}</div>
   </div>
 
   <div class="section">
     <p>
-      Entre la empresa <span class="bold">{{empresa}}</span>, en lo sucesivo "EL EMPLEADOR",
-      y por la otra parte, el(la) ciudadano(a) <span class="bold">{{nombre}}</span>, titular de la Cédula
-      de Identidad Nro. <span class="bold">{{cedula}}</span>, domiciliado(a) en <span class="bold">{{direccion}}</span>,
-      y número telefónico de contacto <span class="bold">{{telefono}}</span>, en lo sucesivo "EL TRABAJADOR",
-      se ha convenido en celebrar el presente Contrato de Trabajo de acuerdo a las siguientes cláusulas:
+      Entre <span class="bold">{{empresa}}</span>, en adelante "EL ADMINISTRADOR", y el(la) ciudadano(a)
+      <span class="bold">{{client_name}}</span>, titular de la Cédula de Identidad Nro.
+      <span class="bold">{{client_ci}}</span>, con correo electrónico
+      <span class="bold">{{client_email}}</span>, en adelante "EL CLIENTE", se celebra el presente
+      Contrato de Administración Delegada de Obra bajo las siguientes cláusulas:
     </p>
   </div>
 
   <div class="section">
-    <div class="section-title">PRIMERA: OBJETO Y CARGO</div>
+    <div class="section-title">PRIMERA: OBJETO Y ALCANCE TÉCNICO</div>
     <p>
-      EL TRABAJADOR prestará sus servicios a EL EMPLEADOR desempeñando el cargo de <span class="bold">{{cargo}}</span>,
-      ejecutando todas las labores inherentes al mismo y cualquier otra vinculada que EL EMPLEADOR le asigne de manera lícita y razonable.
+      EL ADMINISTRADOR se obliga a administrar la ejecución técnica del proyecto bajo el régimen de
+      administración delegada, con el siguiente alcance:
+    </p>
+    <table>
+      <tr><th>Elementos a sustituir</th><td>{{substitution_target}}</td></tr>
+      <tr><th>Elementos a salvar</th><td>{{salvage_target}}</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">SEGUNDA: CONDICIONES FINANCIERAS</div>
+    <table>
+      <tr><th>Costo técnico del proyecto (USD)</th><td>$ {{formatUSD project_cost}}</td></tr>
+      <tr><th>Rebaja comercial (USD)</th><td>$ {{formatUSD discount_amount}}</td></tr>
+      <tr><th>Costo neto (USD)</th><td>$ {{formatUSD net_project_cost}}</td></tr>
+      <tr><th>Honorarios de administración</th><td>{{fee_percentage}}%</td></tr>
+      <tr><th>Honorario estimado</th><td>$ {{formatUSD estimated_fee}}</td></tr>
+      <tr><th>Mínimo mensual garantizado</th><td>$ {{formatUSD monthly_min_fee}}</td></tr>
+      <tr><th>Honorario aplicable</th><td>$ {{formatUSD applicable_fee}}</td></tr>
+      <tr><th>Caja chica / capital de trabajo</th><td>$ {{formatUSD working_capital}}</td></tr>
+      <tr><th>Fondo de garantía (semanas de nómina)</th><td>{{payroll_guarantee_weeks}} semanas</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">TERCERA: PLAZO Y CONDICIÓN RESOLUTORIA</div>
+    <p>
+      El beneficio y las condiciones del presente contrato tendrán una vigencia de
+      <span class="bold">{{contract_deadline_months}} mes(es)</span> contados a partir de la fecha de firma.
+      Transcurrido dicho plazo sin cumplimiento de las obligaciones esenciales de EL CLIENTE
+      (fondeo de caja chica, fondo de garantía de nómina u otros aportes pactados),
+      EL ADMINISTRADOR podrá dar por resuelto el contrato de pleno derecho, sin perjuicio de
+      reclamar honorarios mínimos y gastos ya causados.
     </p>
   </div>
 
   <div class="section">
-    <div class="section-title">SEGUNDA: REMUNERACIÓN</div>
+    <div class="section-title">CUARTA: OBLIGACIONES DE LAS PARTES</div>
     <p>
-      EL EMPLEADOR pagará a EL TRABAJADOR una remuneración mensual base de
-      <span class="bold">${{salario_base}}</span> USD{{#if bonificaciones}}, más bonificaciones por un monto de
-      <span class="bold">${{bonificaciones}}</span> USD{{/if}}, pagaderos mediante depósitos bancarios o según acuerdo entre las partes,
-      conforme a los tabuladores salariales vigentes correspondientes a su cargo.
-    </p>
-  </div>
-
-  <div class="section">
-    <div class="section-title">TERCERA: JORNADA</div>
-    <p>
-      La jornada de trabajo será la estipulada por la legislación vigente, respetando los horarios administrativos y operativos
-      que EL EMPLEADOR defina según las necesidades del servicio.
-    </p>
-  </div>
-
-  <div class="section">
-    <div class="section-title">CUARTA: CONDICIÓN RESOLUTORIA</div>
-    <p>
-      El incumplimiento grave de las obligaciones laborales, la violación de normas de seguridad o conductas que afecten
-      la operación de EL EMPLEADOR podrán dar lugar a la terminación del presente contrato conforme a la legislación laboral aplicable.
+      EL CLIENTE aportará el capital de trabajo (caja chica) por
+      <span class="bold">$ {{formatUSD working_capital}}</span> y mantendrá el Fondo de Garantía
+      equivalente a <span class="bold">{{payroll_guarantee_weeks}}</span> semanas de nómina operativa.
+      EL ADMINISTRADOR dirigirá la ejecución técnica, reportará avances y aplicará los honorarios
+      conforme al porcentaje pactado, respetando el mínimo mensual garantizado.
     </p>
   </div>
 
   <div class="section">
     <p>
-      En señal de conformidad y aceptación digital de todos los términos de este contrato, se firma electrónicamente a los
-      <span class="bold">{{fecha_firma}}</span>, con fecha de ingreso pactada para el <span class="bold">{{fecha_ingreso}}</span>.
+      En señal de conformidad, se firma el presente contrato a los
+      <span class="bold">{{fecha_firma}}</span>.
     </p>
   </div>
 
   <div class="signatures">
     <div class="signature-block">
-      <div>Por EL EMPLEADOR</div>
-      <div class="signature-meta">Representante Legal</div>
+      <div>Por EL ADMINISTRADOR</div>
+      <div class="signature-meta">{{empresa}}</div>
     </div>
     <div class="signature-block">
-      <div>Por EL TRABAJADOR</div>
-      <div class="signature-meta">{{nombre}}</div>
-      {{#if digital_signature}}
-      <div class="digital-stamp">
-        ✓ Aceptación Digital Registrada<br />
-        Ref: {{digital_signature}}
-      </div>
-      {{/if}}
+      <div>Por EL CLIENTE</div>
+      <div class="signature-meta">{{client_name}} · {{client_ci}}</div>
     </div>
   </div>
 
   <div class="footer">
-    Documento generado electrónicamente por Sistema Casa Inteligente. Válido para expediente RRHH.
+    Documento generado electrónicamente · Contrato de Administración Delegada · {{empresa}}
   </div>
 </body>
 </html>

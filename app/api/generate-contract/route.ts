@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase-admin';
-import { generateContractRequestSchema } from '@/lib/contracts/schema';
+import {
+    generateContractRequestSchema,
+    computeContractDerived,
+} from '@/lib/contracts/schema';
 import { generateContractPdf } from '@/lib/contracts/generate-pdf';
 import { uploadContractPdf } from '@/lib/contracts/upload-pdf';
 import type { ContractData } from '@/lib/contracts/types';
@@ -26,7 +29,11 @@ export async function POST(req: NextRequest) {
         const cookieStore = cookies();
         const supabase = createClient(cookieStore);
 
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser();
+
         if (authError || !user) {
             return NextResponse.json(
                 { error: 'No autorizado. Debes iniciar sesión para generar contratos.' },
@@ -50,63 +57,45 @@ export async function POST(req: NextRequest) {
         }
 
         const data = parsed.data;
-        const digitalSignature =
-            data.digital_signature ??
-            `Firmado digitalmente por RRHH - ${new Date().toLocaleDateString('es-VE')}`;
+        const derived = computeContractDerived(data);
 
         const pdfBuffer = await generateContractPdf({
+            ...data,
+            ...derived,
             empresa: EMPRESA,
-            nombre: data.nombre,
-            cedula: data.cedula,
-            telefono: data.telefono,
-            direccion: data.direccion,
-            cargo: data.cargo_acordado,
-            salario_base: data.salario_base,
-            bonificaciones: data.bonificaciones,
-            fecha_ingreso: data.fecha_ingreso,
             fecha_firma: new Date().toLocaleDateString('es-VE'),
-            digital_signature: digitalSignature,
         });
 
-        const { publicUrl } = await uploadContractPdf(pdfBuffer, data.empleado_id);
+        const { publicUrl } = await uploadContractPdf(pdfBuffer, data.client_ci);
 
         const contractRecord: ContractData = {
-            empleado_id: data.empleado_id,
-            cargo_acordado: data.cargo_acordado,
-            salario_base: data.salario_base,
-            bonificaciones: data.bonificaciones,
-            fecha_ingreso: data.fecha_ingreso,
-            estado: data.estado,
+            ...data,
             pdf_url: publicUrl,
+            status: 'generado',
         };
 
         const admin = createAdminClient();
         const { data: inserted, error: insertError } = await admin
-            .from('ci_contratos')
+            .from('contracts')
             .insert(contractRecord)
             .select('id, pdf_url')
             .single();
 
         if (insertError) {
             return NextResponse.json(
-                { error: 'Error al guardar el contrato en la base de datos', detail: insertError.message },
+                {
+                    error: 'Error al guardar el contrato en la base de datos',
+                    detail: insertError.message,
+                },
                 { status: 500 }
             );
-        }
-
-        const { error: empleadoError } = await admin
-            .from('ci_empleados')
-            .update({ estado_proceso: 'examen_completado' })
-            .eq('id', data.empleado_id);
-
-        if (empleadoError) {
-            console.error('Error actualizando empleado:', empleadoError);
         }
 
         return NextResponse.json({
             success: true,
             contract_id: inserted.id,
             pdf_url: inserted.pdf_url,
+            derived,
         });
     } catch (error) {
         console.error('generate-contract error:', error);
