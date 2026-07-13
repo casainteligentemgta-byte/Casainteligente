@@ -58,7 +58,7 @@ const moreItems = [
     { href: '/presupuestos', label: 'Presupuestos', emoji: '📄', color: '#007AFF' },
     { href: '/productos',    label: 'Productos',    emoji: '📦', color: '#FF9500' },
     { href: '/almacen',      label: 'Inventario',   emoji: '🏭', color: '#FF2D55' },
-    { href: '/proyectos',    label: 'Proyectos',    emoji: '🏗️', color: '#32ADE6' },
+    { href: '/operaciones/proyectos', label: 'Proyectos', emoji: '🏗️', color: '#32ADE6' },
     { href: '/contabilidad', label: 'Contabilidad', emoji: '💰', color: '#5856D6' },
     { href: '/personas',     label: 'Personas',     emoji: '👤', color: '#30D158' },
     { href: '/nexus',        label: 'Nexus',        emoji: '🔮', color: '#BF5AF2' },
