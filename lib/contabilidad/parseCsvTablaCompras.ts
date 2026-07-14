@@ -129,6 +129,10 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     'numero_factura',
     'n_factura',
     'num_factura',
+    'no_factura',
+    'n_de_factura',
+    'documento',
+    'nro_doc',
     'nro',
     'numero',
   ]);
@@ -137,10 +141,26 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     'proveedor',
     'razon_social',
     'nombre_proveedor',
+    'beneficiario',
+    'casa_comercial',
     'emisor',
   ]);
-  const iRif = pickCol(headers, ['supplier_rif', 'rif', 'rif_proveedor', 'cedula_rif']);
-  const iFecha = pickCol(headers, ['date', 'fecha', 'fecha_factura', 'f_emision']);
+  const iRif = pickCol(headers, [
+    'supplier_rif',
+    'rif',
+    'rif_proveedor',
+    'cedula_rif',
+    'ci_rif',
+    'doc_identidad',
+  ]);
+  const iFecha = pickCol(headers, [
+    'date',
+    'fecha',
+    'fecha_factura',
+    'f_emision',
+    'fecha_emision',
+    'fechafactura',
+  ]);
   const iDesc = pickCol(headers, [
     'descripcion',
     'description',
@@ -148,19 +168,33 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     'concepto',
     'producto',
     'detalle',
+    'material',
+    'observacion',
+    'observaciones',
   ]);
-  const iCodigo = pickCol(headers, ['item_code', 'codigo', 'sku', 'cod', 'referencia']);
-  const iUnidad = pickCol(headers, ['unidad', 'unit', 'und', 'um']);
-  const iCant = pickCol(headers, ['cantidad', 'quantity', 'cant', 'qty']);
+  const iCodigo = pickCol(headers, ['item_code', 'codigo', 'sku', 'cod', 'referencia', 'cod_prod']);
+  const iUnidad = pickCol(headers, ['unidad', 'unit', 'und', 'um', 'u_m']);
+  const iCant = pickCol(headers, ['cantidad', 'quantity', 'cant', 'qty', 'cant_']);
   const iPrecio = pickCol(headers, [
     'precio_unitario',
     'unit_price',
     'precio',
     'p_unitario',
     'pu',
+    'costo',
+    'costo_unitario',
   ]);
-  const iSub = pickCol(headers, ['subtotal', 'total', 'monto', 'importe', 'total_linea']);
-  const iMoneda = pickCol(headers, ['moneda', 'currency', 'divisa']);
+  const iSub = pickCol(headers, [
+    'subtotal',
+    'total',
+    'monto',
+    'importe',
+    'total_linea',
+    'total_bs',
+    'total_usd',
+    'monto_total',
+  ]);
+  const iMoneda = pickCol(headers, ['moneda', 'currency', 'divisa', 'mon']);
 
   if (iFactura < 0 && iProveedor < 0 && iDesc < 0) {
     throw new Error(
