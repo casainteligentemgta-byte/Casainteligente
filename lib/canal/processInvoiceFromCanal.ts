@@ -297,11 +297,6 @@ async function processInvoiceFromCanalCore(
     await prog.ok('');
     if (params.canal === 'telegram' && !fastTrackMsg) {
       try {
-        const { setTelegramContexto } = await import('@/lib/telegram/estados');
-        await setTelegramContexto(supabase, params.chatId, {
-          contexto: 'factura',
-          pending_factura_id: params.pendingId,
-        });
         const { avanzarFlujoFacturaCompradorTelegram } = await import(
           '@/lib/telegram/flujoFacturaCompradorTelegram'
         );

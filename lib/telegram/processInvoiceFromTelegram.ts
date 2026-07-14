@@ -47,7 +47,7 @@ export async function processTelegramInvoicePhoto(params: {
         await import('@/lib/telegram/flujoFacturaCompradorTelegram');
       const { data: row } = await admin.client
         .from('ci_facturas_canal_pendientes')
-        .select('extracted, proyecto_id, entidad_id, ubicacion_destino_id, estado')
+        .select('extracted, proyecto_id, entidad_id, imputacion_entidad, ubicacion_destino_id, estado')
         .eq('id', params.pendingId)
         .maybeSingle();
       const estado = String(row?.estado ?? '').toLowerCase();
