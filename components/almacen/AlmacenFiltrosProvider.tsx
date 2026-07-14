@@ -116,7 +116,7 @@ export function AlmacenFiltrosProvider({ children }: { children: ReactNode }) {
         const [e, p, depRes] = await Promise.all([
           loadEntidades(supabase),
           loadProyectos(supabase),
-          supabase.from('inventory_deposits').select('id,name,locality,code,entidad_id'),
+          supabase.from('inventory_deposits').select('id,name,locality,code'),
         ]);
         setEntidades(e);
         setProyectos(p);
@@ -205,11 +205,6 @@ export function AlmacenFiltrosProvider({ children }: { children: ReactNode }) {
     [depositsById],
   );
 
-  const depositsEntidad = useMemo(
-    () => depositsLista.map((d) => ({ id: d.id, entidad_id: d.entidad_id ?? null })),
-    [depositsLista],
-  );
-
   const depositIdsScope = useMemo(
     () =>
       listarDepositIdsParaFiltroInventario(ubicacionesInventario, {
@@ -217,16 +212,8 @@ export function AlmacenFiltrosProvider({ children }: { children: ReactNode }) {
         proyectoId: filterProyectoId || undefined,
         proyectoNombre: nombreProyectoFiltro || undefined,
         proyectos,
-        deposits: depositsEntidad,
       }),
-    [
-      ubicacionesInventario,
-      filterEntidadId,
-      filterProyectoId,
-      nombreProyectoFiltro,
-      proyectos,
-      depositsEntidad,
-    ],
+    [ubicacionesInventario, filterEntidadId, filterProyectoId, nombreProyectoFiltro, proyectos],
   );
 
   const depositsFiltrados = useMemo(() => {
@@ -300,7 +287,6 @@ export function AlmacenFiltrosProvider({ children }: { children: ReactNode }) {
               proyectos,
               depositId: filterDepositId || undefined,
               depositNombre,
-              deposits: depositsEntidad,
             });
           }
           return { ubicacionIds: [] as string[], depositoSinInterseccion: false };
@@ -374,7 +360,6 @@ export function AlmacenFiltrosProvider({ children }: { children: ReactNode }) {
     supabase,
     ubicacionesInventario,
     depositsById,
-    depositsEntidad,
   ]);
 
   useEffect(() => {

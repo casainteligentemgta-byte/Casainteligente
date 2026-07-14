@@ -660,9 +660,8 @@ export default function InventarioCuadro() {
                 proyectoId: filterProyectoId || undefined,
                 proyectoNombre: nombreProyectoFiltro || undefined,
                 proyectos,
-                deposits: depositsLista.map((d) => ({ id: d.id, entidad_id: d.entidad_id ?? null })),
             }),
-        [ubicacionesInventario, filterEntidadId, filterProyectoId, nombreProyectoFiltro, proyectos, depositsLista],
+        [ubicacionesInventario, filterEntidadId, filterProyectoId, nombreProyectoFiltro, proyectos],
     );
 
     const hrefDespacho = useMemo(() => {
@@ -957,7 +956,7 @@ export default function InventarioCuadro() {
             let invRes = await invQuery;
             const [prodRes, depRes, furRes] = await Promise.all([
                 supabase.from('products').select('nombre, imagen').not('imagen', 'is', null),
-                supabase.from('inventory_deposits').select('id,name,locality,code,entidad_id'),
+                supabase.from('inventory_deposits').select('id,name,locality'),
                 supabase.from('inventory_furniture').select('id,deposit_id,name'),
             ]);
 

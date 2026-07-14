@@ -6,9 +6,7 @@ import {
 import {
   asegurarUbicacionObra,
   etiquetaUbicacionSelector,
-  labelUbicacionOpcion,
   listarUbicacionesParaSelector,
-  resolverProyectoDestinoDesdeUbicacionAlmacen,
 } from '@/lib/almacen/ubicacionesInventario';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
@@ -91,78 +89,6 @@ function buildKeyboard(
   return { inline_keyboard: rows };
 }
 
-function etiquetaAlmacenFacturaComprador(u: UbicacionInventario): string {
-  const base = labelUbicacionOpcion(u);
-  const proy = u.proyecto?.nombre?.trim();
-  return proy ? `${base} · ${proy}` : base;
-}
-
-function buildKeyboardAlmacenesFactura(
-  ubicaciones: UbicacionInventario[],
-  page: number,
-): { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } {
-  const PAGE_SIZE = 8;
-  const totalPages = Math.max(1, Math.ceil(ubicaciones.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(0, page), totalPages - 1);
-  const slice = ubicaciones.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
-
-  const rows: Array<Array<{ text: string; callback_data: string }>> = slice.map((u) => [
-    {
-      text: truncar(etiquetaAlmacenFacturaComprador(u)),
-      callback_data: `${PREFIX_SEL}${u.id}`,
-    },
-  ]);
-
-  if (totalPages > 1) {
-    const nav: Array<{ text: string; callback_data: string }> = [];
-    if (safePage > 0) {
-      nav.push({ text: '◀', callback_data: `${PREFIX_PAGE}${safePage - 1}` });
-    }
-    nav.push({ text: `${safePage + 1}/${totalPages}`, callback_data: `${PREFIX_PAGE}${safePage}` });
-    if (safePage < totalPages - 1) {
-      nav.push({ text: '▶', callback_data: `${PREFIX_PAGE}${safePage + 1}` });
-    }
-    rows.push(nav);
-  }
-
-  return { inline_keyboard: rows };
-}
-
-/** Tras moneda y forma de pago: elige almacén de ingreso (sin paso entidad/obra). */
-export async function enviarPickerAlmacenesFacturaCompradorTelegram(
-  supabase: SupabaseClient,
-  chatId: string,
-  pendingId: string,
-  page = 0,
-): Promise<void> {
-  await setTelegramContexto(supabase, chatId, {
-    contexto: 'factura',
-    pending_factura_id: pendingId,
-    metadata: { flujo: 'factura_compra_almacen' },
-  });
-
-  const ubicaciones = await listarUbicacionesParaSelector(supabase, {
-    soloAlmacenes: true,
-  });
-
-  if (!ubicaciones.length) {
-    await sendTelegramMessage(
-      chatId,
-      '⚠️ No hay almacenes configurados. Cree depósitos en Almacén → Maestros.',
-      { parse_mode: 'HTML' },
-    );
-    return;
-  }
-
-  const keyboard = buildKeyboardAlmacenesFactura(ubicaciones, page);
-
-  await sendTelegramMessage(
-    chatId,
-    `📦 <b>¿A qué almacén irá el material?</b>\n\n<i>Elija el depósito de ingreso.</i>`,
-    { parse_mode: 'HTML', reply_markup: keyboard },
-  );
-}
-
 export async function enviarPickerUbicacionesTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -220,11 +146,9 @@ export async function manejarCallbackUbicacionTelegram(
 
   const estado = await getTelegramEstado(supabase, params.chatId);
   const pendingId = estado.pending_factura_id;
-  const flujoAlmacenDirecto =
-    String(estado.metadata?.flujo ?? '') === 'factura_compra_almacen';
-  let proyectoId =
+  const proyectoId =
     estado.proyecto_id ?? String(estado.metadata?.factura_picker_proyecto_id ?? '');
-  let nombreObra = String(estado.metadata?.factura_picker_nombre_obra ?? 'Obra');
+  const nombreObra = String(estado.metadata?.factura_picker_nombre_obra ?? 'Obra');
 
   if (!pendingId) {
     await answerCallbackQuery(params.callbackId, 'Sin factura pendiente', true);
@@ -233,21 +157,12 @@ export async function manejarCallbackUbicacionTelegram(
 
   if (parsed.type === 'page') {
     await answerCallbackQuery(params.callbackId);
-    if (flujoAlmacenDirecto) {
-      await enviarPickerAlmacenesFacturaCompradorTelegram(
-        supabase,
-        params.chatId,
-        pendingId,
-        parsed.page,
-      );
-    } else {
-      await enviarPickerUbicacionesTelegram(supabase, params.chatId, {
-        pendingId,
-        proyectoId,
-        nombreObra,
-        page: parsed.page,
-      });
-    }
+    await enviarPickerUbicacionesTelegram(supabase, params.chatId, {
+      pendingId,
+      proyectoId,
+      nombreObra,
+      page: parsed.page,
+    });
     return true;
   }
 
@@ -262,31 +177,10 @@ export async function manejarCallbackUbicacionTelegram(
     return true;
   }
 
-  let imputacionEntidad = false;
-  let entidadId: string | null = null;
-
-  if (flujoAlmacenDirecto || !proyectoId) {
-    try {
-      const destino = await resolverProyectoDestinoDesdeUbicacionAlmacen(
-        supabase,
-        parsed.ubicacionId,
-      );
-      proyectoId = destino.proyectoId ?? '';
-      nombreObra = destino.nombreObra;
-      imputacionEntidad = destino.imputacionEntidad;
-      entidadId = destino.entidadId;
-    } catch (e) {
-      const det = e instanceof Error ? e.message : 'No se pudo vincular el almacén';
-      await answerCallbackQuery(params.callbackId, det.slice(0, 180), true);
-      return true;
-    }
-  }
-
   const { error } = await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
-      proyecto_id: proyectoId || null,
-      entidad_id: entidadId,
+      proyecto_id: proyectoId || undefined,
       ubicacion_destino_id: parsed.ubicacionId,
       updated_at: new Date().toISOString(),
     })
@@ -331,18 +225,14 @@ export async function manejarCallbackUbicacionTelegram(
 
   let textoFinal = resumenFacturaCompradorHtml(extracted);
 
-  const puedeConfirmar = imputacionEntidad ? Boolean(entidadId) : Boolean(proyectoId);
-
-  if (puedeConfirmar) {
+  if (proyectoId) {
     try {
       const estadoPrev = await getTelegramEstado(supabase, params.chatId);
       const procuraId = procuraIdDesdeMetadataFactura(estadoPrev);
       await confirmarCompraDesdeCanal(supabase, {
         pendingId,
-        proyectoId: proyectoId || '',
+        proyectoId,
         ubicacionDestinoId: parsed.ubicacionId,
-        entidadId: entidadId ?? undefined,
-        imputacionEntidad,
         procuraId,
       });
       await setTelegramContexto(supabase, params.chatId, {
@@ -350,10 +240,7 @@ export async function manejarCallbackUbicacionTelegram(
         pending_factura_id: null,
         metadata: {},
       });
-      textoFinal = mensajeCompradorFacturaConfirmadaHtml(
-        imputacionEntidad ? 'entidad' : 'obra',
-        extracted,
-      );
+      textoFinal = mensajeCompradorFacturaConfirmadaHtml('obra', extracted);
     } catch (e) {
       const det = e instanceof Error ? e.message : 'Error al registrar en Contabilidad';
       textoFinal =
@@ -364,7 +251,7 @@ export async function manejarCallbackUbicacionTelegram(
 
   await sendTelegramMessage(params.chatId, textoFinal, {
     parse_mode: 'HTML',
-    reply_markup: tecladoFacturaRegistradaOk(imputacionEntidad ? 'entidad' : 'obra'),
+    reply_markup: tecladoFacturaRegistradaOk('obra'),
   });
   return true;
 }

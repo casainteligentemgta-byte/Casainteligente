@@ -19,11 +19,16 @@ export function baseUrlAppTelegram(): string {
 /** Mensaje al activar modo recepción de facturas por Telegram (/facturas → foto). */
 export function mensajeModoFacturasActivado(opts?: { ticket?: string | null }): string {
   const ticket = opts?.ticket?.trim();
-  const procuraHint = ticket ? `\n🎫 Procura vinculada: <b>${ticket}</b>` : '';
+  const procuraHint = ticket ? `\n🎫 Procura vinculada: <b>${ticket}</b>\n` : '';
   return (
-    '✅ <b>Comprador: cargar factura.</b>' +
+    '✅ <b>COMPRADOR: cargar factura.</b>\n' +
     procuraHint +
-    '\n\nEnvía una <b>foto</b> de la factura de compra.'
+    '\nEnvía una <b>foto</b> de la factura de compra.\n' +
+    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, si es <b>contado</b> o <b>crédito</b>.\n\n' +
+    'Luego elija destino:\n' +
+    '• <b>Obra (AD)</b> → obra + almacén → Contabilidad y precarga para ingreso físico.\n' +
+    '• <b>Gasto de entidad (OpEx)</b> → solo entidad y clasificación → Contabilidad (sin almacén).\n\n' +
+    '<code>/cancelar</code> para salir de este modo.'
   );
 }
 

@@ -25,7 +25,11 @@ export function parseCallbackMenuFacturasComprador(
 
 export function mensajeMenuFacturasComprador(): string {
   return (
-    '🧾 <b>Registrar factura de compra</b>\n\n' +
+    '🧾 <b>Registrar factura de compra</b> (<code>/facturas</code>)\n\n' +
+    'Elige cómo cargar la factura:\n\n' +
+    '• <b>Foto/PDF</b> — lectura automática (OCR) y registro en Contabilidad.\n' +
+    '• <b>Manual</b> — proveedor, número, materiales y montos (como ingreso manual del depositario, sin stock).\n\n' +
+    'Tras registrar queda <b>precargada</b> para ingreso físico con <code>/ingreso</code>.\n\n' +
     '<code>/cancelar</code> para salir.'
   );
 }
@@ -35,7 +39,7 @@ export function tecladoMenuFacturasComprador(): {
 } {
   return {
     inline_keyboard: [
-      [{ text: '📷 Foto, PDF o cámara', callback_data: callbackMenuFacturasComprador('foto') }],
+      [{ text: '📷 Foto o PDF de factura', callback_data: callbackMenuFacturasComprador('foto') }],
       [{ text: '🧾 Carga manual', callback_data: callbackMenuFacturasComprador('manual') }],
     ],
   };

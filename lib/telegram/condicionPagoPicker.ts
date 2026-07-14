@@ -104,13 +104,10 @@ async function continuarTrasFormaPagoTelegram(
     contexto: 'factura',
     metadata: {},
   });
-  const estado = await getTelegramEstado(supabase, chatId);
-  const pendingId = estado.pending_factura_id;
-  if (!pendingId) return;
-  const { enviarPickerAlmacenesFacturaCompradorTelegram } = await import(
-    '@/lib/telegram/ubicacionPicker'
+  const { enviarPickerEntidadesFacturaTelegram } = await import(
+    '@/lib/telegram/facturaEntidadDestinoPicker'
   );
-  await enviarPickerAlmacenesFacturaCompradorTelegram(supabase, chatId, pendingId);
+  await enviarPickerEntidadesFacturaTelegram(supabase, chatId);
 }
 
 async function guardarDiasCreditoYContinuar(
