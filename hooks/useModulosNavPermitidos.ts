@@ -39,6 +39,8 @@ export function useModulosNavPermitidos(): Estado {
       const data = (await res.json()) as {
         roles_empresa?: string[];
         permisos?: string[];
+        acceso_legal?: boolean;
+        modulos?: string[];
         error?: string;
       };
       if (!res.ok) {
@@ -53,6 +55,9 @@ export function useModulosNavPermitidos(): Estado {
       const permisos = data.permisos ?? [];
       const base = modulosParaRolesEmpresa(roles);
       const modulos = ampliarModulosPorPermisos(base, permisos);
+      if (data.acceso_legal || data.modulos?.includes('legal')) {
+        modulos.add('legal');
+      }
       setEstado({ status: 'ready', modulos, roles, permisos });
     } catch {
       if (intento < 2) {

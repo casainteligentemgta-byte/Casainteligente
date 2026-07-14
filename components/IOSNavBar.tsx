@@ -177,6 +177,22 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'legal',
+    href: '/legal',
+    label: 'Legal',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 3v18M8 7h8M6 21h12M9 11l3 6 3-6"
+          stroke={active ? '#FBBF24' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: 'rrhh',
     href: '/rrhh/hojas-vida',
     label: 'RRHH',
@@ -237,6 +253,9 @@ function navItemActive(pathname: string, href: string): boolean {
   if (href === '/configuracion/equipo') {
     return pathname.startsWith('/configuracion/equipo');
   }
+  if (href === '/legal') {
+    return pathname === '/legal' || pathname.startsWith('/legal/');
+  }
   return pathname.startsWith(href);
 }
 
@@ -247,6 +266,7 @@ function colorActivo(label: string): string {
   if (label === 'Proyectos') return '#F59E0B';
   if (label === 'Entidades') return '#A78BFA';
   if (label === 'Equipo') return '#38BDF8';
+  if (label === 'Legal') return '#FBBF24';
   if (label === 'RRHH') return '#F472B6';
   if (label === 'Ventas') return '#34C759';
   return '#007AFF';
@@ -265,8 +285,10 @@ export default function IOSNavBar() {
     items = navItems.filter((i) => acceso.modulos.has(i.id));
   } else if (acceso.status === 'anon') {
     items = navItems.filter((i) => i.id === 'inicio');
+  } else {
+    // loading: barra casi completa, sin Legal (solo dueño / entitlement)
+    items = navItems.filter((i) => i.id !== 'legal');
   }
-  // loading: barra completa hasta confirmar roles (evita dejar al admin solo con Inicio)
 
   return (
     <nav

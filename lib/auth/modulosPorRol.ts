@@ -13,7 +13,8 @@ export type ModuloNavId =
   | 'rrhh'
   | 'almacen'
   | 'contabilidad'
-  | 'equipo';
+  | 'equipo'
+  | 'legal';
 
 export type ModuloNavDef = {
   id: ModuloNavId;
@@ -31,6 +32,7 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   { id: 'equipo', href: '/configuracion/equipo', label: 'Equipo' },
+  { id: 'legal', href: '/legal', label: 'Legal' },
   { id: 'rrhh', href: '/rrhh/hojas-vida', label: 'RRHH' },
   { id: 'almacen', href: '/almacen', label: 'Almacenes' },
   { id: 'contabilidad', href: '/contabilidad', label: 'Conta' },
@@ -143,6 +145,7 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
     modulo: 'contabilidad',
     match: (p) => p === '/contabilidad' || p.startsWith('/contabilidad/') || p.startsWith('/procura'),
   },
+  { modulo: 'legal', match: (p) => p === '/legal' || p.startsWith('/legal/') },
 ];
 
 /**

@@ -15,6 +15,8 @@ import {
   permisosEnforcementActivo,
   resolverActorWeb,
 } from '@/lib/auth/permisos';
+import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
+import { resolverAccesoLegal } from '@/lib/legal/accesoLegal';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,9 +33,18 @@ export async function GET() {
 
   const actor = await resolverActorWeb(supabase, user.id, user.email);
   const permisos = permisosActorComoLista(actor);
-  const modulos = Array.from(
-    ampliarModulosPorPermisos(modulosParaRolesEmpresa(actor.rolesEmpresa), permisos),
+  const modulosSet = ampliarModulosPorPermisos(
+    modulosParaRolesEmpresa(actor.rolesEmpresa),
+    permisos,
   );
+
+  const admin = createSupabaseAdminOnlyClient() ?? supabase;
+  const accesoLegal = await resolverAccesoLegal(admin, user.id, user.email);
+  if (accesoLegal.ok) {
+    modulosSet.add('legal');
+  }
+
+  const modulos = Array.from(modulosSet);
 
   return NextResponse.json({
     ok: true,
@@ -43,6 +54,10 @@ export async function GET() {
     roles_obra: actor.rolesObra,
     permisos,
     modulos,
+    acceso_legal: accesoLegal.ok,
+    legal: accesoLegal.ok
+      ? { org_id: accesoLegal.orgId, rol: accesoLegal.rolLegal, motivo: accesoLegal.motivo }
+      : null,
     catalogo: {
       permisos: PERMISOS,
       roles_empresa: ROLES_EMPRESA,

@@ -17,6 +17,7 @@ const RUTAS_PROTEGIDAS = [
   '/proyectos',
   '/rrhh',
   '/procura',
+  '/legal',
 ];
 
 function esRutaPublica(pathname: string): boolean {
