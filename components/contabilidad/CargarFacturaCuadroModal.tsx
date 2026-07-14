@@ -7,6 +7,7 @@ import {
   Images,
   Loader2,
   ShieldCheck,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -20,6 +21,8 @@ import {
   esArchivoCsvTabla,
   parseCsvTablaCompras,
 } from '@/lib/contabilidad/parseCsvTablaCompras';
+
+const MAX_FOTOS_EMPAREJE_LOTE = 12;
 
 type FilaApi = {
   invoice_number?: string;
@@ -68,7 +71,8 @@ type GrupoFactura = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  onGuardado?: () => void;
+  /** Se llama tras guardar al menos una compra; recibe el `proyecto_id` usado. */
+  onGuardado?: (proyectoId: string) => void;
   proyectos: ProyectoCatalogo[];
   proyectoIdInicial?: string | null;
 };
@@ -161,6 +165,28 @@ function totalGrupo(g: GrupoFactura): number {
     return acc + parseNum(l.cantidad) * parseNum(l.precio_unitario);
   }, 0);
   return Math.round(suma * 100) / 100;
+}
+
+/** Datos mínimos para registrar en contabilidad (fotos opcionales). */
+function motivoBloqueoGuardado(g: GrupoFactura): string | null {
+  if (!g.invoice_number.trim() && !g.supplier_name.trim()) {
+    return 'Falta número de factura o proveedor';
+  }
+  if (!(totalGrupo(g) > 0)) return 'Total en cero';
+  return null;
+}
+
+function nombreProveedorGuardado(g: GrupoFactura): string {
+  const n = g.supplier_name.trim();
+  if (n) return n;
+  const inv = g.invoice_number.trim();
+  return inv ? `Proveedor factura ${inv}` : 'Proveedor pendiente';
+}
+
+function numeroFacturaGuardado(g: GrupoFactura): string {
+  const inv = g.invoice_number.trim();
+  if (inv) return inv;
+  return `SIN-${g.key.slice(-8)}`;
 }
 
 /**
@@ -335,12 +361,16 @@ export default function CargarFacturaCuadroModal({
   const [grupos, setGrupos] = useState<GrupoFactura[]>([]);
   const [fotos, setFotos] = useState<FotoAdjunto[]>([]);
   const [activoKey, setActivoKey] = useState<string | null>(null);
+  const [matching, setMatching] = useState(false);
+  const [matchEtapa, setMatchEtapa] = useState('');
 
   const resetAll = useCallback(() => {
     setExtracting(false);
     setExtractPct(0);
     setExtractEtapa('');
     setSaving(false);
+    setMatching(false);
+    setMatchEtapa('');
     setTablaNombre(null);
     setGrupos([]);
     setActivoKey(null);
@@ -403,7 +433,8 @@ export default function CargarFacturaCuadroModal({
   const stats = useMemo(() => {
     const cert = grupos.filter((g) => g.certificada).length;
     const conFoto = grupos.filter((g) => g.fotoId).length;
-    return { total: grupos.length, cert, conFoto };
+    const listos = grupos.filter((g) => !motivoBloqueoGuardado(g)).length;
+    return { total: grupos.length, cert, conFoto, listos };
   }, [grupos]);
 
   const onPickTabla = async (file: File) => {
@@ -478,7 +509,9 @@ export default function CargarFacturaCuadroModal({
     }
     if (nuevas.length === 0) return;
     setFotos((prev) => [...prev, ...nuevas]);
-    toast.success(`${nuevas.length} foto(s) agregada(s). Asigne cada una a una factura.`);
+    toast.success(
+      `${nuevas.length} foto(s) agregada(s). Pulse «Emparejar con IA» o asígnelas a mano.`,
+    );
   };
 
   const updateGrupo = (key: string, patch: Partial<GrupoFactura>) => {
@@ -502,6 +535,139 @@ export default function CargarFacturaCuadroModal({
         };
       }),
     );
+  };
+
+  /**
+   * Gemini lee cada foto y la enlaza a la factura del cuadro (nº / RIF / proveedor).
+   */
+  const emparejarFotosConIa = async () => {
+    if (grupos.length === 0) {
+      toast.error('Primero cargue la tabla o el CSV');
+      return;
+    }
+    if (fotos.length === 0) {
+      toast.error('Suba fotos (o PDF) de las facturas');
+      return;
+    }
+
+    setMatching(true);
+    setMatchEtapa('Preparando emparejamiento…');
+    try {
+      const candidatas = grupos.map((g) => ({
+        key: g.key,
+        invoice_number: g.invoice_number,
+        supplier_name: g.supplier_name,
+        supplier_rif: g.supplier_rif,
+        fecha: g.fecha,
+        total: totalGrupo(g),
+        moneda: g.moneda,
+        lineas: g.lineas.length,
+      }));
+
+      // Solo fotos aún sin asignar (permite reintentar el resto)
+      const fotosPendientes = fotos.filter((f) => !grupos.some((g) => g.fotoId === f.id));
+      const lote = fotosPendientes.length > 0 ? fotosPendientes : fotos;
+
+      let emparejadas = 0;
+      let sinMatch = 0;
+      const lotes: FotoAdjunto[][] = [];
+      for (let i = 0; i < lote.length; i += MAX_FOTOS_EMPAREJE_LOTE) {
+        lotes.push(lote.slice(i, i + MAX_FOTOS_EMPAREJE_LOTE));
+      }
+
+      for (let li = 0; li < lotes.length; li++) {
+        const chunk = lotes[li]!;
+        setMatchEtapa(
+          lotes.length > 1
+            ? `IA leyendo fotos ${li + 1}/${lotes.length}…`
+            : `IA leyendo ${chunk.length} foto(s)…`,
+        );
+
+        const form = new FormData();
+        form.append('facturas', JSON.stringify(candidatas));
+        form.append('foto_ids', JSON.stringify(chunk.map((f) => f.id)));
+        for (const f of chunk) {
+          form.append('foto', f.file, f.file.name);
+        }
+
+        const res = await fetch('/api/contabilidad/compras/emparejar-fotos', {
+          method: 'POST',
+          body: form,
+        });
+        const ct = res.headers.get('content-type') ?? '';
+        let data: {
+          ok?: boolean;
+          error?: string;
+          matches?: Array<{
+            fotoId: string;
+            grupoKey: string | null;
+            confianza: number;
+            invoice_number_leido?: string;
+            supplier_name_leido?: string;
+            supplier_rif_leido?: string;
+            motivo?: string;
+          }>;
+        } = {};
+        if (ct.includes('application/json')) {
+          data = (await res.json()) as typeof data;
+        } else {
+          throw new Error(
+            (await res.text()).trim().slice(0, 180) || `Error HTTP ${res.status}`,
+          );
+        }
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `No se pudo emparejar (HTTP ${res.status})`);
+        }
+
+        const matchesOk = (data.matches ?? []).filter(
+          (m) => m.grupoKey && m.confianza >= 40,
+        );
+        sinMatch += (data.matches ?? []).length - matchesOk.length;
+        emparejadas += matchesOk.length;
+
+        if (matchesOk.length > 0) {
+          setGrupos((prev) => {
+            let next = prev.map((g) => ({ ...g }));
+            for (const m of matchesOk) {
+              const grupoKey = m.grupoKey!;
+              next = next.map((g) => {
+                if (g.fotoId === m.fotoId && g.key !== grupoKey) {
+                  return { ...g, fotoId: null, certificada: false };
+                }
+                if (g.key !== grupoKey) return g;
+                return {
+                  ...g,
+                  invoice_number: g.invoice_number.trim() || (m.invoice_number_leido ?? ''),
+                  supplier_name: g.supplier_name.trim() || (m.supplier_name_leido ?? ''),
+                  supplier_rif: g.supplier_rif.trim() || (m.supplier_rif_leido ?? ''),
+                  fotoId: m.fotoId,
+                  certificada: false,
+                };
+              });
+            }
+            return next;
+          });
+        }
+      }
+
+      if (emparejadas > 0) {
+        toast.success(
+          `${emparejadas} foto(s) enlazada(s) con IA. Revise y guarde en contabilidad.`,
+        );
+      } else {
+        toast.error(
+          'La IA no pudo emparejar con suficiente confianza. Asigne las fotos a mano.',
+        );
+      }
+      if (sinMatch > 0 && emparejadas > 0) {
+        toast.message(`${sinMatch} foto(s) sin match claro — asígnelas manualmente.`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al emparejar con IA');
+    } finally {
+      setMatching(false);
+      setMatchEtapa('');
+    }
   };
 
   const toggleCertificar = (key: string) => {
@@ -528,14 +694,23 @@ export default function CargarFacturaCuadroModal({
     updateGrupo(key, { certificada: !g.certificada });
   };
 
-  const guardarCertificadas = async () => {
+  const guardarGrupos = async (modo: 'listas' | 'certificadas') => {
     if (!proyectoId) {
-      toast.error('Seleccione la obra');
+      toast.error('Seleccione la obra para ver las compras en Contabilidad');
       return;
     }
-    const listas = grupos.filter((g) => g.certificada);
-    if (listas.length === 0) {
-      toast.error('Certifique al menos una factura (con su foto)');
+
+    const candidatas =
+      modo === 'certificadas'
+        ? grupos.filter((g) => g.certificada)
+        : grupos.filter((g) => !motivoBloqueoGuardado(g));
+
+    if (candidatas.length === 0) {
+      toast.error(
+        modo === 'certificadas'
+          ? 'Certifique al menos una factura (con su foto) o use «Guardar en contabilidad»'
+          : 'No hay facturas listas. Revise nº, proveedor y montos en cada fila.',
+      );
       return;
     }
 
@@ -543,10 +718,38 @@ export default function CargarFacturaCuadroModal({
     const supabase = createClient();
     let ok = 0;
     let fail = 0;
+    const keysOk = new Set<string>();
 
     try {
-      for (const g of listas) {
+      // Completar tasas BCV faltantes antes de insertar
+      const porFecha = new Map<string, number>();
+      for (const g of candidatas) {
+        const fecha = fechaParaInputDate(g.fecha) || hoyIso();
+        if (parseNum(g.tasaBcv) > 0) {
+          porFecha.set(fecha, parseNum(g.tasaBcv));
+          continue;
+        }
+        if (porFecha.has(fecha)) continue;
         try {
+          const r = await resolverTasaBcvVesPorUsd(fecha);
+          if (r.tasa_bcv_ves_por_usd > 0) porFecha.set(fecha, r.tasa_bcv_ves_por_usd);
+        } catch {
+          /* se pide tasa manual abajo */
+        }
+      }
+
+      for (const g of candidatas) {
+        try {
+          const bloqueo = motivoBloqueoGuardado(g);
+          if (bloqueo) throw new Error(bloqueo);
+
+          const fecha = fechaParaInputDate(g.fecha) || hoyIso();
+          let tasa = parseNum(g.tasaBcv);
+          if (!(tasa > 0)) tasa = porFecha.get(fecha) ?? 0;
+          if (!(tasa > 0)) {
+            throw new Error('Indique tasa BCV (no se pudo obtener automáticamente)');
+          }
+
           const foto = fotos.find((f) => f.id === g.fotoId);
           let document_storage_path: string | null = null;
           let document_file_name: string | null = null;
@@ -561,8 +764,10 @@ export default function CargarFacturaCuadroModal({
           }
 
           const total = totalGrupo(g);
-          const tasa = parseNum(g.tasaBcv);
           const montos = calcularGastoBimonetario(total, g.moneda, tasa);
+          if (!(montos.montoVes > 0) && !(montos.montoUsd > 0)) {
+            throw new Error('Montos bimonetarios inválidos');
+          }
           const lineas = g.lineas.map((l) => {
             const cantidad = parseNum(l.cantidad) || 1;
             const precio = parseNum(l.precio_unitario);
@@ -578,23 +783,27 @@ export default function CargarFacturaCuadroModal({
             };
           });
 
+          const conFoto = Boolean(document_storage_path);
+          const notas = conFoto
+            ? 'Importación desde tabla histórica con foto de factura (solo contabilidad, sin stock).'
+            : 'Importación desde CSV/tabla histórica (solo contabilidad, sin stock). Fotos opcionales.';
+
           const res = await fetch('/api/contabilidad/compras', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               proyecto_id: proyectoId,
               imputacion: 'obra',
-              invoice_number: g.invoice_number.trim(),
-              supplier_name: g.supplier_name.trim(),
-              supplier_rif: g.supplier_rif.trim(),
-              fecha: fechaParaInputDate(g.fecha) || hoyIso(),
+              invoice_number: numeroFacturaGuardado(g),
+              supplier_name: nombreProveedorGuardado(g),
+              supplier_rif: g.supplier_rif.trim() || 'SIN-RIF',
+              fecha,
               monto_ves: montos.montoVes,
               monto_usd: montos.montoUsd,
               tasa_bcv_fecha: montos.tasaApplied,
               moneda_original: g.moneda,
               origen: 'HISTORICO_TABLA',
-              notas:
-                'Importación desde tabla histórica certificada con foto de factura (solo contabilidad, sin stock).',
+              notas,
               document_storage_path,
               document_file_name,
               lineas,
@@ -612,24 +821,27 @@ export default function CargarFacturaCuadroModal({
             throw new Error(data.hint ? `${data.error} (${data.hint})` : data.error || 'Error');
           }
           ok += 1;
+          keysOk.add(g.key);
         } catch (e) {
           fail += 1;
-          console.error('[guardarCertificadas]', g.invoice_number, e);
+          console.error('[guardarGrupos]', g.invoice_number, e);
           toast.error(
-            `Factura ${g.invoice_number}: ${e instanceof Error ? e.message : 'falló'}`,
+            `Factura ${g.invoice_number || '?'}: ${e instanceof Error ? e.message : 'falló'}`,
           );
         }
       }
 
       if (ok > 0) {
-        toast.success(`${ok} compra(s) certificada(s) en el cuadro (sin stock)`);
-        onGuardado?.();
-        setGrupos((prev) => prev.filter((g) => !g.certificada));
-        if (ok === listas.length && fail === 0) {
+        toast.success(
+          `${ok} compra(s) en Contabilidad · obra seleccionada (sin stock)`,
+        );
+        onGuardado?.(proyectoId);
+        setGrupos((prev) => prev.filter((g) => !keysOk.has(g.key)));
+        if (fail === 0) {
           onClose();
         }
       } else {
-        toast.error('No se pudo guardar ninguna compra');
+        toast.error('No se pudo guardar ninguna compra en Contabilidad');
       }
     } finally {
       setSaving(false);
@@ -638,7 +850,7 @@ export default function CargarFacturaCuadroModal({
 
   if (!open) return null;
 
-  const busy = extracting || saving;
+  const busy = extracting || saving || matching;
   const fotosLibres = fotos.filter((f) => !grupos.some((g) => g.fotoId === f.id));
 
   return (
@@ -651,11 +863,12 @@ export default function CargarFacturaCuadroModal({
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
           <div>
             <h2 id="cargar-tabla-historica-title" className="text-base font-bold text-white">
-              Tabla histórica + fotos
+              Importar CSV / tabla histórica
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">
-              El PDF es el cuadro con datos ya extractados. Suba también las fotos de cada factura,
-              revise y marque Certificar solo si coinciden. Solo contabilidad (sin stock).
+              1) Obra · 2) CSV o PDF de la tabla · 3) Fotos de facturas · 4){' '}
+              <b className="text-zinc-400">Emparejar con IA</b> · 5) Guardar en contabilidad.
+              La IA enlaza cada foto con su factura del cuadro (sin stock).
             </p>
           </div>
           <button
@@ -776,6 +989,19 @@ export default function CargarFacturaCuadroModal({
               >
                 <Images className="h-4 w-4" />
                 Subir fotos
+              </button>
+              <button
+                type="button"
+                disabled={busy || grupos.length === 0 || fotos.length === 0}
+                onClick={() => void emparejarFotosConIa()}
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-400/45 bg-indigo-500/20 px-3 py-2.5 text-sm font-bold text-white hover:bg-indigo-500/30 disabled:opacity-50"
+              >
+                {matching ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {matching ? matchEtapa || 'Emparejando…' : 'Emparejar con IA'}
               </button>
               <p className="mt-1 text-[11px] text-zinc-500">
                 {fotos.length} foto(s) · {stats.conFoto}/{stats.total} con foto ·{' '}
@@ -1013,32 +1239,48 @@ export default function CargarFacturaCuadroModal({
             </div>
           ) : (
             <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-500">
-              Suba primero el PDF de la tabla. Luego las fotos de facturas para contrastar y
-              certificar cada una.
+              1) Obra · 2) CSV/PDF de la tabla · 3) Fotos de facturas · 4) Emparejar con IA · 5)
+              Guardar en contabilidad.
             </p>
           )}
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-white/10 px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onClose}
-            className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-zinc-300 hover:bg-white/5 disabled:opacity-40"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={busy || stats.cert === 0}
-            onClick={() => void guardarCertificadas()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            {saving
-              ? 'Guardando…'
-              : `Guardar certificadas (${stats.cert})`}
-          </button>
+        <div className="flex flex-col gap-2 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <p className="text-[11px] text-zinc-500 leading-snug sm:max-w-[45%]">
+            {proyectoId
+              ? `${stats.listos}/${stats.total} lista(s) para el cuadro · fotos ${stats.conFoto}`
+              : 'Seleccione la obra para que las compras aparezcan filtradas en Contabilidad.'}
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onClose}
+              className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-zinc-300 hover:bg-white/5 disabled:opacity-40"
+            >
+              Cancelar
+            </button>
+            {stats.cert > 0 ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void guardarGrupos('certificadas')}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-50 hover:bg-amber-500/25 disabled:opacity-40"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Solo certificadas ({stats.cert})
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={busy || stats.listos === 0 || !proyectoId}
+              onClick={() => void guardarGrupos('listas')}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+              {saving ? 'Guardando…' : `Guardar en contabilidad (${stats.listos})`}
+            </button>
+          </div>
         </div>
       </div>
     </div>

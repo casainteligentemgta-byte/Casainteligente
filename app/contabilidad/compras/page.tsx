@@ -310,6 +310,8 @@ export default function ComprasPage() {
         titulo?: string;
     } | null>(null);
     const [cargarFacturaOpen, setCargarFacturaOpen] = useState(false);
+    /** Incrementar tras importar CSV para forzar reload aunque los filtros no cambien. */
+    const [comprasReloadToken, setComprasReloadToken] = useState(0);
     const [verificandoFecha, setVerificandoFecha] = useState<{
         compraId: string;
         pendienteCanalId?: string | null;
@@ -896,6 +898,7 @@ export default function ComprasPage() {
         fuenteFiltro,
         estadoLogisticaFiltro,
         compraDeepLinkId,
+        comprasReloadToken,
     ]);
 
     useEffect(() => {
@@ -2124,7 +2127,7 @@ export default function ComprasPage() {
                 <button
                     type="button"
                     onClick={() => setCargarFacturaOpen(true)}
-                    title="Importar tabla histórica + fotos de facturas (solo cuadro, sin stock)"
+                    title="Importar CSV o tabla histórica a Contabilidad de la obra (sin stock)"
                     style={{
                         fontSize: '11px',
                         fontWeight: 700,
@@ -2140,7 +2143,7 @@ export default function ComprasPage() {
                     }}
                 >
                     <FileUp size={13} />
-                    Tabla + fotos
+                    Importar CSV
                 </button>
                 <button
                     type="button"
@@ -3608,8 +3611,17 @@ export default function ComprasPage() {
                 open={cargarFacturaOpen}
                 onClose={() => setCargarFacturaOpen(false)}
                 proyectos={proyectos}
-                proyectoIdInicial={proyectoFiltro || null}
-                onGuardado={() => void load()}
+                proyectoIdInicial={
+                    proyectoFiltro && proyectoFiltro !== 'sin_proyecto' ? proyectoFiltro : null
+                }
+                onGuardado={(proyectoIdGuardado) => {
+                    setCargarFacturaOpen(false);
+                    setPeriodo('todas');
+                    setFuenteFiltro('todos');
+                    setEstadoLogisticaFiltro('');
+                    if (proyectoIdGuardado) setProyectoFiltro(proyectoIdGuardado);
+                    setComprasReloadToken((n) => n + 1);
+                }}
             />
         </div>
     );
