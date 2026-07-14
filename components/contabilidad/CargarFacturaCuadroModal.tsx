@@ -524,15 +524,12 @@ export default function CargarFacturaCuadroModal({
         if (g.key !== grupoKey) {
           // una foto solo en una factura
           if (fotoId && g.fotoId === fotoId) {
-            return { ...g, fotoId: null, certificada: false };
+            return { ...g, fotoId: null };
           }
           return g;
         }
-        return {
-          ...g,
-          fotoId,
-          certificada: fotoId ? g.certificada : false,
-        };
+        // Foto independiente de «certificada»: se puede adjuntar antes o después.
+        return { ...g, fotoId };
       }),
     );
   };
@@ -674,12 +671,9 @@ export default function CargarFacturaCuadroModal({
     const g = grupos.find((x) => x.key === key);
     if (!g) return;
     if (!g.certificada) {
-      if (!g.fotoId) {
-        toast.error('Adjunte la foto de la factura antes de certificar');
-        return;
-      }
-      if (!g.invoice_number.trim() || !g.supplier_name.trim() || !g.supplier_rif.trim()) {
-        toast.error('Complete nº factura, proveedor y RIF antes de certificar');
+      // Foto opcional: se puede adjuntar después. Solo validamos datos mínimos.
+      if (!g.invoice_number.trim() && !g.supplier_name.trim()) {
+        toast.error('Indique al menos nº de factura o proveedor');
         return;
       }
       if (!(parseNum(g.tasaBcv) > 0)) {
@@ -689,6 +683,9 @@ export default function CargarFacturaCuadroModal({
       if (!(totalGrupo(g) > 0)) {
         toast.error('El total de la factura debe ser mayor a cero');
         return;
+      }
+      if (!g.fotoId) {
+        toast.message('Marcada como revisada. Puede adjuntar la foto más tarde.');
       }
     }
     updateGrupo(key, { certificada: !g.certificada });
@@ -708,7 +705,7 @@ export default function CargarFacturaCuadroModal({
     if (candidatas.length === 0) {
       toast.error(
         modo === 'certificadas'
-          ? 'Certifique al menos una factura (con su foto) o use «Guardar en contabilidad»'
+          ? 'Marque al menos una factura como revisada, o use «Guardar en contabilidad»'
           : 'No hay facturas listas. Revise nº, proveedor y montos en cada fila.',
       );
       return;
@@ -866,9 +863,9 @@ export default function CargarFacturaCuadroModal({
               Importar CSV / tabla histórica
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">
-              1) Obra · 2) CSV o PDF de la tabla · 3) Fotos de facturas · 4){' '}
-              <b className="text-zinc-400">Emparejar con IA</b> · 5) Guardar en contabilidad.
-              La IA enlaza cada foto con su factura del cuadro (sin stock).
+              1) Obra · 2) CSV/PDF de la tabla · 3){' '}
+              <b className="text-zinc-400">Guardar en contabilidad</b>. Las fotos son{' '}
+              <b className="text-zinc-400">opcionales</b> (puede subirlas y emparejarlas después).
             </p>
           </div>
           <button
@@ -959,8 +956,8 @@ export default function CargarFacturaCuadroModal({
                 </div>
               ) : (
                 <p className="mt-1.5 text-[10px] text-zinc-500 leading-snug">
-                  En Excel: Archivo → Guardar como → <b className="text-zinc-400">CSV UTF-8</b>. Luego
-                  adjunte las fotos de cada factura.
+                  En Excel: Archivo → Guardar como → <b className="text-zinc-400">CSV UTF-8</b>. Las
+                  fotos de factura son opcionales.
                 </p>
               )}
               {tablaNombre && !extracting ? (
@@ -968,7 +965,7 @@ export default function CargarFacturaCuadroModal({
               ) : null}
             </div>
             <div>
-              <label className={labelClass}>2. Fotos de facturas</label>
+              <label className={labelClass}>Fotos (opcional, después OK)</label>
               <input
                 ref={fotosRef}
                 type="file"
@@ -1005,7 +1002,7 @@ export default function CargarFacturaCuadroModal({
               </button>
               <p className="mt-1 text-[11px] text-zinc-500">
                 {fotos.length} foto(s) · {stats.conFoto}/{stats.total} con foto ·{' '}
-                {stats.cert}/{stats.total} certificadas
+                {stats.cert}/{stats.total} revisadas
               </p>
             </div>
           </div>
@@ -1156,7 +1153,7 @@ export default function CargarFacturaCuadroModal({
                           )}
                           <button
                             type="button"
-                            disabled={busy || activo.certificada}
+                            disabled={busy}
                             className="absolute right-2 top-2 rounded-md bg-black/70 p-1 text-zinc-300 hover:text-white"
                             onClick={() => asignarFoto(activo.key, null)}
                             aria-label="Quitar foto"
@@ -1165,8 +1162,9 @@ export default function CargarFacturaCuadroModal({
                           </button>
                         </div>
                       ) : (
-                        <p className="mb-2 text-[11px] text-amber-200/80">
-                          Sin foto. Elija una de abajo para contrastar con los datos de la tabla.
+                        <p className="mb-2 text-[11px] text-zinc-400">
+                          Sin foto (opcional). Puede guardar ya y adjuntar la imagen después, o elegir
+                          una de abajo / usar Emparejar con IA.
                         </p>
                       )}
                       <div className="flex flex-wrap gap-2">
@@ -1174,7 +1172,7 @@ export default function CargarFacturaCuadroModal({
                           <button
                             key={f.id}
                             type="button"
-                            disabled={busy || activo.certificada}
+                            disabled={busy}
                             onClick={() => asignarFoto(activo.key, f.id)}
                             className="h-14 w-14 overflow-hidden rounded-lg border border-white/15 hover:border-emerald-400/50"
                             title={f.file.name}
@@ -1228,8 +1226,10 @@ export default function CargarFacturaCuadroModal({
                     >
                       <ShieldCheck className="h-4 w-4" />
                       {activo.certificada
-                        ? 'Certificada — datos coinciden con la foto'
-                        : 'Certificar: datos de la tabla son correctos'}
+                        ? activo.fotoId
+                          ? 'Revisada — con foto adjunta'
+                          : 'Revisada — puede adjuntar la foto después'
+                        : 'Marcar como revisada (foto opcional)'}
                     </button>
                   </>
                 ) : (
@@ -1239,8 +1239,8 @@ export default function CargarFacturaCuadroModal({
             </div>
           ) : (
             <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-500">
-              1) Obra · 2) CSV/PDF de la tabla · 3) Fotos de facturas · 4) Emparejar con IA · 5)
-              Guardar en contabilidad.
+              1) Obra · 2) CSV/PDF · 3) Guardar en contabilidad. Las fotos son opcionales y se pueden
+              subir después.
             </p>
           )}
         </div>
@@ -1268,7 +1268,7 @@ export default function CargarFacturaCuadroModal({
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-50 hover:bg-amber-500/25 disabled:opacity-40"
               >
                 <ShieldCheck className="h-4 w-4" />
-                Solo certificadas ({stats.cert})
+                Solo revisadas ({stats.cert})
               </button>
             ) : null}
             <button
