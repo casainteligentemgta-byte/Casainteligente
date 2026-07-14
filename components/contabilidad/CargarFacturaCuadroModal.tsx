@@ -68,7 +68,8 @@ type GrupoFactura = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  onGuardado?: () => void;
+  /** Se llama tras guardar al menos una compra; recibe el `proyecto_id` usado. */
+  onGuardado?: (proyectoId: string) => void;
   proyectos: ProyectoCatalogo[];
   proyectoIdInicial?: string | null;
 };
@@ -161,6 +162,28 @@ function totalGrupo(g: GrupoFactura): number {
     return acc + parseNum(l.cantidad) * parseNum(l.precio_unitario);
   }, 0);
   return Math.round(suma * 100) / 100;
+}
+
+/** Datos mínimos para registrar en contabilidad (fotos opcionales). */
+function motivoBloqueoGuardado(g: GrupoFactura): string | null {
+  if (!g.invoice_number.trim() && !g.supplier_name.trim()) {
+    return 'Falta número de factura o proveedor';
+  }
+  if (!(totalGrupo(g) > 0)) return 'Total en cero';
+  return null;
+}
+
+function nombreProveedorGuardado(g: GrupoFactura): string {
+  const n = g.supplier_name.trim();
+  if (n) return n;
+  const inv = g.invoice_number.trim();
+  return inv ? `Proveedor factura ${inv}` : 'Proveedor pendiente';
+}
+
+function numeroFacturaGuardado(g: GrupoFactura): string {
+  const inv = g.invoice_number.trim();
+  if (inv) return inv;
+  return `SIN-${g.key.slice(-8)}`;
 }
 
 /**
@@ -403,7 +426,8 @@ export default function CargarFacturaCuadroModal({
   const stats = useMemo(() => {
     const cert = grupos.filter((g) => g.certificada).length;
     const conFoto = grupos.filter((g) => g.fotoId).length;
-    return { total: grupos.length, cert, conFoto };
+    const listos = grupos.filter((g) => !motivoBloqueoGuardado(g)).length;
+    return { total: grupos.length, cert, conFoto, listos };
   }, [grupos]);
 
   const onPickTabla = async (file: File) => {
@@ -528,14 +552,23 @@ export default function CargarFacturaCuadroModal({
     updateGrupo(key, { certificada: !g.certificada });
   };
 
-  const guardarCertificadas = async () => {
+  const guardarGrupos = async (modo: 'listas' | 'certificadas') => {
     if (!proyectoId) {
-      toast.error('Seleccione la obra');
+      toast.error('Seleccione la obra para ver las compras en Contabilidad');
       return;
     }
-    const listas = grupos.filter((g) => g.certificada);
-    if (listas.length === 0) {
-      toast.error('Certifique al menos una factura (con su foto)');
+
+    const candidatas =
+      modo === 'certificadas'
+        ? grupos.filter((g) => g.certificada)
+        : grupos.filter((g) => !motivoBloqueoGuardado(g));
+
+    if (candidatas.length === 0) {
+      toast.error(
+        modo === 'certificadas'
+          ? 'Certifique al menos una factura (con su foto) o use «Guardar en contabilidad»'
+          : 'No hay facturas listas. Revise nº, proveedor y montos en cada fila.',
+      );
       return;
     }
 
@@ -543,10 +576,38 @@ export default function CargarFacturaCuadroModal({
     const supabase = createClient();
     let ok = 0;
     let fail = 0;
+    const keysOk = new Set<string>();
 
     try {
-      for (const g of listas) {
+      // Completar tasas BCV faltantes antes de insertar
+      const porFecha = new Map<string, number>();
+      for (const g of candidatas) {
+        const fecha = fechaParaInputDate(g.fecha) || hoyIso();
+        if (parseNum(g.tasaBcv) > 0) {
+          porFecha.set(fecha, parseNum(g.tasaBcv));
+          continue;
+        }
+        if (porFecha.has(fecha)) continue;
         try {
+          const r = await resolverTasaBcvVesPorUsd(fecha);
+          if (r.tasa_bcv_ves_por_usd > 0) porFecha.set(fecha, r.tasa_bcv_ves_por_usd);
+        } catch {
+          /* se pide tasa manual abajo */
+        }
+      }
+
+      for (const g of candidatas) {
+        try {
+          const bloqueo = motivoBloqueoGuardado(g);
+          if (bloqueo) throw new Error(bloqueo);
+
+          const fecha = fechaParaInputDate(g.fecha) || hoyIso();
+          let tasa = parseNum(g.tasaBcv);
+          if (!(tasa > 0)) tasa = porFecha.get(fecha) ?? 0;
+          if (!(tasa > 0)) {
+            throw new Error('Indique tasa BCV (no se pudo obtener automáticamente)');
+          }
+
           const foto = fotos.find((f) => f.id === g.fotoId);
           let document_storage_path: string | null = null;
           let document_file_name: string | null = null;
@@ -561,8 +622,10 @@ export default function CargarFacturaCuadroModal({
           }
 
           const total = totalGrupo(g);
-          const tasa = parseNum(g.tasaBcv);
           const montos = calcularGastoBimonetario(total, g.moneda, tasa);
+          if (!(montos.montoVes > 0) && !(montos.montoUsd > 0)) {
+            throw new Error('Montos bimonetarios inválidos');
+          }
           const lineas = g.lineas.map((l) => {
             const cantidad = parseNum(l.cantidad) || 1;
             const precio = parseNum(l.precio_unitario);
@@ -578,23 +641,27 @@ export default function CargarFacturaCuadroModal({
             };
           });
 
+          const conFoto = Boolean(document_storage_path);
+          const notas = conFoto
+            ? 'Importación desde tabla histórica con foto de factura (solo contabilidad, sin stock).'
+            : 'Importación desde CSV/tabla histórica (solo contabilidad, sin stock). Fotos opcionales.';
+
           const res = await fetch('/api/contabilidad/compras', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               proyecto_id: proyectoId,
               imputacion: 'obra',
-              invoice_number: g.invoice_number.trim(),
-              supplier_name: g.supplier_name.trim(),
-              supplier_rif: g.supplier_rif.trim(),
-              fecha: fechaParaInputDate(g.fecha) || hoyIso(),
+              invoice_number: numeroFacturaGuardado(g),
+              supplier_name: nombreProveedorGuardado(g),
+              supplier_rif: g.supplier_rif.trim() || 'SIN-RIF',
+              fecha,
               monto_ves: montos.montoVes,
               monto_usd: montos.montoUsd,
               tasa_bcv_fecha: montos.tasaApplied,
               moneda_original: g.moneda,
               origen: 'HISTORICO_TABLA',
-              notas:
-                'Importación desde tabla histórica certificada con foto de factura (solo contabilidad, sin stock).',
+              notas,
               document_storage_path,
               document_file_name,
               lineas,
@@ -612,24 +679,27 @@ export default function CargarFacturaCuadroModal({
             throw new Error(data.hint ? `${data.error} (${data.hint})` : data.error || 'Error');
           }
           ok += 1;
+          keysOk.add(g.key);
         } catch (e) {
           fail += 1;
-          console.error('[guardarCertificadas]', g.invoice_number, e);
+          console.error('[guardarGrupos]', g.invoice_number, e);
           toast.error(
-            `Factura ${g.invoice_number}: ${e instanceof Error ? e.message : 'falló'}`,
+            `Factura ${g.invoice_number || '?'}: ${e instanceof Error ? e.message : 'falló'}`,
           );
         }
       }
 
       if (ok > 0) {
-        toast.success(`${ok} compra(s) certificada(s) en el cuadro (sin stock)`);
-        onGuardado?.();
-        setGrupos((prev) => prev.filter((g) => !g.certificada));
-        if (ok === listas.length && fail === 0) {
+        toast.success(
+          `${ok} compra(s) en Contabilidad · obra seleccionada (sin stock)`,
+        );
+        onGuardado?.(proyectoId);
+        setGrupos((prev) => prev.filter((g) => !keysOk.has(g.key)));
+        if (fail === 0) {
           onClose();
         }
       } else {
-        toast.error('No se pudo guardar ninguna compra');
+        toast.error('No se pudo guardar ninguna compra en Contabilidad');
       }
     } finally {
       setSaving(false);
@@ -651,11 +721,12 @@ export default function CargarFacturaCuadroModal({
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
           <div>
             <h2 id="cargar-tabla-historica-title" className="text-base font-bold text-white">
-              Tabla histórica + fotos
+              Importar CSV / tabla histórica
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">
-              El PDF es el cuadro con datos ya extractados. Suba también las fotos de cada factura,
-              revise y marque Certificar solo si coinciden. Solo contabilidad (sin stock).
+              Elija la <b className="text-zinc-400">obra</b>, suba el CSV y pulse{' '}
+              <b className="text-zinc-400">Guardar en contabilidad</b>. Las filas quedarán en el
+              cuadro de Compras de esa obra (sin stock). Las fotos son opcionales.
             </p>
           </div>
           <button
@@ -1013,32 +1084,48 @@ export default function CargarFacturaCuadroModal({
             </div>
           ) : (
             <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-500">
-              Suba primero el PDF de la tabla. Luego las fotos de facturas para contrastar y
-              certificar cada una.
+              1) Seleccione la obra · 2) Suba el CSV (recomendado) · 3) Guardar en contabilidad.
+              Las fotos son opcionales para certificar después.
             </p>
           )}
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-white/10 px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onClose}
-            className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-zinc-300 hover:bg-white/5 disabled:opacity-40"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={busy || stats.cert === 0}
-            onClick={() => void guardarCertificadas()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            {saving
-              ? 'Guardando…'
-              : `Guardar certificadas (${stats.cert})`}
-          </button>
+        <div className="flex flex-col gap-2 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <p className="text-[11px] text-zinc-500 leading-snug sm:max-w-[45%]">
+            {proyectoId
+              ? `${stats.listos}/${stats.total} lista(s) para el cuadro · fotos ${stats.conFoto}`
+              : 'Seleccione la obra para que las compras aparezcan filtradas en Contabilidad.'}
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onClose}
+              className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-zinc-300 hover:bg-white/5 disabled:opacity-40"
+            >
+              Cancelar
+            </button>
+            {stats.cert > 0 ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void guardarGrupos('certificadas')}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-50 hover:bg-amber-500/25 disabled:opacity-40"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Solo certificadas ({stats.cert})
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={busy || stats.listos === 0 || !proyectoId}
+              onClick={() => void guardarGrupos('listas')}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+              {saving ? 'Guardando…' : `Guardar en contabilidad (${stats.listos})`}
+            </button>
+          </div>
         </div>
       </div>
     </div>
