@@ -60,16 +60,27 @@ export async function resolverActorWeb(
   userId: string,
   email?: string | null,
 ): Promise<ActorPermisos> {
-  const [rolesRows, nominaResult] = await Promise.all([
-    listarRolesEmpresaUsuario(supabase, userId),
-    email?.trim()
-      ? supabase
-          .from('ci_proyecto_nomina')
-          .select('proyecto_id, rol, nombre, email, activo')
-          .eq('activo', true)
-          .ilike('email', email.trim())
-      : Promise.resolve({ data: [] as unknown[], error: null }),
-  ]);
+  let rolesRows = await listarRolesEmpresaUsuario(supabase, userId);
+  // Si el cliente de sesión no ve filas (RLS/cookie), reintentar con service role
+  if (rolesRows.length === 0) {
+    try {
+      const { createSupabaseAdminOnlyClient } = await import('@/lib/supabase/adminOnlyClient');
+      const admin = createSupabaseAdminOnlyClient();
+      if (admin) {
+        rolesRows = await listarRolesEmpresaUsuario(admin, userId);
+      }
+    } catch {
+      /* sin service role: se queda vacío */
+    }
+  }
+
+  const nominaResult = email?.trim()
+    ? await supabase
+        .from('ci_proyecto_nomina')
+        .select('proyecto_id, rol, nombre, email, activo')
+        .eq('activo', true)
+        .ilike('email', email.trim())
+    : { data: [] as unknown[], error: null };
   const nominaRows = nominaResult.data;
 
   const rolesEmpresa = rolesRows.map((r) => String(r.rol));

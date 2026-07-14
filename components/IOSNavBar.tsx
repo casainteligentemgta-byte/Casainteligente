@@ -263,10 +263,10 @@ export default function IOSNavBar() {
     items = navItems.filter((i) => i.id === 'inicio');
   } else if (acceso.status === 'ready') {
     items = navItems.filter((i) => acceso.modulos.has(i.id));
-  } else if (acceso.status === 'anon' || acceso.status === 'loading') {
-    // Mientras cargan permisos: solo Inicio (evita flash de módulos no autorizados)
+  } else if (acceso.status === 'anon') {
     items = navItems.filter((i) => i.id === 'inicio');
   }
+  // loading: barra completa hasta confirmar roles (evita dejar al admin solo con Inicio)
 
   return (
     <nav
