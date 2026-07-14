@@ -51,6 +51,7 @@ import {
     Filter,
     FileText,
     FileSpreadsheet,
+    FileUp,
     Loader2,
     MapPin,
     PackageCheck,
@@ -61,6 +62,7 @@ import {
     Share2,
     Trash2,
 } from 'lucide-react';
+import CargarFacturaCuadroModal from '@/components/contabilidad/CargarFacturaCuadroModal';
 import ReubicarCompraModal from '@/components/contabilidad/ReubicarCompraModal';
 import ImputacionCompraToggle from '@/components/contabilidad/ImputacionCompraToggle';
 import ClasificacionGastoEntidadSelect from '@/components/contabilidad/ClasificacionGastoEntidadSelect';
@@ -307,6 +309,7 @@ export default function ComprasPage() {
         ubicacionId?: string | null;
         titulo?: string;
     } | null>(null);
+    const [cargarFacturaOpen, setCargarFacturaOpen] = useState(false);
     const [verificandoFecha, setVerificandoFecha] = useState<{
         compraId: string;
         pendienteCanalId?: string | null;
@@ -2117,6 +2120,28 @@ export default function ComprasPage() {
                         Compras
                     </h1>
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <button
+                    type="button"
+                    onClick={() => setCargarFacturaOpen(true)}
+                    title="Importar tabla histórica + fotos de facturas (solo cuadro, sin stock)"
+                    style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#fff',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(52,199,89,0.45)',
+                        background: 'rgba(52,199,89,0.22)',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                    }}
+                >
+                    <FileUp size={13} />
+                    Tabla + fotos
+                </button>
                 <button
                     type="button"
                     onClick={() => setFiltrosAbiertos((v) => !v)}
@@ -2181,6 +2206,7 @@ export default function ComprasPage() {
                 >
                     <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                 </button>
+                </div>
             </div>
 
             <div className="compras-page-body">
@@ -3575,6 +3601,14 @@ export default function ComprasPage() {
                 proyectoIdInicial={reubicarCompra?.proyectoId}
                 ubicacionIdInicial={reubicarCompra?.ubicacionId}
                 onClose={() => setReubicarCompra(null)}
+                onGuardado={() => void load()}
+            />
+
+            <CargarFacturaCuadroModal
+                open={cargarFacturaOpen}
+                onClose={() => setCargarFacturaOpen(false)}
+                proyectos={proyectos}
+                proyectoIdInicial={proyectoFiltro || null}
                 onGuardado={() => void load()}
             />
         </div>
