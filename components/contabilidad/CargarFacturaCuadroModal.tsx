@@ -159,6 +159,120 @@ function totalGrupo(g: GrupoFactura): number {
   return Math.round(suma * 100) / 100;
 }
 
+/**
+ * Sube el archivo con progreso real de upload (0–28%) y luego estima el
+ * análisis IA (28–95%) hasta recibir la respuesta.
+ */
+function postExtractTablaWithProgress(
+  file: File,
+  onProgress: (pct: number, etapa: string) => void,
+): Promise<{
+  ok: boolean;
+  status: number;
+  contentType: string;
+  payload: { error?: string; filas?: FilaApi[]; total_filas?: number };
+  rawText?: string;
+}> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    form.append('file', file);
+
+    let tick: ReturnType<typeof setInterval> | null = null;
+    let analysisPct = 28;
+
+    const clearTick = () => {
+      if (tick) {
+        clearInterval(tick);
+        tick = null;
+      }
+    };
+
+    const startAnalysisEstimate = () => {
+      analysisPct = 28;
+      onProgress(28, 'Analizando tabla con IA…');
+      clearTick();
+      // Sube despacio hacia 95% mientras el servidor procesa (Gemini ~30–120s)
+      tick = setInterval(() => {
+        analysisPct = Math.min(95, analysisPct + (analysisPct < 60 ? 1.2 : analysisPct < 80 ? 0.6 : 0.25));
+        onProgress(Math.round(analysisPct), 'Extrayendo filas de la tabla…');
+      }, 900);
+    };
+
+    xhr.upload.addEventListener('progress', (ev) => {
+      if (!ev.lengthComputable) {
+        onProgress(12, 'Subiendo archivo…');
+        return;
+      }
+      const uploaded = Math.round((ev.loaded / ev.total) * 28);
+      onProgress(Math.max(2, uploaded), 'Subiendo archivo…');
+    });
+
+    xhr.upload.addEventListener('load', () => {
+      startAnalysisEstimate();
+    });
+
+    xhr.addEventListener('load', () => {
+      clearTick();
+      const contentType = xhr.getResponseHeader('content-type') ?? '';
+      const raw = (xhr.responseText ?? '').trim();
+      if (contentType.includes('application/json')) {
+        try {
+          const payload = JSON.parse(raw) as {
+            error?: string;
+            filas?: FilaApi[];
+            total_filas?: number;
+          };
+          onProgress(100, 'Listo');
+          resolve({
+            ok: xhr.status >= 200 && xhr.status < 300,
+            status: xhr.status,
+            contentType,
+            payload,
+          });
+        } catch {
+          reject(
+            new Error(
+              `El servidor devolvió JSON inválido (HTTP ${xhr.status}). Intente de nuevo o use una imagen de la tabla.`,
+            ),
+          );
+        }
+        return;
+      }
+      reject(
+        new Error(
+          raw.slice(0, 240) ||
+            `El servidor respondió con error ${xhr.status} (no JSON). Recargue e intente otra vez.`,
+        ),
+      );
+    });
+
+    xhr.addEventListener('error', () => {
+      clearTick();
+      reject(new Error('No se pudo conectar con el servidor al leer la tabla.'));
+    });
+
+    xhr.addEventListener('abort', () => {
+      clearTick();
+      reject(new Error('Lectura de tabla cancelada.'));
+    });
+
+    xhr.addEventListener('timeout', () => {
+      clearTick();
+      reject(
+        new Error(
+          'La lectura de la tabla tardó demasiado. Pruebe un PDF más pequeño o una captura de la tabla.',
+        ),
+      );
+    });
+
+    onProgress(1, 'Preparando archivo…');
+    xhr.open('POST', '/api/contabilidad/compras/extract-tabla');
+    xhr.timeout = 180_000;
+    xhr.send(form);
+  });
+}
+
 export default function CargarFacturaCuadroModal({
   open,
   onClose,
@@ -170,6 +284,8 @@ export default function CargarFacturaCuadroModal({
   const fotosRef = useRef<HTMLInputElement>(null);
   const [proyectoId, setProyectoId] = useState('');
   const [extracting, setExtracting] = useState(false);
+  const [extractPct, setExtractPct] = useState(0);
+  const [extractEtapa, setExtractEtapa] = useState('');
   const [saving, setSaving] = useState(false);
   const [tablaNombre, setTablaNombre] = useState<string | null>(null);
   const [grupos, setGrupos] = useState<GrupoFactura[]>([]);
@@ -178,6 +294,8 @@ export default function CargarFacturaCuadroModal({
 
   const resetAll = useCallback(() => {
     setExtracting(false);
+    setExtractPct(0);
+    setExtractEtapa('');
     setSaving(false);
     setTablaNombre(null);
     setGrupos([]);
@@ -246,55 +364,23 @@ export default function CargarFacturaCuadroModal({
 
   const onPickTabla = async (file: File) => {
     setExtracting(true);
+    setExtractPct(0);
+    setExtractEtapa('Preparando…');
     try {
-      const form = new FormData();
-      form.append('file', file);
+      const { ok, status, payload } = await postExtractTablaWithProgress(file, (pct, etapa) => {
+        setExtractPct(pct);
+        setExtractEtapa(etapa);
+      });
 
-      let res: Response;
-      try {
-        res = await fetch('/api/contabilidad/compras/extract-tabla', {
-          method: 'POST',
-          body: form,
-          signal: AbortSignal.timeout(180_000),
-        });
-      } catch (networkErr) {
-        const hint =
-          networkErr instanceof Error && networkErr.name === 'TimeoutError'
-            ? 'La lectura de la tabla tardó demasiado. Pruebe un PDF más pequeño o divídalo en páginas.'
-            : 'No se pudo conectar con el servidor al leer la tabla.';
-        throw new Error(hint);
-      }
-
-      const contentType = res.headers.get('content-type') ?? '';
-      let payload: {
-        error?: string;
-        filas?: FilaApi[];
-        total_filas?: number;
-      };
-
-      if (contentType.includes('application/json')) {
-        try {
-          payload = (await res.json()) as typeof payload;
-        } catch {
-          throw new Error(
-            `El servidor devolvió JSON inválido (HTTP ${res.status}). Intente de nuevo o use una imagen de la tabla.`,
-          );
-        }
-      } else {
-        const text = (await res.text()).trim();
-        throw new Error(
-          text.slice(0, 240) ||
-            `El servidor respondió con error ${res.status} (no JSON). Recargue e intente otra vez.`,
-        );
-      }
-
-      if (!res.ok) {
-        throw new Error(payload.error || `No se pudo leer la tabla (HTTP ${res.status})`);
+      if (!ok) {
+        throw new Error(payload.error || `No se pudo leer la tabla (HTTP ${status})`);
       }
       const agrupados = agruparFilas(payload.filas ?? []);
       if (agrupados.length === 0) {
         throw new Error('La tabla no devolvió filas utilizables');
       }
+      setExtractPct(100);
+      setExtractEtapa('Completado');
       setTablaNombre(file.name);
       setGrupos(agrupados);
       setActivoKey(agrupados[0]?.key ?? null);
@@ -303,7 +389,6 @@ export default function CargarFacturaCuadroModal({
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error al leer la tabla';
-      // Safari: "The string did not match the expected pattern" al parsear no-JSON
       if (/did not match the expected pattern/i.test(msg)) {
         toast.error(
           'No se pudo interpretar la respuesta del servidor. Recargue la página e intente con un PDF más liviano o una captura de la tabla.',
@@ -313,6 +398,8 @@ export default function CargarFacturaCuadroModal({
       }
     } finally {
       setExtracting(false);
+      setExtractPct(0);
+      setExtractEtapa('');
     }
   };
 
@@ -561,9 +648,26 @@ export default function CargarFacturaCuadroModal({
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-400/40 bg-indigo-500/20 px-3 py-2.5 text-sm font-bold text-white hover:bg-indigo-500/30 disabled:opacity-50"
               >
                 {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                {extracting ? 'Leyendo tabla…' : 'Subir tabla'}
+                {extracting ? `Leyendo… ${extractPct}%` : 'Subir tabla'}
               </button>
-              {tablaNombre ? (
+              {extracting ? (
+                <div className="mt-2 space-y-1" aria-live="polite">
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-indigo-200/90">
+                    <span className="truncate">{extractEtapa || 'Procesando…'}</span>
+                    <span className="shrink-0 tabular-nums">{extractPct}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-black/50 border border-white/10">
+                    <div
+                      className="h-full rounded-full bg-indigo-500 transition-[width] duration-300 ease-out"
+                      style={{ width: `${Math.min(100, Math.max(0, extractPct))}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-snug">
+                    La IA puede tardar 1–3 min en tablas grandes. El % avanza mientras analiza.
+                  </p>
+                </div>
+              ) : null}
+              {tablaNombre && !extracting ? (
                 <p className="mt-1 truncate text-[11px] text-zinc-400">{tablaNombre}</p>
               ) : null}
             </div>
