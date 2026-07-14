@@ -83,6 +83,26 @@ function parseNum(raw: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+function fechaParaInputDate(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
+  const [y, m, d] = s.split('-').map(Number);
+  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return '';
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() !== m - 1 ||
+    dt.getUTCDate() !== d
+  ) {
+    return '';
+  }
+  return s;
+}
+
+function hoyIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function claveFactura(invoice: string, rif: string, proveedor: string): string {
   const a = invoice.trim().toUpperCase() || 'SIN-NUM';
   const b = rif.trim().toUpperCase() || proveedor.trim().toUpperCase() || 'SIN-PROV';
@@ -118,7 +138,7 @@ function agruparFilas(filas: FilaApi[]): GrupoFactura[] {
         invoice_number: invoice || `SIN-${map.size + 1}`,
         supplier_name: supplier,
         supplier_rif: rif,
-        fecha: (f.date ?? '').toString().slice(0, 10) || new Date().toISOString().slice(0, 10),
+        fecha: fechaParaInputDate(f.date) || hoyIso(),
         moneda,
         lineas: [linea],
         fotoId: null,
@@ -382,7 +402,7 @@ export default function CargarFacturaCuadroModal({
               invoice_number: g.invoice_number.trim(),
               supplier_name: g.supplier_name.trim(),
               supplier_rif: g.supplier_rif.trim(),
-              fecha: g.fecha || new Date().toISOString().slice(0, 10),
+              fecha: fechaParaInputDate(g.fecha) || hoyIso(),
               monto_ves: montos.montoVes,
               monto_usd: montos.montoUsd,
               tasa_bcv_fecha: montos.tasaApplied,
@@ -588,10 +608,13 @@ export default function CargarFacturaCuadroModal({
                         <input
                           type="date"
                           className={inputClass}
-                          value={activo.fecha}
+                          value={fechaParaInputDate(activo.fecha)}
                           disabled={busy || activo.certificada}
                           onChange={(e) =>
-                            updateGrupo(activo.key, { fecha: e.target.value, certificada: false })
+                            updateGrupo(activo.key, {
+                              fecha: fechaParaInputDate(e.target.value) || hoyIso(),
+                              certificada: false,
+                            })
                           }
                         />
                       </div>

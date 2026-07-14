@@ -67,7 +67,11 @@ const RESPONSE_SCHEMA = {
           invoice_number: { type: 'string' },
           supplier_name: { type: 'string' },
           supplier_rif: { type: 'string' },
-          date: { type: 'string' },
+          date: {
+            type: 'string',
+            description:
+              'Fecha SIEMPRE YYYY-MM-DD (ej. 2024-03-15). Si no hay fecha usable, cadena vacía.',
+          },
           descripcion: { type: 'string' },
           item_code: { type: 'string' },
           unidad: { type: 'string' },
@@ -116,18 +120,44 @@ function pickNumber(obj: Record<string, unknown>, keys: string[]): number {
   return 0;
 }
 
-function normalizarFecha(raw: string): string {
+function esFechaIsoValida(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+}
+
+/** Devuelve YYYY-MM-DD o cadena vacía si no se puede interpretar. */
+export function normalizarFechaTabla(raw: string): string {
   const s = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const iso = s.slice(0, 10);
+    return esFechaIsoValida(iso) ? iso : '';
+  }
+  // DD/MM/YYYY o DD-MM-YYYY (formato VE)
   const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if (m) {
     const d = m[1]!.padStart(2, '0');
     const mo = m[2]!.padStart(2, '0');
     let y = m[3]!;
     if (y.length === 2) y = Number(y) > 50 ? `19${y}` : `20${y}`;
-    return `${y}-${mo}-${d}`;
+    const iso = `${y}-${mo}-${d}`;
+    return esFechaIsoValida(iso) ? iso : '';
   }
-  return s.slice(0, 10);
+  // YYYY/MM/DD
+  const m2 = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m2) {
+    const iso = `${m2[1]}-${m2[2]!.padStart(2, '0')}-${m2[3]!.padStart(2, '0')}`;
+    return esFechaIsoValida(iso) ? iso : '';
+  }
+  return '';
 }
 
 function normalizarMoneda(raw: string): 'VES' | 'USD' {
@@ -171,7 +201,7 @@ export function parseFilasTablaCompraHistorica(text: string): FilaTablaCompraHis
         invoice_number: invoice,
         supplier_name: pickString(o, ['supplier_name', 'proveedor', 'razon_social']),
         supplier_rif: pickString(o, ['supplier_rif', 'rif']),
-        date: normalizarFecha(pickString(o, ['date', 'fecha'])),
+        date: normalizarFechaTabla(pickString(o, ['date', 'fecha'])),
         descripcion: descripcion || (invoice ? `Compra factura ${invoice}` : 'Ítem'),
         item_code: pickString(o, ['item_code', 'codigo', 'sku']),
         unidad: pickString(o, ['unidad', 'unit']) || 'UND',
