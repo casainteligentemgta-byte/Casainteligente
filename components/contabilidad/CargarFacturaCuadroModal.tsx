@@ -249,17 +249,48 @@ export default function CargarFacturaCuadroModal({
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch('/api/contabilidad/compras/extract-tabla', {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(180_000),
-      });
-      const payload = (await res.json()) as {
+
+      let res: Response;
+      try {
+        res = await fetch('/api/contabilidad/compras/extract-tabla', {
+          method: 'POST',
+          body: form,
+          signal: AbortSignal.timeout(180_000),
+        });
+      } catch (networkErr) {
+        const hint =
+          networkErr instanceof Error && networkErr.name === 'TimeoutError'
+            ? 'La lectura de la tabla tardó demasiado. Pruebe un PDF más pequeño o divídalo en páginas.'
+            : 'No se pudo conectar con el servidor al leer la tabla.';
+        throw new Error(hint);
+      }
+
+      const contentType = res.headers.get('content-type') ?? '';
+      let payload: {
         error?: string;
         filas?: FilaApi[];
         total_filas?: number;
       };
-      if (!res.ok) throw new Error(payload.error || 'No se pudo leer la tabla');
+
+      if (contentType.includes('application/json')) {
+        try {
+          payload = (await res.json()) as typeof payload;
+        } catch {
+          throw new Error(
+            `El servidor devolvió JSON inválido (HTTP ${res.status}). Intente de nuevo o use una imagen de la tabla.`,
+          );
+        }
+      } else {
+        const text = (await res.text()).trim();
+        throw new Error(
+          text.slice(0, 240) ||
+            `El servidor respondió con error ${res.status} (no JSON). Recargue e intente otra vez.`,
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(payload.error || `No se pudo leer la tabla (HTTP ${res.status})`);
+      }
       const agrupados = agruparFilas(payload.filas ?? []);
       if (agrupados.length === 0) {
         throw new Error('La tabla no devolvió filas utilizables');
@@ -271,7 +302,15 @@ export default function CargarFacturaCuadroModal({
         `${payload.total_filas ?? 0} filas → ${agrupados.length} factura(s). Adjunte fotos y certifique.`,
       );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error al leer la tabla');
+      const msg = e instanceof Error ? e.message : 'Error al leer la tabla';
+      // Safari: "The string did not match the expected pattern" al parsear no-JSON
+      if (/did not match the expected pattern/i.test(msg)) {
+        toast.error(
+          'No se pudo interpretar la respuesta del servidor. Recargue la página e intente con un PDF más liviano o una captura de la tabla.',
+        );
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setExtracting(false);
     }
@@ -415,7 +454,14 @@ export default function CargarFacturaCuadroModal({
               lineas,
             }),
           });
-          const data = (await res.json()) as { error?: string; hint?: string };
+          const ct = res.headers.get('content-type') ?? '';
+          let data: { error?: string; hint?: string } = {};
+          if (ct.includes('application/json')) {
+            data = (await res.json()) as typeof data;
+          } else {
+            const t = (await res.text()).trim();
+            throw new Error(t.slice(0, 200) || `Error HTTP ${res.status}`);
+          }
           if (!res.ok) {
             throw new Error(data.hint ? `${data.error} (${data.hint})` : data.error || 'Error');
           }
@@ -604,18 +650,28 @@ export default function CargarFacturaCuadroModal({
                         />
                       </div>
                       <div>
-                        <label className={labelClass}>Fecha</label>
+                        <label className={labelClass}>Fecha (AAAA-MM-DD)</label>
                         <input
-                          type="date"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="2024-03-15"
                           className={inputClass}
-                          value={fechaParaInputDate(activo.fecha)}
+                          value={activo.fecha}
                           disabled={busy || activo.certificada}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            // Permitir escribir libre; al blur/guardar se sanea
                             updateGrupo(activo.key, {
-                              fecha: fechaParaInputDate(e.target.value) || hoyIso(),
+                              fecha: raw,
                               certificada: false,
-                            })
-                          }
+                            });
+                          }}
+                          onBlur={(e) => {
+                            const iso = fechaParaInputDate(e.target.value);
+                            updateGrupo(activo.key, {
+                              fecha: iso || hoyIso(),
+                            });
+                          }}
                         />
                       </div>
                       <div>

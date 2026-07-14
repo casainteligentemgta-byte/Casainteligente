@@ -1,5 +1,4 @@
 import {
-  GEMINI_PROCUREMENT_DEFAULT_MODEL,
   procurementModelCandidates,
 } from '@/lib/almacen/geminiProcurementModels';
 import { geminiGenerateWithDocument } from '@/lib/gemini/client';
@@ -232,34 +231,42 @@ export async function extractTablaComprasHistoricasFromFile(file: {
   let modelUsed = '';
   let lastError: Error | null = null;
 
+  const attempts: Array<{ model: string; withSchema: boolean }> = [];
   for (const model of models) {
+    attempts.push({ model, withSchema: true });
+    attempts.push({ model, withSchema: false });
+  }
+
+  for (const attempt of attempts) {
     try {
       text = await geminiGenerateWithDocument({
-        model,
+        model: attempt.model,
         prompt: PROMPT,
         mimeType: file.mimeType,
         base64,
         systemInstruction:
-          'Eres un extractor de tablas de compras históricas. Solo JSON válido según el schema.',
+          'Eres un extractor de tablas de compras históricas. Responde SOLO con JSON: {"filas":[...]}',
         temperature: 0.1,
-        maxOutputTokens: 8192,
-        responseSchema: RESPONSE_SCHEMA,
+        maxOutputTokens: 16384,
+        ...(attempt.withSchema ? { responseSchema: RESPONSE_SCHEMA } : {}),
       });
-      modelUsed = model;
+      modelUsed = attempt.model + (attempt.withSchema ? '' : '-freeform');
       break;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      const retryable = (err as { retryable?: boolean }).retryable === true;
-      if (!retryable) break;
+      console.warn(
+        '[extractTablaComprasHistoricas]',
+        attempt.model,
+        attempt.withSchema ? 'schema' : 'freeform',
+        lastError.message,
+      );
     }
   }
 
   if (!text) {
-    throw (
-      lastError ??
-      new Error(
-        `No se pudo leer la tabla con Gemini. Pruebe GEMINI_PROCUREMENT_MODEL=${GEMINI_PROCUREMENT_DEFAULT_MODEL}.`,
-      )
+    const detalle = lastError?.message?.slice(0, 280) || 'sin detalle';
+    throw new Error(
+      `No se pudo leer la tabla con la IA (${detalle}). Pruebe una captura PNG de la tabla o un PDF más pequeño.`,
     );
   }
 
