@@ -395,10 +395,6 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
-    await setTelegramContexto(supabase, chatId, {
-      contexto: 'factura',
-      pending_factura_id: null,
-    });
     await enviarMenuFacturasCompradorTelegram(supabase, chatId);
   } catch (err) {
     console.error('[telegram /facturas menu]', err);

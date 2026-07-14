@@ -135,7 +135,6 @@ async function guardarDiasCreditoYContinuar(
     ...prev,
     condicion_pago: 'credito',
     dias_credito: parsed,
-    comprador_confirmo_pago: true,
   };
 
   const { error } = await supabase
@@ -193,7 +192,6 @@ export async function manejarCallbackCondicionPagoFacturaTelegram(
     ...prev,
     condicion_pago: condicion,
     dias_credito: condicion === 'credito' ? null : null,
-    comprador_confirmo_pago: true,
   };
 
   const { error } = await supabase
