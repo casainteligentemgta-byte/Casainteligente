@@ -16,6 +16,10 @@ import { calcularGastoBimonetario } from '@/lib/finanzas/currency-converter';
 import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import { createClient } from '@/lib/supabase/client';
 import type { ProyectoCatalogo } from '@/lib/proyectos/proyectosUnificados';
+import {
+  esArchivoCsvTabla,
+  parseCsvTablaCompras,
+} from '@/lib/contabilidad/parseCsvTablaCompras';
 
 type FilaApi = {
   invoice_number?: string;
@@ -163,15 +167,66 @@ function totalGrupo(g: GrupoFactura): number {
  * Sube el archivo con progreso real de upload (0–28%) y luego estima el
  * análisis IA (28–95%) hasta recibir la respuesta.
  */
+function mensajeErrorAmigable(err: unknown): string {
+  const raw =
+    typeof err === 'string'
+      ? err
+      : err instanceof Error
+        ? err.message
+        : err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Error al leer la tabla';
+  if (/did not match the expected pattern/i.test(raw) || /JSON Parse error/i.test(raw)) {
+    return (
+      'No se pudo interpretar la respuesta del servidor. ' +
+      'Pruebe: 1) Chrome, 2) CSV desde Excel, 3) captura PNG de la tabla.'
+    );
+  }
+  return raw || 'Error al leer la tabla';
+}
+
+function parseRespuestaExtractTabla(raw: string, status: number): {
+  error?: string;
+  filas?: FilaApi[];
+  total_filas?: number;
+} {
+  const t = (raw ?? '').trim();
+  if (!t) {
+    throw new Error(
+      `Respuesta vacía del servidor (HTTP ${status}). Intente de nuevo o suba un CSV.`,
+    );
+  }
+  const tryParse = (s: string) => JSON.parse(s) as {
+    error?: string;
+    filas?: FilaApi[];
+    total_filas?: number;
+  };
+  try {
+    return tryParse(t);
+  } catch {
+    const start = t.indexOf('{');
+    const end = t.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return tryParse(t.slice(start, end + 1));
+      } catch {
+        /* fallthrough */
+      }
+    }
+    throw new Error(
+      `No se pudo leer la respuesta del servidor (HTTP ${status}). ` +
+        'Exporte la tabla a CSV desde Excel (Archivo → Guardar como → CSV) y súbala aquí.',
+    );
+  }
+}
+
 function postExtractTablaWithProgress(
   file: File,
   onProgress: (pct: number, etapa: string) => void,
 ): Promise<{
   ok: boolean;
   status: number;
-  contentType: string;
   payload: { error?: string; filas?: FilaApi[]; total_filas?: number };
-  rawText?: string;
 }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -192,7 +247,6 @@ function postExtractTablaWithProgress(
       analysisPct = 28;
       onProgress(28, 'Analizando tabla con IA…');
       clearTick();
-      // Sube despacio hacia 95% mientras el servidor procesa (Gemini ~30–120s)
       tick = setInterval(() => {
         analysisPct = Math.min(95, analysisPct + (analysisPct < 60 ? 1.2 : analysisPct < 80 ? 0.6 : 0.25));
         onProgress(Math.round(analysisPct), 'Extrayendo filas de la tabla…');
@@ -214,37 +268,17 @@ function postExtractTablaWithProgress(
 
     xhr.addEventListener('load', () => {
       clearTick();
-      const contentType = xhr.getResponseHeader('content-type') ?? '';
-      const raw = (xhr.responseText ?? '').trim();
-      if (contentType.includes('application/json')) {
-        try {
-          const payload = JSON.parse(raw) as {
-            error?: string;
-            filas?: FilaApi[];
-            total_filas?: number;
-          };
-          onProgress(100, 'Listo');
-          resolve({
-            ok: xhr.status >= 200 && xhr.status < 300,
-            status: xhr.status,
-            contentType,
-            payload,
-          });
-        } catch {
-          reject(
-            new Error(
-              `El servidor devolvió JSON inválido (HTTP ${xhr.status}). Intente de nuevo o use una imagen de la tabla.`,
-            ),
-          );
-        }
-        return;
+      try {
+        const payload = parseRespuestaExtractTabla(xhr.responseText ?? '', xhr.status);
+        onProgress(100, 'Listo');
+        resolve({
+          ok: xhr.status >= 200 && xhr.status < 300,
+          status: xhr.status,
+          payload,
+        });
+      } catch (e) {
+        reject(new Error(mensajeErrorAmigable(e)));
       }
-      reject(
-        new Error(
-          raw.slice(0, 240) ||
-            `El servidor respondió con error ${xhr.status} (no JSON). Recargue e intente otra vez.`,
-        ),
-      );
     });
 
     xhr.addEventListener('error', () => {
@@ -261,7 +295,7 @@ function postExtractTablaWithProgress(
       clearTick();
       reject(
         new Error(
-          'La lectura de la tabla tardó demasiado. Pruebe un PDF más pequeño o una captura de la tabla.',
+          'La lectura de la tabla tardó demasiado. Pruebe un CSV o una captura PNG de la tabla.',
         ),
       );
     });
@@ -269,6 +303,7 @@ function postExtractTablaWithProgress(
     onProgress(1, 'Preparando archivo…');
     xhr.open('POST', '/api/contabilidad/compras/extract-tabla');
     xhr.timeout = 180_000;
+    xhr.responseType = 'text';
     xhr.send(form);
   });
 }
@@ -367,13 +402,35 @@ export default function CargarFacturaCuadroModal({
     setExtractPct(0);
     setExtractEtapa('Preparando…');
     try {
+      // CSV/TSV: parseo local (sin IA) — evita el fallo Safari/Gemini en PDF grandes
+      if (esArchivoCsvTabla(file)) {
+        setExtractPct(20);
+        setExtractEtapa('Leyendo CSV…');
+        const text = await file.text();
+        setExtractPct(70);
+        setExtractEtapa('Procesando filas…');
+        const filas = parseCsvTablaCompras(text);
+        const agrupados = agruparFilas(filas);
+        setExtractPct(100);
+        setExtractEtapa('Completado');
+        setTablaNombre(file.name);
+        setGrupos(agrupados);
+        setActivoKey(agrupados[0]?.key ?? null);
+        toast.success(
+          `${filas.length} filas → ${agrupados.length} factura(s) desde CSV. Adjunte fotos y certifique.`,
+        );
+        return;
+      }
+
       const { ok, status, payload } = await postExtractTablaWithProgress(file, (pct, etapa) => {
         setExtractPct(pct);
         setExtractEtapa(etapa);
       });
 
       if (!ok) {
-        throw new Error(payload.error || `No se pudo leer la tabla (HTTP ${status})`);
+        throw new Error(
+          mensajeErrorAmigable(payload.error || `No se pudo leer la tabla (HTTP ${status})`),
+        );
       }
       const agrupados = agruparFilas(payload.filas ?? []);
       if (agrupados.length === 0) {
@@ -388,14 +445,7 @@ export default function CargarFacturaCuadroModal({
         `${payload.total_filas ?? 0} filas → ${agrupados.length} factura(s). Adjunte fotos y certifique.`,
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Error al leer la tabla';
-      if (/did not match the expected pattern/i.test(msg)) {
-        toast.error(
-          'No se pudo interpretar la respuesta del servidor. Recargue la página e intente con un PDF más liviano o una captura de la tabla.',
-        );
-      } else {
-        toast.error(msg);
-      }
+      toast.error(mensajeErrorAmigable(e));
     } finally {
       setExtracting(false);
       setExtractPct(0);
@@ -633,7 +683,7 @@ export default function CargarFacturaCuadroModal({
                 ref={tablaRef}
                 type="file"
                 className="hidden"
-                accept="application/pdf,image/jpeg,image/png,image/webp,image/*"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/*,.csv,.tsv,text/csv,text/plain"
                 disabled={busy}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -663,10 +713,14 @@ export default function CargarFacturaCuadroModal({
                     />
                   </div>
                   <p className="text-[10px] text-zinc-500 leading-snug">
-                    La IA puede tardar 1–3 min en tablas grandes. El % avanza mientras analiza.
+                    PDF usa IA (1–3 min). CSV de Excel es instantáneo y más fiable.
                   </p>
                 </div>
-              ) : null}
+              ) : (
+                <p className="mt-1 text-[10px] text-zinc-500 leading-snug">
+                  Ideal: CSV desde Excel. También PDF/PNG de la tabla.
+                </p>
+              )}
               {tablaNombre && !extracting ? (
                 <p className="mt-1 truncate text-[11px] text-zinc-400">{tablaNombre}</p>
               ) : null}

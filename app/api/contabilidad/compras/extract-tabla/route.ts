@@ -60,13 +60,20 @@ export async function POST(req: Request) {
       modelUsed,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Error al leer la tabla.';
+    let message = error instanceof Error ? error.message : 'Error al leer la tabla.';
+    if (/did not match the expected pattern/i.test(message) || /JSON Parse error/i.test(message)) {
+      message =
+        'No se pudo leer el documento con la IA. Exporte la tabla a CSV desde Excel y súbala, o use una captura PNG clara.';
+    }
     console.error('[POST /api/contabilidad/compras/extract-tabla]', error);
     let status = 500;
     if (message.includes('GEMINI_API_KEY')) status = 503;
     else if (message.includes('Cuota') || message.includes('429')) status = 429;
     else if (message.includes('12 MB')) status = 413;
     else if (message.includes('No se detectaron')) status = 422;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      { error: message },
+      { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
+    );
   }
 }

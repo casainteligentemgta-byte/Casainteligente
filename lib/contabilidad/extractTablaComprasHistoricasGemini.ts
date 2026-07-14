@@ -233,8 +233,9 @@ export async function extractTablaComprasHistoricasFromFile(file: {
 
   const attempts: Array<{ model: string; withSchema: boolean }> = [];
   for (const model of models) {
-    attempts.push({ model, withSchema: true });
+    // freeform primero: el schema estricto a veces deja respuesta vacía / inválida
     attempts.push({ model, withSchema: false });
+    attempts.push({ model, withSchema: true });
   }
 
   for (const attempt of attempts) {
