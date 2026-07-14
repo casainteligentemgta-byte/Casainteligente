@@ -7,6 +7,7 @@ import {
   Images,
   Loader2,
   ShieldCheck,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -20,6 +21,8 @@ import {
   esArchivoCsvTabla,
   parseCsvTablaCompras,
 } from '@/lib/contabilidad/parseCsvTablaCompras';
+
+const MAX_FOTOS_EMPAREJE_LOTE = 12;
 
 type FilaApi = {
   invoice_number?: string;
@@ -358,12 +361,16 @@ export default function CargarFacturaCuadroModal({
   const [grupos, setGrupos] = useState<GrupoFactura[]>([]);
   const [fotos, setFotos] = useState<FotoAdjunto[]>([]);
   const [activoKey, setActivoKey] = useState<string | null>(null);
+  const [matching, setMatching] = useState(false);
+  const [matchEtapa, setMatchEtapa] = useState('');
 
   const resetAll = useCallback(() => {
     setExtracting(false);
     setExtractPct(0);
     setExtractEtapa('');
     setSaving(false);
+    setMatching(false);
+    setMatchEtapa('');
     setTablaNombre(null);
     setGrupos([]);
     setActivoKey(null);
@@ -502,7 +509,9 @@ export default function CargarFacturaCuadroModal({
     }
     if (nuevas.length === 0) return;
     setFotos((prev) => [...prev, ...nuevas]);
-    toast.success(`${nuevas.length} foto(s) agregada(s). Asigne cada una a una factura.`);
+    toast.success(
+      `${nuevas.length} foto(s) agregada(s). Pulse «Emparejar con IA» o asígnelas a mano.`,
+    );
   };
 
   const updateGrupo = (key: string, patch: Partial<GrupoFactura>) => {
@@ -526,6 +535,139 @@ export default function CargarFacturaCuadroModal({
         };
       }),
     );
+  };
+
+  /**
+   * Gemini lee cada foto y la enlaza a la factura del cuadro (nº / RIF / proveedor).
+   */
+  const emparejarFotosConIa = async () => {
+    if (grupos.length === 0) {
+      toast.error('Primero cargue la tabla o el CSV');
+      return;
+    }
+    if (fotos.length === 0) {
+      toast.error('Suba fotos (o PDF) de las facturas');
+      return;
+    }
+
+    setMatching(true);
+    setMatchEtapa('Preparando emparejamiento…');
+    try {
+      const candidatas = grupos.map((g) => ({
+        key: g.key,
+        invoice_number: g.invoice_number,
+        supplier_name: g.supplier_name,
+        supplier_rif: g.supplier_rif,
+        fecha: g.fecha,
+        total: totalGrupo(g),
+        moneda: g.moneda,
+        lineas: g.lineas.length,
+      }));
+
+      // Solo fotos aún sin asignar (permite reintentar el resto)
+      const fotosPendientes = fotos.filter((f) => !grupos.some((g) => g.fotoId === f.id));
+      const lote = fotosPendientes.length > 0 ? fotosPendientes : fotos;
+
+      let emparejadas = 0;
+      let sinMatch = 0;
+      const lotes: FotoAdjunto[][] = [];
+      for (let i = 0; i < lote.length; i += MAX_FOTOS_EMPAREJE_LOTE) {
+        lotes.push(lote.slice(i, i + MAX_FOTOS_EMPAREJE_LOTE));
+      }
+
+      for (let li = 0; li < lotes.length; li++) {
+        const chunk = lotes[li]!;
+        setMatchEtapa(
+          lotes.length > 1
+            ? `IA leyendo fotos ${li + 1}/${lotes.length}…`
+            : `IA leyendo ${chunk.length} foto(s)…`,
+        );
+
+        const form = new FormData();
+        form.append('facturas', JSON.stringify(candidatas));
+        form.append('foto_ids', JSON.stringify(chunk.map((f) => f.id)));
+        for (const f of chunk) {
+          form.append('foto', f.file, f.file.name);
+        }
+
+        const res = await fetch('/api/contabilidad/compras/emparejar-fotos', {
+          method: 'POST',
+          body: form,
+        });
+        const ct = res.headers.get('content-type') ?? '';
+        let data: {
+          ok?: boolean;
+          error?: string;
+          matches?: Array<{
+            fotoId: string;
+            grupoKey: string | null;
+            confianza: number;
+            invoice_number_leido?: string;
+            supplier_name_leido?: string;
+            supplier_rif_leido?: string;
+            motivo?: string;
+          }>;
+        } = {};
+        if (ct.includes('application/json')) {
+          data = (await res.json()) as typeof data;
+        } else {
+          throw new Error(
+            (await res.text()).trim().slice(0, 180) || `Error HTTP ${res.status}`,
+          );
+        }
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `No se pudo emparejar (HTTP ${res.status})`);
+        }
+
+        const matchesOk = (data.matches ?? []).filter(
+          (m) => m.grupoKey && m.confianza >= 40,
+        );
+        sinMatch += (data.matches ?? []).length - matchesOk.length;
+        emparejadas += matchesOk.length;
+
+        if (matchesOk.length > 0) {
+          setGrupos((prev) => {
+            let next = prev.map((g) => ({ ...g }));
+            for (const m of matchesOk) {
+              const grupoKey = m.grupoKey!;
+              next = next.map((g) => {
+                if (g.fotoId === m.fotoId && g.key !== grupoKey) {
+                  return { ...g, fotoId: null, certificada: false };
+                }
+                if (g.key !== grupoKey) return g;
+                return {
+                  ...g,
+                  invoice_number: g.invoice_number.trim() || (m.invoice_number_leido ?? ''),
+                  supplier_name: g.supplier_name.trim() || (m.supplier_name_leido ?? ''),
+                  supplier_rif: g.supplier_rif.trim() || (m.supplier_rif_leido ?? ''),
+                  fotoId: m.fotoId,
+                  certificada: false,
+                };
+              });
+            }
+            return next;
+          });
+        }
+      }
+
+      if (emparejadas > 0) {
+        toast.success(
+          `${emparejadas} foto(s) enlazada(s) con IA. Revise y guarde en contabilidad.`,
+        );
+      } else {
+        toast.error(
+          'La IA no pudo emparejar con suficiente confianza. Asigne las fotos a mano.',
+        );
+      }
+      if (sinMatch > 0 && emparejadas > 0) {
+        toast.message(`${sinMatch} foto(s) sin match claro — asígnelas manualmente.`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al emparejar con IA');
+    } finally {
+      setMatching(false);
+      setMatchEtapa('');
+    }
   };
 
   const toggleCertificar = (key: string) => {
@@ -708,7 +850,7 @@ export default function CargarFacturaCuadroModal({
 
   if (!open) return null;
 
-  const busy = extracting || saving;
+  const busy = extracting || saving || matching;
   const fotosLibres = fotos.filter((f) => !grupos.some((g) => g.fotoId === f.id));
 
   return (
@@ -724,9 +866,9 @@ export default function CargarFacturaCuadroModal({
               Importar CSV / tabla histórica
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">
-              Elija la <b className="text-zinc-400">obra</b>, suba el CSV y pulse{' '}
-              <b className="text-zinc-400">Guardar en contabilidad</b>. Las filas quedarán en el
-              cuadro de Compras de esa obra (sin stock). Las fotos son opcionales.
+              1) Obra · 2) CSV o PDF de la tabla · 3) Fotos de facturas · 4){' '}
+              <b className="text-zinc-400">Emparejar con IA</b> · 5) Guardar en contabilidad.
+              La IA enlaza cada foto con su factura del cuadro (sin stock).
             </p>
           </div>
           <button
@@ -847,6 +989,19 @@ export default function CargarFacturaCuadroModal({
               >
                 <Images className="h-4 w-4" />
                 Subir fotos
+              </button>
+              <button
+                type="button"
+                disabled={busy || grupos.length === 0 || fotos.length === 0}
+                onClick={() => void emparejarFotosConIa()}
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-400/45 bg-indigo-500/20 px-3 py-2.5 text-sm font-bold text-white hover:bg-indigo-500/30 disabled:opacity-50"
+              >
+                {matching ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {matching ? matchEtapa || 'Emparejando…' : 'Emparejar con IA'}
               </button>
               <p className="mt-1 text-[11px] text-zinc-500">
                 {fotos.length} foto(s) · {stats.conFoto}/{stats.total} con foto ·{' '}
@@ -1084,8 +1239,8 @@ export default function CargarFacturaCuadroModal({
             </div>
           ) : (
             <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-500">
-              1) Seleccione la obra · 2) Suba el CSV (recomendado) · 3) Guardar en contabilidad.
-              Las fotos son opcionales para certificar después.
+              1) Obra · 2) CSV/PDF de la tabla · 3) Fotos de facturas · 4) Emparejar con IA · 5)
+              Guardar en contabilidad.
             </p>
           )}
         </div>
