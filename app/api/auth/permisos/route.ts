@@ -6,6 +6,11 @@ import {
   PERMISOS_POR_ROL_OBRA,
 } from '@/lib/auth/permisosCatalogo';
 import {
+  ampliarModulosPorPermisos,
+  modulosParaRolesEmpresa,
+  MODULOS_NAV,
+} from '@/lib/auth/modulosPorRol';
+import {
   permisosActorComoLista,
   permisosEnforcementActivo,
   resolverActorWeb,
@@ -25,6 +30,10 @@ export async function GET() {
   }
 
   const actor = await resolverActorWeb(supabase, user.id, user.email);
+  const permisos = permisosActorComoLista(actor);
+  const modulos = Array.from(
+    ampliarModulosPorPermisos(modulosParaRolesEmpresa(actor.rolesEmpresa), permisos),
+  );
 
   return NextResponse.json({
     ok: true,
@@ -32,11 +41,13 @@ export async function GET() {
     usuario: { id: user.id, email: user.email },
     roles_empresa: actor.rolesEmpresa,
     roles_obra: actor.rolesObra,
-    permisos: permisosActorComoLista(actor),
+    permisos,
+    modulos,
     catalogo: {
       permisos: PERMISOS,
       roles_empresa: ROLES_EMPRESA,
       permisos_por_rol_obra: PERMISOS_POR_ROL_OBRA,
+      modulos_nav: MODULOS_NAV,
     },
   });
 }

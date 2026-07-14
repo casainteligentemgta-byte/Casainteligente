@@ -9,17 +9,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiUrl } from '@/lib/http/apiUrl';
+import { ROLES_EMPRESA } from '@/lib/auth/permisosCatalogo';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
-const ROLES_SUGERIDOS = [
-  { value: 'admin', label: 'Administrador' },
-  { value: 'pm_obra', label: 'Project Manager' },
-  { value: 'contador', label: 'Administrador financiero / Contador' },
-] as const;
-
 function etiquetaRolAsignacion(slug: string): string {
-  return ROLES_SUGERIDOS.find((r) => r.value === slug)?.label ?? slug;
+  return ROLES_EMPRESA.find((r) => r.value === slug)?.label ?? slug;
 }
 
 const campoClase =
@@ -37,7 +32,7 @@ type Props = {
 export default function AsignarRolUsuario({ className, entidadIdInicial, onAsignado }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState('');
-  const [rol, setRol] = useState<string>(ROLES_SUGERIDOS[0].value);
+  const [rol, setRol] = useState<string>(ROLES_EMPRESA[0]?.value ?? 'admin');
   const [entidadId, setEntidadId] = useState(entidadIdInicial ?? '');
   const [entidades, setEntidades] = useState<EntidadOpcion[]>([]);
   const [cargandoEntidades, setCargandoEntidades] = useState(true);
@@ -143,7 +138,7 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
           <div>
             <CardTitle className="text-lg font-bold tracking-tight text-white">Asignar rol a usuario</CardTitle>
             <CardDescription className="mt-1 text-zinc-500">
-              Roles disponibles: Administrador, Project Manager o Administrador financiero / Contador.
+              Para usuarios que ya tienen cuenta Auth. Define rol y entidad; el menú se oculta según el rol.
             </CardDescription>
           </div>
         </div>
@@ -179,7 +174,7 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
                 disabled={enviando}
                 className={campoClase}
               >
-                {ROLES_SUGERIDOS.map((r) => (
+                {ROLES_EMPRESA.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}
                   </option>
@@ -247,7 +242,7 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
             disabled={enviando}
             onClick={() => {
               setEmail('');
-              setRol(ROLES_SUGERIDOS[0].value);
+              setRol(ROLES_EMPRESA[0]?.value ?? 'admin');
               setUltimoOk(null);
             }}
             className="rounded-xl border-white/15 text-zinc-300"

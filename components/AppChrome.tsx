@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
+import ModulosRutaGuard from '@/components/auth/ModulosRutaGuard';
 import IOSNavBar from '@/components/IOSNavBar';
 import { usePathname } from 'next/navigation';
 
@@ -35,6 +36,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <ReactQueryProvider>
+        {!chromeMinimal ? <ModulosRutaGuard /> : null}
         <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-28 sm:pb-24'}>{children}</div>
       </ReactQueryProvider>
       {!chromeMinimal ? <IOSNavBar /> : null}

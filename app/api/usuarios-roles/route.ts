@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { buscarUsuarioIdPorEmail } from '@/lib/auth/buscarUsuarioIdPorEmail';
 import { upsertRolEmpresaUsuario } from '@/lib/auth/ciUsuariosRolesDb';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
@@ -17,17 +18,11 @@ type Body = {
 
 /**
  * POST { email, rol, entidadId }
- * 1) Resuelve usuario_id en Auth por email (service role).
- * 2) Inserta/actualiza en ci_usuarios_roles con createClient() (sesión authenticated).
+ * Asigna rol a un usuario que ya existe en Auth.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user: sessionUser },
-  } = await supabase.auth.getUser();
-  if (!sessionUser) {
-    return NextResponse.json({ error: 'Debe iniciar sesión' }, { status: 401 });
-  }
+  const gate = await requirePermisoWeb('equipo.gestionar');
+  if (!gate.ok) return gate.response;
 
   let body: Body;
   try {
@@ -56,9 +51,16 @@ export async function POST(req: Request) {
   const authLookup = await buscarUsuarioIdPorEmail(admin.client, email);
   if ('error' in authLookup) {
     const status = authLookup.error.includes('no encontrado') ? 404 : 502;
-    return NextResponse.json({ error: authLookup.error }, { status });
+    return NextResponse.json(
+      {
+        error: authLookup.error,
+        hint: 'Use «Invitar usuario» para enviar el correo de acceso, o créelo antes en Supabase Auth.',
+      },
+      { status },
+    );
   }
 
+  const supabase = await createClient();
   const { data: entidad, error: entErr } = await supabase
     .from('ci_entidades')
     .select('id')
@@ -72,7 +74,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Entidad no encontrada' }, { status: 404 });
   }
 
-  const { data, error } = await upsertRolEmpresaUsuario(supabase, {
+  const { data, error } = await upsertRolEmpresaUsuario(admin.client, {
     userId: authLookup.userId,
     rol,
     entidadId,
