@@ -226,16 +226,19 @@ export async function extractTablaComprasHistoricasFromFile(file: {
   }
 
   const base64 = file.buffer.toString('base64');
-  const models = procurementModelCandidates();
+  // Máx. 2 intentos: evita timeout de Vercel (HTML 504 → error "no se pudo leer respuesta")
+  const models = procurementModelCandidates().slice(0, 2);
   let text = '';
   let modelUsed = '';
   let lastError: Error | null = null;
 
-  const attempts: Array<{ model: string; withSchema: boolean }> = [];
-  for (const model of models) {
-    // freeform primero: el schema estricto a veces deja respuesta vacía / inválida
-    attempts.push({ model, withSchema: false });
-    attempts.push({ model, withSchema: true });
+  const attempts: Array<{ model: string; withSchema: boolean }> = [
+    { model: models[0]!, withSchema: false },
+  ];
+  if (models[1]) {
+    attempts.push({ model: models[1], withSchema: false });
+  } else {
+    attempts.push({ model: models[0]!, withSchema: true });
   }
 
   for (const attempt of attempts) {

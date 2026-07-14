@@ -193,14 +193,23 @@ function parseRespuestaExtractTabla(raw: string, status: number): {
   const t = (raw ?? '').trim();
   if (!t) {
     throw new Error(
-      `Respuesta vacía del servidor (HTTP ${status}). Intente de nuevo o suba un CSV.`,
+      status === 413 || status === 502 || status === 504
+        ? `El servidor cortó la carga (HTTP ${status}). Exporte la tabla a CSV desde Excel y súbala aquí.`
+        : `Respuesta vacía del servidor (HTTP ${status}). Use CSV desde Excel (más fiable que PDF).`,
     );
   }
-  const tryParse = (s: string) => JSON.parse(s) as {
-    error?: string;
-    filas?: FilaApi[];
-    total_filas?: number;
-  };
+  // Vercel a veces devuelve HTML en timeout — no intentar parsear como JSON “a ciegas”
+  if (/^<!DOCTYPE|^<html/i.test(t) || (status >= 500 && !t.startsWith('{'))) {
+    throw new Error(
+      `El servidor no respondió a tiempo (HTTP ${status}). Exporte la tabla a CSV: en Excel → Archivo → Guardar como → CSV UTF-8.`,
+    );
+  }
+  const tryParse = (s: string) =>
+    JSON.parse(s) as {
+      error?: string;
+      filas?: FilaApi[];
+      total_filas?: number;
+    };
   try {
     return tryParse(t);
   } catch {
@@ -214,8 +223,7 @@ function parseRespuestaExtractTabla(raw: string, status: number): {
       }
     }
     throw new Error(
-      `No se pudo leer la respuesta del servidor (HTTP ${status}). ` +
-        'Exporte la tabla a CSV desde Excel (Archivo → Guardar como → CSV) y súbala aquí.',
+      `No se pudo leer la respuesta (HTTP ${status}). Solución recomendada: Excel → Guardar como CSV UTF-8 → subir el .csv.`,
     );
   }
 }
@@ -316,6 +324,7 @@ export default function CargarFacturaCuadroModal({
   proyectoIdInicial,
 }: Props) {
   const tablaRef = useRef<HTMLInputElement>(null);
+  const csvRef = useRef<HTMLInputElement>(null);
   const fotosRef = useRef<HTMLInputElement>(null);
   const [proyectoId, setProyectoId] = useState('');
   const [extracting, setExtracting] = useState(false);
@@ -678,12 +687,12 @@ export default function CargarFacturaCuadroModal({
               </select>
             </div>
             <div>
-              <label className={labelClass}>1. PDF / imagen de la tabla</label>
+              <label className={labelClass}>1. Tabla de compras</label>
               <input
-                ref={tablaRef}
+                ref={csvRef}
                 type="file"
                 className="hidden"
-                accept="application/pdf,image/jpeg,image/png,image/webp,image/*,.csv,.tsv,text/csv,text/plain"
+                accept=".csv,.tsv,text/csv,text/tab-separated-values,text/plain"
                 disabled={busy}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -691,15 +700,37 @@ export default function CargarFacturaCuadroModal({
                   if (f) void onPickTabla(f);
                 }}
               />
-              <button
-                type="button"
+              <input
+                ref={tablaRef}
+                type="file"
+                className="hidden"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/*"
                 disabled={busy}
-                onClick={() => tablaRef.current?.click()}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-400/40 bg-indigo-500/20 px-3 py-2.5 text-sm font-bold text-white hover:bg-indigo-500/30 disabled:opacity-50"
-              >
-                {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                {extracting ? `Leyendo… ${extractPct}%` : 'Subir tabla'}
-              </button>
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) void onPickTabla(f);
+                }}
+              />
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => csvRef.current?.click()}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/50 bg-emerald-500/25 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-500/35 disabled:opacity-50"
+                >
+                  {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                  {extracting ? `Leyendo… ${extractPct}%` : 'Subir CSV (recomendado)'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => tablaRef.current?.click()}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-white/10 disabled:opacity-50"
+                >
+                  PDF / imagen (lento, máx. 4 MB)
+                </button>
+              </div>
               {extracting ? (
                 <div className="mt-2 space-y-1" aria-live="polite">
                   <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-indigo-200/90">
@@ -708,17 +739,15 @@ export default function CargarFacturaCuadroModal({
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-black/50 border border-white/10">
                     <div
-                      className="h-full rounded-full bg-indigo-500 transition-[width] duration-300 ease-out"
+                      className="h-full rounded-full bg-emerald-500 transition-[width] duration-300 ease-out"
                       style={{ width: `${Math.min(100, Math.max(0, extractPct))}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-zinc-500 leading-snug">
-                    PDF usa IA (1–3 min). CSV de Excel es instantáneo y más fiable.
-                  </p>
                 </div>
               ) : (
-                <p className="mt-1 text-[10px] text-zinc-500 leading-snug">
-                  Ideal: CSV desde Excel. También PDF/PNG de la tabla.
+                <p className="mt-1.5 text-[10px] text-zinc-500 leading-snug">
+                  En Excel: Archivo → Guardar como → <b className="text-zinc-400">CSV UTF-8</b>. Luego
+                  adjunte las fotos de cada factura.
                 </p>
               )}
               {tablaNombre && !extracting ? (
