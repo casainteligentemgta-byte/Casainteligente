@@ -1002,7 +1002,7 @@ export default function CargarFacturaCuadroModal({
               </button>
               <p className="mt-1 text-[11px] text-zinc-500">
                 {fotos.length} foto(s) · {stats.conFoto}/{stats.total} con foto ·{' '}
-                {stats.cert}/{stats.total} certificadas
+                {stats.cert}/{stats.total} revisadas
               </p>
             </div>
           </div>
@@ -1268,7 +1268,7 @@ export default function CargarFacturaCuadroModal({
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-50 hover:bg-amber-500/25 disabled:opacity-40"
               >
                 <ShieldCheck className="h-4 w-4" />
-                Solo certificadas ({stats.cert})
+                Solo revisadas ({stats.cert})
               </button>
             ) : null}
             <button
