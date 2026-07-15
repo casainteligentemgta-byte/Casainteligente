@@ -218,8 +218,6 @@ export default function ComprasLineasTable({
             <SortTh col="factura" label="Factura" />
             <SortTh col="proveedor" label="Proveedor" />
             <SortTh col="rif" label="RIF" />
-            <th style={th}>Entidad</th>
-            <th style={th}>Proyecto</th>
             <th style={th}>Almacén</th>
             <SortTh col="articulo" label="Artículo" />
             <SortTh col="cantidad" label="Cant." align="right" />
@@ -227,6 +225,8 @@ export default function ComprasLineasTable({
             <SortTh col="subtotalBs" label="Subtotal (Bs)" align="right" />
             <SortTh col="usd" label="USD" align="right" />
             <SortTh col="tasaBcv" label="Tasa BCV" align="right" />
+            <th style={th}>Entidad</th>
+            <th style={th}>Proyecto</th>
             <th style={th}>Ver imagen</th>
             {muestraAcciones ? <th style={th}>Acciones</th> : null}
           </tr>
@@ -334,12 +334,6 @@ export default function ComprasLineasTable({
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
                 <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{row.rif}</td>
-                <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>
-                  {row.entidad || '—'}
-                </td>
-                <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>
-                  {row.proyecto || '—'}
-                </td>
                 <td style={{ ...td, maxWidth: 130 }}>
                   {(() => {
                     const { texto, pendienteIngreso } = etiquetaAlmacenIngresoCompra({
@@ -399,6 +393,12 @@ export default function ComprasLineasTable({
                   {row.tasaBcv != null && row.tasaBcv > 0
                     ? formatearTasaBcv(row.tasaBcv)
                     : '—'}
+                </td>
+                <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>
+                  {row.entidad || '—'}
+                </td>
+                <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>
+                  {row.proyecto || '—'}
                 </td>
                 <td style={td}>
                   {onScrollToCompra ? (

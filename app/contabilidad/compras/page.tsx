@@ -1445,6 +1445,21 @@ export default function ComprasPage() {
         [lineasOrdenadas],
     );
 
+    /** Totales solo de líneas del artículo filtrado (no del total de factura). */
+    const resumenArticuloFiltrado = useMemo(() => {
+        const term = articuloFiltro.trim();
+        if (!term) return null;
+        const lineas = lineasOrdenadas.filter((r) => r.esLinea);
+        const unidades = lineas.reduce((acc, r) => acc + (Number(r.cantidad) || 0), 0);
+        return {
+            termino: term,
+            lineas: lineas.length,
+            unidades: Math.round(unidades * 1000) / 1000,
+            bs: totalLineasBs,
+            usd: totalUsdLineasVista,
+        };
+    }, [articuloFiltro, lineasOrdenadas, totalLineasBs, totalUsdLineasVista]);
+
     const showList = !loading && compras.length > 0;
     const showLineas = !loading && lineasOrdenadas.length > 0;
 
@@ -2421,6 +2436,69 @@ export default function ComprasPage() {
                             </div>
                         ) : null}
                     </div>
+                    {resumenArticuloFiltrado ? (
+                        <div
+                            className="compras-no-imprimir"
+                            style={{
+                                marginBottom: '14px',
+                                padding: '12px 14px',
+                                borderRadius: '12px',
+                                border: '1px solid rgba(88,86,214,0.45)',
+                                background: 'rgba(88,86,214,0.15)',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                alignItems: 'center',
+                                gap: '10px 16px',
+                            }}
+                            role="status"
+                            aria-label={`Resumen del artículo ${resumenArticuloFiltrado.termino}`}
+                        >
+                            <span
+                                style={{
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    letterSpacing: '0.06em',
+                                    color: '#c7d2fe',
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                Artículo «{resumenArticuloFiltrado.termino}»
+                            </span>
+                            <span
+                                style={{
+                                    fontSize: '13px',
+                                    fontWeight: 800,
+                                    color: '#fff',
+                                    fontVariantNumeric: 'tabular-nums',
+                                }}
+                            >
+                                {resumenArticuloFiltrado.unidades.toLocaleString('es-VE')} und
+                            </span>
+                            <span
+                                style={{
+                                    fontSize: '13px',
+                                    fontWeight: 800,
+                                    color: '#FFD60A',
+                                    fontVariantNumeric: 'tabular-nums',
+                                }}
+                            >
+                                {formatearBs(resumenArticuloFiltrado.bs)}
+                            </span>
+                            <span
+                                style={{
+                                    fontSize: '13px',
+                                    fontWeight: 800,
+                                    color: '#FF3B30',
+                                    fontVariantNumeric: 'tabular-nums',
+                                }}
+                            >
+                                {formatearUsd(resumenArticuloFiltrado.usd)}
+                            </span>
+                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>
+                                {resumenArticuloFiltrado.lineas} línea(s) · solo este artículo
+                            </span>
+                        </div>
+                    ) : null}
                     <div className="compras-cuadro-totales">
                         <div>
                             <p

@@ -58,8 +58,6 @@ const CSV_HEADERS = [
   'Factura',
   'Proveedor',
   'RIF',
-  'Entidad',
-  'Obra / Proyecto',
   'Almacén',
   'Artículo',
   'Código',
@@ -68,6 +66,8 @@ const CSV_HEADERS = [
   'Subtotal (Bs)',
   'USD',
   'Tasa BCV',
+  'Entidad',
+  'Obra / Proyecto',
 ] as const;
 
 function escapeCsvCell(value: string | number): string {
@@ -159,8 +159,6 @@ function filaComprasAValores(row: FilaFacturaCanal): (string | number)[] {
     row.factura,
     row.proveedor,
     row.rif,
-    row.entidad ?? '',
-    row.proyecto ?? '',
     row.almacen ?? '',
     row.esLinea ? row.articulo : '(cabecera)',
     row.esLinea ? row.codigo : '',
@@ -169,6 +167,8 @@ function filaComprasAValores(row: FilaFacturaCanal): (string | number)[] {
     bs,
     usd ?? '',
     row.tasaBcv ?? '',
+    row.entidad ?? '',
+    row.proyecto ?? '',
   ];
 }
 

@@ -108,8 +108,6 @@ const TSV_HEADERS = [
   'Factura',
   'Proveedor',
   'RIF',
-  'Entidad',
-  'Obra / Proyecto',
   'Almacén',
   'Artículo',
   'Código',
@@ -118,6 +116,8 @@ const TSV_HEADERS = [
   'Subtotal (Bs)',
   'USD',
   'Tasa BCV',
+  'Entidad',
+  'Obra / Proyecto',
 ] as const;
 
 function filaComprasATsv(row: FilaFacturaCanal): string {
@@ -128,8 +128,6 @@ function filaComprasATsv(row: FilaFacturaCanal): string {
     row.factura,
     row.proveedor,
     row.rif,
-    row.entidad ?? '',
-    row.proyecto ?? '',
     row.almacen ?? '',
     row.esLinea ? row.articulo : '(cabecera)',
     row.esLinea ? row.codigo : '',
@@ -138,6 +136,8 @@ function filaComprasATsv(row: FilaFacturaCanal): string {
     String(bs),
     usd != null ? String(usd) : '',
     row.tasaBcv != null ? String(row.tasaBcv) : '',
+    row.entidad ?? '',
+    row.proyecto ?? '',
   ].join('\t');
 }
 
