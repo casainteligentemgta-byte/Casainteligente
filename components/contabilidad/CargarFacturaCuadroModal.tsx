@@ -363,6 +363,8 @@ export default function CargarFacturaCuadroModal({
   const [activoKey, setActivoKey] = useState<string | null>(null);
   const [matching, setMatching] = useState(false);
   const [matchEtapa, setMatchEtapa] = useState('');
+  /** Facturas marcadas para guardar sin certificar (todas o algunas). */
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
 
   const resetAll = useCallback(() => {
     setExtracting(false);
@@ -374,6 +376,7 @@ export default function CargarFacturaCuadroModal({
     setTablaNombre(null);
     setGrupos([]);
     setActivoKey(null);
+    setSelectedKeys(new Set());
     setFotos((prev) => {
       for (const f of prev) URL.revokeObjectURL(f.previewUrl);
       return [];
@@ -434,8 +437,44 @@ export default function CargarFacturaCuadroModal({
     const cert = grupos.filter((g) => g.certificada).length;
     const conFoto = grupos.filter((g) => g.fotoId).length;
     const listos = grupos.filter((g) => !motivoBloqueoGuardado(g)).length;
-    return { total: grupos.length, cert, conFoto, listos };
-  }, [grupos]);
+    const seleccionados = grupos.filter(
+      (g) => selectedKeys.has(g.key) && !motivoBloqueoGuardado(g),
+    ).length;
+    const todosSeleccionados =
+      grupos.length > 0 && grupos.every((g) => selectedKeys.has(g.key));
+    return {
+      total: grupos.length,
+      cert,
+      conFoto,
+      listos,
+      seleccionados,
+      todosSeleccionados,
+    };
+  }, [grupos, selectedKeys]);
+
+  const toggleSeleccionado = (key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const seleccionarTodos = () => {
+    setSelectedKeys(new Set(grupos.map((g) => g.key)));
+  };
+
+  const seleccionarNinguno = () => {
+    setSelectedKeys(new Set());
+  };
+
+  const aplicarGruposCargados = (agrupados: GrupoFactura[]) => {
+    setGrupos(agrupados);
+    setActivoKey(agrupados[0]?.key ?? null);
+    // Por defecto: todas seleccionadas para guardar sin certificar
+    setSelectedKeys(new Set(agrupados.map((g) => g.key)));
+  };
 
   const onPickTabla = async (file: File) => {
     setExtracting(true);
@@ -454,10 +493,9 @@ export default function CargarFacturaCuadroModal({
         setExtractPct(100);
         setExtractEtapa('Completado');
         setTablaNombre(file.name);
-        setGrupos(agrupados);
-        setActivoKey(agrupados[0]?.key ?? null);
+        aplicarGruposCargados(agrupados);
         toast.success(
-          `${filas.length} filas → ${agrupados.length} factura(s) desde CSV. Adjunte fotos y certifique.`,
+          `${filas.length} filas → ${agrupados.length} factura(s). Seleccione cuáles guardar (sin certificar).`,
         );
         return;
       }
@@ -479,10 +517,9 @@ export default function CargarFacturaCuadroModal({
       setExtractPct(100);
       setExtractEtapa('Completado');
       setTablaNombre(file.name);
-      setGrupos(agrupados);
-      setActivoKey(agrupados[0]?.key ?? null);
+      aplicarGruposCargados(agrupados);
       toast.success(
-        `${payload.total_filas ?? 0} filas → ${agrupados.length} factura(s). Adjunte fotos y certifique.`,
+        `${payload.total_filas ?? 0} filas → ${agrupados.length} factura(s). Seleccione cuáles guardar (sin certificar).`,
       );
     } catch (e) {
       toast.error(mensajeErrorAmigable(e));
@@ -691,7 +728,7 @@ export default function CargarFacturaCuadroModal({
     updateGrupo(key, { certificada: !g.certificada });
   };
 
-  const guardarGrupos = async (modo: 'listas' | 'certificadas') => {
+  const guardarGrupos = async (modo: 'seleccionadas' | 'listas' | 'certificadas') => {
     if (!proyectoId) {
       toast.error('Seleccione la obra para ver las compras en Contabilidad');
       return;
@@ -700,13 +737,17 @@ export default function CargarFacturaCuadroModal({
     const candidatas =
       modo === 'certificadas'
         ? grupos.filter((g) => g.certificada)
-        : grupos.filter((g) => !motivoBloqueoGuardado(g));
+        : modo === 'seleccionadas'
+          ? grupos.filter((g) => selectedKeys.has(g.key) && !motivoBloqueoGuardado(g))
+          : grupos.filter((g) => !motivoBloqueoGuardado(g));
 
     if (candidatas.length === 0) {
       toast.error(
         modo === 'certificadas'
-          ? 'Marque al menos una factura como revisada, o use «Guardar en contabilidad»'
-          : 'No hay facturas listas. Revise nº, proveedor y montos en cada fila.',
+          ? 'Marque al menos una factura como revisada, o guarde las seleccionadas'
+          : modo === 'seleccionadas'
+            ? 'Seleccione al menos una factura lista (nº/proveedor y monto > 0)'
+            : 'No hay facturas listas. Revise nº, proveedor y montos en cada fila.',
       );
       return;
     }
@@ -834,6 +875,11 @@ export default function CargarFacturaCuadroModal({
         );
         onGuardado?.(proyectoId);
         setGrupos((prev) => prev.filter((g) => !keysOk.has(g.key)));
+        setSelectedKeys((prev) => {
+          const next = new Set(prev);
+          Array.from(keysOk).forEach((k) => next.delete(k));
+          return next;
+        });
         if (fail === 0) {
           onClose();
         }
@@ -863,9 +909,8 @@ export default function CargarFacturaCuadroModal({
               Importar CSV / tabla histórica
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">
-              1) Obra · 2) CSV/PDF de la tabla · 3){' '}
-              <b className="text-zinc-400">Guardar en contabilidad</b>. Las fotos son{' '}
-              <b className="text-zinc-400">opcionales</b> (puede subirlas y emparejarlas después).
+              1) Obra · 2) CSV/PDF · 3) Marque <b className="text-zinc-400">todas o algunas</b> · 4){' '}
+              <b className="text-zinc-400">Guardar seleccionadas</b> (sin certificar). Fotos opcionales.
             </p>
           </div>
           <button
@@ -1010,38 +1055,83 @@ export default function CargarFacturaCuadroModal({
           {grupos.length > 0 ? (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-5 min-h-[280px]">
               <div className="lg:col-span-2 space-y-1.5 max-h-[50vh] overflow-y-auto rounded-xl border border-white/10 p-2">
-                {grupos.map((g) => (
+                <div className="flex flex-wrap items-center gap-2 px-1 pb-1.5 border-b border-white/10 mb-1">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="rounded border-white/30"
+                      checked={stats.todosSeleccionados}
+                      disabled={busy}
+                      onChange={(e) => {
+                        if (e.target.checked) seleccionarTodos();
+                        else seleccionarNinguno();
+                      }}
+                    />
+                    Todas
+                  </label>
                   <button
-                    key={g.key}
                     type="button"
-                    onClick={() => setActivoKey(g.key)}
-                    className={`w-full rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${
-                      activoKey === g.key
-                        ? 'border-indigo-400/50 bg-indigo-500/20'
-                        : 'border-white/5 bg-black/30 hover:bg-white/5'
-                    }`}
+                    disabled={busy}
+                    onClick={seleccionarNinguno}
+                    className="text-[10px] font-bold text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-white truncate">
-                        {g.invoice_number || 'Sin nº'}
-                      </span>
-                      <span className="flex items-center gap-1 shrink-0">
-                        {g.fotoId ? (
-                          <Images className="h-3.5 w-3.5 text-emerald-400" />
-                        ) : (
-                          <Images className="h-3.5 w-3.5 text-zinc-600" />
-                        )}
-                        {g.certificada ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                        ) : null}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 truncate text-zinc-400">{g.supplier_name || '—'}</p>
-                    <p className="text-[10px] text-zinc-500">
-                      {g.fecha} · {g.lineas.length} línea(s) · {totalGrupo(g)} {g.moneda}
-                    </p>
+                    Ninguna
                   </button>
-                ))}
+                  <span className="text-[10px] text-zinc-500 ml-auto">
+                    {stats.seleccionados}/{stats.total} p/guardar
+                  </span>
+                </div>
+                {grupos.map((g) => {
+                  const marcada = selectedKeys.has(g.key);
+                  const bloqueo = motivoBloqueoGuardado(g);
+                  return (
+                    <div
+                      key={g.key}
+                      className={`flex gap-2 rounded-lg border px-2 py-2 text-xs transition-colors ${
+                        activoKey === g.key
+                          ? 'border-indigo-400/50 bg-indigo-500/20'
+                          : marcada
+                            ? 'border-emerald-400/30 bg-emerald-500/10'
+                            : 'border-white/5 bg-black/30'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 shrink-0 rounded border-white/30"
+                        checked={marcada}
+                        disabled={busy}
+                        aria-label={`Seleccionar factura ${g.invoice_number || g.key}`}
+                        onChange={() => toggleSeleccionado(g.key)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setActivoKey(g.key)}
+                        className="min-w-0 flex-1 text-left hover:opacity-90"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-white truncate">
+                            {g.invoice_number || 'Sin nº'}
+                          </span>
+                          <span className="flex items-center gap-1 shrink-0">
+                            {g.fotoId ? (
+                              <Images className="h-3.5 w-3.5 text-emerald-400" />
+                            ) : (
+                              <Images className="h-3.5 w-3.5 text-zinc-600" />
+                            )}
+                            {g.certificada ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                            ) : null}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-zinc-400">{g.supplier_name || '—'}</p>
+                        <p className="text-[10px] text-zinc-500">
+                          {g.fecha} · {g.lineas.length} línea(s) · {totalGrupo(g)} {g.moneda}
+                          {bloqueo ? ` · ${bloqueo}` : ''}
+                        </p>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="lg:col-span-3 space-y-3 rounded-xl border border-white/10 p-3">
@@ -1239,8 +1329,8 @@ export default function CargarFacturaCuadroModal({
             </div>
           ) : (
             <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-500">
-              1) Obra · 2) CSV/PDF · 3) Guardar en contabilidad. Las fotos son opcionales y se pueden
-              subir después.
+              1) Obra · 2) CSV/PDF · 3) Seleccione facturas · 4) Guardar seleccionadas (sin
+              certificar). Fotos opcionales.
             </p>
           )}
         </div>
@@ -1248,7 +1338,7 @@ export default function CargarFacturaCuadroModal({
         <div className="flex flex-col gap-2 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <p className="text-[11px] text-zinc-500 leading-snug sm:max-w-[45%]">
             {proyectoId
-              ? `${stats.listos}/${stats.total} lista(s) para el cuadro · fotos ${stats.conFoto}`
+              ? `${stats.seleccionados} seleccionada(s) lista(s) · ${stats.listos}/${stats.total} con datos OK · fotos ${stats.conFoto}`
               : 'Seleccione la obra para que las compras aparezcan filtradas en Contabilidad.'}
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -1273,12 +1363,14 @@ export default function CargarFacturaCuadroModal({
             ) : null}
             <button
               type="button"
-              disabled={busy || stats.listos === 0 || !proyectoId}
-              onClick={() => void guardarGrupos('listas')}
+              disabled={busy || stats.seleccionados === 0 || !proyectoId}
+              onClick={() => void guardarGrupos('seleccionadas')}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-              {saving ? 'Guardando…' : `Guardar en contabilidad (${stats.listos})`}
+              {saving
+                ? 'Guardando…'
+                : `Guardar seleccionadas (${stats.seleccionados})`}
             </button>
           </div>
         </div>
