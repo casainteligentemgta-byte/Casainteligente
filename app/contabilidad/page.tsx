@@ -199,6 +199,14 @@ export default function ContabilidadPage() {
 
     const modules: ModuloContabilidad[] = [
         {
+            title: 'CCO Obra',
+            description: 'Libro maestro · KPIs y gráficos V4',
+            icon: '📒',
+            href: '/contabilidad/cco',
+            color: '#2563EB',
+            active: true,
+        },
+        {
             title: 'Procuras',
             description: 'Gestión de abastecimiento y pedidos',
             icon: '📦',
@@ -387,6 +395,38 @@ export default function ContabilidadPage() {
             </div>
 
             <div style={{ padding: '20px' }}>
+                <Link
+                    href="/contabilidad/cco"
+                    style={{
+                        display: 'block',
+                        textDecoration: 'none',
+                        marginBottom: '16px',
+                        padding: '14px 16px',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(37,99,235,0.45)',
+                        background: 'linear-gradient(135deg, rgba(37,99,235,0.22) 0%, rgba(0,0,0,0) 100%)',
+                    }}
+                >
+                    <p
+                        style={{
+                            color: '#93C5FD',
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            letterSpacing: '0.07em',
+                            textTransform: 'uppercase',
+                            marginBottom: '4px',
+                        }}
+                    >
+                        Principal · CCO V4
+                    </p>
+                    <p style={{ color: 'white', fontSize: '15px', fontWeight: 700 }}>
+                        Control Contable de Obra
+                    </p>
+                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', marginTop: '2px' }}>
+                        KPIs BCV/Real, gráficos y menú como tu sistema · datos vivos →
+                    </p>
+                </Link>
+
                 <div
                     style={{
                         ...glass,
