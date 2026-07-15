@@ -21,6 +21,7 @@ import {
   esArchivoCsvTabla,
   parseCsvTablaCompras,
 } from '@/lib/contabilidad/parseCsvTablaCompras';
+import GuardadoCsvProgreso from '@/components/contabilidad/GuardadoCsvProgreso';
 
 const MAX_FOTOS_EMPAREJE_LOTE = 12;
 
@@ -360,6 +361,10 @@ export default function CargarFacturaCuadroModal({
   const [extractPct, setExtractPct] = useState(0);
   const [extractEtapa, setExtractEtapa] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savePct, setSavePct] = useState(0);
+  const [saveActual, setSaveActual] = useState(0);
+  const [saveTotal, setSaveTotal] = useState(0);
+  const [saveEtapa, setSaveEtapa] = useState('');
   const [tablaNombre, setTablaNombre] = useState<string | null>(null);
   const [grupos, setGrupos] = useState<GrupoFactura[]>([]);
   const [fotos, setFotos] = useState<FotoAdjunto[]>([]);
@@ -374,6 +379,10 @@ export default function CargarFacturaCuadroModal({
     setExtractPct(0);
     setExtractEtapa('');
     setSaving(false);
+    setSavePct(0);
+    setSaveActual(0);
+    setSaveTotal(0);
+    setSaveEtapa('');
     setMatching(false);
     setMatchEtapa('');
     setTablaNombre(null);
@@ -755,11 +764,27 @@ export default function CargarFacturaCuadroModal({
       return;
     }
 
+    const totalSave = candidatas.length;
     setSaving(true);
+    setSavePct(1);
+    setSaveActual(0);
+    setSaveTotal(totalSave);
+    setSaveEtapa('Preparando tasas BCV…');
     const supabase = createClient();
     let ok = 0;
     let fail = 0;
     const keysOk = new Set<string>();
+
+    const marcarProgreso = (hecho: number, etapa: string) => {
+      // 0–12% preparación; 12–100% por factura
+      const pct =
+        totalSave <= 0
+          ? 100
+          : Math.min(99, Math.round(12 + (hecho / totalSave) * 88));
+      setSaveActual(hecho);
+      setSavePct(pct);
+      setSaveEtapa(etapa);
+    };
 
     try {
       // Completar tasas BCV faltantes antes de insertar
@@ -779,7 +804,12 @@ export default function CargarFacturaCuadroModal({
         }
       }
 
-      for (const g of candidatas) {
+      marcarProgreso(0, 'Guardando facturas…');
+
+      for (let i = 0; i < candidatas.length; i++) {
+        const g = candidatas[i]!;
+        const etiqueta = g.invoice_number.trim() || `fila ${i + 1}`;
+        marcarProgreso(i, `Guardando ${etiqueta}…`);
         try {
           const bloqueo = motivoBloqueoGuardado(g);
           if (bloqueo) throw new Error(bloqueo);
@@ -867,7 +897,11 @@ export default function CargarFacturaCuadroModal({
             `Factura ${g.invoice_number || '?'}: ${e instanceof Error ? e.message : 'falló'}`,
           );
         }
+        marcarProgreso(i + 1, `Listo ${i + 1}/${totalSave}`);
       }
+
+      setSavePct(100);
+      setSaveEtapa(ok > 0 ? '¡Listo!' : 'Sin guardados');
 
       if (ok > 0) {
         toast.success(
@@ -888,6 +922,10 @@ export default function CargarFacturaCuadroModal({
       }
     } finally {
       setSaving(false);
+      setSavePct(0);
+      setSaveActual(0);
+      setSaveTotal(0);
+      setSaveEtapa('');
     }
   };
 
@@ -899,10 +937,17 @@ export default function CargarFacturaCuadroModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/75">
       <div
-        className="flex max-h-[94vh] w-full max-w-5xl flex-col rounded-2xl border border-white/10 bg-[#141418] shadow-2xl"
+        className="relative flex max-h-[94vh] w-full max-w-5xl flex-col rounded-2xl border border-white/10 bg-[#141418] shadow-2xl"
         role="dialog"
         aria-labelledby="cargar-tabla-historica-title"
       >
+        <GuardadoCsvProgreso
+          open={saving}
+          pct={savePct}
+          actual={saveActual}
+          total={saveTotal}
+          etapa={saveEtapa}
+        />
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
           <div>
             <h2 id="cargar-tabla-historica-title" className="text-base font-bold text-white">
@@ -1369,7 +1414,7 @@ export default function CargarFacturaCuadroModal({
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
               {saving
-                ? 'Guardando…'
+                ? `Guardando ${savePct}%`
                 : `Guardar seleccionadas (${stats.seleccionados})`}
             </button>
           </div>
