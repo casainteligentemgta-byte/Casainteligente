@@ -215,9 +215,11 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     }
 
     const invoice = cell(cols, iFactura);
+    const proveedor = cell(cols, iProveedor);
     const descripcion =
-      cell(cols, iDesc) || (invoice ? `Compra factura ${invoice}` : '');
-    if (!descripcion && !(subtotal > 0) && !invoice) continue;
+      cell(cols, iDesc) ||
+      (invoice ? `Compra factura ${invoice}` : proveedor ? `Compra ${proveedor}` : '');
+    if (!descripcion && !(subtotal > 0) && !invoice && !proveedor) continue;
 
     const monedaRaw = cell(cols, iMoneda).toUpperCase();
     const moneda =
@@ -227,7 +229,7 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
 
     filas.push({
       invoice_number: invoice,
-      supplier_name: cell(cols, iProveedor),
+      supplier_name: proveedor,
       supplier_rif: cell(cols, iRif),
       date: normalizarFechaCsv(cell(cols, iFecha)),
       descripcion: descripcion || 'Ítem',
