@@ -836,6 +836,11 @@ export default function CargarFacturaCuadroModal({
 
           const total = totalGrupo(g);
           const montos = calcularGastoBimonetario(total, g.moneda, tasa);
+          // Par coherente para el API: monto_ves = round(monto_usd × tasa, 2).
+          // Evita fallos por redondeo VES→USD (p. ej. diferencia 1–3 Bs con tolerancia 0.05).
+          const montoUsd = montos.montoUsd;
+          const montoVes =
+            Math.round(montoUsd * montos.tasaApplied * 100) / 100;
           const lineas = g.lineas.map((l) => {
             const cantidad = parseNum(l.cantidad) || 1;
             const precio = parseNum(l.precio_unitario);
@@ -866,8 +871,8 @@ export default function CargarFacturaCuadroModal({
               supplier_name: nombreProveedorGuardado(g),
               supplier_rif: g.supplier_rif.trim() || 'SIN-RIF',
               fecha,
-              monto_ves: montos.montoVes,
-              monto_usd: montos.montoUsd,
+              monto_ves: montoVes,
+              monto_usd: montoUsd,
               tasa_bcv_fecha: montos.tasaApplied,
               moneda_original: g.moneda,
               origen: 'HISTORICO_TABLA',

@@ -1,5 +1,19 @@
-/** Tolerancia en bolívares para redondeo al validar monto_ves ≈ monto_usd × tasa. */
+/** Tolerancia mínima en bolívares al validar monto_ves ≈ monto_usd × tasa. */
 export const TOLERANCIA_COHERENCIA_BIMONETARIA_VES = 0.05;
+
+/**
+ * Tolerancia efectiva: al convertir VES→USD con 2 decimales, el error máximo
+ * teórico es ~media céntima de USD × tasa (p. ej. tasa 5000 ⇒ ~25 Bs).
+ * La tolerancia fija ±0.05 fallaba en importaciones CSV con tasas altas.
+ */
+export function toleranciaCoherenciaBimonetaria(tasaBcvFecha: number): number {
+  const tasa = Number(tasaBcvFecha);
+  if (!(tasa > 0) || !Number.isFinite(tasa)) {
+    return TOLERANCIA_COHERENCIA_BIMONETARIA_VES;
+  }
+  // 0.005 USD × tasa + margen float
+  return Math.max(TOLERANCIA_COHERENCIA_BIMONETARIA_VES, tasa * 0.005 + 0.02);
+}
 
 export type ErrorValidacionBimonetaria = {
   ok: false;
@@ -35,7 +49,7 @@ export function validarCoherenciaBimonetaria(
   montoVes: number,
   montoUsd: number,
   tasaBcvFecha: number,
-  tolerancia = TOLERANCIA_COHERENCIA_BIMONETARIA_VES,
+  tolerancia?: number,
 ): { ok: true } | ErrorValidacionBimonetaria {
   if (!(tasaBcvFecha > 0)) {
     return {
@@ -45,14 +59,19 @@ export function validarCoherenciaBimonetaria(
     };
   }
 
+  const tol =
+    tolerancia != null && Number.isFinite(tolerancia) && tolerancia >= 0
+      ? tolerancia
+      : toleranciaCoherenciaBimonetaria(tasaBcvFecha);
+
   const esperadoVes = montoUsd * tasaBcvFecha;
   const diff = Math.abs(montoVes - esperadoVes);
 
-  if (diff > tolerancia) {
+  if (diff > tol) {
     return {
       ok: false,
       error: `Incoherencia bimonetaria: monto_ves (${montoVes.toFixed(2)}) no coincide con monto_usd × tasa_bcv_fecha (${esperadoVes.toFixed(2)}).`,
-      hint: `Diferencia ${diff.toFixed(4)} Bs (tolerancia ±${tolerancia}). Verifica montos y tasa del día de la factura.`,
+      hint: `Diferencia ${diff.toFixed(4)} Bs (tolerancia ±${tol.toFixed(2)}). Verifica montos y tasa del día de la factura.`,
     };
   }
 
