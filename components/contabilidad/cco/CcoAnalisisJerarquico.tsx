@@ -191,7 +191,7 @@ function TreemapPresupuesto({ nodos }: { nodos: CcoTreemapNodo[] }) {
       if (!m.has(n.cap)) m.set(n.cap, []);
       m.get(n.cap)!.push(n);
     }
-    return [...m.entries()].sort(
+    return Array.from(m.entries()).sort(
       (a, b) =>
         b[1].reduce((s, x) => s + x.costo, 0) - a[1].reduce((s, x) => s + x.costo, 0),
     );

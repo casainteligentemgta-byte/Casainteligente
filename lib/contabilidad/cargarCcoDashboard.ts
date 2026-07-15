@@ -117,8 +117,11 @@ function acumularSerie(
   porMesIngresos: Map<string, number>,
   porMesEgresos: Map<string, number>,
 ): { periodo: CcoSeriePunto[]; acumulado: CcoSeriePunto[]; gastos: CcoGastoMensual[] } {
-  const keys = new Set([...porMesIngresos.keys(), ...porMesEgresos.keys()]);
-  const periodos = [...keys].sort();
+  const keys = new Set([
+    ...Array.from(porMesIngresos.keys()),
+    ...Array.from(porMesEgresos.keys()),
+  ]);
+  const periodos = Array.from(keys).sort();
   const periodo: CcoSeriePunto[] = [];
   const acumulado: CcoSeriePunto[] = [];
   const gastos: CcoGastoMensual[] = [];
@@ -269,7 +272,7 @@ export async function cargarCcoDashboard(
   // Prorratear admin delegada en cada capítulo
   const totalGastos = gastosNetos || 1;
   for (const [cap, tipos] of porCapTipo) {
-    const matCap = [...tipos.values()].reduce((a, b) => a + b, 0);
+    const matCap = Array.from(tipos.values()).reduce((a, b) => a + b, 0);
     const adminShare = adminDelegada * (matCap / totalGastos);
     if (adminShare > 0) {
       tipos.set(
@@ -285,8 +288,8 @@ export async function cargarCcoDashboard(
   }
 
   const grandTotal =
-    [...porCapTipo.values()].reduce(
-      (acc, tipos) => acc + [...tipos.values()].reduce((a, b) => a + b, 0),
+    Array.from(porCapTipo.values()).reduce(
+      (acc, tipos) => acc + Array.from(tipos.values()).reduce((a, b) => a + b, 0),
       0,
     ) || 1;
 
@@ -302,7 +305,7 @@ export async function cargarCcoDashboard(
   const { periodo: flujoPeriodo, acumulado: flujoAcumulado, gastos: gastosMensual } =
     acumularSerie(porMesIngresos, porMesEgresos);
 
-  const topProveedores: CcoProveedorFila[] = [...porProveedor.entries()]
+  const topProveedores: CcoProveedorFila[] = Array.from(porProveedor.entries())
     .map(([proveedor, costo]) => ({ proveedor, costo }))
     .sort((a, b) => b.costo - a.costo)
     .slice(0, 10)
@@ -323,7 +326,7 @@ export async function cargarCcoDashboard(
     return map[t];
   };
 
-  const capitulos: CcoCapituloFila[] = [...porCapTipo.entries()]
+  const capitulos: CcoCapituloFila[] = Array.from(porCapTipo.entries())
     .map(([cap, tipos]) => {
       const row: CcoCapituloFila = {
         cap: cap.slice(0, 22),
@@ -347,10 +350,10 @@ export async function cargarCcoDashboard(
     })
     .slice(0, 12);
 
-  const jerarquiaCapitulos: CcoCapituloJerarquia[] = [...porCapTipo.entries()]
+  const jerarquiaCapitulos: CcoCapituloJerarquia[] = Array.from(porCapTipo.entries())
     .map(([nombre, tipos]) => {
-      const total = [...tipos.values()].reduce((a, b) => a + b, 0);
-      const hijos: CcoHijoJerarquia[] = [...tipos.entries()]
+      const total = Array.from(tipos.values()).reduce((a, b) => a + b, 0);
+      const hijos: CcoHijoJerarquia[] = Array.from(tipos.entries())
         .filter(([, c]) => c > 0)
         .map(([n, costo]) => ({
           nombre: n,
