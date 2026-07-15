@@ -271,7 +271,7 @@ export async function cargarCcoDashboard(
 
   // Prorratear admin delegada en cada capítulo
   const totalGastos = gastosNetos || 1;
-  for (const [cap, tipos] of porCapTipo) {
+  for (const [cap, tipos] of Array.from(porCapTipo.entries())) {
     const matCap = Array.from(tipos.values()).reduce((a, b) => a + b, 0);
     const adminShare = adminDelegada * (matCap / totalGastos);
     if (adminShare > 0) {
@@ -340,7 +340,7 @@ export async function cargarCcoDashboard(
         permiso: 0,
         proyecto: 0,
       };
-      for (const [t, v] of tipos) row[tipKey(t)] = v;
+      for (const [t, v] of Array.from(tipos.entries())) row[tipKey(t)] = v;
       return row;
     })
     .sort((a, b) => {
