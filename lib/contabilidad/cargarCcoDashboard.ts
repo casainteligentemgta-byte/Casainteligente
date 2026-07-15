@@ -311,8 +311,9 @@ export async function cargarCcoDashboard(
     .slice(0, 10)
     .reverse();
 
-  const tipKey = (t: CcoTipoGasto): keyof CcoCapituloFila => {
-    const map: Record<CcoTipoGasto, keyof CcoCapituloFila> = {
+  type CcoCapituloMontoKey = Exclude<keyof CcoCapituloFila, 'cap'>;
+  const tipKey = (t: CcoTipoGasto): CcoCapituloMontoKey => {
+    const map: Record<CcoTipoGasto, CcoCapituloMontoKey> = {
       'ADMINISTRACIÓN DELEGADA': 'admin',
       MATERIALES: 'materiales',
       CONTRATISTA: 'contratista',
@@ -340,7 +341,9 @@ export async function cargarCcoDashboard(
         permiso: 0,
         proyecto: 0,
       };
-      for (const [t, v] of Array.from(tipos.entries())) row[tipKey(t)] = v;
+      for (const [t, v] of Array.from(tipos.entries())) {
+        row[tipKey(t)] = v;
+      }
       return row;
     })
     .sort((a, b) => {

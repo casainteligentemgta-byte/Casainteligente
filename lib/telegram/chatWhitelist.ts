@@ -163,28 +163,27 @@ export async function isChatAllowedAsync(chatId: string | number): Promise<boole
 export async function listarTelegramWhitelist(
   supabase: SupabaseClient,
 ): Promise<FilaTelegramWhitelist[]> {
-  const select = schemaSinCargo ? SELECT_SIN_CARGO : SELECT_CON_CARGO;
-  let { data, error } = await supabase
+  const cols = schemaSinCargo ? SELECT_SIN_CARGO : SELECT_CON_CARGO;
+  // Cast: select tipado de supabase genera uniones demasiado grandes.
+  let result = await supabase
     .from('ci_telegram_whitelist')
-    .select(select)
+    .select(cols as string)
     .order('activo', { ascending: false })
     .order('nombre');
 
-  if (esErrorColumnaCargoWhitelist(error)) {
+  if (esErrorColumnaCargoWhitelist(result.error)) {
     schemaSinCargo = true;
-    const retry = await supabase
+    result = await supabase
       .from('ci_telegram_whitelist')
-      .select(SELECT_SIN_CARGO)
+      .select(SELECT_SIN_CARGO as string)
       .order('activo', { ascending: false })
       .order('nombre');
-    data = retry.data;
-    error = retry.error;
   }
 
-  if (error?.code === '42P01') return [];
-  if (error) throw new Error(error.message);
+  if (result.error?.code === '42P01') return [];
+  if (result.error) throw new Error(result.error.message);
 
-  return (data ?? []).map((r) => mapFilaTelegramWhitelist(r as Record<string, unknown>));
+  return ((result.data ?? []) as unknown as Record<string, unknown>[]).map(mapFilaTelegramWhitelist);
 }
 
 export type CrearTelegramWhitelistInput = {
@@ -227,38 +226,33 @@ export async function crearTelegramWhitelist(
     updated_at: new Date().toISOString(),
   };
 
-  const conCargo = schemaSinCargo ? null : { ...rowBase, cargo };
-  const row = conCargo ?? payloadSinCargo(rowBase, cargo);
-  const select = schemaSinCargo ? SELECT_SIN_CARGO : SELECT_CON_CARGO;
-
-  let { data, error } = await supabase
-    .from('ci_telegram_whitelist')
-    .upsert(row, { onConflict: 'chat_id' })
-    .select(select)
-    .single();
-
-  if (esErrorColumnaCargoWhitelist(error)) {
-    schemaSinCargo = true;
-    const retry = await supabase
+  const upsertOne = async (body: Record<string, unknown>, cols: string) =>
+    supabase
       .from('ci_telegram_whitelist')
-      .upsert(payloadSinCargo(rowBase, cargo), { onConflict: 'chat_id' })
-      .select(SELECT_SIN_CARGO)
+      .upsert(body, { onConflict: 'chat_id' })
+      .select(cols)
       .single();
-    data = retry.data;
-    error = retry.error;
+
+  let result = schemaSinCargo
+    ? await upsertOne(payloadSinCargo(rowBase, cargo), SELECT_SIN_CARGO)
+    : await upsertOne({ ...rowBase, cargo }, SELECT_CON_CARGO);
+
+  if (esErrorColumnaCargoWhitelist(result.error)) {
+    schemaSinCargo = true;
+    result = await upsertOne(payloadSinCargo(rowBase, cargo), SELECT_SIN_CARGO);
   }
 
-  if (error) {
-    if (esErrorColumnaCargoWhitelist(error)) {
+  if (result.error) {
+    if (esErrorColumnaCargoWhitelist(result.error)) {
       throw new Error(
-        `${error.message}. Ejecuta en Supabase SQL Editor: alter table public.ci_telegram_whitelist add column if not exists cargo varchar(100); notify pgrst, 'reload schema';`,
+        `${result.error.message}. Ejecuta en Supabase SQL Editor: alter table public.ci_telegram_whitelist add column if not exists cargo varchar(100); notify pgrst, 'reload schema';`,
       );
     }
-    throw new Error(error.message);
+    throw new Error(result.error.message);
   }
   invalidarCacheWhitelistTelegram();
 
-  return mapFilaTelegramWhitelist(data as Record<string, unknown>);
+  return mapFilaTelegramWhitelist(result.data as unknown as Record<string, unknown>);
 }
 
 export async function actualizarTelegramWhitelist(
@@ -287,36 +281,33 @@ export async function actualizarTelegramWhitelist(
     if (cargoTxt && patch.notas === undefined) body.notas = cargoTxt;
   }
 
-  const select = schemaSinCargo ? SELECT_SIN_CARGO : SELECT_CON_CARGO;
-  let { data, error } = await supabase
-    .from('ci_telegram_whitelist')
-    .update(body)
-    .eq('id', id.trim())
-    .select(select)
-    .maybeSingle();
+  const updateOne = async (bodyUpd: Record<string, unknown>, cols: string) =>
+    supabase
+      .from('ci_telegram_whitelist')
+      .update(bodyUpd)
+      .eq('id', id.trim())
+      .select(cols)
+      .maybeSingle();
 
-  if (esErrorColumnaCargoWhitelist(error)) {
+  let result = schemaSinCargo
+    ? await updateOne(body, SELECT_SIN_CARGO)
+    : await updateOne(body, SELECT_CON_CARGO);
+
+  if (esErrorColumnaCargoWhitelist(result.error)) {
     schemaSinCargo = true;
     const bodyLegacy = { ...body };
     delete bodyLegacy.cargo;
     if (patch.cargo !== undefined && bodyLegacy.notas == null) {
       bodyLegacy.notas = patch.cargo?.trim().slice(0, 100) || null;
     }
-    const retry = await supabase
-      .from('ci_telegram_whitelist')
-      .update(bodyLegacy)
-      .eq('id', id.trim())
-      .select(SELECT_SIN_CARGO)
-      .maybeSingle();
-    data = retry.data;
-    error = retry.error;
+    result = await updateOne(bodyLegacy, SELECT_SIN_CARGO);
   }
 
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error('Registro no encontrado');
+  if (result.error) throw new Error(result.error.message);
+  if (!result.data) throw new Error('Registro no encontrado');
   invalidarCacheWhitelistTelegram();
 
-  return mapFilaTelegramWhitelist(data as Record<string, unknown>);
+  return mapFilaTelegramWhitelist(result.data as unknown as Record<string, unknown>);
 }
 
 export async function eliminarTelegramWhitelist(
