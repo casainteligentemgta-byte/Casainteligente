@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createProcurementDocumentSignedUrl } from '@/lib/almacen/procurementDocumentStorage';
+import {
+  createProcurementDocumentSignedUrl,
+  uploadProcurementDocument,
+  validateProcurementDocument,
+} from '@/lib/almacen/procurementDocumentStorage';
 import {
   resolverDocumentoCompra,
   sincronizarDocumentoEnCompra,
@@ -92,6 +96,75 @@ export async function GET(_req: Request, ctx: RouteCtx) {
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Error al obtener el documento.';
     console.error('[GET contabilidad compra document]', e);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/** POST multipart/form-data — adjunta imagen o PDF a una compra ya registrada. */
+export async function POST(req: Request, ctx: RouteCtx) {
+  try {
+    const { id } = await ctx.params;
+    if (!id?.trim()) {
+      return NextResponse.json({ error: 'ID de compra requerido.' }, { status: 400 });
+    }
+
+    const form = await req.formData();
+    const file = form.get('documento');
+    if (!(file instanceof File) || file.size === 0) {
+      return NextResponse.json(
+        { error: 'Envíe un archivo en el campo documento (imagen o PDF).' },
+        { status: 400 },
+      );
+    }
+
+    const validation = validateProcurementDocument(file);
+    if (validation) {
+      return NextResponse.json({ error: validation }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+    const compraId = id.trim();
+    const { data: compra, error: compraErr } = await supabase
+      .from('contabilidad_compras')
+      .select('id, purchase_invoice_id, document_storage_path')
+      .eq('id', compraId)
+      .maybeSingle();
+
+    if (compraErr) throw compraErr;
+    if (!compra) {
+      return NextResponse.json({ error: 'Compra no encontrada.' }, { status: 404 });
+    }
+
+    const uploaded = await uploadProcurementDocument(
+      supabase,
+      compra.purchase_invoice_id?.trim() || `compra-${compraId}`,
+      file,
+    );
+
+    const { error: upErr } = await supabase
+      .from('contabilidad_compras')
+      .update({
+        document_storage_path: uploaded.path,
+        document_file_name: uploaded.fileName,
+      })
+      .eq('id', compraId);
+
+    if (upErr) throw upErr;
+
+    const admin = supabaseAdminForRoute();
+    const storageClient = admin.ok ? admin.client : supabase;
+    const url = await createProcurementDocumentSignedUrl(storageClient, uploaded.path);
+
+    return NextResponse.json({
+      ok: true,
+      url,
+      fileName: uploaded.fileName,
+      mimeType: uploaded.mimeType,
+      storagePath: uploaded.path,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Error al adjuntar el documento.';
+    console.error('[POST contabilidad compra document]', e);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

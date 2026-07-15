@@ -119,11 +119,14 @@ function claveFactura(invoice: string, rif: string, proveedor: string): string {
 
 function agruparFilas(filas: FilaApi[]): GrupoFactura[] {
   const map = new Map<string, GrupoFactura>();
-  for (const f of filas) {
+  filas.forEach((f, rowIdx) => {
     const invoice = (f.invoice_number ?? '').trim();
     const supplier = (f.supplier_name ?? '').trim();
     const rif = (f.supplier_rif ?? '').trim();
-    const key = claveFactura(invoice, rif, supplier);
+    // Sin nº de factura: cada fila CSV es un registro distinto (evita colapsar todo en SIN-NUM).
+    const key = invoice
+      ? claveFactura(invoice, rif, supplier)
+      : `csv-fila-${rowIdx}`;
     const moneda = String(f.moneda ?? 'VES').toUpperCase() === 'USD' ? 'USD' : 'VES';
     const linea: LineaGrupo = {
       key: nuevoKey(),
@@ -154,7 +157,7 @@ function agruparFilas(filas: FilaApi[]): GrupoFactura[] {
         tasaBcv: '',
       });
     }
-  }
+  });
   return Array.from(map.values());
 }
 
@@ -167,12 +170,9 @@ function totalGrupo(g: GrupoFactura): number {
   return Math.round(suma * 100) / 100;
 }
 
-/** Datos mínimos para registrar en contabilidad (fotos opcionales). */
+/** Solo bloquea grupos vacíos; factura, proveedor y montos se completan al guardar. */
 function motivoBloqueoGuardado(g: GrupoFactura): string | null {
-  if (!g.invoice_number.trim() && !g.supplier_name.trim()) {
-    return 'Falta número de factura o proveedor';
-  }
-  if (!(totalGrupo(g) > 0)) return 'Total en cero';
+  if (g.lineas.length === 0) return 'Sin líneas';
   return null;
 }
 
@@ -180,7 +180,10 @@ function nombreProveedorGuardado(g: GrupoFactura): string {
   const n = g.supplier_name.trim();
   if (n) return n;
   const inv = g.invoice_number.trim();
-  return inv ? `Proveedor factura ${inv}` : 'Proveedor pendiente';
+  if (inv) return `Proveedor factura ${inv}`;
+  const desc = g.lineas[0]?.descripcion.trim();
+  if (desc && desc !== 'Ítem') return desc.slice(0, 80);
+  return 'Proveedor pendiente';
 }
 
 function numeroFacturaGuardado(g: GrupoFactura): string {
@@ -745,9 +748,9 @@ export default function CargarFacturaCuadroModal({
       toast.error(
         modo === 'certificadas'
           ? 'Marque al menos una factura como revisada, o guarde las seleccionadas'
-          : modo === 'seleccionadas'
-            ? 'Seleccione al menos una factura lista (nº/proveedor y monto > 0)'
-            : 'No hay facturas listas. Revise nº, proveedor y montos en cada fila.',
+            : modo === 'seleccionadas'
+            ? 'Seleccione al menos una factura del CSV'
+            : 'No hay facturas en el CSV.',
       );
       return;
     }
@@ -803,9 +806,6 @@ export default function CargarFacturaCuadroModal({
 
           const total = totalGrupo(g);
           const montos = calcularGastoBimonetario(total, g.moneda, tasa);
-          if (!(montos.montoVes > 0) && !(montos.montoUsd > 0)) {
-            throw new Error('Montos bimonetarios inválidos');
-          }
           const lineas = g.lineas.map((l) => {
             const cantidad = parseNum(l.cantidad) || 1;
             const precio = parseNum(l.precio_unitario);
@@ -1338,7 +1338,7 @@ export default function CargarFacturaCuadroModal({
         <div className="flex flex-col gap-2 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <p className="text-[11px] text-zinc-500 leading-snug sm:max-w-[45%]">
             {proyectoId
-              ? `${stats.seleccionados} seleccionada(s) lista(s) · ${stats.listos}/${stats.total} con datos OK · fotos ${stats.conFoto}`
+              ? `${stats.seleccionados} seleccionada(s) de ${stats.total} · fotos ${stats.conFoto} (opcionales)`
               : 'Seleccione la obra para que las compras aparezcan filtradas en Contabilidad.'}
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

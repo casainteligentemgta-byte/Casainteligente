@@ -79,7 +79,7 @@ import EditarFacturaCanalModal, {
 import EditarLineaCompraModal, {
     type LineaCompraEditable,
 } from '@/components/contabilidad/EditarLineaCompraModal';
-import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
+import CompraFacturaAdjunto from '@/components/contabilidad/CompraFacturaAdjunto';
 import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
 import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
 import {
@@ -270,7 +270,17 @@ function compraPuedeVerImagen(c: CompraRow): boolean {
             c.purchase_invoice_id ||
             c.origen === 'RECEPCION_MERCANCIA' ||
             c.origen === 'TELEGRAM' ||
+            c.origen === 'HISTORICO_TABLA' ||
             c.pendiente_canal_id,
+    );
+}
+
+function compraPuedeAdjuntarFactura(c: CompraRow): boolean {
+    return (
+        c.origen === 'HISTORICO_TABLA' &&
+        !c.document_storage_path &&
+        !c.purchase_invoice_id &&
+        !c.pendiente_canal_id
     );
 }
 
@@ -2983,7 +2993,11 @@ export default function ComprasPage() {
                                                                     : 'rgba(255,255,255,0.35)',
                                                             }}
                                                         >
-                                                            {imagenAbierta ? '▲ ocultar imagen' : '▼ ver imagen'}
+                                                            {imagenAbierta
+                                                                ? '▲ ocultar'
+                                                                : c.document_storage_path
+                                                                  ? '▼ ver imagen'
+                                                                  : '▼ factura / adjuntar'}
                                                         </span>
                                                     ) : null}
                                                 </button>
@@ -3478,7 +3492,7 @@ export default function ComprasPage() {
                                             );
                                         })()}
                                         {compraPuedeVerImagen(c) ? (
-                                            <CompraFacturaImagen
+                                            <CompraFacturaAdjunto
                                                 compraId={c.id}
                                                 documentApiPath={
                                                     c.pendiente_canal_id &&
@@ -3495,10 +3509,12 @@ export default function ComprasPage() {
                                                             c.pendiente_canal_id,
                                                     )
                                                 }
+                                                puedeAdjuntar={compraPuedeAdjuntarFactura(c)}
                                                 esRecepcion={
                                                     c.origen === 'RECEPCION_MERCANCIA' ||
                                                     c.origen === 'TELEGRAM'
                                                 }
+                                                onAdjuntado={() => void load()}
                                             />
                                         ) : c.document_file_name ? (
                                             <p
