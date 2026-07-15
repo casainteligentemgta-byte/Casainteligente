@@ -19,15 +19,35 @@ export type FilaTelegramWhitelist = {
   updated_at: string;
 };
 
-const SELECT_WHITELIST =
+const SELECT_CON_CARGO =
   'id,chat_id,nombre,cargo,telefono,email,proyecto_id,empleado_id,nomina_id,origen,activo,notas,created_at,updated_at';
 
+const SELECT_SIN_CARGO =
+  'id,chat_id,nombre,telefono,email,proyecto_id,empleado_id,nomina_id,origen,activo,notas,created_at,updated_at';
+
+/** true si PostgREST/Postgres no tiene aún la columna cargo (mig. 231/267 pendiente). */
+export function esErrorColumnaCargoWhitelist(
+  error: { message?: string; code?: string; details?: string } | null | undefined,
+): boolean {
+  if (!error) return false;
+  const blob = `${error.code ?? ''} ${error.message ?? ''} ${error.details ?? ''}`;
+  return (
+    error.code === 'PGRST204' ||
+    error.code === '42703' ||
+    /ci_telegram_whitelist\.cargo|'cargo' column of 'ci_telegram_whitelist'|column ci_telegram_whitelist\.cargo/i.test(
+      blob,
+    )
+  );
+}
+
 function mapFilaTelegramWhitelist(r: Record<string, unknown>): FilaTelegramWhitelist {
+  const notas = r.notas != null ? String(r.notas).trim() || null : null;
+  const cargoCol = r.cargo != null ? String(r.cargo).trim() || null : null;
   return {
     id: String(r.id),
     chat_id: Number(r.chat_id),
     nombre: String(r.nombre ?? '').trim() || 'Sin nombre',
-    cargo: r.cargo != null ? String(r.cargo).trim() || null : null,
+    cargo: cargoCol ?? notas,
     telefono: r.telefono != null ? String(r.telefono).trim() || null : null,
     email: r.email != null ? String(r.email).trim() || null : null,
     proyecto_id: r.proyecto_id != null ? String(r.proyecto_id) : null,
@@ -35,7 +55,7 @@ function mapFilaTelegramWhitelist(r: Record<string, unknown>): FilaTelegramWhite
     nomina_id: r.nomina_id != null ? String(r.nomina_id) : null,
     origen: (r.origen as FilaTelegramWhitelist['origen']) ?? 'manual',
     activo: Boolean(r.activo),
-    notas: r.notas != null ? String(r.notas).trim() || null : null,
+    notas,
     created_at: String(r.created_at),
     updated_at: String(r.updated_at),
   };
@@ -43,6 +63,8 @@ function mapFilaTelegramWhitelist(r: Record<string, unknown>): FilaTelegramWhite
 
 const CACHE_TTL_MS = 60_000;
 let cacheAllowed: { ids: Set<string>; expiresAt: number } | null = null;
+/** Cache de esquema: si ya vimos que falta cargo, no insistimos en esa columna. */
+let schemaSinCargo = false;
 
 export function invalidarCacheWhitelistTelegram(): void {
   cacheAllowed = null;
@@ -65,18 +87,12 @@ async function cargarChatIdsAutorizadosDb(supabase: SupabaseClient): Promise<Set
   const ids = new Set<string>();
 
   const [{ data: lista }, { data: nomina }, { data: usuariosCompras }] = await Promise.all([
-    supabase
-      .from('ci_telegram_whitelist')
-      .select('chat_id')
-      .eq('activo', true),
+    supabase.from('ci_telegram_whitelist').select('chat_id').eq('activo', true),
     supabase
       .from('ci_proyecto_nomina')
       .select('telegram_chat_id, empleado_id, ci_empleados(telegram_chat_id)')
       .eq('activo', true),
-    supabase
-      .from('ci_usuarios_sistema_telegram')
-      .select('telegram_id')
-      .eq('activo', true),
+    supabase.from('ci_usuarios_sistema_telegram').select('telegram_id').eq('activo', true),
   ]);
 
   for (const row of lista ?? []) {
@@ -147,11 +163,23 @@ export async function isChatAllowedAsync(chatId: string | number): Promise<boole
 export async function listarTelegramWhitelist(
   supabase: SupabaseClient,
 ): Promise<FilaTelegramWhitelist[]> {
-  const { data, error } = await supabase
+  const select = schemaSinCargo ? SELECT_SIN_CARGO : SELECT_CON_CARGO;
+  let { data, error } = await supabase
     .from('ci_telegram_whitelist')
-    .select(SELECT_WHITELIST)
+    .select(select)
     .order('activo', { ascending: false })
     .order('nombre');
+
+  if (esErrorColumnaCargoWhitelist(error)) {
+    schemaSinCargo = true;
+    const retry = await supabase
+      .from('ci_telegram_whitelist')
+      .select(SELECT_SIN_CARGO)
+      .order('activo', { ascending: false })
+      .order('nombre');
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error?.code === '42P01') return [];
   if (error) throw new Error(error.message);
@@ -168,6 +196,16 @@ export type CrearTelegramWhitelistInput = {
   notas?: string | null;
 };
 
+function payloadSinCargo(row: Record<string, unknown>, cargo?: string | null): Record<string, unknown> {
+  const { cargo: _c, ...rest } = row;
+  const cargoTxt = cargo?.trim().slice(0, 100) || null;
+  const notasPrev = rest.notas != null ? String(rest.notas).trim() : '';
+  if (cargoTxt && !notasPrev.includes(cargoTxt)) {
+    rest.notas = notasPrev ? `${cargoTxt} · ${notasPrev}`.slice(0, 500) : cargoTxt;
+  }
+  return rest;
+}
+
 export async function crearTelegramWhitelist(
   supabase: SupabaseClient,
   input: CrearTelegramWhitelistInput,
@@ -177,10 +215,10 @@ export async function crearTelegramWhitelist(
   if (!nombre) throw new Error('nombre requerido');
   if (chatId == null) throw new Error('chat_id inválido');
 
-  const row = {
+  const cargo = input.cargo?.trim().slice(0, 100) || null;
+  const rowBase: Record<string, unknown> = {
     chat_id: chatId,
     nombre,
-    cargo: input.cargo?.trim().slice(0, 100) || null,
     telefono: input.telefono?.trim() || null,
     email: input.email?.trim() || null,
     notas: input.notas?.trim() || null,
@@ -189,13 +227,35 @@ export async function crearTelegramWhitelist(
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const conCargo = schemaSinCargo ? null : { ...rowBase, cargo };
+  const row = conCargo ?? payloadSinCargo(rowBase, cargo);
+  const select = schemaSinCargo ? SELECT_SIN_CARGO : SELECT_CON_CARGO;
+
+  let { data, error } = await supabase
     .from('ci_telegram_whitelist')
     .upsert(row, { onConflict: 'chat_id' })
-    .select(SELECT_WHITELIST)
+    .select(select)
     .single();
 
-  if (error) throw new Error(error.message);
+  if (esErrorColumnaCargoWhitelist(error)) {
+    schemaSinCargo = true;
+    const retry = await supabase
+      .from('ci_telegram_whitelist')
+      .upsert(payloadSinCargo(rowBase, cargo), { onConflict: 'chat_id' })
+      .select(SELECT_SIN_CARGO)
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error) {
+    if (esErrorColumnaCargoWhitelist(error)) {
+      throw new Error(
+        `${error.message}. Ejecuta en Supabase SQL Editor: alter table public.ci_telegram_whitelist add column if not exists cargo varchar(100); notify pgrst, 'reload schema';`,
+      );
+    }
+    throw new Error(error.message);
+  }
   invalidarCacheWhitelistTelegram();
 
   return mapFilaTelegramWhitelist(data as Record<string, unknown>);
@@ -215,18 +275,42 @@ export async function actualizarTelegramWhitelist(
 ): Promise<FilaTelegramWhitelist> {
   const body: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.nombre !== undefined) body.nombre = patch.nombre.trim();
-  if (patch.cargo !== undefined) body.cargo = patch.cargo?.trim().slice(0, 100) || null;
   if (patch.telefono !== undefined) body.telefono = patch.telefono?.trim() || null;
   if (patch.email !== undefined) body.email = patch.email?.trim() || null;
   if (patch.activo !== undefined) body.activo = patch.activo;
   if (patch.notas !== undefined) body.notas = patch.notas?.trim() || null;
 
-  const { data, error } = await supabase
+  if (!schemaSinCargo && patch.cargo !== undefined) {
+    body.cargo = patch.cargo?.trim().slice(0, 100) || null;
+  } else if (schemaSinCargo && patch.cargo !== undefined) {
+    const cargoTxt = patch.cargo?.trim().slice(0, 100) || null;
+    if (cargoTxt && patch.notas === undefined) body.notas = cargoTxt;
+  }
+
+  const select = schemaSinCargo ? SELECT_SIN_CARGO : SELECT_CON_CARGO;
+  let { data, error } = await supabase
     .from('ci_telegram_whitelist')
     .update(body)
     .eq('id', id.trim())
-    .select(SELECT_WHITELIST)
+    .select(select)
     .maybeSingle();
+
+  if (esErrorColumnaCargoWhitelist(error)) {
+    schemaSinCargo = true;
+    const bodyLegacy = { ...body };
+    delete bodyLegacy.cargo;
+    if (patch.cargo !== undefined && bodyLegacy.notas == null) {
+      bodyLegacy.notas = patch.cargo?.trim().slice(0, 100) || null;
+    }
+    const retry = await supabase
+      .from('ci_telegram_whitelist')
+      .update(bodyLegacy)
+      .eq('id', id.trim())
+      .select(SELECT_SIN_CARGO)
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) throw new Error(error.message);
   if (!data) throw new Error('Registro no encontrado');
@@ -267,20 +351,38 @@ export async function sincronizarWhitelistDesdeNomina(
     return;
   }
 
-  await supabase.from('ci_telegram_whitelist').upsert(
-    {
-      chat_id: params.telegramChatId,
-      nombre: params.nombre.trim() || 'Sin nombre',
-      cargo: params.rolObra?.trim().slice(0, 100) || null,
-      email: params.email,
-      proyecto_id: params.proyectoId,
-      empleado_id: params.empleadoId,
-      nomina_id: params.nominaId,
-      origen: 'nomina',
-      activo: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'chat_id' },
-  );
+  const cargo = params.rolObra?.trim().slice(0, 100) || null;
+  const base = {
+    chat_id: params.telegramChatId,
+    nombre: params.nombre.trim() || 'Sin nombre',
+    email: params.email,
+    proyecto_id: params.proyectoId,
+    empleado_id: params.empleadoId,
+    nomina_id: params.nominaId,
+    origen: 'nomina' as const,
+    activo: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  let error = (
+    await supabase.from('ci_telegram_whitelist').upsert(
+      schemaSinCargo ? { ...base, notas: cargo } : { ...base, cargo },
+      { onConflict: 'chat_id' },
+    )
+  ).error;
+
+  if (esErrorColumnaCargoWhitelist(error)) {
+    schemaSinCargo = true;
+    error = (
+      await supabase
+        .from('ci_telegram_whitelist')
+        .upsert({ ...base, notas: cargo }, { onConflict: 'chat_id' })
+    ).error;
+  }
+
+  if (error && !esErrorColumnaCargoWhitelist(error)) {
+    // no tumbar nómina por whitelist
+    console.warn('[sincronizarWhitelistDesdeNomina]', error.message);
+  }
   invalidarCacheWhitelistTelegram();
 }

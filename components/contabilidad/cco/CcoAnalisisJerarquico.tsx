@@ -461,10 +461,9 @@ export default function CcoAnalisisJerarquico({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: 14,
           }}
-          className="cco-sunburst-grid"
         >
           {(direccion.startsWith('Sub')
             ? // Invertido: un sunburst por tipo (sub) con capítulos como anillo
@@ -517,13 +516,6 @@ export default function CcoAnalisisJerarquico({
         )}
       </div>
 
-      <style jsx global>{`
-        @media (max-width: 900px) {
-          .cco-sunburst-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

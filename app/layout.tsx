@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="es" suppressHydrationWarning>
-            <body className="font-sans antialiased text-[var(--label-primary)]">
+            <body className="font-sans antialiased text-[var(--label-primary)]" suppressHydrationWarning>
                 <div
                     className="min-h-screen app-root-bg"
                     style={{

@@ -171,10 +171,9 @@ function KpiRow({ bloque, honorariosPct, real }: { bloque: CcoKpiBloque; honorar
 
   return (
     <div
-      className="cco-kpi-grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         gap: 12,
         marginBottom: 22,
       }}
@@ -256,6 +255,7 @@ export default function CcoDashboardClient() {
 
   return (
     <div
+      suppressHydrationWarning
       style={{
         minHeight: '100vh',
         background: '#F1F5F9',
@@ -697,18 +697,6 @@ export default function CcoDashboardClient() {
         ) : null}
       </div>
 
-      <style jsx global>{`
-        @media (max-width: 1100px) {
-          .cco-kpi-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          }
-        }
-        @media (max-width: 560px) {
-          .cco-kpi-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

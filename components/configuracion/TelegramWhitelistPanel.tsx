@@ -270,9 +270,13 @@ export default function TelegramWhitelistPanel({ embedded = false }: Props) {
       {error ? (
         <p className="rounded-xl border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">
           {error}
-          {error.includes('ci_telegram_whitelist') || error.includes('42P01') ? (
+          {error.includes('ci_telegram_whitelist') ||
+          error.includes('42P01') ||
+          error.includes('cargo') ? (
             <span className="mt-1 block text-xs">
-              Ejecuta la migración 218_ci_telegram_whitelist.sql en Supabase.
+              Si falta la columna cargo, ejecuta en Supabase SQL Editor la migración{' '}
+              <code className="text-[10px]">267_repair_ci_telegram_whitelist_cargo.sql</code> (o{' '}
+              <code className="text-[10px]">231</code>), no la 218.
             </span>
           ) : null}
         </p>
