@@ -68,11 +68,18 @@ export default function LegalHomeClient() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/legal/asesor"
+              href="/legal/inspecciones"
               className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
             >
+              <Camera className="h-4 w-4" />
+              IurisVigía
+            </Link>
+            <Link
+              href="/legal/asesor"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-200"
+            >
               <MessageSquareText className="h-4 w-4" />
-              Asesor RAG
+              Asesor
             </Link>
             <Link
               href="/legal/casos/nuevo"
