@@ -1,24 +1,20 @@
 /**
- * Cálculo de salario integral diario y garantía trimestral
- * según Art. 142 LOTTT (régimen de prestaciones sociales).
+ * LaborCalculator — régimen de prestaciones sociales (Art. 142 LOTTT).
  *
- * Mínimos de ley por defecto:
- * - 30 días de utilidades
- * - 15 días de bono vacacional
- * - Garantía trimestral = 15 días de salario integral (literal a)
+ * - Literal a): garantía trimestral = 15 días de salario integral
+ * - Literal f): retroactivo = 60 días × años (o fracción > 6 meses)
+ *
+ * Mínimos de ley por defecto: 30 días utilidades, 15 días bono vacacional.
  */
 
 export const PRESTACION_ANTIGUEDAD_REF = 'Art. 142 LOTTT';
 
 export type AlicuotasConfig = {
-  /** Días de utilidades al año (mínimo legal típico: 30). */
   diasUtilidades?: number;
-  /** Días de bono vacacional al año (mínimo legal típico: 15). */
   diasBonoVacacional?: number;
-  /** Base anual en días (360 en práctica laboral VE). */
   diasBaseAnual?: number;
-  /** Días de garantía por trimestre (Art. 142 lit. a → 15). */
   diasGarantiaTrimestral?: number;
+  diasRetroactivoPorAnio?: number;
 };
 
 export type DesgloseSalarioIntegral = {
@@ -36,61 +32,234 @@ export type DesgloseSalarioIntegral = {
 export type ResultadoGarantiaTrimestral = DesgloseSalarioIntegral & {
   garantia_trimestral: number;
   dias_garantia: number;
-  /** Estimación anual = 4 depósitos trimestrales (sin intereses ni ajustes). */
   estimacion_anual_garantias: number;
+};
+
+export type ResultadoRetroactivo = DesgloseSalarioIntegral & {
+  fecha_inicio: string;
+  fecha_fin: string;
+  anios_completos: number;
+  meses_fraccion: number;
+  anios_servicio: number;
+  dias_retroactivo_por_anio: number;
+  retroactivo: number;
+  referencia_retroactivo: string;
+};
+
+export type ResultadoLaborCalculator = ResultadoGarantiaTrimestral & {
+  retroactivo?: ResultadoRetroactivo | null;
 };
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+function parseDateOnly(value: string | Date): Date {
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  if (!m) throw new Error('fecha inválida (use YYYY-MM-DD)');
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
+
+/** Diff calendar years/months/days (estilo relativedelta). */
+export function relativedeltaYmd(
+  inicio: Date,
+  fin: Date,
+): { years: number; months: number; days: number } {
+  if (fin < inicio) {
+    throw new Error('fecha_fin debe ser >= fecha_inicio');
+  }
+  let years = fin.getFullYear() - inicio.getFullYear();
+  let months = fin.getMonth() - inicio.getMonth();
+  let days = fin.getDate() - inicio.getDate();
+  if (days < 0) {
+    months -= 1;
+    const prevMonth = new Date(fin.getFullYear(), fin.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  return { years, months, days };
+}
+
+export class LaborCalculator {
+  salarioBaseMensual: number;
+  diasUtilidades: number;
+  diasBonoVacacional: number;
+  diasBaseAnual: number;
+  diasGarantiaTrimestral: number;
+  diasRetroactivoPorAnio: number;
+
+  constructor(
+    salarioBaseMensual: number,
+    diasUtilidades = 30,
+    diasBonoVacacional = 15,
+    opts?: {
+      diasBaseAnual?: number;
+      diasGarantiaTrimestral?: number;
+      diasRetroactivoPorAnio?: number;
+    },
+  ) {
+    if (!Number.isFinite(salarioBaseMensual) || salarioBaseMensual < 0) {
+      throw new Error('salario_base_mensual debe ser un número >= 0');
+    }
+    this.salarioBaseMensual = salarioBaseMensual;
+    this.diasUtilidades = diasUtilidades;
+    this.diasBonoVacacional = diasBonoVacacional;
+    this.diasBaseAnual = opts?.diasBaseAnual ?? 360;
+    this.diasGarantiaTrimestral = opts?.diasGarantiaTrimestral ?? 15;
+    this.diasRetroactivoPorAnio = opts?.diasRetroactivoPorAnio ?? 60;
+  }
+
+  /**
+   * Salario integral diario base para prestaciones.
+   * Salario normal + alícuotas de utilidades y bono vacacional.
+   */
+  getSalarioIntegralDiario(): number {
+    const salarioDiarioNormal = this.salarioBaseMensual / 30;
+    const alicuotaUtilidades =
+      (salarioDiarioNormal * this.diasUtilidades) / this.diasBaseAnual;
+    const alicuotaBono =
+      (salarioDiarioNormal * this.diasBonoVacacional) / this.diasBaseAnual;
+    return salarioDiarioNormal + alicuotaUtilidades + alicuotaBono;
+  }
+
+  getDesglose(): DesgloseSalarioIntegral {
+    const salarioDiarioNormal = this.salarioBaseMensual / 30;
+    const alicuotaUtilidades =
+      (salarioDiarioNormal * this.diasUtilidades) / this.diasBaseAnual;
+    const alicuotaBono =
+      (salarioDiarioNormal * this.diasBonoVacacional) / this.diasBaseAnual;
+    return {
+      salario_mensual: round2(this.salarioBaseMensual),
+      salario_diario_base: round2(salarioDiarioNormal),
+      alicuota_utilidades: round2(alicuotaUtilidades),
+      alicuota_bono_vacacional: round2(alicuotaBono),
+      salario_integral_diario: round2(this.getSalarioIntegralDiario()),
+      dias_utilidades: this.diasUtilidades,
+      dias_bono_vacacional: this.diasBonoVacacional,
+      dias_base_anual: this.diasBaseAnual,
+      referencia: PRESTACION_ANTIGUEDAD_REF,
+    };
+  }
+
+  /** Art. 142 literal a) — 15 días de salario integral. */
+  calcularGarantiaTrimestral(): number {
+    return this.getSalarioIntegralDiario() * this.diasGarantiaTrimestral;
+  }
+
+  /**
+   * Art. 142 literal f) — 60 días por año (o fracción > 6 meses).
+   */
+  calcularRetroactivo(fechaInicio: string | Date, fechaFin: string | Date): number {
+    const inicio = parseDateOnly(fechaInicio);
+    const fin = parseDateOnly(fechaFin);
+    const diff = relativedeltaYmd(inicio, fin);
+    const aniosServicio = diff.years + (diff.months > 6 ? 1 : 0);
+    return this.getSalarioIntegralDiario() * this.diasRetroactivoPorAnio * aniosServicio;
+  }
+
+  calcularTodo(
+    fechaInicio?: string | Date | null,
+    fechaFin?: string | Date | null,
+  ): ResultadoLaborCalculator {
+    const desglose = this.getDesglose();
+    const garantia = this.calcularGarantiaTrimestral();
+    let retroactivo: ResultadoRetroactivo | null = null;
+
+    if (fechaInicio && fechaFin) {
+      const inicio = parseDateOnly(fechaInicio);
+      const fin = parseDateOnly(fechaFin);
+      const diff = relativedeltaYmd(inicio, fin);
+      const aniosServicio = diff.years + (diff.months > 6 ? 1 : 0);
+      const monto = this.calcularRetroactivo(inicio, fin);
+      retroactivo = {
+        ...desglose,
+        fecha_inicio: toIsoDate(inicio),
+        fecha_fin: toIsoDate(fin),
+        anios_completos: diff.years,
+        meses_fraccion: diff.months,
+        anios_servicio: aniosServicio,
+        dias_retroactivo_por_anio: this.diasRetroactivoPorAnio,
+        retroactivo: round2(monto),
+        referencia_retroactivo: 'Art. 142 literal f) LOTTT',
+      };
+    }
+
+    return {
+      ...desglose,
+      garantia_trimestral: round2(garantia),
+      dias_garantia: this.diasGarantiaTrimestral,
+      estimacion_anual_garantias: round2(garantia * 4),
+      retroactivo,
+    };
+  }
+}
+
 export function calcularSalarioIntegralDiario(
   salarioMensual: number,
   config?: AlicuotasConfig,
 ): DesgloseSalarioIntegral {
-  if (!Number.isFinite(salarioMensual) || salarioMensual < 0) {
-    throw new Error('salario_mensual debe ser un número >= 0');
-  }
-
-  const diasUtilidades = config?.diasUtilidades ?? 30;
-  const diasBono = config?.diasBonoVacacional ?? 15;
-  const diasBase = config?.diasBaseAnual ?? 360;
-
-  const salarioDiarioBase = salarioMensual / 30;
-  const alicuotaUtilidades = salarioDiarioBase * (diasUtilidades / diasBase);
-  const alicuotaBono = salarioDiarioBase * (diasBono / diasBase);
-  const salarioIntegralDiario = salarioDiarioBase + alicuotaUtilidades + alicuotaBono;
-
-  return {
-    salario_mensual: round2(salarioMensual),
-    salario_diario_base: round2(salarioDiarioBase),
-    alicuota_utilidades: round2(alicuotaUtilidades),
-    alicuota_bono_vacacional: round2(alicuotaBono),
-    salario_integral_diario: round2(salarioIntegralDiario),
-    dias_utilidades: diasUtilidades,
-    dias_bono_vacacional: diasBono,
-    dias_base_anual: diasBase,
-    referencia: PRESTACION_ANTIGUEDAD_REF,
-  };
+  return new LaborCalculator(
+    salarioMensual,
+    config?.diasUtilidades ?? 30,
+    config?.diasBonoVacacional ?? 15,
+    {
+      diasBaseAnual: config?.diasBaseAnual,
+      diasGarantiaTrimestral: config?.diasGarantiaTrimestral,
+      diasRetroactivoPorAnio: config?.diasRetroactivoPorAnio,
+    },
+  ).getDesglose();
 }
 
 export function calcularGarantiaTrimestral(
   salarioMensual: number,
   config?: AlicuotasConfig,
 ): ResultadoGarantiaTrimestral {
-  const desglose = calcularSalarioIntegralDiario(salarioMensual, config);
-  const diasGarantia = config?.diasGarantiaTrimestral ?? 15;
-  // Sin redondeo intermedio: usar integral exacto * 15, luego round2
-  const salarioDiarioExacto =
-    salarioMensual / 30 +
-    (salarioMensual / 30) * ((config?.diasUtilidades ?? 30) / (config?.diasBaseAnual ?? 360)) +
-    (salarioMensual / 30) * ((config?.diasBonoVacacional ?? 15) / (config?.diasBaseAnual ?? 360));
-  const garantia = salarioDiarioExacto * diasGarantia;
+  const calc = new LaborCalculator(
+    salarioMensual,
+    config?.diasUtilidades ?? 30,
+    config?.diasBonoVacacional ?? 15,
+    {
+      diasBaseAnual: config?.diasBaseAnual,
+      diasGarantiaTrimestral: config?.diasGarantiaTrimestral,
+      diasRetroactivoPorAnio: config?.diasRetroactivoPorAnio,
+    },
+  );
+  const { retroactivo: _r, ...rest } = calc.calcularTodo();
+  return rest;
+}
 
-  return {
-    ...desglose,
-    garantia_trimestral: round2(garantia),
-    dias_garantia: diasGarantia,
-    estimacion_anual_garantias: round2(garantia * 4),
-  };
+export function calcularRetroactivo(
+  salarioMensual: number,
+  fechaInicio: string | Date,
+  fechaFin: string | Date,
+  config?: AlicuotasConfig,
+): ResultadoRetroactivo {
+  const calc = new LaborCalculator(
+    salarioMensual,
+    config?.diasUtilidades ?? 30,
+    config?.diasBonoVacacional ?? 15,
+    {
+      diasBaseAnual: config?.diasBaseAnual,
+      diasGarantiaTrimestral: config?.diasGarantiaTrimestral,
+      diasRetroactivoPorAnio: config?.diasRetroactivoPorAnio,
+    },
+  );
+  const all = calc.calcularTodo(fechaInicio, fechaFin);
+  if (!all.retroactivo) {
+    throw new Error('No se pudo calcular retroactivo');
+  }
+  return all.retroactivo;
 }
