@@ -68,19 +68,18 @@ export default function LegalHomeClient() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-<<<<<<< HEAD
-              href="/legal/inspecciones"
-              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
-            >
-              <Camera className="h-4 w-4" />
-              IurisVigía
-=======
               href="/legal/documentos/nuevo"
               className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
             >
               <FileText className="h-4 w-4" />
               Nuevo documento
->>>>>>> origin/integracion-diseno-vercel-funcionalidad-local
+            </Link>
+            <Link
+              href="/legal/inspecciones"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
+            >
+              <Camera className="h-4 w-4" />
+              IurisVigía
             </Link>
             <Link
               href="/legal/asesor"
