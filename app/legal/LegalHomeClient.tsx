@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
+import { Camera, FileText, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { etiquetaDe, LEGAL_ESTADOS } from '@/lib/legal/casosCatalogo';
 
@@ -73,6 +73,13 @@ export default function LegalHomeClient() {
             >
               <FileText className="h-4 w-4" />
               Nuevo documento
+            </Link>
+            <Link
+              href="/legal/inspecciones"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
+            >
+              <Camera className="h-4 w-4" />
+              IurisVigía
             </Link>
             <Link
               href="/legal/asesor"
