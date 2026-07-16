@@ -68,6 +68,13 @@ export default function LegalHomeClient() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
+              href="/legal/formatos"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
+            >
+              <FileText className="h-4 w-4" />
+              Subir formatos
+            </Link>
+            <Link
               href="/legal/documentos/nuevo"
               className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
             >
