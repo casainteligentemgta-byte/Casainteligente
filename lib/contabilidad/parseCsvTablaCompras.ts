@@ -1,6 +1,11 @@
 /**
- * Parseo simple de CSV/TSV exportado desde Excel (tabla de compras históricas).
+ * Parseo de CSV/TSV exportado desde Excel (tabla de compras históricas / maestro).
  * No depende de Gemini.
+ *
+ * Formato maestro Rancho (ej. MAESTRO_MAESTRO_RANCHO…):
+ * CLASE, FECHA, PROVEEDOR, TIPO, CAPITULO, SUBCAPITULO, DESCRIPCION,
+ * MONEDA, TASA, MONTO (BS), MONTO BASE (USD), MONTO PAGADO, LINK FACTURA, …
+ * — LINK FACTURA es ruta de soporte, no nº de factura.
  */
 
 export type FilaCsvCompra = {
@@ -61,15 +66,50 @@ function normHeader(h: string): string {
     .replace(/^_|_$/g, '');
 }
 
-function pickCol(headers: string[], aliases: string[]): number {
+/** Columnas que nunca son nº de factura (rutas / soportes / links). */
+function esHeaderLinkOSoporte(norm: string): boolean {
+  return (
+    norm.includes('link') ||
+    norm.includes('soporte') ||
+    norm.includes('archivo') ||
+    norm.includes('path') ||
+    norm.includes('ruta') ||
+    norm.startsWith('url') ||
+    norm.endsWith('_url') ||
+    norm.includes('pdf') ||
+    /^(foto|imagen|adjunto)/.test(norm)
+  );
+}
+
+/**
+ * Elige columna por aliases (exacto primero).
+ * Fuzzy solo si el alias tiene ≥ 5 chars y el header no es link/soporte.
+ */
+function pickCol(
+  headers: string[],
+  aliases: string[],
+  opts?: { allowFuzzy?: boolean; excludeNorm?: (n: string) => boolean },
+): number {
   const norms = headers.map(normHeader);
+  const allowFuzzy = opts?.allowFuzzy !== false;
+  const exclude = opts?.excludeNorm;
+
   for (const a of aliases) {
     const i = norms.indexOf(a);
-    if (i >= 0) return i;
+    if (i >= 0 && !exclude?.(norms[i]!)) return i;
   }
-  for (let i = 0; i < norms.length; i++) {
-    const h = norms[i]!;
-    if (aliases.some((a) => h.includes(a) || a.includes(h))) return i;
+
+  if (!allowFuzzy) return -1;
+
+  for (const a of aliases) {
+    if (a.length < 5) continue; // evita 'nro','mon','cod','pu'
+    for (let i = 0; i < norms.length; i++) {
+      const h = norms[i]!;
+      if (exclude?.(h)) continue;
+      if (h === a) return i;
+      // Solo header contiene alias (no al revés: 'factura' no debe casar todo)
+      if (h.includes(a)) return i;
+    }
   }
   return -1;
 }
@@ -79,9 +119,37 @@ function cell(row: string[], idx: number): string {
   return (row[idx] ?? '').trim();
 }
 
+/** Detecta rutas de archivo / PDF usadas por error como “factura”. */
+export function pareceRutaONombreArchivo(raw: string): boolean {
+  const s = raw.trim();
+  if (!s) return false;
+  if (/\.(pdf|png|jpe?g|webp|gif|heic)(\b|$)/i.test(s)) return true;
+  if (/[/\\]/.test(s)) return true;
+  if (/^soportes?/i.test(s)) return true;
+  if (/^SOPORTES_/i.test(s)) return true;
+  return false;
+}
+
 function parseNumCell(raw: string): number {
-  const s = raw.replace(/\s/g, '').replace(/\.(?=.*\.)/g, '').replace(',', '.');
-  const n = Number(s.replace(/[^\d.-]/g, ''));
+  let s = raw.replace(/\s/g, '').replace(/[^\d.,\-]/g, '');
+  if (!s || s === '-' || s === '.' || s === ',') return 0;
+  // 1.234.567,89 (miles con punto)
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
+    // 1,234,567.89
+    s = s.replace(/,/g, '');
+  } else if (s.includes(',') && s.includes('.')) {
+    // 1234,56 o 1.234,56 ya cubierto; si ambos: último separador = decimal
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  }
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -96,7 +164,6 @@ function normalizarFechaCsv(raw: string): string {
     if (y.length === 2) y = Number(y) > 50 ? `19${y}` : `20${y}`;
     return `${y}-${mo}-${d}`;
   }
-  // Excel serial date (días desde 1899-12-30) — aproximado
   const serial = Number(s);
   if (Number.isFinite(serial) && serial > 20000 && serial < 80000) {
     const epoch = Date.UTC(1899, 11, 30) + serial * 86400000;
@@ -107,6 +174,49 @@ function normalizarFechaCsv(raw: string): string {
     return `${y}-${mo}-${d}`;
   }
   return '';
+}
+
+function esFormatoMaestroRancho(norms: string[]): boolean {
+  const hasProv = norms.includes('proveedor');
+  const hasMoneda = norms.includes('moneda');
+  const hasMontoUsd = norms.some(
+    (h) => h === 'monto_base_usd' || h === 'monto_base' || h.includes('monto_base'),
+  );
+  const hasMontoBs = norms.some((h) => h === 'monto_bs' || h === 'monto_ves');
+  const hasLink = norms.some((h) => esHeaderLinkOSoporte(h));
+  return hasProv && (hasMontoUsd || hasMontoBs) && (hasMoneda || hasLink);
+}
+
+function resolverMontoMaestro(
+  cols: string[],
+  moneda: 'VES' | 'USD',
+  iMontoUsd: number,
+  iMontoBs: number,
+  iMontoPagado: number,
+  iCosteTotal: number,
+  iHonorarios: number,
+  iSubGeneric: number,
+): number {
+  const usd = parseNumCell(cell(cols, iMontoUsd));
+  const bs = parseNumCell(cell(cols, iMontoBs));
+  const pagado = parseNumCell(cell(cols, iMontoPagado));
+  const coste = parseNumCell(cell(cols, iCosteTotal));
+  const honor = parseNumCell(cell(cols, iHonorarios));
+  const generic = parseNumCell(cell(cols, iSubGeneric));
+
+  if (moneda === 'USD') {
+    if (usd > 0) return usd;
+    if (pagado > 0) return pagado;
+    if (bs > 0) return bs;
+  } else {
+    if (bs > 0) return bs;
+    if (pagado > 0) return pagado;
+    if (usd > 0) return usd;
+  }
+  if (coste > 0) return coste;
+  if (honor > 0) return honor;
+  if (generic > 0) return generic;
+  return 0;
 }
 
 /**
@@ -121,21 +231,23 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
 
   const sep = detectSep(lines[0]!);
   const headers = splitCsvLine(lines[0]!, sep);
+  const norms = headers.map(normHeader);
+  const maestro = esFormatoMaestroRancho(norms);
 
-  const iFactura = pickCol(headers, [
-    'invoice_number',
-    'factura',
-    'nro_factura',
-    'numero_factura',
-    'n_factura',
-    'num_factura',
-    'no_factura',
-    'n_de_factura',
-    'documento',
-    'nro_doc',
-    'nro',
-    'numero',
-  ]);
+  const iFactura = pickCol(
+    headers,
+    [
+      'invoice_number',
+      'nro_factura',
+      'numero_factura',
+      'n_factura',
+      'num_factura',
+      'no_factura',
+      'n_de_factura',
+      'factura',
+    ],
+    { excludeNorm: esHeaderLinkOSoporte },
+  );
   const iProveedor = pickCol(headers, [
     'supplier_name',
     'proveedor',
@@ -145,17 +257,14 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     'casa_comercial',
     'emisor',
   ]);
-  const iRif = pickCol(headers, [
-    'supplier_rif',
-    'rif',
-    'rif_proveedor',
-    'cedula_rif',
-    'ci_rif',
-    'doc_identidad',
-  ]);
+  const iRif = pickCol(
+    headers,
+    ['supplier_rif', 'rif', 'rif_proveedor', 'cedula_rif', 'ci_rif'],
+    { allowFuzzy: false },
+  );
   const iFecha = pickCol(headers, [
-    'date',
     'fecha',
+    'date',
     'fecha_factura',
     'f_emision',
     'fecha_emision',
@@ -169,36 +278,59 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     'producto',
     'detalle',
     'material',
-    'observacion',
-    'observaciones',
   ]);
-  const iCodigo = pickCol(headers, ['item_code', 'codigo', 'sku', 'cod', 'referencia', 'cod_prod']);
-  const iUnidad = pickCol(headers, ['unidad', 'unit', 'und', 'um', 'u_m']);
-  const iCant = pickCol(headers, ['cantidad', 'quantity', 'cant', 'qty', 'cant_']);
-  const iPrecio = pickCol(headers, [
-    'precio_unitario',
-    'unit_price',
-    'precio',
-    'p_unitario',
-    'pu',
-    'costo',
-    'costo_unitario',
-  ]);
-  const iSub = pickCol(headers, [
-    'subtotal',
-    'total',
-    'monto',
-    'importe',
-    'total_linea',
-    'total_bs',
-    'total_usd',
-    'monto_total',
-  ]);
-  const iMoneda = pickCol(headers, ['moneda', 'currency', 'divisa', 'mon']);
+  const iTipo = pickCol(headers, ['tipo'], { allowFuzzy: false });
+  const iCapitulo = pickCol(headers, ['capitulo'], { allowFuzzy: false });
+  const iSubcapitulo = pickCol(headers, ['subcapitulo'], { allowFuzzy: false });
 
-  if (iFactura < 0 && iProveedor < 0 && iDesc < 0) {
+  const iCodigo = pickCol(
+    headers,
+    ['item_code', 'codigo', 'sku', 'cod_prod', 'referencia'],
+    { allowFuzzy: false },
+  );
+  const iUnidad = pickCol(headers, ['unidad', 'unit'], { allowFuzzy: false });
+  const iCant = pickCol(headers, ['cantidad', 'quantity', 'qty'], { allowFuzzy: false });
+  const iPrecio = pickCol(
+    headers,
+    ['precio_unitario', 'unit_price', 'precio', 'p_unitario', 'costo_unitario'],
+    { allowFuzzy: false },
+  );
+
+  // Montos maestro (exactos / semiexactos)
+  const iMontoUsd = pickCol(
+    headers,
+    ['monto_base_usd', 'monto_base', 'monto_usd', 'base_usd'],
+    { allowFuzzy: true },
+  );
+  const iMontoBs = pickCol(
+    headers,
+    ['monto_bs', 'monto_ves', 'monto_bolivares'],
+    { allowFuzzy: true },
+  );
+  const iMontoPagado = pickCol(headers, ['monto_pagado', 'pagado'], { allowFuzzy: false });
+  const iCosteTotal = pickCol(headers, ['coste_total', 'costo_total'], { allowFuzzy: false });
+  const iHonorarios = pickCol(headers, ['honorarios'], { allowFuzzy: false });
+
+  // Subtotal genérico (no maestro): evitar casar "monto_bs" si ya hay columnas específicas
+  const iSub = pickCol(
+    headers,
+    ['subtotal', 'total_linea', 'importe', 'monto_total', 'total'],
+    {
+      allowFuzzy: true,
+      excludeNorm: (n) =>
+        n.startsWith('monto_') ||
+        n === 'monto_bs' ||
+        n === 'monto_pagado' ||
+        n.includes('tasa') ||
+        n.includes('admiv'),
+    },
+  );
+
+  const iMoneda = pickCol(headers, ['moneda', 'currency', 'divisa'], { allowFuzzy: false });
+
+  if (iProveedor < 0 && iDesc < 0 && iFactura < 0 && iMontoUsd < 0 && iMontoBs < 0) {
     throw new Error(
-      'No se reconocieron columnas. Incluya al menos: Factura, Proveedor o Descripción.',
+      'No se reconocieron columnas. Incluya al menos: Proveedor, Descripción o Montos (maestro Rancho).',
     );
   }
 
@@ -207,25 +339,61 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     const cols = splitCsvLine(lines[r]!, sep);
     if (cols.every((c) => !c.trim())) continue;
 
-    const cantidad = parseNumCell(cell(cols, iCant)) || 1;
-    const precio = parseNumCell(cell(cols, iPrecio));
-    let subtotal = parseNumCell(cell(cols, iSub));
-    if (!(subtotal > 0) && cantidad > 0 && precio >= 0) {
-      subtotal = Math.round(cantidad * precio * 100) / 100;
-    }
-
-    const invoice = cell(cols, iFactura);
-    const proveedor = cell(cols, iProveedor);
-    const descripcion =
-      cell(cols, iDesc) ||
-      (invoice ? `Compra factura ${invoice}` : proveedor ? `Compra ${proveedor}` : '');
-    if (!descripcion && !(subtotal > 0) && !invoice && !proveedor) continue;
-
     const monedaRaw = cell(cols, iMoneda).toUpperCase();
-    const moneda =
+    const moneda: 'VES' | 'USD' =
       monedaRaw.includes('USD') || monedaRaw === '$' || monedaRaw.includes('DOL')
         ? 'USD'
         : 'VES';
+
+    let cantidad = parseNumCell(cell(cols, iCant)) || 1;
+    let precio = parseNumCell(cell(cols, iPrecio));
+    let subtotal = 0;
+
+    if (maestro || iMontoUsd >= 0 || iMontoBs >= 0 || iMontoPagado >= 0) {
+      subtotal = resolverMontoMaestro(
+        cols,
+        moneda,
+        iMontoUsd,
+        iMontoBs,
+        iMontoPagado,
+        iCosteTotal,
+        iHonorarios,
+        iSub,
+      );
+      // Una fila del maestro = un gasto: cantidad 1, precio = monto
+      if (subtotal > 0) {
+        cantidad = 1;
+        precio = subtotal;
+      }
+    } else {
+      subtotal = parseNumCell(cell(cols, iSub));
+      if (!(subtotal > 0) && cantidad > 0 && precio >= 0) {
+        subtotal = Math.round(cantidad * precio * 100) / 100;
+      }
+    }
+
+    let invoice = cell(cols, iFactura);
+    if (pareceRutaONombreArchivo(invoice)) invoice = '';
+
+    const proveedor = cell(cols, iProveedor);
+    const tipo = cell(cols, iTipo);
+    const capitulo = cell(cols, iCapitulo);
+    const subcap = cell(cols, iSubcapitulo);
+    let descripcion = cell(cols, iDesc);
+    if (!descripcion) {
+      const partes = [tipo, capitulo, subcap].filter(Boolean);
+      descripcion = partes.join(' · ');
+    } else if (maestro && (tipo || capitulo)) {
+      const pref = [tipo, capitulo].filter(Boolean).join(' · ');
+      if (pref && !descripcion.toUpperCase().includes(tipo.toUpperCase())) {
+        descripcion = `${pref}: ${descripcion}`;
+      }
+    }
+    if (!descripcion) {
+      descripcion = proveedor ? `Compra ${proveedor}` : invoice ? `Compra factura ${invoice}` : '';
+    }
+
+    if (!descripcion && !(subtotal > 0) && !invoice && !proveedor) continue;
 
     filas.push({
       invoice_number: invoice,

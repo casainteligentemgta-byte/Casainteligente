@@ -20,6 +20,7 @@ import type { ProyectoCatalogo } from '@/lib/proyectos/proyectosUnificados';
 import {
   esArchivoCsvTabla,
   parseCsvTablaCompras,
+  pareceRutaONombreArchivo,
 } from '@/lib/contabilidad/parseCsvTablaCompras';
 import GuardadoCsvProgreso from '@/components/contabilidad/GuardadoCsvProgreso';
 
@@ -121,10 +122,12 @@ function claveFactura(invoice: string, rif: string, proveedor: string): string {
 function agruparFilas(filas: FilaApi[]): GrupoFactura[] {
   const map = new Map<string, GrupoFactura>();
   filas.forEach((f, rowIdx) => {
-    const invoice = (f.invoice_number ?? '').trim();
+    let invoice = (f.invoice_number ?? '').trim();
+    // LINK FACTURA / rutas PDF no son nº de factura → una fila = un registro
+    if (pareceRutaONombreArchivo(invoice)) invoice = '';
     const supplier = (f.supplier_name ?? '').trim();
     const rif = (f.supplier_rif ?? '').trim();
-    // Sin nº de factura: cada fila CSV es un registro distinto (evita colapsar todo en SIN-NUM).
+    // Sin nº de factura real: cada fila CSV es un registro distinto.
     const key = invoice
       ? claveFactura(invoice, rif, supplier)
       : `csv-fila-${rowIdx}`;
