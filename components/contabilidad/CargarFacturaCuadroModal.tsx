@@ -23,6 +23,11 @@ import {
   pareceRutaONombreArchivo,
 } from '@/lib/contabilidad/parseCsvTablaCompras';
 import GuardadoCsvProgreso from '@/components/contabilidad/GuardadoCsvProgreso';
+import {
+  normalizarRifVenezolano,
+  resolverProveedorYRif,
+  rifParaGuardarCompra,
+} from '@/lib/contabilidad/rifVenezolano';
 
 const MAX_FOTOS_EMPAREJE_LOTE = 12;
 
@@ -125,8 +130,12 @@ function agruparFilas(filas: FilaApi[]): GrupoFactura[] {
     let invoice = (f.invoice_number ?? '').trim();
     // LINK FACTURA / rutas PDF no son nº de factura → una fila = un registro
     if (pareceRutaONombreArchivo(invoice)) invoice = '';
-    const supplier = (f.supplier_name ?? '').trim();
-    const rif = (f.supplier_rif ?? '').trim();
+    const resuelto = resolverProveedorYRif({
+      proveedor: (f.supplier_name ?? '').trim(),
+      rif: (f.supplier_rif ?? '').trim(),
+    });
+    const supplier = resuelto.supplier_name;
+    const rif = resuelto.supplier_rif;
     // Sin nº de factura real: cada fila CSV es un registro distinto.
     const key = invoice
       ? claveFactura(invoice, rif, supplier)
@@ -181,12 +190,9 @@ function motivoBloqueoGuardado(g: GrupoFactura): string | null {
 }
 
 function nombreProveedorGuardado(g: GrupoFactura): string {
+  // No usar la descripción como proveedor (confundía TIPO/artículo con el proveedor).
   const n = g.supplier_name.trim();
-  if (n) return n;
-  const inv = g.invoice_number.trim();
-  if (inv) return `Proveedor factura ${inv}`;
-  const desc = g.lineas[0]?.descripcion.trim();
-  if (desc && desc !== 'Ítem') return desc.slice(0, 80);
+  if (n && !normalizarRifVenezolano(n)) return n;
   return 'Proveedor pendiente';
 }
 
@@ -872,7 +878,8 @@ export default function CargarFacturaCuadroModal({
               imputacion: 'obra',
               invoice_number: numeroFacturaGuardado(g),
               supplier_name: nombreProveedorGuardado(g),
-              supplier_rif: g.supplier_rif.trim() || 'SIN-RIF',
+              // Solo RIF con V/J/E/G/P; nunca un nombre de persona
+              supplier_rif: rifParaGuardarCompra(g.supplier_rif),
               fecha,
               monto_ves: montoVes,
               monto_usd: montoUsd,
@@ -1239,15 +1246,36 @@ export default function CargarFacturaCuadroModal({
                         />
                       </div>
                       <div>
-                        <label className={labelClass}>RIF</label>
+                        <label className={labelClass}>RIF (V/J…)</label>
                         <input
                           className={inputClass}
                           value={activo.supplier_rif}
+                          placeholder="V-12345678 o J-12345678-9"
                           disabled={busy || activo.certificada}
                           onChange={(e) =>
                             updateGrupo(activo.key, { supplier_rif: e.target.value, certificada: false })
                           }
+                          onBlur={() => {
+                            const n = normalizarRifVenezolano(activo.supplier_rif);
+                            if (n) updateGrupo(activo.key, { supplier_rif: n });
+                            else if (activo.supplier_rif.trim()) {
+                              // Nombre u otro texto en RIF → mover a proveedor si está vacío
+                              const r = resolverProveedorYRif({
+                                proveedor: activo.supplier_name,
+                                rif: activo.supplier_rif,
+                              });
+                              updateGrupo(activo.key, {
+                                supplier_name: r.supplier_name || activo.supplier_name,
+                                supplier_rif: r.supplier_rif,
+                              });
+                            }
+                          }}
                         />
+                        {activo.supplier_rif.trim() && !normalizarRifVenezolano(activo.supplier_rif) ? (
+                          <p className="mt-1 text-[10px] text-amber-400/90">
+                            El RIF debe empezar por V o J (ej. V-12345678). No use nombres aquí.
+                          </p>
+                        ) : null}
                       </div>
                       <div>
                         <label className={labelClass}>Moneda</label>

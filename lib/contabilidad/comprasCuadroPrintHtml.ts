@@ -18,6 +18,7 @@ import {
 } from '@/lib/contabilidad/documentoPrintShare';
 import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
 import { etiquetaAlmacenIngresoCompra } from '@/lib/contabilidad/etiquetaAlmacenCompra';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 
 function escapeHtml(s: string): string {
   return s
@@ -55,8 +56,7 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
     .map((row) => {
       const bs = subtotalBs(row);
       const usd = usdRow(row, bs);
-      const rif =
-        !row.rif || /^SIN[-_]?RIF$/i.test(row.rif.trim()) ? '—' : row.rif;
+      const rif = etiquetaRifCompra(row.rif);
       const { texto: almacen } = etiquetaAlmacenIngresoCompra({
         ubicacionNombre: row.almacen,
         proyectoNombre: row.proyecto,

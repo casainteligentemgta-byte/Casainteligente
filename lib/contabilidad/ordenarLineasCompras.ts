@@ -5,6 +5,7 @@ import {
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 
 export type ColumnaOrdenCompras =
   | 'fecha'
@@ -113,7 +114,7 @@ function filaComprasATsv(row: FilaFacturaCanal): string {
     row.fecha,
     row.factura,
     row.proveedor,
-    row.rif,
+    etiquetaRifCompra(row.rif) === '—' ? '' : etiquetaRifCompra(row.rif),
     row.almacen ?? '',
     row.esLinea ? row.articulo : '(cabecera)',
     row.esLinea ? row.codigo : '',

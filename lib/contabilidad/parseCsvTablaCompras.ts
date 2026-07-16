@@ -8,6 +8,8 @@
  * — LINK FACTURA es ruta de soporte, no nº de factura.
  */
 
+import { resolverProveedorYRif } from '@/lib/contabilidad/rifVenezolano';
+
 export type FilaCsvCompra = {
   invoice_number: string;
   supplier_name: string;
@@ -219,8 +221,52 @@ function resolverMontoMaestro(
   return 0;
 }
 
+/** Busca la fila real de encabezados (omite título tipo MAESTRO_…). */
+function indiceFilaEncabezados(lines: string[], sepHint?: string): { idx: number; sep: string } {
+  const markers = [
+    'proveedor',
+    'descripcion',
+    'moneda',
+    'factura',
+    'fecha',
+    'monto_base_usd',
+    'monto_bs',
+    'monto_pagado',
+  ];
+  let bestIdx = 0;
+  let bestScore = -1;
+  let bestSep = sepHint || ',';
+
+  for (let i = 0; i < Math.min(lines.length, 20); i++) {
+    const sep = detectSep(lines[i]!);
+    const norms = splitCsvLine(lines[i]!, sep).map(normHeader);
+    if (norms.length < 3) continue;
+    let score = 0;
+    for (const m of markers) {
+      if (norms.some((h) => h === m || h.startsWith(`${m}_`) || h.endsWith(`_${m}`))) {
+        score += 2;
+      } else if (norms.some((h) => h.includes(m) && m.length >= 5)) {
+        score += 1;
+      }
+    }
+    // Título tipo MAESTRO_… no debe ganar
+    if (norms.some((h) => h.includes('maestro'))) score -= 3;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+      bestSep = sep;
+    }
+  }
+
+  if (bestScore < 2) {
+    const sep = detectSep(lines[0]!);
+    return { idx: 0, sep };
+  }
+  return { idx: bestIdx, sep: bestSep };
+}
+
 /**
- * Parsea texto CSV/TSV de Excel. Primera fila = encabezados.
+ * Parsea texto CSV/TSV de Excel. Detecta fila de encabezados (no el título).
  */
 export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
   const cleaned = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -229,8 +275,8 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     throw new Error('El CSV no tiene filas de datos. Exporte desde Excel con encabezados.');
   }
 
-  const sep = detectSep(lines[0]!);
-  const headers = splitCsvLine(lines[0]!, sep);
+  const { idx: headerIdx, sep } = indiceFilaEncabezados(lines);
+  const headers = splitCsvLine(lines[headerIdx]!, sep);
   const norms = headers.map(normHeader);
   const maestro = esFormatoMaestroRancho(norms);
 
@@ -248,18 +294,15 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     ],
     { excludeNorm: esHeaderLinkOSoporte },
   );
-  const iProveedor = pickCol(headers, [
-    'supplier_name',
-    'proveedor',
-    'razon_social',
-    'nombre_proveedor',
-    'beneficiario',
-    'casa_comercial',
-    'emisor',
-  ]);
+  // Solo nombres claros de proveedor (sin fuzzy: evita TIPO/CAPITULO/DESCRIPCION).
+  const iProveedor = pickCol(
+    headers,
+    ['supplier_name', 'proveedor', 'razon_social', 'nombre_proveedor', 'beneficiario'],
+    { allowFuzzy: false },
+  );
   const iRif = pickCol(
     headers,
-    ['supplier_rif', 'rif', 'rif_proveedor', 'cedula_rif', 'ci_rif'],
+    ['supplier_rif', 'rif', 'rif_proveedor', 'cedula_rif', 'ci_rif', 'cedula'],
     { allowFuzzy: false },
   );
   const iFecha = pickCol(headers, [
@@ -335,7 +378,7 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
   }
 
   const filas: FilaCsvCompra[] = [];
-  for (let r = 1; r < lines.length; r++) {
+  for (let r = headerIdx + 1; r < lines.length; r++) {
     const cols = splitCsvLine(lines[r]!, sep);
     if (cols.every((c) => !c.trim())) continue;
 
@@ -375,7 +418,11 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     let invoice = cell(cols, iFactura);
     if (pareceRutaONombreArchivo(invoice)) invoice = '';
 
-    const proveedor = cell(cols, iProveedor);
+    const { supplier_name: proveedor, supplier_rif: rif } = resolverProveedorYRif({
+      proveedor: cell(cols, iProveedor),
+      rif: cell(cols, iRif),
+    });
+
     const tipo = cell(cols, iTipo);
     const capitulo = cell(cols, iCapitulo);
     const subcap = cell(cols, iSubcapitulo);
@@ -385,7 +432,7 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
       descripcion = partes.join(' · ');
     } else if (maestro && (tipo || capitulo)) {
       const pref = [tipo, capitulo].filter(Boolean).join(' · ');
-      if (pref && !descripcion.toUpperCase().includes(tipo.toUpperCase())) {
+      if (pref && tipo && !descripcion.toUpperCase().includes(tipo.toUpperCase())) {
         descripcion = `${pref}: ${descripcion}`;
       }
     }
@@ -393,12 +440,13 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
       descripcion = proveedor ? `Compra ${proveedor}` : invoice ? `Compra factura ${invoice}` : '';
     }
 
+    // No usar TIPO/CAPITULO como si fueran el proveedor
     if (!descripcion && !(subtotal > 0) && !invoice && !proveedor) continue;
 
     filas.push({
       invoice_number: invoice,
       supplier_name: proveedor,
-      supplier_rif: cell(cols, iRif),
+      supplier_rif: rif,
       date: normalizarFechaCsv(cell(cols, iFecha)),
       descripcion: descripcion || 'Ítem',
       item_code: cell(cols, iCodigo),
