@@ -316,18 +316,15 @@ export default function CcoDashboardClient() {
           }}
         >
           <div>
-            <h1
+            <p
               style={{
                 color: '#fff',
-                fontSize: 22,
+                fontSize: 18,
                 fontWeight: 800,
                 margin: 0,
                 letterSpacing: '-0.02em',
               }}
             >
-              EMPRESA C.A. - VERSIÓN 4.0 (TASA REAL)
-            </h1>
-            <p style={{ color: 'rgba(255,255,255,0.92)', fontSize: 14, margin: '6px 0 0', fontWeight: 500 }}>
               Proyecto: {data?.proyectoNombre ?? '…'}
             </p>
           </div>
