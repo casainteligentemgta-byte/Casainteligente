@@ -23,6 +23,7 @@ import {
   subtotalBsLineaCompra,
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 
 export type AccionesCompraLinea = {
   puedeModificar: boolean;
@@ -327,8 +328,8 @@ export default function ComprasLineasTable({
                 </td>
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
-                <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>
-                  {!row.rif || /^SIN[-_]?RIF$/i.test(row.rif.trim()) ? '—' : row.rif}
+                <td style={{ ...td, color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>
+                  {etiquetaRifCompra(row.rif)}
                 </td>
                 <td style={{ ...td, maxWidth: 130 }}>
                   {(() => {

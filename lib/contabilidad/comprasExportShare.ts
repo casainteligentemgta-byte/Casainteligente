@@ -10,6 +10,7 @@ import {
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 import { descargarTextoComoArchivo } from '@/lib/almacen/inventarioExportShare';
 import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 
@@ -144,7 +145,7 @@ function filaComprasAValores(row: FilaFacturaCanal): (string | number)[] {
     row.fecha,
     row.factura,
     row.proveedor,
-    row.rif,
+    etiquetaRifCompra(row.rif) === '—' ? '' : etiquetaRifCompra(row.rif),
     row.almacen ?? '',
     row.esLinea ? row.articulo : '(cabecera)',
     row.esLinea ? row.codigo : '',
