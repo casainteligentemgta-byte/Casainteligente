@@ -34,7 +34,6 @@ export default function DocumentoNuevoPage() {
   const [tipo, setTipo] = useState('contrato');
   const [contraparte, setContraparte] = useState('');
   const [valores, setValores] = useState<Record<string, string>>({});
-  const [cuerpoPlantilla, setCuerpoPlantilla] = useState('');
 
   useEffect(() => {
     void (async () => {
@@ -75,23 +74,6 @@ export default function DocumentoNuevoPage() {
     setTipo(plantilla.tipo || 'contrato');
   }, [plantilla]);
 
-  // Cargar cuerpo completo al elegir plantilla (GET detalle vía listado no lo trae)
-  useEffect(() => {
-    if (!plantillaId) {
-      setCuerpoPlantilla('');
-      return;
-    }
-    void (async () => {
-      const res = await fetch(apiUrl('/api/legal/plantillas/' + plantillaId), {
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as { plantilla?: { cuerpo_markdown?: string } };
-      setCuerpoPlantilla(data.plantilla?.cuerpo_markdown ?? '');
-    })();
-  }, [plantillaId]);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!titulo.trim()) {
@@ -100,8 +82,8 @@ export default function DocumentoNuevoPage() {
     }
     setEnviando(true);
     try {
-      const cuerpo = cuerpoPlantilla
-        ? aplicarVariablesPlantilla(cuerpoPlantilla, valores)
+      const cuerpo = plantilla?.cuerpo_markdown
+        ? aplicarVariablesPlantilla(plantilla.cuerpo_markdown, valores)
         : '';
       const res = await fetch(apiUrl('/api/legal/documentos'), {
         method: 'POST',
