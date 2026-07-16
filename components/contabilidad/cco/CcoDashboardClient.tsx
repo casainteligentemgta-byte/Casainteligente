@@ -18,6 +18,7 @@ import {
 import type { CcoDashboard, CcoKpiBloque } from '@/lib/contabilidad/cargarCcoDashboard';
 import CcoAnalisisJerarquico from '@/components/contabilidad/cco/CcoAnalisisJerarquico';
 import CcoDatosGraficos from '@/components/contabilidad/cco/CcoDatosGraficos';
+import CcoListaRubros from '@/components/contabilidad/cco/CcoListaRubros';
 
 type TabId =
   | 'graficos'
@@ -624,6 +625,8 @@ export default function CcoDashboardClient() {
               />
             ) : null}
 
+            {tab === 'rubros' ? <CcoListaRubros proyectoId={proyectoId} /> : null}
+
             {tab === 'egresos' ? (
               <SeccionLista
                 title="Egresos"
@@ -651,6 +654,7 @@ export default function CcoDashboardClient() {
             ) : null}
             {tab !== 'graficos' &&
             tab !== 'datos' &&
+            tab !== 'rubros' &&
             tab !== 'egresos' &&
             tab !== 'ingresos' ? (
               <SeccionLista
@@ -660,7 +664,7 @@ export default function CcoDashboardClient() {
                 hrefLabel="Ir a módulos secundarios →"
                 lines={[
                   'Orden y colores del menú V4 ya activos',
-                  'Datos vivos hoy: Gráficos, Datos Gráficos, Egresos e Ingresos vía CI',
+                  'Datos vivos hoy: Gráficos, Datos Gráficos, Lista de Rubros, Egresos e Ingresos vía CI',
                 ]}
               />
             ) : null}
