@@ -268,7 +268,7 @@ export default function CcoDashboardClient() {
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-end',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: 8,
@@ -278,9 +278,6 @@ export default function CcoDashboardClient() {
           fontSize: 12,
         }}
       >
-        <span style={{ color: '#64748B', fontWeight: 600 }}>
-          Control Contable de Obra · principal · datos vivos de Casa Inteligente
-        </span>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <Link href="/contabilidad" style={{ color: '#2563EB', fontWeight: 700, textDecoration: 'none' }}>
             ← Hub módulos
