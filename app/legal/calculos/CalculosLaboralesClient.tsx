@@ -207,6 +207,105 @@ export default function CalculosLaboralesClient() {
           )}
         </div>
       )}
+
+      <section className="space-y-3 border-t border-white/10 pt-6">
+        <h3 className="flex items-center gap-2 text-lg font-bold text-white">
+          <UserRound className="h-5 w-5 text-amber-300" />
+          Pasivo por trabajador
+        </h3>
+        <p className="text-sm text-zinc-500">
+          Lee <code className="text-zinc-400">workers</code>,{' '}
+          <code className="text-zinc-400">benefit_configs</code> y{' '}
+          <code className="text-zinc-400">salary_history</code> (migración 270) y
+          provisiona el monto mayor (Art. 142).
+        </p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const id = workerId.trim();
+            if (!id) return;
+            setPasivoLoading(true);
+            setPasivoError(null);
+            setPasivo(null);
+            try {
+              const qs = fin ? `?fecha_fin=${encodeURIComponent(fin)}` : '';
+              const res = await fetch(
+                apiUrl(`/api/legal/calculos/pasivo/${encodeURIComponent(id)}${qs}`),
+                { credentials: 'include', cache: 'no-store' },
+              );
+              const data = (await res.json()) as WorkerPasivoResult & {
+                error?: string;
+                hint?: string;
+              };
+              if (!res.ok) {
+                setPasivoError([data.error, data.hint].filter(Boolean).join(' — ') || 'Error');
+                return;
+              }
+              setPasivo(data);
+            } catch {
+              setPasivoError('Error de red');
+            } finally {
+              setPasivoLoading(false);
+            }
+          }}
+          className="flex flex-wrap gap-2 rounded-2xl border border-amber-500/20 bg-[#0c1018] p-4"
+        >
+          <input
+            value={workerId}
+            onChange={(e) => setWorkerId(e.target.value)}
+            placeholder="UUID trabajador (ci_empleados.id)"
+            className="min-w-[240px] flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
+          />
+          <button
+            type="submit"
+            disabled={pasivoLoading || !workerId.trim()}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50"
+          >
+            {pasivoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
+            Calcular pasivo
+          </button>
+        </form>
+        {pasivoError && (
+          <p className="rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+            {pasivoError}
+          </p>
+        )}
+        {pasivo && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:col-span-2">
+              <p className="text-sm font-semibold text-white">{pasivo.worker}</p>
+              <p className="text-xs text-zinc-500">
+                Ingreso {pasivo.fecha_inicio} · salario {money(pasivo.salario_base_mensual)} (
+                {pasivo.salario_effective_date})
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                Garantía trimestral
+              </p>
+              <p className="mt-1 text-xl font-bold text-white">
+                {money(pasivo.garantia_trimestral)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                Retroactivo acumulado
+              </p>
+              <p className="mt-1 text-xl font-bold text-white">
+                {money(pasivo.retroactivo_acumulado)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 sm:col-span-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
+                Monto a provisionar · Art. 142 (mayor)
+              </p>
+              <p className="mt-1 text-3xl font-bold text-amber-100">
+                {money(pasivo.monto_a_provisionar)}
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
