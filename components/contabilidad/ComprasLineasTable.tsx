@@ -220,6 +220,7 @@ export default function ComprasLineasTable({
             <SortTh col="rif" label="RIF" />
             <th style={th}>Almacén</th>
             <SortTh col="articulo" label="Artículo" />
+            <th style={th}>Código</th>
             <SortTh col="cantidad" label="Cant." align="right" />
             <SortTh col="precioUnitario" label="P.U." align="right" />
             <SortTh col="subtotalBs" label="Subtotal (Bs)" align="right" />
@@ -273,18 +274,11 @@ export default function ComprasLineasTable({
                 }}
               >
                 {muestraSeleccionFactura ? (
-                  muestraAcciones ? (
-                    <td style={{ ...td, verticalAlign: 'top' }} rowSpan={rowSpan}>
-                      <input
-                        type="checkbox"
-                        checked={seleccionadaFactura}
-                        onChange={() => onToggleCompra?.(row.pendienteId)}
-                        aria-label={`Seleccionar factura ${row.factura || row.proveedor}`}
-                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#5856D6' }}
-                      />
-                    </td>
-                  ) : ordenPlano ? (
-                    <td style={td}>
+                  ordenPlano || esFilaAcciones(filas, row, i) ? (
+                    <td
+                      style={{ ...td, verticalAlign: 'top' }}
+                      rowSpan={ordenPlano ? 1 : filasPorFactura.get(row.pendienteId) ?? 1}
+                    >
                       <input
                         type="checkbox"
                         checked={seleccionadaFactura}
@@ -333,7 +327,9 @@ export default function ComprasLineasTable({
                 </td>
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
-                <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{row.rif}</td>
+                <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>
+                  {!row.rif || /^SIN[-_]?RIF$/i.test(row.rif.trim()) ? '—' : row.rif}
+                </td>
                 <td style={{ ...td, maxWidth: 130 }}>
                   {(() => {
                     const { texto, pendienteIngreso } = etiquetaAlmacenIngresoCompra({
@@ -362,6 +358,9 @@ export default function ComprasLineasTable({
                 </td>
                 <td style={{ ...td, maxWidth: 180 }}>
                   {row.esLinea ? row.articulo : <span style={{ opacity: 0.4 }}>(cabecera)</span>}
+                </td>
+                <td style={{ ...td, maxWidth: 100, color: 'rgba(255,255,255,0.55)', fontFamily: 'monospace', fontSize: 11 }}>
+                  {row.esLinea ? row.codigo || '—' : '—'}
                 </td>
                 <td style={{ ...td, textAlign: 'right' }}>{row.esLinea ? row.cantidad : '—'}</td>
                 <td
@@ -518,7 +517,10 @@ export default function ComprasLineasTable({
                         ) : null}
                       </div>
                     </td>
-                  ) : null
+                  ) : !eliminarPorLinea && !ordenPlano ? null : (
+                    // Celda vacía: evita que las columnas se desplacen si esta fila no tiene botones.
+                    <td style={td} aria-hidden />
+                  )
                 ) : null}
               </tr>
             );

@@ -16,6 +16,8 @@ import {
   documentoPrintToolbarStyles,
   type DocumentoPrintShare,
 } from '@/lib/contabilidad/documentoPrintShare';
+import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
+import { etiquetaAlmacenIngresoCompra } from '@/lib/contabilidad/etiquetaAlmacenCompra';
 
 function escapeHtml(s: string): string {
   return s
@@ -53,17 +55,29 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
     .map((row) => {
       const bs = subtotalBs(row);
       const usd = usdRow(row, bs);
+      const rif =
+        !row.rif || /^SIN[-_]?RIF$/i.test(row.rif.trim()) ? '—' : row.rif;
+      const { texto: almacen } = etiquetaAlmacenIngresoCompra({
+        ubicacionNombre: row.almacen,
+        proyectoNombre: row.proyecto,
+        yaIngresadoAlmacen: row.almacenIngresado,
+        estadoLogistica: row.estadoLogistica,
+      });
       return `<tr>
         <td>${escapeHtml(row.fecha || '—')}</td>
         <td class="mono">${escapeHtml(row.factura || '—')}</td>
         <td>${escapeHtml(row.proveedor)}</td>
-        <td>${escapeHtml(row.rif)}</td>
+        <td>${escapeHtml(rif)}</td>
+        <td>${escapeHtml(almacen)}</td>
         <td>${row.esLinea ? escapeHtml(row.articulo) : '<span class="muted">(cabecera)</span>'}</td>
+        <td class="mono">${row.esLinea ? escapeHtml(row.codigo || '—') : '—'}</td>
         <td class="num">${row.esLinea ? row.cantidad : '—'}</td>
         <td class="num${row.esLinea && esLineaCompraUsd(row) ? ' usd' : ''}">${row.esLinea ? escapeHtml(formatearPrecioUnitarioLineaCompra(row) ?? '—') : '—'}</td>
         <td class="num">${escapeHtml(formatearBs(bs))}</td>
         <td class="num usd">${usd != null ? escapeHtml(formatearUsd(usd)) : '—'}</td>
         <td class="num">${row.tasaBcv != null && row.tasaBcv > 0 ? escapeHtml(formatearTasaBcv(row.tasaBcv)) : '—'}</td>
+        <td>${escapeHtml(row.entidad || '—')}</td>
+        <td>${escapeHtml(row.proyecto || '—')}</td>
       </tr>`;
     })
     .join('');
@@ -123,19 +137,14 @@ export function buildComprasCuadroPrintHtml(input: ComprasCuadroPrintInput): str
     <table>
       <thead>
         <tr>
-          <th>Fecha</th>
-          <th>Factura</th>
-          <th>Proveedor</th>
-          <th>RIF</th>
-          <th>Artículo</th>
-          <th class="num">Cant.</th>
-          <th class="num">P.U.</th>
-          <th class="num">Subtotal (Bs)</th>
-          <th class="num">USD</th>
-          <th class="num">Tasa BCV</th>
+          ${COMPRAS_CUADRO_HEADERS.map((h) =>
+            ['Cant.', 'P.U.', 'Subtotal (Bs)', 'USD', 'Tasa BCV'].includes(h)
+              ? `<th class="num">${escapeHtml(h)}</th>`
+              : `<th>${escapeHtml(h)}</th>`,
+          ).join('')}
         </tr>
       </thead>
-      <tbody>${filasHtml || '<tr><td colspan="10">Sin líneas</td></tr>'}</tbody>
+      <tbody>${filasHtml || `<tr><td colspan="${COMPRAS_CUADRO_HEADERS.length}">Sin líneas</td></tr>`}</tbody>
     </table>
     <p class="brand">Casa Inteligente · ${escapeHtml(new Date().toLocaleString('es-VE'))}</p>
   </main>
