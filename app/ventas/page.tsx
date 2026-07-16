@@ -6,10 +6,6 @@ import Link from 'next/link';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
-import ClientSearch, { Customer } from '@/components/ventas/ClientSearch';
-
-// Opt out of static prerendering — page uses useSearchParams()
-export const dynamic = 'force-dynamic';
 
 /** Miniatura en líneas del presupuesto (solo UI; al guardar en BD se omite `imagen` en `product_data`). */
 function LineItemProductThumb({ imagen }: { imagen?: string | null }) {
@@ -116,7 +112,7 @@ function CategoryBadge({ cat }: { cat: string | null }) {
 function VentasContent() {
     const searchParams = useSearchParams();
     const [items, setItems] = useState<LineItem[]>([]);
-    const [globalMargin, setGlobalMargin] = useState(0);
+    const [globalMargin, setGlobalMargin] = useState(20);
     const [clientName, setClientName] = useState('');
     const [clientRif, setClientRif] = useState('');
     const [clientPhone, setClientPhone] = useState('');
@@ -135,8 +131,6 @@ function VentasContent() {
     const [showZelle, setShowZelle] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [budgetNumber, setBudgetNumber] = useState('500');
-    const [status, setStatus] = useState('pendiente');
 
     type InventoryCandidate = {
         id: string;
@@ -278,9 +272,7 @@ function VentasContent() {
                         setClientRif(data.customer_rif || '');
                         setCustomerId(data.customer_id);
                         setNotes(data.notes || '');
-                        setShowZelle(data.show_zelle !== false);
-                        if (data.budget_number) setBudgetNumber(String(data.budget_number));
-                        if (data.status) setStatus(data.status);
+                        setShowZelle(data.show_zelle !== false); // Default to true if undefined
 
                         if (data.customer_id) {
                             supabase
@@ -326,14 +318,6 @@ function VentasContent() {
                         });
                         setItems(loadedItems);
                     }
-                });
-        } else {
-            // Auto-numerar desde 500 + cantidad de presupuestos existentes
-            supabase
-                .from('budgets')
-                .select('id', { count: 'exact', head: true })
-                .then(({ count }) => {
-                    setBudgetNumber(String(500 + (count || 0) + 1));
                 });
         }
 
@@ -1432,7 +1416,6 @@ function VentasContent() {
                                             unitPrice: i.unitPrice,
                                             discount: i.discount,
                                             costo: i.product.costo,
-                                            image_url: i.product.image_url,
                                         })),
                                         subtotal,
                                         totalCost,
@@ -1440,7 +1423,7 @@ function VentasContent() {
                                         marginPct,
                                         showZelle,
                                         fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-                                        numero: budgetNumber,
+                                        numero: budgetId ? `P-${budgetId.slice(0, 4)}` : `P-${Math.floor(Math.random() * 900) + 100}`,
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
                                     const previewPath = budgetId
@@ -1494,66 +1477,6 @@ function VentasContent() {
                             Limpiar presupuesto
                         </button>
                     </div>
-                )}
-
-                {/* ── FAB Vista Previa (Flotante) ── */}
-                {items.length > 0 && (
-                    <button
-                        onClick={() => {
-                            // Guardar datos en localStorage y navegar
-                            const presupuesto = {
-                                cliente: clientName,
-                                rif: clientRif,
-                                telefono: clientPhone,
-                                email: clientEmail,
-                                notas: notes,
-                                items: items.map(i => ({
-                                    nombre: i.product.nombre,
-                                    categoria: i.product.categoria,
-                                    qty: i.qty,
-                                    unitPrice: i.unitPrice,
-                                    discount: i.discount,
-                                    costo: i.product.costo,
-                                    image_url: i.product.image_url,
-                                })),
-                                subtotal,
-                                totalCost,
-                                totalProfit,
-                                marginPct,
-                                showZelle,
-                                fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-                                numero: budgetNumber,
-                            };
-                            localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
-                            window.open('/ventas/preview', '_blank');
-                        }}
-                        style={{
-                            position: 'fixed',
-                            bottom: '30px',
-                            right: '30px',
-                            zIndex: 100,
-                            width: '64px',
-                            height: '64px',
-                            borderRadius: '32px',
-                            background: 'linear-gradient(135deg, #00AEEF, #0077D4)',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: 'none',
-                            boxShadow: '0 8px 32px rgba(0, 174, 239, 0.4)',
-                            cursor: 'pointer',
-                            transition: 'transform 0.2s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05) translateY(-4px)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1) translateY(0)'}
-                        title="Ver Vista Previa"
-                    >
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                            <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
                 )}
             </div>
 

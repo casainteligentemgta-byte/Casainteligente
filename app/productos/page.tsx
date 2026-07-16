@@ -16,7 +16,7 @@ interface Product {
     precio: number | null;
     utilidad: number | null;
     cantidad: number | null;
-    image_url: string | null;
+    imagen: string | null;
     ubicacion?: string | null;
     manual_instrucciones?: string | null;
     manual_documento_url?: string | null;

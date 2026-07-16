@@ -342,32 +342,26 @@ export default function PreviewPage() {
         );
     }
 
-    const descuento = 0; // Se puede calcular si hay descuentos globales
-    const total = data.subtotal - descuento;
+    const totalItems = data.items.reduce((s, i) => s + i.qty, 0);
+    const descuento = 0; // puede extenderse
 
     return (
         <div style={{
             minHeight: '100vh',
-            background: 'var(--bg-primary, #0A0A0F)',
+            background: '#0A0A0F',
             fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
             color: 'white',
-            paddingBottom: '80px',
+            paddingBottom: '40px',
         }}>
-
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap');
-            `}</style>
 
             {/* ── Toolbar (no se imprime) ── */}
             <div className="no-print" style={{
                 position: 'sticky', top: 0, zIndex: 50,
-                background: 'rgba(10,10,15,0.85)',
+                background: 'rgba(10,10,15,0.9)',
                 backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
                 borderBottom: '1px solid rgba(255,255,255,0.08)',
-                padding: '16px 24px',
+                padding: '12px 20px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {isDemo ? (
@@ -408,7 +402,7 @@ export default function PreviewPage() {
                         Presupuesto {data.numero}
                     </span>
                 </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
                     <button
                         onClick={() => {
                             const notasBloque = data.notas?.trim() ? `\nNotas: ${data.notas.trim()}\n` : '';
@@ -420,14 +414,18 @@ export default function PreviewPage() {
                             navigator.clipboard.writeText(text);
                         }}
                         style={{
-                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: '12px', padding: '10px 16px',
-                            color: 'white', fontSize: '13px', fontWeight: 600,
+                            background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
+                            borderRadius: '12px', padding: '10px 18px',
+                            color: '#007AFF', fontSize: '13px', fontWeight: 600,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '6px'
+                            display: 'flex', alignItems: 'center', gap: '6px',
                         }}
                     >
-                        🔗 Link
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                            <rect x="9" y="9" width="13" height="13" rx="2" stroke="#007AFF" strokeWidth="2" />
+                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="#007AFF" strokeWidth="2" />
+                        </svg>
+                        Copiar
                     </button>
                     <button
                         onClick={() => {
@@ -441,27 +439,15 @@ export default function PreviewPage() {
                             window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
                         }}
                         style={{
-                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: '12px', padding: '10px 16px',
-                            color: 'white', fontSize: '13px', fontWeight: 600,
-                            cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '6px'
-                        }}
-                    >
-                        📧 Email
-                    </button>
-                    <button
-                        onClick={() => handleSharePDF('whatsapp')}
-                        style={{
                             background: '#25D366', border: 'none',
-                            borderRadius: '12px', padding: '10px 16px',
+                            borderRadius: '12px', padding: '10px 18px',
                             color: 'white', fontSize: '13px', fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            boxShadow: '0 4px 14px rgba(37,211,102,0.3)',
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            boxShadow: '0 4px 12px rgba(37,211,102,0.3)',
                         }}
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984 0 1.758.459 3.474 1.33 4.982L2 22l5.167-1.357a9.945 9.945 0 004.845 1.259h.004c5.507 0 9.99-4.478 9.991-9.984 0-2.667-1.037-5.176-2.922-7.062A9.92 9.92 0 0012.012 2z" />
                         </svg>
                         WhatsApp
@@ -469,25 +455,43 @@ export default function PreviewPage() {
                     <button
                         onClick={() => window.print()}
                         style={{
-                            background: 'linear-gradient(135deg, #00AEEF, #0077D4)',
-                            border: 'none', borderRadius: '12px', padding: '10px 16px',
+                            background: 'rgba(255,255,255,0.08)', borderRadius: '12px', padding: '10px 18px',
+                            border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '13px',
+                            fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                        }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                            <rect x="6" y="14" width="12" height="8" rx="1" />
+                        </svg>
+                        PDF
+                    </button>
+                    <button
+                        onClick={() => {
+                            // Simple text download fallback or just print
+                            window.print();
+                        }}
+                        style={{
+                            background: 'linear-gradient(135deg, #FF9500, #FF6B00)',
+                            border: 'none', borderRadius: '12px', padding: '10px 20px',
                             color: 'white', fontSize: '13px', fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
                             display: 'flex', alignItems: 'center', gap: '6px',
+                            boxShadow: '0 4px 16px rgba(255,149,0,0.4)',
                         }}
                     >
-                        🖨️ PDF
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                        </svg>
+                        Descargar
                     </button>
                 </div>
             </div>
 
-            {/* ── Document Container (A4 Proportions, Pinterest UI) ── */}
+            {/* ── Documento ── */}
             <div style={{
-                maxWidth: '850px',
-                margin: '40px auto',
+                maxWidth: '800px', margin: '32px auto 0',
                 padding: '0 20px',
-                display: 'flex',
-                justifyContent: 'center'
             }}>
                 <div
                     className="presupuesto-sin-fotos-producto"
@@ -565,38 +569,29 @@ export default function PreviewPage() {
                             </div>
                         </div>
 
-                        {/* Invoice To */}
-                        <div style={{ marginBottom: '40px' }}>
-                            <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#333333', marginBottom: '8px', borderBottom: '1px solid #D4D4D8', paddingBottom: '4px' }}>Preparado para</h3>
-                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: 0 }}>{data.cliente || 'Cliente no especificado'}</p>
-                            {data.rif && <p style={{ fontSize: '11px', color: '#52525B', margin: '4px 0 0 0' }}>{data.rif}</p>}
-                            {data.telefono && (
-                                <p style={{ fontSize: '11px', color: '#52525B', margin: '6px 0 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#52525B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
-                                    </svg>
-                                    {data.telefono}
-                                </p>
-                            )}
-                            {data.email && (
-                                <p style={{ fontSize: '11px', color: '#52525B', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#52525B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-                                    </svg>
-                                    {data.email}
-                                </p>
-                            )}
-                        </div>
+                        {/* Cliente */}
+                        <div style={{ marginTop: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {data.cliente ? (
+                                    <>
+                                        <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>
+                                            {data.cliente.toUpperCase()}
+                                        </h1>
 
-                        {/* Invoice Details */}
-                        <div style={{ marginBottom: '40px' }}>
-                            <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#333333', marginBottom: '8px', borderBottom: '1px solid #D4D4D8', paddingBottom: '4px' }}>Presupuesto Detallado</h3>
-                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 2px 0' }}>Presupuesto Nº:</p>
-                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: '0 0 12px 0' }}>PR-{data.numero}</p>
-                            
-                            <p style={{ fontSize: '11px', color: '#52525B', margin: '0 0 2px 0' }}>Fecha:</p>
-                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#18181B', margin: 0 }}>{data.fecha}</p>
-                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            {/* RIF / ID */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ width: '20px', display: 'flex', justifyContent: 'center' }}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <rect x="3" y="4" width="18" height="16" rx="2" />
+                                                        <circle cx="9" cy="10" r="2" />
+                                                        <path d="M15 8h2M15 12h2M7 16h10" />
+                                                    </svg>
+                                                </div>
+                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>
+                                                    {data.rif || 'Sin identificación'}
+                                                </span>
+                                            </div>
 
                                             {/* Teléfono */}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -794,29 +789,32 @@ export default function PreviewPage() {
                                 <span style={{ fontSize: '18px', fontWeight: 800, color: '#34C759' }}>${fmt(data.subtotal)}</span>
                             </div>
                         </div>
+                    </div>
 
-                        {/* TOTALS */}
-                        <div style={{ alignSelf: 'flex-end', width: '320px', marginBottom: '60px' }}>
-                            <div style={{ height: '2px', background: '#F4F4F5', marginBottom: '16px' }}></div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                                <span style={{ fontSize: '13px', color: '#52525B' }}>Sub Total</span>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>${fmt(data.subtotal)}</span>
-                            </div>
-                            {descuento > 0 && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                                <span style={{ fontSize: '13px', color: '#52525B' }}>Descuento</span>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>-${fmt(descuento)}</span>
-                            </div>
-                            )}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #E4E4E7' }}>
-                                <span style={{ fontSize: '13px', color: '#52525B' }}>Impuestos (Exento)</span>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#18181B' }}>$0.00</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '2px solid #333333' }}>
-                                <span style={{ fontSize: '15px', fontWeight: 700, color: '#333333' }}>GRAN TOTAL</span>
-                                <span style={{ fontSize: '15px', fontWeight: 700, color: '#333333' }}>${fmt(total)}</span>
-                            </div>
-                        </div>
+                    {/* ── Action Buttons Footer (Mobile Friendly) ── */}
+                    <div className="no-print" style={{
+                        padding: '24px 32px',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '12px',
+                        background: 'rgba(255,255,255,0.02)',
+                        borderTop: '1px solid rgba(255,255,255,0.05)',
+                    }}>
+                        <button
+                            onClick={() => window.print()}
+                            style={{
+                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '16px', padding: '16px 12px',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
+                                color: 'white', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                            }}
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2">
+                                <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                                <rect x="6" y="14" width="12" height="8" rx="1" />
+                            </svg>
+                            Imprimir
+                        </button>
 
                         <button
                             onClick={() => {
@@ -885,13 +883,5 @@ export default function PreviewPage() {
                 }
             `}</style>
         </div>
-    );
-}
-
-export default function PreviewPage() {
-    return (
-        <Suspense fallback={<div>Cargando...</div>}>
-            <PreviewContent />
-        </Suspense>
     );
 }

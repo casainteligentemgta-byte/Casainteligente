@@ -359,7 +359,6 @@ export default function ClientesPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', padding: '16px 16px 8px' }}>
                 {[
                     { label: 'Total', value: lista.length, color: '#007AFF', bg: 'rgba(0,122,255,0.08)', border: 'rgba(0,122,255,0.15)' },
-                    { label: 'Personas', value: personasCount, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                     { label: 'Empresas', value: empresasCount, color: '#FF9500', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.15)' },
                     { label: 'Personas', value: personasCount, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                 ].map(s => (

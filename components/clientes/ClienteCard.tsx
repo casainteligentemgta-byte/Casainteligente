@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
-type ClienteTipo = 'V' | 'J' | 'E' | 'Personal' | 'Empresa';
+type ClienteStatus = 'activo' | 'inactivo' | 'pendiente';
+type ClienteTipo = 'V' | 'J' | 'E';
 type ClienteCategoria = 'personal' | 'empresa';
 
 interface Cliente {
@@ -12,6 +13,7 @@ interface Cliente {
     rif: string;
     tipo: ClienteTipo;
     categoria: ClienteCategoria;
+    status: ClienteStatus;
     email: string;
     telefono: string;
     movil?: string;
@@ -23,13 +25,16 @@ interface Cliente {
     obraCount?: number;
 }
 
-const tipoConfig: Record<string, { bg: string; text: string; border: string }> = {
+const statusConfig: Record<ClienteStatus, { label: string; dot: string; bg: string; text: string }> = {
+    activo: { label: 'Activo', dot: '#34C759', bg: 'rgba(52,199,89,0.10)', text: '#1A7F3C' },
+    inactivo: { label: 'Inactivo', dot: '#FF3B30', bg: 'rgba(255,59,48,0.10)', text: '#C0392B' },
+    pendiente: { label: 'Pendiente', dot: '#FF9500', bg: 'rgba(255,149,0,0.10)', text: '#B8620A' },
+};
+
+const tipoConfig: Record<ClienteTipo, { bg: string; text: string; border: string }> = {
     V: { bg: 'rgba(0,122,255,0.10)', text: '#007AFF', border: 'rgba(0,122,255,0.25)' },
     J: { bg: 'rgba(255,149,0,0.10)', text: '#B8620A', border: 'rgba(255,149,0,0.25)' },
     E: { bg: 'rgba(52,199,89,0.10)', text: '#1A7F3C', border: 'rgba(52,199,89,0.25)' },
-    Personal: { bg: 'rgba(0,122,255,0.10)', text: '#007AFF', border: 'rgba(0,122,255,0.25)' },
-    Empresa: { bg: 'rgba(255,149,0,0.10)', text: '#B8620A', border: 'rgba(255,149,0,0.25)' },
-    default: { bg: 'rgba(142,142,147,0.10)', text: '#8E8E93', border: 'rgba(142,142,147,0.25)' }
 };
 
 function AvatarCircle({ initials, color, categoria, imagen }: { initials: string; color: string; categoria: ClienteCategoria; imagen?: string }) {
@@ -104,6 +109,10 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                         <div style={{ display: 'flex', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: tipo.bg, color: tipo.text, border: `1px solid ${tipo.border}` }}>
                                 {cliente.tipo}
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '6px', background: status.bg, color: status.text, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: status.dot, display: 'inline-block' }} />
+                                {status.label}
                             </span>
                         </div>
                         <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, lineHeight: 1.2 }}>{cliente.nombre}</h2>
