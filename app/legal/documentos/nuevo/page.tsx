@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
@@ -29,7 +29,23 @@ const campo =
   'mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-500/40';
 
 export default function DocumentoNuevoPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center gap-2 text-sm text-zinc-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+        </div>
+      }
+    >
+      <DocumentoNuevoForm />
+    </Suspense>
+  );
+}
+
+function DocumentoNuevoForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const plantillaQuery = searchParams.get('plantilla')?.trim() || '';
   const [plantillas, setPlantillas] = useState<Plantilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -57,14 +73,18 @@ export default function DocumentoNuevoPage() {
           toast.error([data.error, data.hint].filter(Boolean).join(' — ') || 'Error');
           return;
         }
-        setPlantillas(data.plantillas ?? []);
+        const list = data.plantillas ?? [];
+        setPlantillas(list);
+        if (plantillaQuery && list.some((p) => p.id === plantillaQuery)) {
+          setPlantillaId(plantillaQuery);
+        }
       } catch {
         toast.error('Error de red');
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [plantillaQuery]);
 
   const plantilla = useMemo(
     () => plantillas.find((p) => p.id === plantillaId) ?? null,
