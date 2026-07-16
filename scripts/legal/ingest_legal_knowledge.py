@@ -2,6 +2,15 @@
 """
 Ingesta de texto legal → chunks → embeddings OpenAI → Supabase (ci_legal_knowledge).
 
+Metadata canónica (ejemplo):
+{
+  "categoria": "laboral",       # laboral | civil | internacional | mercantil
+  "tipo": "ley",                # ley | jurisprudencia | doctrina | contrato_modelo
+  "jurisdiccion": "venezuela",  # venezuela | internacional | extranjera
+  "fecha_vigencia": "2026-07-16",
+  "referencia": "Art. 142 LOTTT"
+}
+
 Uso:
   export OPENAI_API_KEY=...
   export SUPABASE_URL=...
@@ -10,18 +19,28 @@ Uso:
   python scripts/legal/ingest_legal_knowledge.py \\
     --file ./docs/obligaciones-legales-cap-17.txt \\
     --source "Obligaciones Legales del Empleador" \\
-    --capitulo 17
+    --capitulo 17 \\
+    --categoria laboral \\
+    --tipo ley \\
+    --jurisdiccion venezuela \\
+    --fecha-vigencia 2026-07-16 \\
+    --referencia "Art. 142 LOTTT"
 
-Sin --file, lee stdin o --text.
+  # O con JSON:
+  python scripts/legal/ingest_legal_knowledge.py \\
+    --file ./docs/cap-17.txt \\
+    --metadata-json '{"categoria":"laboral","tipo":"ley","jurisdiccion":"venezuela","fecha_vigencia":"2026-07-16","referencia":"Art. 142 LOTTT"}'
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
-from typing import Iterable, List
+from datetime import date
+from typing import Any, Dict, Iterable, List
 
 try:
     from openai import OpenAI
@@ -32,6 +51,10 @@ try:
     from supabase import create_client
 except ImportError as e:
     raise SystemExit("Instale supabase: pip install supabase") from e
+
+CATEGORIAS = {"laboral", "civil", "internacional", "mercantil"}
+TIPOS = {"ley", "jurisprudencia", "doctrina", "contrato_modelo"}
+JURISDICCIONES = {"venezuela", "internacional", "extranjera"}
 
 
 def recursive_split(text: str, chunk_size: int = 1000, chunk_overlap: int = 100) -> List[str]:
@@ -48,7 +71,7 @@ def recursive_split(text: str, chunk_size: int = 1000, chunk_overlap: int = 100)
                 out.append(p)
                 continue
             if not sep:
-                for i in range(0, len(p), chunk_size - chunk_overlap):
+                for i in range(0, len(p), max(1, chunk_size - chunk_overlap)):
                     out.append(p[i : i + chunk_size])
                 continue
             pieces = p.split(sep)
@@ -60,8 +83,9 @@ def recursive_split(text: str, chunk_size: int = 1000, chunk_overlap: int = 100)
                 else:
                     if buf:
                         out.append(buf)
-                    if len(piece) > chunk_size:
-                        out.extend(split_with(separators[separators.index(sep) + 1], [piece]))
+                    next_sep = separators[separators.index(sep) + 1] if sep in separators else ""
+                    if len(piece) > chunk_size and next_sep != sep:
+                        out.extend(split_with(next_sep, [piece]))
                         buf = ""
                     else:
                         buf = piece
@@ -70,7 +94,6 @@ def recursive_split(text: str, chunk_size: int = 1000, chunk_overlap: int = 100)
         return out
 
     chunks = split_with(separators[0], [text])
-    # Overlap suave entre chunks consecutivos
     if chunk_overlap <= 0 or len(chunks) <= 1:
         return [c.strip() for c in chunks if c.strip()]
 
@@ -92,6 +115,47 @@ def batched(items: List[str], n: int) -> Iterable[List[str]]:
         yield items[i : i + n]
 
 
+def build_metadata(args: argparse.Namespace) -> Dict[str, Any]:
+    meta: Dict[str, Any] = {}
+    if args.metadata_json:
+        try:
+            meta = json.loads(args.metadata_json)
+            if not isinstance(meta, dict):
+                raise ValueError("metadata-json debe ser un objeto")
+        except Exception as e:
+            raise SystemExit(f"--metadata-json inválido: {e}") from e
+
+    categoria = (args.categoria or meta.get("categoria") or "laboral").strip().lower()
+    tipo = (args.tipo or meta.get("tipo") or "ley").strip().lower()
+    jurisdiccion = (
+        args.jurisdiccion or meta.get("jurisdiccion") or "venezuela"
+    ).strip().lower()
+    fecha = args.fecha_vigencia or meta.get("fecha_vigencia") or date.today().isoformat()
+    referencia = args.referencia or meta.get("referencia") or None
+
+    if categoria not in CATEGORIAS:
+        raise SystemExit(f"categoria inválida: {categoria}. Use: {sorted(CATEGORIAS)}")
+    if tipo not in TIPOS:
+        raise SystemExit(f"tipo inválido: {tipo}. Use: {sorted(TIPOS)}")
+    if jurisdiccion not in JURISDICCIONES:
+        raise SystemExit(
+            f"jurisdiccion inválida: {jurisdiccion}. Use: {sorted(JURISDICCIONES)}"
+        )
+    if fecha and not str(fecha).startswith(("19", "20")):
+        raise SystemExit("fecha_vigencia debe ser YYYY-MM-DD")
+
+    out = {
+        "categoria": categoria,
+        "tipo": tipo,
+        "jurisdiccion": jurisdiccion,
+        "fecha_vigencia": str(fecha)[:10] if fecha else None,
+        "referencia": (str(referencia).strip() if referencia else None),
+        "source": args.source,
+        "capitulo": args.capitulo or None,
+    }
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Ingesta legal → ci_legal_knowledge")
     ap.add_argument("--file", help="Archivo de texto (.txt)")
@@ -102,10 +166,20 @@ def main() -> int:
         help="Nombre de la fuente",
     )
     ap.add_argument("--capitulo", default="", help="Capítulo / sección")
+    ap.add_argument("--categoria", choices=sorted(CATEGORIAS), default=None)
+    ap.add_argument("--tipo", choices=sorted(TIPOS), default=None)
+    ap.add_argument("--jurisdiccion", choices=sorted(JURISDICCIONES), default=None)
+    ap.add_argument("--fecha-vigencia", dest="fecha_vigencia", default=None)
+    ap.add_argument("--referencia", default=None, help='Ej. "Art. 142 LOTTT"')
+    ap.add_argument(
+        "--metadata-json",
+        default=None,
+        help="JSON con categoria/tipo/jurisdiccion/fecha_vigencia/referencia",
+    )
     ap.add_argument("--chunk-size", type=int, default=1000)
     ap.add_argument("--chunk-overlap", type=int, default=100)
     ap.add_argument("--model", default="text-embedding-3-small")
-    ap.add_argument("--dry-run", action="store_true", help="Solo muestra chunks, no inserta")
+    ap.add_argument("--dry-run", action="store_true", help="Solo muestra chunks/metadata")
     args = ap.parse_args()
 
     if args.file:
@@ -118,12 +192,14 @@ def main() -> int:
     else:
         ap.error("Indique --file, --text o pipe por stdin")
 
+    metadata = build_metadata(args)
     chunks = recursive_split(
         text_content,
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
     )
     print(f"Fragmentos: {len(chunks)}")
+    print(f"Metadata: {json.dumps(metadata, ensure_ascii=False)}")
     if args.dry_run:
         for i, c in enumerate(chunks[:5]):
             print(f"--- chunk {i+1} ({len(c)} chars) ---\n{c[:240]}…\n")
@@ -151,12 +227,14 @@ def main() -> int:
             rows.append(
                 {
                     "content": chunk,
-                    "source": args.source,
-                    "capitulo": args.capitulo or None,
-                    "metadata": {
-                        "source": args.source,
-                        "capitulo": args.capitulo or None,
-                    },
+                    "categoria": metadata["categoria"],
+                    "tipo": metadata["tipo"],
+                    "jurisdiccion": metadata["jurisdiccion"],
+                    "fecha_vigencia": metadata["fecha_vigencia"],
+                    "referencia": metadata["referencia"],
+                    "source": metadata["source"],
+                    "capitulo": metadata["capitulo"],
+                    "metadata": metadata,
                     "embedding": emb_item.embedding,
                 }
             )
