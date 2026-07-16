@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   MessageSquareText,
   Calculator,
+  Camera,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +17,7 @@ const NAV = [
   { href: '/legal', label: 'Resumen', icon: LayoutDashboard, exact: true },
   { href: '/legal/casos', label: 'Casos', icon: FolderOpen, exact: false },
   { href: '/legal/asesor', label: 'Asesor', icon: MessageSquareText, exact: false },
+  { href: '/legal/inspecciones', label: 'IurisVigía', icon: Camera, exact: false },
   { href: '/legal/calculos', label: 'Cálculos', icon: Calculator, exact: false },
 ];
 

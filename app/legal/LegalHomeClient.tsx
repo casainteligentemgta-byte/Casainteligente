@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
+import { Camera, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { etiquetaDe, LEGAL_ESTADOS } from '@/lib/legal/casosCatalogo';
 
