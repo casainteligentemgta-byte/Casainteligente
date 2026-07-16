@@ -51,9 +51,10 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    const hint = msg.includes('OPENAI_API_KEY')
-      ? 'Configure OPENAI_API_KEY en Vercel (visión gpt-4o).'
-      : undefined;
+    const hint =
+      msg.includes('GEMINI_API_KEY') || msg.includes('OPENAI_API_KEY')
+        ? 'Usa GEMINI_API_KEY (ya configurada en la app) o OPENAI_API_KEY opcional para gpt-4o.'
+        : undefined;
     return NextResponse.json({ error: msg, hint }, { status: 500 });
   }
 }
