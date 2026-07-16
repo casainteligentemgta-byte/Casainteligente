@@ -47,7 +47,17 @@ export type LegalKnowledgeMetadata = {
   capitulo?: string | null;
 };
 
+/** Ejemplo doctrina / libro (ingesta PDF Obligaciones Legales). */
 export const LEGAL_METADATA_EJEMPLO: LegalKnowledgeMetadata = {
+  categoria: 'laboral',
+  tipo: 'doctrina',
+  jurisdiccion: 'venezuela',
+  fecha_vigencia: '2026-07-16',
+  referencia: 'Libro Frederick Cabrera',
+};
+
+/** Ejemplo artículo de ley. */
+export const LEGAL_METADATA_EJEMPLO_LEY: LegalKnowledgeMetadata = {
   categoria: 'laboral',
   tipo: 'ley',
   jurisdiccion: 'venezuela',
