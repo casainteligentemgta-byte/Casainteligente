@@ -1,6 +1,13 @@
 /**
  * IurisVigía — auditor técnico-legal (LOPCYMAT) sobre fotos de inspección.
+ * Visión: Gemini (GEMINI_API_KEY).
  */
+
+import {
+  geminiGenerateWithDocument,
+  getGeminiApiKey,
+} from '@/lib/gemini/client';
+import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
 
 export type EstadoCumplimientoIuris =
   | 'Conforme'
@@ -32,7 +39,11 @@ export function buildIurisVigiaSystemPrompt(context: string): string {
 }
 
 function parseReport(raw: string): IurisVigiaReport {
-  const parsed = JSON.parse(raw) as Partial<IurisVigiaReport>;
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '');
+  const parsed = JSON.parse(cleaned) as Partial<IurisVigiaReport>;
   return {
     descripcion: String(parsed.descripcion ?? 'No analizable'),
     nota_legal: String(parsed.nota_legal ?? 'No analizable'),
@@ -41,57 +52,62 @@ function parseReport(raw: string): IurisVigiaReport {
   };
 }
 
+async function imageUrlToInline(
+  imageUrl: string,
+): Promise<{ mimeType: string; base64: string }> {
+  const url = imageUrl.trim();
+  const dataMatch = /^data:([^;]+);base64,(.+)$/i.exec(url);
+  if (dataMatch) {
+    return { mimeType: dataMatch[1]!.trim() || 'image/jpeg', base64: dataMatch[2]! };
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`No se pudo descargar la imagen (${res.status})`);
+  }
+  const mimeType =
+    res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+  const buf = Buffer.from(await res.arrayBuffer());
+  return { mimeType, base64: buf.toString('base64') };
+}
+
+function resolveIurisModel(override?: string): string {
+  return (
+    override?.trim() ||
+    process.env.LEGAL_VISION_MODEL?.trim() ||
+    process.env.GEMINI_LEGAL_MODEL?.trim() ||
+    process.env.GEMINI_PROCUREMENT_MODEL?.trim() ||
+    GEMINI_PROCUREMENT_DEFAULT_MODEL
+  );
+}
+
 /**
- * Analiza una imagen (URL pública/firmada o data URL) con gpt-4o vision.
+ * Analiza una imagen (URL pública/firmada o data URL) con Gemini vision.
  */
 export async function analyzeInspectionPhoto(
   imageUrl: string,
   context: string,
-  options?: { openaiApiKey?: string; model?: string },
+  options?: { geminiApiKey?: string; model?: string },
 ): Promise<IurisVigiaReport> {
   const url = imageUrl.trim();
   if (!url) throw new Error('image_url requerido');
 
-  const apiKey = (options?.openaiApiKey || process.env.OPENAI_API_KEY || '').trim();
-  if (!apiKey) throw new Error('Falta OPENAI_API_KEY');
+  const apiKey = (options?.geminiApiKey || getGeminiApiKey() || '').trim();
+  if (!apiKey) throw new Error('Falta GEMINI_API_KEY');
 
-  const model = options?.model?.trim() || process.env.LEGAL_VISION_MODEL?.trim() || 'gpt-4o';
+  const model = resolveIurisModel(options?.model);
   const systemPrompt = buildIurisVigiaSystemPrompt(context);
+  const { mimeType, base64 } = await imageUrlToInline(url);
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      response_format: { type: 'json_object' },
-      temperature: 0.2,
-      max_tokens: 2048,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Analiza esta fotografía para mi reporte legal.' },
-            { type: 'image_url', image_url: { url } },
-          ],
-        },
-      ],
-    }),
+  const content = await geminiGenerateWithDocument({
+    model,
+    mimeType,
+    base64,
+    systemInstruction: systemPrompt,
+    temperature: 0.2,
+    maxOutputTokens: 2048,
+    prompt: 'Analiza esta fotografía para mi reporte legal. Responde solo JSON.',
   });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`OpenAI vision ${res.status}: ${body.slice(0, 280)}`);
-  }
-
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = json.choices?.[0]?.message?.content?.trim();
-  if (!content) throw new Error('OpenAI no devolvió contenido');
 
   try {
     return parseReport(content);

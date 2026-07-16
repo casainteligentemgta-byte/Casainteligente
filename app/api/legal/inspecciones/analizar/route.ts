@@ -51,8 +51,8 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    const hint = msg.includes('OPENAI_API_KEY')
-      ? 'Configure OPENAI_API_KEY en Vercel (visión gpt-4o).'
+    const hint = msg.includes('GEMINI_API_KEY')
+      ? 'Configure GEMINI_API_KEY en Vercel (visión Gemini para IurisVigía).'
       : undefined;
     return NextResponse.json({ error: msg, hint }, { status: 500 });
   }
