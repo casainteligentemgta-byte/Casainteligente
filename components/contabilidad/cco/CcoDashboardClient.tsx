@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import type { CcoDashboard, CcoKpiBloque } from '@/lib/contabilidad/cargarCcoDashboard';
 import CcoAnalisisJerarquico from '@/components/contabilidad/cco/CcoAnalisisJerarquico';
+import CcoDatosGraficos from '@/components/contabilidad/cco/CcoDatosGraficos';
 
 type TabId =
   | 'graficos'
@@ -613,6 +614,16 @@ export default function CcoDashboardClient() {
               </div>
             ) : null}
 
+            {tab === 'datos' ? (
+              <CcoDatosGraficos
+                gastosMensual={data.gastosMensual ?? []}
+                jerarquiaCapitulos={data.jerarquiaCapitulos ?? []}
+                topProveedores={data.topProveedores ?? []}
+                tiposPie={data.tiposPie ?? []}
+                treemapNodos={data.treemapNodos ?? []}
+              />
+            ) : null}
+
             {tab === 'egresos' ? (
               <SeccionLista
                 title="Egresos"
@@ -638,7 +649,10 @@ export default function CcoDashboardClient() {
                 ]}
               />
             ) : null}
-            {tab !== 'graficos' && tab !== 'egresos' && tab !== 'ingresos' ? (
+            {tab !== 'graficos' &&
+            tab !== 'datos' &&
+            tab !== 'egresos' &&
+            tab !== 'ingresos' ? (
               <SeccionLista
                 title={TABS.find((t) => t.id === tab)?.label ?? 'Sección'}
                 desc="Estructura lista. Detalle de esta pestaña se completa con el flujo CCO (import SQLite / editor)."
@@ -646,7 +660,7 @@ export default function CcoDashboardClient() {
                 hrefLabel="Ir a módulos secundarios →"
                 lines={[
                   'Orden y colores del menú V4 ya activos',
-                  'Datos vivos hoy: Gráficos, Egresos e Ingresos vía CI',
+                  'Datos vivos hoy: Gráficos, Datos Gráficos, Egresos e Ingresos vía CI',
                 ]}
               />
             ) : null}
