@@ -1,12 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Calculator, Loader2 } from 'lucide-react';
+import { Calculator, Loader2, UserRound } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
   LaborCalculator,
   type ResultadoLaborCalculator,
 } from '@/lib/legal/calcularPrestacionAntiguedad';
+import type { WorkerPasivoResult } from '@/lib/legal/calculateWorkerPasivo';
 
 function money(n: number) {
   return n.toLocaleString('es-VE', {
@@ -24,6 +25,11 @@ export default function CalculosLaboralesClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remoto, setRemoto] = useState<ResultadoLaborCalculator | null>(null);
+
+  const [workerId, setWorkerId] = useState('');
+  const [pasivoLoading, setPasivoLoading] = useState(false);
+  const [pasivoError, setPasivoError] = useState<string | null>(null);
+  const [pasivo, setPasivo] = useState<WorkerPasivoResult | null>(null);
 
   const local = useMemo(() => {
     const s = Number(salario);
