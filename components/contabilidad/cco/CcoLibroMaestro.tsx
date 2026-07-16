@@ -15,12 +15,25 @@ function fmtUsd(n: number): string {
 
 const CLASES = ['', 'GASTO', 'INGRESO', 'CONTRATO', 'PRESUPUESTO'] as const;
 
-export default function CcoLibroMaestro({ proyectoId }: { proyectoId: string }) {
-  const [clase, setClase] = useState('');
+export default function CcoLibroMaestro({
+  proyectoId,
+  claseFija,
+  titulo,
+}: {
+  proyectoId: string;
+  /** Si se pasa, oculta el selector y fija la clase (GASTO / INGRESO / …). */
+  claseFija?: string;
+  titulo?: string;
+}) {
+  const [clase, setClase] = useState(claseFija ?? '');
   const [filas, setFilas] = useState<CcoLibroFila[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (claseFija != null) setClase(claseFija);
+  }, [claseFija]);
 
   const cargar = useCallback(async () => {
     if (!proyectoId) return;
@@ -28,7 +41,8 @@ export default function CcoLibroMaestro({ proyectoId }: { proyectoId: string }) 
     setError(null);
     try {
       const qs = new URLSearchParams({ proyecto: proyectoId, limit: '1500' });
-      if (clase) qs.set('clase', clase);
+      const claseActiva = claseFija ?? clase;
+      if (claseActiva) qs.set('clase', claseActiva);
       const res = await fetch(`/api/contabilidad/cco/libro?${qs}`, { cache: 'no-store' });
       const json = await res.json();
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error');
@@ -40,7 +54,7 @@ export default function CcoLibroMaestro({ proyectoId }: { proyectoId: string }) 
     } finally {
       setLoading(false);
     }
-  }, [proyectoId, clase]);
+  }, [proyectoId, clase, claseFija]);
 
   useEffect(() => {
     void cargar();
@@ -49,7 +63,7 @@ export default function CcoLibroMaestro({ proyectoId }: { proyectoId: string }) 
   if (!proyectoId) {
     return (
       <div style={box}>
-        <h3 style={h3}>Libro maestro</h3>
+        <h3 style={h3}>{titulo ?? 'Libro maestro'}</h3>
         <p style={muted}>Selecciona una obra para ver el libro unificado (df_maestro).</p>
       </div>
     );
@@ -58,20 +72,24 @@ export default function CcoLibroMaestro({ proyectoId }: { proyectoId: string }) 
   return (
     <div style={box}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ ...h3, margin: 0, flex: 1 }}>Libro maestro</h3>
-        <select value={clase} onChange={(e) => setClase(e.target.value)} style={select}>
-          {CLASES.map((c) => (
-            <option key={c || 'all'} value={c}>
-              {c || 'Todas las clases'}
-            </option>
-          ))}
-        </select>
+        <h3 style={{ ...h3, margin: 0, flex: 1 }}>{titulo ?? 'Libro maestro'}</h3>
+        {claseFija == null ? (
+          <select value={clase} onChange={(e) => setClase(e.target.value)} style={select}>
+            {CLASES.map((c) => (
+              <option key={c || 'all'} value={c}>
+                {c || 'Todas las clases'}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <button type="button" onClick={() => void cargar()} style={btn}>
           Actualizar
         </button>
       </div>
       <p style={muted}>
-        Vista unificada V4: gastos (compras obra) + ingresos + contratos + presupuestos · {total} filas
+        {claseFija
+          ? `Movimientos clase ${claseFija} · ${total} filas`
+          : `Vista unificada V4: gastos + ingresos + contratos + presupuestos · ${total} filas`}
       </p>
       {error ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{error}</p> : null}
       {loading ? (

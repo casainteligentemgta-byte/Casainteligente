@@ -30,6 +30,7 @@ import CcoTabDeudas from '@/components/contabilidad/cco/CcoTabDeudas';
 import CcoTabDistribucion from '@/components/contabilidad/cco/CcoTabDistribucion';
 import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos';
 import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
+import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
 
 type NavId =
   | 'dashboard'
@@ -684,9 +685,12 @@ export default function CcoDashboardClient() {
                         style={selectStyle}
                       >
                         <option>Mensual</option>
-                        <option>Semanal</option>
-                        <option>Diario</option>
+                        <option disabled>Semanal (próximamente)</option>
+                        <option disabled>Diario (próximamente)</option>
                       </select>
+                      <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94A3B8' }}>
+                        Series actuales agregadas por mes (YYYY-MM).
+                      </p>
                     </div>
                     <div>
                       <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Modo del Gráfico</p>
@@ -836,55 +840,88 @@ export default function CcoDashboardClient() {
             ) : null}
 
             {tab === 'egresos' ? (
-              <SeccionLista
-                title="Egresos"
-                desc="Gastos netos desde cuadro de compras (imputación obra)."
-                href="/contabilidad/compras"
-                hrefLabel="Abrir compras CI →"
-                lines={[
-                  `Gastos netos: ${fmtUsd(data.oficial.gastosNetos)}`,
-                  `Admin delegada (${data.honorariosPct.toFixed(1)}%): ${fmtUsd(data.oficial.adminDelegada)}`,
-                  `Costo total: ${fmtUsd(data.oficial.costoTotal)}`,
-                ]}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div
+                  style={{
+                    background: '#fff',
+                    borderRadius: 14,
+                    border: '1px solid #E2E8F0',
+                    padding: 18,
+                  }}
+                >
+                  <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Egresos</h3>
+                  <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
+                    Gastos netos desde cuadro de compras (imputación obra).
+                  </p>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#334155', lineHeight: 1.7 }}>
+                    <li>Gastos netos: {fmtUsd(data.oficial.gastosNetos)}</li>
+                    <li>
+                      Admin delegada ({data.honorariosPct.toFixed(1)}%): {fmtUsd(data.oficial.adminDelegada)}
+                    </li>
+                    <li>Costo total: {fmtUsd(data.oficial.costoTotal)}</li>
+                  </ul>
+                </div>
+                <CcoLibroMaestro
+                  proyectoId={proyectoId}
+                  claseFija="GASTO"
+                  titulo="Detalle de egresos (libro)"
+                />
+              </div>
             ) : null}
             {tab === 'ingresos' ? (
-              <SeccionLista
-                title="Ingresos"
-                desc="Inyecciones de capital registradas en CI."
-                href="/contabilidad/inyecciones"
-                hrefLabel="Abrir inyecciones →"
-                lines={[
-                  `Total ingresos: ${fmtUsd(data.oficial.ingresos)}`,
-                  `Registros: ${data.oficial.countIngresos}`,
-                ]}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div
+                  style={{
+                    background: '#fff',
+                    borderRadius: 14,
+                    border: '1px solid #E2E8F0',
+                    padding: 18,
+                  }}
+                >
+                  <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Ingresos</h3>
+                  <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
+                    Inyecciones de capital registradas en CI.
+                  </p>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#334155', lineHeight: 1.7 }}>
+                    <li>Total ingresos: {fmtUsd(data.oficial.ingresos)}</li>
+                    <li>Registros: {data.oficial.countIngresos}</li>
+                  </ul>
+                </div>
+                <CcoLibroMaestro
+                  proyectoId={proyectoId}
+                  claseFija="INGRESO"
+                  titulo="Detalle de ingresos (libro)"
+                />
+              </div>
             ) : null}
             {tab === 'contratos' ? <CcoTabContratos proyectoId={proyectoId} /> : null}
             {tab === 'presupuestos' ? <CcoTabPresupuestos proyectoId={proyectoId} /> : null}
             {tab === 'deudas' ? <CcoTabDeudas proyectoId={proyectoId} /> : null}
-            {tab === 'datos' ? <CcoLibroMaestro proyectoId={proyectoId} /> : null}
+            {tab === 'datos' ? <CcoTabDatosGraficos data={data} modo={modo} /> : null}
             {tab === 'rubros' ? <CcoTabRubros proyectoId={proyectoId} /> : null}
             {tab === 'distribucion' ? (
               <CcoTabDistribucion proyectoId={proyectoId} onDone={() => void cargar()} />
             ) : null}
             {tab === 'editor' ? (
-              <div
-                style={{
-                  background: '#fff',
-                  borderRadius: 14,
-                  border: '1px solid #E2E8F0',
-                  padding: 24,
-                }}
-              >
-                <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>Editor maestro</h3>
-                <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 16px' }}>
-                  Alta de GASTO, INGRESO o CONTRATO sin afectar stock. También disponible en la barra superior.
-                </p>
-                <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
-                <div style={{ marginTop: 20 }}>
-                  <CcoExportBar proyectoId={proyectoId} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div
+                  style={{
+                    background: '#fff',
+                    borderRadius: 14,
+                    border: '1px solid #E2E8F0',
+                    padding: 24,
+                  }}
+                >
+                  <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>Editor maestro</h3>
+                  <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 16px' }}>
+                    Alta de GASTO, INGRESO o CONTRATO sin afectar stock. También disponible en la barra superior.
+                  </p>
+                  <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
+                  <div style={{ marginTop: 20 }}>
+                    <CcoExportBar proyectoId={proyectoId} />
+                  </div>
                 </div>
+                <CcoLibroMaestro proyectoId={proyectoId} titulo="Libro maestro (todas las clases)" />
               </div>
             ) : null}
             {tab === 'auditoria' ? <CcoTabAuditoria proyectoId={proyectoId} /> : null}
