@@ -4,6 +4,7 @@ import {
   subtotalBsLineaCompra,
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
+import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
 
 export type ColumnaOrdenCompras =
   | 'fecha'
@@ -103,22 +104,7 @@ export function ordenarLineasCompras(
   });
 }
 
-const TSV_HEADERS = [
-  'Fecha',
-  'Factura',
-  'Proveedor',
-  'RIF',
-  'Almacén',
-  'Artículo',
-  'Código',
-  'Cant.',
-  'P.U.',
-  'Subtotal (Bs)',
-  'USD',
-  'Tasa BCV',
-  'Entidad',
-  'Obra / Proyecto',
-] as const;
+const TSV_HEADERS = COMPRAS_CUADRO_HEADERS;
 
 function filaComprasATsv(row: FilaFacturaCanal): string {
   const bs = subtotalBsFila(row);

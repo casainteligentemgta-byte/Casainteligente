@@ -105,7 +105,18 @@ export function subtotalBsLineaCompra(row: FilaMontoLineaCompra): number {
     return row.subtotalBsLinea;
   }
   if (!row.esLinea) return row.montoBs;
-  return subtotalNominalLineaCompra(row);
+  const nominal = subtotalNominalLineaCompra(row);
+  // Si el P.U. está en USD, no poner ese nominal bajo «Subtotal (Bs)».
+  if (esLineaCompraUsd(row)) {
+    const t = Number(row.tasaBcv);
+    if (Number.isFinite(t) && t > 0) {
+      return Math.round(nominal * t * 100) / 100;
+    }
+    if (row.montoBs > 0 && row.montoUsd != null && row.montoUsd > 0) {
+      return Math.round((nominal / row.montoUsd) * row.montoBs * 100) / 100;
+    }
+  }
+  return nominal;
 }
 
 /** USD de la fila: total bimonetario prorrateado o cabecera de factura. */

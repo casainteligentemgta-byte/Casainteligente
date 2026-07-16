@@ -9,6 +9,7 @@ import {
   subtotalBsLineaCompra,
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
+import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
 import { descargarTextoComoArchivo } from '@/lib/almacen/inventarioExportShare';
 import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 
@@ -53,22 +54,7 @@ export type CompraCuadroInput = {
   created_at?: string | null;
 };
 
-const CSV_HEADERS = [
-  'Fecha',
-  'Factura',
-  'Proveedor',
-  'RIF',
-  'Almacén',
-  'Artículo',
-  'Código',
-  'Cant.',
-  'P.U.',
-  'Subtotal (Bs)',
-  'USD',
-  'Tasa BCV',
-  'Entidad',
-  'Obra / Proyecto',
-] as const;
+const CSV_HEADERS = COMPRAS_CUADRO_HEADERS;
 
 function escapeCsvCell(value: string | number): string {
   const s = String(value ?? '');
