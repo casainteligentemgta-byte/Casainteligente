@@ -10,6 +10,11 @@ import {
   LEGAL_ESTADOS_DOCUMENTO,
   LEGAL_TIPOS_DOCUMENTO,
 } from '@/lib/legal/documentosCatalogo';
+import {
+  LEGAL_DOCUMENT_ESTRUCTURADO_EJEMPLO,
+  estructuradoToMarkdown,
+  parseDocumentoEstructurado,
+} from '@/lib/legal/documentoEstructurado';
 
 const campo =
   'mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-500/40';
@@ -21,6 +26,7 @@ type Doc = {
   estado: string;
   contraparte: string | null;
   cuerpo_markdown: string;
+  cuerpo_estructurado?: unknown;
 };
 
 export default function DocumentoDetallePage() {
@@ -32,6 +38,8 @@ export default function DocumentoDetallePage() {
   const [estado, setEstado] = useState('borrador');
   const [contraparte, setContraparte] = useState('');
   const [cuerpo, setCuerpo] = useState('');
+  const [jsonEstructurado, setJsonEstructurado] = useState('');
+  const [modo, setModo] = useState<'markdown' | 'json'>('markdown');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -59,6 +67,11 @@ export default function DocumentoDetallePage() {
       setEstado(d.estado);
       setContraparte(d.contraparte ?? '');
       setCuerpo(d.cuerpo_markdown ?? '');
+      const parsed = parseDocumentoEstructurado(d.cuerpo_estructurado);
+      setJsonEstructurado(
+        JSON.stringify(parsed ?? LEGAL_DOCUMENT_ESTRUCTURADO_EJEMPLO, null, 2),
+      );
+      if (parsed) setModo('json');
     } catch {
       toast.error('Error de red');
     } finally {
@@ -73,17 +86,40 @@ export default function DocumentoDetallePage() {
   async function guardar() {
     setSaving(true);
     try {
+      const payload: Record<string, unknown> = {
+        titulo,
+        tipo,
+        estado,
+        contraparte: contraparte || null,
+      };
+
+      if (modo === 'json') {
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(jsonEstructurado);
+        } catch {
+          toast.error('JSON estructurado inválido');
+          setSaving(false);
+          return;
+        }
+        const estructurado = parseDocumentoEstructurado(parsedJson);
+        if (!estructurado) {
+          toast.error('Se requiere document_title y blocks[]');
+          setSaving(false);
+          return;
+        }
+        payload.cuerpo_estructurado = estructurado;
+        payload.cuerpo_markdown = estructuradoToMarkdown(estructurado);
+        payload.titulo = estructurado.document_title;
+      } else {
+        payload.cuerpo_markdown = cuerpo;
+      }
+
       const res = await fetch(apiUrl(`/api/legal/documentos/${id}`), {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titulo,
-          tipo,
-          estado,
-          contraparte: contraparte || null,
-          cuerpo_markdown: cuerpo,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json()) as { error?: string; hint?: string };
       if (!res.ok) {
@@ -179,19 +215,60 @@ export default function DocumentoDetallePage() {
             onChange={(e) => setContraparte(e.target.value)}
           />
         </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-2">
-          Cuerpo (markdown)
-          <textarea
-            className={`${campo} min-h-[420px] font-mono text-[13px] leading-relaxed`}
-            value={cuerpo}
-            onChange={(e) => setCuerpo(e.target.value)}
-          />
-        </label>
+
+        <div className="flex gap-2 sm:col-span-2">
+          <button
+            type="button"
+            onClick={() => setModo('markdown')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+              modo === 'markdown'
+                ? 'bg-amber-500/20 text-amber-100'
+                : 'text-zinc-500 hover:bg-white/5'
+            }`}
+          >
+            Markdown
+          </button>
+          <button
+            type="button"
+            onClick={() => setModo('json')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+              modo === 'json'
+                ? 'bg-amber-500/20 text-amber-100'
+                : 'text-zinc-500 hover:bg-white/5'
+            }`}
+          >
+            Bloques JSON
+          </button>
+        </div>
+
+        {modo === 'markdown' ? (
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-2">
+            Cuerpo (markdown)
+            <textarea
+              className={`${campo} min-h-[420px] font-mono text-[13px] leading-relaxed`}
+              value={cuerpo}
+              onChange={(e) => setCuerpo(e.target.value)}
+            />
+          </label>
+        ) : (
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-2">
+            Cuerpo estructurado (document_title + blocks)
+            <textarea
+              className={`${campo} min-h-[420px] font-mono text-[12px] leading-relaxed`}
+              value={jsonEstructurado}
+              onChange={(e) => setJsonEstructurado(e.target.value)}
+              spellCheck={false}
+            />
+          </label>
+        )}
       </div>
 
       <p className="text-xs text-zinc-600">
-        Tip: usa el Asesor RAG para redactar cláusulas y pégalas aquí. La impresión abre
-        una vista tipográfica lista para PDF del navegador.
+        Bloques: <code className="text-zinc-400">title</code>,{' '}
+        <code className="text-zinc-400">paragraph</code>,{' '}
+        <code className="text-zinc-400">clause</code>,{' '}
+        <code className="text-zinc-400">table</code>. La impresión usa el JSON si
+        está guardado.
       </p>
     </div>
   );

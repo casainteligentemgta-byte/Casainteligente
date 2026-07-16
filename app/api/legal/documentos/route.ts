@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import { requireAccesoLegal } from '@/lib/legal/requireAccesoLegal';
 import { aplicarVariablesPlantilla } from '@/lib/legal/documentosCatalogo';
+import {
+  estructuradoToMarkdown,
+  parseDocumentoEstructurado,
+} from '@/lib/legal/documentoEstructurado';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const HINT_271 =
-  'Ejecute la migración 271_ci_legal_documentos.sql en Supabase SQL Editor.';
+  'Ejecute las migraciones 271 y 272 (documentos + cuerpo_estructurado) en Supabase.';
 
 /** GET — listado de documentos del org + plantillas disponibles. */
 export async function GET(req: Request) {
@@ -80,6 +84,32 @@ export async function POST(req: Request) {
   let cuerpo = String(body.cuerpo_markdown ?? '').trim();
   let plantillaRef: string | null = plantillaId;
 
+  const estructuradoRaw =
+    body.cuerpo_estructurado ??
+    body.estructurado ??
+    (Array.isArray(body.blocks)
+      ? {
+          document_title:
+            String(body.document_title ?? titulo).trim() || titulo,
+          blocks: body.blocks,
+        }
+      : null);
+
+  const estructurado = estructuradoRaw
+    ? parseDocumentoEstructurado(estructuradoRaw)
+    : null;
+
+  if (estructuradoRaw && !estructurado) {
+    return NextResponse.json(
+      { error: 'cuerpo_estructurado inválido (document_title + blocks)' },
+      { status: 400 },
+    );
+  }
+
+  if (estructurado && !cuerpo) {
+    cuerpo = estructuradoToMarkdown(estructurado);
+  }
+
   if (plantillaId) {
     const { data: pl, error: pErr } = await gate.admin
       .from('ci_legal_plantillas')
@@ -102,11 +132,12 @@ export async function POST(req: Request) {
     org_id: gate.acceso.orgId!,
     caso_id: body.caso_id ? String(body.caso_id) : null,
     plantilla_id: plantillaRef,
-    titulo,
+    titulo: estructurado?.document_title || titulo,
     tipo,
     estado: String(body.estado ?? 'borrador').trim() || 'borrador',
     contraparte: body.contraparte != null ? String(body.contraparte).trim() || null : null,
     cuerpo_markdown: cuerpo,
+    cuerpo_estructurado: estructurado,
     variables_valores: variablesValores,
     creado_por: gate.userId,
     actualizado_por: gate.userId,

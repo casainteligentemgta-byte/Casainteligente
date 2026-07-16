@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { requireAccesoLegal } from '@/lib/legal/requireAccesoLegal';
 import { documentoPrintHtml } from '@/lib/legal/renderDocumentoMarkdown';
+import {
+  documentoEstructuradoPrintHtml,
+  estructuradoToMarkdown,
+  parseDocumentoEstructurado,
+} from '@/lib/legal/documentoEstructurado';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const HINT_271 =
-  'Ejecute la migración 271_ci_legal_documentos.sql en Supabase SQL Editor.';
+  'Ejecute las migraciones 271 y 272 (documentos + cuerpo_estructurado) en Supabase.';
 
 async function paramsId(
   ctx: { params: Promise<{ id: string }> | { id: string } },
@@ -42,10 +47,13 @@ export async function GET(
 
   const format = new URL(req.url).searchParams.get('format');
   if (format === 'print' || format === 'html') {
-    const html = documentoPrintHtml(
-      String(data.titulo ?? 'Documento'),
-      String(data.cuerpo_markdown ?? ''),
-    );
+    const estructurado = parseDocumentoEstructurado(data.cuerpo_estructurado);
+    const html = estructurado
+      ? documentoEstructuradoPrintHtml(estructurado)
+      : documentoPrintHtml(
+          String(data.titulo ?? 'Documento'),
+          String(data.cuerpo_markdown ?? ''),
+        );
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
@@ -54,7 +62,7 @@ export async function GET(
   return NextResponse.json({ ok: true, documento: data });
 }
 
-/** PATCH — actualizar cuerpo / estado / metadatos */
+/** PATCH — actualizar cuerpo / estado / metadatos / JSON estructurado */
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> | { id: string } },
@@ -92,6 +100,34 @@ export async function PATCH(
   }
   if (body.variables_valores && typeof body.variables_valores === 'object') {
     patch.variables_valores = body.variables_valores;
+  }
+
+  const estructuradoRaw =
+    body.cuerpo_estructurado ??
+    body.estructurado ??
+    (Array.isArray(body.blocks)
+      ? {
+          document_title:
+            String(body.document_title ?? body.titulo ?? '').trim() || 'Documento',
+          blocks: body.blocks,
+        }
+      : null);
+
+  if (estructuradoRaw != null) {
+    const estructurado = parseDocumentoEstructurado(estructuradoRaw);
+    if (!estructurado) {
+      return NextResponse.json(
+        { error: 'cuerpo_estructurado inválido (document_title + blocks)' },
+        { status: 400 },
+      );
+    }
+    patch.cuerpo_estructurado = estructurado;
+    if (body.sync_markdown !== false && body.cuerpo_markdown == null) {
+      patch.cuerpo_markdown = estructuradoToMarkdown(estructurado);
+    }
+    if (body.titulo == null) {
+      patch.titulo = estructurado.document_title;
+    }
   }
 
   const { data, error } = await gate.admin

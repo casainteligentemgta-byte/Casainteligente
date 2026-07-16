@@ -10,6 +10,10 @@ import {
   aplicarVariablesPlantilla,
   type LegalPlantillaVariable,
 } from '@/lib/legal/documentosCatalogo';
+import {
+  LEGAL_DOCUMENT_ESTRUCTURADO_EJEMPLO,
+  parseDocumentoEstructurado,
+} from '@/lib/legal/documentoEstructurado';
 
 type Plantilla = {
   id: string;
@@ -34,6 +38,7 @@ export default function DocumentoNuevoPage() {
   const [tipo, setTipo] = useState('contrato');
   const [contraparte, setContraparte] = useState('');
   const [valores, setValores] = useState<Record<string, string>>({});
+  const [jsonEstructurado, setJsonEstructurado] = useState('');
 
   useEffect(() => {
     void (async () => {
@@ -76,12 +81,29 @@ export default function DocumentoNuevoPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!titulo.trim()) {
-      toast.error('Indica el título');
+    if (!titulo.trim() && !jsonEstructurado.trim()) {
+      toast.error('Indica el título o pega un JSON estructurado');
       return;
     }
     setEnviando(true);
     try {
+      let cuerpo_estructurado: unknown = null;
+      if (jsonEstructurado.trim()) {
+        try {
+          const raw = JSON.parse(jsonEstructurado) as unknown;
+          cuerpo_estructurado = parseDocumentoEstructurado(raw);
+          if (!cuerpo_estructurado) {
+            toast.error('JSON inválido: document_title + blocks');
+            setEnviando(false);
+            return;
+          }
+        } catch {
+          toast.error('JSON estructurado inválido');
+          setEnviando(false);
+          return;
+        }
+      }
+
       const cuerpo = plantilla?.cuerpo_markdown
         ? aplicarVariablesPlantilla(plantilla.cuerpo_markdown, valores)
         : '';
@@ -90,12 +112,13 @@ export default function DocumentoNuevoPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          titulo: titulo.trim(),
+          titulo: titulo.trim() || 'Documento',
           tipo,
           contraparte: contraparte.trim() || null,
           plantilla_id: plantillaId || null,
           variables_valores: valores,
           cuerpo_markdown: cuerpo,
+          ...(cuerpo_estructurado ? { cuerpo_estructurado } : {}),
         }),
       });
       const data = (await res.json()) as {
@@ -204,6 +227,32 @@ export default function DocumentoNuevoPage() {
             ))}
           </div>
         )}
+
+        <div className="space-y-2 border-t border-white/10 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-200/70">
+              O JSON estructurado (bloques)
+            </p>
+            <button
+              type="button"
+              className="text-xs text-amber-300 hover:underline"
+              onClick={() =>
+                setJsonEstructurado(
+                  JSON.stringify(LEGAL_DOCUMENT_ESTRUCTURADO_EJEMPLO, null, 2),
+                )
+              }
+            >
+              Cargar ejemplo
+            </button>
+          </div>
+          <textarea
+            className={`${campo} min-h-[180px] font-mono text-[12px]`}
+            placeholder='{"document_title":"...","blocks":[{"type":"title","content":"..."}]}'
+            value={jsonEstructurado}
+            onChange={(e) => setJsonEstructurado(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
 
         <button
           type="submit"
