@@ -1,57 +1,122 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { Search, Filter, Plus, User, Building2, ChevronRight, Crown, Loader2 } from 'lucide-react';
 import ClienteDrawer from '@/components/clientes/ClienteDrawer';
 import { createClient } from '@/lib/supabase/client';
+import {
+  etiquetaEstadoObraCrm,
+  montoObraUsd,
+  tipoClienteCrm,
+} from '@/lib/clientes/proyectosClienteDisplay';
 
 const UMBRAL_PREMIUM = 500000;
 
+type ProyectoCrm = {
+  id: string;
+  nombre: string;
+  estado: string;
+  costo: number;
+  tipo_proyecto?: string | null;
+};
+
+type ClienteCrm = {
+  id: string;
+  nombre: string;
+  tipo: 'Empresa' | 'Residencial';
+  email: string;
+  telefono: string;
+  direccion: string;
+  proyectos: ProyectoCrm[];
+};
+
 export default function ClientesCRMView() {
-  const [clientes, setClientes] = useState<any[]>([]);
+  const [clientes, setClientes] = useState<ClienteCrm[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('Todos');
-  const [clienteSeleccionado, setClienteSeleccionado] = useState<any | null>(null);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<
+    (ClienteCrm & { dineroGenerado: number; isPremium: boolean }) | null
+  >(null);
 
   const supabase = createClient();
 
   useEffect(() => {
     async function loadClientes() {
       setIsLoading(true);
+      setLoadError(null);
+
       const { data: cData, error: cError } = await supabase
-        .from('tb_clientes')
-        .select(`
-          *,
-          proyectos:tb_proyectos(*)
-        `);
-      
-      if (!cError && cData) {
-        const formated = cData.map(c => ({
-           id: c.id,
-           nombre: c.nombre,
-           tipo: c.tipo,
-           email: c.email || 'N/A',
-           telefono: c.telefono || 'N/A',
-           direccion: c.direccion || 'N/A',
-           proyectos: (c.proyectos || []).map((p: any) => ({
-             id: p.id,
-             nombre: p.nombre || 'Proyecto S/N',
-             estado: p.estado_obra || 'Cotizacion',
-             costo: p.total_venta || 0
-           }))
-        }));
-        setClientes(formated);
+        .from('customers')
+        .select(
+          'id,nombre,apellido,razon_social,customer_type,tipo,email,telefono,movil,direccion,status',
+        )
+        .order('nombre', { ascending: true });
+
+      if (cError) {
+        setLoadError(cError.message);
+        setClientes([]);
+        setIsLoading(false);
+        return;
       }
+
+      const ids = (cData ?? []).map((c) => c.id);
+      let proyectosPorCliente = new Map<string, ProyectoCrm[]>();
+
+      if (ids.length) {
+        const { data: pData, error: pError } = await supabase
+          .from('ci_proyectos')
+          .select('id,nombre,estado,monto_aproximado,obra_precio_venta_usd,customer_id,tipo_proyecto')
+          .in('customer_id', ids);
+
+        if (pError) {
+          setLoadError(pError.message);
+        } else {
+          for (const p of pData ?? []) {
+            const cid = String(p.customer_id ?? '');
+            if (!cid) continue;
+            const list = proyectosPorCliente.get(cid) ?? [];
+            list.push({
+              id: String(p.id),
+              nombre: String(p.nombre ?? 'Obra'),
+              estado: etiquetaEstadoObraCrm(String(p.estado ?? '')),
+              costo: montoObraUsd(p),
+              tipo_proyecto: p.tipo_proyecto ?? null,
+            });
+            proyectosPorCliente.set(cid, list);
+          }
+        }
+      }
+
+      const formated: ClienteCrm[] = (cData ?? []).map((c) => {
+        const nombre =
+          String(c.razon_social ?? '').trim() ||
+          [c.nombre, c.apellido].filter(Boolean).join(' ').trim() ||
+          'Sin nombre';
+        return {
+          id: String(c.id),
+          nombre,
+          tipo: tipoClienteCrm(c),
+          email: String(c.email ?? 'N/A'),
+          telefono: String(c.telefono ?? c.movil ?? 'N/A'),
+          direccion: String(c.direccion ?? 'N/A'),
+          proyectos: proyectosPorCliente.get(String(c.id)) ?? [],
+        };
+      });
+
+      setClientes(formated);
       setIsLoading(false);
     }
     loadClientes();
   }, [supabase]);
 
   const clientesFiltrados = useMemo(() => {
-    return clientes.filter(c => {
-      const matchSearch = (c.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (c.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return clientes.filter((c) => {
+      const matchSearch =
+        (c.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.email || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchTipo = filtroTipo === 'Todos' || c.tipo === filtroTipo;
       return matchSearch && matchTipo;
     });
@@ -65,19 +130,35 @@ export default function ClientesCRMView() {
             Directorio de Clientes
             {isLoading && <Loader2 className="w-5 h-5 animate-spin text-blue-500" />}
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Gestiona relaciones, proyectos e inversiones de la BD real.</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">
+            Fuente unificada: <code className="text-xs">customers</code> + obras{' '}
+            <code className="text-xs">ci_proyectos</code>
+            {' · '}
+            <Link href="/clientes" className="text-blue-500 hover:underline">
+              Listado principal
+            </Link>
+          </p>
         </div>
-        <button className="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-5 py-2.5 rounded-xl font-semibold shadow-md transition-all flex items-center gap-2">
+        <Link
+          href="/clientes/nuevo"
+          className="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-5 py-2.5 rounded-xl font-semibold shadow-md transition-all flex items-center gap-2"
+        >
           <Plus className="w-5 h-5" />
           Nuevo Cliente
-        </button>
+        </Link>
       </div>
+
+      {loadError ? (
+        <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">
+          Error al cargar: {loadError}
+        </div>
+      ) : null}
 
       <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Buscar por nombre, empresa o correo..."
             className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-slate-50 border border-transparent dark:bg-slate-900 dark:border-slate-800 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:text-white"
             value={searchTerm}
@@ -86,7 +167,7 @@ export default function ClientesCRMView() {
         </div>
         <div className="relative w-full sm:w-64">
           <Filter className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <select 
+          <select
             className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-slate-50 border border-transparent dark:bg-slate-900 dark:border-slate-800 focus:bg-white focus:border-blue-500 outline-none appearance-none font-medium dark:text-white cursor-pointer"
             value={filtroTipo}
             onChange={(e) => setFiltroTipo(e.target.value)}
@@ -99,22 +180,24 @@ export default function ClientesCRMView() {
       </div>
 
       {!isLoading && clientesFiltrados.length === 0 && (
-         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl text-center shadow-sm">
-           <h3 className="text-xl font-bold dark:text-white mb-2">No tienes clientes registrados</h3>
-           <p className="text-slate-500 dark:text-slate-400">Migra tu base de datos de SharePoint o añade uno nuevo.</p>
-         </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl text-center shadow-sm">
+          <h3 className="text-xl font-bold dark:text-white mb-2">No hay clientes que coincidan</h3>
+          <p className="text-slate-500 dark:text-slate-400">
+            Crea uno en <Link href="/clientes/nuevo" className="text-blue-500 underline">/clientes/nuevo</Link>.
+          </p>
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-4">
         {clientesFiltrados.map((cliente) => {
           const dineroGenerado = cliente.proyectos
-             .filter((p: any) => p.estado === 'Finalizado')
-             .reduce((total: number, p: any) => total + p.costo, 0);
-          
+            .filter((p) => p.estado === 'Finalizado')
+            .reduce((total, p) => total + p.costo, 0);
+
           const isPremium = dineroGenerado >= UMBRAL_PREMIUM;
 
           return (
-            <div 
+            <div
               key={cliente.id}
               onClick={() => setClienteSeleccionado({ ...cliente, dineroGenerado, isPremium })}
               className={`group bg-white dark:bg-slate-900 border p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col md:flex-row items-start md:items-center gap-4 justify-between
@@ -122,28 +205,47 @@ export default function ClientesCRMView() {
               `}
             >
               <div className="flex items-center gap-5">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center border-4 relative shrink-0
-                  ${isPremium ? 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30' : 
-                   cliente.tipo === 'Empresa' ? 'bg-indigo-100 text-indigo-600 border-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-900/20' : 
-                                                'bg-emerald-100 text-emerald-600 border-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/20'}
-                `}>
-                  {cliente.tipo === 'Empresa' ? <Building2 className="w-6 h-6" /> : <User className="w-6 h-6" />}
+                <div
+                  className={`w-14 h-14 rounded-full flex items-center justify-center border-4 relative shrink-0
+                  ${
+                    isPremium
+                      ? 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-500/30'
+                      : cliente.tipo === 'Empresa'
+                        ? 'bg-indigo-100 text-indigo-600 border-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-900/20'
+                        : 'bg-emerald-100 text-emerald-600 border-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/20'
+                  }
+                `}
+                >
+                  {cliente.tipo === 'Empresa' ? (
+                    <Building2 className="w-6 h-6" />
+                  ) : (
+                    <User className="w-6 h-6" />
+                  )}
                   {isPremium && (
                     <div className="absolute -top-1 -right-1 bg-amber-500 text-white rounded-full p-0.5 shadow-sm">
-                       <Crown className="w-3.5 h-3.5" />
+                      <Crown className="w-3.5 h-3.5" />
                     </div>
                   )}
                 </div>
-                
+
                 <div className="min-w-0">
-                  <h3 className={`text-xl font-bold transition-colors flex flex-wrap items-center gap-2 truncate
+                  <h3
+                    className={`text-xl font-bold transition-colors flex flex-wrap items-center gap-2 truncate
                     ${isPremium ? 'text-amber-700 dark:text-amber-400 group-hover:text-amber-600' : 'text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400'}
-                  `}>
+                  `}
+                  >
                     <span className="truncate max-w-[200px] sm:max-w-none">{cliente.nombre}</span>
-                    {isPremium && <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-xs px-2 py-0.5 rounded-full font-bold tracking-wide uppercase">Premium</span>}
+                    {isPremium && (
+                      <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-xs px-2 py-0.5 rounded-full font-bold tracking-wide uppercase">
+                        Premium
+                      </span>
+                    )}
                   </h3>
                   <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    <span className="font-medium bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">{cliente.tipo}</span>
+                    <span className="font-medium bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">
+                      {cliente.tipo}
+                    </span>
+                    <span>{cliente.proyectos.length} obra(s)</span>
                     <span className="truncate hidden sm:block">{cliente.email}</span>
                   </div>
                 </div>
@@ -151,9 +253,15 @@ export default function ClientesCRMView() {
 
               <div className="flex items-center gap-6 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-0 border-slate-100 dark:border-slate-800">
                 <div className="text-left md:text-right flex-1">
-                  <p className={`text-sm font-medium ${isPremium ? 'text-amber-600/70 dark:text-amber-500/70' : 'text-slate-500 dark:text-slate-400'}`}>Generado (Finalizados)</p>
-                  <p className={`text-xl font-black ${isPremium ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                    ${(dineroGenerado).toLocaleString('es-MX')}
+                  <p
+                    className={`text-sm font-medium ${isPremium ? 'text-amber-600/70 dark:text-amber-500/70' : 'text-slate-500 dark:text-slate-400'}`}
+                  >
+                    Generado (cerradas/entregadas)
+                  </p>
+                  <p
+                    className={`text-xl font-black ${isPremium ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'}`}
+                  >
+                    ${dineroGenerado.toLocaleString('es-VE')}
                   </p>
                 </div>
                 <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition-colors hidden md:block" />
@@ -164,10 +272,7 @@ export default function ClientesCRMView() {
       </div>
 
       {clienteSeleccionado && (
-        <ClienteDrawer 
-          cliente={clienteSeleccionado} 
-          onClose={() => setClienteSeleccionado(null)} 
-        />
+        <ClienteDrawer cliente={clienteSeleccionado} onClose={() => setClienteSeleccionado(null)} />
       )}
     </div>
   );

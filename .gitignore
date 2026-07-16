@@ -20,6 +20,14 @@
 .DS_Store
 *.pem
 
+# LuloWin / datos locales (no versionar MDB ni exportaciones CSV)
+*.mdb
+*.accdb
+/export_lulo_csv/
+
+# ETL CCO V4 (JSON exportado desde SQLite local)
+/tmp/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -30,6 +38,9 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# supabase CLI cache
+supabase/.temp/
 
 # typescript
 *.tsbuildinfo

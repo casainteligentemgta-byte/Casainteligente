@@ -19,6 +19,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ["var(--font-sans)", "sans-serif"],
+        mono: ["var(--font-nexus-mono)", "ui-monospace", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -53,6 +54,12 @@ module.exports = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        nexus: {
+          base: "#0A0B10",
+          cyan: "#00F2FE",
+          green: "#00FF41",
+          gold: "#FFD700",
         },
       },
       borderRadius: {

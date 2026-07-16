@@ -1,177 +1,394 @@
 'use client';
-// v2 — navbar with Empleados + panel Más
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useModulosNavPermitidos } from '@/hooks/useModulosNavPermitidos';
+import type { ModuloNavId } from '@/lib/auth/modulosPorRol';
 
-// ── Ítems principales (siempre visibles en la barra) ──────────
-const mainItems = [
-    {
-        href: '/',
-        label: 'Inicio',
-        color: '#007AFF',
-        icon: (active: boolean) => (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke={active ? '#007AFF' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? 'rgba(0,122,255,0.1)' : 'none'} />
-                <path d="M9 22V12h6v10" stroke={active ? '#007AFF' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-        ),
-    },
-    {
-        href: '/clientes',
-        label: 'Clientes',
-        color: '#007AFF',
-        icon: (active: boolean) => (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={active ? '#007AFF' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="9" cy="7" r="4" stroke={active ? '#007AFF' : '#8E8E93'} strokeWidth="2" />
-            </svg>
-        ),
-    },
-    {
-        href: '/ventas',
-        label: 'Ventas',
-        color: '#34C759',
-        icon: (active: boolean) => (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <rect x="2" y="7" width="20" height="14" rx="2" stroke={active ? '#34C759' : '#8E8E93'} strokeWidth="2" fill={active ? 'rgba(52,199,89,0.1)' : 'none'} />
-                <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16" stroke={active ? '#34C759' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-        ),
-    },
-    {
-        href: '/rrhh',
-        label: 'RRHH',
-        color: '#FFD60A',
-        icon: (active: boolean) => (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={active ? '#FFD60A' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="9" cy="7" r="4" stroke={active ? '#FFD60A' : '#8E8E93'} strokeWidth="2" />
-                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={active ? '#FFD60A' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-        ),
-    },
+type NavItem = {
+  id: ModuloNavId;
+  href: string;
+  label: string;
+  icon: (active: boolean) => React.ReactNode;
+};
+
+const navItems: NavItem[] = [
+  {
+    id: 'inicio',
+    href: '/',
+    label: 'Inicio',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"
+          stroke={active ? '#007AFF' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(0,122,255,0.1)' : 'none'}
+        />
+        <path
+          d="M9 22V12h6v10"
+          stroke={active ? '#007AFF' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'clientes',
+    href: '/clientes',
+    label: 'Clientes',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
+          stroke={active ? '#007AFF' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle
+          cx="9"
+          cy="7"
+          r="4"
+          stroke={active ? '#007AFF' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'presupuestos',
+    href: '/presupuestos',
+    label: 'Presupuestos',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"
+          stroke={active ? '#007AFF' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(0,122,255,0.1)' : 'none'}
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'ventas',
+    href: '/ventas',
+    label: 'Ventas',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect
+          x="2"
+          y="7"
+          width="20"
+          height="14"
+          rx="2"
+          stroke={active ? '#34C759' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(52,199,89,0.1)' : 'none'}
+        />
+        <path
+          d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"
+          stroke={active ? '#34C759' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'productos',
+    href: '/productos',
+    label: 'Productos',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"
+          stroke={active ? '#FF9500' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(255,149,0,0.1)' : 'none'}
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'proyectos',
+    href: '/proyectos/modulo',
+    label: 'Proyectos',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"
+          stroke={active ? '#F59E0B' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(245,158,11,0.12)' : 'none'}
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'entidades',
+    href: '/configuracion/entidades',
+    label: 'Entidades',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M4 21h16M6 21V8l6-3 6 3v13M9 21v-5h6v5"
+          stroke={active ? '#A78BFA' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(167,139,250,0.15)' : 'none'}
+        />
+        <path d="M12 5v3" stroke={active ? '#A78BFA' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'equipo',
+    href: '/configuracion/equipo',
+    label: 'Equipo',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"
+          stroke={active ? '#38BDF8' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="9" cy="7" r="4" stroke={active ? '#38BDF8' : '#8E8E93'} strokeWidth="2" />
+      </svg>
+    ),
+  },
+  {
+    id: 'legal',
+    href: '/legal',
+    label: 'Legal',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 3v18M8 7h8M6 21h12M9 11l3 6 3-6"
+          stroke={active ? '#FBBF24' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'rrhh',
+    href: '/rrhh/hojas-vida',
+    label: 'RRHH',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h6m-6 4h6m-6-8h6"
+          stroke={active ? '#F472B6' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'almacen',
+    href: '/almacen',
+    label: 'Almacenes',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+          stroke={active ? '#FF2D55' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(255,45,85,0.1)' : 'none'}
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'contabilidad',
+    href: '/contabilidad',
+    label: 'Conta',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"
+          stroke={active ? '#5856D6' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
 ];
 
-// ── Ítems secundarios (en el panel "Más") ─────────────────────
-const moreItems = [
-    { href: '/presupuestos', label: 'Presupuestos', emoji: '📄', color: '#007AFF' },
-    { href: '/productos',    label: 'Productos',    emoji: '📦', color: '#FF9500' },
-    { href: '/almacen',      label: 'Inventario',   emoji: '🏭', color: '#FF2D55' },
-    { href: '/operaciones/proyectos', label: 'Proyectos', emoji: '🏗️', color: '#32ADE6' },
-    { href: '/contabilidad', label: 'Contabilidad', emoji: '💰', color: '#5856D6' },
-    { href: '/personas',     label: 'Personas',     emoji: '👤', color: '#30D158' },
-    { href: '/nexus',        label: 'Nexus',        emoji: '🔮', color: '#BF5AF2' },
-];
+function navItemActive(pathname: string, href: string): boolean {
+  if (pathname === href) return true;
+  if (href === '/') return false;
+  if (href === '/rrhh/hojas-vida') return pathname.startsWith('/rrhh');
+  if (href === '/configuracion/entidades') {
+    return pathname.startsWith('/configuracion/entidades') || pathname.startsWith('/entidades');
+  }
+  if (href === '/configuracion/equipo') {
+    return pathname.startsWith('/configuracion/equipo');
+  }
+  if (href === '/legal') {
+    return pathname === '/legal' || pathname.startsWith('/legal/');
+  }
+  return pathname.startsWith(href);
+}
+
+function colorActivo(label: string): string {
+  if (label === 'Conta') return '#5856D6';
+  if (label === 'Almacenes') return '#FF2D55';
+  if (label === 'Productos') return '#FF9500';
+  if (label === 'Proyectos') return '#F59E0B';
+  if (label === 'Entidades') return '#A78BFA';
+  if (label === 'Equipo') return '#38BDF8';
+  if (label === 'Legal') return '#FBBF24';
+  if (label === 'RRHH') return '#F472B6';
+  if (label === 'Ventas') return '#34C759';
+  return '#007AFF';
+}
+
+const HIDE_DELAY_MS = 900;
 
 export default function IOSNavBar() {
-    const pathname = usePathname();
-    const [showMore, setShowMore] = useState(false);
+  const pathname = usePathname() ?? '';
+  const acceso = useModulosNavPermitidos();
+  const [visible, setVisible] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Rutas donde la barra de navegación NO debe aparecer (Onboarding, Test, Login, 404)
-    const hideOnPaths = ['/onboarding', '/test', '/login', '/404'];
-    if (hideOnPaths.some(p => pathname?.startsWith(p))) return null;
+  const clearHideTimer = useCallback(() => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  }, []);
 
-    const isMoreActive = moreItems.some(item => pathname.startsWith(item.href));
+  const showBar = useCallback(() => {
+    clearHideTimer();
+    setVisible(true);
+  }, [clearHideTimer]);
 
-    return (
-        <>
-            {/* ── Panel "Más" ── */}
-            {showMore && (
-                <div
-                    onClick={() => setShowMore(false)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 49, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+  const scheduleHide = useCallback(() => {
+    clearHideTimer();
+    hideTimer.current = setTimeout(() => setVisible(false), HIDE_DELAY_MS);
+  }, [clearHideTimer]);
+
+  useEffect(() => () => clearHideTimer(), [clearHideTimer]);
+
+  let items = navItems;
+  if (pathname.startsWith('/registro')) {
+    items = navItems.filter((i) => i.href !== '/');
+  } else if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
+    items = navItems.filter((i) => i.id === 'inicio');
+  } else if (acceso.status === 'ready') {
+    items = navItems.filter((i) => acceso.modulos.has(i.id));
+  } else if (acceso.status === 'anon') {
+    items = navItems.filter((i) => i.id === 'inicio');
+  } else {
+    // loading: barra casi completa, sin Legal (solo dueño / entitlement)
+    items = navItems.filter((i) => i.id !== 'legal');
+  }
+
+  return (
+    <>
+      {/* Zona inferior: al pasar el cursor / tocar, revela el menú */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-[45] no-print"
+        style={{ height: 28 }}
+        aria-hidden
+        onMouseEnter={showBar}
+        onTouchStart={() => {
+          showBar();
+          clearHideTimer();
+          hideTimer.current = setTimeout(() => setVisible(false), 2500);
+        }}
+      />
+
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 safe-bottom no-print mx-auto max-w-lg px-2 pb-1 sm:max-w-3xl"
+        onMouseEnter={showBar}
+        onMouseLeave={scheduleHide}
+        onTouchStart={showBar}
+        onFocusCapture={showBar}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            scheduleHide();
+          }
+        }}
+        style={{
+          background: 'rgba(22, 22, 24, 0.82)',
+          backdropFilter: 'blur(28px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+          borderRadius: '18px 18px 0 0',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: 'none',
+          boxShadow: visible ? '0 -8px 32px rgba(0, 0, 0, 0.35)' : 'none',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          transform: visible ? 'translateY(0)' : 'translateY(calc(100% - 5px))',
+          transition: 'transform 0.28s ease, box-shadow 0.28s ease',
+          pointerEvents: visible ? 'auto' : 'none',
+        }}
+      >
+        {/* Franja mínima visible cuando está oculto (atracción visual) */}
+        {!visible ? (
+          <div
+            aria-hidden
+            className="pointer-events-none mx-auto mb-0 h-1 w-10 rounded-full"
+            style={{ background: 'rgba(255,255,255,0.28)' }}
+          />
+        ) : null}
+        <div className="overflow-x-auto scrollbar-hide">
+          <div className="flex min-w-max items-center gap-0.5 px-1 pb-1.5 pt-2">
+            {items.map((item) => {
+              const isActive = navItemActive(pathname, item.href);
+              const activeColor = colorActivo(item.label);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex flex-col items-center gap-1 min-w-[62px] py-1 px-1 transition-all duration-150 active:scale-90"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  onClick={() => scheduleHide()}
                 >
-                    <div
-                        onClick={e => e.stopPropagation()}
-                        style={{
-                            position: 'absolute', bottom: '80px', left: '12px', right: '12px',
-                            background: 'rgba(28,28,30,0.97)', borderRadius: '20px',
-                            border: '1px solid rgba(255,255,255,0.1)', padding: '16px',
-                            backdropFilter: 'blur(40px)',
-                        }}
-                    >
-                        <p style={{ margin: '0 0 14px 0', fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '1px', paddingLeft: '4px' }}>
-                            Módulos
-                        </p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                            {moreItems.map(item => {
-                                const active = pathname.startsWith(item.href);
-                                return (
-                                    <Link
-                                        key={item.href}
-                                        href={item.href}
-                                        onClick={() => setShowMore(false)}
-                                        style={{ textDecoration: 'none' }}
-                                    >
-                                        <div style={{
-                                            padding: '14px 8px', borderRadius: '14px', textAlign: 'center',
-                                            background: active ? `${item.color}18` : 'rgba(255,255,255,0.05)',
-                                            border: `1px solid ${active ? item.color + '40' : 'rgba(255,255,255,0.08)'}`,
-                                            transition: 'all 0.15s',
-                                        }}>
-                                            <div style={{ fontSize: '24px', marginBottom: '6px' }}>{item.emoji}</div>
-                                            <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: active ? item.color : 'rgba(255,255,255,0.6)' }}>
-                                                {item.label}
-                                            </p>
-                                        </div>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Barra inferior ── */}
-            <nav
-                className="fixed bottom-0 left-0 right-0 z-50 safe-bottom no-print"
-                style={{
-                    background: 'rgba(28, 28, 30, 0.92)',
-                    backdropFilter: 'blur(25px) saturate(200%)',
-                    WebkitBackdropFilter: 'blur(25px) saturate(200%)',
-                    borderTop: '0.5px solid rgba(255, 255, 255, 0.1)',
-                    paddingBottom: 'env(safe-area-inset-bottom)',
-                }}
-            >
-                <div className="flex items-center justify-around px-2 pt-2 pb-2">
-                    {/* Main items */}
-                    {mainItems.map((item) => {
-                        const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className="flex flex-col items-center gap-1 min-w-[56px] py-1 px-1 transition-all duration-150 active:scale-90"
-                                style={{ WebkitTapHighlightColor: 'transparent', textDecoration: 'none' }}
-                            >
-                                <div className="transition-transform duration-150">
-                                    {item.icon(isActive)}
-                                </div>
-                                <span className="text-[10px] font-semibold tracking-tight" style={{ color: isActive ? item.color : '#8E8E93' }}>
-                                    {item.label}
-                                </span>
-                            </Link>
-                        );
-                    })}
-
-                    {/* Más button */}
-                    <button
-                        onClick={() => setShowMore(v => !v)}
-                        className="flex flex-col items-center gap-1 min-w-[56px] py-1 px-1 transition-all duration-150 active:scale-90"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
-                    >
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <circle cx="5"  cy="12" r="2" fill={showMore || isMoreActive ? '#FF9500' : '#8E8E93'} />
-                            <circle cx="12" cy="12" r="2" fill={showMore || isMoreActive ? '#FF9500' : '#8E8E93'} />
-                            <circle cx="19" cy="12" r="2" fill={showMore || isMoreActive ? '#FF9500' : '#8E8E93'} />
-                        </svg>
-                        <span className="text-[10px] font-semibold tracking-tight" style={{ color: showMore || isMoreActive ? '#FF9500' : '#8E8E93' }}>
-                            Más
-                        </span>
-                    </button>
-                </div>
-            </nav>
-        </>
-    );
+                  <div className="transition-transform duration-150">{item.icon(isActive)}</div>
+                  <span
+                    className="text-[10px] font-semibold tracking-tight"
+                    style={{ color: isActive ? activeColor : '#8E8E93' }}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+    </>
+  );
 }

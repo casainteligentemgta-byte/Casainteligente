@@ -1,21 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import AppChrome from "@/components/AppChrome";
 import "./globals.css";
-import IOSNavBar from "@/components/IOSNavBar";
-
-const inter = Inter({
-    subsets: ["latin"],
-    variable: "--font-sans",
-    display: "swap",
-});
 
 export const metadata: Metadata = {
     title: "Casa Inteligente — CRM",
     description: "Sistema de Gestión de Clientes · Security & Domotics",
 };
 
-// Evita pre-render estático de páginas que usan Supabase en el cliente.
-export const dynamic = 'force-dynamic';
+/** Sin esto, `next build` intenta prerender rutas que crean cliente Supabase y falla si faltan env (p. ej. Vercel sin variables). */
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({
     children,
@@ -24,12 +17,14 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="es" suppressHydrationWarning>
-            <body className={inter.variable} style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif' }}>
-                <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
-                    <main className="pb-24">
-                        {children}
-                    </main>
-                    <IOSNavBar />
+            <body className="font-sans antialiased text-[var(--label-primary)]" suppressHydrationWarning>
+                <div
+                    className="min-h-screen app-root-bg"
+                    style={{
+                        backgroundColor: 'var(--bg-primary)',
+                    }}
+                >
+                    <AppChrome>{children}</AppChrome>
                 </div>
             </body>
         </html>

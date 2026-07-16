@@ -1,0 +1,245 @@
+import type {
+  CompraConfirmadaParaLineas,
+  FilaFacturaCanal,
+  FiltrosFacturaCanal,
+} from '@/lib/contabilidad/filtrosFacturaCanal';
+import { filtrarLineasComprasConfirmadas } from '@/lib/contabilidad/filtrosFacturaCanal';
+import {
+  formatearPrecioUnitarioLineaCompra,
+  subtotalBsLineaCompra,
+  subtotalUsdLineaCompra,
+} from '@/lib/contabilidad/monedaCompra';
+import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
+import { descargarTextoComoArchivo } from '@/lib/almacen/inventarioExportShare';
+import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
+
+export type ComprasExportScope = 'filtrado' | 'completo';
+
+export type CompraCuadroLineaInput = {
+  id?: string;
+  descripcion: string;
+  item_code: string | null;
+  cantidad: number;
+  precio_unitario?: number;
+  subtotal: number;
+};
+
+export type CompraCuadroInput = {
+  id: string;
+  fecha: string | null;
+  invoice_number: string | null;
+  supplier_name: string | null;
+  supplier_rif: string | null;
+  total_amount: number | null;
+  total_amount_usd?: number | null;
+  tasa_bcv_ves_por_usd?: number | null;
+  moneda?: string | null;
+  moneda_original?: string | null;
+  monto_ves?: number | null;
+  monto_usd?: number | null;
+  origen?: string | null;
+  estado?: string | null;
+  entidad_nombre?: string | null;
+  proyecto_nombre?: string | null;
+  ubicacion_nombre?: string | null;
+  ingresado_almacen_at?: string | null;
+  compra_factura_id?: string | null;
+  estado_logistica?: EstadoLogisticaCompra | null;
+  entidad_id?: string | null;
+  proyecto_id?: string | null;
+  ci_proyectos?: { nombre?: string | null } | { nombre?: string | null }[] | null;
+  contabilidad_compra_lineas?: CompraCuadroLineaInput[] | { count: number }[];
+  alerta_fecha?: 'advertencia' | 'critico' | null;
+  fecha_confirmada_manual?: boolean | null;
+  created_at?: string | null;
+};
+
+const CSV_HEADERS = COMPRAS_CUADRO_HEADERS;
+
+function escapeCsvCell(value: string | number): string {
+  const s = String(value ?? '');
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function proyectoNombreCompra(c: CompraCuadroInput): string {
+  if (c.proyecto_nombre?.trim()) return c.proyecto_nombre.trim();
+  const p = c.ci_proyectos;
+  if (Array.isArray(p)) return (p[0]?.nombre ?? '').trim();
+  return (p?.nombre ?? '').trim();
+}
+
+function lineasDetalleCompra(c: CompraCuadroInput): CompraCuadroLineaInput[] {
+  const nested = c.contabilidad_compra_lineas;
+  if (!Array.isArray(nested) || !nested.length) return [];
+  const first = nested[0];
+  if (first && 'descripcion' in first) return nested as CompraCuadroLineaInput[];
+  return [];
+}
+
+export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
+  compras: T[],
+  tasaResolver: (c: T) => number | null,
+  filtrosLineas: FiltrosFacturaCanal = {},
+): FilaFacturaCanal[] {
+  const payload: CompraConfirmadaParaLineas[] = compras.map((c) => ({
+    id: c.id,
+    fecha: String(c.fecha ?? '').slice(0, 10),
+    invoice_number: String(c.invoice_number ?? 'S/N').trim(),
+    supplier_name: String(c.supplier_name ?? '').trim(),
+    supplier_rif: String(c.supplier_rif ?? '').trim(),
+    total_amount: Number(c.total_amount) || 0,
+    total_amount_usd: c.total_amount_usd,
+    tasa_bcv_ves_por_usd: tasaResolver(c),
+    moneda: c.moneda,
+    moneda_original: c.moneda_original,
+    monto_ves: c.monto_ves,
+    monto_usd: c.monto_usd,
+    origen: String(c.origen ?? ''),
+    estado: String(c.estado ?? 'REGISTRADA'),
+    entidadNombre: c.entidad_nombre ?? undefined,
+    proyectoNombre: proyectoNombreCompra(c) || undefined,
+    almacenNombre: c.ubicacion_nombre ?? undefined,
+    almacenIngresado: Boolean(c.ingresado_almacen_at?.trim() || c.compra_factura_id?.trim()),
+    estadoLogistica: c.estado_logistica ?? null,
+    entidadId: c.entidad_id ?? null,
+    proyectoId: c.proyecto_id ?? null,
+    alerta_fecha: c.alerta_fecha ?? null,
+    fecha_confirmada_manual: c.fecha_confirmada_manual ?? null,
+    created_at: c.created_at ?? null,
+    lineas: lineasDetalleCompra(c).map((l) => {
+      const cantidad = Number(l.cantidad) || 0;
+      const precio =
+        l.precio_unitario != null && Number(l.precio_unitario) >= 0
+          ? Number(l.precio_unitario)
+          : cantidad > 0
+            ? Number(l.subtotal) / cantidad
+            : 0;
+      return {
+        id: l.id,
+        descripcion: l.descripcion,
+        item_code: l.item_code,
+        cantidad,
+        precio_unitario: precio,
+        subtotal: Number(l.subtotal) || 0,
+      };
+    }),
+  }));
+  return filtrarLineasComprasConfirmadas(payload, filtrosLineas);
+}
+
+function filaComprasACeldas(row: FilaFacturaCanal): string[] {
+  return filaComprasAValores(row).map((v) => String(v ?? ''));
+}
+
+/** Filas del cuadro como matriz (cabecera + datos) para Excel. */
+export function lineasComprasAoa(filas: FilaFacturaCanal[]): (string | number)[][] {
+  return [[...CSV_HEADERS], ...filas.map(filaComprasAValores)];
+}
+
+function filaComprasAValores(row: FilaFacturaCanal): (string | number)[] {
+  const bs = subtotalBsLineaCompra(row);
+  const usd = subtotalUsdLineaCompra(row);
+  return [
+    row.fecha,
+    row.factura,
+    row.proveedor,
+    etiquetaRifCompra(row.rif) === '—' ? '' : etiquetaRifCompra(row.rif),
+    row.almacen ?? '',
+    row.esLinea ? row.articulo : '(cabecera)',
+    row.esLinea ? row.codigo : '',
+    row.esLinea ? row.cantidad : '',
+    row.esLinea ? formatearPrecioUnitarioLineaCompra(row) ?? '' : '',
+    bs,
+    usd ?? '',
+    row.tasaBcv ?? '',
+    row.entidad ?? '',
+    row.proyecto ?? '',
+  ];
+}
+
+export function lineasComprasACsv(filas: FilaFacturaCanal[]): string {
+  const lines = [
+    CSV_HEADERS.join(','),
+    ...filas.map((f) => filaComprasACeldas(f).map(escapeCsvCell).join(',')),
+  ];
+  return `\uFEFF${lines.join('\r\n')}`;
+}
+
+export function nombreArchivoComprasCsv(scope: ComprasExportScope): string {
+  const fecha = new Date().toISOString().slice(0, 10);
+  return scope === 'filtrado'
+    ? `cuadro-compras-filtrado-${fecha}.csv`
+    : `cuadro-compras-completo-${fecha}.csv`;
+}
+
+export function nombreArchivoComprasExcel(scope: ComprasExportScope): string {
+  const fecha = new Date().toISOString().slice(0, 10);
+  return scope === 'filtrado'
+    ? `cuadro-compras-filtrado-${fecha}.xls`
+    : `cuadro-compras-completo-${fecha}.xls`;
+}
+
+function escapeXmlExcel(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function celdaSpreadsheetMl(value: string | number, header = false): string {
+  const tag = header ? 'Cell ss:StyleID="Header"' : 'Cell';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `<${tag}><Data ss:Type="Number">${value}</Data></Cell>`;
+  }
+  return `<${tag}><Data ss:Type="String">${escapeXmlExcel(String(value ?? ''))}</Data></Cell>`;
+}
+
+/** XML Spreadsheet (Excel 2003+) — abre en Microsoft Excel y LibreOffice. */
+export function comprasCuadroSpreadsheetMl(filas: FilaFacturaCanal[]): string {
+  const rows = lineasComprasAoa(filas);
+  const filasXml = rows
+    .map(
+      (row, idx) =>
+        `<Row>${row.map((cell) => celdaSpreadsheetMl(cell, idx === 0)).join('')}</Row>`,
+    )
+    .join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Header"><Font ss:Bold="1"/></Style>
+ </Styles>
+ <Worksheet ss:Name="Compras">
+  <Table>${filasXml}</Table>
+ </Worksheet>
+</Workbook>`;
+}
+
+export function exportarComprasCuadroExcel(
+  filas: FilaFacturaCanal[],
+  scope: ComprasExportScope,
+): boolean {
+  if (!filas.length) return false;
+  descargarTextoComoArchivo(
+    `\uFEFF${comprasCuadroSpreadsheetMl(filas)}`,
+    nombreArchivoComprasExcel(scope),
+    'application/vnd.ms-excel;charset=utf-8',
+  );
+  return true;
+}
+
+export function exportarComprasCuadroCsv(
+  filas: FilaFacturaCanal[],
+  scope: ComprasExportScope,
+): boolean {
+  if (!filas.length) return false;
+  descargarTextoComoArchivo(lineasComprasACsv(filas), nombreArchivoComprasCsv(scope));
+  return true;
+}
