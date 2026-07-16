@@ -268,7 +268,7 @@ export default function CcoDashboardClient() {
       <div
         style={{
           display: 'flex',
-          justifyContent: 'flex-end',
+          justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: 8,
@@ -278,26 +278,24 @@ export default function CcoDashboardClient() {
           fontSize: 12,
         }}
       >
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <Link href="/contabilidad" style={{ color: '#2563EB', fontWeight: 700, textDecoration: 'none' }}>
-            ← Hub módulos
-          </Link>
-          <button
-            type="button"
-            onClick={() => void cargar()}
-            style={{
-              border: '1px solid #CBD5E1',
-              background: '#fff',
-              borderRadius: 8,
-              padding: '4px 10px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              color: '#334155',
-            }}
-          >
-            Actualizar
-          </button>
-        </div>
+        <Link href="/contabilidad" style={{ color: '#2563EB', fontWeight: 700, textDecoration: 'none' }}>
+          ← Hub módulos
+        </Link>
+        <button
+          type="button"
+          onClick={() => void cargar()}
+          style={{
+            border: '1px solid #CBD5E1',
+            background: '#fff',
+            borderRadius: 8,
+            padding: '4px 10px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            color: '#334155',
+          }}
+        >
+          Actualizar
+        </button>
       </div>
 
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '16px 20px 24px' }}>
