@@ -56,11 +56,11 @@ export async function POST(req: Request) {
     if (msg.includes('match_legal_knowledge') || msg.includes('ci_legal_knowledge')) {
       hint =
         'Ejecute las migraciones 268 y 269 en Supabase e ingeste documentos legales.';
+    } else if (msg.includes('GEMINI_API_KEY')) {
+      hint = 'Configure GEMINI_API_KEY en Vercel (chat legal / IurisVigía).';
     } else if (msg.includes('OPENAI_API_KEY') || msg.includes('gpt-4o') || msg.includes('OpenAI')) {
       hint =
-        'Configure OPENAI_API_KEY (embeddings + chat gpt-4o). Opcional: LEGAL_CHAT_MODEL.';
-    } else if (msg.includes('GEMINI_API_KEY')) {
-      hint = 'Sin OpenAI chat: configure GEMINI_API_KEY como fallback de redacción.';
+        'La búsqueda RAG usa embeddings OpenAI (OPENAI_API_KEY). El chat ya usa Gemini si hay GEMINI_API_KEY.';
     }
     return NextResponse.json({ error: msg, hint }, { status: 500 });
   }

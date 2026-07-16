@@ -17,7 +17,7 @@ export type ConsultaAbogadoOptions = {
   matchThreshold?: number;
   matchCount?: number;
   filterMetadata?: Record<string, unknown> | null;
-  /** Por defecto gpt-4o (OpenAI). Usar gemini-* para fallback Gemini. */
+  /** Por defecto Gemini. Usar gpt-* solo si hay OPENAI_API_KEY y LEGAL_CHAT_MODEL=gpt-*. */
   model?: string;
   /** Si true, el contexto incluye etiquetas [Fuente N] además del content. */
   labeledContext?: boolean;
@@ -87,9 +87,16 @@ async function chatOpenAiSystem(
 }
 
 function preferOpenAi(model?: string): boolean {
-  const m = (model || process.env.LEGAL_CHAT_MODEL || 'gpt-4o').toLowerCase();
+  const m = (
+    model ||
+    process.env.LEGAL_CHAT_MODEL ||
+    process.env.GEMINI_LEGAL_MODEL ||
+    'gemini'
+  ).toLowerCase();
   if (m.startsWith('gemini')) return false;
-  return Boolean(process.env.OPENAI_API_KEY?.trim());
+  if (m.startsWith('gpt')) return Boolean(process.env.OPENAI_API_KEY?.trim());
+  // Sin modelo OpenAI explícito: preferir Gemini
+  return false;
 }
 
 export async function consultarAbogadoSenior(
@@ -132,8 +139,23 @@ export async function consultarAbogadoSenior(
   let model: string;
   let provider: 'openai' | 'gemini';
 
-  if (useOpenAi && openaiKey) {
-    // 3) Llamada a la IA (OpenAI gpt-4o por defecto)
+  if (getGeminiApiKey() && !useOpenAi) {
+    model =
+      options?.model?.trim() ||
+      process.env.LEGAL_CHAT_MODEL?.trim() ||
+      process.env.GEMINI_LEGAL_MODEL?.trim() ||
+      GEMINI_PROCUREMENT_DEFAULT_MODEL;
+    if (!model.startsWith('gemini')) {
+      model = GEMINI_PROCUREMENT_DEFAULT_MODEL;
+    }
+    provider = 'gemini';
+    respuesta = await geminiGenerateText({
+      model,
+      prompt: finalPrompt,
+      temperature: 0.25,
+      maxOutputTokens: 4096,
+    });
+  } else if (useOpenAi && openaiKey) {
     model = options?.model?.trim() || process.env.LEGAL_CHAT_MODEL?.trim() || 'gpt-4o';
     provider = 'openai';
     respuesta = await chatOpenAiSystem(finalPrompt, model, openaiKey);
@@ -146,7 +168,6 @@ export async function consultarAbogadoSenior(
       model = GEMINI_PROCUREMENT_DEFAULT_MODEL;
     }
     provider = 'gemini';
-    // Gemini: el final_prompt completo va como mensaje de usuario (equivalente al system único)
     respuesta = await geminiGenerateText({
       model,
       prompt: finalPrompt,
@@ -155,7 +176,7 @@ export async function consultarAbogadoSenior(
     });
   } else {
     throw new Error(
-      'Falta OPENAI_API_KEY (gpt-4o) o GEMINI_API_KEY para redactar el dictamen',
+      'Falta GEMINI_API_KEY (recomendado) u OPENAI_API_KEY para redactar el dictamen',
     );
   }
 
