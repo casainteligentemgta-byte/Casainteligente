@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { FolderOpen, Loader2, Plus, Scale } from 'lucide-react';
+import { FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { etiquetaDe, LEGAL_ESTADOS } from '@/lib/legal/casosCatalogo';
 
@@ -66,13 +66,22 @@ export default function LegalHomeClient() {
               resolución, no solo emitir documentos.
             </p>
           </div>
-          <Link
-            href="/legal/casos/nuevo"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-amber-900/30"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo caso
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/legal/asesor"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
+            >
+              <MessageSquareText className="h-4 w-4" />
+              Asesor RAG
+            </Link>
+            <Link
+              href="/legal/casos/nuevo"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-amber-900/30"
+            >
+              <Plus className="h-4 w-4" />
+              Nuevo caso
+            </Link>
+          </div>
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
