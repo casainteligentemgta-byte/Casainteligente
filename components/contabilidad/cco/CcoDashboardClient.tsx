@@ -19,6 +19,7 @@ import type { CcoDashboard, CcoKpiBloque } from '@/lib/contabilidad/cargarCcoDas
 import CcoAnalisisJerarquico from '@/components/contabilidad/cco/CcoAnalisisJerarquico';
 import CcoDatosGraficos from '@/components/contabilidad/cco/CcoDatosGraficos';
 import CcoListaRubros from '@/components/contabilidad/cco/CcoListaRubros';
+import CcoEgresos from '@/components/contabilidad/cco/CcoEgresos';
 
 type TabId =
   | 'graficos'
@@ -628,17 +629,7 @@ export default function CcoDashboardClient() {
             {tab === 'rubros' ? <CcoListaRubros proyectoId={proyectoId} /> : null}
 
             {tab === 'egresos' ? (
-              <SeccionLista
-                title="Egresos"
-                desc="Gastos netos desde cuadro de compras (imputación obra)."
-                href="/contabilidad/compras"
-                hrefLabel="Abrir compras CI →"
-                lines={[
-                  `Gastos netos: ${fmtUsd(data.oficial.gastosNetos)}`,
-                  `Admin delegada (${data.honorariosPct.toFixed(1)}%): ${fmtUsd(data.oficial.adminDelegada)}`,
-                  `Costo total: ${fmtUsd(data.oficial.costoTotal)}`,
-                ]}
-              />
+              <CcoEgresos proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
             ) : null}
             {tab === 'ingresos' ? (
               <SeccionLista
