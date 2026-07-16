@@ -17,8 +17,10 @@ interface Cliente {
     movil?: string;
     direccion?: string;
     initials: string;
-    color: string;
+    /** Hex; si falta, la tarjeta usa #007AFF */
+    color?: string;
     imagen?: string;
+    obraCount?: number;
 }
 
 const tipoConfig: Record<string, { bg: string; text: string; border: string }> = {
@@ -62,7 +64,9 @@ function AvatarCircle({ initials, color, categoria, imagen }: { initials: string
 
 // ── Mini tarjeta modal ──────────────────────────────────────────────
 function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
-    const tipo = tipoConfig[cliente.tipo] || tipoConfig.default;
+    const status = statusConfig[cliente.status] ?? statusConfig.activo;
+    const tipo = tipoConfig[cliente.tipo] ?? tipoConfig.V;
+    const accent = cliente.color ?? '#007AFF';
     return (
         <div
             onClick={onClose}
@@ -95,7 +99,7 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
 
                 {/* Header */}
                 <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <AvatarCircle initials={cliente.initials} color={cliente.color} categoria={cliente.categoria} imagen={cliente.imagen} />
+                    <AvatarCircle initials={cliente.initials} color={accent} categoria={cliente.categoria} imagen={cliente.imagen} />
                     <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: tipo.bg, color: tipo.text, border: `1px solid ${tipo.border}` }}>
@@ -165,7 +169,9 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
 
 // ── Main Card ──────────────────────────────────────────────────────
 export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; onDelete?: (id: string) => void }) {
-    const tipo = tipoConfig[cliente.tipo] || tipoConfig.default;
+    const status = statusConfig[cliente.status] ?? statusConfig.activo;
+    const tipo = tipoConfig[cliente.tipo] ?? tipoConfig.V;
+    const accent = cliente.color ?? '#007AFF';
     const [showModal, setShowModal] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -203,11 +209,11 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
             >
                 {/* Top accent line */}
                 <div className="absolute top-0 left-0 right-0 h-px"
-                    style={{ background: `linear-gradient(90deg, transparent, ${cliente.color}40, transparent)` }} />
+                    style={{ background: `linear-gradient(90deg, transparent, ${accent}40, transparent)` }} />
 
                 {/* Main info row */}
                 <div className="flex items-center gap-4 px-4 pt-4 pb-3">
-                    <AvatarCircle initials={cliente.initials} color={cliente.color} categoria={cliente.categoria} imagen={cliente.imagen} />
+                    <AvatarCircle initials={cliente.initials} color={accent} categoria={cliente.categoria} imagen={cliente.imagen} />
 
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
@@ -248,8 +254,19 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
 
                             {/* Badges */}
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: tipo.bg }}>
-                                    <span className="font-medium" style={{ color: tipo.text, fontSize: '11px' }}>{cliente.tipo}</span>
+                                {(cliente.obraCount ?? 0) > 0 ? (
+                                    <div
+                                        className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+                                        style={{ background: 'rgba(90,200,250,0.12)', border: '1px solid rgba(90,200,250,0.25)' }}
+                                    >
+                                        <span style={{ color: '#5AC8FA', fontSize: '10px', fontWeight: 700 }}>
+                                            {cliente.obraCount} obra{cliente.obraCount === 1 ? '' : 's'}
+                                        </span>
+                                    </div>
+                                ) : null}
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: status.bg }}>
+                                    <div className="rounded-full" style={{ width: '5px', height: '5px', background: status.dot }} />
+                                    <span className="font-medium" style={{ color: status.text, fontSize: '11px' }}>{status.label}</span>
                                 </div>
                             </div>
                         </div>
@@ -261,7 +278,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
 
                     {/* Presupuesto — botón destacado full width */}
                     <Link
-                        href={`/ventas?cliente=${encodeURIComponent(cliente.nombre)}&rif=${encodeURIComponent(cliente.rif)}`}
+                        href={`/ventas?customerId=${encodeURIComponent(cliente.id)}`}
                         style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                             width: '100%', padding: '11px 0',
@@ -307,6 +324,28 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             </svg>
                             Ver
                         </button>
+
+                        {/* Ficha */}
+                        <Link
+                            href={`/clientes/${cliente.id}`}
+                            style={{
+                                flex: 1, padding: '9px 0',
+                                background: 'transparent',
+                                borderRight: '1px solid rgba(255,255,255,0.07)',
+                                textDecoration: 'none',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                                color: '#5AC8FA', fontSize: '11px', fontWeight: 600,
+                                transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(90,200,250,0.08)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                <path d="M4 19.5V4.5a1.5 1.5 0 011.5-1.5h8.4L20 9.1V19.5A1.5 1.5 0 0118.5 21h-13A1.5 1.5 0 014 19.5z" stroke="#5AC8FA" strokeWidth="2" />
+                                <path d="M14 3v6h6" stroke="#5AC8FA" strokeWidth="2" />
+                            </svg>
+                            Ficha
+                        </Link>
 
                         {/* Editar */}
                         <Link

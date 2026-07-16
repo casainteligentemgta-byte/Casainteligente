@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { 
   Users, Activity, AlertOctagon, DollarSign, 
@@ -48,6 +49,26 @@ export default function DashboardView() {
             <h1 className="text-3xl font-black text-white tracking-tight">Centro de Comando</h1>
           </div>
           <p className="text-slate-500 font-medium">Operaciones Casa Inteligente • Acceso Autorizado</p>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+            <Link
+              href="/admin/dashboard-operativo"
+              className="inline-flex text-sm font-semibold text-sky-400 hover:text-sky-300 underline-offset-4 hover:underline"
+            >
+              Dashboard operativo (mano de obra)
+            </Link>
+            <Link
+              href="/admin/config/nomina"
+              className="inline-flex text-sm font-semibold text-emerald-400 hover:text-emerald-300 underline-offset-4 hover:underline"
+            >
+              Configuración nómina (costo hora + carga prestacional)
+            </Link>
+            <Link
+              href="/admin/config/alertas"
+              className="inline-flex text-sm font-semibold text-amber-400 hover:text-amber-300 underline-offset-4 hover:underline"
+            >
+              Alertas centralizadas (Telegram, procuras, compras, despacho)
+            </Link>
+          </div>
         </div>
         
         <div className="flex items-center gap-4 bg-slate-900/50 border border-slate-800/50 px-4 py-2 rounded-xl backdrop-blur-sm">

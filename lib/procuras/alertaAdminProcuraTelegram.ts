@@ -1,0 +1,131 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { sendTelegramMessage } from '@/lib/telegram/botApi';
+import {
+  cargarAlertasConfig,
+  debeAlertarProcura,
+  prioridadProcuraDesdeObs,
+} from '@/lib/alertas/alertasConfig';
+import { listarContadoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
+import {
+  construirMensajeAdminViabilidadProcura,
+  construirResumenStockProcuraMensaje,
+  type FilaProcuraMensaje,
+} from '@/lib/procuras/mensajeAlertaProcuraTelegram';
+import { tecladoViabilidadAdmin } from '@/lib/procuras/viabilidadAdminProcuraTelegram';
+import { replicarAlertaProcuraAdminEnLogBot } from '@/lib/telegram/espejoSalidaLogBot';
+import { isLogBotConfigured } from '@/lib/telegram/logBotApi';
+
+export type AlertaProcuraAdminRow = {
+  id: string;
+  ticket: string;
+  solicitante_nombre?: string | null;
+  solicitante_telegram_chat_id?: number | null;
+  material_txt: string;
+  cantidad: number;
+  unidad: string;
+  estado: string;
+  observaciones?: string | null;
+  proyecto_id?: string | null;
+  ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
+  capitulo_maestro_id?: string | null;
+  prioridad?: string | null;
+  monto_estimado_usd?: number | null;
+};
+
+export type ResultadoAlertaProcuraPendiente = {
+  enviado: boolean;
+  canalAdmin: boolean;
+  dmsEnviados: number;
+  /** Copia enviada al bot de logs (p. ej. sin contador configurado). */
+  logReplicado?: boolean;
+};
+
+function esChatSolicitante(chatId: string | number, solicitanteChatId?: number | null): boolean {
+  if (solicitanteChatId == null || !Number.isFinite(solicitanteChatId)) return false;
+  return String(chatId) === String(Math.trunc(solicitanteChatId));
+}
+
+/** Contador / revisor de fondos: informar viabilidad presupuestaria (vía larga). */
+export async function enviarAlertaProcuraPendienteAdmin(
+  supabase: SupabaseClient,
+  procuraId: string,
+): Promise<ResultadoAlertaProcuraPendiente> {
+  const { config: alertas } = await cargarAlertasConfig(supabase);
+
+  const { data, error } = await supabase
+    .from('ci_procuras')
+    .select(
+      'id,ticket,estado,solicitante_nombre,solicitante_telegram_chat_id,material_txt,material_id,cantidad,unidad,observaciones,prioridad,monto_estimado_usd,capitulo_maestro_id,proyecto_id,entidad_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,ci_proyectos(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+    )
+    .eq('id', procuraId.trim())
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn('[alertaAdminProcura] no se pudo cargar procura', procuraId, error?.message);
+    return { enviado: false, canalAdmin: false, dmsEnviados: 0 };
+  }
+
+  const row = data as FilaProcuraMensaje;
+  if (!debeAlertarProcura(row.estado, alertas)) {
+    return { enviado: false, canalAdmin: false, dmsEnviados: 0 };
+  }
+
+  const solicitanteChatId =
+    row.solicitante_telegram_chat_id != null
+      ? Number(row.solicitante_telegram_chat_id)
+      : null;
+
+  const prioridad =
+    row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
+  const stock = await construirResumenStockProcuraMensaje(supabase, row);
+  const mensaje = construirMensajeAdminViabilidadProcura(row, prioridad, stock);
+  const replyMarkup = tecladoViabilidadAdmin(row.id);
+
+  const proyectoId = row.proyecto_id?.trim() || null;
+  let contadores: Awaited<ReturnType<typeof listarContadoresProcuraTelegram>> = [];
+  try {
+    contadores = await listarContadoresProcuraTelegram(supabase, proyectoId);
+  } catch (e) {
+    console.warn('[alertaAdminProcura] listar contadores', e);
+  }
+
+  let dmsEnviados = 0;
+  const destinatariosEnviados: { nombre: string; chatId: number }[] = [];
+  for (const cont of contadores) {
+    if (esChatSolicitante(cont.chatId, solicitanteChatId)) continue;
+
+    try {
+      await sendTelegramMessage(String(cont.chatId), mensaje, {
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
+        rolDestinatario: 'Contador',
+        nombreDestinatario: cont.nombre,
+        accionLogDestinatario: 'informar_viabilidad',
+        contextoLogEspejo: '[Procura · viabilidad presupuestaria]',
+        skipLogEspejo: true,
+      });
+      dmsEnviados += 1;
+      destinatariosEnviados.push({ nombre: cont.nombre, chatId: cont.chatId });
+    } catch (e) {
+      console.warn('[alertaAdminProcura] DM contador', cont.nombre, cont.chatId, e);
+    }
+  }
+
+  const sinContadorConfigurado = contadores.length === 0;
+  const logActivo = isLogBotConfigured();
+
+  await replicarAlertaProcuraAdminEnLogBot({
+    procuraId: row.id,
+    mensaje,
+    ticket: String(row.ticket ?? ''),
+    destinatarios: destinatariosEnviados,
+    sinContadorConfigurado,
+  });
+
+  return {
+    enviado: dmsEnviados > 0 || (sinContadorConfigurado && logActivo),
+    canalAdmin: false,
+    dmsEnviados,
+    logReplicado: logActivo,
+  };
+}

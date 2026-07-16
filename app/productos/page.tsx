@@ -18,6 +18,8 @@ interface Product {
     cantidad: number | null;
     image_url: string | null;
     ubicacion?: string | null;
+    manual_instrucciones?: string | null;
+    manual_documento_url?: string | null;
 }
 
 const CATEGORIAS_COMERCIALES = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network'];
@@ -43,19 +45,34 @@ function fmt(n: number | null) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Miniatura en catálogo: foto del producto si hay URL válida; si no, identidad por categoría/iniciales. */
 function ProductAvatar({ product }: { product: Product }) {
     const cat = product.categoria ?? '';
     const color = CAT_COLORS[cat]?.dot ?? '#8E8E93';
     const initials = (product.nombre || '??').slice(0, 2).toUpperCase();
+    const [imgFailed, setImgFailed] = useState(false);
+    const src = product.imagen?.trim();
 
-    if (product.image_url) {
+    if (src && !imgFailed) {
         return (
-            <img
-                src={product.image_url}
-                alt={product.nombre}
-                style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover', flexShrink: 0 }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
+            <div
+                style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '14px',
+                    flexShrink: 0,
+                    overflow: 'hidden',
+                    border: `1.5px solid ${color}44`,
+                    background: 'rgba(0,0,0,0.35)',
+                }}
+            >
+                <img
+                    src={src}
+                    alt=""
+                    onError={() => setImgFailed(true)}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+            </div>
         );
     }
 
@@ -204,18 +221,65 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
                     background: '#1C1C1E', borderRadius: '32px 32px 0 0',
                     padding: '30px 24px 50px',
                     boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
                 }}
             >
                 <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', margin: '0 auto 20px' }} />
+                {product.imagen ? (
+                    <img
+                        src={product.imagen}
+                        alt=""
+                        style={{
+                            width: '100%',
+                            maxHeight: '200px',
+                            objectFit: 'contain',
+                            borderRadius: '16px',
+                            marginBottom: '16px',
+                            background: 'rgba(0,0,0,0.4)',
+                        }}
+                    />
+                ) : null}
                 <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 800, marginBottom: '8px' }}>{product.nombre}</h2>
-                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', marginBottom: '24px' }}>{product.descripcion}</p>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>{product.descripcion || 'Sin descripción.'}</p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
                     <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '16px' }}>
                         <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px', fontWeight: 700 }}>PRECIO VENTA</p>
                         <p style={{ color: '#34C759', fontSize: '24px', fontWeight: 800, marginTop: '4px' }}>${fmt(product.precio)}</p>
                     </div>
                 </div>
+
+                {(product.manual_instrucciones || product.manual_documento_url) ? (
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700, marginBottom: '10px' }}>MANUAL E INSTRUCCIONES</p>
+                        {product.manual_documento_url ? (
+                            <a
+                                href={product.manual_documento_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    display: 'inline-block',
+                                    marginBottom: '12px',
+                                    padding: '10px 16px',
+                                    borderRadius: '12px',
+                                    background: 'rgba(0,122,255,0.2)',
+                                    color: '#5AC8FA',
+                                    fontSize: '14px',
+                                    fontWeight: 700,
+                                    textDecoration: 'none',
+                                }}
+                            >
+                                📄 Abrir manual (PDF)
+                            </a>
+                        ) : null}
+                        {product.manual_instrucciones ? (
+                            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13px', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                                {product.manual_instrucciones}
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </div>
     );
@@ -298,15 +362,48 @@ export default function ProductosPage() {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center'
             }}>
                 <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 800 }}>Catálogo</h1>
-                <Link href="/productos/nuevo">
-                    <button style={{
-                        background: '#FF9500', color: 'white', border: 'none',
-                        borderRadius: '12px', padding: '10px 16px', fontWeight: 700,
-                        fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,149,0,0.3)'
-                    }}>
-                        + Nuevo
-                    </button>
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {cart.length > 0 ? (
+                        <button
+                            type="button"
+                            onClick={() =>
+                                router.push(`/ventas?productos=${cart.map((i) => i.product.id).join(',')}`)
+                            }
+                            style={{
+                                background: '#34C759',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                padding: '10px 14px',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(52,199,89,0.3)',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            🛒 Presupuesto ({cart.length})
+                        </button>
+                    ) : null}
+                    <Link href="/productos/nuevo">
+                        <button
+                            type="button"
+                            style={{
+                                background: '#FF9500',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                padding: '10px 16px',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(255,149,0,0.3)',
+                            }}
+                        >
+                            + Nuevo
+                        </button>
+                    </Link>
+                </div>
             </div>
 
             <div style={{ padding: '20px' }}>
@@ -360,22 +457,6 @@ export default function ProductosPage() {
             </div>
 
             {selected && <ProductDetail product={selected} onClose={() => setSelected(null)} />}
-
-            {cart.length > 0 && (
-                <div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 110 }}>
-                    <button
-                        onClick={() => router.push(`/ventas?productos=${cart.map(i => i.product.id).join(',')}`)}
-                        style={{
-                            width: '100%', background: '#34C759', padding: '18px',
-                            color: 'white', fontSize: '17px', fontWeight: 700, border: 'none',
-                            borderRadius: '18px', boxShadow: '0 8px 25px rgba(52,199,89,0.4)',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        🛒 Crear presupuesto ({cart.length})
-                    </button>
-                </div>
-            )}
         </div>
     );
 }

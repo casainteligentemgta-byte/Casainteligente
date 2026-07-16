@@ -2,194 +2,184 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import AeropuertoRelojPizarra from '@/components/home/AeropuertoRelojPizarra';
 import { createClient } from '@/lib/supabase/client';
+import { GlassCard } from '@/components/nexus/GlassCard';
+import { cn } from '@/lib/utils';
+
+type StatTileProps = {
+  href?: string;
+  actionHref?: string;
+  actionColor?: string;
+  icon: string;
+  value: React.ReactNode;
+  label: string;
+  valueClass?: string;
+  badge?: string;
+  cardClass?: string;
+};
+
+function StatTile({
+  href,
+  actionHref,
+  actionColor = 'var(--ios-blue)',
+  icon,
+  value,
+  label,
+  valueClass = 'text-white',
+  badge,
+  cardClass,
+}: StatTileProps) {
+  const card = (
+    <GlassCard
+      className={cn(
+        'h-full !p-3 sm:!p-3.5 landscape:!p-2.5 active:scale-[0.98] transition-transform',
+        cardClass,
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1 landscape:mb-0.5">
+        <span className="text-lg landscape:text-base leading-none">{icon}</span>
+        {badge ? (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white/10 text-[var(--nexus-text-muted)] uppercase shrink-0">
+            {badge}
+          </span>
+        ) : (
+          <span className="w-5 h-5 shrink-0" />
+        )}
+      </div>
+      <p
+        suppressHydrationWarning
+        className={cn(
+          'text-2xl sm:text-3xl landscape:text-xl font-bold tracking-tighter leading-none',
+          valueClass,
+        )}
+      >
+        {value}
+      </p>
+      <p className="text-[10px] landscape:text-[9px] font-bold uppercase tracking-widest text-[var(--nexus-text-muted)] mt-0.5 opacity-80">
+        {label}
+      </p>
+    </GlassCard>
+  );
+
+  return (
+    <div className="relative h-full min-h-0">
+      {href ? <Link href={href}>{card}</Link> : card}
+      {actionHref ? (
+        <Link
+          href={actionHref}
+          className="absolute top-2 right-2 z-10 w-7 h-7 landscape:w-6 landscape:h-6 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all"
+          style={{ background: actionColor }}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function formatDayLabel(now: Date): string {
+  const dayName = now.toLocaleDateString('es-VE', { weekday: 'long' });
+  const dateStr = now.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
+  return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)}, ${dateStr}`;
+}
 
 export default function DashboardPage() {
-    const [productCount, setProductCount] = useState<number | null>(null);
-    const [clientCount, setClientCount] = useState<number | null>(null);
-    const [projectCount, setProjectCount] = useState<number | null>(null);
+  const [productCount, setProductCount] = useState<number | null>(null);
+  const [clientCount, setClientCount] = useState<number | null>(null);
+  /** Solo en cliente: evita mismatch SSR vs navegador (fecha, conteos). */
+  const [dayLabel, setDayLabel] = useState('');
+  const [clientReady, setClientReady] = useState(false);
 
-    useEffect(() => {
-        const supabase = createClient();
-        // Contar productos
-        supabase.from('products').select('id', { count: 'exact', head: true })
-            .then(({ count }) => setProductCount(count ?? 0));
-        // Contar clientes
-        supabase.from('customers').select('id', { count: 'exact', head: true })
-            .then(({ count }) => setClientCount(count ?? 0));
-        // Contar proyectos
-        supabase.from('ci_proyectos').select('id', { count: 'exact', head: true })
-            .then(({ count }) => setProjectCount(count ?? 0));
-    }, []);
+  useEffect(() => {
+    setClientReady(true);
+    setDayLabel(formatDayLabel(new Date()));
+    const supabase = createClient();
+    supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .then(({ count }) => setProductCount(count ?? 0));
+    supabase
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .then(({ count }) => setClientCount(count ?? 0));
+  }, []);
 
-    const now = new Date();
-    const dayName = now.toLocaleDateString('es-VE', { weekday: 'long' });
-    const dateStr = now.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
-    const dayLabel = `${dayName.charAt(0).toUpperCase() + dayName.slice(1)}, ${dateStr}`;
+  const dash = '\u2014';
+  const clientesValue = clientReady ? (clientCount ?? dash) : dash;
+  const productosValue = clientReady ? (productCount ?? dash) : dash;
 
-    return (
-        <div className="min-h-screen" style={{ background: 'var(--bg-primary)', paddingBottom: '100px' }}>
-
-            {/* ── Header ── */}
-            <div className="px-5 pt-14 pb-6">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <p className="font-medium" style={{ fontSize: '15px', color: 'var(--label-tertiary)' }}>
-                            {dayLabel}
-                        </p>
-                        <h1
-                            className="font-bold tracking-tight mt-0.5"
-                            style={{ fontSize: '34px', color: 'var(--label-primary)', lineHeight: 1.1 }}
-                        >
-                            Dashboard
-                        </h1>
-                    </div>
-                    <div
-                        className="flex items-center justify-center rounded-full font-bold text-white"
-                        style={{
-                            width: '44px', height: '44px',
-                            background: 'linear-gradient(135deg, #007AFF, #5856D6)',
-                            fontSize: '16px',
-                            boxShadow: '0 4px 12px rgba(0,122,255,0.35)',
-                            flexShrink: 0,
-                        }}
-                    >
-                        CI
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Stats Grid ── */}
-            <div className="px-5 grid grid-cols-2 gap-3 mb-6">
-
-                {/* ── Clientes ── */}
-                <div style={{ position: 'relative' }}>
-                    <Link
-                        href="/clientes"
-                        className="rounded-2xl p-4 transition-all duration-150 active:scale-95"
-                        style={{
-                            background: 'rgba(0,122,255,0.10)',
-                            border: '1px solid rgba(0,122,255,0.2)',
-                            textDecoration: 'none', display: 'block',
-                            boxShadow: '0 4px 20px rgba(0,122,255,0.12)',
-                        }}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <span style={{ fontSize: '24px' }}>👥</span>
-                            <div style={{ width: '28px', height: '28px' }} />
-                        </div>
-                        <p className="font-bold" style={{ fontSize: '26px', color: '#007AFF', letterSpacing: '-0.03em' }}>
-                            {clientCount ?? '—'}
-                        </p>
-                        <p className="text-sm font-medium mt-0.5" style={{ color: '#007AFF', opacity: 0.7 }}>
-                            Clientes
-                        </p>
-                    </Link>
-                    <Link
-                        href="/clientes/nuevo"
-                        style={{
-                            position: 'absolute', top: '16px', right: '16px', zIndex: 10,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            width: '28px', height: '28px', borderRadius: '8px',
-                            background: '#007AFF', boxShadow: '0 2px 8px rgba(0,122,255,0.4)',
-                            textDecoration: 'none',
-                        }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                    </Link>
-                </div>
-
-                {/* ── Ventas ── */}
-                <div
-                    className="rounded-2xl p-4"
-                    style={{
-                        background: 'rgba(52,199,89,0.08)',
-                        border: '1px solid rgba(52,199,89,0.15)',
-                        boxShadow: '0 4px 20px rgba(52,199,89,0.08)',
-                    }}
-                >
-                    <div className="flex items-start justify-between mb-3">
-                        <span style={{ fontSize: '24px' }}>📈</span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                            style={{ background: 'rgba(52,199,89,0.15)', color: '#34C759' }}>
-                            +8.3%
-                        </span>
-                    </div>
-                    <p className="font-bold" style={{ fontSize: '26px', color: 'var(--label-primary)', letterSpacing: '-0.03em' }}>
-                        $48.2K
-                    </p>
-                    <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--label-secondary)' }}>
-                        Ventas
-                    </p>
-                </div>
-
-                {/* ── Proyectos ── */}
-                <div style={{ position: 'relative' }}>
-                    <Link
-                        href="/operaciones/proyectos"
-                        className="rounded-2xl p-4 transition-all duration-150 active:scale-95"
-                        style={{
-                            background: 'rgba(90,200,250,0.10)',
-                            border: '1px solid rgba(90,200,250,0.2)',
-                            textDecoration: 'none', display: 'block',
-                            boxShadow: '0 4px 20px rgba(90,200,250,0.12)',
-                        }}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <span style={{ fontSize: '24px' }}>🏗️</span>
-                            <div style={{ width: '28px', height: '28px' }} />
-                        </div>
-                        <p className="font-bold" style={{ fontSize: '26px', color: '#5AC8FA', letterSpacing: '-0.03em' }}>
-                            {projectCount ?? '—'}
-                        </p>
-                        <p className="text-sm font-medium mt-0.5" style={{ color: '#5AC8FA', opacity: 0.7 }}>
-                            Proyectos
-                        </p>
-                    </Link>
-                </div>
-
-                {/* ── Productos ── */}
-                <div style={{ position: 'relative' }}>
-                    <Link
-                        href="/productos"
-                        className="rounded-2xl p-4 transition-all duration-150 active:scale-95"
-                        style={{
-                            background: 'rgba(255,149,0,0.10)',
-                            border: '1px solid rgba(255,149,0,0.2)',
-                            textDecoration: 'none', display: 'block',
-                            boxShadow: '0 4px 20px rgba(255,149,0,0.12)',
-                        }}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <span style={{ fontSize: '24px' }}>📦</span>
-                            <div style={{ width: '28px', height: '28px' }} />
-                        </div>
-                        <p className="font-bold" style={{ fontSize: '26px', color: '#FF9500', letterSpacing: '-0.03em' }}>
-                            {productCount ?? '—'}
-                        </p>
-                        <p className="text-sm font-medium mt-0.5" style={{ color: '#FF9500', opacity: 0.7 }}>
-                            Productos
-                        </p>
-                    </Link>
-                    <Link
-                        href="/productos/nuevo"
-                        style={{
-                            position: 'absolute', top: '16px', right: '16px', zIndex: 10,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            width: '28px', height: '28px', borderRadius: '8px',
-                            background: '#FF9500', boxShadow: '0 2px 8px rgba(255,149,0,0.4)',
-                            textDecoration: 'none',
-                        }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M7 2v10M2 7h10" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                    </Link>
-                </div>
-
-            </div>
+  return (
+    <article className="home-inicio flex flex-col overflow-hidden px-4 pt-4 pb-2 sm:pt-5 landscape:pt-3 landscape:px-5 landscape:pb-2">
+      <header className="shrink-0 flex items-center justify-between gap-3 mb-3 landscape:mb-2">
+        <div className="min-w-0">
+          <p
+            suppressHydrationWarning
+            className="text-[10px] landscape:text-[9px] font-bold uppercase tracking-widest text-[var(--nexus-text-dim)] truncate min-h-[1em]"
+          >
+            {dayLabel || '\u00A0'}
+          </p>
+          <h1 className="text-2xl sm:text-3xl landscape:text-xl font-bold tracking-tight text-white truncate">
+            CASA INTELIGENTE
+          </h1>
         </div>
-    );
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/nexus"
+            className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-cyan)] ring-1 ring-[rgba(0,242,254,0.3)] hover:bg-[rgba(0,242,254,0.1)] transition-all"
+          >
+            Nexus
+          </Link>
+          <div className="w-9 h-9 landscape:w-8 landscape:h-8 rounded-full bg-gradient-to-br from-[var(--ios-blue)] to-[var(--ios-indigo)] flex items-center justify-center text-white text-xs font-bold shadow-[0_4px_12px_rgba(0,122,255,0.3)] border border-white/20">
+            CI
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-1 min-h-0 flex-col gap-3 landscape:flex-row landscape:gap-4 landscape:items-stretch">
+        <section className="landscape:flex-[1.05] landscape:min-w-0 flex flex-col justify-center min-h-0">
+          <AeropuertoRelojPizarra dense className="flex-1 min-h-0 max-h-full" />
+        </section>
+
+        <section className="landscape:flex-1 grid grid-cols-2 gap-2 sm:gap-3 landscape:gap-2 min-h-0 content-center auto-rows-fr">
+          <StatTile
+            href="/clientes"
+            actionHref="/clientes/nuevo"
+            actionColor="var(--ios-blue)"
+            icon="👥"
+            value={clientesValue}
+            label="Clientes"
+            valueClass="text-[var(--ios-blue)]"
+            cardClass="!bg-blue-500/5 border-blue-500/20"
+          />
+          <StatTile
+            icon="📈"
+            value="$48.2K"
+            label="Ventas"
+            badge="+8.3%"
+            cardClass="!bg-green-500/5 border-green-500/20"
+          />
+          <StatTile
+            icon="🏗️"
+            value="18"
+            label="Proyectos"
+            badge="+3"
+            cardClass="!bg-orange-500/5 border-orange-500/20"
+          />
+          <StatTile
+            href="/productos"
+            actionHref="/productos/nuevo"
+            actionColor="var(--ios-orange)"
+            icon="📦"
+            value={productosValue}
+            label="Productos"
+            valueClass="text-[var(--ios-orange)]"
+            cardClass="!bg-orange-500/5 border-orange-500/20"
+          />
+        </section>
+      </div>
+    </article>
+  );
 }

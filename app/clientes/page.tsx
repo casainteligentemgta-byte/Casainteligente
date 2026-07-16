@@ -3,49 +3,154 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
+import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 
-const FILTERS = ['Todos', 'Personas', 'Empresas'];
+const CUSTOMERS_LOAD_TIMEOUT_MS = 22_000;
+
+// En clientes solo mostramos clasificación por tipo:
+// - Personas naturales
+// - Personas jurídicas (empresas)
+const FILTERS = ['Ambos', 'Personas', 'Empresas'];
+
+type ClienteTipoCard = 'V' | 'J' | 'E';
+type ClienteStatusCard = 'activo' | 'inactivo' | 'pendiente';
+
+function colorPorId(id: string): string {
+    const paleta = ['#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#FF9500', '#00C7BE', '#34C759'];
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h += id.charCodeAt(i);
+    return paleta[h % paleta.length];
+}
+
+/** La tabla `customers.tipo` puede ser "empresa" o letra RIF; ClienteCard espera V | J | E */
+function normalizarTipo(tipoRaw: string | null | undefined, categoria: 'personal' | 'empresa'): ClienteTipoCard {
+    const t = (tipoRaw || '').trim().toUpperCase();
+    if (t === 'V' || t === 'J' || t === 'E') return t;
+    if (categoria === 'empresa') return 'J';
+    return 'V';
+}
+
+function normalizarStatus(s: string | null | undefined): ClienteStatusCard {
+    const v = (s || 'activo').toLowerCase();
+    if (v === 'inactivo' || v === 'pendiente' || v === 'activo') return v;
+    return 'activo';
+}
 
 export default function ClientesPage() {
     const [search, setSearch] = useState('');
-    const [filtro, setFiltro] = useState('Todos');
+    const [filtro, setFiltro] = useState('Ambos');
     const [lista, setLista] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     const fetchClientes = useCallback(async () => {
         setLoading(true);
-        const supabase = createClient();
-        const { data, error } = await supabase
-            .from('customers')
-            .select('*')
-            .order('created_at', { ascending: false });
+        setFetchError(null);
+        try {
+            let supabase: ReturnType<typeof createClient>;
+            try {
+                supabase = createClient();
+            } catch (e: unknown) {
+                setFetchError(e instanceof Error ? e.message : 'No se pudo iniciar Supabase (revisa .env.local).');
+                setLista([]);
+                return;
+            }
 
-        if (!error && data) {
-            // Mapear campos de la DB a los que espera el componente
-            const mapped = data.map(c => {
-                const nombre = c.nombre || 'Sin Nombre';
-                const initials = nombre
-                    .split(' ')
-                    .filter(Boolean)
-                    .map((n: string) => n[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase() || '??';
+            let data: Record<string, unknown>[] | null = null;
+            let error: { message: string } | null = null;
+
+            const first = await withTimeout(
+                Promise.resolve(
+                    supabase
+                        .from('customers')
+                        .select('*')
+                        .order('created_at', { ascending: false }),
+                ),
+                CUSTOMERS_LOAD_TIMEOUT_MS,
+                'Lectura de customers (*)',
+            );
+            if (first.error) {
+                const second = await withTimeout(
+                    Promise.resolve(
+                        supabase
+                            .from('customers')
+                            .select('id,nombre,rif,email,movil,tipo,status,direccion,imagen,created_at,updated_at')
+                            .order('created_at', { ascending: false }),
+                    ),
+                    CUSTOMERS_LOAD_TIMEOUT_MS,
+                    'Lectura de customers (columnas base)',
+                );
+                data = (second.data ?? null) as Record<string, unknown>[] | null;
+                error = second.error;
+                if (error) {
+                    setFetchError(`${first.error.message} · ${error.message}`);
+                    setLista([]);
+                    return;
+                }
+            } else {
+                data = (first.data ?? null) as Record<string, unknown>[] | null;
+            }
+
+            if (!data || data.length === 0) {
+                setLista([]);
+                return;
+            }
+
+            const ids = data.map((c) => String(c.id ?? '')).filter(Boolean);
+            const obraCountPorCliente = new Map<string, number>();
+            if (ids.length) {
+                const { data: proys } = await withTimeout(
+                    Promise.resolve(
+                        supabase
+                            .from('ci_proyectos')
+                            .select('customer_id')
+                            .in('customer_id', ids),
+                    ),
+                    CUSTOMERS_LOAD_TIMEOUT_MS,
+                    'Conteo obras por cliente',
+                );
+                for (const p of proys ?? []) {
+                    const cid = String(p.customer_id ?? '');
+                    if (!cid) continue;
+                    obraCountPorCliente.set(cid, (obraCountPorCliente.get(cid) ?? 0) + 1);
+                }
+            }
+
+            const mapped = data.map((c: Record<string, unknown>) => {
+                const nombreSafe = (typeof c.nombre === 'string' && c.nombre.trim()) ? c.nombre.trim() : 'Sin nombre';
+                const partes = nombreSafe.split(/\s+/).filter(Boolean);
+                const initials =
+                    partes.map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??';
+                const tipoStr = typeof c.tipo === 'string' ? c.tipo : '';
+                const categoria = tipoStr.toLowerCase() === 'empresa' ? 'empresa' : 'personal';
+                const tipoLetra = normalizarTipo(tipoStr, categoria);
+                const idStr = String(c.id ?? '');
 
                 return {
                     ...c,
-                    nombre,
+                    nombre: nombreSafe,
+                    rif: typeof c.rif === 'string' ? c.rif : '',
+                    email: typeof c.email === 'string' ? c.email : '',
+                    tipo: tipoLetra,
+                    categoria,
+                    status: normalizarStatus(typeof c.status === 'string' ? c.status : undefined),
+                    telefono: typeof c.movil === 'string' ? c.movil : '',
+                    movil: typeof c.movil === 'string' ? c.movil : undefined,
+                    direccion: typeof c.direccion === 'string' ? c.direccion : '',
+                    imagen: c.imagen || null,
                     initials,
-                    categoria: (c.tipo || '').toLowerCase() === 'empresa' ? 'empresa' : 'personal',
-                    telefono: c.movil || '',
-                    direccion: c.direccion || '',
-                    imagen: c.imagen || null
+                    color: colorPorId(idStr),
+                    obraCount: obraCountPorCliente.get(idStr) ?? 0,
                 };
             });
             setLista(mapped);
+        } catch (e: unknown) {
+            setFetchError(e instanceof Error ? e.message : 'Error inesperado al cargar clientes.');
+            setLista([]);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => {
@@ -53,16 +158,19 @@ export default function ClientesPage() {
     }, [fetchClientes]);
 
     const filtered = lista.filter(c => {
+        const nombreLc = (c.nombre || '').toLowerCase();
         const matchSearch = search.trim() === '' ||
-            c.nombre.toLowerCase().includes(search.toLowerCase()) ||
-            c.rif?.toLowerCase().includes(search.toLowerCase()) ||
-            (c.email?.toLowerCase().includes(search.toLowerCase())) ||
-            (c.movil?.includes(search));
+            nombreLc.includes(search.toLowerCase()) ||
+            (c.rif && String(c.rif).toLowerCase().includes(search.toLowerCase())) ||
+            (c.email && String(c.email).toLowerCase().includes(search.toLowerCase())) ||
+            (c.movil && String(c.movil).includes(search));
 
         const matchFiltro =
-            filtro === 'Todos' ? true :
-                filtro === 'Personas' ? c.categoria === 'personal' :
-                    filtro === 'Empresas' ? c.categoria === 'empresa' : true;
+            filtro === 'Ambos'
+                ? true
+                : filtro === 'Personas'
+                  ? c.categoria === 'personal'
+                  : c.categoria === 'empresa';
 
         return matchSearch && matchFiltro;
     });
@@ -71,7 +179,13 @@ export default function ClientesPage() {
     const empresasCount = lista.filter(c => c.categoria === 'empresa').length;
 
     const handleDelete = async (id: string) => {
-        const supabase = createClient();
+        let supabase: ReturnType<typeof createClient>;
+        try {
+            supabase = createClient();
+        } catch {
+            alert('No se pudo conectar a Supabase. Revisa .env.local.');
+            return;
+        }
         const { error } = await supabase.from('customers').delete().eq('id', id);
         if (!error) {
             setLista(prev => prev.filter(c => c.id !== id));
@@ -79,6 +193,42 @@ export default function ClientesPage() {
             alert('Error al borrar: ' + error.message);
         }
     };
+
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '48px 20px', paddingBottom: '100px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', fontSize: '15px' }}>Cargando clientes…</p>
+            </div>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '24px 20px 100px' }}>
+                <div style={{
+                    maxWidth: '480px', margin: '0 auto', padding: '20px', borderRadius: '16px',
+                    background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.35)', color: 'white',
+                }}>
+                    <p style={{ fontWeight: 700, marginBottom: '8px' }}>No se pudo cargar clientes</p>
+                    <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '12px' }}>{fetchError}</p>
+                    <p style={{ fontSize: '13px', opacity: 0.75, lineHeight: 1.5 }}>
+                        Revisa que exista la tabla <code style={{ color: '#FF9500' }}>customers</code> en Supabase y que{' '}
+                        <code style={{ color: '#FF9500' }}>.env.local</code> tenga URL y anon key correctos.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => fetchClientes()}
+                        style={{
+                            marginTop: '16px', padding: '10px 18px', borderRadius: '12px', border: 'none',
+                            background: '#007AFF', color: 'white', fontWeight: 600, cursor: 'pointer',
+                        }}
+                    >
+                        Reintentar
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '100px' }}>
@@ -109,11 +259,25 @@ export default function ClientesPage() {
                             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'white', lineHeight: 1 }}>Clientes</h1>
                             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
                                 {filtered.length} de {lista.length} registros
-                                {filtro !== 'Todos' ? ` · ${filtro}` : ''}
+                                {' · '}
+                                {filtro}
                                 {search ? ` · "${search}"` : ''}
                             </p>
                         </div>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <Link
+                        href="/clientes/crm"
+                        style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '0 12px', height: '36px', borderRadius: '18px',
+                            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                            color: 'rgba(255,255,255,0.75)', fontSize: '11px', fontWeight: 600,
+                            textDecoration: 'none',
+                        }}
+                    >
+                        Vista CRM
+                    </Link>
                     <Link
                         href="/clientes/nuevo"
                         style={{
@@ -127,6 +291,7 @@ export default function ClientesPage() {
                             <path d="M8 2v12M2 8h12" stroke="white" strokeWidth="2" strokeLinecap="round" />
                         </svg>
                     </Link>
+                    </div>
                 </div>
 
                 {/* Search */}
@@ -196,6 +361,7 @@ export default function ClientesPage() {
                     { label: 'Total', value: lista.length, color: '#007AFF', bg: 'rgba(0,122,255,0.08)', border: 'rgba(0,122,255,0.15)' },
                     { label: 'Personas', value: personasCount, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                     { label: 'Empresas', value: empresasCount, color: '#FF9500', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.15)' },
+                    { label: 'Personas', value: personasCount, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                 ].map(s => (
                     <div key={s.label} style={{
                         background: s.bg, border: `1px solid ${s.border}`,
@@ -212,22 +378,40 @@ export default function ClientesPage() {
                 {filtered.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                         <div style={{ fontSize: '40px', marginBottom: '12px' }}>👥</div>
-                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>Sin resultados</p>
-                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
-                            Prueba con otro término o filtro
-                        </p>
-                        {(search || filtro !== 'Todos') && (
-                            <button
-                                onClick={() => { setSearch(''); setFiltro('Todos'); }}
-                                style={{
-                                    marginTop: '16px', padding: '10px 20px', borderRadius: '12px',
-                                    background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
-                                    color: '#007AFF', fontSize: '14px', fontWeight: 600,
-                                    cursor: 'pointer', fontFamily: 'inherit',
-                                }}
-                            >
-                                Limpiar filtros
-                            </button>
+                        {lista.length === 0 ? (
+                            <>
+                                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>
+                                    No hay clientes en la base
+                                </p>
+                                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', marginTop: '8px', lineHeight: 1.5 }}>
+                                    Crea el primero con el botón <strong style={{ color: 'rgba(255,255,255,0.55)' }}>+</strong> arriba a la
+                                    derecha.
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>Sin resultados</p>
+                                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
+                                    Hay {lista.length} en total; prueba otro término o filtro.
+                                </p>
+                                {(search || filtro !== 'Ambos') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearch('');
+                                            setFiltro('Ambos');
+                                        }}
+                                        style={{
+                                            marginTop: '16px', padding: '10px 20px', borderRadius: '12px',
+                                            background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
+                                            color: '#007AFF', fontSize: '14px', fontWeight: 600,
+                                            cursor: 'pointer', fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        Limpiar filtros
+                                    </button>
+                                )}
+                            </>
                         )}
                     </div>
                 ) : (

@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import { Project, ProjectStatus } from '@/types'
 
 const MOCK_PROJECTS: Project[] = [
@@ -29,15 +28,13 @@ const MOCK_PROJECTS: Project[] = [
 ]
 
 export async function getProjects(): Promise<{ data: Project[] | null, error: any }> {
-    const cookieStore = cookies()
-
     // Si no hay credenciales de Supabase configuradas, devuelve datos simulados (mock)
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         console.warn("Faltan credenciales de Supabase. Devolviendo datos de prueba.")
         return { data: MOCK_PROJECTS, error: null }
     }
 
-    const supabase = createClient(cookieStore)
+    const supabase = await createClient()
 
     try {
         const { data, error } = await supabase
@@ -50,21 +47,39 @@ export async function getProjects(): Promise<{ data: Project[] | null, error: an
             return { data: MOCK_PROJECTS, error: null }
         }
 
-        return { data: data as Project[], error: null }
+        // budgets usa subtotal/total_cost; la UI (ProjectCard) espera sale_price/cost_price
+        const mapped = (data ?? []).map((row: Record<string, unknown>) => {
+            const b = row.budget as Record<string, unknown> | null | undefined
+            const sale = (row.sale_price as number | undefined) ?? (b?.subtotal as number | undefined) ?? (b?.sale_price as number | undefined) ?? 0
+            const cost = (row.cost_price as number | undefined) ?? (b?.total_cost as number | undefined) ?? (b?.cost_price as number | undefined) ?? 0
+            const budgetId = (row.budget_id as string | undefined) ?? (b?.id as string | undefined)
+            return {
+                ...row,
+                budget: b
+                    ? {
+                        id: String(b.id ?? budgetId ?? ''),
+                        sale_price: Number(sale),
+                        cost_price: Number(cost),
+                    }
+                    : sale > 0 || cost > 0
+                      ? { id: budgetId ?? '', sale_price: Number(sale), cost_price: Number(cost) }
+                      : undefined,
+            } as Project
+        })
+
+        return { data: mapped, error: null }
     } catch (e) {
         return { data: MOCK_PROJECTS, error: null }
     }
 }
 
 export async function updateProjectStatus(projectId: string, newStatus: ProjectStatus) {
-    const cookieStore = cookies()
-
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
         console.log(`[MOCK] Proyecto ${projectId} actualizado a ${newStatus}`)
         return { error: null }
     }
 
-    const supabase = createClient(cookieStore)
+    const supabase = await createClient()
 
     const { error } = await supabase
         .from('projects')
