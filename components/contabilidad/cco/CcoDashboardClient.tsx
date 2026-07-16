@@ -20,6 +20,16 @@ import CcoAnalisisJerarquico from '@/components/contabilidad/cco/CcoAnalisisJera
 import CcoDatosGraficos from '@/components/contabilidad/cco/CcoDatosGraficos';
 import CcoListaRubros from '@/components/contabilidad/cco/CcoListaRubros';
 import CcoEgresos from '@/components/contabilidad/cco/CcoEgresos';
+import {
+  CcoAuditoriaPanel,
+  CcoContratosPanel,
+  CcoDeudasPanel,
+  CcoDistribucionPanel,
+  CcoEditorMaestroPanel,
+  CcoImportarPdfPanel,
+  CcoIngresosPanel,
+  CcoPresupuestosPanel,
+} from '@/components/contabilidad/cco/CcoModulosCableados';
 
 type TabId =
   | 'graficos'
@@ -632,32 +642,28 @@ export default function CcoDashboardClient() {
               <CcoEgresos proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
             ) : null}
             {tab === 'ingresos' ? (
-              <SeccionLista
-                title="Ingresos"
-                desc="Inyecciones de capital registradas en CI."
-                href="/contabilidad/inyecciones"
-                hrefLabel="Abrir inyecciones →"
-                lines={[
-                  `Total ingresos: ${fmtUsd(data.oficial.ingresos)}`,
-                  `Registros: ${data.oficial.countIngresos}`,
-                ]}
-              />
+              <CcoIngresosPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
             ) : null}
-            {tab !== 'graficos' &&
-            tab !== 'datos' &&
-            tab !== 'rubros' &&
-            tab !== 'egresos' &&
-            tab !== 'ingresos' ? (
-              <SeccionLista
-                title={TABS.find((t) => t.id === tab)?.label ?? 'Sección'}
-                desc="Estructura lista. Detalle de esta pestaña se completa con el flujo CCO (import SQLite / editor)."
-                href="/contabilidad/compras"
-                hrefLabel="Ir a módulos secundarios →"
-                lines={[
-                  'Orden y colores del menú V4 ya activos',
-                  'Datos vivos hoy: Gráficos, Datos Gráficos, Lista de Rubros, Egresos e Ingresos vía CI',
-                ]}
-              />
+            {tab === 'distribucion' ? (
+              <CcoDistribucionPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
+            ) : null}
+            {tab === 'deudas' ? (
+              <CcoDeudasPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
+            ) : null}
+            {tab === 'contratos' ? (
+              <CcoContratosPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
+            ) : null}
+            {tab === 'presupuestos' ? (
+              <CcoPresupuestosPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
+            ) : null}
+            {tab === 'editor' ? (
+              <CcoEditorMaestroPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
+            ) : null}
+            {tab === 'importar' ? (
+              <CcoImportarPdfPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
+            ) : null}
+            {tab === 'auditoria' ? (
+              <CcoAuditoriaPanel proyectoId={proyectoId} proyectos={data.proyectos ?? []} />
             ) : null}
 
             <div style={{ marginTop: 28 }}>
@@ -717,52 +723,6 @@ function EmptyChart() {
       }}
     >
       Sin movimientos en el filtro actual
-    </div>
-  );
-}
-
-function SeccionLista({
-  title,
-  desc,
-  lines,
-  href,
-  hrefLabel,
-}: {
-  title: string;
-  desc: string;
-  lines: string[];
-  href: string;
-  hrefLabel: string;
-}) {
-  return (
-    <div
-      style={{
-        background: '#fff',
-        borderRadius: 14,
-        border: '1px solid #E2E8F0',
-        padding: 24,
-      }}
-    >
-      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{title}</h3>
-      <p style={{ color: '#64748B', fontSize: 13, margin: '8px 0 14px' }}>{desc}</p>
-      <ul style={{ margin: 0, paddingLeft: 18, color: '#334155', fontSize: 14, lineHeight: 1.7 }}>
-        {lines.map((l) => (
-          <li key={l}>{l}</li>
-        ))}
-      </ul>
-      <Link
-        href={href}
-        style={{
-          display: 'inline-block',
-          marginTop: 16,
-          color: '#2563EB',
-          fontWeight: 700,
-          fontSize: 13,
-          textDecoration: 'none',
-        }}
-      >
-        {hrefLabel}
-      </Link>
     </div>
   );
 }
