@@ -133,7 +133,7 @@ export default function CalculosLaboralesClient() {
       <header>
         <p className="flex items-center gap-2 text-sm text-amber-200/80">
           <Calculator className="h-4 w-4" />
-          LaborCalculator · Art. 142 LOTTT
+          LaborCalculator - Art. 142 LOTTT
         </p>
         <h2 className="mt-2 text-2xl font-bold text-white">Prestaciones sociales</h2>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
@@ -237,7 +237,7 @@ export default function CalculosLaboralesClient() {
             </div>
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
-                Garantia trimestral · lit. a)
+                Garantia trimestral - lit. a)
               </p>
               <p className="mt-1 text-2xl font-bold text-amber-100">
                 {money(r.garantia_trimestral)}
@@ -249,20 +249,20 @@ export default function CalculosLaboralesClient() {
             {retro && (
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:col-span-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                  Retroactivo · {retro.referencia_retroactivo}
+                  Retroactivo - {retro.referencia_retroactivo}
                 </p>
                 <p className="mt-1 text-3xl font-bold text-white">{money(retro.retroactivo)}</p>
                 <p className="mt-2 text-xs text-zinc-500">
                   {retro.fecha_inicio} ? {retro.fecha_fin}: {retro.anios_completos} anos +{' '}
                   {retro.meses_fraccion} meses ?{' '}
                   <strong className="text-zinc-300">{retro.anios_servicio}</strong> ano(s)
-                  computables × {retro.dias_retroactivo_por_anio} dias
+                  computables - {retro.dias_retroactivo_por_anio} dias
                 </p>
               </div>
             )}
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-4 sm:col-span-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
-                Monto a provisionar · Art. 142 (mayor)
+                Monto a provisionar - Art. 142 (mayor)
               </p>
               <p className="mt-1 text-3xl font-bold text-emerald-100">
                 {money(r.monto_a_provisionar)}
@@ -278,7 +278,7 @@ export default function CalculosLaboralesClient() {
       <section className="space-y-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
           <UserRound className="h-4 w-4" />
-          Pasivo por trabajador (workers · benefit_configs · salary_history)
+          Pasivo por trabajador (workers - benefit_configs - salary_history)
         </h3>
         <form
           onSubmit={calcularPasivo}
@@ -331,8 +331,8 @@ export default function CalculosLaboralesClient() {
             <div className="sm:col-span-2">
               <p className="text-lg font-bold text-white">{pasivo.worker ?? pasivo.worker_id}</p>
               <p className="text-xs text-zinc-500">
-                {pasivo.fecha_inicio} ? {pasivo.fecha_fin} · salario {money(pasivo.salario_base_mensual)}{' '}
-                (desde {pasivo.salario_effective_date ?? '?'}) · util. {pasivo.dias_utilidades}d ·
+                {pasivo.fecha_inicio} ? {pasivo.fecha_fin} - salario {money(pasivo.salario_base_mensual)}{' '}
+                (desde {pasivo.salario_effective_date ?? '?'}) - util. {pasivo.dias_utilidades}d -
                 bono {pasivo.dias_bono_vacacional}d
               </p>
             </div>
@@ -350,13 +350,13 @@ export default function CalculosLaboralesClient() {
             </div>
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-4 sm:col-span-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
-                Monto a provisionar · {pasivo.referencias.garantia_y_retroactivo}
+                Monto a provisionar - {pasivo.referencias.garantia_y_retroactivo}
               </p>
               <p className="mt-1 text-3xl font-bold text-emerald-100">
                 {money(pasivo.monto_a_provisionar)}
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                Criterio: {labelCriterio(pasivo.criterio_provision)} · integral diario{' '}
+                Criterio: {labelCriterio(pasivo.criterio_provision)} - integral diario{' '}
                 {money(pasivo.salario_integral_diario)}
               </p>
             </div>
