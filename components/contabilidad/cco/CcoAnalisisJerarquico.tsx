@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import type {
   CcoCapituloJerarquia,
+  CcoHijoJerarquia,
   CcoSubCapituloStack,
   CcoTipoPie,
   CcoTreemapNodo,
@@ -54,6 +55,15 @@ function arcPath(
   ].join(' ');
 }
 
+function fmtUsdFull(n: number): string {
+  return n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function ColorScale({ max }: { max: number }) {
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(max * t));
   return (
@@ -70,7 +80,7 @@ function ColorScale({ max }: { max: number }) {
       >
         COSTO TOTAL
       </p>
-      <div style={{ display: 'flex', gap: 6, height: 160 }}>
+      <div style={{ display: 'flex', gap: 6, height: 180 }}>
         <div
           style={{
             width: 14,
@@ -97,19 +107,23 @@ function ColorScale({ max }: { max: number }) {
 }
 
 function SunburstCard({ cap }: { cap: CcoCapituloJerarquia }) {
-  const size = 280;
+  const [hover, setHover] = useState<CcoHijoJerarquia | null>(null);
+  const size = 320;
   const cx = size / 2;
   const cy = size / 2;
-  const rInner = 62;
-  const rOuter = 118;
+  const rInner = 58;
+  const rOuter = 128;
+  const rLabel = (rInner + rOuter) / 2;
   const maxHijo = Math.max(...cap.hijos.map((h) => h.costo), 1);
   let angle = 0;
   const slices = cap.hijos.map((h) => {
     const sweep = (h.costo / (cap.total || 1)) * 360;
     const a0 = angle;
-    const a1 = angle + Math.max(sweep, 0.4);
+    const a1 = angle + Math.max(sweep, 0.35);
     angle = a1;
-    return { ...h, a0, a1, color: colorTealPorValor(h.costo, maxHijo) };
+    const mid = (a0 + a1) / 2;
+    const labelPos = polar(cx, cy, rLabel, mid);
+    return { ...h, a0, a1, mid, labelPos, color: colorTealPorValor(h.costo, maxHijo) };
   });
 
   return (
@@ -122,7 +136,8 @@ function SunburstCard({ cap }: { cap: CcoCapituloJerarquia }) {
         display: 'flex',
         gap: 8,
         alignItems: 'center',
-        minHeight: 300,
+        minHeight: 340,
+        position: 'relative',
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -130,19 +145,65 @@ function SunburstCard({ cap }: { cap: CcoCapituloJerarquia }) {
           Capítulo: {cap.nombre}
         </p>
         <svg width="100%" height={size} viewBox={`0 0 ${size} ${size}`}>
-          {slices.map((s) => (
-            <path
-              key={s.nombre}
-              d={arcPath(cx, cy, rInner, rOuter, s.a0, s.a1)}
-              fill={s.color}
-              stroke="#fff"
-              strokeWidth={1}
-            >
-              <title>
-                {s.nombre}: {fmtUsdCorto(s.costo)} ({s.pctPadre.toFixed(1)}%)
-              </title>
-            </path>
-          ))}
+          {slices.map((s) => {
+            const sweep = s.a1 - s.a0;
+            const showLabel = sweep >= 22;
+            return (
+              <g
+                key={s.nombre}
+                onMouseEnter={() => setHover(s)}
+                onMouseLeave={() => setHover(null)}
+                style={{ cursor: 'pointer' }}
+              >
+                <path
+                  d={arcPath(cx, cy, rInner, rOuter, s.a0, s.a1)}
+                  fill={s.color}
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                  opacity={hover && hover.nombre !== s.nombre ? 0.55 : 1}
+                />
+                {showLabel ? (
+                  <text
+                    x={s.labelPos.x}
+                    y={s.labelPos.y - 8}
+                    textAnchor="middle"
+                    fill={s.costo / maxHijo > 0.4 ? '#F0FDFA' : '#064E3B'}
+                    fontSize={9}
+                    fontWeight={800}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {s.nombre.length > 14 ? `${s.nombre.slice(0, 13)}…` : s.nombre}
+                  </text>
+                ) : null}
+                {showLabel ? (
+                  <text
+                    x={s.labelPos.x}
+                    y={s.labelPos.y + 4}
+                    textAnchor="middle"
+                    fill={s.costo / maxHijo > 0.4 ? '#CCFBF1' : '#065F46'}
+                    fontSize={9}
+                    fontWeight={700}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {fmtUsdCorto(s.costo)}
+                  </text>
+                ) : null}
+                {showLabel ? (
+                  <text
+                    x={s.labelPos.x}
+                    y={s.labelPos.y + 16}
+                    textAnchor="middle"
+                    fill={s.costo / maxHijo > 0.4 ? '#99F6E4' : '#047857'}
+                    fontSize={8}
+                    fontWeight={600}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    Cap: {s.pctPadre.toFixed(1)}%
+                  </text>
+                ) : null}
+              </g>
+            );
+          })}
           <circle cx={cx} cy={cy} r={rInner - 2} fill="#004D40" />
           <text
             x={cx}
@@ -152,38 +213,50 @@ function SunburstCard({ cap }: { cap: CcoCapituloJerarquia }) {
             fontSize={11}
             fontWeight={800}
           >
-            {cap.nombre.slice(0, 14)}
+            {cap.nombre.length > 16 ? `${cap.nombre.slice(0, 15)}…` : cap.nombre}
           </text>
-          <text x={cx} y={cy + 6} textAnchor="middle" fill="#fff" fontSize={13} fontWeight={700}>
+          <text x={cx} y={cy + 6} textAnchor="middle" fill="#fff" fontSize={14} fontWeight={700}>
             {fmtUsdCorto(cap.total)}
           </text>
           <text x={cx} y={cy + 24} textAnchor="middle" fill="#B2DFDB" fontSize={10}>
-            Cap: {cap.pctTotal.toFixed(1)}%
+            Cap: {Number.isFinite(cap.pctTotal) ? cap.pctTotal.toFixed(1) : '0.0'}%
           </text>
         </svg>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-          {cap.hijos.slice(0, 4).map((h) => (
-            <span
-              key={h.nombre}
-              style={{
-                fontSize: 9,
-                color: '#475569',
-                background: '#F1F5F9',
-                padding: '2px 6px',
-                borderRadius: 6,
-              }}
-            >
-              {h.nombre.slice(0, 18)} {fmtUsdCorto(h.costo)}
-            </span>
-          ))}
-        </div>
       </div>
       <ColorScale max={maxHijo} />
+      {hover ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 16,
+            bottom: 12,
+            background: '#fff',
+            border: '1px solid #E2E8F0',
+            borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+            padding: '10px 12px',
+            minWidth: 180,
+            zIndex: 2,
+            pointerEvents: 'none',
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 13, color: '#0F172A' }}>{hover.nombre}</p>
+          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#334155' }}>
+            <strong>Costo Total:</strong> {fmtUsdFull(hover.costo)}
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#334155' }}>
+            <strong>Del Capítulo:</strong> {hover.pctPadre.toFixed(2)}%
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#334155' }}>
+            <strong>Del Global:</strong> {hover.pctTotal.toFixed(2)}%
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-/** Treemap simple slice-and-dice por capítulo. */
+/** Treemap Capítulo → Sub-Capítulo (estilo captura V4). */
 function TreemapPresupuesto({ nodos }: { nodos: CcoTreemapNodo[] }) {
   const porCap = useMemo(() => {
     const m = new Map<string, CcoTreemapNodo[]>();
@@ -257,7 +330,7 @@ function TreemapPresupuesto({ nodos }: { nodos: CcoTreemapNodo[] }) {
                       borderBottom: '1px solid rgba(255,255,255,0.35)',
                       minHeight: 72,
                     }}
-                    title={`${h.sub} ${fmtUsdCorto(h.costo)}`}
+                    title={`${h.sub}: ${fmtUsdFull(h.costo)} · ${h.pctPadre.toFixed(1)}% padre · ${h.pctTotal.toFixed(1)}% total`}
                   >
                     <div style={{ fontWeight: 800 }}>{h.sub}</div>
                     <div>{fmtUsdCorto(h.costo)}</div>
@@ -274,6 +347,43 @@ function TreemapPresupuesto({ nodos }: { nodos: CcoTreemapNodo[] }) {
       <ColorScale max={maxCosto} />
     </div>
   );
+}
+
+function buildVistaInvertida(
+  jerarquiaCapitulos: CcoCapituloJerarquia[],
+  pieTotal: number,
+): CcoCapituloJerarquia[] {
+  const porSub = new Map<string, { total: number; hijos: CcoHijoJerarquia[] }>();
+  for (const cap of jerarquiaCapitulos) {
+    for (const h of cap.hijos) {
+      if (!porSub.has(h.nombre)) porSub.set(h.nombre, { total: 0, hijos: [] });
+      const acc = porSub.get(h.nombre)!;
+      acc.total += h.costo;
+      acc.hijos.push({
+        nombre: cap.nombre,
+        costo: h.costo,
+        pctPadre: 0,
+        pctTotal: h.pctTotal,
+      });
+    }
+  }
+  return Array.from(porSub.entries())
+    .map(([nombre, acc]) => {
+      const hijos = acc.hijos
+        .map((h) => ({
+          ...h,
+          pctPadre: acc.total > 0 ? (h.costo / acc.total) * 100 : 0,
+        }))
+        .sort((a, b) => b.costo - a.costo);
+      return {
+        nombre,
+        total: acc.total,
+        pctTotal: pieTotal > 0 ? (acc.total / pieTotal) * 100 : 0,
+        hijos,
+      };
+    })
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 12);
 }
 
 type Props = {
@@ -295,6 +405,13 @@ export default function CcoAnalisisJerarquico({
   const stackKeys = CCO_TIPOS_GASTO.filter((t) =>
     subCapitulosStack.some((row) => Number(row[t] ?? 0) > 0),
   );
+
+  const sunburstCards = useMemo(() => {
+    if (direccion.startsWith('Sub')) {
+      return buildVistaInvertida(jerarquiaCapitulos, pieTotal);
+    }
+    return jerarquiaCapitulos;
+  }, [direccion, jerarquiaCapitulos, pieTotal]);
 
   if (jerarquiaCapitulos.length === 0 && tiposPie.length === 0) {
     return (
@@ -324,28 +441,39 @@ export default function CcoAnalisisJerarquico({
           padding: '18px 20px',
         }}
       >
-        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 800 }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800 }}>
           Distribución por Sub-Capítulo (Composición por Tipo de Gasto)
         </h3>
-        <div style={{ width: '100%', height: 340 }}>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748B' }}>
+          Barras apiladas por sub-capítulo · leyenda Tipo de Gasto
+        </p>
+        <div style={{ width: '100%', height: 360 }}>
           {subCapitulosStack.length === 0 ? (
             <p style={{ color: '#94A3B8', fontSize: 13 }}>Sin datos</p>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={subCapitulosStack} margin={{ bottom: 48 }}>
-                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+              <BarChart data={subCapitulosStack} margin={{ bottom: 56, left: 8, right: 8 }}>
+                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="sub"
                   tick={{ fill: '#64748B', fontSize: 9 }}
                   interval={0}
-                  angle={-35}
+                  angle={-40}
                   textAnchor="end"
-                  height={70}
+                  height={78}
+                  label={{
+                    value: 'Sub-Capítulo',
+                    position: 'insideBottom',
+                    offset: -4,
+                    style: { fill: '#64748B', fontSize: 11 },
+                  }}
                 />
                 <YAxis
-                  tickFormatter={(n) => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000)}k` : String(n))}
+                  tickFormatter={(n) =>
+                    Math.abs(n) >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n))
+                  }
                   tick={{ fill: '#64748B', fontSize: 11 }}
-                  width={48}
+                  width={52}
                   label={{
                     value: 'Costo Total (USD)',
                     angle: -90,
@@ -354,13 +482,15 @@ export default function CcoAnalisisJerarquico({
                   }}
                 />
                 <Tooltip
-                  formatter={(v) =>
+                  formatter={(v, name) => [
                     Number(v).toLocaleString('en-US', {
                       style: 'currency',
                       currency: 'USD',
-                      maximumFractionDigits: 0,
-                    })
-                  }
+                      maximumFractionDigits: 2,
+                    }),
+                    `Tipo de Gasto=${String(name)}`,
+                  ]}
+                  labelFormatter={(label) => `Sub-Capítulo=${label}`}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {stackKeys.map((k) => (
@@ -455,42 +585,19 @@ export default function CcoAnalisisJerarquico({
           </select>
         </div>
         <p style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#334155' }}>
-          Estructura Concéntrica (Sunburst) por Capítulo
-          {direccion.includes('Sub-Capítulo -') ? ' (vista invertida: mismos datos)' : ''}
+          Estructura Concéntrica (Sunburst) por{' '}
+          {direccion.startsWith('Sub') ? 'Sub-Capítulo' : 'Capítulo'}
         </p>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
             gap: 14,
           }}
         >
-          {(direccion.startsWith('Sub')
-            ? // Invertido: un sunburst por tipo (sub) con capítulos como anillo
-              tiposPie.slice(0, 8).map((t) => {
-                const hijos = jerarquiaCapitulos
-                  .map((c) => {
-                    const h = c.hijos.find((x) => x.nombre === t.name);
-                    return h
-                      ? {
-                          nombre: c.nombre,
-                          costo: h.costo,
-                          pctPadre: t.value > 0 ? (h.costo / t.value) * 100 : 0,
-                          pctTotal: h.pctTotal,
-                        }
-                      : null;
-                  })
-                  .filter(Boolean) as CcoCapituloJerarquia['hijos'];
-                const total = hijos.reduce((s, h) => s + h.costo, 0);
-                const fake: CcoCapituloJerarquia = {
-                  nombre: t.name,
-                  total,
-                  pctTotal: (total / (pieTotal || 1)) * 100,
-                  hijos,
-                };
-                return <SunburstCard key={t.name} cap={fake} />;
-              })
-            : jerarquiaCapitulos.map((c) => <SunburstCard key={c.nombre} cap={c} />))}
+          {sunburstCards.map((c) => (
+            <SunburstCard key={c.nombre} cap={c} />
+          ))}
         </div>
       </div>
 
@@ -507,15 +614,28 @@ export default function CcoAnalisisJerarquico({
           Relación Jerárquica del Presupuesto (Mapa de Árbol)
         </h2>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: '#64748B' }}>
-          Mapa de Árbol: Capítulo → Sub-Capítulo (tipo de gasto inferido desde proveedor en CI)
+          Mapa de Árbol: {direccion.startsWith('Sub') ? 'Sub-Capítulo → Capítulo' : 'Capítulo → Sub-Capítulo'}{' '}
+          (haz hover para ver montos)
         </p>
         {treemapNodos.length === 0 ? (
           <p style={{ color: '#94A3B8', fontSize: 13 }}>Sin datos</p>
         ) : (
-          <TreemapPresupuesto nodos={treemapNodos} />
+          <TreemapPresupuesto
+            nodos={
+              direccion.startsWith('Sub')
+                ? treemapNodos.map((n) => ({
+                    ...n,
+                    cap: n.sub,
+                    sub: n.cap,
+                  }))
+                : treemapNodos
+            }
+          />
         )}
+        <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94A3B8' }}>
+          Consejo: el tamaño y el tono teal indican el costo relativo de cada bloque.
+        </p>
       </div>
-
     </div>
   );
 }

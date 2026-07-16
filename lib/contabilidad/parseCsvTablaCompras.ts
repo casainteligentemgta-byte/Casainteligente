@@ -427,13 +427,17 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     const capitulo = cell(cols, iCapitulo);
     const subcap = cell(cols, iSubcapitulo);
     let descripcion = cell(cols, iDesc);
+    // Preservar TIPO · CAPÍTULO · SUBCAPÍTULO para gráficos jerárquicos CCO.
+    const jerarquiaPref = [tipo, capitulo, subcap].filter(Boolean).join(' · ');
     if (!descripcion) {
-      const partes = [tipo, capitulo, subcap].filter(Boolean);
-      descripcion = partes.join(' · ');
-    } else if (maestro && (tipo || capitulo)) {
-      const pref = [tipo, capitulo].filter(Boolean).join(' · ');
-      if (pref && tipo && !descripcion.toUpperCase().includes(tipo.toUpperCase())) {
-        descripcion = `${pref}: ${descripcion}`;
+      descripcion = jerarquiaPref;
+    } else if (jerarquiaPref) {
+      const upper = descripcion.toUpperCase();
+      const faltaTipo = Boolean(tipo && !upper.includes(tipo.toUpperCase()));
+      const faltaCap = Boolean(capitulo && !upper.includes(capitulo.toUpperCase()));
+      const faltaSub = Boolean(subcap && !upper.includes(subcap.toUpperCase()));
+      if (faltaTipo || faltaCap || faltaSub) {
+        descripcion = `${jerarquiaPref}: ${descripcion}`;
       }
     }
     if (!descripcion) {

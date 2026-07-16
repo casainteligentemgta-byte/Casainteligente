@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import type { CcoDashboard, CcoKpiBloque } from '@/lib/contabilidad/cargarCcoDashboard';
 import CcoAnalisisJerarquico from '@/components/contabilidad/cco/CcoAnalisisJerarquico';
+import { CCO_TIPO_COLOR_CAT } from '@/lib/contabilidad/ccoClasificarGasto';
 
 type TabId =
   | 'graficos'
@@ -47,16 +48,17 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'auditoria', label: 'AUDITORÍA', icon: '🛡️' },
 ];
 
+/** Misma paleta que barras de Sub-Capítulo / leyenda Tipo de Gasto. */
 const TIPOS_GASTO = [
-  { key: 'admin', name: 'ADMINISTRACIÓN DELEGADA', color: '#2563EB' },
-  { key: 'materiales', name: 'MATERIALES', color: '#DC2626' },
-  { key: 'contratista', name: 'CONTRATISTA', color: '#16A34A' },
-  { key: 'equipos', name: 'EQUIPOS', color: '#7C3AED' },
-  { key: 'insumos', name: 'INSUMOS', color: '#F97316' },
-  { key: 'mano', name: 'MANO DE OBRA', color: '#22D3EE' },
-  { key: 'transporte', name: 'TRANSPORTE', color: '#F9A8D4' },
-  { key: 'permiso', name: 'PERMISOLOGÍA', color: '#EC4899' },
-  { key: 'proyecto', name: 'PROYECTO', color: '#A78BFA' },
+  { key: 'admin', name: 'ADMINISTRACIÓN DELEGADA', color: CCO_TIPO_COLOR_CAT['ADMINISTRACIÓN DELEGADA'] },
+  { key: 'materiales', name: 'MATERIALES', color: CCO_TIPO_COLOR_CAT.MATERIALES },
+  { key: 'contratista', name: 'CONTRATISTA', color: CCO_TIPO_COLOR_CAT.CONTRATISTA },
+  { key: 'equipos', name: 'EQUIPOS', color: CCO_TIPO_COLOR_CAT.EQUIPOS },
+  { key: 'insumos', name: 'INSUMOS', color: CCO_TIPO_COLOR_CAT.INSUMOS },
+  { key: 'mano', name: 'MANO DE OBRA', color: CCO_TIPO_COLOR_CAT['MANO DE OBRA'] },
+  { key: 'transporte', name: 'TRANSPORTE', color: CCO_TIPO_COLOR_CAT.TRANSPORTE },
+  { key: 'permiso', name: 'PERMISOLOGÍA', color: CCO_TIPO_COLOR_CAT.PERMISOLOGIA },
+  { key: 'proyecto', name: 'PROYECTO', color: CCO_TIPO_COLOR_CAT.PROYECTO },
 ] as const;
 
 const axisTick = { fill: '#64748B', fontSize: 11 };
@@ -577,23 +579,42 @@ export default function CcoDashboardClient() {
                     )}
                   </ChartCard>
 
-                  <ChartCard title="Distribución por Capítulo (Composición por Tipo de Gasto)" tall={360}>
+                  <ChartCard title="Distribución por Capítulo (Composición por Tipo de Gasto)" tall={400}>
                     {data.capitulos.length === 0 ? (
                       <EmptyChart />
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data.capitulos}>
-                          <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+                        <BarChart data={data.capitulos} margin={{ bottom: 28, left: 4, right: 8 }}>
+                          <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" vertical={false} />
                           <XAxis
                             dataKey="cap"
                             tick={{ ...axisTick, fontSize: 9 }}
                             interval={0}
-                            angle={-20}
+                            angle={-25}
                             textAnchor="end"
-                            height={60}
+                            height={68}
+                            label={{
+                              value: 'Capítulo',
+                              position: 'insideBottom',
+                              offset: -4,
+                              style: { fill: '#64748B', fontSize: 11 },
+                            }}
                           />
-                          <YAxis tickFormatter={fmtUsdTick} tick={axisTick} width={48} />
-                          <Tooltip formatter={(v) => fmtUsd(Number(v))} />
+                          <YAxis
+                            tickFormatter={fmtUsdTick}
+                            tick={axisTick}
+                            width={52}
+                            label={{
+                              value: 'Costo Total (USD)',
+                              angle: -90,
+                              position: 'insideLeft',
+                              style: { fill: '#64748B', fontSize: 11 },
+                            }}
+                          />
+                          <Tooltip
+                            formatter={(v, name) => [fmtUsd(Number(v)), `Tipo de Gasto=${String(name)}`]}
+                            labelFormatter={(label) => `Capítulo=${label}`}
+                          />
                           <Legend wrapperStyle={{ fontSize: 11 }} />
                           {TIPOS_GASTO.map((t) => (
                             <Bar key={t.key} dataKey={t.key} name={t.name} stackId="a" fill={t.color} />

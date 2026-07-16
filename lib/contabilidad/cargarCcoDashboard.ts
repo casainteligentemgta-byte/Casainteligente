@@ -5,6 +5,9 @@ import {
   CCO_TIPOS_GASTO,
   CCO_TIPO_COLOR_PIE,
   clasificarTipoGasto,
+  etiquetaCorta,
+  parseJerarquiaDesdeTexto,
+  resolverTipoGastoTexto,
   type CcoTipoGasto,
 } from '@/lib/contabilidad/ccoClasificarGasto';
 
@@ -90,6 +93,30 @@ export type CcoDashboard = {
   proyectos: CcoProyectoOpcion[];
 };
 
+type CompraRow = {
+  id: string;
+  fecha?: string;
+  proyecto_id?: string;
+  monto_usd?: number;
+  monto_ves?: number;
+  total_amount?: number;
+  imputacion?: string;
+  supplier_name?: string;
+  contabilidad_compra_lineas?:
+    | { descripcion?: string; subtotal?: number }[]
+    | { descripcion?: string; subtotal?: number }
+    | null;
+};
+
+type GastoObraRow = {
+  fecha?: string | null;
+  disciplina?: string | null;
+  tipo?: string | null;
+  costo?: number | null;
+  descripcion?: string | null;
+  proveedor?: string | null;
+};
+
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -139,6 +166,59 @@ function acumularSerie(
   return { periodo, acumulado, gastos };
 }
 
+function tipKey(t: CcoTipoGasto): Exclude<keyof CcoCapituloFila, 'cap'> {
+  const map: Record<CcoTipoGasto, Exclude<keyof CcoCapituloFila, 'cap'>> = {
+    'ADMINISTRACIÓN DELEGADA': 'admin',
+    MATERIALES: 'materiales',
+    CONTRATISTA: 'contratista',
+    EQUIPOS: 'equipos',
+    INSUMOS: 'insumos',
+    'MANO DE OBRA': 'mano',
+    TRANSPORTE: 'transporte',
+    PERMISOLOGIA: 'permiso',
+    PROYECTO: 'proyecto',
+  };
+  return map[t];
+}
+
+function addTriple(
+  porCapTipo: Map<string, Map<CcoTipoGasto, number>>,
+  porCapSub: Map<string, Map<string, number>>,
+  porSubTipo: Map<string, Map<CcoTipoGasto, number>>,
+  porTipoTotal: Map<CcoTipoGasto, number>,
+  cap: string,
+  sub: string,
+  tipo: CcoTipoGasto,
+  usd: number,
+) {
+  if (!(usd > 0)) return;
+  if (!porCapTipo.has(cap)) porCapTipo.set(cap, new Map());
+  const ct = porCapTipo.get(cap)!;
+  ct.set(tipo, (ct.get(tipo) ?? 0) + usd);
+
+  if (!porCapSub.has(cap)) porCapSub.set(cap, new Map());
+  const cs = porCapSub.get(cap)!;
+  cs.set(sub, (cs.get(sub) ?? 0) + usd);
+
+  if (!porSubTipo.has(sub)) porSubTipo.set(sub, new Map());
+  const st = porSubTipo.get(sub)!;
+  st.set(tipo, (st.get(tipo) ?? 0) + usd);
+
+  porTipoTotal.set(tipo, (porTipoTotal.get(tipo) ?? 0) + usd);
+}
+
+function lineasDeCompra(row: CompraRow): { descripcion: string; subtotal: number }[] {
+  const nested = row.contabilidad_compra_lineas;
+  if (!nested) return [];
+  const arr = Array.isArray(nested) ? nested : [nested];
+  return arr
+    .map((l) => ({
+      descripcion: String(l.descripcion ?? '').trim(),
+      subtotal: num(l.subtotal),
+    }))
+    .filter((l) => l.descripcion || l.subtotal > 0);
+}
+
 export async function cargarCcoDashboard(
   supabase: SupabaseClient,
   params?: { proyectoId?: string | null; devaluacionPromedio?: number },
@@ -166,7 +246,7 @@ export async function cargarCcoDashboard(
   let comprasQ = supabase
     .from('contabilidad_compras')
     .select(
-      'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name',
+      'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name,contabilidad_compra_lineas(descripcion,subtotal)',
     )
     .not('proyecto_id', 'is', null)
     .neq('imputacion', IMPUTACION_ENTIDAD)
@@ -175,8 +255,23 @@ export async function cargarCcoDashboard(
 
   if (proyectoId) comprasQ = comprasQ.eq('proyecto_id', proyectoId);
 
-  const { data: compras, error: cErr } = await comprasQ;
-  if (cErr) throw cErr;
+  const comprasRes = await comprasQ;
+  let compras: CompraRow[] = (comprasRes.data ?? []) as CompraRow[];
+
+  // Fallback si el embed de líneas no está disponible
+  if (comprasRes.error) {
+    let fbQ = supabase
+      .from('contabilidad_compras')
+      .select('id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name')
+      .not('proyecto_id', 'is', null)
+      .neq('imputacion', IMPUTACION_ENTIDAD)
+      .order('fecha', { ascending: true })
+      .limit(8000);
+    if (proyectoId) fbQ = fbQ.eq('proyecto_id', proyectoId);
+    const fb = await fbQ;
+    if (fb.error) throw fb.error;
+    compras = (fb.data ?? []) as CompraRow[];
+  }
 
   let inyQ = supabase
     .from('ci_inyecciones_capital')
@@ -220,12 +315,26 @@ export async function cargarCcoDashboard(
     }
   }
 
+  /** Complemento opcional: gastos_obra (disciplina = sub-capítulo). */
+  let gastosObra: GastoObraRow[] = [];
+  if (proyectoId) {
+    const gQ = await supabase
+      .from('gastos_obra')
+      .select('fecha,disciplina,tipo,costo,descripcion,proveedor')
+      .eq('proyecto_id', proyectoId)
+      .limit(8000);
+    if (!gQ.error) gastosObra = (gQ.data ?? []) as GastoObraRow[];
+  }
+
   const porMesIngresos = new Map<string, number>();
   const porMesEgresos = new Map<string, number>();
   const porProveedor = new Map<string, number>();
-  const porProyectoUsd = new Map<string, number>();
-  /** cap -> tipo -> usd (compras) */
+  /** cap -> tipo -> usd */
   const porCapTipo = new Map<string, Map<CcoTipoGasto, number>>();
+  /** cap -> sub -> usd (sunburst / treemap) */
+  const porCapSub = new Map<string, Map<string, number>>();
+  /** sub -> tipo -> usd (barras apiladas sub-capítulo) */
+  const porSubTipo = new Map<string, Map<CcoTipoGasto, number>>();
   const porTipoTotal = new Map<CcoTipoGasto, number>();
 
   let ingresos = 0;
@@ -242,34 +351,90 @@ export async function cargarCcoDashboard(
   }
 
   const nombrePorId = new Map(proyectos.map((p) => [p.id, p.nombre]));
-
   let gastosNetos = 0;
-  for (const row of compras ?? []) {
-    const usd = num((row as { monto_usd?: number }).monto_usd);
+  let jerarquiaDesdeLineas = 0;
+
+  for (const row of compras) {
+    const usd = num(row.monto_usd);
     gastosNetos += usd;
-    const periodo = ym((row as { fecha?: string }).fecha);
+    const periodo = ym(row.fecha);
     if (periodo) porMesEgresos.set(periodo, (porMesEgresos.get(periodo) ?? 0) + usd);
 
-    const prov =
-      String((row as { supplier_name?: string }).supplier_name ?? '').trim() || 'Sin proveedor';
+    const prov = String(row.supplier_name ?? '').trim() || 'Sin proveedor';
     porProveedor.set(prov, (porProveedor.get(prov) ?? 0) + usd);
 
-    const pid = String((row as { proyecto_id?: string }).proyecto_id ?? '').trim();
-    if (pid) porProyectoUsd.set(pid, (porProyectoUsd.get(pid) ?? 0) + usd);
+    const pid = String(row.proyecto_id ?? '').trim();
+    const capFallback = (nombrePorId.get(pid) ?? (pid || 'SIN CAPÍTULO')).slice(0, 28).toUpperCase();
+    const tipoFallback = clasificarTipoGasto(prov);
+    const lineas = lineasDeCompra(row);
 
-    const cap = (nombrePorId.get(pid) ?? (pid || 'SIN CAPÍTULO')).slice(0, 28).toUpperCase();
-    const tipo = clasificarTipoGasto(prov);
-    if (!porCapTipo.has(cap)) porCapTipo.set(cap, new Map());
-    const m = porCapTipo.get(cap)!;
-    m.set(tipo, (m.get(tipo) ?? 0) + usd);
-    porTipoTotal.set(tipo, (porTipoTotal.get(tipo) ?? 0) + usd);
+    if (lineas.length > 0 && usd > 0) {
+      const sumSub = lineas.reduce((s, l) => s + Math.max(l.subtotal, 0), 0);
+      for (const linea of lineas) {
+        const share =
+          sumSub > 0 ? (Math.max(linea.subtotal, 0) / sumSub) * usd : usd / lineas.length;
+        const parsed = parseJerarquiaDesdeTexto(linea.descripcion);
+        const tipo = parsed.tipo ?? tipoFallback;
+        const cap = (parsed.capitulo || capFallback).slice(0, 28).toUpperCase();
+        const sub = (parsed.subcapitulo || parsed.tipo || tipo).slice(0, 28).toUpperCase();
+        if (parsed.capitulo || parsed.subcapitulo) jerarquiaDesdeLineas += 1;
+        addTriple(porCapTipo, porCapSub, porSubTipo, porTipoTotal, cap, sub, tipo, share);
+      }
+    } else {
+      addTriple(
+        porCapTipo,
+        porCapSub,
+        porSubTipo,
+        porTipoTotal,
+        capFallback,
+        tipoFallback,
+        tipoFallback,
+        usd,
+      );
+    }
+  }
+
+  // Si hay gastos_obra con disciplina, enriquecer (o reemplazar jerarquía cuando no hubo CSV)
+  for (const g of gastosObra) {
+    const costo = num(g.costo);
+    if (!(costo > 0)) continue;
+    const parsed = parseJerarquiaDesdeTexto(
+      [g.tipo, g.disciplina, g.descripcion].filter(Boolean).join(' · '),
+    );
+    const tipo =
+      resolverTipoGastoTexto(String(g.tipo ?? '')) ||
+      parsed.tipo ||
+      clasificarTipoGasto(String(g.proveedor ?? g.descripcion ?? ''));
+    const cap = (
+      parsed.capitulo ||
+      (proyectoNombre !== 'Todas las obras' ? proyectoNombre : 'OBRA')
+    )
+      .slice(0, 28)
+      .toUpperCase();
+    const sub = (parsed.subcapitulo || String(g.disciplina ?? '').trim() || tipo)
+      .slice(0, 28)
+      .toUpperCase();
+
+    // Solo agregar si no teníamos jerarquía de líneas CSV (evitar doble conteo)
+    if (jerarquiaDesdeLineas === 0) {
+      const periodo = ym(g.fecha);
+      if (periodo) porMesEgresos.set(periodo, (porMesEgresos.get(periodo) ?? 0) + costo);
+      gastosNetos += costo;
+      const prov = String(g.proveedor ?? '').trim() || 'Sin proveedor';
+      porProveedor.set(prov, (porProveedor.get(prov) ?? 0) + costo);
+      addTriple(porCapTipo, porCapSub, porSubTipo, porTipoTotal, cap, sub, tipo, costo);
+    } else if (parsed.subcapitulo || String(g.disciplina ?? '').trim()) {
+      // Ya contamos compras; no sumar de nuevo al total, pero si faltan subs reales
+      // no tocamos montos para no duplicar.
+      void 0;
+    }
   }
 
   const adminDelegada = gastosNetos * (honorariosPct / 100);
   const costoTotal = gastosNetos + adminDelegada;
   const saldoCaja = ingresos - costoTotal;
 
-  // Prorratear admin delegada en cada capítulo
+  // Prorratear admin delegada en cada capítulo / sub
   const totalGastos = gastosNetos || 1;
   for (const [cap, tipos] of Array.from(porCapTipo.entries())) {
     const matCap = Array.from(tipos.values()).reduce((a, b) => a + b, 0);
@@ -283,8 +448,22 @@ export async function cargarCcoDashboard(
         'ADMINISTRACIÓN DELEGADA',
         (porTipoTotal.get('ADMINISTRACIÓN DELEGADA') ?? 0) + adminShare,
       );
+      // Prorratear admin a sub-capítulos del capítulo
+      const subs = porCapSub.get(cap);
+      if (subs && subs.size) {
+        const subTotal = Array.from(subs.values()).reduce((a, b) => a + b, 0) || 1;
+        for (const [sub, subUsd] of Array.from(subs.entries())) {
+          const share = adminShare * (subUsd / subTotal);
+          subs.set(sub, subUsd + share);
+          if (!porSubTipo.has(sub)) porSubTipo.set(sub, new Map());
+          const st = porSubTipo.get(sub)!;
+          st.set(
+            'ADMINISTRACIÓN DELEGADA',
+            (st.get('ADMINISTRACIÓN DELEGADA') ?? 0) + share,
+          );
+        }
+      }
     }
-    void cap;
   }
 
   const grandTotal =
@@ -311,26 +490,10 @@ export async function cargarCcoDashboard(
     .slice(0, 10)
     .reverse();
 
-  type CcoCapituloMontoKey = Exclude<keyof CcoCapituloFila, 'cap'>;
-  const tipKey = (t: CcoTipoGasto): CcoCapituloMontoKey => {
-    const map: Record<CcoTipoGasto, CcoCapituloMontoKey> = {
-      'ADMINISTRACIÓN DELEGADA': 'admin',
-      MATERIALES: 'materiales',
-      CONTRATISTA: 'contratista',
-      EQUIPOS: 'equipos',
-      INSUMOS: 'insumos',
-      'MANO DE OBRA': 'mano',
-      TRANSPORTE: 'transporte',
-      PERMISOLOGIA: 'permiso',
-      PROYECTO: 'proyecto',
-    };
-    return map[t];
-  };
-
   const capitulos: CcoCapituloFila[] = Array.from(porCapTipo.entries())
     .map(([cap, tipos]) => {
       const row: CcoCapituloFila = {
-        cap: cap.slice(0, 22),
+        cap: etiquetaCorta(cap, 22),
         admin: 0,
         materiales: 0,
         contratista: 0,
@@ -347,16 +510,19 @@ export async function cargarCcoDashboard(
       return row;
     })
     .sort((a, b) => {
-      const ta = a.admin + a.materiales + a.contratista + a.equipos + a.insumos + a.mano;
-      const tb = b.admin + b.materiales + b.contratista + b.equipos + b.insumos + b.mano;
+      const ta =
+        a.admin + a.materiales + a.contratista + a.equipos + a.insumos + a.mano + a.transporte;
+      const tb =
+        b.admin + b.materiales + b.contratista + b.equipos + b.insumos + b.mano + b.transporte;
       return tb - ta;
     })
     .slice(0, 12);
 
-  const jerarquiaCapitulos: CcoCapituloJerarquia[] = Array.from(porCapTipo.entries())
-    .map(([nombre, tipos]) => {
-      const total = Array.from(tipos.values()).reduce((a, b) => a + b, 0);
-      const hijos: CcoHijoJerarquia[] = Array.from(tipos.entries())
+  /** Sunburst / treemap: hijos = Sub-Capítulos reales (no tipos de gasto). */
+  const jerarquiaCapitulos: CcoCapituloJerarquia[] = Array.from(porCapSub.entries())
+    .map(([nombre, subs]) => {
+      const total = Array.from(subs.values()).reduce((a, b) => a + b, 0);
+      const hijos: CcoHijoJerarquia[] = Array.from(subs.entries())
         .filter(([, c]) => c > 0)
         .map(([n, costo]) => ({
           nombre: n,
@@ -375,14 +541,22 @@ export async function cargarCcoDashboard(
     .sort((a, b) => b.total - a.total)
     .slice(0, 12);
 
-  /** Eje X = capítulo/obra; stack = tipo de gasto (misma composición que captura V4). */
-  const subCapitulosStack: CcoSubCapituloStack[] = jerarquiaCapitulos.map((c) => {
-    const row: CcoSubCapituloStack = { sub: c.nombre.slice(0, 18) };
-    for (const t of CCO_TIPOS_GASTO) {
-      row[t] = porCapTipo.get(c.nombre)?.get(t) ?? 0;
-    }
-    return row;
-  });
+  /** Eje X = Sub-Capítulo; stack = Tipo de Gasto. */
+  const subCapitulosStack: CcoSubCapituloStack[] = Array.from(porSubTipo.entries())
+    .map(([sub, tipos]) => {
+      const row: CcoSubCapituloStack = { sub: etiquetaCorta(sub, 18) };
+      let total = 0;
+      for (const t of CCO_TIPOS_GASTO) {
+        const v = tipos.get(t) ?? 0;
+        row[t] = v;
+        total += v;
+      }
+      return { row, total };
+    })
+    .filter((x) => x.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 18)
+    .map((x) => x.row);
 
   const tiposPie: CcoTipoPie[] = CCO_TIPOS_GASTO.map((name) => ({
     name,
