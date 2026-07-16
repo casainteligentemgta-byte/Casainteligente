@@ -17,6 +17,7 @@ import {
   type LegalDocumentStructured,
 } from '@/lib/legal/documentoEstructurado';
 import DocumentBlocksView from '@/components/legal/DocumentBlocksView';
+import GenerarPDFButton from '@/components/legal/GenerarPDFButton';
 
 const campo =
   'mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-500/40';
@@ -211,13 +212,14 @@ export default function DocumentoDetallePage() {
             className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
           >
             <Printer className="h-4 w-4" />
-            Imprimir / PDF
+            Vista impresión
           </a>
+          <GenerarPDFButton documentId={id} />
           <button
             type="button"
             onClick={() => void guardar()}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2 text-sm font-bold text-black disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-100 hover:bg-white/5 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Guardar
