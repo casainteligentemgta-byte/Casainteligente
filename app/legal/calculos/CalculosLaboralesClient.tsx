@@ -16,10 +16,12 @@ function money(n: number) {
   });
 }
 
-function labelCriterio(c: WorkerPasivoResult['criterio_provision'] | ResultadoLaborCalculator['criterio_provision']) {
+function labelCriterio(
+  c: WorkerPasivoResult['criterio_provision'] | ResultadoLaborCalculator['criterio_provision'],
+) {
   if (c === 'retroactivo') return 'Retroactivo (lit. f)';
-  if (c === 'empatados') return 'Empate garantía / retroactivo';
-  return 'Garantía trimestral (lit. a)';
+  if (c === 'empatados') return 'Empate garantia / retroactivo';
+  return 'Garantia trimestral (lit. a)';
 }
 
 export default function CalculosLaboralesClient() {
@@ -135,14 +137,14 @@ export default function CalculosLaboralesClient() {
         </p>
         <h2 className="mt-2 text-2xl font-bold text-white">Prestaciones sociales</h2>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Salario integral, garantía trimestral (literal a) y retroactivo de 60 días por año o
-          fracción &gt; 6 meses (literal f). Se provisiona el monto mayor.
+          Salario integral, garantia trimestral (literal a) y retroactivo de 60 dias por ano o
+          fraccion &gt; 6 meses (literal f). Se provisiona el monto mayor.
         </p>
       </header>
 
       <section className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
-          Simulación manual
+          Simulacion manual
         </h3>
         <form
           onSubmit={calcularApi}
@@ -160,7 +162,7 @@ export default function CalculosLaboralesClient() {
             />
           </label>
           <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Días utilidades
+            Dias utilidades
             <input
               type="number"
               min={0}
@@ -170,7 +172,7 @@ export default function CalculosLaboralesClient() {
             />
           </label>
           <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Días bono vacacional
+            Dias bono vacacional
             <input
               type="number"
               min={0}
@@ -235,7 +237,7 @@ export default function CalculosLaboralesClient() {
             </div>
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
-                Garantía trimestral · lit. a)
+                Garantia trimestral · lit. a)
               </p>
               <p className="mt-1 text-2xl font-bold text-amber-100">
                 {money(r.garantia_trimestral)}
@@ -251,10 +253,10 @@ export default function CalculosLaboralesClient() {
                 </p>
                 <p className="mt-1 text-3xl font-bold text-white">{money(retro.retroactivo)}</p>
                 <p className="mt-2 text-xs text-zinc-500">
-                  {retro.fecha_inicio} ? {retro.fecha_fin}: {retro.anios_completos} años +{' '}
+                  {retro.fecha_inicio} ? {retro.fecha_fin}: {retro.anios_completos} anos +{' '}
                   {retro.meses_fraccion} meses ?{' '}
-                  <strong className="text-zinc-300">{retro.anios_servicio}</strong> año(s)
-                  computables × {retro.dias_retroactivo_por_anio} días
+                  <strong className="text-zinc-300">{retro.anios_servicio}</strong> ano(s)
+                  computables × {retro.dias_retroactivo_por_anio} dias
                 </p>
               </div>
             )}
@@ -335,7 +337,7 @@ export default function CalculosLaboralesClient() {
               </p>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-              <p className="text-[10px] uppercase text-zinc-500">Garantía trimestral</p>
+              <p className="text-[10px] uppercase text-zinc-500">Garantia trimestral</p>
               <p className="mt-1 text-xl font-bold text-white">
                 {money(pasivo.garantia_trimestral)}
               </p>
