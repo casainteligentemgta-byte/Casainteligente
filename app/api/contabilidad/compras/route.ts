@@ -11,6 +11,7 @@ import {
   parseMontoBimonetario,
   validarMontosCompraBimonetarios,
 } from '@/lib/contabilidad/validarCompraBimonetaria';
+import { upsertCompraContableDedup } from '@/lib/contabilidad/upsertCompraContableDedup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,6 +47,11 @@ type CompraInsertBody = {
   document_storage_path?: string | null;
   document_file_name?: string | null;
   lineas?: LineaCompraBody[];
+  /**
+   * Upsert por llave natural (hash). Por defecto true en HISTORICO_*.
+   * false → rechaza duplicado con 409.
+   */
+  upsert_dedup?: boolean;
 };
 
 function extraerTasaCliente(body: CompraInsertBody): number | null {
@@ -60,9 +66,13 @@ function normalizarFecha(fecha?: string): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function origenHistorico(origen: string): boolean {
+  return /^HISTORICO_/i.test(origen);
+}
+
 /**
  * POST /api/contabilidad/compras
- * Registra una compra en contabilidad_compras con validación bimonetaria estricta.
+ * Registra una compra en contabilidad_compras con validación bimonetaria y anti-duplicados (hash).
  */
 export async function POST(req: Request) {
   try {
@@ -76,6 +86,7 @@ export async function POST(req: Request) {
     const supplierRif = body.supplier_rif?.trim();
     const supplierName = body.supplier_name?.trim();
     const fecha = normalizarFecha(body.fecha);
+    const origen = body.origen?.trim() || 'LIBRO_COMPRAS';
 
     if (!gastoEntidad && !proyectoId) {
       return NextResponse.json(
@@ -145,17 +156,17 @@ export async function POST(req: Request) {
     const purchaseInvoiceId = body.purchase_invoice_id?.trim() || null;
 
     if (purchaseInvoiceId) {
-      const { data: existente } = await supabase
+      const { data: existentePi } = await supabase
         .from('contabilidad_compras')
         .select('id')
         .eq('purchase_invoice_id', purchaseInvoiceId)
         .maybeSingle();
 
-      if (existente?.id) {
+      if (existentePi?.id) {
         return NextResponse.json(
           {
             error: 'Ya existe un registro contable para esta factura de recepción.',
-            hint: `compra_id: ${existente.id}`,
+            hint: `compra_id: ${existentePi.id}`,
           },
           { status: 409 },
         );
@@ -173,82 +184,57 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: compra, error: compraError } = await supabase
-      .from('contabilidad_compras')
-      .insert({
-        purchase_invoice_id: purchaseInvoiceId,
-        proyecto_id: gastoEntidad ? null : proyectoId,
-        imputacion: gastoEntidad ? IMPUTACION_ENTIDAD : IMPUTACION_OBRA,
-        ...(entidadId ? { entidad_id: entidadId } : {}),
-        invoice_number: invoiceNumber,
-        supplier_rif: supplierRif,
-        supplier_name: supplierName,
-        fecha,
-        total_amount: validacion.montoVes,
-        monto_ves: validacion.montoVes,
-        monto_usd: validacion.montoUsd,
-        total_amount_usd: validacion.montoUsd,
-        tasa_bcv_ves_por_usd: validacion.tasaBcvFecha,
-        moneda: monedaOriginal,
-        moneda_original: monedaOriginal,
-        origen: body.origen?.trim() || 'LIBRO_COMPRAS',
-        estado: 'REGISTRADA',
-        notas: body.notas ?? null,
-        document_storage_path: body.document_storage_path ?? null,
-        document_file_name: body.document_file_name ?? null,
-      })
-      .select('id')
-      .single();
+    const upsert =
+      body.upsert_dedup !== undefined
+        ? Boolean(body.upsert_dedup)
+        : origenHistorico(origen);
 
-    if (compraError) {
-      const hint = /monto_ves|tasa_bcv|moneda_original/i.test(compraError.message)
-        ? 'Ejecuta las migraciones 144 y 148 en Supabase y recarga el schema.'
-        : compraError.message;
+    const lineas = Array.isArray(body.lineas)
+      ? body.lineas.map((l) => ({
+          descripcion: l.descripcion,
+          item_code: l.item_code,
+          unidad: l.unidad,
+          cantidad: parseMontoBimonetario(l.cantidad) ?? 0,
+          precio_unitario: parseMontoBimonetario(l.precio_unitario) ?? 0,
+          subtotal: parseMontoBimonetario(l.subtotal) ?? undefined,
+          purchase_detail_id: l.purchase_detail_id,
+          material_id: l.material_id,
+        }))
+      : [];
+
+    const result = await upsertCompraContableDedup(supabase, {
+      purchase_invoice_id: purchaseInvoiceId,
+      proyecto_id: gastoEntidad ? null : proyectoId,
+      entidad_id: entidadId,
+      imputacion: gastoEntidad ? IMPUTACION_ENTIDAD : IMPUTACION_OBRA,
+      invoice_number: invoiceNumber,
+      supplier_rif: supplierRif,
+      supplier_name: supplierName,
+      fecha,
+      monto_ves: validacion.montoVes,
+      monto_usd: validacion.montoUsd,
+      tasa_bcv_ves_por_usd: validacion.tasaBcvFecha,
+      moneda_original: monedaOriginal,
+      origen,
+      notas: body.notas ?? null,
+      document_storage_path: body.document_storage_path ?? null,
+      document_file_name: body.document_file_name ?? null,
+      lineas,
+      upsert,
+    });
+
+    if (!result.ok) {
       return NextResponse.json(
-        { error: `No se pudo registrar la compra: ${compraError.message}`, hint },
-        { status: 500 },
+        { error: result.error, hint: result.hint, id: result.id },
+        { status: result.status },
       );
-    }
-
-    const lineas = Array.isArray(body.lineas) ? body.lineas : [];
-    if (lineas.length > 0) {
-      const lineRows = lineas.map((l) => {
-        const cantidad = parseMontoBimonetario(l.cantidad) ?? 0;
-        const precioUnitario = parseMontoBimonetario(l.precio_unitario) ?? 0;
-        const subtotal =
-          parseMontoBimonetario(l.subtotal) ?? cantidad * precioUnitario;
-        return {
-          compra_id: compra.id,
-          purchase_detail_id: l.purchase_detail_id ?? null,
-          material_id: l.material_id ?? null,
-          descripcion: (l.descripcion ?? 'Ítem').trim() || 'Ítem',
-          item_code: l.item_code?.trim() || null,
-          unidad: (l.unidad ?? 'UND').trim() || 'UND',
-          cantidad,
-          precio_unitario: precioUnitario,
-          subtotal,
-        };
-      });
-
-      const { error: lineasError } = await supabase
-        .from('contabilidad_compra_lineas')
-        .insert(lineRows);
-
-      if (lineasError) {
-        await supabase.from('contabilidad_compras').delete().eq('id', compra.id);
-        return NextResponse.json(
-          {
-            error: `Compra creada pero falló el detalle: ${lineasError.message}`,
-            hint: 'Revisa lineas[] (descripcion, cantidad, precio_unitario).',
-          },
-          { status: 500 },
-        );
-      }
     }
 
     return NextResponse.json({
       ok: true,
-      id: compra.id,
+      id: result.id,
+      action: result.action,
+      dedup_hash: result.dedup_hash,
       monto_ves: validacion.montoVes,
       monto_usd: validacion.montoUsd,
       tasa_bcv_fecha: validacion.tasaBcvFecha,

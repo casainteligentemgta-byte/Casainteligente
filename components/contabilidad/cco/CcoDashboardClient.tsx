@@ -17,6 +17,41 @@ import {
 } from 'recharts';
 import type { CcoDashboard, CcoKpiBloque } from '@/lib/contabilidad/cargarCcoDashboard';
 import CcoAnalisisJerarquico from '@/components/contabilidad/cco/CcoAnalisisJerarquico';
+import CcoImportarCsvPanel from '@/components/contabilidad/cco/CcoImportarCsvPanel';
+import CcoExportBar from '@/components/contabilidad/cco/CcoExportBar';
+import CcoFormRegistroModal from '@/components/contabilidad/cco/CcoFormRegistroModal';
+import CcoImportarPdfPanel from '@/components/contabilidad/cco/CcoImportarPdfPanel';
+import CcoImportarV4Panel from '@/components/contabilidad/cco/CcoImportarV4Panel';
+import CcoLibroMaestro from '@/components/contabilidad/cco/CcoLibroMaestro';
+import CcoTabAjustes from '@/components/contabilidad/cco/CcoTabAjustes';
+import CcoTabAuditoria from '@/components/contabilidad/cco/CcoTabAuditoria';
+import CcoTabContratos from '@/components/contabilidad/cco/CcoTabContratos';
+import CcoTabDeudas from '@/components/contabilidad/cco/CcoTabDeudas';
+import CcoTabDistribucion from '@/components/contabilidad/cco/CcoTabDistribucion';
+import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos';
+import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
+
+type NavId =
+  | 'dashboard'
+  | 'importar-csv'
+  | 'importar-pdf'
+  | 'importar-v4'
+  | 'libro'
+  | 'presupuestos'
+  | 'auditoria'
+  | 'ajustes';
+
+/** Menú lateral CCO V4. */
+const NAV_ITEMS: { id: NavId; label: string; ready: boolean; hint?: string }[] = [
+  { id: 'dashboard', label: 'Dashboard', ready: true },
+  { id: 'importar-csv', label: 'Importar CSV', ready: true, hint: 'Anti-duplicados' },
+  { id: 'importar-pdf', label: 'Importar PDF', ready: true, hint: 'OCR / tabla' },
+  { id: 'importar-v4', label: 'Importar V4 SQLite', ready: true, hint: 'JSON ETL' },
+  { id: 'libro', label: 'Libro maestro', ready: true },
+  { id: 'presupuestos', label: 'Presupuestos', ready: true },
+  { id: 'auditoria', label: 'Auditoría', ready: true },
+  { id: 'ajustes', label: 'Ajustes CCO', ready: true },
+];
 
 type TabId =
   | 'graficos'
@@ -211,14 +246,23 @@ const SECUNDARIOS = [
 ];
 
 export default function CcoDashboardClient() {
+  const [nav, setNav] = useState<NavId>('dashboard');
   const [tab, setTab] = useState<TabId>('graficos');
   const [proyectoId, setProyectoId] = useState('');
   const [devaluacion, setDevaluacion] = useState(0);
+  const [devalManual, setDevalManual] = useState(false);
+  const devaluacionRef = React.useRef(devaluacion);
+  devaluacionRef.current = devaluacion;
   const [data, setData] = useState<CcoDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [periodicidad, setPeriodicidad] = useState('Mensual');
   const [modo, setModo] = useState<'acumulado' | 'periodo'>('acumulado');
+
+  const proyectosCatalogo = useMemo(
+    () => (data?.proyectos ?? []).map((p) => ({ id: p.id, nombre: p.nombre })),
+    [data?.proyectos],
+  );
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -226,22 +270,37 @@ export default function CcoDashboardClient() {
     try {
       const qs = new URLSearchParams();
       if (proyectoId) qs.set('proyecto', proyectoId);
-      qs.set('devaluacion', String(devaluacion));
+      // Solo forzar devaluación si el usuario la editó; si no, usa config de obra.
+      if (devalManual) qs.set('devaluacion', String(devaluacionRef.current));
       const res = await fetch(`/api/contabilidad/cco-dashboard?${qs}`, { cache: 'no-store' });
       const json = (await res.json()) as CcoDashboard & { ok?: boolean; error?: string };
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error al cargar');
       setData(json);
+      if (!devalManual && json.devaluacionPromedio != null) {
+        const d = Number(json.devaluacionPromedio) || 0;
+        setDevaluacion((prev) => (prev === d ? prev : d));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar dashboard');
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [proyectoId, devaluacion]);
+  }, [proyectoId, devalManual]);
+
+  useEffect(() => {
+    setDevalManual(false);
+  }, [proyectoId]);
 
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  useEffect(() => {
+    if (!devalManual) return;
+    const t = window.setTimeout(() => void cargar(), 350);
+    return () => window.clearTimeout(t);
+  }, [devaluacion, devalManual, cargar]);
 
   const flujo = useMemo(() => {
     if (!data) return [];
@@ -298,7 +357,160 @@ export default function CcoDashboardClient() {
         </button>
       </div>
 
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '16px 20px 24px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          minHeight: 'calc(100vh - 42px)',
+          maxWidth: 1400,
+          margin: '0 auto',
+        }}
+      >
+        {/* Menú izquierdo — se enriquecerá después */}
+        <aside
+          style={{
+            width: 220,
+            flexShrink: 0,
+            background: '#0F172A',
+            color: '#E2E8F0',
+            padding: '18px 12px',
+            borderRight: '1px solid #1E293B',
+          }}
+        >
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: '#64748B',
+              margin: '0 8px 12px',
+            }}
+          >
+            Menú CCO
+          </p>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {NAV_ITEMS.map((item) => {
+              const active = nav === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={!item.ready}
+                  title={item.ready ? undefined : 'Próximamente'}
+                  onClick={() => {
+                    if (item.ready) setNav(item.id);
+                  }}
+                  style={{
+                    textAlign: 'left',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '10px 12px',
+                    cursor: item.ready ? 'pointer' : 'not-allowed',
+                    background: active ? '#2563EB' : 'transparent',
+                    color: item.ready ? (active ? '#fff' : '#CBD5E1') : '#475569',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    opacity: item.ready ? 1 : 0.55,
+                  }}
+                >
+                  <span style={{ display: 'block' }}>{item.label}</span>
+                  {item.hint ? (
+                    <span
+                      style={{
+                        display: 'block',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        marginTop: 2,
+                        color: active ? 'rgba(255,255,255,0.75)' : '#64748B',
+                      }}
+                    >
+                      {item.hint}
+                    </span>
+                  ) : null}
+                  {!item.ready ? (
+                    <span style={{ display: 'block', fontSize: 10, marginTop: 2, color: '#64748B' }}>
+                      Próximamente
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <div style={{ flex: 1, minWidth: 0, padding: '16px 20px 24px' }}>
+      {nav === 'importar-csv' ? (
+        <CcoImportarCsvPanel
+          proyectos={proyectosCatalogo}
+          proyectoIdInicial={proyectoId || null}
+          onImportado={(pid) => {
+            if (pid) setProyectoId(pid);
+            void cargar();
+            setNav('dashboard');
+          }}
+        />
+      ) : null}
+
+      {nav === 'importar-pdf' ? (
+        <CcoImportarPdfPanel
+          proyectos={proyectosCatalogo}
+          proyectoIdInicial={proyectoId || null}
+          onImportado={(pid) => {
+            if (pid) setProyectoId(pid);
+            void cargar();
+            setNav('dashboard');
+          }}
+        />
+      ) : null}
+
+      {nav === 'importar-v4' ||
+      nav === 'libro' ||
+      nav === 'presupuestos' ||
+      nav === 'auditoria' ||
+      nav === 'ajustes' ? (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', maxWidth: 360 }}>
+            <span style={labelStyle}>Obra destino</span>
+            <select
+              value={proyectoId}
+              onChange={(e) => setProyectoId(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Seleccionar obra…</option>
+              {(data?.proyectos ?? proyectosCatalogo).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+
+      {nav === 'importar-v4' ? (
+        <CcoImportarV4Panel proyectoId={proyectoId} onDone={() => void cargar()} />
+      ) : null}
+
+      {nav === 'libro' ? <CcoLibroMaestro proyectoId={proyectoId} /> : null}
+
+      {nav === 'presupuestos' ? <CcoTabPresupuestos proyectoId={proyectoId} /> : null}
+
+      {nav === 'auditoria' ? <CcoTabAuditoria proyectoId={proyectoId} /> : null}
+
+      {nav === 'ajustes' ? (
+        <CcoTabAjustes
+          proyectoId={proyectoId}
+          onSaved={(cfg) => {
+            setDevaluacion(cfg.devaluacion_pct);
+            setDevalManual(false);
+            void cargar();
+          }}
+        />
+      ) : null}
+
+      {nav === 'dashboard' ? (
+        <>
         <div
           style={{
             background: 'linear-gradient(90deg, #1D4ED8 0%, #2563EB 55%, #3B82F6 100%)',
@@ -362,10 +574,20 @@ export default function CcoDashboardClient() {
               type="number"
               step="0.01"
               value={devaluacion}
-              onChange={(e) => setDevaluacion(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                setDevalManual(true);
+                setDevaluacion(Number(e.target.value) || 0);
+              }}
               style={selectStyle}
             />
           </label>
+          <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={labelStyle}>Exportar / registrar</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <CcoExportBar proyectoId={proyectoId} />
+              <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -638,15 +860,64 @@ export default function CcoDashboardClient() {
                 ]}
               />
             ) : null}
-            {tab !== 'graficos' && tab !== 'egresos' && tab !== 'ingresos' ? (
+            {tab === 'contratos' ? <CcoTabContratos proyectoId={proyectoId} /> : null}
+            {tab === 'presupuestos' ? <CcoTabPresupuestos proyectoId={proyectoId} /> : null}
+            {tab === 'deudas' ? <CcoTabDeudas proyectoId={proyectoId} /> : null}
+            {tab === 'datos' ? <CcoLibroMaestro proyectoId={proyectoId} /> : null}
+            {tab === 'rubros' ? <CcoTabRubros proyectoId={proyectoId} /> : null}
+            {tab === 'distribucion' ? (
+              <CcoTabDistribucion proyectoId={proyectoId} onDone={() => void cargar()} />
+            ) : null}
+            {tab === 'editor' ? (
+              <div
+                style={{
+                  background: '#fff',
+                  borderRadius: 14,
+                  border: '1px solid #E2E8F0',
+                  padding: 24,
+                }}
+              >
+                <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>Editor maestro</h3>
+                <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 16px' }}>
+                  Alta de GASTO, INGRESO o CONTRATO sin afectar stock. También disponible en la barra superior.
+                </p>
+                <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
+                <div style={{ marginTop: 20 }}>
+                  <CcoExportBar proyectoId={proyectoId} />
+                </div>
+              </div>
+            ) : null}
+            {tab === 'auditoria' ? <CcoTabAuditoria proyectoId={proyectoId} /> : null}
+            {tab === 'importar' ? (
+              <CcoImportarPdfPanel
+                proyectos={proyectosCatalogo}
+                proyectoIdInicial={proyectoId || null}
+                onImportado={(pid) => {
+                  if (pid) setProyectoId(pid);
+                  void cargar();
+                }}
+              />
+            ) : null}
+            {tab !== 'graficos' &&
+            tab !== 'egresos' &&
+            tab !== 'ingresos' &&
+            tab !== 'contratos' &&
+            tab !== 'presupuestos' &&
+            tab !== 'deudas' &&
+            tab !== 'datos' &&
+            tab !== 'rubros' &&
+            tab !== 'distribucion' &&
+            tab !== 'editor' &&
+            tab !== 'auditoria' &&
+            tab !== 'importar' ? (
               <SeccionLista
                 title={TABS.find((t) => t.id === tab)?.label ?? 'Sección'}
-                desc="Estructura lista. Detalle de esta pestaña se completa con el flujo CCO (import SQLite / editor)."
+                desc="Menú CCO V4 cableado (CSV, PDF, SQLite, libro, contratos, exports)."
                 href="/contabilidad/compras"
                 hrefLabel="Ir a módulos secundarios →"
                 lines={[
-                  'Orden y colores del menú V4 ya activos',
-                  'Datos vivos hoy: Gráficos, Egresos e Ingresos vía CI',
+                  'Import PDF: menú izquierdo o pestaña IMPORTAR PDF',
+                  'Exporta Excel/PDF desde la barra superior',
                 ]}
               />
             ) : null}
@@ -687,6 +958,9 @@ export default function CcoDashboardClient() {
             </div>
           </>
         ) : null}
+        </>
+      ) : null}
+        </div>
       </div>
 
     </div>

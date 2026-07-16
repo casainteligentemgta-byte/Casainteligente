@@ -113,6 +113,11 @@ def calculate_worker_pasivo(
         "retroactivo_acumulado": retroactivo,
         # Art. 142 LOTTT — provisionar el monto mayor
         "monto_a_provisionar": max(trimestral, retroactivo),
+        "criterio_provision": (
+            "empatados"
+            if trimestral == retroactivo
+            else ("retroactivo" if retroactivo > trimestral else "garantia_trimestral")
+        ),
         "referencias": {
             "utilidades": "Art. 131 LOTTT",
             "bono_vacacional": "Art. 190 LOTTT",

@@ -38,7 +38,8 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     <>
       <ReactQueryProvider>
         {!chromeMinimal ? <ModulosRutaGuard /> : null}
-        <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-28 sm:pb-24'}>{children}</div>
+        {/* Dock inferior auto-oculto: poco padding; el menú no reserva espacio fijo */}
+        <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-8'}>{children}</div>
       </ReactQueryProvider>
       {!chromeMinimal ? <IOSNavBar /> : null}
       <Toaster

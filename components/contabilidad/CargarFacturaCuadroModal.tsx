@@ -31,6 +31,7 @@ import {
   resolverProveedorYRif,
   rifParaGuardarCompra,
 } from '@/lib/contabilidad/rifVenezolano';
+import { cadenaLlaveNaturalCompra } from '@/lib/contabilidad/compraLlaveNatural';
 
 const MAX_FOTOS_EMPAREJE_LOTE = 12;
 
@@ -779,7 +780,7 @@ export default function CargarFacturaCuadroModal({
       return;
     }
 
-    const totalSave = candidatas.length;
+    let totalSave = candidatas.length;
     setSaving(true);
     setSavePct(1);
     setSaveActual(0);
@@ -787,6 +788,8 @@ export default function CargarFacturaCuadroModal({
     setSaveEtapa('Preparando tasas BCV…');
     const supabase = createClient();
     let ok = 0;
+    let updated = 0;
+    let skipCsv = 0;
     let fail = 0;
     const keysOk = new Set<string>();
 
@@ -819,10 +822,44 @@ export default function CargarFacturaCuadroModal({
         }
       }
 
+      /** Nivel 1: dedupe dentro del lote CSV (misma llave natural → una sola). */
+      const vistasLlave = new Set<string>();
+      const aGuardar: GrupoFactura[] = [];
+      for (const g of candidatas) {
+        const fecha = fechaParaInputDate(g.fecha) || hoyIso();
+        let tasa = parseNum(g.tasaBcv);
+        if (!(tasa > 0)) tasa = porFecha.get(fecha) ?? 0;
+        const total = totalGrupo(g);
+        const montosPrev =
+          tasa > 0 ? calcularGastoBimonetario(total, g.moneda, tasa) : { montoVes: 0, montoUsd: 0 };
+        const llave = cadenaLlaveNaturalCompra({
+          fecha,
+          invoice_number: numeroFacturaGuardado(g),
+          supplier_rif: g.supplier_rif.trim() || 'SIN-RIF',
+          supplier_name: nombreProveedorGuardado(g),
+          monto_usd: montosPrev.montoUsd,
+          monto_ves: montosPrev.montoVes || total,
+          proyecto_id: proyectoId,
+        });
+        if (vistasLlave.has(llave)) {
+          skipCsv += 1;
+          keysOk.add(g.key);
+          continue;
+        }
+        vistasLlave.add(llave);
+        aGuardar.push(g);
+      }
+
+      if (skipCsv > 0) {
+        toast.message(`${skipCsv} fila(s) duplicada(s) en el CSV omitida(s) (misma llave natural)`);
+      }
+
+      totalSave = aGuardar.length;
+      setSaveTotal(totalSave);
       marcarProgreso(0, 'Guardando facturas…');
 
-      for (let i = 0; i < candidatas.length; i++) {
-        const g = candidatas[i]!;
+      for (let i = 0; i < aGuardar.length; i++) {
+        const g = aGuardar[i]!;
         const etiqueta = g.invoice_number.trim() || `fila ${i + 1}`;
         marcarProgreso(i, `Guardando ${etiqueta}…`);
         try {
@@ -892,6 +929,7 @@ export default function CargarFacturaCuadroModal({
               tasa_bcv_fecha: montos.tasaApplied,
               moneda_original: g.moneda,
               origen: 'HISTORICO_TABLA',
+              upsert_dedup: true,
               notas,
               document_storage_path,
               document_file_name,
@@ -899,7 +937,7 @@ export default function CargarFacturaCuadroModal({
             }),
           });
           const ct = res.headers.get('content-type') ?? '';
-          let data: { error?: string; hint?: string } = {};
+          let data: { error?: string; hint?: string; action?: string } = {};
           if (ct.includes('application/json')) {
             data = (await res.json()) as typeof data;
           } else {
@@ -910,6 +948,7 @@ export default function CargarFacturaCuadroModal({
             throw new Error(data.hint ? `${data.error} (${data.hint})` : data.error || 'Error');
           }
           ok += 1;
+          if (data.action === 'updated') updated += 1;
           keysOk.add(g.key);
         } catch (e) {
           fail += 1;
@@ -925,8 +964,12 @@ export default function CargarFacturaCuadroModal({
       setSaveEtapa(ok > 0 ? '¡Listo!' : 'Sin guardados');
 
       if (ok > 0) {
+        const detalle =
+          updated > 0
+            ? ` (${ok - updated} nuevas, ${updated} actualizadas por anti-duplicado)`
+            : '';
         toast.success(
-          `${ok} compra(s) en Contabilidad · obra seleccionada (sin stock)`,
+          `${ok} compra(s) en Contabilidad · obra seleccionada (sin stock)${detalle}`,
         );
         onGuardado?.(proyectoId);
         setGrupos((prev) => prev.filter((g) => !keysOk.has(g.key)));

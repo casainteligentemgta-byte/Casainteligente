@@ -141,12 +141,17 @@ function acumularSerie(
 
 export async function cargarCcoDashboard(
   supabase: SupabaseClient,
-  params?: { proyectoId?: string | null; devaluacionPromedio?: number },
+  params?: {
+    proyectoId?: string | null;
+    /** Si se omite, se usa cco_proyecto_config.devaluacion_pct de la obra. */
+    devaluacionPromedio?: number | null;
+  },
 ): Promise<CcoDashboard> {
   const proyectoId = params?.proyectoId?.trim() || null;
-  const devaluacionPromedio = Number.isFinite(params?.devaluacionPromedio)
-    ? Number(params!.devaluacionPromedio)
-    : 0;
+  const devaluacionOverride =
+    params?.devaluacionPromedio != null && Number.isFinite(params.devaluacionPromedio)
+      ? Number(params.devaluacionPromedio)
+      : null;
 
   const { data: proyectosRows } = await supabase
     .from('ci_proyectos')
@@ -163,19 +168,26 @@ export async function cargarCcoDashboard(
     ? proyectos.find((p) => p.id === proyectoId)?.nombre ?? 'Obra seleccionada'
     : 'Todas las obras';
 
-  let comprasQ = supabase
-    .from('contabilidad_compras')
-    .select(
-      'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name',
-    )
-    .not('proyecto_id', 'is', null)
-    .neq('imputacion', IMPUTACION_ENTIDAD)
-    .order('fecha', { ascending: true })
-    .limit(8000);
+  const selectComprasBase =
+    'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name';
+  const selectComprasCco = `${selectComprasBase},tipo_gasto_cco,capitulo_cco`;
 
-  if (proyectoId) comprasQ = comprasQ.eq('proyecto_id', proyectoId);
+  const buildComprasQ = (cols: string) => {
+    let q = supabase
+      .from('contabilidad_compras')
+      .select(cols)
+      .not('proyecto_id', 'is', null)
+      .neq('imputacion', IMPUTACION_ENTIDAD)
+      .order('fecha', { ascending: true })
+      .limit(8000);
+    if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+    return q;
+  };
 
-  const { data: compras, error: cErr } = await comprasQ;
+  let { data: compras, error: cErr } = await buildComprasQ(selectComprasCco);
+  if (cErr && /tipo_gasto_cco|capitulo_cco|42703|PGRST204|schema cache/i.test(cErr.message ?? '')) {
+    ({ data: compras, error: cErr } = await buildComprasQ(selectComprasBase));
+  }
   if (cErr) throw cErr;
 
   let inyQ = supabase
@@ -191,19 +203,36 @@ export async function cargarCcoDashboard(
     throw iErr;
   }
 
-  let honorariosPct = 12;
+  let honorariosPct = 15;
+  let devaluacionDesdeConfig: number | null = null;
+
   if (proyectoId) {
-    const { data: contrato } = await supabase
-      .from('ci_contratos_express')
-      .select('honorarios_admin_pct')
+    const { data: cfg, error: cfgErr } = await supabase
+      .from('cco_proyecto_config')
+      .select('honorarios_admin_pct,devaluacion_pct')
       .eq('proyecto_id', proyectoId)
-      .eq('tipo_contrato', TIPO_CONTRATO_AD)
-      .eq('estado', ESTADO_CONTRATO_EXITOSO)
-      .order('created_at', { ascending: false })
-      .limit(1)
       .maybeSingle();
-    if (contrato?.honorarios_admin_pct != null) {
-      honorariosPct = num(contrato.honorarios_admin_pct);
+    if (cfgErr && !/cco_proyecto_config|schema cache|42703|PGRST204/i.test(cfgErr.message ?? '')) {
+      throw cfgErr;
+    }
+    if (cfg && (cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct != null) {
+      honorariosPct = num((cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct);
+    } else {
+      const { data: contrato } = await supabase
+        .from('ci_contratos_express')
+        .select('honorarios_admin_pct')
+        .eq('proyecto_id', proyectoId)
+        .eq('tipo_contrato', TIPO_CONTRATO_AD)
+        .eq('estado', ESTADO_CONTRATO_EXITOSO)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (contrato?.honorarios_admin_pct != null) {
+        honorariosPct = num(contrato.honorarios_admin_pct);
+      }
+    }
+    if (cfg && (cfg as { devaluacion_pct?: number }).devaluacion_pct != null) {
+      devaluacionDesdeConfig = num((cfg as { devaluacion_pct?: number }).devaluacion_pct);
     }
   } else {
     const { data: contratos } = await supabase
@@ -219,6 +248,9 @@ export async function cargarCcoDashboard(
       honorariosPct = pcts.reduce((a, b) => a + b, 0) / pcts.length;
     }
   }
+
+  // Override del query param gana; si no, config de obra.
+  const devaluacionPromedio = devaluacionOverride ?? devaluacionDesdeConfig ?? 0;
 
   const porMesIngresos = new Map<string, number>();
   const porMesEgresos = new Map<string, number>();
@@ -257,8 +289,19 @@ export async function cargarCcoDashboard(
     const pid = String((row as { proyecto_id?: string }).proyecto_id ?? '').trim();
     if (pid) porProyectoUsd.set(pid, (porProyectoUsd.get(pid) ?? 0) + usd);
 
-    const cap = (nombrePorId.get(pid) ?? (pid || 'SIN CAPÍTULO')).slice(0, 28).toUpperCase();
-    const tipo = clasificarTipoGasto(prov);
+    const capRaw = String((row as { capitulo_cco?: string }).capitulo_cco ?? '').trim();
+    const cap = (
+      capRaw ||
+      nombrePorId.get(pid) ||
+      pid ||
+      'SIN CAPÍTULO'
+    )
+      .slice(0, 28)
+      .toUpperCase();
+    const tipoPersistido = String((row as { tipo_gasto_cco?: string }).tipo_gasto_cco ?? '').trim();
+    const tipo = (CCO_TIPOS_GASTO as readonly string[]).includes(tipoPersistido)
+      ? (tipoPersistido as CcoTipoGasto)
+      : clasificarTipoGasto(prov);
     if (!porCapTipo.has(cap)) porCapTipo.set(cap, new Map());
     const m = porCapTipo.get(cap)!;
     m.set(tipo, (m.get(tipo) ?? 0) + usd);

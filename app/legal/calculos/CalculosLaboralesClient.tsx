@@ -16,6 +16,12 @@ function money(n: number) {
   });
 }
 
+function labelCriterio(c: WorkerPasivoResult['criterio_provision'] | ResultadoLaborCalculator['criterio_provision']) {
+  if (c === 'retroactivo') return 'Retroactivo (lit. f)';
+  if (c === 'empatados') return 'Empate garantía / retroactivo';
+  return 'Garantía trimestral (lit. a)';
+}
+
 export default function CalculosLaboralesClient() {
   const [salario, setSalario] = useState('500');
   const [utilidades, setUtilidades] = useState('30');
@@ -27,8 +33,10 @@ export default function CalculosLaboralesClient() {
   const [remoto, setRemoto] = useState<ResultadoLaborCalculator | null>(null);
 
   const [workerId, setWorkerId] = useState('');
+  const [pasivoFechaFin, setPasivoFechaFin] = useState('');
   const [pasivoLoading, setPasivoLoading] = useState(false);
   const [pasivoError, setPasivoError] = useState<string | null>(null);
+  const [pasivoHint, setPasivoHint] = useState<string | null>(null);
   const [pasivo, setPasivo] = useState<WorkerPasivoResult | null>(null);
 
   const local = useMemo(() => {
@@ -79,228 +87,275 @@ export default function CalculosLaboralesClient() {
     }
   }
 
+  async function calcularPasivo(e: React.FormEvent) {
+    e.preventDefault();
+    const id = workerId.trim();
+    if (!id) {
+      setPasivoError('Indique el UUID del trabajador (ci_empleados / workers).');
+      return;
+    }
+    setPasivoLoading(true);
+    setPasivoError(null);
+    setPasivoHint(null);
+    setPasivo(null);
+    try {
+      const q = pasivoFechaFin.trim()
+        ? `?fecha_fin=${encodeURIComponent(pasivoFechaFin.trim())}`
+        : '';
+      const res = await fetch(apiUrl(`/api/legal/calculos/pasivo/${id}${q}`), {
+        credentials: 'include',
+      });
+      const data = (await res.json()) as WorkerPasivoResult & {
+        error?: string;
+        hint?: string;
+        ok?: boolean;
+      };
+      if (!res.ok) {
+        setPasivoError(data.error || 'Error');
+        setPasivoHint(data.hint || null);
+        return;
+      }
+      setPasivo(data);
+    } catch {
+      setPasivoError('Error de red');
+    } finally {
+      setPasivoLoading(false);
+    }
+  }
+
   const r = remoto ?? local;
   const retro = r?.retroactivo;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <header>
         <p className="flex items-center gap-2 text-sm text-amber-200/80">
           <Calculator className="h-4 w-4" />
-          LaborCalculator Â· Art. 142 LOTTT
+          LaborCalculator · Art. 142 LOTTT
         </p>
-        <h2 className="mt-2 text-2xl font-bold text-white">
-          Prestaciones sociales
-        </h2>
+        <h2 className="mt-2 text-2xl font-bold text-white">Prestaciones sociales</h2>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Salario integral, garantÃ­a trimestral (literal a) y retroactivo de 60
-          dÃ­as por aÃ±o o fracciÃ³n &gt; 6 meses (literal f).
+          Salario integral, garantía trimestral (literal a) y retroactivo de 60 días por año o
+          fracción &gt; 6 meses (literal f). Se provisiona el monto mayor.
         </p>
       </header>
 
-      <form
-        onSubmit={calcularApi}
-        className="grid gap-3 rounded-2xl border border-amber-500/20 bg-[#0c1018] p-4 sm:grid-cols-3"
-      >
-        <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Salario base mensual
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            value={salario}
-            onChange={(e) => setSalario(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          DÃ­as utilidades
-          <input
-            type="number"
-            min={0}
-            value={utilidades}
-            onChange={(e) => setUtilidades(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          DÃ­as bono vacacional
-          <input
-            type="number"
-            min={0}
-            value={bono}
-            onChange={(e) => setBono(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Fecha inicio (retroactivo)
-          <input
-            type="date"
-            value={inicio}
-            onChange={(e) => setInicio(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Fecha fin
-          <input
-            type="date"
-            value={fin}
-            onChange={(e) => setFin(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
-        <div className="flex items-end">
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-            Calcular
-          </button>
-        </div>
-      </form>
-
-      {error && (
-        <p className="rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">
-          {error}
-        </p>
-      )}
-
-      {r && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-              Salario integral diario
-            </p>
-            <p className="mt-1 text-xl font-bold text-white">{money(r.salario_integral_diario)}</p>
-            <p className="mt-1 text-xs text-zinc-600">
-              Base {money(r.salario_diario_base)} + util. {money(r.alicuota_utilidades)} +
-              bono {money(r.alicuota_bono_vacacional)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
-              GarantÃ­a trimestral Â· lit. a)
-            </p>
-            <p className="mt-1 text-2xl font-bold text-amber-100">
-              {money(r.garantia_trimestral)}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              4 trimestres â‰ˆ {money(r.estimacion_anual_garantias)}
-            </p>
-          </div>
-          {retro && (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:col-span-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                Retroactivo Â· {retro.referencia_retroactivo}
-              </p>
-              <p className="mt-1 text-3xl font-bold text-white">{money(retro.retroactivo)}</p>
-              <p className="mt-2 text-xs text-zinc-500">
-                {retro.fecha_inicio} â†’ {retro.fecha_fin}: {retro.anios_completos} aÃ±os +{' '}
-                {retro.meses_fraccion} meses â†’ <strong className="text-zinc-300">{retro.anios_servicio}</strong>{' '}
-                aÃ±o(s) computables Ã— {retro.dias_retroactivo_por_anio} dÃ­as
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      <section className="space-y-3 border-t border-white/10 pt-6">
-        <h3 className="flex items-center gap-2 text-lg font-bold text-white">
-          <UserRound className="h-5 w-5 text-amber-300" />
-          Pasivo por trabajador
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          Simulación manual
         </h3>
-        <p className="text-sm text-zinc-500">
-          Lee <code className="text-zinc-400">workers</code>,{' '}
-          <code className="text-zinc-400">benefit_configs</code> y{' '}
-          <code className="text-zinc-400">salary_history</code> (migraciÃ³n 270) y
-          provisiona el monto mayor (Art. 142).
-        </p>
         <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const id = workerId.trim();
-            if (!id) return;
-            setPasivoLoading(true);
-            setPasivoError(null);
-            setPasivo(null);
-            try {
-              const qs = fin ? `?fecha_fin=${encodeURIComponent(fin)}` : '';
-              const res = await fetch(
-                apiUrl(`/api/legal/calculos/pasivo/${encodeURIComponent(id)}${qs}`),
-                { credentials: 'include', cache: 'no-store' },
-              );
-              const data = (await res.json()) as WorkerPasivoResult & {
-                error?: string;
-                hint?: string;
-              };
-              if (!res.ok) {
-                setPasivoError([data.error, data.hint].filter(Boolean).join(' â€” ') || 'Error');
-                return;
-              }
-              setPasivo(data);
-            } catch {
-              setPasivoError('Error de red');
-            } finally {
-              setPasivoLoading(false);
-            }
-          }}
-          className="flex flex-wrap gap-2 rounded-2xl border border-amber-500/20 bg-[#0c1018] p-4"
+          onSubmit={calcularApi}
+          className="grid gap-3 rounded-2xl border border-amber-500/20 bg-[#0c1018] p-4 sm:grid-cols-3"
         >
-          <input
-            value={workerId}
-            onChange={(e) => setWorkerId(e.target.value)}
-            placeholder="UUID trabajador (ci_empleados.id)"
-            className="min-w-[240px] flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
-          />
-          <button
-            type="submit"
-            disabled={pasivoLoading || !workerId.trim()}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50"
-          >
-            {pasivoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-            Calcular pasivo
-          </button>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Salario base mensual
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={salario}
+              onChange={(e) => setSalario(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Días utilidades
+            <input
+              type="number"
+              min={0}
+              value={utilidades}
+              onChange={(e) => setUtilidades(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Días bono vacacional
+            <input
+              type="number"
+              min={0}
+              value={bono}
+              onChange={(e) => setBono(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Fecha inicio (retroactivo)
+            <input
+              type="date"
+              value={inicio}
+              onChange={(e) => setInicio(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Fecha fin
+            <input
+              type="date"
+              value={fin}
+              onChange={(e) => setFin(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Calculator className="h-4 w-4" />
+              )}
+              Calcular
+            </button>
+          </div>
         </form>
-        {pasivoError && (
+
+        {error && (
           <p className="rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">
-            {pasivoError}
+            {error}
           </p>
         )}
-        {pasivo && (
+
+        {r && (
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:col-span-2">
-              <p className="text-sm font-semibold text-white">{pasivo.worker}</p>
-              <p className="text-xs text-zinc-500">
-                Ingreso {pasivo.fecha_inicio} Â· salario {money(pasivo.salario_base_mensual)} (
-                {pasivo.salario_effective_date})
-              </p>
-            </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                GarantÃ­a trimestral
+                Salario integral diario
               </p>
+              <p className="mt-1 text-xl font-bold text-white">
+                {money(r.salario_integral_diario)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-600">
+                Base {money(r.salario_diario_base)} + util. {money(r.alicuota_utilidades)} + bono{' '}
+                {money(r.alicuota_bono_vacacional)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
+                Garantía trimestral · lit. a)
+              </p>
+              <p className="mt-1 text-2xl font-bold text-amber-100">
+                {money(r.garantia_trimestral)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                4 trimestres ? {money(r.estimacion_anual_garantias)}
+              </p>
+            </div>
+            {retro && (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:col-span-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  Retroactivo · {retro.referencia_retroactivo}
+                </p>
+                <p className="mt-1 text-3xl font-bold text-white">{money(retro.retroactivo)}</p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  {retro.fecha_inicio} ? {retro.fecha_fin}: {retro.anios_completos} años +{' '}
+                  {retro.meses_fraccion} meses ?{' '}
+                  <strong className="text-zinc-300">{retro.anios_servicio}</strong> año(s)
+                  computables × {retro.dias_retroactivo_por_anio} días
+                </p>
+              </div>
+            )}
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-4 sm:col-span-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
+                Monto a provisionar · Art. 142 (mayor)
+              </p>
+              <p className="mt-1 text-3xl font-bold text-emerald-100">
+                {money(r.monto_a_provisionar)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                Criterio: {labelCriterio(r.criterio_provision)}
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          <UserRound className="h-4 w-4" />
+          Pasivo por trabajador (workers · benefit_configs · salary_history)
+        </h3>
+        <form
+          onSubmit={calcularPasivo}
+          className="grid gap-3 rounded-2xl border border-white/10 bg-[#0c1018] p-4 sm:grid-cols-3"
+        >
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-2">
+            Worker ID (UUID)
+            <input
+              type="text"
+              value={workerId}
+              onChange={(e) => setWorkerId(e.target.value)}
+              placeholder="id de ci_empleados / vista workers"
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-mono text-sm text-zinc-100"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Fecha fin (opcional)
+            <input
+              type="date"
+              value={pasivoFechaFin}
+              onChange={(e) => setPasivoFechaFin(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={pasivoLoading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2.5 text-sm font-semibold text-amber-100 disabled:opacity-50"
+            >
+              {pasivoLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Calculator className="h-4 w-4" />
+              )}
+              Leer datos y provisionar monto mayor
+            </button>
+          </div>
+        </form>
+
+        {pasivoError && (
+          <div className="rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+            <p>{pasivoError}</p>
+            {pasivoHint && <p className="mt-1 text-xs text-red-300/80">{pasivoHint}</p>}
+          </div>
+        )}
+
+        {pasivo && (
+          <div className="grid gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <p className="text-lg font-bold text-white">{pasivo.worker ?? pasivo.worker_id}</p>
+              <p className="text-xs text-zinc-500">
+                {pasivo.fecha_inicio} ? {pasivo.fecha_fin} · salario {money(pasivo.salario_base_mensual)}{' '}
+                (desde {pasivo.salario_effective_date ?? '?'}) · util. {pasivo.dias_utilidades}d ·
+                bono {pasivo.dias_bono_vacacional}d
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[10px] uppercase text-zinc-500">Garantía trimestral</p>
               <p className="mt-1 text-xl font-bold text-white">
                 {money(pasivo.garantia_trimestral)}
               </p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                Retroactivo acumulado
-              </p>
+            <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[10px] uppercase text-zinc-500">Retroactivo acumulado</p>
               <p className="mt-1 text-xl font-bold text-white">
                 {money(pasivo.retroactivo_acumulado)}
               </p>
             </div>
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 sm:col-span-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
-                Monto a provisionar Â· Art. 142 (mayor)
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-4 sm:col-span-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
+                Monto a provisionar · {pasivo.referencias.garantia_y_retroactivo}
               </p>
-              <p className="mt-1 text-3xl font-bold text-amber-100">
+              <p className="mt-1 text-3xl font-bold text-emerald-100">
                 {money(pasivo.monto_a_provisionar)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                Criterio: {labelCriterio(pasivo.criterio_provision)} · integral diario{' '}
+                {money(pasivo.salario_integral_diario)}
               </p>
             </div>
           </div>

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useModulosNavPermitidos } from '@/hooks/useModulosNavPermitidos';
 import type { ModuloNavId } from '@/lib/auth/modulosPorRol';
 
@@ -272,9 +273,32 @@ function colorActivo(label: string): string {
   return '#007AFF';
 }
 
+const HIDE_DELAY_MS = 900;
+
 export default function IOSNavBar() {
   const pathname = usePathname() ?? '';
   const acceso = useModulosNavPermitidos();
+  const [visible, setVisible] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHideTimer = useCallback(() => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  }, []);
+
+  const showBar = useCallback(() => {
+    clearHideTimer();
+    setVisible(true);
+  }, [clearHideTimer]);
+
+  const scheduleHide = useCallback(() => {
+    clearHideTimer();
+    hideTimer.current = setTimeout(() => setVisible(false), HIDE_DELAY_MS);
+  }, [clearHideTimer]);
+
+  useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
   let items = navItems;
   if (pathname.startsWith('/registro')) {
@@ -291,44 +315,80 @@ export default function IOSNavBar() {
   }
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 safe-bottom no-print mx-auto max-w-lg px-2 pb-1 sm:max-w-3xl"
-      style={{
-        background: 'rgba(22, 22, 24, 0.82)',
-        backdropFilter: 'blur(28px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(180%)',
-        borderRadius: '18px 18px 0 0',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderBottom: 'none',
-        boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.35)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}
-    >
-      <div className="overflow-x-auto scrollbar-hide">
-        <div className="flex min-w-max items-center gap-0.5 px-1 pb-1.5 pt-2">
-          {items.map((item) => {
-            const isActive = navItemActive(pathname, item.href);
-            const activeColor = colorActivo(item.label);
+    <>
+      {/* Zona inferior: al pasar el cursor / tocar, revela el menú */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-[45] no-print"
+        style={{ height: 28 }}
+        aria-hidden
+        onMouseEnter={showBar}
+        onTouchStart={() => {
+          showBar();
+          clearHideTimer();
+          hideTimer.current = setTimeout(() => setVisible(false), 2500);
+        }}
+      />
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex flex-col items-center gap-1 min-w-[62px] py-1 px-1 transition-all duration-150 active:scale-90"
-                style={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <div className="transition-transform duration-150">{item.icon(isActive)}</div>
-                <span
-                  className="text-[10px] font-semibold tracking-tight"
-                  style={{ color: isActive ? activeColor : '#8E8E93' }}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 safe-bottom no-print mx-auto max-w-lg px-2 pb-1 sm:max-w-3xl"
+        onMouseEnter={showBar}
+        onMouseLeave={scheduleHide}
+        onTouchStart={showBar}
+        onFocusCapture={showBar}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            scheduleHide();
+          }
+        }}
+        style={{
+          background: 'rgba(22, 22, 24, 0.82)',
+          backdropFilter: 'blur(28px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+          borderRadius: '18px 18px 0 0',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: 'none',
+          boxShadow: visible ? '0 -8px 32px rgba(0, 0, 0, 0.35)' : 'none',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          transform: visible ? 'translateY(0)' : 'translateY(calc(100% - 5px))',
+          transition: 'transform 0.28s ease, box-shadow 0.28s ease',
+          pointerEvents: visible ? 'auto' : 'none',
+        }}
+      >
+        {/* Franja mínima visible cuando está oculto (atracción visual) */}
+        {!visible ? (
+          <div
+            aria-hidden
+            className="pointer-events-none mx-auto mb-0 h-1 w-10 rounded-full"
+            style={{ background: 'rgba(255,255,255,0.28)' }}
+          />
+        ) : null}
+        <div className="overflow-x-auto scrollbar-hide">
+          <div className="flex min-w-max items-center gap-0.5 px-1 pb-1.5 pt-2">
+            {items.map((item) => {
+              const isActive = navItemActive(pathname, item.href);
+              const activeColor = colorActivo(item.label);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex flex-col items-center gap-1 min-w-[62px] py-1 px-1 transition-all duration-150 active:scale-90"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  onClick={() => scheduleHide()}
                 >
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
+                  <div className="transition-transform duration-150">{item.icon(isActive)}</div>
+                  <span
+                    className="text-[10px] font-semibold tracking-tight"
+                    style={{ color: isActive ? activeColor : '#8E8E93' }}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }

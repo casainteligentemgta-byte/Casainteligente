@@ -48,6 +48,9 @@ export type ResultadoRetroactivo = DesgloseSalarioIntegral & {
 
 export type ResultadoLaborCalculator = ResultadoGarantiaTrimestral & {
   retroactivo?: ResultadoRetroactivo | null;
+  /** Art. 142 LOTTT — provisionar el monto mayor entre garantía y retroactivo. */
+  monto_a_provisionar: number;
+  criterio_provision: 'garantia_trimestral' | 'retroactivo' | 'empatados';
 };
 
 function round2(n: number): number {
@@ -197,12 +200,23 @@ export class LaborCalculator {
       };
     }
 
+    const retroMonto = retroactivo?.retroactivo ?? 0;
+    const garantiaR = round2(garantia);
+    const montoMayor = round2(Math.max(garantiaR, retroMonto));
+    let criterio: ResultadoLaborCalculator['criterio_provision'] = 'garantia_trimestral';
+    if (retroactivo) {
+      if (garantiaR === retroMonto) criterio = 'empatados';
+      else if (retroMonto > garantiaR) criterio = 'retroactivo';
+    }
+
     return {
       ...desglose,
-      garantia_trimestral: round2(garantia),
+      garantia_trimestral: garantiaR,
       dias_garantia: this.diasGarantiaTrimestral,
       estimacion_anual_garantias: round2(garantia * 4),
       retroactivo,
+      monto_a_provisionar: montoMayor,
+      criterio_provision: criterio,
     };
   }
 }
@@ -237,7 +251,8 @@ export function calcularGarantiaTrimestral(
       diasRetroactivoPorAnio: config?.diasRetroactivoPorAnio,
     },
   );
-  const { retroactivo: _r, ...rest } = calc.calcularTodo();
+  const { retroactivo: _r, monto_a_provisionar: _m, criterio_provision: _c, ...rest } =
+    calc.calcularTodo();
   return rest;
 }
 

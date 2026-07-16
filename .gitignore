@@ -25,6 +25,9 @@
 *.accdb
 /export_lulo_csv/
 
+# ETL CCO V4 (JSON exportado desde SQLite local)
+/tmp/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

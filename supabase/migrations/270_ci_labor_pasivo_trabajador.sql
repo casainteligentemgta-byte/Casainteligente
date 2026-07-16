@@ -53,7 +53,26 @@ create policy ci_labor_salary_history_select_auth
   on public.ci_labor_salary_history for select to authenticated
   using (true);
 
--- Vistas de compatibilidad con el snippet conceptual (workers / benefit_configs / salary_history)
+-- Vistas de compatibilidad con el snippet conceptual (workers / benefit_configs / salary_history).
+-- Si existe una tabla stub vacía `workers` (id/full_name/status), se archiva para poder crear la vista.
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'workers'
+      and table_type = 'BASE TABLE'
+  ) then
+    if not exists (select 1 from public.workers limit 1) then
+      alter table public.workers rename to workers_stub_pre_270;
+    else
+      raise exception
+        'public.workers es una tabla con datos; renómbrela manualmente antes de crear la vista de pasivo laboral (migración 270).';
+    end if;
+  end if;
+end $$;
+
 create or replace view public.workers as
 select
   e.id,

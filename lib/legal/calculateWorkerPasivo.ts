@@ -1,5 +1,6 @@
 /**
  * Pasivo laboral por trabajador — Supabase + LaborCalculator.
+ * Lee workers, benefit_configs y salary_history (migración 270).
  * Arts. 131 (utilidades), 190 (bono), 142 (garantía / retroactivo / monto mayor).
  */
 
@@ -20,6 +21,7 @@ export type WorkerPasivoResult = {
   retroactivo_acumulado: number;
   /** Art. 142 LOTTT — provisionar el monto mayor */
   monto_a_provisionar: number;
+  criterio_provision: 'garantia_trimestral' | 'retroactivo' | 'empatados';
   referencias: {
     utilidades: string;
     bono_vacacional: string;
@@ -35,6 +37,10 @@ function todayIso(): string {
   return `${y}-${m}-${day}`;
 }
 
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
 export async function calculateWorkerPasivo(
   supabase: SupabaseClient,
   workerId: string,
@@ -45,16 +51,22 @@ export async function calculateWorkerPasivo(
 
   const { data: worker, error: wErr } = await supabase
     .from('workers')
-    .select('*')
+    .select('id, full_name, join_date')
     .eq('id', id)
     .maybeSingle();
 
-  if (wErr) return { error: wErr.message };
+  if (wErr) {
+    const hint =
+      wErr.message.includes('schema cache') || wErr.message.includes('join_date')
+        ? ' Ejecute supabase/migrations/270_ci_labor_pasivo_trabajador.sql en Supabase.'
+        : '';
+    return { error: `${wErr.message}.${hint}`.trim() };
+  }
   if (!worker) return { error: 'Error: No se encontró el trabajador.' };
 
   const { data: config } = await supabase
     .from('benefit_configs')
-    .select('*')
+    .select('days_utilidades, days_bono_vacacional')
     .eq('worker_id', id)
     .maybeSingle();
 
@@ -65,10 +77,19 @@ export async function calculateWorkerPasivo(
     .order('effective_date', { ascending: false })
     .limit(1);
 
-  if (sErr) return { error: sErr.message };
+  if (sErr) {
+    const hint =
+      sErr.message.includes('schema cache') || sErr.message.includes('does not exist')
+        ? ' Ejecute migración 270 (salary_history / ci_labor_salary_history).'
+        : '';
+    return { error: `${sErr.message}.${hint}`.trim() };
+  }
   const latestSalary = salaryRows?.[0];
   if (!latestSalary || latestSalary.base_salary == null) {
-    return { error: 'Error: No se encontró historial salarial para este trabajador.' };
+    return {
+      error:
+        'Error: No se encontró historial salarial para este trabajador. Inserte fila en salary_history.',
+    };
   }
 
   const diasUtilidades = Number(config?.days_utilidades ?? 30);
@@ -85,8 +106,9 @@ export async function calculateWorkerPasivo(
     diasBono,
   );
 
-  const trimestral = calc.calcularGarantiaTrimestral();
-  const retroactivo = calc.calcularRetroactivo(joinDate, fechaFin);
+  const todo = calc.calcularTodo(joinDate, fechaFin);
+  const trimestral = todo.garantia_trimestral;
+  const retroactivo = todo.retroactivo?.retroactivo ?? 0;
 
   return {
     worker: worker.full_name ?? null,
@@ -99,10 +121,11 @@ export async function calculateWorkerPasivo(
     dias_bono_vacacional: diasBono,
     fecha_inicio: joinDate,
     fecha_fin: fechaFin,
-    salario_integral_diario: calc.getSalarioIntegralDiario(),
+    salario_integral_diario: todo.salario_integral_diario,
     garantia_trimestral: trimestral,
-    retroactivo_acumulado: retroactivo,
-    monto_a_provisionar: Math.max(trimestral, retroactivo),
+    retroactivo_acumulado: round2(retroactivo),
+    monto_a_provisionar: todo.monto_a_provisionar,
+    criterio_provision: todo.criterio_provision,
     referencias: {
       utilidades: 'Art. 131 LOTTT',
       bono_vacacional: 'Art. 190 LOTTT',
