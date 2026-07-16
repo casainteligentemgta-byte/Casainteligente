@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { Camera, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
+import { Camera, FileText, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { etiquetaDe, LEGAL_ESTADOS } from '@/lib/legal/casosCatalogo';
 
@@ -58,21 +58,29 @@ export default function LegalHomeClient() {
           <div>
             <p className="flex items-center gap-2 text-sm text-amber-200/80">
               <Scale className="h-4 w-4" />
-              Resolución de casos · obras y despacho
+              Casos · contratos · documentos
             </p>
             <h2 className="mt-2 text-2xl font-bold text-white">Panel legal</h2>
             <p className="mt-1 max-w-xl text-sm text-zinc-500">
-              Gestiona conflictos de obra, asuntos de despacho y casos externos. El foco es la
-              resolución, no solo emitir documentos.
+              Resuelve conflictos de obra y despacho, y redacta contratos, finiquitos,
+              poderes y cartas con plantillas venezolanas.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
+<<<<<<< HEAD
               href="/legal/inspecciones"
               className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
             >
               <Camera className="h-4 w-4" />
               IurisVigía
+=======
+              href="/legal/documentos/nuevo"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
+            >
+              <FileText className="h-4 w-4" />
+              Nuevo documento
+>>>>>>> origin/integracion-diseno-vercel-funcionalidad-local
             </Link>
             <Link
               href="/legal/asesor"
