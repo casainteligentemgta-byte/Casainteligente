@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -26,6 +25,94 @@ import {
   colorTealPorValor,
   fmtUsdCorto,
 } from '@/lib/contabilidad/ccoClasificarGasto';
+
+const MQ_NARROW = '(max-width: 720px)';
+
+function useNarrowScreen(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(MQ_NARROW);
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+  return narrow;
+}
+
+function truncLabel(s: string, max: number): string {
+  const t = String(s ?? '').trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(1, max - 1))}…`;
+}
+
+function fmtUsdTick(n: number): string {
+  if (Math.abs(n) >= 1000) return `${Math.round(n / 1000)}k`;
+  return String(Math.round(n));
+}
+
+function fmtUsdFull(n: number): string {
+  return Number(n).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  });
+}
+
+type LegendItem = { name: string; color: string; value?: number; pct?: number };
+
+/** Leyenda ordenada en rejilla legible (evita el solapamiento de Recharts en móvil). */
+function CcoChartLegend({ items, showValues }: { items: LegendItem[]; showValues?: boolean }) {
+  if (items.length === 0) return null;
+  return (
+    <ul
+      style={{
+        listStyle: 'none',
+        margin: '12px 0 0',
+        padding: 0,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))',
+        gap: '8px 10px',
+      }}
+    >
+      {items.map((it) => (
+        <li
+          key={it.name}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            minWidth: 0,
+            fontSize: 11,
+            lineHeight: 1.3,
+            color: '#334155',
+          }}
+        >
+          <span
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              background: it.color,
+              flexShrink: 0,
+              marginTop: 2,
+            }}
+          />
+          <span style={{ minWidth: 0, wordBreak: 'break-word' }}>
+            <span style={{ fontWeight: 700 }}>{it.name}</span>
+            {showValues && it.value != null ? (
+              <span style={{ display: 'block', color: '#64748B', fontWeight: 600 }}>
+                {fmtUsdCorto(it.value)}
+                {it.pct != null ? ` · ${it.pct.toFixed(1)}%` : ''}
+              </span>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function polar(cx: number, cy: number, r: number, angle: number) {
   const rad = ((angle - 90) * Math.PI) / 180;
@@ -123,6 +210,8 @@ function SunburstCard({ cap }: { cap: CcoCapituloJerarquia }) {
         gap: 8,
         alignItems: 'center',
         minHeight: 300,
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -201,18 +290,19 @@ function TreemapPresupuesto({ nodos }: { nodos: CcoTreemapNodo[] }) {
   const totalAll = nodos.reduce((s, n) => s + n.costo, 0) || 1;
 
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+    <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', flexWrap: 'wrap' }}>
       <div
         style={{
-          flex: 1,
+          flex: '1 1 240px',
           display: 'flex',
           flexWrap: 'wrap',
           gap: 6,
-          minHeight: 320,
+          minHeight: 280,
           background: '#FAFCFB',
           borderRadius: 10,
           padding: 8,
           border: '1px solid #E2E8F0',
+          minWidth: 0,
         }}
       >
         {porCap.map(([cap, hijos]) => {
@@ -222,13 +312,14 @@ function TreemapPresupuesto({ nodos }: { nodos: CcoTreemapNodo[] }) {
             <div
               key={cap}
               style={{
-                flex: `${flexGrow * 10} 1 ${Math.max(160, flexGrow * 420)}px`,
+                flex: `${flexGrow * 10} 1 ${Math.max(140, flexGrow * 320)}px`,
                 border: '1px solid #004D4033',
                 borderRadius: 8,
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
-                minHeight: 140,
+                minHeight: 120,
+                minWidth: 0,
               }}
             >
               <div
@@ -256,6 +347,7 @@ function TreemapPresupuesto({ nodos }: { nodos: CcoTreemapNodo[] }) {
                       borderRight: '1px solid rgba(255,255,255,0.35)',
                       borderBottom: '1px solid rgba(255,255,255,0.35)',
                       minHeight: 72,
+                      minWidth: 0,
                     }}
                     title={`${h.sub} ${fmtUsdCorto(h.costo)}`}
                   >
@@ -289,12 +381,52 @@ export default function CcoAnalisisJerarquico({
   tiposPie,
   treemapNodos,
 }: Props) {
+  const narrow = useNarrowScreen();
   const [direccion, setDireccion] = useState('Capítulo -> Sub-Capítulo');
 
   const pieTotal = tiposPie.reduce((s, t) => s + t.value, 0) || 1;
   const stackKeys = CCO_TIPOS_GASTO.filter((t) =>
     subCapitulosStack.some((row) => Number(row[t] ?? 0) > 0),
   );
+
+  const stackLegend: LegendItem[] = [...stackKeys]
+    .sort((a, b) => a.localeCompare(b, 'es'))
+    .map((k) => ({
+      name: k,
+      color: CCO_TIPO_COLOR_CAT[k],
+    }));
+
+  const pieOrdenado = useMemo(
+    () => [...tiposPie].sort((a, b) => b.value - a.value),
+    [tiposPie],
+  );
+
+  const pieLegend: LegendItem[] = pieOrdenado.map((t) => ({
+    name: t.name,
+    color: t.color,
+    value: t.value,
+    pct: (t.value / pieTotal) * 100,
+  }));
+
+  /** En móvil: barras horizontales + etiquetas cortas; menos filas si hay muchas. */
+  const stackChartData = useMemo(() => {
+    const rows = subCapitulosStack.map((row) => {
+      const total = stackKeys.reduce((s, k) => s + Number(row[k] ?? 0), 0);
+      return {
+        ...row,
+        subFull: String(row.sub ?? ''),
+        sub: truncLabel(String(row.sub ?? ''), narrow ? 16 : 22),
+        _total: total,
+      };
+    });
+    rows.sort((a, b) => b._total - a._total);
+    if (narrow && rows.length > 8) return rows.slice(0, 8);
+    return rows;
+  }, [subCapitulosStack, stackKeys, narrow]);
+
+  const stackChartH = narrow
+    ? Math.max(280, stackChartData.length * 36 + 48)
+    : 340;
 
   if (jerarquiaCapitulos.length === 0 && tiposPie.length === 0) {
     return (
@@ -321,104 +453,133 @@ export default function CcoAnalisisJerarquico({
           background: '#fff',
           borderRadius: 14,
           border: '1px solid #E2E8F0',
-          padding: '18px 20px',
+          padding: narrow ? '14px 12px' : '18px 20px',
+          maxWidth: '100%',
+          overflow: 'hidden',
         }}
       >
-        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 800 }}>
-          Distribución por Sub-Capítulo (Composición por Tipo de Gasto)
+        <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>
+          Distribución por Sub-Capítulo
         </h3>
-        <div style={{ width: '100%', height: 340 }}>
-          {subCapitulosStack.length === 0 ? (
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748B' }}>
+          Composición por tipo de gasto
+          {narrow && subCapitulosStack.length > 8
+            ? ` · top 8 de ${subCapitulosStack.length}`
+            : ''}
+        </p>
+        <div style={{ width: '100%', height: stackChartH, minWidth: 0 }}>
+          {stackChartData.length === 0 ? (
             <p style={{ color: '#94A3B8', fontSize: 13 }}>Sin datos</p>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={subCapitulosStack} margin={{ bottom: 48 }}>
-                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="sub"
-                  tick={{ fill: '#64748B', fontSize: 9 }}
-                  interval={0}
-                  angle={-35}
-                  textAnchor="end"
-                  height={70}
-                />
-                <YAxis
-                  tickFormatter={(n) => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000)}k` : String(n))}
-                  tick={{ fill: '#64748B', fontSize: 11 }}
-                  width={48}
-                  label={{
-                    value: 'Costo Total (USD)',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { fill: '#64748B', fontSize: 11 },
-                  }}
-                />
-                <Tooltip
-                  formatter={(v) =>
-                    Number(v).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                      maximumFractionDigits: 0,
-                    })
-                  }
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {stackKeys.map((k) => (
-                  <Bar key={k} dataKey={k} stackId="a" fill={CCO_TIPO_COLOR_CAT[k]} name={k} />
-                ))}
-              </BarChart>
+              {narrow ? (
+                <BarChart
+                  layout="vertical"
+                  data={stackChartData}
+                  margin={{ top: 4, right: 8, left: 4, bottom: 4 }}
+                >
+                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={fmtUsdTick}
+                    tick={{ fill: '#64748B', fontSize: 10 }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="sub"
+                    width={88}
+                    tick={{ fill: '#475569', fontSize: 10 }}
+                    interval={0}
+                  />
+                  <Tooltip
+                    labelFormatter={(_, payload) => {
+                      const p = payload?.[0]?.payload as { subFull?: string } | undefined;
+                      return p?.subFull ?? '';
+                    }}
+                    formatter={(v) => fmtUsdFull(Number(v))}
+                  />
+                  {stackKeys.map((k) => (
+                    <Bar key={k} dataKey={k} stackId="a" fill={CCO_TIPO_COLOR_CAT[k]} name={k} />
+                  ))}
+                </BarChart>
+              ) : (
+                <BarChart data={stackChartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="sub"
+                    tick={{ fill: '#64748B', fontSize: 10 }}
+                    interval={0}
+                    angle={-28}
+                    textAnchor="end"
+                    height={72}
+                  />
+                  <YAxis
+                    tickFormatter={fmtUsdTick}
+                    tick={{ fill: '#64748B', fontSize: 11 }}
+                    width={48}
+                    label={{
+                      value: 'Costo Total (USD)',
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: { fill: '#64748B', fontSize: 11 },
+                    }}
+                  />
+                  <Tooltip
+                    labelFormatter={(_, payload) => {
+                      const p = payload?.[0]?.payload as { subFull?: string } | undefined;
+                      return p?.subFull ?? '';
+                    }}
+                    formatter={(v) => fmtUsdFull(Number(v))}
+                  />
+                  {stackKeys.map((k) => (
+                    <Bar key={k} dataKey={k} stackId="a" fill={CCO_TIPO_COLOR_CAT[k]} name={k} />
+                  ))}
+                </BarChart>
+              )}
             </ResponsiveContainer>
           )}
         </div>
+        <CcoChartLegend items={stackLegend} />
 
-        <h3 style={{ margin: '20px 0 12px', fontSize: 16, fontWeight: 800 }}>
+        <h3 style={{ margin: '22px 0 4px', fontSize: 15, fontWeight: 800 }}>
           Distribución Total por Tipo de Gasto
         </h3>
-        <div style={{ width: '100%', height: 300, display: 'flex', justifyContent: 'center' }}>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748B' }}>
+          Ordenado de mayor a menor
+        </p>
+        <div
+          style={{
+            width: '100%',
+            height: narrow ? 220 : 280,
+            display: 'flex',
+            justifyContent: 'center',
+            minWidth: 0,
+          }}
+        >
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
+            <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
               <Pie
-                data={tiposPie}
+                data={pieOrdenado}
                 dataKey="value"
                 nameKey="name"
-                cx="42%"
+                cx="50%"
                 cy="50%"
-                innerRadius={70}
-                outerRadius={110}
+                innerRadius={narrow ? 48 : 70}
+                outerRadius={narrow ? 78 : 110}
                 paddingAngle={1}
-                label={(props) => {
-                  const p = Number((props as { percent?: number }).percent ?? 0);
-                  return p > 0.04 ? `${(p * 100).toFixed(1)}%` : '';
-                }}
+                label={false}
               >
-                {tiposPie.map((t) => (
+                {pieOrdenado.map((t) => (
                   <Cell key={t.name} fill={t.color} />
                 ))}
               </Pie>
               <Tooltip
-                formatter={(v, name) => [
-                  Number(v).toLocaleString('en-US', {
-                    style: 'currency',
-                    currency: 'USD',
-                    maximumFractionDigits: 0,
-                  }),
-                  String(name),
-                ]}
-              />
-              <Legend
-                layout="vertical"
-                align="right"
-                verticalAlign="middle"
-                wrapperStyle={{ fontSize: 11 }}
-                formatter={(value) => {
-                  const row = tiposPie.find((t) => t.name === value);
-                  const pct = row ? ((row.value / pieTotal) * 100).toFixed(1) : '';
-                  return `${value} ${pct}%`;
-                }}
+                formatter={(v, name) => [fmtUsdFull(Number(v)), String(name)]}
               />
             </PieChart>
           </ResponsiveContainer>
         </div>
+        <CcoChartLegend items={pieLegend} showValues />
       </div>
 
       {/* Análisis Jerárquico sunbursts */}
@@ -427,10 +588,12 @@ export default function CcoAnalisisJerarquico({
           background: '#fff',
           borderRadius: 14,
           border: '1px solid #E2E8F0',
-          padding: '18px 20px',
+          padding: narrow ? '14px 12px' : '18px 20px',
+          maxWidth: '100%',
+          overflow: 'hidden',
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0F172A' }}>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0F172A' }}>
           Análisis Jerárquico
         </h2>
         <div style={{ margin: '12px 0 16px', maxWidth: 420 }}>
@@ -461,7 +624,7 @@ export default function CcoAnalisisJerarquico({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
             gap: 14,
           }}
         >
@@ -500,10 +663,12 @@ export default function CcoAnalisisJerarquico({
           background: '#fff',
           borderRadius: 14,
           border: '1px solid #E2E8F0',
-          padding: '18px 20px',
+          padding: narrow ? '14px 12px' : '18px 20px',
+          maxWidth: '100%',
+          overflow: 'hidden',
         }}
       >
-        <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 800 }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 800 }}>
           Relación Jerárquica del Presupuesto (Mapa de Árbol)
         </h2>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: '#64748B' }}>
@@ -515,7 +680,6 @@ export default function CcoAnalisisJerarquico({
           <TreemapPresupuesto nodos={treemapNodos} />
         )}
       </div>
-
     </div>
   );
 }
