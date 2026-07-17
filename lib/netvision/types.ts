@@ -101,13 +101,43 @@ export type CoverageSector = {
   mode: 'day' | 'night'
 }
 
+export type BomCategory =
+  | 'camera'
+  | 'nvr'
+  | 'storage'
+  | 'poe'
+  | 'accessory'
+  | 'network'
+  | 'wifi'
+  | 'cable'
+  | 'connector'
+  | 'conduit'
+
 export type BomLine = {
   sku: string
-  category: 'camera' | 'nvr' | 'storage' | 'poe' | 'accessory' | 'network' | 'wifi'
+  category: BomCategory
   description: string
   qty: number
   unitUsd: number
   totalUsd: number
+}
+
+export type CableType = 'CAT5E' | 'CAT6' | 'CAT6A' | 'FIBER' | 'COAX'
+
+export type CableRoute = {
+  id: string
+  fromId: string
+  toId: string
+  fromLabel: string
+  toLabel: string
+  /** puntos normalizados de la polilínea (ruta ortogonal) */
+  points: { x: number; y: number }[]
+  straightM: number
+  routeM: number
+  type: CableType
+  certified: boolean
+  warn: boolean
+  warning: string | null
 }
 
 export type BomSummary = {

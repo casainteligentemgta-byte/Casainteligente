@@ -43,6 +43,14 @@ Diseño CCTV / redes / cableado / BIM integrado en Nexus (`/nexus/vision`).
 - Export **SVG** y **PNG** del esquema
 - Click en nodo del diagrama → selecciona en el inspector
 
+## Fase 4 — Cableado y conductos
+
+- Rutas ortogonales en plano (toggle **Rutas**) con holgura 15%
+- Tipo de cable Cat6/Cat6A/fibra por distancia + alertas TIA 100 m
+- Cajetines automáticos (16/20/25 mm, ducto 40×40) ocupación ≤40%
+- Pestaña **Cable**: lista de rutas + plan de conductos
+- BOM: cables ($/m), RJ45, cajetines, corrugado
+
 ## Roadmap
 
 | Fase | Módulo | Estado |
@@ -50,7 +58,7 @@ Diseño CCTV / redes / cableado / BIM integrado en Nexus (`/nexus/vision`).
 | 1 | CCTV FOV / BOM | Hecho |
 | 2 | Redes WiFi + Ethernet + PoE | Hecho |
 | 3 | Diagramas técnicos automáticos | Hecho |
-| 4 | Cableado, cajetines, BOM completo | Pendiente |
+| 4 | Cableado, cajetines, BOM completo | Hecho |
 | 5 | Canalizaciones subterráneas | Pendiente |
 | 6 | Cumplimiento NEC/IEC/NFPA/TIA | Stub |
 | 7 | BIM IFC/DWG/paquete Revit | Stub |

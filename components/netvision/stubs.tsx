@@ -15,13 +15,7 @@ function ComingSoon({ title, phase }: { title: string; phase: string }) {
 
 /** DiagramGenerator real: components/netvision/DiagramGenerator.tsx (Fase 3). */
 
-export function CableRoutingEngine() {
-  return <ComingSoon title="Motor de rutas de cable" phase="Fase 4" />
-}
-
-export function ConduitCalculator() {
-  return <ComingSoon title="Cajetines y conductos" phase="Fase 4" />
-}
+/** CableRoutingEngine / ConduitCalculator reales (Fase 4). */
 
 export function UndergroundCanalizationTool() {
   return <ComingSoon title="Canalizaciones subterráneas" phase="Fase 5" />

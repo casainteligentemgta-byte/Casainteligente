@@ -15,6 +15,8 @@ import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
 import BOMGenerator from '@/components/netvision/BOMGenerator'
+import CableRoutingEngine from '@/components/netvision/CableRoutingEngine'
+import ConduitCalculator from '@/components/netvision/ConduitCalculator'
 import DiagramGenerator from '@/components/netvision/DiagramGenerator'
 import NetworkDesigner from '@/components/netvision/NetworkDesigner'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
@@ -48,6 +50,14 @@ import {
   analyzeWifiCoverage,
   buildWifiCoverage,
 } from '@/lib/netvision/services/wifiPredictor'
+import {
+  buildCableRoutes,
+  validateCableRoutes,
+} from '@/lib/netvision/services/cableRoutingEngine'
+import {
+  planConduits,
+  validateConduits,
+} from '@/lib/netvision/services/conduitCalculator'
 import {
   clearProjectStorage,
   emptyProject,
@@ -107,6 +117,7 @@ export default function NexusVisionArchitectClient() {
   const [showFov, setShowFov] = useState(true)
   const [showWifi, setShowWifi] = useState(true)
   const [showLinks, setShowLinks] = useState(true)
+  const [showCableRoutes, setShowCableRoutes] = useState(true)
   const [nightMode, setNightMode] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,7 +132,7 @@ export default function NexusVisionArchitectClient() {
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
-  const [sideTab, setSideTab] = useState<'cctv' | 'red'>('cctv')
+  const [sideTab, setSideTab] = useState<'cctv' | 'red' | 'cable'>('cctv')
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const fileRef = useRef<HTMLInputElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
@@ -156,15 +167,45 @@ export default function NexusVisionArchitectClient() {
     [project.cameras, project.networkNodes],
   )
 
+  const cableRoutes = useMemo(
+    () => buildCableRoutes(project.cameras, project.networkNodes, project.scale),
+    [project.cameras, project.networkNodes, project.scale],
+  )
+
+  const conduitPlans = useMemo(() => planConduits(cableRoutes), [cableRoutes])
+
   const validations = useMemo(() => {
     const cov = analyzeRedundancy(project.cameras, sectors)
     const wifi = analyzeWifiCoverage(project.networkNodes, project.scale)
-    return [...cov, ...poeAnalysis.validations, ...wifi]
-  }, [project.cameras, project.networkNodes, project.scale, sectors, poeAnalysis.validations])
+    const cab = validateCableRoutes(cableRoutes)
+    const cnd = validateConduits(conduitPlans)
+    return [...cov, ...poeAnalysis.validations, ...wifi, ...cab, ...cnd]
+  }, [
+    project.cameras,
+    project.networkNodes,
+    project.scale,
+    sectors,
+    poeAnalysis.validations,
+    cableRoutes,
+    conduitPlans,
+  ])
 
   const bom = useMemo(
-    () => buildBom(project.cameras, project.retentionDays, project.networkNodes),
-    [project.cameras, project.retentionDays, project.networkNodes],
+    () =>
+      buildBom(
+        project.cameras,
+        project.retentionDays,
+        project.networkNodes,
+        cableRoutes,
+        conduitPlans,
+      ),
+    [
+      project.cameras,
+      project.retentionDays,
+      project.networkNodes,
+      cableRoutes,
+      conduitPlans,
+    ],
   )
 
   const linkLines = useMemo(() => {
@@ -350,7 +391,7 @@ export default function NexusVisionArchitectClient() {
         <div>
           <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            CCTV + redes + diagrama unifilar en tiempo real.
+            CCTV + redes + cableado + diagrama unifilar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -499,6 +540,14 @@ export default function NexusVisionArchitectClient() {
                     <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
                       <input
                         type="checkbox"
+                        checked={showCableRoutes}
+                        onChange={(e) => setShowCableRoutes(e.target.checked)}
+                      />
+                      Rutas
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
                         checked={nightMode}
                         onChange={(e) => setNightMode(e.target.checked)}
                       />
@@ -569,11 +618,13 @@ export default function NexusVisionArchitectClient() {
                     sectors={sectors}
                     wifiCircles={wifiCircles}
                     linkLines={linkLines}
+                    cableRoutes={cableRoutes}
                     selectedId={selectedId}
                     placeMode={placeMode}
                     showFov={showFov}
                     showWifi={showWifi}
                     showLinks={showLinks}
+                    showCableRoutes={showCableRoutes}
                     onAddAt={onAddAt}
                     onMove={onMove}
                     onSelect={setSelectedId}
@@ -589,7 +640,7 @@ export default function NexusVisionArchitectClient() {
           <div className="flex gap-1 rounded-lg border border-white/10 bg-black/30 p-0.5">
             <button
               type="button"
-              className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${
+              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
                 sideTab === 'cctv' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
               }`}
               onClick={() => setSideTab('cctv')}
@@ -598,16 +649,44 @@ export default function NexusVisionArchitectClient() {
             </button>
             <button
               type="button"
-              className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${
+              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
                 sideTab === 'red' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
               }`}
               onClick={() => setSideTab('red')}
             >
               Red
             </button>
+            <button
+              type="button"
+              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
+                sideTab === 'cable' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
+              }`}
+              onClick={() => setSideTab('cable')}
+            >
+              Cable
+            </button>
           </div>
 
-          {sideTab === 'red' ? (
+          {sideTab === 'cable' ? (
+            <div className="space-y-4">
+              <CableRoutingEngine
+                routes={cableRoutes}
+                onSelect={(fromId) => setSelectedId(fromId)}
+              />
+              <div className="border-t border-white/10 pt-3">
+                <ConduitCalculator
+                  plans={conduitPlans}
+                  onSelectNode={setSelectedId}
+                />
+              </div>
+              <div className="border-t border-white/10 pt-3">
+                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+                  Validaciones
+                </h3>
+                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+              </div>
+            </div>
+          ) : sideTab === 'red' ? (
             <NetworkDesigner
               nodes={project.networkNodes}
               placeKind={placeNetKind}

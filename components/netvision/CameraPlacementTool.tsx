@@ -14,6 +14,7 @@ import {
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type {
+  CableRoute,
   CoverageSector,
   DesignCamera,
   DesignNetworkNode,
@@ -27,11 +28,13 @@ export type CameraPlacementToolProps = {
   sectors: CoverageSector[]
   wifiCircles: WifiCoverageCircle[]
   linkLines: { fromX: number; fromY: number; toX: number; toY: number; warn?: boolean }[]
+  cableRoutes?: CableRoute[]
   selectedId: string | null
   placeMode: boolean
   showFov: boolean
   showWifi: boolean
   showLinks: boolean
+  showCableRoutes?: boolean
   onAddAt: (normX: number, normY: number) => void
   onMove: (id: string, normX: number, normY: number) => void
   onSelect: (id: string) => void
@@ -98,11 +101,13 @@ export default function CameraPlacementTool({
   sectors,
   wifiCircles,
   linkLines,
+  cableRoutes = [],
   selectedId,
   placeMode,
   showFov,
   showWifi,
   showLinks,
+  showCableRoutes = false,
   onAddAt,
   onMove,
   onSelect,
@@ -227,7 +232,27 @@ export default function CameraPlacementTool({
               )
             })}
 
+          {showCableRoutes &&
+            cableRoutes.map((r) => {
+              const pts: number[] = []
+              for (const p of r.points) {
+                pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
+              }
+              return (
+                <Line
+                  key={r.id}
+                  points={pts}
+                  stroke={r.warn ? '#f87171' : 'rgba(250,204,21,0.75)'}
+                  strokeWidth={r.warn ? 2.5 : 2}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
+                />
+              )
+            })}
+
           {showLinks &&
+            !showCableRoutes &&
             linkLines.map((l, i) => (
               <Line
                 key={`link-${i}`}
