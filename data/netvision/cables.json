@@ -1,0 +1,10 @@
+{
+  "CAT5E": { "maxM": 100, "usdPerM": 0.08, "poeOk": true },
+  "CAT6": { "maxM": 100, "usdPerM": 0.12, "poeOk": true },
+  "CAT6A": { "maxM": 55, "usdPerM": 0.15, "poeOk": true, "note": "hasta 55m sin repetidor a 10G" },
+  "FIBER": { "maxM": 2000, "usdPerM": 0.5, "poeOk": false },
+  "COAX": { "maxM": 300, "usdPerM": 0.18, "poeOk": false },
+  "connectors": {
+    "RJ45": { "usdEach": 0.5 }
+  }
+}

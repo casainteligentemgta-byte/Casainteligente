@@ -1,0 +1,34 @@
+{
+  "NEC": {
+    "maxPoEDistance": 100,
+    "minSeparationHighVoltage": 30,
+    "requiredCertification": "UL",
+    "groundingInterval": 20,
+    "maxCableTension": 25
+  },
+  "IEC": {
+    "maxHDMIDistance": 15,
+    "coaxialImpedance": "75Ω±5%",
+    "maxCrosstalk": -35,
+    "returnLoss": 20,
+    "minSeparationPower": 50
+  },
+  "NFPA": {
+    "requireLSZH": true,
+    "minDistanceHeatSource": 20,
+    "fireRating": "UL94-V0"
+  },
+  "TIA_EIA_568": {
+    "maxHorizontalDistance": 100,
+    "maxWorkZoneDistance": 90,
+    "radiusCurvature": 4,
+    "maxCableTension": 25,
+    "maxConduitOccupancy": 0.4
+  },
+  "ISO27001": {
+    "requireEncryption": true,
+    "segregateNetworks": true,
+    "restrictedAccess": true,
+    "requireAuditLog": true
+  }
+}

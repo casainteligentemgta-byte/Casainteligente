@@ -68,8 +68,8 @@ export const NEXUS_MODULES: NexusModule[] = [
   },
   {
     href: '/nexus/vision',
-    label: 'Cámaras / Planos',
-    description: 'Cargar PDF o imagen y colocar cámaras',
+    label: 'NetVision Pro',
+    description: 'Diseño CCTV: FOV, catálogo, BOM y export',
     icon: Sparkles,
     group: 'commercial',
   },

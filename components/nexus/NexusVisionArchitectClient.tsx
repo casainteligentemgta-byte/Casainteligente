@@ -2,33 +2,55 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Camera, Trash2, Upload, Undo2 } from 'lucide-react'
+import type Konva from 'konva'
+import {
+  Camera,
+  Download,
+  FileJson,
+  Trash2,
+  Upload,
+  Undo2,
+} from 'lucide-react'
 import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
-import type { VisionCameraPin } from '@/components/nexus/NexusVisionKonvaStage'
+import BOMGenerator from '@/components/netvision/BOMGenerator'
+import ValidationEngine from '@/components/netvision/ValidationEngine'
+import {
+  CAMERA_CATALOG,
+  DEFAULT_CAMERA_MODEL_ID,
+  getCameraModelOrDefault,
+} from '@/lib/netvision/catalog/cameras'
+import {
+  buildCoverageSectors,
+  defaultScale,
+} from '@/lib/netvision/services/coverageCalculator'
+import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
+import { analyzeRedundancy } from '@/lib/netvision/services/redundancyAnalyzer'
+import {
+  clearProjectStorage,
+  loadProject,
+  saveProject,
+} from '@/lib/netvision/storage'
+import type { DesignCamera, NetVisionProject } from '@/lib/netvision/types'
+import {
+  downloadDataUrl,
+  downloadJson,
+  openSpecsPrintable,
+  projectToExportJson,
+} from '@/lib/netvision/utils/exporters'
 
-const NexusVisionKonvaStage = dynamic(
-  () => import('@/components/nexus/NexusVisionKonvaStage'),
+const CameraPlacementTool = dynamic(
+  () => import('@/components/netvision/CameraPlacementTool'),
   {
     ssr: false,
     loading: () => (
       <div className="flex min-h-[320px] items-center justify-center text-sm text-[var(--nexus-text-muted)]">
-        Cargando editor Konva…
+        Cargando NetVision Pro…
       </div>
     ),
   },
 )
-
-type CamaraPin = {
-  id: string
-  /** 0–1 normalizado sobre el plano */
-  x: number
-  y: number
-  label: string
-}
-
-const STORAGE_KEY = 'nexus.vision.architect.v2'
 
 function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -50,58 +72,56 @@ async function renderPdfFirstPage(file: File): Promise<string> {
   return canvas.toDataURL('image/jpeg', 0.92)
 }
 
-function normalizeLegacyPin(c: { id: string; x: number; y: number; label: string }): CamaraPin {
-  // v1 guardaba 0–100 %; v2 usa 0–1
-  const looksPercent = c.x > 1 || c.y > 1
-  return {
-    id: c.id,
-    label: c.label,
-    x: looksPercent ? c.x / 100 : c.x,
-    y: looksPercent ? c.y / 100 : c.y,
-  }
-}
-
 export default function NexusVisionArchitectClient() {
-  const [planoUrl, setPlanoUrl] = useState<string | null>(null)
-  const [planoNombre, setPlanoNombre] = useState('')
-  const [camaras, setCamaras] = useState<CamaraPin[]>([])
+  const [project, setProject] = useState<NetVisionProject>(() => ({
+    version: 1,
+    planoUrl: null,
+    planoNombre: '',
+    cameras: [],
+    scale: defaultScale(),
+    retentionDays: 30,
+    complianceProfileId: 'VE',
+  }))
+  const [hydrated, setHydrated] = useState(false)
   const [modoColocar, setModoColocar] = useState(true)
+  const [showFov, setShowFov] = useState(true)
+  const [nightMode, setNightMode] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [defaultModelId, setDefaultModelId] = useState(DEFAULT_CAMERA_MODEL_ID)
+  const [calibrateMode, setCalibrateMode] = useState(false)
+  const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
+  const [calibMeters, setCalibMeters] = useState('10')
   const fileRef = useRef<HTMLInputElement>(null)
+  const stageRef = useRef<Konva.Stage | null>(null)
 
   useEffect(() => {
-    try {
-      const raw =
-        sessionStorage.getItem(STORAGE_KEY) ??
-        sessionStorage.getItem('nexus.vision.architect.v1')
-      if (!raw) return
-      const parsed = JSON.parse(raw) as {
-        planoUrl?: string
-        planoNombre?: string
-        camaras?: CamaraPin[]
-      }
-      if (parsed.planoUrl) setPlanoUrl(parsed.planoUrl)
-      if (parsed.planoNombre) setPlanoNombre(parsed.planoNombre)
-      if (Array.isArray(parsed.camaras)) {
-        setCamaras(parsed.camaras.map(normalizeLegacyPin))
-      }
-    } catch {
-      /* ignore */
-    }
+    setProject(loadProject())
+    setHydrated(true)
   }, [])
 
   useEffect(() => {
-    try {
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ planoUrl, planoNombre, camaras }),
-      )
-    } catch {
-      /* ignore quota */
-    }
-  }, [planoUrl, planoNombre, camaras])
+    if (!hydrated) return
+    saveProject(project)
+  }, [project, hydrated])
+
+  const sectors = useMemo(
+    () => buildCoverageSectors(project.cameras, project.scale, nightMode ? 'night' : 'day'),
+    [project.cameras, project.scale, nightMode],
+  )
+
+  const validations = useMemo(
+    () => analyzeRedundancy(project.cameras, sectors),
+    [project.cameras, sectors],
+  )
+
+  const bom = useMemo(
+    () => buildBom(project.cameras, project.retentionDays),
+    [project.cameras, project.retentionDays],
+  )
+
+  const selected = project.cameras.find((c) => c.id === selectedId) ?? null
 
   const onFile = useCallback(async (file: File | null) => {
     if (!file) return
@@ -123,11 +143,16 @@ export default function NexusVisionArchitectClient() {
       } else {
         throw new Error('Usa una imagen (JPG/PNG/WEBP) o un PDF.')
       }
-      setPlanoUrl(url)
-      setPlanoNombre(file.name)
-      setCamaras([])
+      setProject((p) => ({
+        ...p,
+        planoUrl: url,
+        planoNombre: file.name,
+        cameras: [],
+      }))
       setSelectedId(null)
       setModoColocar(true)
+      setCalibrateMode(false)
+      setCalibPoints([])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
@@ -135,34 +160,52 @@ export default function NexusVisionArchitectClient() {
     }
   }, [])
 
-  const pins: VisionCameraPin[] = useMemo(
-    () =>
-      camaras.map((c) => ({
-        id: c.id,
-        name: c.label,
-        x: c.x,
-        y: c.y,
-        selected: c.id === selectedId,
-      })),
-    [camaras, selectedId],
-  )
-
   const onAddAt = (normX: number, normY: number) => {
-    if (!modoColocar || !planoUrl) return
-    const n = camaras.length + 1
-    const pin: CamaraPin = {
+    if (!project.planoUrl) return
+
+    if (calibrateMode) {
+      const next = [...calibPoints, { x: normX, y: normY }]
+      if (next.length >= 2) {
+        const a = next[0]!
+        const b = next[1]!
+        const meters = Math.max(0.5, Number(calibMeters) || 10)
+        const distN = Math.hypot(a.x - b.x, a.y - b.y) || 1e-6
+        const metersPerNorm = meters / distN
+        setProject((p) => ({
+          ...p,
+          scale: {
+            metersPerNormX: metersPerNorm,
+            metersPerNormY: metersPerNorm,
+            calibrated: true,
+          },
+        }))
+        setCalibPoints([])
+        setCalibrateMode(false)
+      } else {
+        setCalibPoints(next)
+      }
+      return
+    }
+
+    if (!modoColocar) return
+    const n = project.cameras.length + 1
+    const pin: DesignCamera = {
       id: uid(),
       x: Math.round(normX * 1000) / 1000,
       y: Math.round(normY * 1000) / 1000,
       label: `CAM-${String(n).padStart(2, '0')}`,
+      modelId: defaultModelId,
+      yawDeg: 0,
+      mountHeightM: 2.8,
     }
-    setCamaras((prev) => [...prev, pin])
+    setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
     setSelectedId(pin.id)
   }
 
   const onMove = (id: string, normX: number, normY: number) => {
-    setCamaras((prev) =>
-      prev.map((c) =>
+    setProject((p) => ({
+      ...p,
+      cameras: p.cameras.map((c) =>
         c.id === id
           ? {
               ...c,
@@ -171,45 +214,56 @@ export default function NexusVisionArchitectClient() {
             }
           : c,
       ),
-    )
+    }))
+  }
+
+  const updateSelected = (patch: Partial<DesignCamera>) => {
+    if (!selectedId) return
+    setProject((p) => ({
+      ...p,
+      cameras: p.cameras.map((c) => (c.id === selectedId ? { ...c, ...patch } : c)),
+    }))
   }
 
   const quitar = (id: string) => {
-    setCamaras((prev) => prev.filter((c) => c.id !== id))
+    setProject((p) => ({ ...p, cameras: p.cameras.filter((c) => c.id !== id) }))
     if (selectedId === id) setSelectedId(null)
   }
 
   const limpiarPlano = () => {
-    setPlanoUrl(null)
-    setPlanoNombre('')
-    setCamaras([])
+    setProject({
+      version: 1,
+      planoUrl: null,
+      planoNombre: '',
+      cameras: [],
+      scale: defaultScale(),
+      retentionDays: 30,
+      complianceProfileId: 'VE',
+    })
     setSelectedId(null)
-    try {
-      sessionStorage.removeItem(STORAGE_KEY)
-      sessionStorage.removeItem('nexus.vision.architect.v1')
-    } catch {
-      /* ignore */
-    }
+    clearProjectStorage()
   }
 
-  const resumen = useMemo(
-    () =>
-      camaras
-        .map(
-          (c) =>
-            `${c.label}: ${(c.x * 100).toFixed(1)}%, ${(c.y * 100).toFixed(1)}%`,
-        )
-        .join('\n'),
-    [camaras],
-  )
+  const exportPng = () => {
+    const stage = stageRef.current
+    if (!stage) return
+    downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
+  }
+
+  const exportJson = () => {
+    downloadJson(
+      'netvision-design.json',
+      projectToExportJson(project, bom),
+    )
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">AI Architect · Cámaras</h1>
+          <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            Carga un PDF o imagen del plano y ubica las cámaras en el lienzo Konva.
+            Diseño CCTV inteligente: cobertura FOV, catálogo multi-marca, BOM y export.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -229,11 +283,28 @@ export default function NexusVisionArchitectClient() {
             className="hidden"
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
           />
-          {planoUrl ? (
-            <Button type="button" variant="glass" onClick={limpiarPlano}>
-              <Undo2 className="mr-2 h-4 w-4" />
-              Nuevo plano
-            </Button>
+          {project.planoUrl ? (
+            <>
+              <Button type="button" variant="glass" onClick={exportPng}>
+                <Download className="mr-2 h-4 w-4" />
+                PNG
+              </Button>
+              <Button type="button" variant="glass" onClick={exportJson}>
+                <FileJson className="mr-2 h-4 w-4" />
+                JSON
+              </Button>
+              <Button
+                type="button"
+                variant="glass"
+                onClick={() => openSpecsPrintable(project, bom)}
+              >
+                PDF specs
+              </Button>
+              <Button type="button" variant="glass" onClick={limpiarPlano}>
+                <Undo2 className="mr-2 h-4 w-4" />
+                Nuevo plano
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -244,9 +315,9 @@ export default function NexusVisionArchitectClient() {
         </p>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 xl:grid-cols-[1fr_300px_280px]">
         <GlassCardMotion className="overflow-hidden p-3 sm:p-4">
-          {!planoUrl ? (
+          {!project.planoUrl ? (
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -255,109 +326,235 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                PDF (primera página) o imagen JPG/PNG/WEBP. Luego toca el lienzo Konva para
-                colocar cada cámara y arrástrala para reposicionar.
+                PDF (primera página) o imagen. Calibra la escala, coloca cámaras del catálogo y
+                revisa conos FOV + BOM.
               </p>
             </button>
           ) : (
             <>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
                 <p className="truncate text-xs text-[var(--nexus-text-muted)]">
-                  <Mono>{planoNombre || 'Plano'}</Mono>
+                  <Mono>{project.planoNombre || 'Plano'}</Mono>
                   {' · '}
-                  {camaras.length} cámara{camaras.length === 1 ? '' : 's'}
+                  {project.cameras.length} cámara{project.cameras.length === 1 ? '' : 's'}
+                  {' · '}
+                  {project.scale.calibrated ? (
+                    <span className="text-[var(--nexus-green)]">escala OK</span>
+                  ) : (
+                    <span className="text-amber-300">escala estimada ~40 m</span>
+                  )}
                 </p>
-                <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-[var(--nexus-cyan)]">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
                   <input
                     type="checkbox"
-                    checked={modoColocar}
-                    onChange={(e) => setModoColocar(e.target.checked)}
+                    checked={modoColocar && !calibrateMode}
+                    onChange={(e) => {
+                      setModoColocar(e.target.checked)
+                      if (e.target.checked) setCalibrateMode(false)
+                    }}
                   />
-                  Modo colocar cámaras
+                  Colocar
                 </label>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                  <input
+                    type="checkbox"
+                    checked={showFov}
+                    onChange={(e) => setShowFov(e.target.checked)}
+                  />
+                  FOV
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                  <input
+                    type="checkbox"
+                    checked={nightMode}
+                    onChange={(e) => setNightMode(e.target.checked)}
+                  />
+                  Noche
+                </label>
+                <button
+                  type="button"
+                  className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                    calibrateMode
+                      ? 'bg-[var(--nexus-cyan)] text-black'
+                      : 'text-[var(--nexus-cyan)]'
+                  }`}
+                  onClick={() => {
+                    setCalibrateMode((v) => !v)
+                    setCalibPoints([])
+                    setModoColocar(false)
+                  }}
+                >
+                  Calibrar escala
+                </button>
+                {calibrateMode ? (
+                  <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
+                    Distancia real (m)
+                    <input
+                      value={calibMeters}
+                      onChange={(e) => setCalibMeters(e.target.value)}
+                      className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
+                    />
+                    · clic 2 puntos ({calibPoints.length}/2)
+                  </label>
+                ) : null}
+                <select
+                  value={defaultModelId}
+                  onChange={(e) => setDefaultModelId(e.target.value)}
+                  className="max-w-[200px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+                  title="Modelo al colocar"
+                >
+                  {CAMERA_CATALOG.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.brand} · {m.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div
                 className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
-                  modoColocar ? 'cursor-crosshair' : 'cursor-default'
+                  modoColocar || calibrateMode ? 'cursor-crosshair' : 'cursor-default'
                 }`}
               >
-                <NexusVisionKonvaStage
-                  backgroundUrl={planoUrl}
-                  cameras={pins}
+                <CameraPlacementTool
+                  backgroundUrl={project.planoUrl}
+                  cameras={project.cameras}
+                  sectors={sectors}
+                  selectedId={selectedId}
+                  placeMode={modoColocar || calibrateMode}
+                  showFov={showFov}
                   onAddAt={onAddAt}
                   onMove={onMove}
                   onSelect={setSelectedId}
+                  stageRef={stageRef}
                 />
               </div>
-              <p className="mt-2 text-[11px] text-[var(--nexus-text-dim)]">
-                {modoColocar
-                  ? 'Toca el plano vacío para agregar. Arrastra un pin para moverlo. Selecciónalo para editar a la derecha.'
-                  : 'Modo colocar desactivado — puedes seleccionar y arrastrar pins sin agregar nuevos.'}
-              </p>
             </>
           )}
         </GlassCardMotion>
 
-        <GlassCardMotion delay={0.06} className="space-y-3 p-4">
+        <GlassCardMotion delay={0.04} className="space-y-3 p-4">
           <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
-            Cámaras colocadas
+            Inspector
           </h2>
-          {camaras.length === 0 ? (
-            <p className="text-xs text-[var(--nexus-text-dim)]">
-              Aún no hay cámaras. Carga un plano y toca donde irán.
-            </p>
-          ) : (
-            <ul className="max-h-[420px] space-y-2 overflow-auto pr-1">
-              {camaras.map((c) => (
-                <li
-                  key={c.id}
-                  className={`rounded-lg border px-2.5 py-2 ${
-                    selectedId === c.id
-                      ? 'border-[var(--nexus-cyan)] bg-[rgba(0,242,254,0.08)]'
-                      : 'border-white/10 bg-black/20'
-                  }`}
+          {selected ? (
+            <div className="space-y-2 text-xs">
+              <label className="block">
+                <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
+                <input
+                  value={selected.label}
+                  onChange={(e) => updateSelected({ label: e.target.value })}
+                  className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[var(--nexus-text-dim)]">Modelo</span>
+                <select
+                  value={selected.modelId}
+                  onChange={(e) => updateSelected({ modelId: e.target.value })}
+                  className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
                 >
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={c.label}
-                      onChange={(e) =>
-                        setCamaras((prev) =>
-                          prev.map((x) =>
-                            x.id === c.id ? { ...x, label: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      onFocus={() => setSelectedId(c.id)}
-                      className="min-w-0 flex-1 rounded border border-white/10 bg-black/40 px-2 py-1 text-xs font-semibold text-white outline-none focus:border-[var(--nexus-cyan)]"
-                    />
+                  {CAMERA_CATALOG.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.brand} · {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[var(--nexus-text-dim)]">
+                  Orientación (yaw) {selected.yawDeg}°
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={359}
+                  value={selected.yawDeg}
+                  onChange={(e) => updateSelected({ yawDeg: Number(e.target.value) })}
+                  className="mt-1 w-full"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[var(--nexus-text-dim)]">Altura montaje (m)</span>
+                <input
+                  type="number"
+                  step={0.1}
+                  min={1}
+                  max={12}
+                  value={selected.mountHeightM}
+                  onChange={(e) =>
+                    updateSelected({ mountHeightM: Number(e.target.value) || 2.8 })
+                  }
+                  className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                />
+              </label>
+              <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                {(() => {
+                  const m = getCameraModelOrDefault(selected.modelId)
+                  return `${m.fovDeg}° FOV · día ${m.rangeDayM}m · noche ${m.rangeNightM}m · ${m.bitrateMbps} Mbps · ${m.poeWatts} W`
+                })()}
+              </p>
+              <Button
+                type="button"
+                variant="glass"
+                className="w-full"
+                onClick={() => quitar(selected.id)}
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Quitar cámara
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-[var(--nexus-text-dim)]">
+              Selecciona una cámara en el plano o la lista.
+            </p>
+          )}
+
+          <div className="border-t border-white/10 pt-3">
+            <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+              Cámaras
+            </h3>
+            {project.cameras.length === 0 ? (
+              <p className="text-xs text-[var(--nexus-text-dim)]">Ninguna aún.</p>
+            ) : (
+              <ul className="max-h-52 space-y-1 overflow-auto">
+                {project.cameras.map((c) => (
+                  <li key={c.id}>
                     <button
                       type="button"
-                      onClick={() => quitar(c.id)}
-                      className="rounded p-1.5 text-red-300 hover:bg-red-500/20"
-                      aria-label={`Quitar ${c.label}`}
+                      onClick={() => setSelectedId(c.id)}
+                      className={`w-full rounded-lg border px-2 py-1.5 text-left text-[11px] ${
+                        selectedId === c.id
+                          ? 'border-[var(--nexus-cyan)] bg-[rgba(0,242,254,0.08)]'
+                          : 'border-white/10 bg-black/20'
+                      }`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <span className="font-semibold text-white">{c.label}</span>
+                      <span className="mt-0.5 block truncate text-[var(--nexus-text-dim)]">
+                        {getCameraModelOrDefault(c.modelId).brand}
+                      </span>
                     </button>
-                  </div>
-                  <p className="mt-1 text-[10px] text-[var(--nexus-text-dim)]">
-                    X {(c.x * 100).toFixed(1)}% · Y {(c.y * 100).toFixed(1)}%
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {camaras.length > 0 ? (
-            <Button
-              type="button"
-              variant="glass"
-              className="w-full"
-              onClick={() => {
-                void navigator.clipboard?.writeText(resumen)
-              }}
-            >
-              Copiar lista de posiciones
-            </Button>
-          ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="border-t border-white/10 pt-3">
+            <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+              Validaciones
+            </h3>
+            <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+          </div>
+        </GlassCardMotion>
+
+        <GlassCardMotion delay={0.08} className="space-y-3 p-4">
+          <BOMGenerator
+            bom={bom}
+            retentionDays={project.retentionDays}
+            onRetentionChange={(days) =>
+              setProject((p) => ({ ...p, retentionDays: days }))
+            }
+          />
         </GlassCardMotion>
       </div>
     </div>

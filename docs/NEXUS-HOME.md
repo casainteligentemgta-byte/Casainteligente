@@ -60,7 +60,7 @@ Objetivo: al crear o actualizar un registro en `nexus_clients`, poder **vincular
 | `/nexus/builder` | Nexus Builder (DnD + totales + margen) |
 | `/nexus/proyectos` | Obra + timeline (demo) |
 | `/nexus/contratos/demo/firmar` | Firma digital + animación isotipo |
-| `/nexus/vision` | AI Architect / AR (concepto) |
+| `/nexus/vision` | **NetVision Pro** — diseño CCTV (FOV, catálogo, BOM, export). Roadmap: redes, cableado, normativas, BIM |
 
 ## Base de datos
 
