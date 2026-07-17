@@ -1,0 +1,5 @@
+# Bot standalone (proceso aparte; no forma parte del build Next en Vercel)
+mi-asistente-ai/node_modules
+mi-asistente-ai/.env
+.tmp-fotos-analisis
+build-output.log
