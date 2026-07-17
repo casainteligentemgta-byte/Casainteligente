@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Menu, PanelLeftClose, X } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -209,8 +209,8 @@ function KpiRow({ bloque, honorariosPct, real }: { bloque: CcoKpiBloque; honorar
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-        gap: 12,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 10,
         marginBottom: 22,
       }}
     >
@@ -228,12 +228,14 @@ function ChartCard({ title, children, tall }: { title: string; children: React.R
         background: '#fff',
         borderRadius: 12,
         border: '1px solid #E2E8F0',
-        padding: '16px 18px 12px',
+        padding: '12px 12px 10px',
         marginBottom: 18,
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
-      <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700, color: '#0F172A' }}>{title}</h3>
-      <div style={{ width: '100%', height: tall ?? 320 }}>{children}</div>
+      <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{title}</h3>
+      <div style={{ width: '100%', height: tall ?? 280, minWidth: 0 }}>{children}</div>
     </div>
   );
 }
@@ -245,6 +247,8 @@ const SECUNDARIOS = [
   { title: 'Procuras', href: '/contabilidad/procuras' },
   { title: 'Canal Telegram', href: '/contabilidad/compras/canal' },
 ];
+
+const MQ_DESKTOP = '(min-width: 900px)';
 
 export default function CcoDashboardClient() {
   const [nav, setNav] = useState<NavId>('dashboard');
@@ -259,6 +263,38 @@ export default function CcoDashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [periodicidad, setPeriodicidad] = useState('Mensual');
   const [modo, setModo] = useState<'acumulado' | 'periodo'>('acumulado');
+  /** Menú izquierdo: abierto en desktop, cerrado en móvil por defecto. */
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(MQ_DESKTOP);
+    const apply = () => {
+      const desktop = mq.matches;
+      setIsDesktop(desktop);
+      setMenuOpen(desktop);
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktop || !menuOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isDesktop, menuOpen]);
+
+  const seleccionarNav = useCallback((id: NavId) => {
+    setNav(id);
+    if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia(MQ_DESKTOP).matches) {
+      setMenuOpen(false);
+    }
+  }, []);
 
   const proyectosCatalogo = useMemo(
     () => (data?.proyectos ?? []).map((p) => ({ id: p.id, nombre: p.nombre })),
@@ -332,15 +368,54 @@ export default function CcoDashboardClient() {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: 8,
-          padding: '8px 16px',
+          padding: '8px 12px',
           background: '#E2E8F0',
           borderBottom: '1px solid #CBD5E1',
           fontSize: 12,
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
         }}
       >
-        <Link href="/contabilidad" style={{ color: '#2563EB', fontWeight: 700, textDecoration: 'none' }}>
-          ← Hub módulos
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-controls="cco-sidebar"
+            title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              border: '1px solid #CBD5E1',
+              background: '#fff',
+              borderRadius: 8,
+              padding: '6px 10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              color: '#334155',
+              flexShrink: 0,
+            }}
+          >
+            {menuOpen ? <PanelLeftClose size={16} /> : <Menu size={16} />}
+            <span style={{ fontSize: 12 }}>{menuOpen ? 'Ocultar' : 'Menú'}</span>
+          </button>
+          <Link
+            href="/contabilidad"
+            style={{
+              color: '#2563EB',
+              fontWeight: 700,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            ← Hub
+          </Link>
+        </div>
         <button
           type="button"
           onClick={() => void cargar()}
@@ -365,32 +440,96 @@ export default function CcoDashboardClient() {
           minHeight: 'calc(100vh - 42px)',
           maxWidth: 1400,
           margin: '0 auto',
+          position: 'relative',
         }}
       >
-        {/* Menú izquierdo — se enriquecerá después */}
+        {/* Overlay móvil cuando el menú está abierto */}
+        {!isDesktop && menuOpen ? (
+          <button
+            type="button"
+            aria-label="Cerrar menú"
+            onClick={() => setMenuOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.45)',
+              border: 'none',
+              zIndex: 45,
+              cursor: 'pointer',
+            }}
+          />
+        ) : null}
+
+        {/* Menú izquierdo: colapsable; en móvil es drawer */}
         <aside
+          id="cco-sidebar"
           style={{
-            width: 220,
+            ...(isDesktop
+              ? {
+                  width: menuOpen ? 220 : 0,
+                  position: 'relative' as const,
+                  transform: 'none',
+                }
+              : {
+                  width: 260,
+                  position: 'fixed' as const,
+                  top: 0,
+                  left: 0,
+                  bottom: 0,
+                  transform: menuOpen ? 'translateX(0)' : 'translateX(-105%)',
+                  zIndex: 50,
+                }),
             flexShrink: 0,
             background: '#0F172A',
             color: '#E2E8F0',
-            padding: '18px 12px',
+            padding: menuOpen || !isDesktop ? '18px 12px' : 0,
             borderRight: '1px solid #1E293B',
+            overflow: 'hidden',
+            overflowY: 'auto',
+            transition: 'width 0.2s ease, transform 0.2s ease, padding 0.2s ease',
+            boxShadow: !isDesktop && menuOpen ? '8px 0 24px rgba(0,0,0,0.35)' : 'none',
           }}
         >
-          <p
+          <div
             style={{
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: '#64748B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               margin: '0 8px 12px',
+              minWidth: 196,
             }}
           >
-            Menú CCO
-          </p>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: '#64748B',
+                margin: 0,
+              }}
+            >
+              Menú CCO
+            </p>
+            {!isDesktop ? (
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Cerrar"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#94A3B8',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'inline-flex',
+                }}
+              >
+                <X size={18} />
+              </button>
+            ) : null}
+          </div>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 196 }}>
             {NAV_ITEMS.map((item) => {
               const active = nav === item.id;
               return (
@@ -400,7 +539,7 @@ export default function CcoDashboardClient() {
                   disabled={!item.ready}
                   title={item.ready ? undefined : 'Próximamente'}
                   onClick={() => {
-                    if (item.ready) setNav(item.id);
+                    if (item.ready) seleccionarNav(item.id);
                   }}
                   style={{
                     textAlign: 'left',
@@ -440,7 +579,15 @@ export default function CcoDashboardClient() {
           </nav>
         </aside>
 
-        <div style={{ flex: 1, minWidth: 0, padding: '16px 20px 24px' }}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            width: '100%',
+            padding: isDesktop ? '16px 20px 24px' : '12px 12px 88px',
+            overflowX: 'hidden',
+          }}
+        >
       {nav === 'importar-csv' ? (
         <CcoImportarCsvPanel
           proyectos={proyectosCatalogo}
@@ -526,14 +673,17 @@ export default function CcoDashboardClient() {
             marginBottom: 16,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0, flex: '1 1 180px' }}>
             <p
               style={{
                 color: '#fff',
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: 800,
                 margin: 0,
                 letterSpacing: '-0.02em',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
               Proyecto: {data?.proyectoNombre ?? '…'}
@@ -620,11 +770,15 @@ export default function CcoDashboardClient() {
             <div
               style={{
                 display: 'flex',
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
                 gap: '4px 2px',
                 borderBottom: '1px solid #CBD5E1',
                 marginBottom: 18,
                 paddingBottom: 2,
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'thin',
+                maxWidth: '100%',
               }}
             >
               {TABS.map((t) => {
@@ -639,12 +793,13 @@ export default function CcoDashboardClient() {
                       border: 'none',
                       borderBottom: active ? '3px solid #EF4444' : '3px solid transparent',
                       color: active ? '#DC2626' : '#334155',
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 700,
-                      padding: '10px 10px 8px',
+                      padding: '10px 8px 8px',
                       cursor: 'pointer',
                       letterSpacing: '0.02em',
                       whiteSpace: 'nowrap',
+                      flexShrink: 0,
                     }}
                   >
                     <span style={{ marginRight: 4 }}>{t.icon}</span>
@@ -661,19 +816,20 @@ export default function CcoDashboardClient() {
                     background: '#fff',
                     borderRadius: 14,
                     border: '1px solid #E2E8F0',
-                    padding: '20px 22px 8px',
+                    padding: '14px 14px 8px',
                     marginBottom: 18,
+                    maxWidth: '100%',
                   }}
                 >
-                  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Panel de Análisis Financiero</h2>
-                  <p style={{ margin: '6px 0 16px', fontSize: 14, color: '#64748B' }}>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Panel de Análisis Financiero</h2>
+                  <p style={{ margin: '6px 0 16px', fontSize: 13, color: '#64748B' }}>
                     Comparativa de Ingresos vs Egresos (Flujo de Caja)
                   </p>
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 20,
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: 16,
                       marginBottom: 12,
                     }}
                   >
