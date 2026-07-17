@@ -15,6 +15,7 @@ import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
 import BOMGenerator from '@/components/netvision/BOMGenerator'
+import DiagramGenerator from '@/components/netvision/DiagramGenerator'
 import NetworkDesigner from '@/components/netvision/NetworkDesigner'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
@@ -121,6 +122,7 @@ export default function NexusVisionArchitectClient() {
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
   const [sideTab, setSideTab] = useState<'cctv' | 'red'>('cctv')
+  const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const fileRef = useRef<HTMLInputElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
 
@@ -348,7 +350,7 @@ export default function NexusVisionArchitectClient() {
         <div>
           <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            CCTV + redes: FOV, switches PoE, APs WiFi, enlaces y BOM.
+            CCTV + redes + diagrama unifilar en tiempo real.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -417,6 +419,30 @@ export default function NexusVisionArchitectClient() {
           ) : (
             <>
               <div className="mb-3 flex flex-wrap items-center gap-3">
+                <div className="flex gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
+                  <button
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                      viewMode === 'plano'
+                        ? 'bg-[var(--nexus-cyan)] text-black'
+                        : 'text-[var(--nexus-text-muted)]'
+                    }`}
+                    onClick={() => setViewMode('plano')}
+                  >
+                    Plano
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                      viewMode === 'diagrama'
+                        ? 'bg-[var(--nexus-cyan)] text-black'
+                        : 'text-[var(--nexus-text-muted)]'
+                    }`}
+                    onClick={() => setViewMode('diagrama')}
+                  >
+                    Diagrama
+                  </button>
+                </div>
                 <p className="truncate text-xs text-[var(--nexus-text-muted)]">
                   <Mono>{project.planoNombre || 'Plano'}</Mono>
                   {' · '}
@@ -428,6 +454,7 @@ export default function NexusVisionArchitectClient() {
                     <span className="text-amber-300">escala ~40 m</span>
                   )}
                 </p>
+                {viewMode === 'plano' ? (
                 <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
                   <input
                     type="checkbox"
@@ -442,102 +469,118 @@ export default function NexusVisionArchitectClient() {
                   />
                   Cámara
                 </label>
-                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
-                  <input
-                    type="checkbox"
-                    checked={showFov}
-                    onChange={(e) => setShowFov(e.target.checked)}
-                  />
-                  FOV
-                </label>
-                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
-                  <input
-                    type="checkbox"
-                    checked={showWifi}
-                    onChange={(e) => setShowWifi(e.target.checked)}
-                  />
-                  WiFi
-                </label>
-                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
-                  <input
-                    type="checkbox"
-                    checked={showLinks}
-                    onChange={(e) => setShowLinks(e.target.checked)}
-                  />
-                  Enlaces
-                </label>
-                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
-                  <input
-                    type="checkbox"
-                    checked={nightMode}
-                    onChange={(e) => setNightMode(e.target.checked)}
-                  />
-                  Noche
-                </label>
-                <button
-                  type="button"
-                  className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                    calibrateMode
-                      ? 'bg-[var(--nexus-cyan)] text-black'
-                      : 'text-[var(--nexus-cyan)]'
-                  }`}
-                  onClick={() => {
-                    setCalibrateMode((v) => !v)
-                    setCalibPoints([])
-                    setModoColocarCam(false)
-                    setPlaceNetKind(null)
-                  }}
-                >
-                  Calibrar
-                </button>
-                {calibrateMode ? (
-                  <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
-                    m
-                    <input
-                      value={calibMeters}
-                      onChange={(e) => setCalibMeters(e.target.value)}
-                      className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
-                    />
-                    ({calibPoints.length}/2)
-                  </label>
                 ) : null}
-                {!placeNetKind ? (
-                  <select
-                    value={defaultModelId}
-                    onChange={(e) => setDefaultModelId(e.target.value)}
-                    className="max-w-[180px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
-                  >
-                    {CAMERA_CATALOG.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.brand} · {m.name}
-                      </option>
-                    ))}
-                  </select>
+                {viewMode === 'plano' ? (
+                  <>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showFov}
+                        onChange={(e) => setShowFov(e.target.checked)}
+                      />
+                      FOV
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showWifi}
+                        onChange={(e) => setShowWifi(e.target.checked)}
+                      />
+                      WiFi
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showLinks}
+                        onChange={(e) => setShowLinks(e.target.checked)}
+                      />
+                      Enlaces
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={nightMode}
+                        onChange={(e) => setNightMode(e.target.checked)}
+                      />
+                      Noche
+                    </label>
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                        calibrateMode
+                          ? 'bg-[var(--nexus-cyan)] text-black'
+                          : 'text-[var(--nexus-cyan)]'
+                      }`}
+                      onClick={() => {
+                        setCalibrateMode((v) => !v)
+                        setCalibPoints([])
+                        setModoColocarCam(false)
+                        setPlaceNetKind(null)
+                      }}
+                    >
+                      Calibrar
+                    </button>
+                    {calibrateMode ? (
+                      <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
+                        m
+                        <input
+                          value={calibMeters}
+                          onChange={(e) => setCalibMeters(e.target.value)}
+                          className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
+                        />
+                        ({calibPoints.length}/2)
+                      </label>
+                    ) : null}
+                    {!placeNetKind ? (
+                      <select
+                        value={defaultModelId}
+                        onChange={(e) => setDefaultModelId(e.target.value)}
+                        className="max-w-[180px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+                      >
+                        {CAMERA_CATALOG.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.brand} · {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
-              <div
-                className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
-                  placeMode ? 'cursor-crosshair' : 'cursor-default'
-                }`}
-              >
-                <CameraPlacementTool
-                  backgroundUrl={project.planoUrl}
+              {viewMode === 'diagrama' ? (
+                <DiagramGenerator
                   cameras={project.cameras}
                   networkNodes={project.networkNodes}
-                  sectors={sectors}
-                  wifiCircles={wifiCircles}
-                  linkLines={linkLines}
-                  selectedId={selectedId}
-                  placeMode={placeMode}
-                  showFov={showFov}
-                  showWifi={showWifi}
-                  showLinks={showLinks}
-                  onAddAt={onAddAt}
-                  onMove={onMove}
-                  onSelect={setSelectedId}
-                  stageRef={stageRef}
+                  scale={project.scale}
+                  planoNombre={project.planoNombre}
+                  onSelectNode={setSelectedId}
+                  expanded
                 />
-              </div>
+              ) : (
+                <div
+                  className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                    placeMode ? 'cursor-crosshair' : 'cursor-default'
+                  }`}
+                >
+                  <CameraPlacementTool
+                    backgroundUrl={project.planoUrl}
+                    cameras={project.cameras}
+                    networkNodes={project.networkNodes}
+                    sectors={sectors}
+                    wifiCircles={wifiCircles}
+                    linkLines={linkLines}
+                    selectedId={selectedId}
+                    placeMode={placeMode}
+                    showFov={showFov}
+                    showWifi={showWifi}
+                    showLinks={showLinks}
+                    onAddAt={onAddAt}
+                    onMove={onMove}
+                    onSelect={setSelectedId}
+                    stageRef={stageRef}
+                  />
+                </div>
+              )}
             </>
           )}
         </GlassCardMotion>

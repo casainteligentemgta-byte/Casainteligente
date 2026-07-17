@@ -35,13 +35,21 @@ Diseño CCTV / redes / cableado / BIM integrado en Nexus (`/nexus/vision`).
 - `lib/netvision/catalog/network.ts` — catálogo switches/APs
 - `data/netvision/*` — JSON
 
+## Fase 3 — Diagrama unifilar
+
+- Vista **Plano / Diagrama** en el editor
+- Grafo jerárquico: CORE/NVR → Switch/Injector → AP → Cámaras
+- Enlaces con metros + tipo de cable; se regenera al mover equipos
+- Export **SVG** y **PNG** del esquema
+- Click en nodo del diagrama → selecciona en el inspector
+
 ## Roadmap
 
 | Fase | Módulo | Estado |
 |------|--------|--------|
 | 1 | CCTV FOV / BOM | Hecho |
 | 2 | Redes WiFi + Ethernet + PoE | Hecho |
-| 3 | Diagramas técnicos automáticos | Pendiente |
+| 3 | Diagramas técnicos automáticos | Hecho |
 | 4 | Cableado, cajetines, BOM completo | Pendiente |
 | 5 | Canalizaciones subterráneas | Pendiente |
 | 6 | Cumplimiento NEC/IEC/NFPA/TIA | Stub |
