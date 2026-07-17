@@ -6,6 +6,7 @@ const RUTAS_PUBLICAS = [
   '/login',
   '/auth',
   '/rrhh/registro',
+  '/reclutamiento',
   '/nexus',
 ];
 
@@ -109,9 +110,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   if (!user && esRutaProtegida(pathname) && !esRutaPublica(pathname)) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
-    loginUrl.searchParams.set('next', pathname);
+    const loginUrl = new URL('/login', request.url);
+    const retorno = `${pathname}${request.nextUrl.search || ''}`;
+    loginUrl.searchParams.set('next', retorno);
     return NextResponse.redirect(loginUrl);
   }
 

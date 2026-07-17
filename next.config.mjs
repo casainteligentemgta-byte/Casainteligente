@@ -53,9 +53,10 @@ const nextConfig = {
   // ─── Redirecciones ──────────────────────────────────────────────────────────────
   async redirects() {
     return [
-      { source: '/reclutamiento/dashboard', destination: '/rrhh?vista=reclutamiento', permanent: true },
-      { source: '/reclutamiento', destination: '/rrhh?vista=reclutamiento', permanent: false },
-      { source: '/reclutamiento/:path*', destination: '/rrhh?vista=reclutamiento', permanent: false },
+      // Solo el dashboard legacy de staff → hub RRHH.
+      // NO redirigir /reclutamiento ni /reclutamiento/*: ahí viven
+      // postulación pública (?need=), onboarding y hoja de vida.
+      { source: '/reclutamiento/dashboard', destination: '/rrhh/reclutamiento', permanent: true },
       { source: '/registro', destination: '/rrhh/registro', permanent: false },
       { source: '/registro/:path*', destination: '/rrhh/registro', permanent: false },
       { source: '/talento', destination: '/rrhh', permanent: false },
