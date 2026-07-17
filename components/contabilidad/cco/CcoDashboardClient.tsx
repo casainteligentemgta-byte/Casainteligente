@@ -221,7 +221,17 @@ function KpiRow({ bloque, honorariosPct, real }: { bloque: CcoKpiBloque; honorar
   );
 }
 
-function ChartCard({ title, children, tall }: { title: string; children: React.ReactNode; tall?: number }) {
+function ChartCard({
+  title,
+  children,
+  tall,
+  footer,
+}: {
+  title: string;
+  children: React.ReactNode;
+  tall?: number;
+  footer?: React.ReactNode;
+}) {
   return (
     <div
       style={{
@@ -236,6 +246,7 @@ function ChartCard({ title, children, tall }: { title: string; children: React.R
     >
       <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{title}</h3>
       <div style={{ width: '100%', height: tall ?? 280, minWidth: 0 }}>{children}</div>
+      {footer ? <div style={{ marginTop: 10 }}>{footer}</div> : null}
     </div>
   );
 }
@@ -938,49 +949,151 @@ export default function CcoDashboardClient() {
                     )}
                   </ChartCard>
 
-                  <ChartCard title="Top 10 Proveedores (Costo Total)" tall={380}>
+                  <ChartCard
+                    title="Top 10 Proveedores (Costo Total)"
+                    tall={!isDesktop ? 360 : 380}
+                  >
                     {data.topProveedores.length === 0 ? (
                       <EmptyChart />
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart layout="vertical" data={data.topProveedores} margin={{ left: 8, right: 16 }}>
+                        <BarChart
+                          layout="vertical"
+                          data={data.topProveedores.map((p) => ({
+                            ...p,
+                            proveedorFull: p.proveedor,
+                            proveedor:
+                              p.proveedor.length > (!isDesktop ? 14 : 22)
+                                ? `${p.proveedor.slice(0, !isDesktop ? 13 : 21)}…`
+                                : p.proveedor,
+                          }))}
+                          margin={{ left: 4, right: 12, top: 4, bottom: 4 }}
+                        >
                           <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" horizontal={false} />
                           <XAxis type="number" tickFormatter={fmtUsdTick} tick={axisTick} />
                           <YAxis
                             type="category"
                             dataKey="proveedor"
-                            width={150}
+                            width={!isDesktop ? 86 : 140}
                             tick={{ ...axisTick, fontSize: 10 }}
+                            interval={0}
                           />
-                          <Tooltip formatter={(v) => fmtUsd(Number(v))} />
+                          <Tooltip
+                            labelFormatter={(_, payload) => {
+                              const p = payload?.[0]?.payload as { proveedorFull?: string } | undefined;
+                              return p?.proveedorFull ?? '';
+                            }}
+                            formatter={(v) => fmtUsd(Number(v))}
+                          />
                           <Bar dataKey="costo" name="COSTO TOTAL" fill="#1E3A8A" radius={[0, 4, 4, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
                   </ChartCard>
 
-                  <ChartCard title="Distribución por Capítulo (Composición por Tipo de Gasto)" tall={360}>
+                  <ChartCard
+                    title="Distribución por Capítulo (Composición por Tipo de Gasto)"
+                    tall={!isDesktop ? Math.max(300, Math.min(data.capitulos.length, 10) * 38 + 40) : 360}
+                    footer={
+                      data.capitulos.length === 0 ? null : (
+                        <ul
+                          style={{
+                            listStyle: 'none',
+                            margin: 0,
+                            padding: 0,
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                            gap: '6px 10px',
+                          }}
+                        >
+                          {[...TIPOS_GASTO]
+                            .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+                            .map((t) => (
+                            <li
+                              key={t.key}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                fontSize: 11,
+                                color: '#334155',
+                                fontWeight: 600,
+                                minWidth: 0,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: 2,
+                                  background: t.color,
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span style={{ wordBreak: 'break-word' }}>{t.name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )
+                    }
+                  >
                     {data.capitulos.length === 0 ? (
                       <EmptyChart />
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data.capitulos}>
-                          <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
-                          <XAxis
-                            dataKey="cap"
-                            tick={{ ...axisTick, fontSize: 9 }}
-                            interval={0}
-                            angle={-20}
-                            textAnchor="end"
-                            height={60}
-                          />
-                          <YAxis tickFormatter={fmtUsdTick} tick={axisTick} width={48} />
-                          <Tooltip formatter={(v) => fmtUsd(Number(v))} />
-                          <Legend wrapperStyle={{ fontSize: 11 }} />
-                          {TIPOS_GASTO.map((t) => (
-                            <Bar key={t.key} dataKey={t.key} name={t.name} stackId="a" fill={t.color} />
-                          ))}
-                        </BarChart>
+                        {!isDesktop ? (
+                          <BarChart
+                            layout="vertical"
+                            data={[...data.capitulos]
+                              .map((c) => ({
+                                ...c,
+                                capFull: c.cap,
+                                cap: c.cap.length > 16 ? `${c.cap.slice(0, 15)}…` : c.cap,
+                              }))
+                              .slice(0, 10)}
+                            margin={{ top: 4, right: 8, left: 4, bottom: 4 }}
+                          >
+                            <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" tickFormatter={fmtUsdTick} tick={axisTick} />
+                            <YAxis
+                              type="category"
+                              dataKey="cap"
+                              width={90}
+                              tick={{ ...axisTick, fontSize: 10 }}
+                              interval={0}
+                            />
+                            <Tooltip
+                              labelFormatter={(_, payload) => {
+                                const p = payload?.[0]?.payload as { capFull?: string } | undefined;
+                                return p?.capFull ?? '';
+                              }}
+                              formatter={(v) => fmtUsd(Number(v))}
+                            />
+                            {TIPOS_GASTO.map((t) => (
+                              <Bar key={t.key} dataKey={t.key} name={t.name} stackId="a" fill={t.color} />
+                            ))}
+                          </BarChart>
+                        ) : (
+                          <BarChart data={data.capitulos} margin={{ bottom: 12 }}>
+                            <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+                            <XAxis
+                              dataKey="cap"
+                              tick={{ ...axisTick, fontSize: 10 }}
+                              interval={0}
+                              angle={-25}
+                              textAnchor="end"
+                              height={70}
+                              tickFormatter={(v) =>
+                                String(v).length > 18 ? `${String(v).slice(0, 17)}…` : String(v)
+                              }
+                            />
+                            <YAxis tickFormatter={fmtUsdTick} tick={axisTick} width={48} />
+                            <Tooltip formatter={(v) => fmtUsd(Number(v))} />
+                            {TIPOS_GASTO.map((t) => (
+                              <Bar key={t.key} dataKey={t.key} name={t.name} stackId="a" fill={t.color} />
+                            ))}
+                          </BarChart>
+                        )}
                       </ResponsiveContainer>
                     )}
                   </ChartCard>
