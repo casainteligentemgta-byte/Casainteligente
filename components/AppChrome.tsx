@@ -26,7 +26,9 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   /** Vista previa del presupuesto: pantalla completa sin dock ni distracciones (y sin caché de miniaturas en otros módulos). */
   const isPresupuestoPreview = path === '/ventas/preview';
   /** Entrevista candidato u onboarding: pantalla completa sin dock (anti-distracción). */
-  const isRecruitment = path.startsWith('/rrhh') && path.includes('reclutamiento');
+  const isRecruitment =
+    path.startsWith('/reclutamiento') ||
+    (path.startsWith('/rrhh') && path.includes('reclutamiento'));
   /** Postulación pública: sin dock CRM (evita «Inicio» y otros módulos). */
   const isPublicRegistro = path.startsWith('/registro');
   const isLogin = path === '/login' || path.startsWith('/auth');
