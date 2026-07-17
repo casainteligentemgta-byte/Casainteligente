@@ -1,153 +1,207 @@
-'use client';
+'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Trash2, Upload, Undo2 } from 'lucide-react';
-import { Button } from '@/components/nexus/ui/button';
-import { GlassCardMotion } from '@/components/nexus/GlassCard';
-import { Mono } from '@/components/nexus/Mono';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
+import { Camera, Trash2, Upload, Undo2 } from 'lucide-react'
+import { Button } from '@/components/nexus/ui/button'
+import { GlassCardMotion } from '@/components/nexus/GlassCard'
+import { Mono } from '@/components/nexus/Mono'
+import type { VisionCameraPin } from '@/components/nexus/NexusVisionKonvaStage'
+
+const NexusVisionKonvaStage = dynamic(
+  () => import('@/components/nexus/NexusVisionKonvaStage'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[320px] items-center justify-center text-sm text-[var(--nexus-text-muted)]">
+        Cargando editor Konva…
+      </div>
+    ),
+  },
+)
 
 type CamaraPin = {
-  id: string;
-  x: number; // 0–100 %
-  y: number; // 0–100 %
-  label: string;
-};
+  id: string
+  /** 0–1 normalizado sobre el plano */
+  x: number
+  y: number
+  label: string
+}
 
-const STORAGE_KEY = 'nexus.vision.architect.v1';
+const STORAGE_KEY = 'nexus.vision.architect.v2'
 
 function uid(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
 async function renderPdfFirstPage(file: File): Promise<string> {
-  const pdfjs = await import('pdfjs-dist');
-  // Worker desde CDN alineado a la versión instalada
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-  const data = new Uint8Array(await file.arrayBuffer());
-  const doc = await pdfjs.getDocument({ data }).promise;
-  const page = await doc.getPage(1);
-  const viewport = page.getViewport({ scale: 1.5 });
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('No se pudo crear el canvas del PDF.');
-  await page.render({ canvasContext: ctx, viewport }).promise;
-  return canvas.toDataURL('image/jpeg', 0.92);
+  const pdfjs = await import('pdfjs-dist')
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+  const data = new Uint8Array(await file.arrayBuffer())
+  const doc = await pdfjs.getDocument({ data }).promise
+  const page = await doc.getPage(1)
+  const viewport = page.getViewport({ scale: 1.5 })
+  const canvas = document.createElement('canvas')
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('No se pudo crear el canvas del PDF.')
+  await page.render({ canvasContext: ctx, viewport }).promise
+  return canvas.toDataURL('image/jpeg', 0.92)
+}
+
+function normalizeLegacyPin(c: { id: string; x: number; y: number; label: string }): CamaraPin {
+  // v1 guardaba 0–100 %; v2 usa 0–1
+  const looksPercent = c.x > 1 || c.y > 1
+  return {
+    id: c.id,
+    label: c.label,
+    x: looksPercent ? c.x / 100 : c.x,
+    y: looksPercent ? c.y / 100 : c.y,
+  }
 }
 
 export default function NexusVisionArchitectClient() {
-  const [planoUrl, setPlanoUrl] = useState<string | null>(null);
-  const [planoNombre, setPlanoNombre] = useState<string>('');
-  const [camaras, setCamaras] = useState<CamaraPin[]>([]);
-  const [modoColocar, setModoColocar] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const [planoUrl, setPlanoUrl] = useState<string | null>(null)
+  const [planoNombre, setPlanoNombre] = useState('')
+  const [camaras, setCamaras] = useState<CamaraPin[]>([])
+  const [modoColocar, setModoColocar] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      const raw =
+        sessionStorage.getItem(STORAGE_KEY) ??
+        sessionStorage.getItem('nexus.vision.architect.v1')
+      if (!raw) return
       const parsed = JSON.parse(raw) as {
-        planoUrl?: string;
-        planoNombre?: string;
-        camaras?: CamaraPin[];
-      };
-      if (parsed.planoUrl) setPlanoUrl(parsed.planoUrl);
-      if (parsed.planoNombre) setPlanoNombre(parsed.planoNombre);
-      if (Array.isArray(parsed.camaras)) setCamaras(parsed.camaras);
+        planoUrl?: string
+        planoNombre?: string
+        camaras?: CamaraPin[]
+      }
+      if (parsed.planoUrl) setPlanoUrl(parsed.planoUrl)
+      if (parsed.planoNombre) setPlanoNombre(parsed.planoNombre)
+      if (Array.isArray(parsed.camaras)) {
+        setCamaras(parsed.camaras.map(normalizeLegacyPin))
+      }
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     try {
       sessionStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ planoUrl, planoNombre, camaras }),
-      );
+      )
     } catch {
       /* ignore quota */
     }
-  }, [planoUrl, planoNombre, camaras]);
+  }, [planoUrl, planoNombre, camaras])
 
   const onFile = useCallback(async (file: File | null) => {
-    if (!file) return;
-    setError(null);
-    setLoading(true);
+    if (!file) return
+    setError(null)
+    setLoading(true)
     try {
       const isPdf =
-        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-      let url: string;
+        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      let url: string
       if (isPdf) {
-        url = await renderPdfFirstPage(file);
+        url = await renderPdfFirstPage(file)
       } else if (file.type.startsWith('image/')) {
         url = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-          reader.readAsDataURL(file);
-        });
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result))
+          reader.onerror = () => reject(new Error('No se pudo leer la imagen.'))
+          reader.readAsDataURL(file)
+        })
       } else {
-        throw new Error('Usa una imagen (JPG/PNG/WEBP) o un PDF.');
+        throw new Error('Usa una imagen (JPG/PNG/WEBP) o un PDF.')
       }
-      setPlanoUrl(url);
-      setPlanoNombre(file.name);
-      setCamaras([]);
-      setSelectedId(null);
-      setModoColocar(true);
+      setPlanoUrl(url)
+      setPlanoNombre(file.name)
+      setCamaras([])
+      setSelectedId(null)
+      setModoColocar(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al cargar el plano');
+      setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
-  const onStageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!modoColocar || !planoUrl || !stageRef.current) return;
-    const rect = stageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    if (x < 0 || x > 100 || y < 0 || y > 100) return;
-    const n = camaras.length + 1;
+  const pins: VisionCameraPin[] = useMemo(
+    () =>
+      camaras.map((c) => ({
+        id: c.id,
+        name: c.label,
+        x: c.x,
+        y: c.y,
+        selected: c.id === selectedId,
+      })),
+    [camaras, selectedId],
+  )
+
+  const onAddAt = (normX: number, normY: number) => {
+    if (!modoColocar || !planoUrl) return
+    const n = camaras.length + 1
     const pin: CamaraPin = {
       id: uid(),
-      x: Math.round(x * 10) / 10,
-      y: Math.round(y * 10) / 10,
+      x: Math.round(normX * 1000) / 1000,
+      y: Math.round(normY * 1000) / 1000,
       label: `CAM-${String(n).padStart(2, '0')}`,
-    };
-    setCamaras((prev) => [...prev, pin]);
-    setSelectedId(pin.id);
-  };
+    }
+    setCamaras((prev) => [...prev, pin])
+    setSelectedId(pin.id)
+  }
+
+  const onMove = (id: string, normX: number, normY: number) => {
+    setCamaras((prev) =>
+      prev.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              x: Math.round(normX * 1000) / 1000,
+              y: Math.round(normY * 1000) / 1000,
+            }
+          : c,
+      ),
+    )
+  }
 
   const quitar = (id: string) => {
-    setCamaras((prev) => prev.filter((c) => c.id !== id));
-    if (selectedId === id) setSelectedId(null);
-  };
+    setCamaras((prev) => prev.filter((c) => c.id !== id))
+    if (selectedId === id) setSelectedId(null)
+  }
 
   const limpiarPlano = () => {
-    setPlanoUrl(null);
-    setPlanoNombre('');
-    setCamaras([]);
-    setSelectedId(null);
+    setPlanoUrl(null)
+    setPlanoNombre('')
+    setCamaras([])
+    setSelectedId(null)
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY)
+      sessionStorage.removeItem('nexus.vision.architect.v1')
     } catch {
       /* ignore */
     }
-  };
+  }
 
   const resumen = useMemo(
     () =>
       camaras
-        .map((c) => `${c.label}: ${c.x.toFixed(1)}%, ${c.y.toFixed(1)}%`)
+        .map(
+          (c) =>
+            `${c.label}: ${(c.x * 100).toFixed(1)}%, ${(c.y * 100).toFixed(1)}%`,
+        )
         .join('\n'),
     [camaras],
-  );
+  )
 
   return (
     <div className="space-y-6">
@@ -155,7 +209,7 @@ export default function NexusVisionArchitectClient() {
         <div>
           <h1 className="text-2xl font-bold text-white">AI Architect · Cámaras</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            Carga un PDF o imagen del plano y coloca las cámaras tocando el mapa.
+            Carga un PDF o imagen del plano y ubica las cámaras en el lienzo Konva.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -201,7 +255,8 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                PDF (primera página) o imagen JPG/PNG/WEBP. Luego toca para colocar cada cámara.
+                PDF (primera página) o imagen JPG/PNG/WEBP. Luego toca el lienzo Konva para
+                colocar cada cámara y arrástrala para reposicionar.
               </p>
             </button>
           ) : (
@@ -222,51 +277,22 @@ export default function NexusVisionArchitectClient() {
                 </label>
               </div>
               <div
-                ref={stageRef}
-                role="presentation"
-                onClick={onStageClick}
-                className={`relative w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
                   modoColocar ? 'cursor-crosshair' : 'cursor-default'
                 }`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={planoUrl}
-                  alt="Plano"
-                  className="block h-auto w-full select-none"
-                  draggable={false}
+                <NexusVisionKonvaStage
+                  backgroundUrl={planoUrl}
+                  cameras={pins}
+                  onAddAt={onAddAt}
+                  onMove={onMove}
+                  onSelect={setSelectedId}
                 />
-                {camaras.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    title={c.label}
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      setSelectedId(c.id);
-                    }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2"
-                    style={{ left: `${c.x}%`, top: `${c.y}%` }}
-                  >
-                    <span
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 shadow-[0_0_12px_rgba(0,242,254,0.55)] ${
-                        selectedId === c.id
-                          ? 'border-white bg-[var(--nexus-cyan)] text-black'
-                          : 'border-[var(--nexus-cyan)] bg-black/80 text-[var(--nexus-cyan)]'
-                      }`}
-                    >
-                      <Camera className="h-4 w-4" strokeWidth={2.5} />
-                    </span>
-                    <span className="mt-0.5 block rounded bg-black/75 px-1 text-[10px] font-bold text-white">
-                      {c.label}
-                    </span>
-                  </button>
-                ))}
               </div>
               <p className="mt-2 text-[11px] text-[var(--nexus-text-dim)]">
                 {modoColocar
-                  ? 'Toca el plano para agregar una cámara. Selecciona un pin para editarlo a la derecha.'
-                  : 'Modo colocar desactivado — puedes seleccionar pins sin agregar nuevos.'}
+                  ? 'Toca el plano vacío para agregar. Arrastra un pin para moverlo. Selecciónalo para editar a la derecha.'
+                  : 'Modo colocar desactivado — puedes seleccionar y arrastrar pins sin agregar nuevos.'}
               </p>
             </>
           )}
@@ -314,7 +340,7 @@ export default function NexusVisionArchitectClient() {
                     </button>
                   </div>
                   <p className="mt-1 text-[10px] text-[var(--nexus-text-dim)]">
-                    X {c.x.toFixed(1)}% · Y {c.y.toFixed(1)}%
+                    X {(c.x * 100).toFixed(1)}% · Y {(c.y * 100).toFixed(1)}%
                   </p>
                 </li>
               ))}
@@ -326,7 +352,7 @@ export default function NexusVisionArchitectClient() {
               variant="glass"
               className="w-full"
               onClick={() => {
-                void navigator.clipboard?.writeText(resumen);
+                void navigator.clipboard?.writeText(resumen)
               }}
             >
               Copiar lista de posiciones
@@ -335,5 +361,5 @@ export default function NexusVisionArchitectClient() {
         </GlassCardMotion>
       </div>
     </div>
-  );
+  )
 }

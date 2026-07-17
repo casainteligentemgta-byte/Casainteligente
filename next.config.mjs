@@ -1,3 +1,8 @@
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -104,16 +109,29 @@ const nextConfig = {
       }
     }
 
-    // Excluir canvas del bundle del cliente (solo lo necesita el servidor para react-pdf)
+    // Konva: `main` → index-node.js (require('canvas')). Preferir entry browser
+    // y stubear canvas también en el compile server de Client Components.
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      'konva/lib/index-node.js': path.resolve(
+        __dirname,
+        'node_modules/konva/lib/index.js',
+      ),
+    };
+    config.resolve.fallback = {
+      ...(config.resolve.fallback ?? {}),
+      canvas: false,
+      ...(isServer
+        ? {}
+        : {
+            fs: false,
+            path: false,
+            stream: false,
+          }),
+    };
     if (!isServer) {
-      config.resolve = config.resolve ?? {};
-      config.resolve.fallback = {
-        ...(config.resolve.fallback ?? {}),
-        canvas: false,
-        fs: false,
-        path: false,
-        stream: false,
-      };
+      config.resolve.mainFields = ['browser', 'module', 'main'];
     }
 
     return config;
