@@ -6,6 +6,15 @@ import { CCO_TIPOS_GASTO } from '@/lib/contabilidad/ccoClasificarGasto';
 type Props = {
   proyectoId: string;
   onSaved?: () => void;
+  /** Clase inicial al abrir el formulario. */
+  defaultClase?: 'GASTO' | 'INGRESO' | 'CONTRATO';
+  /** Texto del botón disparador. */
+  triggerLabel?: string;
+  /** Estilo del disparador (sidebar V4). */
+  triggerVariant?: 'primary' | 'ingreso' | 'ghost';
+  /** Oculta el botón y controla apertura desde fuera. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 const empty = {
@@ -22,13 +31,32 @@ const empty = {
   forma_pago: 'TRANSFERENCIA BANCARIA',
 };
 
-export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(empty);
+export default function CcoFormRegistroModal({
+  proyectoId,
+  onSaved,
+  defaultClase = 'GASTO',
+  triggerLabel = '+ Nuevo registro',
+  triggerVariant = 'primary',
+  open: openProp,
+  onOpenChange,
+}: Props) {
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp ?? openInternal;
+  const setOpen = (v: boolean) => {
+    onOpenChange?.(v);
+    if (openProp === undefined) setOpenInternal(v);
+  };
+  const [form, setForm] = useState({ ...empty, clase: defaultClase });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [contratos, setContratos] = useState<{ id: string; label: string }[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      setForm((f) => ({ ...f, clase: defaultClase, fecha: f.fecha || empty.fecha }));
+    }
+  }, [open, defaultClase]);
 
   useEffect(() => {
     if (!open || !proyectoId || form.clase !== 'GASTO') return;
@@ -98,11 +126,20 @@ export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
     );
   }
 
+  const triggerStyle =
+    triggerVariant === 'ingreso'
+      ? btnIngreso
+      : triggerVariant === 'ghost'
+        ? btnGhost
+        : btnPrimary;
+
   return (
     <div>
-      <button type="button" onClick={() => setOpen(true)} style={btnPrimary}>
-        + Nuevo registro
-      </button>
+      {openProp === undefined ? (
+        <button type="button" onClick={() => setOpen(true)} style={triggerStyle}>
+          {triggerLabel}
+        </button>
+      ) : null}
 
       {open ? (
         <div
@@ -329,6 +366,18 @@ const btnPrimary: React.CSSProperties = {
   fontWeight: 700,
   cursor: 'pointer',
   fontSize: 13,
+};
+
+const btnIngreso: React.CSSProperties = {
+  width: '100%',
+  background: '#16A34A',
+  color: '#fff',
+  border: 0,
+  borderRadius: 10,
+  padding: '12px 14px',
+  fontWeight: 800,
+  cursor: 'pointer',
+  fontSize: 14,
 };
 
 const btnGhost: React.CSSProperties = {

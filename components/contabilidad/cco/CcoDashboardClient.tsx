@@ -25,6 +25,7 @@ import CcoImportarV4Panel from '@/components/contabilidad/cco/CcoImportarV4Panel
 import CcoLibroMaestro from '@/components/contabilidad/cco/CcoLibroMaestro';
 import CcoTabEgresos from '@/components/contabilidad/cco/CcoTabEgresos';
 import CcoTabIngresos from '@/components/contabilidad/cco/CcoTabIngresos';
+import CcoSidebarResumen from '@/components/contabilidad/cco/CcoSidebarResumen';
 import CcoTabAjustes from '@/components/contabilidad/cco/CcoTabAjustes';
 import CcoTabAuditoria from '@/components/contabilidad/cco/CcoTabAuditoria';
 import CcoTabContratos from '@/components/contabilidad/cco/CcoTabContratos';
@@ -579,6 +580,7 @@ export default function CcoDashboardClient() {
               );
             })}
           </nav>
+          <CcoSidebarResumen proyectoId={proyectoId} onChanged={() => void cargar()} />
         </aside>
 
         <div

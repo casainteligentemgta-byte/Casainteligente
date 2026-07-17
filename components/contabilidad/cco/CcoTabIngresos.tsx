@@ -309,8 +309,68 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
     );
   }
 
+  const kpis = useMemo(() => {
+    let montoOrig = 0;
+    let montoUsd = 0;
+    for (const f of filas) {
+      const d = f.draft ?? toDraft(f);
+      montoOrig += Number(d.monto_orig) || 0;
+      montoUsd += montoUsdFromDraft(d);
+    }
+    return { montoOrig, montoUsd, count: filas.length };
+  }, [filas]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: 12,
+        }}
+      >
+        {[
+          { t: 'Suma Monto Original', v: fmtNum(kpis.montoOrig) },
+          { t: 'Suma Monto USD', v: fmtUsd(kpis.montoUsd) },
+          { t: 'Registros', v: String(kpis.count) },
+        ].map((k) => (
+          <div
+            key={k.t}
+            style={{
+              background: '#fff',
+              borderRadius: 14,
+              border: '1px solid #E2E8F0',
+              padding: '16px 18px',
+              boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                color: '#64748B',
+                textTransform: 'uppercase',
+              }}
+            >
+              {k.t}
+            </p>
+            <p
+              style={{
+                margin: '8px 0 0',
+                fontSize: 22,
+                fontWeight: 800,
+                color: '#0F172A',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {k.v}
+            </p>
+          </div>
+        ))}
+      </div>
+
       <div style={box}>
         <h2
           style={{
