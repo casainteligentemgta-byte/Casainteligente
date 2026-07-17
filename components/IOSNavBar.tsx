@@ -143,6 +143,43 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'domotica',
+    href: '/nexus/vision',
+    label: 'Cámaras',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M3 11l9-7 9 7"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M5 10v10h14V10"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
+        />
+        <circle
+          cx="12"
+          cy="14"
+          r="2.25"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+        />
+        <path
+          d="M12 11.5v.75M12 16.25V17M9.5 14H8.75M15.25 14H14.5"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="1.75"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: 'entidades',
     href: '/configuracion/entidades',
     label: 'Entidades',
@@ -257,6 +294,9 @@ function navItemActive(pathname: string, href: string): boolean {
   if (href === '/legal') {
     return pathname === '/legal' || pathname.startsWith('/legal/');
   }
+  if (href === '/nexus/vision') {
+    return pathname.startsWith('/nexus/vision');
+  }
   return pathname.startsWith(href);
 }
 
@@ -265,6 +305,7 @@ function colorActivo(label: string): string {
   if (label === 'Almacenes') return '#FF2D55';
   if (label === 'Productos') return '#FF9500';
   if (label === 'Proyectos') return '#F59E0B';
+  if (label === 'Cámaras') return '#06B6D4';
   if (label === 'Entidades') return '#A78BFA';
   if (label === 'Equipo') return '#38BDF8';
   if (label === 'Legal') return '#FBBF24';

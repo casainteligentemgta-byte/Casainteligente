@@ -9,6 +9,7 @@ export type ModuloNavId =
   | 'ventas'
   | 'productos'
   | 'proyectos'
+  | 'domotica'
   | 'entidades'
   | 'rrhh'
   | 'almacen'
@@ -30,6 +31,7 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'ventas', href: '/ventas', label: 'Ventas' },
   { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
+  { id: 'domotica', href: '/nexus/vision', label: 'Cámaras' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   { id: 'equipo', href: '/configuracion/equipo', label: 'Equipo' },
   { id: 'legal', href: '/legal', label: 'Legal' },
@@ -46,6 +48,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa | 'solo_lectura', ModuloNavId[]> = {
     'ventas',
     'productos',
     'proyectos',
+    'domotica',
     'entidades',
     'equipo',
     'rrhh',
@@ -57,6 +60,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa | 'solo_lectura', ModuloNavId[]> = {
     'clientes',
     'presupuestos',
     'proyectos',
+    'domotica',
     'almacen',
     'contabilidad',
   ],
@@ -64,7 +68,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa | 'solo_lectura', ModuloNavId[]> = {
   comprador: ['inicio', 'proyectos', 'almacen', 'contabilidad'],
   almacen_central: ['inicio', 'almacen', 'contabilidad'],
   rrhh: ['inicio', 'rrhh', 'proyectos', 'equipo'],
-  solo_lectura: ['inicio', 'proyectos', 'contabilidad', 'almacen'],
+  solo_lectura: ['inicio', 'proyectos', 'domotica', 'contabilidad', 'almacen'],
 };
 
 /** Si no hay rol: solo inicio (evita menú completo a invitados sin asignar). */
