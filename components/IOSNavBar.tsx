@@ -144,8 +144,8 @@ const navItems: NavItem[] = [
   },
   {
     id: 'domotica',
-    href: '/nexus/builder',
-    label: 'Domótica',
+    href: '/nexus/vision',
+    label: 'Cámaras',
     icon: (active: boolean) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path
@@ -294,8 +294,8 @@ function navItemActive(pathname: string, href: string): boolean {
   if (href === '/legal') {
     return pathname === '/legal' || pathname.startsWith('/legal/');
   }
-  if (href === '/nexus/builder') {
-    return pathname === '/nexus' || pathname.startsWith('/nexus/');
+  if (href === '/nexus/vision') {
+    return pathname.startsWith('/nexus/vision');
   }
   return pathname.startsWith(href);
 }
@@ -305,7 +305,7 @@ function colorActivo(label: string): string {
   if (label === 'Almacenes') return '#FF2D55';
   if (label === 'Productos') return '#FF9500';
   if (label === 'Proyectos') return '#F59E0B';
-  if (label === 'Domótica') return '#06B6D4';
+  if (label === 'Cámaras') return '#06B6D4';
   if (label === 'Entidades') return '#A78BFA';
   if (label === 'Equipo') return '#38BDF8';
   if (label === 'Legal') return '#FBBF24';

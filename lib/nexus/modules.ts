@@ -68,9 +68,9 @@ export const NEXUS_MODULES: NexusModule[] = [
   },
   {
     href: '/nexus/vision',
-    label: 'AI & Vision',
-    description: 'Architect heatmap · AR campo',
+    label: 'Cámaras / Planos',
+    description: 'Cargar PDF o imagen y colocar cámaras',
     icon: Sparkles,
-    group: 'concept',
+    group: 'commercial',
   },
 ];

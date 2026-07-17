@@ -31,7 +31,7 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'ventas', href: '/ventas', label: 'Ventas' },
   { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
-  { id: 'domotica', href: '/nexus/builder', label: 'Domótica' },
+  { id: 'domotica', href: '/nexus/vision', label: 'Cámaras' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   { id: 'equipo', href: '/configuracion/equipo', label: 'Equipo' },
   { id: 'legal', href: '/legal', label: 'Legal' },
