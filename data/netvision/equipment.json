@@ -110,5 +110,111 @@
     "baseChassisUsd": 220,
     "channelsPerUnit": 16
   },
-  "storageUsdPerTb": 85
+  "storageUsdPerTb": 85,
+  "network": [
+    {
+      "id": "sw-poe-8",
+      "kind": "switch",
+      "brand": "Ubiquiti",
+      "name": "UniFi Switch Lite 8 PoE",
+      "poePorts": 8,
+      "poeBudgetW": 52,
+      "drawWatts": 12,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 8,
+      "priceUsd": 109
+    },
+    {
+      "id": "sw-poe-24",
+      "kind": "switch",
+      "brand": "Ubiquiti",
+      "name": "UniFi Switch 24 PoE",
+      "poePorts": 24,
+      "poeBudgetW": 250,
+      "drawWatts": 25,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 24,
+      "priceUsd": 399
+    },
+    {
+      "id": "sw-poe-16-hik",
+      "kind": "switch",
+      "brand": "Hikvision",
+      "name": "DS-3E1518P-EI 16 PoE",
+      "poePorts": 16,
+      "poeBudgetW": 135,
+      "drawWatts": 18,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 16,
+      "priceUsd": 189
+    },
+    {
+      "id": "ap-u6-lite",
+      "kind": "ap",
+      "brand": "Ubiquiti",
+      "name": "UniFi U6 Lite",
+      "poePorts": 0,
+      "poeBudgetW": 0,
+      "drawWatts": 12,
+      "wifiRangeM": 18,
+      "band": "dual",
+      "ports": 1,
+      "priceUsd": 99
+    },
+    {
+      "id": "ap-u6-pro",
+      "kind": "ap",
+      "brand": "Ubiquiti",
+      "name": "UniFi U6 Pro",
+      "poePorts": 0,
+      "poeBudgetW": 0,
+      "drawWatts": 13,
+      "wifiRangeM": 25,
+      "band": "dual",
+      "ports": 1,
+      "priceUsd": 149
+    },
+    {
+      "id": "nvr-ds7608",
+      "kind": "nvr",
+      "brand": "Hikvision",
+      "name": "DS-7608NI-K2/8P",
+      "poePorts": 8,
+      "poeBudgetW": 80,
+      "drawWatts": 15,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 8,
+      "priceUsd": 280
+    },
+    {
+      "id": "nvr-ds7616",
+      "kind": "nvr",
+      "brand": "Hikvision",
+      "name": "DS-7616NI-K2/16P",
+      "poePorts": 16,
+      "poeBudgetW": 200,
+      "drawWatts": 20,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 16,
+      "priceUsd": 420
+    },
+    {
+      "id": "inj-poe-gig",
+      "kind": "injector",
+      "brand": "Generic",
+      "name": "PoE+ Injector 30W",
+      "poePorts": 1,
+      "poeBudgetW": 30,
+      "drawWatts": 2,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 1,
+      "priceUsd": 28
+    }
+  ]
 }

@@ -1,5 +1,6 @@
 import type { BomSummary, NetVisionProject } from '@/lib/netvision/types'
 import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
 
 export function projectToExportJson(project: NetVisionProject, bom: BomSummary) {
   return {
@@ -23,6 +24,21 @@ export function projectToExportJson(project: NetVisionProject, bom: BomSummary) 
           rangeNightM: m.rangeNightM,
           bitrateMbps: m.bitrateMbps,
           poeWatts: m.poeWatts,
+        },
+      }
+    }),
+    networkNodes: (project.networkNodes ?? []).map((n) => {
+      const m = getNetworkModelOrDefault(n.modelId, n.kind)
+      return {
+        ...n,
+        model: {
+          id: m.id,
+          brand: m.brand,
+          name: m.name,
+          kind: m.kind,
+          poeBudgetW: m.poeBudgetW,
+          poePorts: m.poePorts,
+          wifiRangeM: m.wifiRangeM,
         },
       }
     }),

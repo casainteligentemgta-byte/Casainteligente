@@ -11,7 +11,7 @@ export default function ValidationEngine({ results, onSelectCamera }: Props) {
   if (results.length === 0) {
     return (
       <p className="text-xs text-[var(--nexus-text-dim)]">
-        Sin alertas. Coloca cámaras para validar cobertura.
+        Sin alertas. Coloca cámaras / nodos de red para validar.
       </p>
     )
   }
@@ -27,11 +27,11 @@ export default function ValidationEngine({ results, onSelectCamera }: Props) {
             <span className="font-semibold">
               {r.code} · {r.level}
             </span>
-            {r.cameraId && onSelectCamera ? (
+            {(r.cameraId || r.nodeId) && onSelectCamera ? (
               <button
                 type="button"
                 className="text-[10px] underline opacity-80"
-                onClick={() => onSelectCamera(r.cameraId!)}
+                onClick={() => onSelectCamera((r.cameraId ?? r.nodeId)!)}
               >
                 Ver
               </button>

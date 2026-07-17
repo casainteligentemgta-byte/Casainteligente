@@ -1,6 +1,13 @@
-import type { DesignCamera, NetVisionProject, ScaleCalibration } from '@/lib/netvision/types'
+import type {
+  DesignCamera,
+  DesignNetworkNode,
+  NetVisionProject,
+  NetworkNodeKind,
+  ScaleCalibration,
+} from '@/lib/netvision/types'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
+import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
 
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
 const LEGACY_V2 = 'nexus.vision.architect.v2'
@@ -12,6 +19,7 @@ export function emptyProject(): NetVisionProject {
     planoUrl: null,
     planoNombre: '',
     cameras: [],
+    networkNodes: [],
     scale: defaultScale(),
     retentionDays: 30,
     complianceProfileId: 'VE',
@@ -36,7 +44,6 @@ export function loadProject(): NetVisionProject {
 
 export function saveProject(project: NetVisionProject) {
   try {
-    // Evitar volcar planos enormes si fallan: intentar completo, si falla sin dataURL
     sessionStorage.setItem(NETVISION_STORAGE_KEY, JSON.stringify(project))
   } catch {
     try {
@@ -69,6 +76,9 @@ function normalizeProject(p: Partial<NetVisionProject>): NetVisionProject {
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
+    networkNodes: Array.isArray(p.networkNodes)
+      ? p.networkNodes.map(normalizeNetworkNode)
+      : [],
     scale,
     retentionDays: typeof p.retentionDays === 'number' ? p.retentionDays : 30,
     complianceProfileId: p.complianceProfileId ?? 'VE',
@@ -85,6 +95,23 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     modelId: c.modelId ?? DEFAULT_CAMERA_MODEL_ID,
     yawDeg: typeof c.yawDeg === 'number' ? c.yawDeg : 0,
     mountHeightM: typeof c.mountHeightM === 'number' ? c.mountHeightM : 2.8,
+  }
+}
+
+function normalizeNetworkNode(
+  n: Partial<DesignNetworkNode>,
+): DesignNetworkNode {
+  const kind = (n.kind ?? 'switch') as NetworkNodeKind
+  const looksPercent = (n.x ?? 0) > 1 || (n.y ?? 0) > 1
+  return {
+    id: n.id ?? `${Date.now()}`,
+    label: n.label ?? 'SW-01',
+    kind,
+    modelId: n.modelId ?? defaultModelIdForKind(kind),
+    x: looksPercent ? (n.x ?? 0) / 100 : (n.x ?? 0),
+    y: looksPercent ? (n.y ?? 0) / 100 : (n.y ?? 0),
+    wifiChannel: typeof n.wifiChannel === 'number' ? n.wifiChannel : undefined,
+    linkedCameraIds: Array.isArray(n.linkedCameraIds) ? n.linkedCameraIds : [],
   }
 }
 

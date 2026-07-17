@@ -36,11 +36,45 @@ export type ScaleCalibration = {
   calibrated: boolean
 }
 
+export type NetworkNodeKind = 'switch' | 'ap' | 'nvr' | 'injector'
+
+export type NetworkDeviceModel = {
+  id: string
+  kind: NetworkNodeKind
+  brand: string
+  name: string
+  /** Puertos PoE (switch/injector) o 0 */
+  poePorts: number
+  /** Presupuesto PoE total Watts */
+  poeBudgetW: number
+  /** Potencia que consume el propio equipo (AP/NVR) */
+  drawWatts: number
+  /** Alcance WiFi útil estimado (m) — solo AP */
+  wifiRangeM: number
+  band: 'none' | '2.4' | '5' | 'dual'
+  ports: number
+  priceUsd: number
+}
+
+export type DesignNetworkNode = {
+  id: string
+  label: string
+  kind: NetworkNodeKind
+  modelId: string
+  x: number
+  y: number
+  /** Canal WiFi asignado (AP) */
+  wifiChannel?: number
+  /** IDs de cámaras asignadas a este switch/injector (PoE) */
+  linkedCameraIds: string[]
+}
+
 export type NetVisionProject = {
   version: 1
   planoUrl: string | null
   planoNombre: string
   cameras: DesignCamera[]
+  networkNodes: DesignNetworkNode[]
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string
@@ -54,6 +88,7 @@ export type ValidationResult = {
   message: string
   solution: string
   cameraId?: string
+  nodeId?: string
 }
 
 export type CoverageSector = {
@@ -68,7 +103,7 @@ export type CoverageSector = {
 
 export type BomLine = {
   sku: string
-  category: 'camera' | 'nvr' | 'storage' | 'poe' | 'accessory'
+  category: 'camera' | 'nvr' | 'storage' | 'poe' | 'accessory' | 'network' | 'wifi'
   description: string
   qty: number
   unitUsd: number

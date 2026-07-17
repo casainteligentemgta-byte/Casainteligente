@@ -11,9 +11,7 @@ function ComingSoon({ title, phase }: { title: string; phase: string }) {
   )
 }
 
-export function NetworkDesigner() {
-  return <ComingSoon title="Diseño de redes WiFi + Ethernet" phase="Fase 2" />
-}
+/** NetworkDesigner real: components/netvision/NetworkDesigner.tsx (Fase 2). */
 
 export function DiagramGenerator() {
   return <ComingSoon title="Esquematización / planos técnicos" phase="Fase 3" />

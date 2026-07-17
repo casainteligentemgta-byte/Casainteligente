@@ -1,6 +1,12 @@
 import equipment from '@/data/netvision/equipment.json'
 import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
-import type { BomLine, BomSummary, DesignCamera } from '@/lib/netvision/types'
+import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
+import type {
+  BomLine,
+  BomSummary,
+  DesignCamera,
+  DesignNetworkNode,
+} from '@/lib/netvision/types'
 
 export function totalBandwidthMbps(cameras: DesignCamera[]): number {
   return cameras.reduce((sum, c) => sum + getCameraModelOrDefault(c.modelId).bitrateMbps, 0)
@@ -17,7 +23,11 @@ export function estimateStorageTb(totalMbps: number, retentionDays: number): num
   return bits / (8 * 1e12)
 }
 
-export function buildBom(cameras: DesignCamera[], retentionDays: number): BomSummary {
+export function buildBom(
+  cameras: DesignCamera[],
+  retentionDays: number,
+  networkNodes: DesignNetworkNode[] = [],
+): BomSummary {
   const lines: BomLine[] = []
   const byModel = new Map<string, { qty: number; unit: number; desc: string }>()
 
@@ -39,12 +49,43 @@ export function buildBom(cameras: DesignCamera[], retentionDays: number): BomSum
     })
   })
 
+  const netByModel = new Map<
+    string,
+    { qty: number; unit: number; desc: string; category: BomLine['category'] }
+  >()
+  for (const n of networkNodes) {
+    const m = getNetworkModelOrDefault(n.modelId, n.kind)
+    const category: BomLine['category'] =
+      n.kind === 'ap' ? 'wifi' : n.kind === 'nvr' ? 'nvr' : 'network'
+    const prev = netByModel.get(m.id)
+    if (prev) prev.qty += 1
+    else
+      netByModel.set(m.id, {
+        qty: 1,
+        unit: m.priceUsd,
+        desc: `${m.brand} ${m.name}`,
+        category,
+      })
+  }
+  Array.from(netByModel.entries()).forEach(([sku, v]) => {
+    lines.push({
+      sku,
+      category: v.category,
+      description: v.desc,
+      qty: v.qty,
+      unitUsd: v.unit,
+      totalUsd: v.qty * v.unit,
+    })
+  })
+
+  const hasPhysicalNvr = networkNodes.some((n) => n.kind === 'nvr')
   const nvrMeta = equipment.nvr
   const channels = cameras.length
-  const nvrUnits = channels === 0 ? 0 : Math.ceil(channels / nvrMeta.channelsPerUnit)
-  if (nvrUnits > 0) {
+  if (!hasPhysicalNvr && channels > 0) {
+    const nvrUnits = Math.ceil(channels / nvrMeta.channelsPerUnit)
     const unit =
-      nvrMeta.baseChassisUsd + nvrMeta.channelPriceUsd * Math.min(channels, nvrMeta.channelsPerUnit)
+      nvrMeta.baseChassisUsd +
+      nvrMeta.channelPriceUsd * Math.min(channels, nvrMeta.channelsPerUnit)
     lines.push({
       sku: 'NVR-CH',
       category: 'nvr',
@@ -70,8 +111,23 @@ export function buildBom(cameras: DesignCamera[], retentionDays: number): BomSum
   }
 
   const poe = totalPoeWatts(cameras)
-  if (poe > 0) {
-    const injectors = Math.ceil(poe / 30) // switch PoE ~30W útiles por puerto agrupado
+  const poeBudgetOnSite = networkNodes.reduce((s, n) => {
+    const m = getNetworkModelOrDefault(n.modelId, n.kind)
+    return s + m.poeBudgetW
+  }, 0)
+  const deficit = Math.max(0, poe - poeBudgetOnSite)
+  if (deficit > 0) {
+    const injectors = Math.ceil(deficit / 30)
+    lines.push({
+      sku: 'POE-INJ-EST',
+      category: 'poe',
+      description: `Injectors PoE estimados (déficit ${deficit.toFixed(0)} W)`,
+      qty: injectors,
+      unitUsd: 28,
+      totalUsd: injectors * 28,
+    })
+  } else if (poe > 0 && networkNodes.length === 0) {
+    const injectors = Math.ceil(poe / 30)
     lines.push({
       sku: 'POE-BUDGET',
       category: 'poe',

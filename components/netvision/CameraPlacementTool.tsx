@@ -1,22 +1,48 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Arc, Circle, Image as KonvaImage, Layer, Stage, Text } from 'react-konva'
+import {
+  Arc,
+  Circle,
+  Image as KonvaImage,
+  Layer,
+  Line,
+  Rect,
+  Stage,
+  Text,
+} from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import type { CoverageSector, DesignCamera } from '@/lib/netvision/types'
+import type {
+  CoverageSector,
+  DesignCamera,
+  DesignNetworkNode,
+} from '@/lib/netvision/types'
+import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
   cameras: DesignCamera[]
+  networkNodes: DesignNetworkNode[]
   sectors: CoverageSector[]
+  wifiCircles: WifiCoverageCircle[]
+  linkLines: { fromX: number; fromY: number; toX: number; toY: number; warn?: boolean }[]
   selectedId: string | null
   placeMode: boolean
   showFov: boolean
+  showWifi: boolean
+  showLinks: boolean
   onAddAt: (normX: number, normY: number) => void
   onMove: (id: string, normX: number, normY: number) => void
   onSelect: (id: string) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
+}
+
+const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
+  switch: '#a78bfa',
+  ap: '#34d399',
+  nvr: '#fbbf24',
+  injector: '#fb7185',
 }
 
 function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
@@ -68,10 +94,15 @@ function useHtmlImage(url: string | null) {
 export default function CameraPlacementTool({
   backgroundUrl,
   cameras,
+  networkNodes,
   sectors,
+  wifiCircles,
+  linkLines,
   selectedId,
   placeMode,
   showFov,
+  showWifi,
+  showLinks,
   onAddAt,
   onMove,
   onSelect,
@@ -95,6 +126,8 @@ export default function CameraPlacementTool({
     offsetX = (width - drawW) / 2
     offsetY = (height - drawH) / 2
   }
+
+  const avg = (drawW + drawH) / 2
 
   const toNorm = (px: number, py: number) => ({
     x: Math.min(1, Math.max(0, (px - offsetX) / Math.max(drawW, 1))),
@@ -142,19 +175,37 @@ export default function CameraPlacementTool({
               y={height / 2 - 10}
               width={width - 48}
               align="center"
-              text="Carga un plano (PDF o imagen) para ubicar cámaras"
+              text="Carga un plano (PDF o imagen) para ubicar equipos"
               fill="#94a3b8"
               fontSize={14}
               listening={false}
             />
           )}
 
+          {showWifi &&
+            wifiCircles.map((c) => {
+              const cx = offsetX + c.cx * drawW
+              const cy = offsetY + c.cy * drawH
+              const radius = Math.max(8, c.radiusNorm * avg)
+              return (
+                <Circle
+                  key={`wifi-${c.nodeId}`}
+                  x={cx}
+                  y={cy}
+                  radius={radius}
+                  fill="rgba(52,211,153,0.12)"
+                  stroke="rgba(52,211,153,0.55)"
+                  strokeWidth={1}
+                  dash={[6, 4]}
+                  listening={false}
+                />
+              )
+            })}
+
           {showFov &&
             sectors.map((s) => {
               const cx = offsetX + s.cx * drawW
               const cy = offsetY + s.cy * drawH
-              // Escala radio: usar promedio de drawW/drawH para radio visual
-              const avg = (drawW + drawH) / 2
               const radius = s.radiusNorm * avg
               const angle = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
               const rotation = (s.startAngleRad * 180) / Math.PI
@@ -176,18 +227,34 @@ export default function CameraPlacementTool({
               )
             })}
 
+          {showLinks &&
+            linkLines.map((l, i) => (
+              <Line
+                key={`link-${i}`}
+                points={[
+                  offsetX + l.fromX * drawW,
+                  offsetY + l.fromY * drawH,
+                  offsetX + l.toX * drawW,
+                  offsetY + l.toY * drawH,
+                ]}
+                stroke={l.warn ? '#f87171' : 'rgba(167,139,250,0.65)'}
+                strokeWidth={l.warn ? 2 : 1.5}
+                dash={l.warn ? [4, 4] : [8, 6]}
+                listening={false}
+              />
+            ))}
+
           {cameras.map((cam) => {
             const cx = offsetX + cam.x * drawW
             const cy = offsetY + cam.y * drawH
             const selected = cam.id === selectedId
-            const fill = selected ? '#22d3ee' : '#06b6d4'
             return (
               <Circle
                 key={cam.id}
                 x={cx}
                 y={cy}
                 radius={selected ? 14 : 11}
-                fill={fill}
+                fill={selected ? '#22d3ee' : '#06b6d4'}
                 stroke="#0f172a"
                 strokeWidth={2}
                 shadowColor="black"
@@ -211,21 +278,71 @@ export default function CameraPlacementTool({
             )
           })}
 
-          {cameras.map((cam) => {
-            const cx = offsetX + cam.x * drawW
-            const cy = offsetY + cam.y * drawH
+          {networkNodes.map((node) => {
+            const cx = offsetX + node.x * drawW
+            const cy = offsetY + node.y * drawH
+            const selected = node.id === selectedId
+            const color = NODE_COLORS[node.kind]
+            const size = selected ? 16 : 13
             return (
-              <Text
-                key={`lbl-${cam.id}`}
-                x={cx + 12}
-                y={cy - 18}
-                text={cam.label}
-                fontSize={11}
-                fill="#e2e8f0"
-                listening={false}
+              <Rect
+                key={node.id}
+                x={cx - size}
+                y={cy - size}
+                width={size * 2}
+                height={size * 2}
+                fill={color}
+                stroke={selected ? '#fff' : '#0f172a'}
+                strokeWidth={selected ? 2.5 : 2}
+                cornerRadius={node.kind === 'ap' ? size : 3}
+                shadowColor="black"
+                shadowBlur={8}
+                shadowOpacity={0.35}
+                draggable
+                onClick={(e) => {
+                  e.cancelBubble = true
+                  onSelect(node.id)
+                }}
+                onTap={(e) => {
+                  e.cancelBubble = true
+                  onSelect(node.id)
+                }}
+                onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                  const r = e.target as Konva.Rect
+                  const n = toNorm(r.x() + size, r.y() + size)
+                  onMove(node.id, n.x, n.y)
+                }}
               />
             )
           })}
+
+          {cameras.map((cam) => (
+            <Text
+              key={`lbl-${cam.id}`}
+              x={offsetX + cam.x * drawW + 12}
+              y={offsetY + cam.y * drawH - 18}
+              text={cam.label}
+              fontSize={11}
+              fill="#e2e8f0"
+              listening={false}
+            />
+          ))}
+
+          {networkNodes.map((node) => (
+            <Text
+              key={`nlbl-${node.id}`}
+              x={offsetX + node.x * drawW + 14}
+              y={offsetY + node.y * drawH - 18}
+              text={
+                node.kind === 'ap' && node.wifiChannel
+                  ? `${node.label}·ch${node.wifiChannel}`
+                  : node.label
+              }
+              fontSize={11}
+              fill="#e2e8f0"
+              listening={false}
+            />
+          ))}
         </Layer>
       </Stage>
     </div>
