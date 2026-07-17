@@ -19,6 +19,7 @@ import CableRoutingEngine from '@/components/netvision/CableRoutingEngine'
 import ConduitCalculator from '@/components/netvision/ConduitCalculator'
 import DiagramGenerator from '@/components/netvision/DiagramGenerator'
 import NetworkDesigner from '@/components/netvision/NetworkDesigner'
+import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
   CAMERA_CATALOG,
@@ -58,6 +59,13 @@ import {
   planConduits,
   validateConduits,
 } from '@/lib/netvision/services/conduitCalculator'
+import {
+  buildUndergroundPlan,
+  validateUnderground,
+  type ChamberMaterial,
+  type TerrainType,
+  type ZoneType,
+} from '@/lib/netvision/services/canalizationCalculator'
 import {
   clearProjectStorage,
   emptyProject,
@@ -118,6 +126,10 @@ export default function NexusVisionArchitectClient() {
   const [showWifi, setShowWifi] = useState(true)
   const [showLinks, setShowLinks] = useState(true)
   const [showCableRoutes, setShowCableRoutes] = useState(true)
+  const [showUnderground, setShowUnderground] = useState(false)
+  const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
+  const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
+  const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
   const [nightMode, setNightMode] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -132,7 +144,7 @@ export default function NexusVisionArchitectClient() {
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
-  const [sideTab, setSideTab] = useState<'cctv' | 'red' | 'cable'>('cctv')
+  const [sideTab, setSideTab] = useState<'cctv' | 'red' | 'cable' | 'sub'>('cctv')
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const fileRef = useRef<HTMLInputElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
@@ -174,12 +186,23 @@ export default function NexusVisionArchitectClient() {
 
   const conduitPlans = useMemo(() => planConduits(cableRoutes), [cableRoutes])
 
+  const undergroundPlan = useMemo(
+    () =>
+      buildUndergroundPlan(cableRoutes, {
+        zone: ugZone,
+        terrain: ugTerrain,
+        chamberMaterial: ugChamberMat,
+      }),
+    [cableRoutes, ugZone, ugTerrain, ugChamberMat],
+  )
+
   const validations = useMemo(() => {
     const cov = analyzeRedundancy(project.cameras, sectors)
     const wifi = analyzeWifiCoverage(project.networkNodes, project.scale)
     const cab = validateCableRoutes(cableRoutes)
     const cnd = validateConduits(conduitPlans)
-    return [...cov, ...poeAnalysis.validations, ...wifi, ...cab, ...cnd]
+    const ug = validateUnderground(undergroundPlan)
+    return [...cov, ...poeAnalysis.validations, ...wifi, ...cab, ...cnd, ...ug]
   }, [
     project.cameras,
     project.networkNodes,
@@ -188,6 +211,7 @@ export default function NexusVisionArchitectClient() {
     poeAnalysis.validations,
     cableRoutes,
     conduitPlans,
+    undergroundPlan,
   ])
 
   const bom = useMemo(
@@ -198,6 +222,7 @@ export default function NexusVisionArchitectClient() {
         project.networkNodes,
         cableRoutes,
         conduitPlans,
+        undergroundPlan,
       ),
     [
       project.cameras,
@@ -205,6 +230,7 @@ export default function NexusVisionArchitectClient() {
       project.networkNodes,
       cableRoutes,
       conduitPlans,
+      undergroundPlan,
     ],
   )
 
@@ -391,7 +417,7 @@ export default function NexusVisionArchitectClient() {
         <div>
           <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            CCTV + redes + cableado + diagrama unifilar.
+            CCTV + redes + cableado + subterráneo + diagrama.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -548,6 +574,14 @@ export default function NexusVisionArchitectClient() {
                     <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
                       <input
                         type="checkbox"
+                        checked={showUnderground}
+                        onChange={(e) => setShowUnderground(e.target.checked)}
+                      />
+                      Sub
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
                         checked={nightMode}
                         onChange={(e) => setNightMode(e.target.checked)}
                       />
@@ -619,12 +653,14 @@ export default function NexusVisionArchitectClient() {
                     wifiCircles={wifiCircles}
                     linkLines={linkLines}
                     cableRoutes={cableRoutes}
+                    undergroundRuns={undergroundPlan.runs}
                     selectedId={selectedId}
                     placeMode={placeMode}
                     showFov={showFov}
                     showWifi={showWifi}
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
+                    showUnderground={showUnderground}
                     onAddAt={onAddAt}
                     onMove={onMove}
                     onSelect={setSelectedId}
@@ -665,9 +701,40 @@ export default function NexusVisionArchitectClient() {
             >
               Cable
             </button>
+            <button
+              type="button"
+              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
+                sideTab === 'sub' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
+              }`}
+              onClick={() => {
+                setSideTab('sub')
+                setShowUnderground(true)
+                setViewMode('plano')
+              }}
+            >
+              Sub
+            </button>
           </div>
 
-          {sideTab === 'cable' ? (
+          {sideTab === 'sub' ? (
+            <div className="space-y-4">
+              <UndergroundCanalizationTool
+                plan={undergroundPlan}
+                zone={ugZone}
+                terrain={ugTerrain}
+                chamberMaterial={ugChamberMat}
+                onZone={setUgZone}
+                onTerrain={setUgTerrain}
+                onChamberMaterial={setUgChamberMat}
+              />
+              <div className="border-t border-white/10 pt-3">
+                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+                  Validaciones
+                </h3>
+                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+              </div>
+            </div>
+          ) : sideTab === 'cable' ? (
             <div className="space-y-4">
               <CableRoutingEngine
                 routes={cableRoutes}

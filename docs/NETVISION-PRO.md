@@ -51,6 +51,15 @@ Diseño CCTV / redes / cableado / BIM integrado en Nexus (`/nexus/vision`).
 - Pestaña **Cable**: lista de rutas + plan de conductos
 - BOM: cables ($/m), RJ45, cajetines, corrugado
 
+## Fase 5 — Canalizaciones subterráneas
+
+- Pestaña **Sub**: zona (peatonal/vehicular/cruce/ferrocarril), terreno, material de cámaras
+- Profundidad normativa + tubería PVC/HDPE por nº de cables (ocupación 40%)
+- Cámaras de acceso: cada 30 m, giros >30°, entrada/salida (Ø≥60 cm)
+- Perfil 2D de zanja + volumen excavación, apuntalamiento, equipos, permisos, horas
+- Toggle **Sub** en plano (trazas naranjas + pozos rombo)
+- BOM: tubería, cámaras, excavación m³, entibado
+
 ## Roadmap
 
 | Fase | Módulo | Estado |
@@ -59,6 +68,6 @@ Diseño CCTV / redes / cableado / BIM integrado en Nexus (`/nexus/vision`).
 | 2 | Redes WiFi + Ethernet + PoE | Hecho |
 | 3 | Diagramas técnicos automáticos | Hecho |
 | 4 | Cableado, cajetines, BOM completo | Hecho |
-| 5 | Canalizaciones subterráneas | Pendiente |
+| 5 | Canalizaciones subterráneas | Hecho |
 | 6 | Cumplimiento NEC/IEC/NFPA/TIA | Stub |
 | 7 | BIM IFC/DWG/paquete Revit | Stub |

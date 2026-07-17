@@ -3,6 +3,10 @@ import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
 import { buildCableBomLines } from '@/lib/netvision/services/cableCalculator'
 import { buildConduitBomLines, type ConduitPlan } from '@/lib/netvision/services/conduitCalculator'
+import {
+  buildUndergroundBomLines,
+  type UndergroundPlan,
+} from '@/lib/netvision/services/canalizationCalculator'
 import type {
   BomLine,
   BomSummary,
@@ -32,6 +36,7 @@ export function buildBom(
   networkNodes: DesignNetworkNode[] = [],
   cableRoutes: CableRoute[] = [],
   conduitPlans: ConduitPlan[] = [],
+  undergroundPlan?: UndergroundPlan | null,
 ): BomSummary {
   const lines: BomLine[] = []
   const byModel = new Map<string, { qty: number; unit: number; desc: string }>()
@@ -148,6 +153,9 @@ export function buildBom(
   }
   if (conduitPlans.length > 0) {
     lines.push(...buildConduitBomLines(conduitPlans))
+  }
+  if (undergroundPlan && undergroundPlan.runs.length > 0) {
+    lines.push(...buildUndergroundBomLines(undergroundPlan))
   }
 
   const subtotalByCategory: Record<string, number> = {}

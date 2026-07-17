@@ -17,9 +17,7 @@ function ComingSoon({ title, phase }: { title: string; phase: string }) {
 
 /** CableRoutingEngine / ConduitCalculator reales (Fase 4). */
 
-export function UndergroundCanalizationTool() {
-  return <ComingSoon title="Canalizaciones subterráneas" phase="Fase 5" />
-}
+/** UndergroundCanalizationTool real (Fase 5). */
 
 export function ComplianceValidatorPanel() {
   return <ComingSoon title="Validador NEC / IEC / NFPA / TIA" phase="Fase 6" />

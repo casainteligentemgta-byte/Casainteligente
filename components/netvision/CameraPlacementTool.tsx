@@ -20,6 +20,7 @@ import type {
   DesignNetworkNode,
 } from '@/lib/netvision/types'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
+import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -29,12 +30,14 @@ export type CameraPlacementToolProps = {
   wifiCircles: WifiCoverageCircle[]
   linkLines: { fromX: number; fromY: number; toX: number; toY: number; warn?: boolean }[]
   cableRoutes?: CableRoute[]
+  undergroundRuns?: UndergroundRun[]
   selectedId: string | null
   placeMode: boolean
   showFov: boolean
   showWifi: boolean
   showLinks: boolean
   showCableRoutes?: boolean
+  showUnderground?: boolean
   onAddAt: (normX: number, normY: number) => void
   onMove: (id: string, normX: number, normY: number) => void
   onSelect: (id: string) => void
@@ -102,12 +105,14 @@ export default function CameraPlacementTool({
   wifiCircles,
   linkLines,
   cableRoutes = [],
+  undergroundRuns = [],
   selectedId,
   placeMode,
   showFov,
   showWifi,
   showLinks,
   showCableRoutes = false,
+  showUnderground = false,
   onAddAt,
   onMove,
   onSelect,
@@ -233,6 +238,7 @@ export default function CameraPlacementTool({
             })}
 
           {showCableRoutes &&
+            !showUnderground &&
             cableRoutes.map((r) => {
               const pts: number[] = []
               for (const p of r.points) {
@@ -250,6 +256,46 @@ export default function CameraPlacementTool({
                 />
               )
             })}
+
+          {showUnderground &&
+            undergroundRuns.map((run) => {
+              const pts: number[] = []
+              for (const p of run.points) {
+                pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
+              }
+              return (
+                <Line
+                  key={run.id}
+                  points={pts}
+                  stroke="rgba(251,146,60,0.9)"
+                  strokeWidth={3.5}
+                  dash={[10, 6]}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
+                />
+              )
+            })}
+
+          {showUnderground &&
+            undergroundRuns.flatMap((run) =>
+              run.chambers.map((ch: AccessChamber) => {
+                const cx = offsetX + ch.x * drawW
+                const cy = offsetY + ch.y * drawH
+                const s = 7
+                return (
+                  <Line
+                    key={ch.id}
+                    points={[cx, cy - s, cx + s, cy, cx, cy + s, cx - s, cy, cx, cy - s]}
+                    closed
+                    fill="#fb923c"
+                    stroke="#7c2d12"
+                    strokeWidth={1}
+                    listening={false}
+                  />
+                )
+              }),
+            )}
 
           {showLinks &&
             !showCableRoutes &&
