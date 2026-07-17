@@ -54,6 +54,9 @@ export type CcoProveedorContratos = {
 
 export type CcoLibroFila = {
   id: string;
+  /** ID visible (origen V4 o correlativo). */
+  display_id: number | string;
+  origen_v4_id: number | null;
   clase: CcoClase;
   fecha: string | null;
   proveedor: string;
@@ -62,10 +65,18 @@ export type CcoLibroFila = {
   subcapitulo: string;
   descripcion: string;
   moneda: string;
+  tasa: number;
+  monto_orig: number;
+  pct_distribucion: number;
+  admin_pct: number;
   monto_base_usd: number;
   honorarios_usd: number;
   costo_total_usd: number;
   estado: string;
+  forma_pago: string | null;
+  invoice_number: string | null;
+  /** Clave para «Agrupar Gastos Divididos»; null si no es split. */
+  split_group_key: string | null;
   contrato_obra_id: string | null;
   fuente: 'compra' | 'inyeccion' | 'contrato' | 'presupuesto' | 'auditoria';
 };

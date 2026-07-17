@@ -40,7 +40,7 @@ export default function CcoLibroMaestro({
     setLoading(true);
     setError(null);
     try {
-      const qs = new URLSearchParams({ proyecto: proyectoId, limit: '1500' });
+      const qs = new URLSearchParams({ proyecto: proyectoId, limit: '5000' });
       const claseActiva = claseFija ?? clase;
       if (claseActiva) qs.set('clase', claseActiva);
       const res = await fetch(`/api/contabilidad/cco/libro?${qs}`, { cache: 'no-store' });

@@ -23,6 +23,7 @@ import CcoFormRegistroModal from '@/components/contabilidad/cco/CcoFormRegistroM
 import CcoImportarPdfPanel from '@/components/contabilidad/cco/CcoImportarPdfPanel';
 import CcoImportarV4Panel from '@/components/contabilidad/cco/CcoImportarV4Panel';
 import CcoLibroMaestro from '@/components/contabilidad/cco/CcoLibroMaestro';
+import CcoTabEgresos from '@/components/contabilidad/cco/CcoTabEgresos';
 import CcoTabAjustes from '@/components/contabilidad/cco/CcoTabAjustes';
 import CcoTabAuditoria from '@/components/contabilidad/cco/CcoTabAuditoria';
 import CcoTabContratos from '@/components/contabilidad/cco/CcoTabContratos';
@@ -995,35 +996,7 @@ export default function CcoDashboardClient() {
               </div>
             ) : null}
 
-            {tab === 'egresos' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div
-                  style={{
-                    background: '#fff',
-                    borderRadius: 14,
-                    border: '1px solid #E2E8F0',
-                    padding: 18,
-                  }}
-                >
-                  <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Egresos</h3>
-                  <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
-                    Gastos netos desde cuadro de compras (imputación obra).
-                  </p>
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#334155', lineHeight: 1.7 }}>
-                    <li>Gastos netos: {fmtUsd(data.oficial.gastosNetos)}</li>
-                    <li>
-                      Admin delegada ({data.honorariosPct.toFixed(1)}%): {fmtUsd(data.oficial.adminDelegada)}
-                    </li>
-                    <li>Costo total: {fmtUsd(data.oficial.costoTotal)}</li>
-                  </ul>
-                </div>
-                <CcoLibroMaestro
-                  proyectoId={proyectoId}
-                  claseFija="GASTO"
-                  titulo="Detalle de egresos (libro)"
-                />
-              </div>
-            ) : null}
+            {tab === 'egresos' ? <CcoTabEgresos proyectoId={proyectoId} /> : null}
             {tab === 'ingresos' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div
