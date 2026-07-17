@@ -197,15 +197,23 @@ type PatchCambio = {
   tasa?: number;
   monto_orig?: number;
   admin_pct?: number | null;
+  tipo?: string;
+  capitulo?: string;
+  subcapitulo?: string;
+  estado?: string;
+  forma_pago?: string | null;
 };
 
 type PatchBody = {
   proyecto_id?: string;
+  clase?: 'GASTO' | 'INGRESO';
   cambios?: PatchCambio[];
+  eliminar_ids?: string[];
 };
 
 /**
- * PATCH egresos (compras obra): guarda cambios de filas editables del cuadro V4.
+ * PATCH egresos/ingresos: guarda cambios de filas editables del cuadro V4.
+ * clase=INGRESO → ci_inyecciones_capital; default GASTO → contabilidad_compras.
  */
 export async function PATCH(req: Request) {
   try {
@@ -214,18 +222,131 @@ export async function PATCH(req: Request) {
 
     const body = (await req.json()) as PatchBody;
     const proyectoId = String(body.proyecto_id ?? '').trim();
+    const clase = String(body.clase ?? 'GASTO').toUpperCase() === 'INGRESO' ? 'INGRESO' : 'GASTO';
     const cambios = Array.isArray(body.cambios) ? body.cambios : [];
-    if (!proyectoId || cambios.length === 0) {
+    const eliminarIds = Array.isArray(body.eliminar_ids)
+      ? body.eliminar_ids.map((x) => String(x).trim()).filter(Boolean)
+      : [];
+    if (!proyectoId || (cambios.length === 0 && eliminarIds.length === 0)) {
       return NextResponse.json(
-        { ok: false, error: 'proyecto_id y cambios[] son requeridos.' },
+        { ok: false, error: 'proyecto_id y cambios[] o eliminar_ids[] son requeridos.' },
         { status: 400 },
       );
     }
-    if (cambios.length > 500) {
+    if (cambios.length > 500 || eliminarIds.length > 200) {
       return NextResponse.json(
-        { ok: false, error: 'Máximo 500 filas por guardado.' },
+        { ok: false, error: 'Límite de filas excedido (500 cambios / 200 bajas).' },
         { status: 400 },
       );
+    }
+
+    const db = admin.client as SupabaseClient;
+    let updated = 0;
+    let deleted = 0;
+    const errores: string[] = [];
+
+    if (clase === 'INGRESO') {
+      const { buildOrigenIngreso, parseOrigenIngreso } = await import(
+        '@/lib/contabilidad/cco/ingresosVista'
+      );
+
+      for (const id of eliminarIds) {
+        const { error: delErr } = await db
+          .from('ci_inyecciones_capital')
+          .delete()
+          .eq('id', id)
+          .eq('proyecto_id', proyectoId);
+        if (delErr) errores.push(`${id}: ${delErr.message}`);
+        else deleted += 1;
+      }
+
+      for (const c of cambios) {
+        const id = String(c.id ?? '').trim();
+        if (!id) {
+          errores.push('Fila sin id');
+          continue;
+        }
+        const { data: prev, error: prevErr } = await db
+          .from('ci_inyecciones_capital')
+          .select(
+            'id,origen_fondo,moneda_recibida,monto_usd,monto_ves,monto_recibido,tasa_aplicada,tasa_bcv,metodo_pago,fecha_ingreso',
+          )
+          .eq('id', id)
+          .eq('proyecto_id', proyectoId)
+          .maybeSingle();
+        if (prevErr || !prev) {
+          errores.push(`${id}: no encontrado`);
+          continue;
+        }
+        const prevR = prev as unknown as Record<string, unknown>;
+        const parsed = parseOrigenIngreso(String(prevR.origen_fondo ?? ''));
+        const proveedor = c.proveedor != null ? String(c.proveedor).trim() : parsed.proveedor;
+        const descripcion =
+          c.descripcion != null ? String(c.descripcion).trim() : parsed.descripcion;
+        const moneda = String(c.moneda ?? prevR.moneda_recibida ?? 'USD')
+          .toUpperCase()
+          .startsWith('VE')
+          ? 'VES'
+          : 'USD';
+        const tasa = Number(c.tasa);
+        const tasaOk =
+          Number.isFinite(tasa) && tasa > 0
+            ? tasa
+            : Number(prevR.tasa_aplicada) || Number(prevR.tasa_bcv) || 1;
+        const montoOrig = Number(c.monto_orig);
+        const montoOrigOk =
+          Number.isFinite(montoOrig) && montoOrig > 0
+            ? montoOrig
+            : Number(prevR.monto_recibido) || Number(prevR.monto_usd) || 0;
+        const montoUsd =
+          moneda === 'VES' ? (tasaOk > 0 ? montoOrigOk / tasaOk : Number(prevR.monto_usd)) : montoOrigOk;
+        const montoVes = moneda === 'VES' ? montoOrigOk : montoOrigOk * (tasaOk > 1 ? tasaOk : 0);
+        const forma = String(c.forma_pago ?? prevR.metodo_pago ?? 'TRANSFERENCIA').toUpperCase();
+        const metodo = /EFECTIVO/.test(forma) ? 'EFECTIVO' : 'TRANSFERENCIA';
+
+        const patch: Record<string, unknown> = {
+          origen_fondo: buildOrigenIngreso({
+            origen_v4_id: parsed.origen_v4_id,
+            proveedor,
+            descripcion,
+          }),
+          moneda_recibida: moneda,
+          monto_recibido: Math.round(montoOrigOk * 100) / 100,
+          monto_usd: Math.round(montoUsd * 100) / 100,
+          monto_ves: Math.round(montoVes * 100) / 100,
+          tasa_aplicada: tasaOk,
+          tasa_bcv: moneda === 'VES' ? tasaOk : null,
+          metodo_pago: metodo,
+        };
+        if (c.fecha != null) patch.fecha_ingreso = String(c.fecha).slice(0, 10);
+
+        const { error: upErr } = await db
+          .from('ci_inyecciones_capital')
+          .update(patch)
+          .eq('id', id);
+        if (upErr) {
+          errores.push(`${id}: ${upErr.message}`);
+          continue;
+        }
+        updated += 1;
+      }
+
+      if (updated > 0 || deleted > 0) {
+        await db.from('cco_auditoria_eventos').insert({
+          proyecto_id: proyectoId,
+          accion: 'GUARDAR INGRESOS',
+          detalle: `${updated} actualizada(s) · ${deleted} eliminada(s)`,
+          metadata: { updated, deleted, errores: errores.slice(0, 20) },
+        });
+      }
+
+      return NextResponse.json({
+        ok: errores.length === 0,
+        updated,
+        deleted,
+        errores,
+        error: errores.length ? errores[0] : undefined,
+      });
     }
 
     const { data: cfg } = await admin.client
@@ -235,10 +356,6 @@ export async function PATCH(req: Request) {
       .maybeSingle();
     const pctGlobal =
       Number((cfg as { honorarios_admin_pct?: number } | null)?.honorarios_admin_pct) || 15;
-
-    const db = admin.client as SupabaseClient;
-    let updated = 0;
-    const errores: string[] = [];
 
     for (const c of cambios) {
       const id = String(c.id ?? '').trim();
@@ -311,6 +428,13 @@ export async function PATCH(req: Request) {
       if (c.fecha != null) patch.fecha = String(c.fecha).slice(0, 10);
       if (c.proveedor != null) patch.supplier_name = String(c.proveedor).trim() || 'Sin proveedor';
       if (c.descripcion != null) patch.notas = String(c.descripcion).trim().slice(0, 800);
+      if (c.tipo != null) patch.tipo_gasto_cco = String(c.tipo).trim() || null;
+      if (c.capitulo != null) patch.capitulo_cco = String(c.capitulo).trim() || null;
+      if (c.subcapitulo != null) patch.subcapitulo_cco = String(c.subcapitulo).trim() || null;
+      if (c.estado != null) patch.cco_estado = String(c.estado).trim() || 'PAGADO';
+      if (c.forma_pago !== undefined) {
+        patch.forma_pago_cco = c.forma_pago ? String(c.forma_pago).trim() : null;
+      }
 
       const { error: upErr } = await db.from('contabilidad_compras').update(patch).eq('id', id);
       if (upErr) {
@@ -332,11 +456,12 @@ export async function PATCH(req: Request) {
     return NextResponse.json({
       ok: errores.length === 0,
       updated,
+      deleted: 0,
       errores,
       error: errores.length ? errores[0] : undefined,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error al guardar egresos.';
+    const message = err instanceof Error ? err.message : 'Error al guardar registros CCO.';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

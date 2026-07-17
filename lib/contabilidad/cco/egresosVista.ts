@@ -45,11 +45,12 @@ export type EgresosColKey =
   | 'admin_pct'
   | 'honorarios'
   | 'costo_total'
+  | 'estado'
+  | 'forma_pago'
   | 'tipo'
   | 'capitulo'
   | 'subcapitulo'
-  | 'estado'
-  | 'forma_pago';
+  | 'link_factura';
 
 export type EgresosColDef = {
   key: EgresosColKey;
@@ -59,6 +60,7 @@ export type EgresosColDef = {
   editable?: boolean;
 };
 
+/** Orden y etiquetas alineados al cuadro Streamlit V4. */
 export const EGRESOS_COLUMNAS: EgresosColDef[] = [
   { key: 'id', label: 'ID', defaultVisible: true },
   { key: 'fecha', label: 'Fecha', defaultVisible: true, editable: true },
@@ -69,13 +71,14 @@ export const EGRESOS_COLUMNAS: EgresosColDef[] = [
   { key: 'monto_orig', label: 'Monto Orig.', defaultVisible: true, align: 'right', editable: true },
   { key: 'pct_dist', label: '% Distribución', defaultVisible: true, align: 'right' },
   { key: 'admin_pct', label: '% Admin', defaultVisible: true, align: 'right', editable: true },
-  { key: 'honorarios', label: 'Honorarios', defaultVisible: true, align: 'right' },
-  { key: 'costo_total', label: 'Costo Total', defaultVisible: true, align: 'right' },
-  { key: 'tipo', label: 'Tipo', defaultVisible: false },
-  { key: 'capitulo', label: 'Capítulo', defaultVisible: false },
-  { key: 'subcapitulo', label: 'Sub-Capítulo', defaultVisible: false },
-  { key: 'estado', label: 'Estado', defaultVisible: false },
-  { key: 'forma_pago', label: 'Forma pago', defaultVisible: false },
+  { key: 'honorarios', label: 'Honorarios (USD)', defaultVisible: true, align: 'right' },
+  { key: 'costo_total', label: 'Costo Total (USD)', defaultVisible: true, align: 'right' },
+  { key: 'estado', label: 'Estado', defaultVisible: true, editable: true },
+  { key: 'forma_pago', label: 'Forma de Pago', defaultVisible: true, editable: true },
+  { key: 'tipo', label: 'TIPO', defaultVisible: true, editable: true },
+  { key: 'capitulo', label: 'Capítulo', defaultVisible: true, editable: true },
+  { key: 'subcapitulo', label: 'Sub-Capítulo', defaultVisible: true, editable: true },
+  { key: 'link_factura', label: 'LINK FACTURA', defaultVisible: true },
 ];
 
 export function defaultVisibleCols(): Record<EgresosColKey, boolean> {
@@ -85,5 +88,16 @@ export function defaultVisibleCols(): Record<EgresosColKey, boolean> {
 }
 
 export function storageKeyColumnas(proyectoId: string): string {
-  return `cco.egresos.cols.${proyectoId}`;
+  return `cco.egresos.cols.v2.${proyectoId}`;
 }
+
+export const EGRESOS_ESTADOS = ['PAGADO', 'PENDIENTE', 'ANULADO', 'PARCIAL'] as const;
+
+export const FORMAS_PAGO_CCO = [
+  'EFECTIVO',
+  'TRANSFERENCIA',
+  'ZELLE',
+  'PAGO MOVIL',
+  'CHEQUE',
+  'CREDITO',
+] as const;

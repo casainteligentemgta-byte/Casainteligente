@@ -75,6 +75,8 @@ export type CcoLibroFila = {
   estado: string;
   forma_pago: string | null;
   invoice_number: string | null;
+  /** URL o referencia de factura; null → «None» en UI V4. */
+  link_factura: string | null;
   /** Clave para «Agrupar Gastos Divididos»; null si no es split. */
   split_group_key: string | null;
   contrato_obra_id: string | null;

@@ -2,16 +2,22 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Briefcase,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  CircleDollarSign,
   Eye,
   HelpCircle,
   Loader2,
   Save,
 } from 'lucide-react';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
+import { CCO_TIPOS_GASTO } from '@/lib/contabilidad/ccoClasificarGasto';
 import {
   EGRESOS_COLUMNAS,
+  EGRESOS_ESTADOS,
+  FORMAS_PAGO_CCO,
   baseDescripcionSinPct,
   defaultVisibleCols,
   storageKeyColumnas,
@@ -43,6 +49,11 @@ type Draft = {
   tasa: string;
   monto_orig: string;
   admin_pct: string;
+  tipo: string;
+  capitulo: string;
+  subcapitulo: string;
+  estado: string;
+  forma_pago: string;
 };
 
 type VistaFila = CcoLibroFila & {
@@ -61,7 +72,40 @@ function toDraft(f: CcoLibroFila): Draft {
     tasa: f.tasa > 0 ? String(f.tasa) : '',
     monto_orig: String(f.monto_orig ?? f.monto_base_usd),
     admin_pct: String(f.admin_pct ?? ''),
+    tipo: f.tipo || '',
+    capitulo: f.capitulo === '—' ? '' : f.capitulo,
+    subcapitulo: f.subcapitulo === '—' ? '' : f.subcapitulo,
+    estado: f.estado || 'PAGADO',
+    forma_pago: f.forma_pago ?? '',
   };
+}
+
+function noneLabel(v: string | null | undefined): string {
+  const t = String(v ?? '').trim();
+  return t ? t : 'None';
+}
+
+function EstadoBadge({ estado }: { estado: string }) {
+  const e = String(estado || '').toUpperCase();
+  const ok = e === 'PAGADO';
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 8px',
+        borderRadius: 999,
+        background: ok ? '#DCFCE7' : e === 'PENDIENTE' ? '#FEF3C7' : '#F1F5F9',
+        color: ok ? '#166534' : e === 'PENDIENTE' ? '#92400E' : '#475569',
+        fontWeight: 800,
+        fontSize: 11,
+      }}
+    >
+      {ok ? <CheckCircle2 size={12} /> : null}
+      {e || '—'}
+    </span>
+  );
 }
 
 function recalcFromDraft(
@@ -147,10 +191,12 @@ function KpiSuma({
   title,
   value,
   accent,
+  icon,
 }: {
   title: string;
   value: string;
   accent: string;
+  icon: React.ReactNode;
 }) {
   return (
     <div
@@ -161,33 +207,51 @@ function KpiSuma({
         padding: '18px 20px',
         boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
         minHeight: 96,
+        display: 'flex',
+        gap: 12,
+        alignItems: 'flex-start',
       }}
     >
-      <p
+      <div
         style={{
-          margin: 0,
-          fontSize: 12,
-          fontWeight: 800,
-          letterSpacing: '0.04em',
-          color: '#64748B',
-          textTransform: 'uppercase',
+          width: 36,
+          height: 36,
+          borderRadius: 999,
+          background: accent,
+          display: 'grid',
+          placeItems: 'center',
+          flexShrink: 0,
+          color: '#fff',
         }}
       >
-        {title}
-      </p>
-      <p
-        style={{
-          margin: '10px 0 0',
-          fontSize: 26,
-          fontWeight: 800,
-          color: '#0F172A',
-          fontVariantNumeric: 'tabular-nums',
-          letterSpacing: '-0.02em',
-        }}
-      >
-        {value}
-      </p>
-      <div style={{ marginTop: 8, width: 28, height: 3, borderRadius: 99, background: accent }} />
+        {icon}
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: '0.04em',
+            color: '#64748B',
+            textTransform: 'uppercase',
+          }}
+        >
+          {title}
+        </p>
+        <p
+          style={{
+            margin: '8px 0 0',
+            fontSize: 26,
+            fontWeight: 800,
+            color: '#0F172A',
+            fontVariantNumeric: 'tabular-nums',
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {value}
+        </p>
+      </div>
     </div>
   );
 }
@@ -407,17 +471,28 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
     }
   };
 
-  const restablecerVista = () => {
-    persistCols(defaultVisibleCols());
-    setCfgOpen(true);
-  };
-
-  const mostrarOcultas = () => {
-    const next = { ...visible };
+  const mostrarOcultasORestablecer = () => {
+    const next = defaultVisibleCols();
     for (const c of EGRESOS_COLUMNAS) next[c.key] = true;
     persistCols(next);
     setCfgOpen(true);
   };
+
+  const capitulosOpts = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of filas) {
+      if (f.capitulo && f.capitulo !== '—') set.add(f.capitulo);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [filas]);
+
+  const subcapitulosOpts = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of filas) {
+      if (f.subcapitulo && f.subcapitulo !== '—') set.add(f.subcapitulo);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [filas]);
 
   const guardar = async () => {
     const cambios = filas
@@ -433,6 +508,11 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           tasa: Number(d.tasa) || 0,
           monto_orig: Number(d.monto_orig) || 0,
           admin_pct: Number(d.admin_pct) || null,
+          tipo: d.tipo,
+          capitulo: d.capitulo,
+          subcapitulo: d.subcapitulo,
+          estado: d.estado,
+          forma_pago: d.forma_pago || null,
         };
       });
     if (cambios.length === 0) {
@@ -446,7 +526,7 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
       const res = await fetch('/api/contabilidad/cco/registros', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proyecto_id: proyectoId, cambios }),
+        body: JSON.stringify({ proyecto_id: proyectoId, clase: 'GASTO', cambios }),
       });
       const json = await res.json();
       if (!res.ok || json.ok === false) {
@@ -478,9 +558,24 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           gap: 12,
         }}
       >
-        <KpiSuma title="Suma Monto Original" value={fmtNum(kpis.montoOrig)} accent="#0F172A" />
-        <KpiSuma title="Suma Honorarios" value={fmtUsd(kpis.honorarios)} accent="#DC2626" />
-        <KpiSuma title="Suma Costo Total" value={fmtUsd(kpis.costo)} accent="#B91C1C" />
+        <KpiSuma
+          title="Suma Monto Original"
+          value={fmtNum(kpis.montoOrig)}
+          accent="#EAB308"
+          icon={<CircleDollarSign size={18} />}
+        />
+        <KpiSuma
+          title="Suma Honorarios"
+          value={fmtUsd(kpis.honorarios)}
+          accent="#16A34A"
+          icon={<Briefcase size={18} />}
+        />
+        <KpiSuma
+          title="Suma Costo Total"
+          value={fmtUsd(kpis.costo)}
+          accent="#DC2626"
+          icon={<CircleDollarSign size={18} />}
+        />
       </div>
 
       <div
@@ -781,12 +876,122 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                             </td>
                           );
                         }
-                        if (c.key === 'tipo') return <td key={c.key} style={cell}>{f.tipo}</td>;
-                        if (c.key === 'capitulo') return <td key={c.key} style={cell}>{f.capitulo}</td>;
-                        if (c.key === 'subcapitulo') return <td key={c.key} style={cell}>{f.subcapitulo}</td>;
-                        if (c.key === 'estado') return <td key={c.key} style={cell}>{f.estado}</td>;
+                        if (c.key === 'estado') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {readonly ? (
+                                <EstadoBadge estado={d.estado} />
+                              ) : (
+                                <select
+                                  value={d.estado}
+                                  onChange={(e) => patchDraft(f.id, { estado: e.target.value })}
+                                  style={inputCell}
+                                >
+                                  {EGRESOS_ESTADOS.map((st) => (
+                                    <option key={st} value={st}>
+                                      {st}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </td>
+                          );
+                        }
                         if (c.key === 'forma_pago') {
-                          return <td key={c.key} style={cell}>{f.forma_pago ?? '—'}</td>;
+                          return (
+                            <td key={c.key} style={cell}>
+                              {readonly ? (
+                                noneLabel(d.forma_pago)
+                              ) : (
+                                <select
+                                  value={d.forma_pago}
+                                  onChange={(e) => patchDraft(f.id, { forma_pago: e.target.value })}
+                                  style={inputCell}
+                                >
+                                  <option value="">None</option>
+                                  {FORMAS_PAGO_CCO.map((fp) => (
+                                    <option key={fp} value={fp}>
+                                      {fp}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'tipo') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {readonly ? (
+                                d.tipo || '—'
+                              ) : (
+                                <select
+                                  value={d.tipo}
+                                  onChange={(e) => patchDraft(f.id, { tipo: e.target.value })}
+                                  style={{ ...inputCell, minWidth: 120 }}
+                                >
+                                  <option value="">—</option>
+                                  {[...CCO_TIPOS_GASTO]
+                                    .sort((a, b) => a.localeCompare(b, 'es'))
+                                    .map((t) => (
+                                      <option key={t} value={t}>
+                                        {t}
+                                      </option>
+                                    ))}
+                                </select>
+                              )}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'capitulo') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {readonly ? (
+                                d.capitulo || '—'
+                              ) : (
+                                <input
+                                  list={`cap-${proyectoId}`}
+                                  value={d.capitulo}
+                                  onChange={(e) => patchDraft(f.id, { capitulo: e.target.value })}
+                                  style={{ ...inputCell, minWidth: 100 }}
+                                />
+                              )}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'subcapitulo') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {readonly ? (
+                                d.subcapitulo || '—'
+                              ) : (
+                                <input
+                                  list={`sub-${proyectoId}`}
+                                  value={d.subcapitulo}
+                                  onChange={(e) => patchDraft(f.id, { subcapitulo: e.target.value })}
+                                  style={{ ...inputCell, minWidth: 110 }}
+                                />
+                              )}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'link_factura') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {f.link_factura ? (
+                                <a
+                                  href={f.link_factura}
+                                  style={{ color: '#1D4ED8', fontWeight: 700 }}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Ver
+                                </a>
+                              ) : (
+                                'None'
+                              )}
+                            </td>
+                          );
                         }
                         return <td key={c.key} style={cell}>—</td>;
                       })}
@@ -795,6 +1000,16 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                 })}
               </tbody>
             </table>
+            <datalist id={`cap-${proyectoId}`}>
+              {capitulosOpts.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            <datalist id={`sub-${proyectoId}`}>
+              {subcapitulosOpts.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
             {filasVista.length === 0 ? (
               <p style={{ ...muted, padding: 16 }}>Sin egresos para el filtro actual.</p>
             ) : null}
@@ -806,6 +1021,7 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 12,
             marginTop: 14,
           }}
@@ -824,11 +1040,8 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
             Guardar Cambios de Egresos
             {dirtyCount > 0 ? ` (${dirtyCount})` : ''}
           </button>
-          <button type="button" onClick={mostrarOcultas} style={btnLink}>
-            <Eye size={14} /> Mostrar Columnas Ocultas
-          </button>
-          <button type="button" onClick={restablecerVista} style={btnLink}>
-            Restablecer Vista
+          <button type="button" onClick={mostrarOcultasORestablecer} style={btnLink}>
+            <Eye size={14} /> Mostrar Columnas Ocultas / Restablecer Vista
           </button>
         </div>
       </div>

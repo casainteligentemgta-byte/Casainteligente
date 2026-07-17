@@ -6,6 +6,7 @@ import {
   claveGastoDividido,
   parsePctDistribucion,
 } from '@/lib/contabilidad/cco/egresosVista';
+import { parseOrigenIngreso } from '@/lib/contabilidad/cco/ingresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 
 function num(v: unknown): number {
@@ -78,13 +79,17 @@ export async function cargarLibroMaestro(
           'invoice_number',
           'origen_v4_id',
           'forma_pago_cco',
+          'compra_factura_id',
         ].join(','),
       )
       .eq('proyecto_id', proyectoId)
       .neq('imputacion', IMPUTACION_ENTIDAD)
       .order('fecha', { ascending: false })
       .limit(limit);
-    if (error && !/tipo_gasto_cco|capitulo_cco|schema cache|origen_v4/i.test(error.message ?? '')) {
+    if (
+      error &&
+      !/tipo_gasto_cco|capitulo_cco|schema cache|origen_v4|compra_factura/i.test(error.message ?? '')
+    ) {
       throw error;
     }
     for (const row of compras ?? []) {
@@ -128,6 +133,12 @@ export async function cargarLibroMaestro(
         estado: String(r.cco_estado ?? 'PAGADO'),
         forma_pago: r.forma_pago_cco != null ? String(r.forma_pago_cco) : null,
         invoice_number: invoice,
+        link_factura:
+          r.compra_factura_id != null
+            ? `/contabilidad/compras?factura=${String(r.compra_factura_id)}`
+            : invoice && !/^CCO-/i.test(invoice)
+              ? invoice
+              : null,
         split_group_key: claveGastoDividido({
           invoice_number: invoice,
           fecha,
@@ -151,26 +162,35 @@ export async function cargarLibroMaestro(
       .limit(limit);
     if (error && error.code !== '42P01') throw error;
     for (const row of iny ?? []) {
-      const r = row as Record<string, unknown>;
+      const r = row as unknown as Record<string, unknown>;
       const base = num(r.monto_usd);
       const moneda = String(r.moneda_recibida ?? 'USD').toUpperCase() || 'USD';
       const tasa = num(r.tasa_aplicada) || num(r.tasa_bcv) || 0;
       const montoVes = num(r.monto_ves);
+      const parsed = parseOrigenIngreso(String(r.origen_fondo ?? ''));
+      const montoRecibido = num(r.monto_recibido);
       filas.push({
         id: String(r.id),
-        display_id: String(r.id).slice(0, 8),
-        origen_v4_id: null,
+        display_id:
+          parsed.origen_v4_id && parsed.origen_v4_id > 0
+            ? parsed.origen_v4_id
+            : String(r.id).slice(0, 8),
+        origen_v4_id: parsed.origen_v4_id,
         clase: 'INGRESO',
         fecha: String(r.fecha_ingreso ?? r.creado_al ?? '').slice(0, 10) || null,
-        proveedor: 'CLIENTE',
+        proveedor: parsed.proveedor,
         tipo: 'INGRESO',
         capitulo: '—',
         subcapitulo: '—',
-        descripcion:
-          String(r.origen_fondo ?? r.metodo_pago ?? 'Inyección').trim() || 'Inyección',
+        descripcion: parsed.descripcion,
         moneda,
         tasa,
-        monto_orig: moneda === 'VES' && montoVes > 0 ? montoVes : base,
+        monto_orig:
+          montoRecibido > 0
+            ? montoRecibido
+            : moneda === 'VES' && montoVes > 0
+              ? montoVes
+              : base,
         pct_distribucion: 100,
         admin_pct: 0,
         monto_base_usd: base,
@@ -179,6 +199,7 @@ export async function cargarLibroMaestro(
         estado: 'REGISTRADO',
         forma_pago: r.metodo_pago != null ? String(r.metodo_pago) : null,
         invoice_number: null,
+        link_factura: null,
         split_group_key: null,
         contrato_obra_id: null,
         fuente: 'inyeccion',
@@ -220,6 +241,7 @@ export async function cargarLibroMaestro(
         estado: String(r.estado ?? 'PENDIENTE'),
         forma_pago: null,
         invoice_number: null,
+        link_factura: null,
         split_group_key: null,
         contrato_obra_id: String(r.id),
         fuente: 'contrato',
@@ -261,6 +283,7 @@ export async function cargarLibroMaestro(
         estado: 'ESTIMADO',
         forma_pago: null,
         invoice_number: null,
+        link_factura: null,
         split_group_key: null,
         contrato_obra_id: null,
         fuente: 'presupuesto',

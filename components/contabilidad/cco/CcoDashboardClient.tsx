@@ -24,6 +24,7 @@ import CcoImportarPdfPanel from '@/components/contabilidad/cco/CcoImportarPdfPan
 import CcoImportarV4Panel from '@/components/contabilidad/cco/CcoImportarV4Panel';
 import CcoLibroMaestro from '@/components/contabilidad/cco/CcoLibroMaestro';
 import CcoTabEgresos from '@/components/contabilidad/cco/CcoTabEgresos';
+import CcoTabIngresos from '@/components/contabilidad/cco/CcoTabIngresos';
 import CcoTabAjustes from '@/components/contabilidad/cco/CcoTabAjustes';
 import CcoTabAuditoria from '@/components/contabilidad/cco/CcoTabAuditoria';
 import CcoTabContratos from '@/components/contabilidad/cco/CcoTabContratos';
@@ -997,32 +998,7 @@ export default function CcoDashboardClient() {
             ) : null}
 
             {tab === 'egresos' ? <CcoTabEgresos proyectoId={proyectoId} /> : null}
-            {tab === 'ingresos' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div
-                  style={{
-                    background: '#fff',
-                    borderRadius: 14,
-                    border: '1px solid #E2E8F0',
-                    padding: 18,
-                  }}
-                >
-                  <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Ingresos</h3>
-                  <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
-                    Inyecciones de capital registradas en CI.
-                  </p>
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#334155', lineHeight: 1.7 }}>
-                    <li>Total ingresos: {fmtUsd(data.oficial.ingresos)}</li>
-                    <li>Registros: {data.oficial.countIngresos}</li>
-                  </ul>
-                </div>
-                <CcoLibroMaestro
-                  proyectoId={proyectoId}
-                  claseFija="INGRESO"
-                  titulo="Detalle de ingresos (libro)"
-                />
-              </div>
-            ) : null}
+            {tab === 'ingresos' ? <CcoTabIngresos proyectoId={proyectoId} /> : null}
             {tab === 'contratos' ? <CcoTabContratos proyectoId={proyectoId} /> : null}
             {tab === 'presupuestos' ? <CcoTabPresupuestos proyectoId={proyectoId} /> : null}
             {tab === 'deudas' ? <CcoTabDeudas proyectoId={proyectoId} /> : null}
