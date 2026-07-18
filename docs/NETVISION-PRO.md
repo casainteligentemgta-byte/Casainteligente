@@ -2,7 +2,10 @@
 
 Diseño CCTV / redes / cableado / subterráneo / normativas / BIM en Nexus (`/nexus/vision`).
 
-**Manual explicativo (visión de producto y uso):** [`NETVISION-PRO-MANUAL.md`](./NETVISION-PRO-MANUAL.md) — también en la app en [`/nexus/vision/manual`](/nexus/vision/manual).
+**Manuales:**
+
+- Explicativo (visión de producto): [`NETVISION-PRO-MANUAL.md`](./NETVISION-PRO-MANUAL.md) → [`/nexus/vision/manual`](/nexus/vision/manual)
+- Usuario (paso a paso): [`NETVISION-PRO-USER-MANUAL.md`](./NETVISION-PRO-USER-MANUAL.md) → [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario)
 
 ## Fases implementadas
 

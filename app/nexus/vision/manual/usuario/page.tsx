@@ -5,20 +5,20 @@ import NetVisionManualNav from '@/components/netvision/NetVisionManualNav'
 import NetVisionManualView from '@/components/netvision/NetVisionManualView'
 
 export const metadata: Metadata = {
-  title: 'Manual · NetVision Pro',
+  title: 'Manual de usuario · NetVision Pro',
   description:
-    'Manual explicativo de NetVision Pro: CCTV, redes, cableado, canalizaciones, normativas y BIM.',
+    'Manual de usuario paso a paso de NetVision Pro: plano, CCTV, red, cableado, validación y exportación.',
 }
 
-export default function NetVisionManualPage() {
+export default function NetVisionUserManualPage() {
   const markdown = fs.readFileSync(
-    path.join(process.cwd(), 'docs/NETVISION-PRO-MANUAL.md'),
+    path.join(process.cwd(), 'docs/NETVISION-PRO-USER-MANUAL.md'),
     'utf8',
   )
 
   return (
     <div className="space-y-4">
-      <NetVisionManualNav active="explicativo" />
+      <NetVisionManualNav active="usuario" />
       <NetVisionManualView markdown={markdown} />
     </div>
   )

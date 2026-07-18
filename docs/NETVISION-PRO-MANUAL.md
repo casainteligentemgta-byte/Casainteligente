@@ -1,6 +1,7 @@
 # Manual explicativo: NetVision Pro
 
-> **Nota:** Este manual describe la visión y el uso de NetVision Pro. El estado técnico de lo implementado en la app (y lo que queda fuera de alcance) está en [`NETVISION-PRO.md`](./NETVISION-PRO.md). Abrir en la app: [`/nexus/vision/manual`](/nexus/vision/manual).
+> **Nota:** Este manual describe la visión y el uso de NetVision Pro. El estado técnico de lo implementado en la app (y lo que queda fuera de alcance) está en [`NETVISION-PRO.md`](./NETVISION-PRO.md).  
+> En la app: [`/nexus/vision/manual`](/nexus/vision/manual). Paso a paso: [manual de usuario](./NETVISION-PRO-USER-MANUAL.md) → [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario).
 
 ## ¿Qué es NetVision Pro?
 
