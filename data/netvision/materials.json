@@ -1,0 +1,44 @@
+{
+  "materials": [
+    {
+      "id": "drywall",
+      "label": "Muro drywall",
+      "kind": "wall_drywall",
+      "blocksVision": true,
+      "wifiLossDb": 4,
+      "soundLossDb": 8,
+      "color": "#94a3b8",
+      "dash": null
+    },
+    {
+      "id": "block",
+      "label": "Muro de bloque",
+      "kind": "wall_block",
+      "blocksVision": true,
+      "wifiLossDb": 12,
+      "soundLossDb": 22,
+      "color": "#78716c",
+      "dash": null
+    },
+    {
+      "id": "glass",
+      "label": "Vidrio",
+      "kind": "glass",
+      "blocksVision": false,
+      "wifiLossDb": 2,
+      "soundLossDb": 4,
+      "color": "#38bdf8",
+      "dash": [8, 4]
+    },
+    {
+      "id": "window",
+      "label": "Ventana",
+      "kind": "window",
+      "blocksVision": false,
+      "wifiLossDb": 1.5,
+      "soundLossDb": 3,
+      "color": "#22d3ee",
+      "dash": [4, 4]
+    }
+  ]
+}

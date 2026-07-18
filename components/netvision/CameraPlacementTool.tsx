@@ -18,7 +18,10 @@ import type {
   CoverageSector,
   DesignCamera,
   DesignNetworkNode,
+  DesignStructure,
+  SpectrumCell,
 } from '@/lib/netvision/types'
+import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 
@@ -26,22 +29,38 @@ export type CameraPlacementToolProps = {
   backgroundUrl: string | null
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
+  structures?: DesignStructure[]
   sectors: CoverageSector[]
   wifiCircles: WifiCoverageCircle[]
+  wifiSpectrum?: SpectrumCell[]
+  soundSpectrum?: SpectrumCell[]
   linkLines: { fromX: number; fromY: number; toX: number; toY: number; warn?: boolean }[]
   cableRoutes?: CableRoute[]
   undergroundRuns?: UndergroundRun[]
   selectedId: string | null
   placeMode: boolean
+  draftPoint?: { x: number; y: number } | null
   showFov: boolean
   showWifi: boolean
+  showSound?: boolean
   showLinks: boolean
   showCableRoutes?: boolean
   showUnderground?: boolean
   onAddAt: (normX: number, normY: number) => void
   onMove: (id: string, normX: number, normY: number) => void
+  onMoveStructureEndpoint?: (
+    id: string,
+    end: 'a' | 'b',
+    normX: number,
+    normY: number,
+  ) => void
   onSelect: (id: string) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
+}
+
+function spectrumFill(strength: number, hue: number) {
+  const a = 0.08 + strength * 0.42
+  return `hsla(${hue}, 85%, ${45 + strength * 20}%, ${a})`
 }
 
 const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
@@ -128,20 +147,26 @@ export default function CameraPlacementTool({
   backgroundUrl,
   cameras,
   networkNodes,
+  structures = [],
   sectors,
   wifiCircles,
+  wifiSpectrum = [],
+  soundSpectrum = [],
   linkLines,
   cableRoutes = [],
   undergroundRuns = [],
   selectedId,
   placeMode,
+  draftPoint = null,
   showFov,
   showWifi,
+  showSound = false,
   showLinks,
   showCableRoutes = false,
   showUnderground = false,
   onAddAt,
   onMove,
+  onMoveStructureEndpoint,
   onSelect,
   stageRef,
 }: CameraPlacementToolProps) {
@@ -420,6 +445,20 @@ export default function CameraPlacementTool({
           )}
 
           {showWifi &&
+            wifiSpectrum.map((c, i) => (
+              <Rect
+                key={`wifi-cell-${i}`}
+                x={offsetX + c.x * drawW}
+                y={offsetY + c.y * drawH}
+                width={Math.max(1, c.w * drawW)}
+                height={Math.max(1, c.h * drawH)}
+                fill={spectrumFill(c.strength, 152)}
+                listening={false}
+              />
+            ))}
+
+          {showWifi &&
+            wifiSpectrum.length === 0 &&
             wifiCircles.map((c) => {
               const cx = offsetX + c.cx * drawW
               const cy = offsetY + c.cy * drawH
@@ -439,14 +478,44 @@ export default function CameraPlacementTool({
               )
             })}
 
+          {showSound &&
+            soundSpectrum.map((c, i) => (
+              <Rect
+                key={`snd-cell-${i}`}
+                x={offsetX + c.x * drawW}
+                y={offsetY + c.y * drawH}
+                width={Math.max(1, c.w * drawW)}
+                height={Math.max(1, c.h * drawH)}
+                fill={spectrumFill(c.strength, 280)}
+                listening={false}
+              />
+            ))}
+
           {showFov &&
             sectors.map((s) => {
+              const selected = s.cameraId === selectedId
+              if (s.polygon && s.polygon.length >= 3) {
+                const pts: number[] = []
+                for (const p of s.polygon) {
+                  pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
+                }
+                return (
+                  <Line
+                    key={`fov-${s.cameraId}`}
+                    points={pts}
+                    closed
+                    fill={selected ? 'rgba(34,211,238,0.28)' : 'rgba(6,182,212,0.18)'}
+                    stroke={selected ? 'rgba(34,211,238,0.85)' : 'rgba(6,182,212,0.45)'}
+                    strokeWidth={1}
+                    listening={false}
+                  />
+                )
+              }
               const cx = offsetX + s.cx * drawW
               const cy = offsetY + s.cy * drawH
               const radius = s.radiusNorm * avg
               const angle = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
               const rotation = (s.startAngleRad * 180) / Math.PI
-              const selected = s.cameraId === selectedId
               return (
                 <Arc
                   key={`fov-${s.cameraId}`}
@@ -463,6 +532,83 @@ export default function CameraPlacementTool({
                 />
               )
             })}
+
+          {structures.map((s) => {
+            const mat = getStructureMaterialOrDefault(s.materialId)
+            const selected = s.id === selectedId
+            const x1 = offsetX + s.x1 * drawW
+            const y1 = offsetY + s.y1 * drawH
+            const x2 = offsetX + s.x2 * drawW
+            const y2 = offsetY + s.y2 * drawH
+            return (
+              <Line
+                key={`str-${s.id}`}
+                points={[x1, y1, x2, y2]}
+                stroke={mat.color}
+                strokeWidth={selected ? 5 : 3.5}
+                dash={mat.dash ?? undefined}
+                lineCap="round"
+                opacity={selected ? 1 : 0.9}
+                onClick={(e) => {
+                  e.cancelBubble = true
+                  onSelect(s.id)
+                }}
+                onTap={(e) => {
+                  e.cancelBubble = true
+                  onSelect(s.id)
+                }}
+              />
+            )
+          })}
+
+          {onMoveStructureEndpoint
+            ? structures.flatMap((s) => {
+                const mat = getStructureMaterialOrDefault(s.materialId)
+                const selected = s.id === selectedId
+                const ends: Array<['a' | 'b', number, number]> = [
+                  ['a', s.x1, s.y1],
+                  ['b', s.x2, s.y2],
+                ]
+                return ends.map(([end, nx, ny]) => (
+                  <Circle
+                    key={`str-end-${s.id}-${end}`}
+                    x={offsetX + nx * drawW}
+                    y={offsetY + ny * drawH}
+                    radius={selected ? 7 : 5}
+                    fill={mat.color}
+                    stroke="#0f172a"
+                    strokeWidth={1.5}
+                    opacity={selected ? 1 : 0.55}
+                    draggable
+                    onClick={(e) => {
+                      e.cancelBubble = true
+                      onSelect(s.id)
+                    }}
+                    onTap={(e) => {
+                      e.cancelBubble = true
+                      onSelect(s.id)
+                    }}
+                    onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                      const node = e.target as Konva.Circle
+                      const n = toNorm(node.x(), node.y())
+                      onMoveStructureEndpoint(s.id, end, n.x, n.y)
+                    }}
+                  />
+                ))
+              })
+            : null}
+
+          {draftPoint ? (
+            <Circle
+              x={offsetX + draftPoint.x * drawW}
+              y={offsetY + draftPoint.y * drawH}
+              radius={6}
+              fill="#22d3ee"
+              stroke="#fff"
+              strokeWidth={1}
+              listening={false}
+            />
+          ) : null}
 
           {showCableRoutes &&
             !showUnderground &&

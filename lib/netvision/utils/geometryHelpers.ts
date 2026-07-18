@@ -92,3 +92,49 @@ export function pointInSector(
   while (ang < start) ang += Math.PI * 2
   return ang <= end + 1e-9
 }
+
+export type NormSeg = { x1: number; y1: number; x2: number; y2: number }
+
+/**
+ * Intersección segmento–segmento en [0,1].
+ * Devuelve t a lo largo de A→B (0 en A, 1 en B) o null.
+ */
+export function segmentIntersectionT(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  dx: number,
+  dy: number,
+): number | null {
+  const rX = bx - ax
+  const rY = by - ay
+  const sX = dx - cx
+  const sY = dy - cy
+  const den = rX * sY - rY * sX
+  if (Math.abs(den) < 1e-12) return null
+  const t = ((cx - ax) * sY - (cy - ay) * sX) / den
+  const u = ((cx - ax) * rY - (cy - ay) * rX) / den
+  if (t < 1e-6 || t > 1 - 1e-6 || u < 0 || u > 1) return null
+  return t
+}
+
+/** Acumula pérdidas de segmentos cruzados por el rayo A→B (hasta maxT). */
+export function rayCrossings(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  segments: NormSeg[],
+): { t: number; index: number }[] {
+  const hits: { t: number; index: number }[] = []
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i]!
+    const t = segmentIntersectionT(ax, ay, bx, by, s.x1, s.y1, s.x2, s.y2)
+    if (t != null) hits.push({ t, index: i })
+  }
+  hits.sort((a, b) => a.t - b.t)
+  return hits
+}

@@ -14,13 +14,19 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'fov',
     label: 'FOV',
     blurb:
-      'Campo de visión de cada cámara (cono/sector que “ve”). Sirve para revisar cobertura CCTV y zonas sin vigilancia.',
+      'Campo de visión de cada cámara. Con muros de drywall/bloque se recorta; vidrio y ventana dejan ver.',
   },
   {
     id: 'wifi',
     label: 'WiFi',
     blurb:
-      'Alcance estimado de los APs WiFi en el plano. Útil para detectar áreas sin señal.',
+      'Espectro WiFi de los APs. Los muros atenúan la señal (bloque más que drywall; vidrio poco).',
+  },
+  {
+    id: 'sound',
+    label: 'Sonido',
+    blurb:
+      'Espectro acústico estimado desde las cámaras (mic). Los muros reducen el alcance según el material.',
   },
   {
     id: 'links',
@@ -51,6 +57,12 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     label: 'Calibrar',
     blurb:
       'Marca dos puntos en el plano e indica la distancia real en metros para fijar la escala del diseño.',
+  },
+  {
+    id: 'muros',
+    label: 'Muros',
+    blurb:
+      'Pestaña Muros: dibuja drywall, bloque, vidrio o ventana (2 toques) para afinar FOV, WiFi y sonido.',
   },
 ]
 

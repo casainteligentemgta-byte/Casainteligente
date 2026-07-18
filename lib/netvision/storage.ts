@@ -1,12 +1,15 @@
 import type {
   DesignCamera,
   DesignNetworkNode,
+  DesignStructure,
   NetVisionProject,
   NetworkNodeKind,
   ScaleCalibration,
+  StructureMaterialId,
 } from '@/lib/netvision/types'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
+import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
 
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
@@ -20,6 +23,7 @@ export function emptyProject(): NetVisionProject {
     planoNombre: '',
     cameras: [],
     networkNodes: [],
+    structures: [],
     scale: defaultScale(),
     retentionDays: 30,
     complianceProfileId: 'VE',
@@ -79,6 +83,9 @@ function normalizeProject(p: Partial<NetVisionProject>): NetVisionProject {
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)
       : [],
+    structures: Array.isArray(p.structures)
+      ? p.structures.map(normalizeStructure)
+      : [],
     scale,
     retentionDays: typeof p.retentionDays === 'number' ? p.retentionDays : 30,
     complianceProfileId: p.complianceProfileId ?? 'VE',
@@ -112,6 +119,20 @@ function normalizeNetworkNode(
     y: looksPercent ? (n.y ?? 0) / 100 : (n.y ?? 0),
     wifiChannel: typeof n.wifiChannel === 'number' ? n.wifiChannel : undefined,
     linkedCameraIds: Array.isArray(n.linkedCameraIds) ? n.linkedCameraIds : [],
+  }
+}
+
+function normalizeStructure(s: Partial<DesignStructure>): DesignStructure {
+  const materialId = (s.materialId ??
+    DEFAULT_STRUCTURE_MATERIAL_ID) as StructureMaterialId
+  return {
+    id: s.id ?? `${Date.now()}`,
+    label: s.label ?? 'MUR-01',
+    materialId,
+    x1: typeof s.x1 === 'number' ? s.x1 : 0.3,
+    y1: typeof s.y1 === 'number' ? s.y1 : 0.3,
+    x2: typeof s.x2 === 'number' ? s.x2 : 0.7,
+    y2: typeof s.y2 === 'number' ? s.y2 : 0.3,
   }
 }
 
