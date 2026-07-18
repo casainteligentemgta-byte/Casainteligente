@@ -2,23 +2,56 @@ import type {
   DesignCamera,
   DesignNetworkNode,
   DesignStructure,
+  NetVisionCurrency,
   NetVisionProject,
+  NetVisionProjectIndexEntry,
   NetworkNodeKind,
   ScaleCalibration,
   StructureMaterialId,
+  UnitSystem,
 } from '@/lib/netvision/types'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
 import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
 
+/** Copia activa de trabajo (rápida). */
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
+/** Biblioteca multi-proyecto en localStorage. */
+export const NETVISION_LIBRARY_KEY = 'nexus.netvision.library.v1'
+export const NETVISION_ACTIVE_ID_KEY = 'nexus.netvision.activeId.v1'
+
 const LEGACY_V2 = 'nexus.vision.architect.v2'
 const LEGACY_V1 = 'nexus.vision.architect.v1'
 
-export function emptyProject(): NetVisionProject {
+type LibraryStore = {
+  version: 1
+  projects: Record<string, NetVisionProject>
+}
+
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function newId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export function emptyProject(partial?: {
+  name?: string
+  id?: string
+}): NetVisionProject {
+  const id = partial?.id ?? newId()
   return {
-    version: 1,
+    version: 2,
+    id,
+    name: partial?.name?.trim() || 'Proyecto sin nombre',
+    description: '',
+    client: '',
+    updatedAt: nowIso(),
+    unitSystem: 'metric',
+    currency: 'USD',
+    distributorMarginPct: 15,
     planoUrl: null,
     planoNombre: '',
     cameras: [],
@@ -30,33 +63,196 @@ export function emptyProject(): NetVisionProject {
   }
 }
 
-export function loadProject(): NetVisionProject {
+function readLibrary(): LibraryStore {
   try {
-    const raw = sessionStorage.getItem(NETVISION_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<NetVisionProject>
-      return normalizeProject(parsed)
+    const raw = localStorage.getItem(NETVISION_LIBRARY_KEY)
+    if (!raw) return { version: 1, projects: {} }
+    const parsed = JSON.parse(raw) as Partial<LibraryStore>
+    const projects: Record<string, NetVisionProject> = {}
+    if (parsed.projects && typeof parsed.projects === 'object') {
+      for (const [id, p] of Object.entries(parsed.projects)) {
+        projects[id] = normalizeProject(p as Partial<NetVisionProject>, id)
+      }
     }
-    const legacy =
-      sessionStorage.getItem(LEGACY_V2) ?? sessionStorage.getItem(LEGACY_V1)
-    if (legacy) return migrateLegacy(JSON.parse(legacy))
+    return { version: 1, projects }
   } catch {
-    /* ignore */
+    return { version: 1, projects: {} }
   }
-  return emptyProject()
 }
 
-export function saveProject(project: NetVisionProject) {
+function writeLibrary(store: LibraryStore) {
   try {
-    sessionStorage.setItem(NETVISION_STORAGE_KEY, JSON.stringify(project))
+    localStorage.setItem(NETVISION_LIBRARY_KEY, JSON.stringify(store))
   } catch {
     try {
-      const slim = { ...project, planoUrl: null }
-      sessionStorage.setItem(NETVISION_STORAGE_KEY, JSON.stringify(slim))
+      const slimProjects: Record<string, NetVisionProject> = {}
+      for (const [id, p] of Object.entries(store.projects)) {
+        slimProjects[id] = { ...p, planoUrl: null }
+      }
+      localStorage.setItem(
+        NETVISION_LIBRARY_KEY,
+        JSON.stringify({ version: 1, projects: slimProjects }),
+      )
     } catch {
       /* ignore quota */
     }
   }
+}
+
+function getActiveId(): string | null {
+  try {
+    return localStorage.getItem(NETVISION_ACTIVE_ID_KEY)
+  } catch {
+    return null
+  }
+}
+
+function setActiveId(id: string) {
+  try {
+    localStorage.setItem(NETVISION_ACTIVE_ID_KEY, id)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function listProjectIndex(): NetVisionProjectIndexEntry[] {
+  const { projects } = readLibrary()
+  return Object.values(projects)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      updatedAt: p.updatedAt,
+      planoNombre: p.planoNombre,
+      cameraCount: p.cameras.length,
+      networkCount: p.networkNodes.length,
+    }))
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+}
+
+export function createProject(name?: string): NetVisionProject {
+  const project = emptyProject({ name })
+  const lib = readLibrary()
+  lib.projects[project.id] = project
+  writeLibrary(lib)
+  setActiveId(project.id)
+  persistWorkingCopy(project)
+  return project
+}
+
+export function openProject(id: string): NetVisionProject | null {
+  const lib = readLibrary()
+  const p = lib.projects[id]
+  if (!p) return null
+  setActiveId(id)
+  persistWorkingCopy(p)
+  return p
+}
+
+export function deleteProject(id: string): NetVisionProject {
+  const lib = readLibrary()
+  delete lib.projects[id]
+  writeLibrary(lib)
+  const active = getActiveId()
+  if (active === id) {
+    const next = Object.values(lib.projects).sort((a, b) =>
+      a.updatedAt < b.updatedAt ? 1 : -1,
+    )[0]
+    if (next) {
+      setActiveId(next.id)
+      persistWorkingCopy(next)
+      return next
+    }
+    const fresh = emptyProject()
+    lib.projects[fresh.id] = fresh
+    writeLibrary(lib)
+    setActiveId(fresh.id)
+    persistWorkingCopy(fresh)
+    return fresh
+  }
+  return loadProject()
+}
+
+export function renameProject(id: string, name: string): void {
+  const lib = readLibrary()
+  const p = lib.projects[id]
+  if (!p) return
+  p.name = name.trim() || p.name
+  p.updatedAt = nowIso()
+  writeLibrary(lib)
+  if (getActiveId() === id) persistWorkingCopy(p)
+}
+
+function persistWorkingCopy(project: NetVisionProject) {
+  try {
+    sessionStorage.setItem(NETVISION_STORAGE_KEY, JSON.stringify(project))
+  } catch {
+    try {
+      sessionStorage.setItem(
+        NETVISION_STORAGE_KEY,
+        JSON.stringify({ ...project, planoUrl: null }),
+      )
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** Carga el proyecto activo (migra legacy / crea uno si no hay). */
+export function loadProject(): NetVisionProject {
+  try {
+    const raw = sessionStorage.getItem(NETVISION_STORAGE_KEY)
+    if (raw) {
+      const parsed = normalizeProject(JSON.parse(raw) as Partial<NetVisionProject>)
+      ensureInLibrary(parsed)
+      setActiveId(parsed.id)
+      return parsed
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const activeId = getActiveId()
+  const lib = readLibrary()
+  if (activeId && lib.projects[activeId]) {
+    const p = lib.projects[activeId]!
+    persistWorkingCopy(p)
+    return p
+  }
+
+  try {
+    const legacy =
+      sessionStorage.getItem(LEGACY_V2) ?? sessionStorage.getItem(LEGACY_V1)
+    if (legacy) {
+      const migrated = migrateLegacy(JSON.parse(legacy))
+      ensureInLibrary(migrated)
+      setActiveId(migrated.id)
+      persistWorkingCopy(migrated)
+      return migrated
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const first = Object.values(lib.projects)[0]
+  if (first) {
+    setActiveId(first.id)
+    persistWorkingCopy(first)
+    return first
+  }
+
+  return createProject('Mi primer proyecto')
+}
+
+export function saveProject(project: NetVisionProject) {
+  const next: NetVisionProject = {
+    ...normalizeProject(project),
+    updatedAt: nowIso(),
+  }
+  persistWorkingCopy(next)
+  const lib = readLibrary()
+  lib.projects[next.id] = next
+  writeLibrary(lib)
+  setActiveId(next.id)
 }
 
 export function clearProjectStorage() {
@@ -69,14 +265,67 @@ export function clearProjectStorage() {
   }
 }
 
-function normalizeProject(p: Partial<NetVisionProject>): NetVisionProject {
-  const base = emptyProject()
+/** Reinicia el diseño del proyecto activo (mantiene id, nombre y prefs). */
+export function resetActiveDesign(current: NetVisionProject): NetVisionProject {
+  const next: NetVisionProject = {
+    ...emptyProject({ id: current.id, name: current.name }),
+    description: current.description ?? '',
+    client: current.client ?? '',
+    unitSystem: current.unitSystem,
+    currency: current.currency,
+    distributorMarginPct: current.distributorMarginPct,
+    complianceProfileId: current.complianceProfileId,
+    retentionDays: current.retentionDays,
+    updatedAt: nowIso(),
+  }
+  saveProject(next)
+  return next
+}
+
+function ensureInLibrary(project: NetVisionProject) {
+  const lib = readLibrary()
+  if (!lib.projects[project.id]) {
+    lib.projects[project.id] = project
+    writeLibrary(lib)
+  }
+}
+
+function normalizeProject(
+  p: Partial<NetVisionProject>,
+  fallbackId?: string,
+): NetVisionProject {
+  const base = emptyProject({
+    id: typeof p.id === 'string' && p.id ? p.id : fallbackId,
+    name: typeof p.name === 'string' ? p.name : undefined,
+  })
   const scale: ScaleCalibration = {
     ...base.scale,
     ...(p.scale ?? {}),
   }
+  const unitSystem = normalizeUnitSystem(p.unitSystem)
+  const currency = normalizeCurrency(p.currency)
+  const margin =
+    typeof p.distributorMarginPct === 'number' && Number.isFinite(p.distributorMarginPct)
+      ? Math.min(100, Math.max(0, p.distributorMarginPct))
+      : 15
+
+  const nameFromPlano =
+    !p.name && p.planoNombre ? String(p.planoNombre).replace(/\.[^.]+$/, '') : null
+
   return {
-    version: 1,
+    version: 2,
+    id: typeof p.id === 'string' && p.id ? p.id : base.id,
+    name: (typeof p.name === 'string' && p.name.trim()
+      ? p.name.trim()
+      : nameFromPlano || base.name
+    ).slice(0, 120),
+    description: typeof p.description === 'string' ? p.description : '',
+    client: typeof p.client === 'string' ? p.client : '',
+    updatedAt:
+      typeof p.updatedAt === 'string' && p.updatedAt ? p.updatedAt : nowIso(),
+    unitSystem,
+    currency,
+    distributorMarginPct: margin,
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
@@ -90,6 +339,16 @@ function normalizeProject(p: Partial<NetVisionProject>): NetVisionProject {
     retentionDays: typeof p.retentionDays === 'number' ? p.retentionDays : 30,
     complianceProfileId: p.complianceProfileId ?? 'VE',
   }
+}
+
+function normalizeUnitSystem(v: unknown): UnitSystem {
+  if (v === 'imperial' || v === 'mixed' || v === 'metric') return v
+  return 'metric'
+}
+
+function normalizeCurrency(v: unknown): NetVisionCurrency {
+  if (v === 'VES' || v === 'EUR' || v === 'USD') return v
+  return 'USD'
 }
 
 function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignCamera {
@@ -151,7 +410,11 @@ function migrateLegacy(parsed: {
   planoNombre?: string
   camaras?: Array<{ id: string; x: number; y: number; label: string }>
 }): NetVisionProject {
-  const base = emptyProject()
+  const base = emptyProject({
+    name: parsed.planoNombre
+      ? String(parsed.planoNombre).replace(/\.[^.]+$/, '')
+      : 'Proyecto migrado',
+  })
   base.planoUrl = parsed.planoUrl ?? null
   base.planoNombre = parsed.planoNombre ?? ''
   base.cameras = (parsed.camaras ?? []).map((c) => normalizeCamera(c))

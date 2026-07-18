@@ -106,8 +106,31 @@ export type DesignStructure = {
   y2: number
 }
 
+/** Sistema de visualización de unidades (cálculos internos siempre en metros). */
+export type UnitSystem = 'metric' | 'imperial' | 'mixed'
+
+export type NetVisionCurrency = 'USD' | 'VES' | 'EUR'
+
+export type NetVisionProjectIndexEntry = {
+  id: string
+  name: string
+  updatedAt: string
+  planoNombre: string
+  cameraCount: number
+  networkCount: number
+}
+
 export type NetVisionProject = {
-  version: 1
+  version: 1 | 2
+  id: string
+  name: string
+  description?: string
+  client?: string
+  updatedAt: string
+  unitSystem: UnitSystem
+  currency: NetVisionCurrency
+  /** Margen distribuidor sobre subtotal BOM (0–100). */
+  distributorMarginPct: number
   planoUrl: string | null
   planoNombre: string
   cameras: DesignCamera[]
