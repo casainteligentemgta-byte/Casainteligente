@@ -3,7 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import type Konva from 'konva'
+import Link from 'next/link'
 import {
+  BookOpen,
   Camera,
   Download,
   Trash2,
@@ -618,6 +620,12 @@ export default function NexusVisionArchitectClient() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="glass" asChild>
+            <Link href="/nexus/vision/manual">
+              <BookOpen className="mr-2 h-4 w-4" />
+              Manual
+            </Link>
+          </Button>
           <Button
             type="button"
             variant="glass"
