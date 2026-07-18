@@ -14,6 +14,8 @@ import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
 import BOMGenerator from '@/components/netvision/BOMGenerator'
+import NetVisionPrefsPanel from '@/components/netvision/NetVisionPrefsPanel'
+import NetVisionProjectsPanel from '@/components/netvision/NetVisionProjectsPanel'
 import CableRoutingEngine from '@/components/netvision/CableRoutingEngine'
 import ConduitCalculator from '@/components/netvision/ConduitCalculator'
 import DiagramGenerator from '@/components/netvision/DiagramGenerator'
@@ -27,8 +29,9 @@ import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator
 import BIMViewer from '@/components/netvision/BIMViewer'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
-  CAMERA_CATALOG,
+  CAMERA_BRANDS,
   DEFAULT_CAMERA_MODEL_ID,
+  cameraCatalogGrouped,
   effectiveCameraVision,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
@@ -45,6 +48,7 @@ import {
   buildCoverageSectors,
   buildVisionSpectrum,
   defaultScale,
+  visionBandRangesM,
 } from '@/lib/netvision/services/coverageCalculator'
 import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
 import { analyzeRedundancy } from '@/lib/netvision/services/redundancyAnalyzer'
@@ -82,11 +86,17 @@ import {
   profilesForCountry,
 } from '@/lib/netvision/services/complianceValidator'
 import {
-  clearProjectStorage,
   emptyProject,
   loadProject,
+  resetActiveDesign,
   saveProject,
 } from '@/lib/netvision/storage'
+import {
+  defaultCalibrationInput,
+  formatLength,
+  lengthUnitLabel,
+  parseCalibrationToMeters,
+} from '@/lib/netvision/utils/units'
 import type {
   DesignCamera,
   DesignNetworkNode,
@@ -161,7 +171,7 @@ export default function NexusVisionArchitectClient() {
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
   const [sideTab, setSideTab] = useState<
-    'cctv' | 'red' | 'muros' | 'cable' | 'sub' | 'norm' | 'bim'
+    'cctv' | 'red' | 'muros' | 'cable' | 'sub' | 'norm' | 'prefs' | 'bim'
   >('cctv')
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const [complianceCountry, setComplianceCountry] = useState('VE')
@@ -172,6 +182,7 @@ export default function NexusVisionArchitectClient() {
     const p = loadProject()
     setProject(p)
     if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
+    setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
     setHydrated(true)
   }, [])
 
@@ -179,6 +190,11 @@ export default function NexusVisionArchitectClient() {
     if (!hydrated) return
     saveProject(project)
   }, [project, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    setCalibMeters(defaultCalibrationInput(project.unitSystem ?? 'metric'))
+  }, [project.unitSystem, hydrated])
 
   const structures = project.structures ?? []
 
@@ -498,7 +514,10 @@ export default function NexusVisionArchitectClient() {
       if (next.length >= 2) {
         const a = next[0]!
         const b = next[1]!
-        const meters = Math.max(0.5, Number(calibMeters) || 10)
+        const meters = parseCalibrationToMeters(
+          calibMeters,
+          project.unitSystem ?? 'metric',
+        )
         const distN = Math.hypot(a.x - b.x, a.y - b.y) || 1e-6
         const metersPerNorm = meters / distN
         setProject((p) => ({
@@ -595,9 +614,20 @@ export default function NexusVisionArchitectClient() {
   }
 
   const limpiarPlano = () => {
-    setProject(emptyProject())
+    const next = resetActiveDesign(project)
+    setProject(next)
     setSelectedId(null)
-    clearProjectStorage()
+    setError(null)
+  }
+
+  const switchToProject = (p: NetVisionProject) => {
+    setProject(p)
+    setSelectedId(null)
+    setComplianceCountry(p.complianceProfileId || 'VE')
+    setCalibPoints([])
+    setCalibrateMode(false)
+    setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+    setError(null)
   }
 
   const exportPng = () => {
@@ -611,13 +641,30 @@ export default function NexusVisionArchitectClient() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
             CCTV · redes · cableado · subterráneo · normas · BIM
           </p>
+          <input
+            value={project.name}
+            onChange={(e) =>
+              setProject((p) => ({ ...p, name: e.target.value.slice(0, 120) }))
+            }
+            className="mt-2 w-full max-w-md rounded-lg border border-white/10 bg-black/30 px-2.5 py-1 text-sm font-medium text-white placeholder:text-[var(--nexus-text-dim)]"
+            placeholder="Nombre del proyecto"
+            aria-label="Nombre del proyecto"
+          />
         </div>
         <div className="flex flex-wrap gap-2">
+          <NetVisionProjectsPanel
+            activeId={project.id}
+            projectName={project.name}
+            onOpen={switchToProject}
+            onNameChange={(name) =>
+              setProject((p) => ({ ...p, name: name.slice(0, 120) }))
+            }
+          />
           <Button
             type="button"
             variant="glass"
@@ -667,7 +714,7 @@ export default function NexusVisionArchitectClient() {
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
                 Agrega cámara, switch, AP o NVR con los botones +; luego arrastra en el plano.
-                Revisa FOV, WiFi y enlaces.
+                CCTV: {CAMERA_BRANDS.join(', ')}.
               </p>
             </button>
           ) : (
@@ -705,7 +752,9 @@ export default function NexusVisionArchitectClient() {
                   {project.scale.calibrated ? (
                     <span className="text-[var(--nexus-green)]">escala OK</span>
                   ) : (
-                    <span className="text-amber-300">escala ~40 m</span>
+                    <span className="text-amber-300">
+                      escala ~{formatLength(40, project.unitSystem ?? 'metric', 0)}
+                    </span>
                   )}
                 </p>
                 {viewMode === 'plano' ? (
@@ -717,6 +766,22 @@ export default function NexusVisionArchitectClient() {
                   >
                     <Camera className="h-3.5 w-3.5" />
                     + Cámara
+                  </button>
+                ) : null}
+                {viewMode === 'plano' ? (
+                  <button
+                    type="button"
+                    disabled={!project.planoUrl || loading || project.cameras.length === 0}
+                    title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
+                    onClick={() => {
+                      setShowFov(true)
+                      setViewMode('plano')
+                      setSideTab('cctv')
+                      setError(null)
+                    }}
+                    className="inline-flex items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
+                  >
+                    Calcular cobertura
                   </button>
                 ) : null}
                 {viewMode === 'plano' ? (
@@ -818,7 +883,7 @@ export default function NexusVisionArchitectClient() {
                     </button>
                     {calibrateMode ? (
                       <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
-                        m
+                        {lengthUnitLabel(project.unitSystem ?? 'metric')}
                         <input
                           value={calibMeters}
                           onChange={(e) => setCalibMeters(e.target.value)}
@@ -830,13 +895,17 @@ export default function NexusVisionArchitectClient() {
                     <select
                       value={defaultModelId}
                       onChange={(e) => setDefaultModelId(e.target.value)}
-                      className="max-w-[180px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+                      className="max-w-[200px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
                       title="Modelo de cámara al agregar"
                     >
-                      {CAMERA_CATALOG.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.brand} · {m.name}
-                        </option>
+                      {cameraCatalogGrouped().map((g) => (
+                        <optgroup key={g.brand} label={g.brand}>
+                          {g.models.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </>
@@ -890,6 +959,25 @@ export default function NexusVisionArchitectClient() {
                   />
                 </div>
               )}
+              {viewMode === 'plano' && showFov && project.cameras.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[10px] text-[var(--nexus-text-muted)]">
+                  <span className="font-semibold uppercase tracking-wide text-white">
+                    Semáforo cobertura
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+                    Verde · detección objetos/personas
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />
+                    Amarillo · más lejos
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-red-500" />
+                    Rojo · detección dudosa (con visión)
+                  </span>
+                </div>
+              ) : null}
             </>
           )}
         </GlassCardMotion>
@@ -904,6 +992,7 @@ export default function NexusVisionArchitectClient() {
                 ['cable', 'Cable'],
                 ['sub', 'Sub'],
                 ['norm', 'Norm'],
+                ['prefs', 'Prefs'],
                 ['bim', 'BIM'],
               ] as const
             ).map(([id, label]) => (
@@ -965,6 +1054,15 @@ export default function NexusVisionArchitectClient() {
               cableRoutes={cableRoutes}
               conduitPlans={conduitPlans}
               onSelect={setSelectedId}
+            />
+          ) : sideTab === 'prefs' ? (
+            <NetVisionPrefsPanel
+              unitSystem={project.unitSystem ?? 'metric'}
+              currency={project.currency ?? 'USD'}
+              distributorMarginPct={project.distributorMarginPct ?? 15}
+              description={project.description ?? ''}
+              client={project.client ?? ''}
+              onChange={(patch) => setProject((p) => ({ ...p, ...patch }))}
             />
           ) : sideTab === 'bim' ? (
             <BIMViewer project={project} cableRoutes={cableRoutes} />
@@ -1081,24 +1179,52 @@ export default function NexusVisionArchitectClient() {
                       }
                       className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
                     >
-                      {CAMERA_CATALOG.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.brand} · {m.name}
-                        </option>
+                      {cameraCatalogGrouped().map((g) => (
+                        <optgroup key={g.brand} label={g.brand}>
+                          {g.models.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </label>
+                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                    Marcas: {CAMERA_BRANDS.join(' · ')}
+                  </p>
                   {(() => {
                     const vision = effectiveCameraVision(
                       selectedCam,
                       nightMode ? 'night' : 'day',
                     )
                     const model = getCameraModelOrDefault(selectedCam.modelId)
+                    const bands = visionBandRangesM(vision.rangeM)
                     return (
                       <>
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
-                          Espectro de visión
+                          Espectro de visión · semáforo
                         </p>
+                        <ul className="space-y-0.5 rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px]">
+                          <li className="flex items-center gap-1.5 text-emerald-300">
+                            <span className="h-2 w-2 rounded-sm bg-emerald-500" />
+                            0–
+                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')} ·
+                            detección objetos/personas
+                          </li>
+                          <li className="flex items-center gap-1.5 text-yellow-200">
+                            <span className="h-2 w-2 rounded-sm bg-yellow-400" />
+                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')}–
+                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')} · más
+                            lejos
+                          </li>
+                          <li className="flex items-center gap-1.5 text-red-300">
+                            <span className="h-2 w-2 rounded-sm bg-red-500" />
+                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')}–
+                            {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')} ·
+                            detección dudosa
+                          </li>
+                        </ul>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Orientación {vision.yawDeg}°
@@ -1132,7 +1258,8 @@ export default function NexusVisionArchitectClient() {
                         </label>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
-                            Alcance {vision.rangeM.toFixed(1)} m
+                            Alcance{' '}
+                            {formatLength(vision.rangeM, project.unitSystem ?? 'metric')}
                             {selectedCam.rangeM == null ? ' · catálogo' : ''}
                             {nightMode ? ' · noche' : ' · día'}
                           </span>
@@ -1279,6 +1406,12 @@ export default function NexusVisionArchitectClient() {
             retentionDays={project.retentionDays}
             onRetentionChange={(days) =>
               setProject((p) => ({ ...p, retentionDays: days }))
+            }
+            projectName={project.name}
+            currency={project.currency ?? 'USD'}
+            distributorMarginPct={project.distributorMarginPct ?? 15}
+            onMarginChange={(pct) =>
+              setProject((p) => ({ ...p, distributorMarginPct: pct }))
             }
           />
         </GlassCardMotion>

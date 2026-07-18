@@ -1,12 +1,44 @@
-import type { BomSummary, NetVisionProject } from '@/lib/netvision/types'
+import type {
+  BomSummary,
+  NetVisionCurrency,
+  NetVisionProject,
+} from '@/lib/netvision/types'
 import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
 
+export function bomMarginTotal(
+  bom: BomSummary,
+  marginPct: number,
+): { marginUsd: number; totalWithMarginUsd: number } {
+  const pct = Number.isFinite(marginPct) ? Math.min(100, Math.max(0, marginPct)) : 0
+  const marginUsd = (bom.totalUsd * pct) / 100
+  return { marginUsd, totalWithMarginUsd: bom.totalUsd + marginUsd }
+}
+
+export function currencySymbol(currency: NetVisionCurrency): string {
+  if (currency === 'EUR') return '€'
+  if (currency === 'VES') return 'Bs'
+  return '$'
+}
+
 export function projectToExportJson(project: NetVisionProject, bom: BomSummary) {
+  const { marginUsd, totalWithMarginUsd } = bomMarginTotal(
+    bom,
+    project.distributorMarginPct ?? 0,
+  )
   return {
     app: 'NetVision Pro',
     version: project.version,
     exportedAt: new Date().toISOString(),
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    client: project.client,
+    unitSystem: project.unitSystem,
+    currency: project.currency,
+    distributorMarginPct: project.distributorMarginPct,
+    marginUsd,
+    totalWithMarginUsd,
     planoNombre: project.planoNombre,
     scale: project.scale,
     retentionDays: project.retentionDays,
@@ -52,18 +84,110 @@ export function downloadJson(filename: string, data: unknown) {
   triggerDownload(blob, filename)
 }
 
-export function bomToCsv(bom: BomSummary): string {
+export function bomToCsv(
+  bom: BomSummary,
+  opts?: { marginPct?: number; currency?: NetVisionCurrency; projectName?: string },
+): string {
+  const marginPct = opts?.marginPct ?? 0
+  const { marginUsd, totalWithMarginUsd } = bomMarginTotal(bom, marginPct)
+  const currency = opts?.currency ?? 'USD'
   const header = 'sku,category,description,qty,unit_usd,total_usd'
   const rows = bom.lines.map(
     (l) =>
       `${csvEscape(l.sku)},${csvEscape(l.category)},${csvEscape(l.description)},${l.qty},${l.unitUsd},${l.totalUsd}`,
   )
-  rows.push(`TOTAL,,,, ,${bom.totalUsd}`)
+  rows.push(`SUBTOTAL,,,, ,${bom.totalUsd}`)
+  rows.push(`MARGEN_${marginPct}pct,,,, ,${marginUsd.toFixed(2)}`)
+  rows.push(`TOTAL_${currency},,,, ,${totalWithMarginUsd.toFixed(2)}`)
+  if (opts?.projectName) {
+    return [`# ${opts.projectName}`, header, ...rows].join('\n')
+  }
   return [header, ...rows].join('\n')
+}
+
+export function bomToExcelXml(
+  bom: BomSummary,
+  opts: {
+    projectName: string
+    marginPct: number
+    currency: NetVisionCurrency
+  },
+): string {
+  const { marginUsd, totalWithMarginUsd } = bomMarginTotal(bom, opts.marginPct)
+  const esc = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  const cell = (v: string | number, type: 'String' | 'Number' = 'String') => {
+    if (type === 'Number') {
+      const n = Number(v)
+      return `<Cell><Data ss:Type="Number">${Number.isFinite(n) ? n : 0}</Data></Cell>`
+    }
+    return `<Cell><Data ss:Type="String">${esc(String(v))}</Data></Cell>`
+  }
+  const header = ['SKU', 'Categoría', 'Descripción', 'Cant.', 'Unit USD', 'Total USD']
+  const bodyRows = bom.lines.map((l) =>
+    [
+      cell(l.sku),
+      cell(l.category),
+      cell(l.description),
+      cell(l.qty, 'Number'),
+      cell(l.unitUsd, 'Number'),
+      cell(l.totalUsd, 'Number'),
+    ].join(''),
+  )
+  bodyRows.push(
+    [cell(''), cell(''), cell('SUBTOTAL'), cell(''), cell(''), cell(bom.totalUsd, 'Number')].join(
+      '',
+    ),
+  )
+  bodyRows.push(
+    [
+      cell(''),
+      cell(''),
+      cell(`MARGEN ${opts.marginPct}%`),
+      cell(''),
+      cell(''),
+      cell(Number(marginUsd.toFixed(2)), 'Number'),
+    ].join(''),
+  )
+  bodyRows.push(
+    [
+      cell(''),
+      cell(''),
+      cell(`TOTAL ${opts.currency}`),
+      cell(''),
+      cell(''),
+      cell(Number(totalWithMarginUsd.toFixed(2)), 'Number'),
+    ].join(''),
+  )
+  const headerRow = `<Row>${header.map((h) => cell(h)).join('')}</Row>`
+  const rowsXml = bodyRows.map((r) => `<Row>${r}</Row>`).join('')
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="BOM">
+  <Table>
+   <Row>${cell(opts.projectName)}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}</Row>
+   ${headerRow}
+   ${rowsXml}
+  </Table>
+ </Worksheet>
+</Workbook>`
 }
 
 export function downloadCsv(filename: string, csv: string) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  triggerDownload(blob, filename)
+}
+
+export function downloadExcelXml(filename: string, xml: string) {
+  const blob = new Blob([xml], {
+    type: 'application/vnd.ms-excel;charset=utf-8',
+  })
   triggerDownload(blob, filename)
 }
 

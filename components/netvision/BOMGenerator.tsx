@@ -1,17 +1,42 @@
 'use client'
 
-import type { BomSummary } from '@/lib/netvision/types'
+import type { BomSummary, NetVisionCurrency } from '@/lib/netvision/types'
 import { Mono } from '@/components/nexus/Mono'
 import { Button } from '@/components/nexus/ui/button'
-import { bomToCsv, downloadCsv } from '@/lib/netvision/utils/exporters'
+import {
+  bomMarginTotal,
+  bomToCsv,
+  bomToExcelXml,
+  currencySymbol,
+  downloadCsv,
+  downloadExcelXml,
+} from '@/lib/netvision/utils/exporters'
 
 type Props = {
   bom: BomSummary
   retentionDays: number
   onRetentionChange: (days: number) => void
+  projectName: string
+  currency: NetVisionCurrency
+  distributorMarginPct: number
+  onMarginChange: (pct: number) => void
 }
 
-export default function BOMGenerator({ bom, retentionDays, onRetentionChange }: Props) {
+export default function BOMGenerator({
+  bom,
+  retentionDays,
+  onRetentionChange,
+  projectName,
+  currency,
+  distributorMarginPct,
+  onMarginChange,
+}: Props) {
+  const sym = currencySymbol(currency)
+  const { marginUsd, totalWithMarginUsd } = bomMarginTotal(bom, distributorMarginPct)
+  const fileBase = (projectName || 'netvision')
+    .replace(/[^\w\-]+/g, '_')
+    .slice(0, 40)
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -49,27 +74,95 @@ export default function BOMGenerator({ bom, retentionDays, onRetentionChange }: 
               className="flex justify-between gap-2 border-b border-white/5 py-1 text-[var(--nexus-text-muted)]"
             >
               <span className="min-w-0 truncate">
-                <Mono className="text-[10px] text-[var(--nexus-cyan)]">{l.qty}×</Mono> {l.description}
+                <Mono className="text-[10px] text-[var(--nexus-cyan)]">{l.qty}×</Mono>{' '}
+                {l.description}
               </span>
-              <span className="shrink-0 text-white">${l.totalUsd.toFixed(0)}</span>
+              <span className="shrink-0 text-white">
+                {sym}
+                {l.totalUsd.toFixed(0)}
+              </span>
             </li>
           ))}
         </ul>
       )}
 
-      <p className="text-sm font-semibold text-white">
-        Total <Mono>${bom.totalUsd.toFixed(2)}</Mono>
-      </p>
+      <label className="flex items-center justify-between gap-2 text-[11px] text-[var(--nexus-text-dim)]">
+        Margen distribuidor
+        <span className="flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={distributorMarginPct}
+            onChange={(e) => onMarginChange(Number(e.target.value) || 0)}
+            className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
+          />
+          %
+        </span>
+      </label>
 
-      <Button
-        type="button"
-        variant="glass"
-        className="w-full"
-        disabled={bom.lines.length === 0}
-        onClick={() => downloadCsv('netvision-bom.csv', bomToCsv(bom))}
-      >
-        Exportar BOM (CSV)
-      </Button>
+      <div className="space-y-0.5 text-sm">
+        <p className="flex justify-between text-[var(--nexus-text-muted)]">
+          <span>Subtotal</span>
+          <Mono>
+            {sym}
+            {bom.totalUsd.toFixed(2)}
+          </Mono>
+        </p>
+        <p className="flex justify-between text-[var(--nexus-text-muted)]">
+          <span>Margen ({distributorMarginPct}%)</span>
+          <Mono>
+            {sym}
+            {marginUsd.toFixed(2)}
+          </Mono>
+        </p>
+        <p className="flex justify-between font-semibold text-white">
+          <span>Total {currency}</span>
+          <Mono>
+            {sym}
+            {totalWithMarginUsd.toFixed(2)}
+          </Mono>
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="glass"
+          className="w-full"
+          disabled={bom.lines.length === 0}
+          onClick={() =>
+            downloadCsv(
+              `${fileBase}-bom.csv`,
+              bomToCsv(bom, {
+                marginPct: distributorMarginPct,
+                currency,
+                projectName,
+              }),
+            )
+          }
+        >
+          CSV
+        </Button>
+        <Button
+          type="button"
+          variant="glass"
+          className="w-full"
+          disabled={bom.lines.length === 0}
+          onClick={() =>
+            downloadExcelXml(
+              `${fileBase}-bom.xls`,
+              bomToExcelXml(bom, {
+                projectName: projectName || 'NetVision',
+                marginPct: distributorMarginPct,
+                currency,
+              }),
+            )
+          }
+        >
+          Excel
+        </Button>
+      </div>
     </div>
   )
 }
@@ -78,9 +171,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5">
       <p className="text-[10px] uppercase text-[var(--nexus-text-dim)]">{label}</p>
-      <p className="font-semibold text-white">
-        <Mono>{value}</Mono>
-      </p>
+      <p className="font-semibold text-white">{value}</p>
     </div>
   )
 }

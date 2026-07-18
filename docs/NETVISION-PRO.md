@@ -6,8 +6,10 @@ Diseño CCTV / redes / cableado / subterráneo / normativas / BIM en Nexus (`/ne
 
 ### 1 — CCTV
 FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/PDF.
+**Marcas:** Hikvision, Axis, Uniview, Dahua, Sony, Ezviz, Aqara.
 Agregar cámara con botón **+ Cámara** (no por clic en el plano); luego arrastrar el pin.
 Espectro de visión ajustable por cámara: orientación, apertura FOV y alcance (sliders + asas en el plano).
+**Calcular cobertura**: semáforo por alcance — verde (detección objetos/personas ≤40%), amarillo (≤70%), rojo (visión dudosa hasta 100%).
 Guía rápida de capas (Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
 
 ### 1b — Muros / materiales
@@ -38,17 +40,26 @@ Profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
 - Export paquete: JSON + IFC-lite + shared parameters CSV + script Dynamo
 - `.RVT` nativo requiere worker/add-in (no en browser)
 
+### 8 — Proyectos, preferencias y BOM
+- **Mis proyectos**: biblioteca local (`localStorage`) — crear, abrir, renombrar, eliminar; nombre/cliente/descripción
+- Pestaña **Prefs**: sistema de unidades (métrico / imperial / mixto), divisa (USD/VES/EUR), margen distribuidor
+- Cálculos internos en metros; UI de calibración y alcances formateados según unidades
+- BOM: CSV + Excel (SpreadsheetML `.xls`) con margen y total
+
 ## Estructura
 
-- `components/netvision/*` — UI (CameraPlacementTool, NetworkDesigner, DiagramGenerator, CableRoutingEngine, ConduitCalculator, UndergroundCanalizationTool, ComplianceValidator, BIMViewer, BOMGenerator)
+- `components/netvision/*` — UI (CameraPlacementTool, NetworkDesigner, DiagramGenerator, CableRoutingEngine, ConduitCalculator, UndergroundCanalizationTool, ComplianceValidator, BIMViewer, BOMGenerator, NetVisionProjectsPanel, NetVisionPrefsPanel)
 - `lib/netvision/services/*` — motores
+- `lib/netvision/utils/units.ts` — conversiones de visualización
 - Re-exports plan: `lib/netvision/coverage.ts`, `bom.ts`, `underground.ts`
 - `data/netvision/*` — JSON (equipment, cables, conduits, underground, normatives, countries)
 - Mapa de fases: `components/netvision/stubs.tsx` → `NETVISION_ROADMAP_STATUS`
 
 ## Persistencia
 
-`sessionStorage` clave `nexus.netvision.v1` (migra legacy `nexus.vision.architect.v1/v2`).
+- Activo: `sessionStorage` `nexus.netvision.v1`
+- Biblioteca: `localStorage` `nexus.netvision.library.v1` + `nexus.netvision.activeId.v1`
+- Migra legacy `nexus.vision.architect.v1/v2`
 
 ## Fuera de alcance (plan)
 
