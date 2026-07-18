@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   Arc,
   Circle,
@@ -21,7 +21,9 @@ import type {
   DesignStructure,
   SpectrumCell,
 } from '@/lib/netvision/types'
+import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
+import { degToRad, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 
@@ -55,6 +57,14 @@ export type CameraPlacementToolProps = {
     normX: number,
     normY: number,
   ) => void
+  /** Ajuste interactivo de óptica (yaw / FOV / alcance) desde el plano. */
+  onAdjustCameraVision?: (
+    id: string,
+    patch: { yawDeg?: number; fovDeg?: number; rangeM?: number },
+  ) => void
+  metersPerNormX?: number
+  metersPerNormY?: number
+  nightMode?: boolean
   onSelect: (id: string) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
 }
@@ -169,6 +179,10 @@ export default function CameraPlacementTool({
   onAddAt,
   onMove,
   onMoveStructureEndpoint,
+  onAdjustCameraVision,
+  metersPerNormX = 40,
+  metersPerNormY = 40,
+  nightMode = false,
   onSelect,
   stageRef,
 }: CameraPlacementToolProps) {
@@ -548,6 +562,140 @@ export default function CameraPlacementTool({
                 />
               )
             })}
+
+          {showFov &&
+            onAdjustCameraVision &&
+            cameras
+              .filter((c) => c.id === selectedId)
+              .map((cam) => {
+                const vision = effectiveCameraVision(cam, nightMode ? 'night' : 'day')
+                const sector = sectors.find((s) => s.cameraId === cam.id)
+                const radiusNorm =
+                  sector?.radiusNorm ??
+                  vision.rangeM / Math.max((metersPerNormX + metersPerNormY) / 2, 1)
+                const midAng = degToRad(vision.yawDeg)
+                const half = degToRad(vision.fovDeg / 2)
+                const tipX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
+                const tipY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
+                const leftAng = midAng - half
+                const rightAng = midAng + half
+                const wingR = radiusNorm * 0.72
+                const leftX = offsetX + (cam.x + Math.cos(leftAng) * wingR) * drawW
+                const leftY = offsetY + (cam.y + Math.sin(leftAng) * wingR) * drawH
+                const rightX = offsetX + (cam.x + Math.cos(rightAng) * wingR) * drawW
+                const rightY = offsetY + (cam.y + Math.sin(rightAng) * wingR) * drawH
+                const cx = offsetX + cam.x * drawW
+                const cy = offsetY + cam.y * drawH
+                const avgMPerNorm = (metersPerNormX + metersPerNormY) / 2
+
+                const applyFromPointer = (
+                  px: number,
+                  py: number,
+                  mode: 'tip' | 'left' | 'right',
+                ) => {
+                  const n = toNorm(px, py)
+                  const dx = n.x - cam.x
+                  const dy = n.y - cam.y
+                  const ang = radToDeg(Math.atan2(dy, dx))
+                  const distNorm = Math.hypot(dx, dy)
+                  if (mode === 'tip') {
+                    const rangeM = Math.min(
+                      120,
+                      Math.max(2, distNorm * avgMPerNorm),
+                    )
+                    onAdjustCameraVision(cam.id, {
+                      yawDeg: Math.round(((ang % 360) + 360) % 360),
+                      rangeM: Math.round(rangeM * 10) / 10,
+                    })
+                    return
+                  }
+                  // Alas: abren/cierran el FOV respecto al yaw actual
+                  let delta = ang - vision.yawDeg
+                  while (delta > 180) delta -= 360
+                  while (delta < -180) delta += 360
+                  const halfFov = Math.min(85, Math.max(10, Math.abs(delta)))
+                  onAdjustCameraVision(cam.id, {
+                    fovDeg: Math.round(halfFov * 2),
+                  })
+                }
+
+                return (
+                  <Fragment key={`vis-handles-${cam.id}`}>
+                    <Line
+                      points={[cx, cy, tipX, tipY]}
+                      stroke="rgba(165,243,252,0.85)"
+                      strokeWidth={2}
+                      dash={[5, 4]}
+                      listening={false}
+                    />
+                    <Circle
+                      x={tipX}
+                      y={tipY}
+                      radius={9}
+                      fill="#22d3ee"
+                      stroke="#ecfeff"
+                      strokeWidth={2}
+                      draggable
+                      onClick={(e) => {
+                        e.cancelBubble = true
+                        onSelect(cam.id)
+                      }}
+                      onTap={(e) => {
+                        e.cancelBubble = true
+                        onSelect(cam.id)
+                      }}
+                      onDragMove={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        applyFromPointer(node.x(), node.y(), 'tip')
+                      }}
+                      onDragEnd={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        applyFromPointer(node.x(), node.y(), 'tip')
+                      }}
+                    />
+                    <Circle
+                      x={leftX}
+                      y={leftY}
+                      radius={7}
+                      fill="#67e8f9"
+                      stroke="#0f172a"
+                      strokeWidth={1.5}
+                      draggable
+                      onDragMove={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        applyFromPointer(node.x(), node.y(), 'left')
+                      }}
+                      onDragEnd={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        applyFromPointer(node.x(), node.y(), 'left')
+                      }}
+                    />
+                    <Circle
+                      x={rightX}
+                      y={rightY}
+                      radius={7}
+                      fill="#67e8f9"
+                      stroke="#0f172a"
+                      strokeWidth={1.5}
+                      draggable
+                      onDragMove={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        applyFromPointer(node.x(), node.y(), 'right')
+                      }}
+                      onDragEnd={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        applyFromPointer(node.x(), node.y(), 'right')
+                      }}
+                    />
+                  </Fragment>
+                )
+              })}
 
           {structures.map((s) => {
             const mat = getStructureMaterialOrDefault(s.materialId)

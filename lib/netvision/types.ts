@@ -23,9 +23,13 @@ export type DesignCamera = {
   x: number
   y: number
   modelId: string
-  /** Orientación en grados (0 = este, sentido antihorario en canvas Y-down se ajusta en renderer) */
+  /** Orientación en grados (0 = este; en canvas Y-down crece en sentido horario) */
   yawDeg: number
   mountHeightM: number
+  /** Apertura FOV en grados (override del catálogo). Si falta, usa el modelo. */
+  fovDeg?: number
+  /** Alcance de visión en metros (override día/noche del catálogo). */
+  rangeM?: number
 }
 
 export type ScaleCalibration = {

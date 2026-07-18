@@ -29,6 +29,7 @@ import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
   CAMERA_CATALOG,
   DEFAULT_CAMERA_MODEL_ID,
+  effectiveCameraVision,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
 import {
@@ -548,12 +549,29 @@ export default function NexusVisionArchitectClient() {
     }))
   }
 
-  const updateSelectedCam = (patch: Partial<DesignCamera>) => {
-    if (!selectedId) return
+  const patchCamera = (id: string, patch: Partial<DesignCamera>) => {
     setProject((p) => ({
       ...p,
-      cameras: p.cameras.map((c) => (c.id === selectedId ? { ...c, ...patch } : c)),
+      cameras: p.cameras.map((c) => {
+        if (c.id !== id) return c
+        const next: DesignCamera = { ...c, ...patch }
+        if ('fovDeg' in patch && patch.fovDeg === undefined) delete next.fovDeg
+        if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
+        return next
+      }),
     }))
+  }
+
+  const updateSelectedCam = (patch: Partial<DesignCamera>) => {
+    if (!selectedId) return
+    patchCamera(selectedId, patch)
+  }
+
+  const adjustCameraVision = (
+    id: string,
+    patch: { yawDeg?: number; fovDeg?: number; rangeM?: number },
+  ) => {
+    patchCamera(id, patch)
   }
 
   const updateSelectedNet = (patch: Partial<DesignNetworkNode>) => {
@@ -881,6 +899,10 @@ export default function NexusVisionArchitectClient() {
                     onAddAt={onAddAt}
                     onMove={onMove}
                     onMoveStructureEndpoint={onMoveStructureEndpoint}
+                    onAdjustCameraVision={adjustCameraVision}
+                    metersPerNormX={project.scale.metersPerNormX}
+                    metersPerNormY={project.scale.metersPerNormY}
+                    nightMode={nightMode}
                     onSelect={setSelectedId}
                     stageRef={stageRef}
                   />
@@ -1068,7 +1090,13 @@ export default function NexusVisionArchitectClient() {
                     <span className="text-[var(--nexus-text-dim)]">Modelo</span>
                     <select
                       value={selectedCam.modelId}
-                      onChange={(e) => updateSelectedCam({ modelId: e.target.value })}
+                      onChange={(e) =>
+                        updateSelectedCam({
+                          modelId: e.target.value,
+                          fovDeg: undefined,
+                          rangeM: undefined,
+                        })
+                      }
                       className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
                     >
                       {CAMERA_CATALOG.map((m) => (
@@ -1078,27 +1106,83 @@ export default function NexusVisionArchitectClient() {
                       ))}
                     </select>
                   </label>
-                  <label className="block">
-                    <span className="text-[var(--nexus-text-dim)]">
-                      Orientación (yaw) {selectedCam.yawDeg}°
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={359}
-                      value={selectedCam.yawDeg}
-                      onChange={(e) =>
-                        updateSelectedCam({ yawDeg: Number(e.target.value) })
-                      }
-                      className="mt-1 w-full"
-                    />
-                  </label>
-                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                    {(() => {
-                      const m = getCameraModelOrDefault(selectedCam.modelId)
-                      return `${m.fovDeg}° FOV · ${m.poeWatts} W · ${m.bitrateMbps} Mbps`
-                    })()}
-                  </p>
+                  {(() => {
+                    const vision = effectiveCameraVision(
+                      selectedCam,
+                      nightMode ? 'night' : 'day',
+                    )
+                    const model = getCameraModelOrDefault(selectedCam.modelId)
+                    return (
+                      <>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
+                          Espectro de visión
+                        </p>
+                        <label className="block">
+                          <span className="text-[var(--nexus-text-dim)]">
+                            Orientación {vision.yawDeg}°
+                          </span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={359}
+                            value={vision.yawDeg}
+                            onChange={(e) =>
+                              updateSelectedCam({ yawDeg: Number(e.target.value) })
+                            }
+                            className="mt-1 w-full"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-[var(--nexus-text-dim)]">
+                            Apertura FOV {vision.fovDeg}°
+                            {selectedCam.fovDeg == null ? ' · catálogo' : ''}
+                          </span>
+                          <input
+                            type="range"
+                            min={20}
+                            max={170}
+                            value={vision.fovDeg}
+                            onChange={(e) =>
+                              updateSelectedCam({ fovDeg: Number(e.target.value) })
+                            }
+                            className="mt-1 w-full"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-[var(--nexus-text-dim)]">
+                            Alcance {vision.rangeM.toFixed(1)} m
+                            {selectedCam.rangeM == null ? ' · catálogo' : ''}
+                            {nightMode ? ' · noche' : ' · día'}
+                          </span>
+                          <input
+                            type="range"
+                            min={2}
+                            max={120}
+                            step={0.5}
+                            value={vision.rangeM}
+                            onChange={(e) =>
+                              updateSelectedCam({ rangeM: Number(e.target.value) })
+                            }
+                            className="mt-1 w-full"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="text-[10px] text-[var(--nexus-text-muted)] underline"
+                          onClick={() =>
+                            updateSelectedCam({ fovDeg: undefined, rangeM: undefined })
+                          }
+                        >
+                          Restaurar FOV/alcance del modelo ({model.fovDeg}° /{' '}
+                          {nightMode ? model.rangeNightM : model.rangeDayM} m)
+                        </button>
+                        <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                          En el plano: punto cyan = girar/alcance; puntos laterales = apertura.
+                          {` · ${model.poeWatts} W · ${model.bitrateMbps} Mbps`}
+                        </p>
+                      </>
+                    )
+                  })()}
                   <Button
                     type="button"
                     variant="glass"
