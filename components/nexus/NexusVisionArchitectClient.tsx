@@ -19,6 +19,9 @@ import CableRoutingEngine from '@/components/netvision/CableRoutingEngine'
 import ConduitCalculator from '@/components/netvision/ConduitCalculator'
 import DiagramGenerator from '@/components/netvision/DiagramGenerator'
 import NetworkDesigner from '@/components/netvision/NetworkDesigner'
+import NetVisionLayerHelp, {
+  layerHelpTitle,
+} from '@/components/netvision/NetVisionLayerHelp'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator'
 import BIMViewer from '@/components/netvision/BIMViewer'
@@ -583,7 +586,11 @@ export default function NexusVisionArchitectClient() {
                 ) : null}
                 {viewMode === 'plano' ? (
                   <>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                    <NetVisionLayerHelp />
+                    <label
+                      title={layerHelpTitle('fov')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
                       <input
                         type="checkbox"
                         checked={showFov}
@@ -591,7 +598,10 @@ export default function NexusVisionArchitectClient() {
                       />
                       FOV
                     </label>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                    <label
+                      title={layerHelpTitle('wifi')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
                       <input
                         type="checkbox"
                         checked={showWifi}
@@ -599,7 +609,10 @@ export default function NexusVisionArchitectClient() {
                       />
                       WiFi
                     </label>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                    <label
+                      title={layerHelpTitle('links')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
                       <input
                         type="checkbox"
                         checked={showLinks}
@@ -607,7 +620,10 @@ export default function NexusVisionArchitectClient() {
                       />
                       Enlaces
                     </label>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                    <label
+                      title={layerHelpTitle('routes')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
                       <input
                         type="checkbox"
                         checked={showCableRoutes}
@@ -615,7 +631,10 @@ export default function NexusVisionArchitectClient() {
                       />
                       Rutas
                     </label>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                    <label
+                      title={layerHelpTitle('sub')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
                       <input
                         type="checkbox"
                         checked={showUnderground}
@@ -623,7 +642,10 @@ export default function NexusVisionArchitectClient() {
                       />
                       Sub
                     </label>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                    <label
+                      title={layerHelpTitle('night')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
                       <input
                         type="checkbox"
                         checked={nightMode}
@@ -633,6 +655,7 @@ export default function NexusVisionArchitectClient() {
                     </label>
                     <button
                       type="button"
+                      title={layerHelpTitle('calibrate')}
                       className={`rounded px-2 py-0.5 text-xs font-semibold ${
                         calibrateMode
                           ? 'bg-[var(--nexus-cyan)] text-black'
