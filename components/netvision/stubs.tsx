@@ -1,23 +1,24 @@
 'use client'
 
-/** Stubs residuales NetVision Pro (módulos ya implementados se importan directo). */
+/**
+ * Roadmap NetVision Pro — Fases 2–7 implementadas en módulos dedicados:
+ *
+ * - Fase 2: NetworkDesigner.tsx + poeAnalyzer / wifiPredictor / channelOptimizer
+ * - Fase 3: DiagramGenerator.tsx + diagramBuilder
+ * - Fase 4: CableRoutingEngine.tsx + ConduitCalculator.tsx
+ * - Fase 5: UndergroundCanalizationTool.tsx + canalizationCalculator
+ * - Fase 6: ComplianceValidator.tsx + complianceValidator service
+ * - Fase 7: BIMViewer.tsx + bimExporter
+ *
+ * Este archivo solo documenta el mapa; no exporta stubs activos.
+ */
 
-function ComingSoon({ title, phase }: { title: string; phase: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-white/15 bg-black/20 px-3 py-4 text-xs text-[var(--nexus-text-dim)]">
-      <p className="font-semibold text-[var(--nexus-text-muted)]">{title}</p>
-      <p className="mt-1">Roadmap {phase} — próximamente.</p>
-    </div>
-  )
-}
-
-/** Fases 1–7 implementadas en components/netvision/* dedicados. */
-
-export function AutomationEditor() {
-  return (
-    <ComingSoon
-      title="Editor automatización avanzada"
-      phase="Dynamo ya se exporta desde pestaña BIM"
-    />
-  )
-}
+export const NETVISION_ROADMAP_STATUS = {
+  phase1_cctv: 'done',
+  phase2_network: 'done',
+  phase3_diagram: 'done',
+  phase4_cabling: 'done',
+  phase5_underground: 'done',
+  phase6_compliance: 'done',
+  phase7_bim: 'done',
+} as const

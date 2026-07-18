@@ -69,7 +69,7 @@ export const NEXUS_MODULES: NexusModule[] = [
   {
     href: '/nexus/vision',
     label: 'NetVision Pro',
-    description: 'Diseño CCTV: FOV, catálogo, BOM y export',
+    description: 'CCTV, redes, cableado, normas y BIM',
     icon: Sparkles,
     group: 'commercial',
   },

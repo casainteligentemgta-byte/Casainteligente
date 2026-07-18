@@ -31,10 +31,16 @@ Profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
 
 ## Estructura
 
-- `components/netvision/*` — UI
+- `components/netvision/*` — UI (CameraPlacementTool, NetworkDesigner, DiagramGenerator, CableRoutingEngine, ConduitCalculator, UndergroundCanalizationTool, ComplianceValidator, BIMViewer, BOMGenerator)
 - `lib/netvision/services/*` — motores
+- Re-exports plan: `lib/netvision/coverage.ts`, `bom.ts`, `underground.ts`
 - `data/netvision/*` — JSON (equipment, cables, conduits, underground, normatives, countries)
+- Mapa de fases: `components/netvision/stubs.tsx` → `NETVISION_ROADMAP_STATUS`
 
 ## Persistencia
 
-`sessionStorage` clave `nexus.netvision.v1`.
+`sessionStorage` clave `nexus.netvision.v1` (migra legacy `nexus.vision.architect.v1/v2`).
+
+## Fuera de alcance (plan)
+
+Motor RF Ekahau-level, import CAD nativo, Visio/VSDX, `.RVT` nativo en browser, Supabase multi-usuario, Loxone/Crestron, AR.
