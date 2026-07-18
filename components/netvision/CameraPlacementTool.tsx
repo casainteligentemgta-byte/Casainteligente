@@ -54,9 +54,28 @@ const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 4
 const ZOOM_STEP = 1.2
+const PINCH_TAP_SUPPRESS_MS = 350
 
 function clampZoom(scale: number) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale))
+}
+
+function touchDistance(a: Touch, b: Touch) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+}
+
+function touchCenterInEl(el: HTMLElement, a: Touch, b: Touch) {
+  const rect = el.getBoundingClientRect()
+  return {
+    x: (a.clientX + b.clientX) / 2 - rect.left,
+    y: (a.clientY + b.clientY) / 2 - rect.top,
+  }
+}
+
+type PinchState = {
+  lastDist: number
+  lastScale: number
+  lastPos: { x: number; y: number }
 }
 
 function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
@@ -132,11 +151,109 @@ export default function CameraPlacementTool({
   const image = useHtmlImage(backgroundUrl)
   const [zoom, setZoom] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
+  const [pinching, setPinching] = useState(false)
+  const viewRef = useRef({ zoom: 1, stagePos: { x: 0, y: 0 } })
+  const pinchRef = useRef<PinchState | null>(null)
+  const suppressTapUntilRef = useRef(0)
+
+  viewRef.current = { zoom, stagePos }
 
   useEffect(() => {
     setZoom(1)
     setStagePos({ x: 0, y: 0 })
+    viewRef.current = { zoom: 1, stagePos: { x: 0, y: 0 } }
+    pinchRef.current = null
+    setPinching(false)
   }, [backgroundUrl])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const endPinch = () => {
+      if (!pinchRef.current) return
+      pinchRef.current = null
+      setPinching(false)
+      suppressTapUntilRef.current = Date.now() + PINCH_TAP_SUPPRESS_MS
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length < 2) return
+      localStageRef.current?.stopDrag()
+      const t0 = e.touches[0]
+      const t1 = e.touches[1]
+      if (!t0 || !t1) return
+      const { zoom: z, stagePos: pos } = viewRef.current
+      pinchRef.current = {
+        lastDist: Math.max(1, touchDistance(t0, t1)),
+        lastScale: z,
+        lastPos: { ...pos },
+      }
+      setPinching(true)
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      const pinch = pinchRef.current
+      if (!pinch || e.touches.length < 2) return
+      e.preventDefault()
+      const t0 = e.touches[0]
+      const t1 = e.touches[1]
+      if (!t0 || !t1) return
+
+      const dist = Math.max(1, touchDistance(t0, t1))
+      const center = touchCenterInEl(el, t0, t1)
+      const nextScale = clampZoom(pinch.lastScale * (dist / pinch.lastDist))
+      const pointTo = {
+        x: (center.x - pinch.lastPos.x) / pinch.lastScale,
+        y: (center.y - pinch.lastPos.y) / pinch.lastScale,
+      }
+      const nextPos = {
+        x: center.x - pointTo.x * nextScale,
+        y: center.y - pointTo.y * nextScale,
+      }
+
+      pinch.lastDist = dist
+      pinch.lastScale = nextScale
+      pinch.lastPos = nextPos
+      viewRef.current = { zoom: nextScale, stagePos: nextPos }
+      setZoom(nextScale)
+      setStagePos(nextPos)
+
+      const stage = localStageRef.current
+      if (stage) {
+        stage.scale({ x: nextScale, y: nextScale })
+        stage.position(nextPos)
+        stage.batchDraw()
+      }
+    }
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) endPinch()
+    }
+
+    const onGesture = (e: Event) => {
+      e.preventDefault()
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('touchcancel', onTouchEnd)
+    // Safari iPad: evita el zoom de página sobre el canvas
+    el.addEventListener('gesturestart', onGesture as EventListener)
+    el.addEventListener('gesturechange', onGesture as EventListener)
+    el.addEventListener('gestureend', onGesture as EventListener)
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
+      el.removeEventListener('gesturestart', onGesture as EventListener)
+      el.removeEventListener('gesturechange', onGesture as EventListener)
+      el.removeEventListener('gestureend', onGesture as EventListener)
+    }
+  }, [])
 
   const pad = 16
   let drawW = width - pad * 2
@@ -160,34 +277,25 @@ export default function CameraPlacementTool({
   })
 
   const applyZoomAt = (nextScale: number, pointer: { x: number; y: number } | null) => {
-    const oldScale = zoom
+    const { zoom: oldScale, stagePos: pos } = viewRef.current
     const scale = clampZoom(nextScale)
     if (scale === oldScale) return
-    if (pointer) {
-      const mousePointTo = {
-        x: (pointer.x - stagePos.x) / oldScale,
-        y: (pointer.y - stagePos.y) / oldScale,
-      }
-      setStagePos({
-        x: pointer.x - mousePointTo.x * scale,
-        y: pointer.y - mousePointTo.y * scale,
-      })
-    } else {
-      const cx = width / 2
-      const cy = height / 2
-      const mousePointTo = {
-        x: (cx - stagePos.x) / oldScale,
-        y: (cy - stagePos.y) / oldScale,
-      }
-      setStagePos({
-        x: cx - mousePointTo.x * scale,
-        y: cy - mousePointTo.y * scale,
-      })
+    const focus = pointer ?? { x: width / 2, y: height / 2 }
+    const mousePointTo = {
+      x: (focus.x - pos.x) / oldScale,
+      y: (focus.y - pos.y) / oldScale,
     }
+    const nextPos = {
+      x: focus.x - mousePointTo.x * scale,
+      y: focus.y - mousePointTo.y * scale,
+    }
+    viewRef.current = { zoom: scale, stagePos: nextPos }
+    setStagePos(nextPos)
     setZoom(scale)
   }
 
   const resetView = () => {
+    viewRef.current = { zoom: 1, stagePos: { x: 0, y: 0 } }
     setZoom(1)
     setStagePos({ x: 0, y: 0 })
   }
@@ -199,11 +307,15 @@ export default function CameraPlacementTool({
     const pointer = stage.getPointerPosition()
     if (!pointer) return
     const direction = e.evt.deltaY > 0 ? -1 : 1
-    applyZoomAt(zoom * (direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP), pointer)
+    applyZoomAt(
+      viewRef.current.zoom * (direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
+      pointer,
+    )
   }
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
-    if (!placeMode) return
+    if (!placeMode || pinching) return
+    if (Date.now() < suppressTapUntilRef.current) return
     if (e.target !== e.target.getStage()) return
     const stage = e.target.getStage()
     if (!stage) return
@@ -218,18 +330,23 @@ export default function CameraPlacementTool({
     if (stageRef) stageRef.current = node
   }
 
-  const canPan = !placeMode
+  // En iPad/tablet: un dedo siempre puede mover el plano; el tap corto sigue colocando.
+  const canPan = !pinching
 
   return (
-    <div ref={containerRef} className="relative h-full min-h-[320px] w-full touch-none">
+    <div
+      ref={containerRef}
+      className="relative h-full min-h-[320px] w-full overscroll-none touch-none select-none"
+      style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+    >
       <div className="pointer-events-none absolute right-3 top-3 z-10 flex flex-col items-stretch gap-1">
         <div className="pointer-events-auto flex overflow-hidden rounded-md border border-slate-600/80 bg-slate-900/90 shadow-lg backdrop-blur">
           <button
             type="button"
             title="Acercar"
             aria-label="Acercar"
-            className="px-2.5 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-700/80"
-            onClick={() => applyZoomAt(zoom * ZOOM_STEP, null)}
+            className="min-h-11 min-w-11 touch-manipulation px-3 py-2 text-base font-medium text-slate-100 hover:bg-slate-700/80 active:bg-slate-600/80"
+            onClick={() => applyZoomAt(viewRef.current.zoom * ZOOM_STEP, null)}
           >
             +
           </button>
@@ -237,8 +354,8 @@ export default function CameraPlacementTool({
             type="button"
             title="Alejar"
             aria-label="Alejar"
-            className="border-l border-slate-600/80 px-2.5 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-700/80"
-            onClick={() => applyZoomAt(zoom / ZOOM_STEP, null)}
+            className="min-h-11 min-w-11 touch-manipulation border-l border-slate-600/80 px-3 py-2 text-base font-medium text-slate-100 hover:bg-slate-700/80 active:bg-slate-600/80"
+            onClick={() => applyZoomAt(viewRef.current.zoom / ZOOM_STEP, null)}
           >
             −
           </button>
@@ -246,17 +363,17 @@ export default function CameraPlacementTool({
             type="button"
             title="Restablecer zoom"
             aria-label="Restablecer zoom"
-            className="border-l border-slate-600/80 px-2.5 py-1.5 text-xs font-medium tabular-nums text-slate-200 hover:bg-slate-700/80"
+            className="min-h-11 min-w-[3.25rem] touch-manipulation border-l border-slate-600/80 px-3 py-2 text-sm font-medium tabular-nums text-slate-200 hover:bg-slate-700/80 active:bg-slate-600/80"
             onClick={resetView}
           >
             {Math.round(zoom * 100)}%
           </button>
         </div>
-        {canPan && (
-          <p className="rounded bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
-            Arrastra para mover · rueda para zoom
-          </p>
-        )}
+        <p className="rounded bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
+          {placeMode
+            ? 'Pellizca para zoom · toca para colocar · arrastra para mover'
+            : 'Pellizca para zoom · un dedo para mover'}
+        </p>
       </div>
       <Stage
         ref={setStage}
@@ -267,14 +384,17 @@ export default function CameraPlacementTool({
         x={stagePos.x}
         y={stagePos.y}
         draggable={canPan}
+        dragDistance={6}
         onDragEnd={(e) => {
           if (e.target !== e.target.getStage()) return
-          setStagePos({ x: e.target.x(), y: e.target.y() })
+          const next = { x: e.target.x(), y: e.target.y() }
+          viewRef.current = { ...viewRef.current, stagePos: next }
+          setStagePos(next)
         }}
         onWheel={handleWheel}
         onClick={handleStageClick}
         onTap={handleStageClick}
-        style={{ cursor: canPan ? 'grab' : placeMode ? 'crosshair' : 'default' }}
+        style={{ cursor: placeMode ? 'crosshair' : 'grab' }}
       >
         <Layer>
           {image ? (
