@@ -45,6 +45,7 @@ import {
   buildCoverageSectors,
   buildVisionSpectrum,
   defaultScale,
+  visionBandRangesM,
 } from '@/lib/netvision/services/coverageCalculator'
 import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
 import { analyzeRedundancy } from '@/lib/netvision/services/redundancyAnalyzer'
@@ -720,6 +721,22 @@ export default function NexusVisionArchitectClient() {
                   </button>
                 ) : null}
                 {viewMode === 'plano' ? (
+                  <button
+                    type="button"
+                    disabled={!project.planoUrl || loading || project.cameras.length === 0}
+                    title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
+                    onClick={() => {
+                      setShowFov(true)
+                      setViewMode('plano')
+                      setSideTab('cctv')
+                      setError(null)
+                    }}
+                    className="inline-flex items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
+                  >
+                    Calcular cobertura
+                  </button>
+                ) : null}
+                {viewMode === 'plano' ? (
                   <>
                     <NetVisionLayerHelp />
                     <label
@@ -890,6 +907,25 @@ export default function NexusVisionArchitectClient() {
                   />
                 </div>
               )}
+              {viewMode === 'plano' && showFov && project.cameras.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[10px] text-[var(--nexus-text-muted)]">
+                  <span className="font-semibold uppercase tracking-wide text-white">
+                    Semáforo cobertura
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+                    Verde · detección objetos/personas
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />
+                    Amarillo · más lejos
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-red-500" />
+                    Rojo · detección dudosa (con visión)
+                  </span>
+                </div>
+              ) : null}
             </>
           )}
         </GlassCardMotion>
@@ -1094,11 +1130,26 @@ export default function NexusVisionArchitectClient() {
                       nightMode ? 'night' : 'day',
                     )
                     const model = getCameraModelOrDefault(selectedCam.modelId)
+                    const bands = visionBandRangesM(vision.rangeM)
                     return (
                       <>
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
-                          Espectro de visión
+                          Espectro de visión · semáforo
                         </p>
+                        <ul className="space-y-0.5 rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px]">
+                          <li className="flex items-center gap-1.5 text-emerald-300">
+                            <span className="h-2 w-2 rounded-sm bg-emerald-500" />
+                            0–{bands.greenMaxM} m · detección objetos/personas
+                          </li>
+                          <li className="flex items-center gap-1.5 text-yellow-200">
+                            <span className="h-2 w-2 rounded-sm bg-yellow-400" />
+                            {bands.greenMaxM}–{bands.yellowMaxM} m · más lejos
+                          </li>
+                          <li className="flex items-center gap-1.5 text-red-300">
+                            <span className="h-2 w-2 rounded-sm bg-red-500" />
+                            {bands.yellowMaxM}–{bands.redMaxM} m · detección dudosa
+                          </li>
+                        </ul>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Orientación {vision.yawDeg}°

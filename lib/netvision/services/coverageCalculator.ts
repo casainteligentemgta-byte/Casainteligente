@@ -9,6 +9,7 @@ import type {
   DesignStructure,
   ScaleCalibration,
   SpectrumCell,
+  VisionBand,
 } from '@/lib/netvision/types'
 import {
   distMeters,
@@ -17,12 +18,48 @@ import {
   pointInSector,
 } from '@/lib/netvision/utils/geometryHelpers'
 
+/** Fracciones del alcance: verde detección, amarillo lejos, rojo dudoso. */
+export const VISION_BAND_FRAC = {
+  greenMax: 0.4,
+  yellowMax: 0.7,
+} as const
+
 export function defaultScale(): ScaleCalibration {
   // Asume plano ~40 m de ancho si no hay calibración
   return {
     metersPerNormX: 40,
     metersPerNormY: 40,
     calibrated: false,
+  }
+}
+
+export function visionBandForDistance(
+  distanceM: number,
+  rangeM: number,
+): VisionBand | null {
+  if (rangeM <= 0 || distanceM < 0 || distanceM > rangeM + 1e-6) return null
+  const t = distanceM / rangeM
+  if (t <= VISION_BAND_FRAC.greenMax) return 'green'
+  if (t <= VISION_BAND_FRAC.yellowMax) return 'yellow'
+  return 'red'
+}
+
+function bandRank(band: VisionBand): number {
+  if (band === 'green') return 3
+  if (band === 'yellow') return 2
+  return 1
+}
+
+/** Metros por banda de semáforo según el alcance efectivo. */
+export function visionBandRangesM(rangeM: number): {
+  greenMaxM: number
+  yellowMaxM: number
+  redMaxM: number
+} {
+  return {
+    greenMaxM: Math.round(rangeM * VISION_BAND_FRAC.greenMax * 10) / 10,
+    yellowMaxM: Math.round(rangeM * VISION_BAND_FRAC.yellowMax * 10) / 10,
+    redMaxM: Math.round(rangeM * 10) / 10,
   }
 }
 
@@ -63,15 +100,16 @@ export function buildCoverageSectors(
 }
 
 /**
- * Espectro de visión CCTV: celdas visibles por al menos una cámara
- * (dentro del FOV + línea de visión no bloqueada por muros opacos).
+ * Espectro de visión CCTV con semáforo de cobertura automática:
+ * verde = detección objetos/personas, amarillo = más lejos,
+ * rojo = detección dudosa pero con visión.
  */
 export function buildVisionSpectrum(
   cameras: DesignCamera[],
   scale: ScaleCalibration,
   mode: 'day' | 'night' = 'day',
   structures: DesignStructure[] = [],
-  grid = 32,
+  grid = 36,
 ): SpectrumCell[] {
   if (cameras.length === 0) return []
 
@@ -93,7 +131,8 @@ export function buildVisionSpectrum(
     for (let ix = 0; ix < grid; ix++) {
       const px = (ix + 0.5) * cell
       const py = (iy + 0.5) * cell
-      let best = 0
+      let bestBand: VisionBand | null = null
+      let bestStrength = 0
       for (const p of prepared) {
         if (
           !pointInSector(
@@ -117,16 +156,26 @@ export function buildVisionSpectrum(
           scale.metersPerNormX,
           scale.metersPerNormY,
         )
-        const strength = Math.max(0, 1 - d / Math.max(p.rangeM, 1))
-        if (strength > best) best = strength
+        const band = visionBandForDistance(d, p.rangeM)
+        if (!band) continue
+        const strength = Math.max(0.15, 1 - d / Math.max(p.rangeM, 1))
+        if (
+          !bestBand ||
+          bandRank(band) > bandRank(bestBand) ||
+          (band === bestBand && strength > bestStrength)
+        ) {
+          bestBand = band
+          bestStrength = strength
+        }
       }
-      if (best < 0.04) continue
+      if (!bestBand) continue
       cells.push({
         x: ix * cell,
         y: iy * cell,
         w: cell,
         h: cell,
-        strength: best,
+        strength: bestStrength,
+        band: bestBand,
       })
     }
   }

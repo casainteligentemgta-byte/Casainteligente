@@ -134,7 +134,10 @@ export type CoverageSector = {
   polygon?: { x: number; y: number }[]
 }
 
-/** Celda de mapa de calor (WiFi o sonido), valor normalizado 0–1. */
+/** Semáforo de cobertura CCTV (alcance relativo). */
+export type VisionBand = 'green' | 'yellow' | 'red'
+
+/** Celda de mapa de calor (WiFi, sonido o visión). */
 export type SpectrumCell = {
   x: number
   y: number
@@ -142,6 +145,8 @@ export type SpectrumCell = {
   h: number
   /** 0 = sin cobertura, 1 = excelente */
   strength: number
+  /** Banda semáforo (solo espectro de visión). */
+  band?: VisionBand
 }
 
 export type BomCategory =
