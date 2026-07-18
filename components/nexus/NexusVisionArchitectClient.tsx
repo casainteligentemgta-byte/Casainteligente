@@ -127,7 +127,6 @@ async function renderPdfFirstPage(file: File): Promise<string> {
 export default function NexusVisionArchitectClient() {
   const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
   const [hydrated, setHydrated] = useState(false)
-  const [modoColocarCam, setModoColocarCam] = useState(true)
   const [placeNetKind, setPlaceNetKind] = useState<NetworkNodeKind | null>(null)
   const [showFov, setShowFov] = useState(true)
   const [showWifi, setShowWifi] = useState(true)
@@ -313,7 +312,6 @@ export default function NexusVisionArchitectClient() {
         networkNodes: [],
       }))
       setSelectedId(null)
-      setModoColocarCam(true)
       setPlaceNetKind(null)
       setCalibrateMode(false)
       setCalibPoints([])
@@ -323,6 +321,42 @@ export default function NexusVisionArchitectClient() {
       setLoading(false)
     }
   }, [])
+
+  const addCameraAt = (normX: number, normY: number) => {
+    if (!project.planoUrl) return
+    const n = project.cameras.length + 1
+    const pin: DesignCamera = {
+      id: uid(),
+      x: Math.round(normX * 1000) / 1000,
+      y: Math.round(normY * 1000) / 1000,
+      label: `CAM-${String(n).padStart(2, '0')}`,
+      modelId: defaultModelId,
+      yawDeg: 0,
+      mountHeightM: 2.8,
+    }
+    setError(null)
+    setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
+    setSelectedId(pin.id)
+    setSideTab('cctv')
+    setViewMode('plano')
+    setPlaceNetKind(null)
+    setCalibrateMode(false)
+    setCalibPoints([])
+  }
+
+  /** Agrega cámara por botón (centro del plano, con leve desplazamiento si ya hay otras). */
+  const addCameraFromButton = () => {
+    if (!project.planoUrl) {
+      setError('Carga un plano antes de agregar cámaras.')
+      return
+    }
+    const idx = project.cameras.length
+    const offset = (idx % 8) * 0.04
+    const row = Math.floor(idx / 8) * 0.04
+    const x = Math.min(0.9, 0.5 + offset - 0.14)
+    const y = Math.min(0.9, 0.5 + row - 0.08)
+    addCameraAt(x, y)
+  }
 
   const onAddAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
@@ -367,23 +401,7 @@ export default function NexusVisionArchitectClient() {
       setProject((p) => ({ ...p, networkNodes: [...p.networkNodes, node] }))
       setSelectedId(node.id)
       setSideTab('red')
-      return
     }
-
-    if (!modoColocarCam) return
-    const n = project.cameras.length + 1
-    const pin: DesignCamera = {
-      id: uid(),
-      x: Math.round(normX * 1000) / 1000,
-      y: Math.round(normY * 1000) / 1000,
-      label: `CAM-${String(n).padStart(2, '0')}`,
-      modelId: defaultModelId,
-      yawDeg: 0,
-      mountHeightM: 2.8,
-    }
-    setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
-    setSelectedId(pin.id)
-    setSideTab('cctv')
   }
 
   const onMove = (id: string, normX: number, normY: number) => {
@@ -439,7 +457,7 @@ export default function NexusVisionArchitectClient() {
     downloadJson('netvision-design.json', projectToExportJson(project, bom))
   }
 
-  const placeMode = modoColocarCam || !!placeNetKind || calibrateMode
+  const placeMode = !!placeNetKind || calibrateMode
 
   return (
     <div className="space-y-6">
@@ -510,7 +528,8 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                Coloca cámaras, switches PoE y APs. Revisa FOV, WiFi, enlaces y presupuesto PoE.
+                Usa + Cámara para agregar CCTV; switches PoE y APs desde Red. Revisa FOV, WiFi y
+                enlaces.
               </p>
             </button>
           ) : (
@@ -552,20 +571,15 @@ export default function NexusVisionArchitectClient() {
                   )}
                 </p>
                 {viewMode === 'plano' ? (
-                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
-                  <input
-                    type="checkbox"
-                    checked={modoColocarCam && !calibrateMode && !placeNetKind}
-                    onChange={(e) => {
-                      setModoColocarCam(e.target.checked)
-                      if (e.target.checked) {
-                        setCalibrateMode(false)
-                        setPlaceNetKind(null)
-                      }
-                    }}
-                  />
-                  Cámara
-                </label>
+                  <button
+                    type="button"
+                    disabled={!project.planoUrl || loading}
+                    onClick={addCameraFromButton}
+                    className="inline-flex items-center gap-1 rounded-lg bg-[var(--nexus-cyan)] px-2.5 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    + Cámara
+                  </button>
                 ) : null}
                 {viewMode === 'plano' ? (
                   <>
@@ -627,7 +641,6 @@ export default function NexusVisionArchitectClient() {
                       onClick={() => {
                         setCalibrateMode((v) => !v)
                         setCalibPoints([])
-                        setModoColocarCam(false)
                         setPlaceNetKind(null)
                       }}
                     >
@@ -797,7 +810,6 @@ export default function NexusVisionArchitectClient() {
               onPlaceKind={(kind) => {
                 setPlaceNetKind(kind)
                 if (kind) {
-                  setModoColocarCam(false)
                   setCalibrateMode(false)
                 }
               }}
@@ -828,6 +840,19 @@ export default function NexusVisionArchitectClient() {
               <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
                 Inspector CCTV
               </h2>
+              <button
+                type="button"
+                disabled={!project.planoUrl || loading}
+                onClick={addCameraFromButton}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--nexus-cyan)] px-3 py-2 text-xs font-semibold text-black disabled:opacity-40"
+              >
+                <Camera className="h-3.5 w-3.5" />
+                + Agregar cámara
+              </button>
+              <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                La cámara se agrega al plano; arrástrala para ubicarla. Modelo por defecto del
+                selector de la barra.
+              </p>
               {selectedCam ? (
                 <div className="space-y-2 text-xs">
                   <label className="block">
