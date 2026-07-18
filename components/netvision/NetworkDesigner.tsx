@@ -15,11 +15,11 @@ import type { DesignNetworkNode, NetworkNodeKind } from '@/lib/netvision/types'
 
 type Props = {
   nodes: DesignNetworkNode[]
-  placeKind: NetworkNodeKind | null
   defaultModels: Record<NetworkNodeKind, string>
   poeRows: PoeBudgetRow[]
   linkAdvice: CameraLinkAdvice[]
-  onPlaceKind: (kind: NetworkNodeKind | null) => void
+  disabled?: boolean
+  onAddKind: (kind: NetworkNodeKind) => void
   onDefaultModel: (kind: NetworkNodeKind, modelId: string) => void
   onOptimizeChannels: () => void
   onAutoAssignPoe: () => void
@@ -36,11 +36,11 @@ const KINDS: { kind: NetworkNodeKind; label: string; defaultId: string }[] = [
 
 export default function NetworkDesigner({
   nodes,
-  placeKind,
   defaultModels,
   poeRows,
   linkAdvice,
-  onPlaceKind,
+  disabled = false,
+  onAddKind,
   onDefaultModel,
   onOptimizeChannels,
   onAutoAssignPoe,
@@ -58,34 +58,39 @@ export default function NetworkDesigner({
           <button
             key={k.kind}
             type="button"
-            onClick={() => onPlaceKind(placeKind === k.kind ? null : k.kind)}
-            className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${
-              placeKind === k.kind
-                ? 'bg-[var(--nexus-cyan)] text-black'
-                : 'border border-white/15 text-[var(--nexus-text-muted)]'
-            }`}
+            disabled={disabled}
+            onClick={() => onAddKind(k.kind)}
+            className="rounded-lg bg-[var(--nexus-cyan)] px-2 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
           >
             + {k.label}
           </button>
         ))}
       </div>
+      <p className="text-[10px] text-[var(--nexus-text-dim)]">
+        Cada botón agrega un equipo al plano; arrástralo para ubicarlo.
+      </p>
 
-      {placeKind ? (
-        <label className="block text-[11px] text-[var(--nexus-text-dim)]">
-          Modelo al colocar ({placeKind})
-          <select
-            value={defaultModels[placeKind]}
-            onChange={(e) => onDefaultModel(placeKind, e.target.value)}
-            className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-xs text-white"
-          >
-            {networkCatalogByKind(placeKind).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.brand} · {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
+      <div className="space-y-2">
+        <h3 className="text-[10px] font-bold uppercase text-[var(--nexus-text-dim)]">
+          Modelo al agregar
+        </h3>
+        {KINDS.map((k) => (
+          <label key={k.kind} className="block text-[11px] text-[var(--nexus-text-dim)]">
+            {k.label}
+            <select
+              value={defaultModels[k.kind]}
+              onChange={(e) => onDefaultModel(k.kind, e.target.value)}
+              className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-xs text-white"
+            >
+              {networkCatalogByKind(k.kind).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.brand} · {m.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="glass" className="text-[11px]" onClick={onAutoAssignPoe}>
@@ -161,7 +166,7 @@ export default function NetworkDesigner({
         </h3>
         {nodes.length === 0 ? (
           <p className="text-[11px] text-[var(--nexus-text-dim)]">
-            Activa + Switch / AP y toca el plano.
+            Usa + Switch / AP / NVR / Injector para agregarlos al plano.
           </p>
         ) : (
           <ul className="max-h-32 space-y-1 overflow-auto text-[11px]">
