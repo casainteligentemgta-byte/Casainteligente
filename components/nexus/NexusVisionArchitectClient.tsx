@@ -87,6 +87,7 @@ import {
   designFromRoutes,
   profilesForCountry,
 } from '@/lib/netvision/services/complianceValidator'
+import { cloudUpsertProject } from '@/lib/netvision/cloud'
 import {
   emptyProject,
   loadProject,
@@ -191,6 +192,21 @@ export default function NexusVisionArchitectClient() {
   useEffect(() => {
     if (!hydrated) return
     saveProject(project)
+  }, [project, hydrated])
+
+  /** Sync diferido a Supabase (si hay sesión). */
+  useEffect(() => {
+    if (!hydrated) return
+    const t = window.setTimeout(() => {
+      void cloudUpsertProject(project).then((r) => {
+        if (!r.authenticated) return
+        if (!r.ok && r.error) {
+          // Silencioso si la tabla aún no existe; evita spamear UI
+          if (r.error.includes('migración 274') || r.error.includes('42P01')) return
+        }
+      })
+    }, 1800)
+    return () => window.clearTimeout(t)
   }, [project, hydrated])
 
   useEffect(() => {

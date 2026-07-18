@@ -22,4 +22,5 @@ export const NETVISION_ROADMAP_STATUS = {
   phase6_compliance: 'done',
   phase7_bim: 'done',
   phase8_projects_prefs_bom: 'done',
+  phase9_supabase_persist: 'done',
 } as const

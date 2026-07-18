@@ -52,6 +52,12 @@ Profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
 - Cálculos internos en metros; UI de calibración y alcances formateados según unidades
 - BOM: CSV + Excel (SpreadsheetML `.xls`) con margen y total
 
+### 9 — Persistencia Supabase
+- Tabla `netvision_projects` (migración `274_netvision_projects.sql`) con RLS por `auth.uid()`
+- API: `GET/PUT/DELETE /api/netvision/projects` y `/api/netvision/projects/[id]`
+- UI: **Subir nube** / listar nube / abrir desde Supabase; autoguardado diferido si hay sesión
+- Planos muy grandes (>~450KB data URL) se omiten en la nube; el diseño y el plano local se conservan
+
 ## Estructura
 
 - `components/netvision/*` — UI (CameraPlacementTool, NetworkDesigner, DiagramGenerator, CableRoutingEngine, ConduitCalculator, UndergroundCanalizationTool, ComplianceValidator, BIMViewer, BOMGenerator, NetVisionProjectsPanel, NetVisionPrefsPanel)
@@ -65,8 +71,9 @@ Profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
 
 - Activo: `sessionStorage` `nexus.netvision.v1`
 - Biblioteca: `localStorage` `nexus.netvision.library.v1` + `nexus.netvision.activeId.v1`
+- Nube: `public.netvision_projects` (por usuario autenticado)
 - Migra legacy `nexus.vision.architect.v1/v2`
 
 ## Fuera de alcance (plan)
 
-Motor RF Ekahau-level, import CAD nativo, Visio/VSDX, `.RVT` nativo en browser, Supabase multi-usuario, Loxone/Crestron, AR.
+Motor RF Ekahau-level, import CAD nativo, Visio/VSDX, `.RVT` nativo en browser, colaboración simultánea multi-usuario, Loxone/Crestron, AR.
