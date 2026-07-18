@@ -6,7 +6,6 @@ import type Konva from 'konva'
 import {
   Camera,
   Download,
-  FileJson,
   Trash2,
   Upload,
   Undo2,
@@ -85,12 +84,7 @@ import type {
   NetVisionProject,
   NetworkNodeKind,
 } from '@/lib/netvision/types'
-import {
-  downloadDataUrl,
-  downloadJson,
-  openSpecsPrintable,
-  projectToExportJson,
-} from '@/lib/netvision/utils/exporters'
+import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -435,10 +429,6 @@ export default function NexusVisionArchitectClient() {
     downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
   }
 
-  const exportJson = () => {
-    downloadJson('netvision-design.json', projectToExportJson(project, bom))
-  }
-
   const placeMode = modoColocarCam || !!placeNetKind || calibrateMode
 
   return (
@@ -472,17 +462,6 @@ export default function NexusVisionArchitectClient() {
               <Button type="button" variant="glass" onClick={exportPng}>
                 <Download className="mr-2 h-4 w-4" />
                 PNG
-              </Button>
-              <Button type="button" variant="glass" onClick={exportJson}>
-                <FileJson className="mr-2 h-4 w-4" />
-                JSON
-              </Button>
-              <Button
-                type="button"
-                variant="glass"
-                onClick={() => openSpecsPrintable(project, bom)}
-              >
-                PDF specs
               </Button>
               <Button type="button" variant="glass" onClick={limpiarPlano}>
                 <Undo2 className="mr-2 h-4 w-4" />
