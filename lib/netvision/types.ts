@@ -1,6 +1,13 @@
 /** Tipos canónicos NetVision Pro (Fase 1+). */
 
-export type CameraBrand = 'Hikvision' | 'Axis' | 'Uniview' | 'Dahua'
+export type CameraBrand =
+  | 'Hikvision'
+  | 'Axis'
+  | 'Uniview'
+  | 'Dahua'
+  | 'Sony'
+  | 'Ezviz'
+  | 'Aqara'
 
 export type CameraModel = {
   id: string
