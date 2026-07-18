@@ -1,6 +1,13 @@
 /** Tipos canónicos NetVision Pro (Fase 1+). */
 
-export type CameraBrand = 'Hikvision' | 'Axis' | 'Uniview' | 'Dahua'
+export type CameraBrand =
+  | 'Hikvision'
+  | 'Axis'
+  | 'Uniview'
+  | 'Dahua'
+  | 'Sony'
+  | 'Ezviz'
+  | 'Aqara'
 
 export type CameraModel = {
   id: string
@@ -99,8 +106,31 @@ export type DesignStructure = {
   y2: number
 }
 
+/** Sistema de visualización de unidades (cálculos internos siempre en metros). */
+export type UnitSystem = 'metric' | 'imperial' | 'mixed'
+
+export type NetVisionCurrency = 'USD' | 'VES' | 'EUR'
+
+export type NetVisionProjectIndexEntry = {
+  id: string
+  name: string
+  updatedAt: string
+  planoNombre: string
+  cameraCount: number
+  networkCount: number
+}
+
 export type NetVisionProject = {
-  version: 1
+  version: 1 | 2
+  id: string
+  name: string
+  description?: string
+  client?: string
+  updatedAt: string
+  unitSystem: UnitSystem
+  currency: NetVisionCurrency
+  /** Margen distribuidor sobre subtotal BOM (0–100). */
+  distributorMarginPct: number
   planoUrl: string | null
   planoNombre: string
   cameras: DesignCamera[]
@@ -134,7 +164,10 @@ export type CoverageSector = {
   polygon?: { x: number; y: number }[]
 }
 
-/** Celda de mapa de calor (WiFi o sonido), valor normalizado 0–1. */
+/** Semáforo de cobertura CCTV (alcance relativo). */
+export type VisionBand = 'green' | 'yellow' | 'red'
+
+/** Celda de mapa de calor (WiFi, sonido o visión). */
 export type SpectrumCell = {
   x: number
   y: number
@@ -142,6 +175,8 @@ export type SpectrumCell = {
   h: number
   /** 0 = sin cobertura, 1 = excelente */
   strength: number
+  /** Banda semáforo (solo espectro de visión). */
+  band?: VisionBand
 }
 
 export type BomCategory =

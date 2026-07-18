@@ -20,6 +20,7 @@ import type {
   DesignNetworkNode,
   DesignStructure,
   SpectrumCell,
+  VisionBand,
 } from '@/lib/netvision/types'
 import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
@@ -66,6 +67,15 @@ export type CameraPlacementToolProps = {
 function spectrumFill(strength: number, hue: number, boost = 0) {
   const a = Math.min(0.72, 0.1 + boost + strength * 0.48)
   return `hsla(${hue}, 90%, ${42 + strength * 22}%, ${a})`
+}
+
+/** Semáforo de cobertura: verde detección, amarillo lejos, rojo dudoso. */
+function visionBandFill(band: VisionBand | undefined, strength: number) {
+  const a = Math.min(0.78, 0.28 + strength * 0.42)
+  if (band === 'green') return `rgba(34, 197, 94, ${a})`
+  if (band === 'yellow') return `rgba(234, 179, 8, ${a})`
+  if (band === 'red') return `rgba(239, 68, 68, ${a})`
+  return spectrumFill(strength, 190, 0.12)
 }
 
 const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
@@ -461,7 +471,7 @@ export default function CameraPlacementTool({
                 y={offsetY + c.y * drawH}
                 width={Math.max(1, c.w * drawW)}
                 height={Math.max(1, c.h * drawH)}
-                fill={spectrumFill(c.strength, 190, 0.12)}
+                fill={visionBandFill(c.band, c.strength)}
                 listening={false}
               />
             ))}
@@ -522,12 +532,19 @@ export default function CameraPlacementTool({
                 for (const p of poly) {
                   pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
                 }
+                // Contorno del cono; el relleno lo da el semáforo del espectro
                 return (
                   <Line
                     key={`fov-${s.cameraId}`}
                     points={pts}
                     closed
-                    fill={selected ? 'rgba(34,211,238,0.42)' : 'rgba(6,182,212,0.32)'}
+                    fill={
+                      visionSpectrum.length > 0
+                        ? 'rgba(6,182,212,0.04)'
+                        : selected
+                          ? 'rgba(34,211,238,0.42)'
+                          : 'rgba(6,182,212,0.32)'
+                    }
                     stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
                     strokeWidth={selected ? 2.5 : 2}
                     listening={false}
@@ -548,7 +565,13 @@ export default function CameraPlacementTool({
                   outerRadius={Math.max(12, radius)}
                   angle={angle}
                   rotation={rotation}
-                  fill={selected ? 'rgba(34,211,238,0.42)' : 'rgba(6,182,212,0.32)'}
+                  fill={
+                    visionSpectrum.length > 0
+                      ? 'rgba(6,182,212,0.04)'
+                      : selected
+                        ? 'rgba(34,211,238,0.42)'
+                        : 'rgba(6,182,212,0.32)'
+                  }
                   stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
                   strokeWidth={selected ? 2.5 : 2}
                   listening={false}

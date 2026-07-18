@@ -146,7 +146,7 @@ export function buildBimPackage(
     format: 'netvision-bim-package',
     version: 1,
     note: 'Materializar .RVT vía worker Railway + add-in/Dynamo Revit. Este paquete es IFC-lite + parámetros.',
-    projectName: project.planoNombre || 'NetVision Project',
+    projectName: project.name || project.planoNombre || 'NetVision Project',
     phases: ['design', 'cabling', 'equipment', 'documentation'],
     views: [
       'Planta equipos',

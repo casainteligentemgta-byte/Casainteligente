@@ -15,7 +15,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'fov',
     label: 'Visión',
     blurb:
-      'Espectro de visión CCTV (mapa de calor + cono). Drywall y bloque cortan la vista; vidrio/ventana no.',
+      'Cobertura automática por alcance (semáforo): verde detección objetos/personas, amarillo más lejos, rojo detección dudosa. Muros opacos cortan la vista.',
   },
   {
     id: 'wifi',
