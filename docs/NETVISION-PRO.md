@@ -16,6 +16,7 @@ Pestaña **Muros**: drywall, bloque, vidrio, ventana (2 toques en el plano).
 
 ### 2 — Redes
 Switches PoE, APs WiFi, NVR, injectors, canales, presupuesto PoE.
+Botones **+ Switch / + AP / + NVR / + Injector** agregan el equipo al plano de inmediato (igual que + Cámara); luego arrastrar.
 
 ### 3 — Diagrama
 Unifilar en tiempo real (Plano/Diagrama) + SVG/PNG.

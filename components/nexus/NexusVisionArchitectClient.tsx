@@ -6,7 +6,6 @@ import type Konva from 'konva'
 import {
   Camera,
   Download,
-  FileJson,
   Trash2,
   Upload,
   Undo2,
@@ -95,12 +94,7 @@ import type {
   NetworkNodeKind,
   StructureMaterialId,
 } from '@/lib/netvision/types'
-import {
-  downloadDataUrl,
-  downloadJson,
-  openSpecsPrintable,
-  projectToExportJson,
-} from '@/lib/netvision/utils/exporters'
+import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -137,7 +131,6 @@ async function renderPdfFirstPage(file: File): Promise<string> {
 export default function NexusVisionArchitectClient() {
   const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
   const [hydrated, setHydrated] = useState(false)
-  const [placeNetKind, setPlaceNetKind] = useState<NetworkNodeKind | null>(null)
   const [showFov, setShowFov] = useState(true)
   const [showWifi, setShowWifi] = useState(true)
   const [showSound, setShowSound] = useState(false)
@@ -366,7 +359,6 @@ export default function NexusVisionArchitectClient() {
         structures: [],
       }))
       setSelectedId(null)
-      setPlaceNetKind(null)
       setCalibrateMode(false)
       setCalibPoints([])
       setDrawStructureMaterial(null)
@@ -377,6 +369,16 @@ export default function NexusVisionArchitectClient() {
       setLoading(false)
     }
   }, [])
+
+  /** Posición inicial al agregar por botón (leve desplazamiento para no apilar). */
+  const buttonSpawnPos = (index: number, baseX: number, baseY: number) => {
+    const offset = (index % 8) * 0.04
+    const row = Math.floor(index / 8) * 0.04
+    return {
+      x: Math.min(0.9, Math.max(0.08, baseX + offset - 0.14)),
+      y: Math.min(0.9, Math.max(0.08, baseY + row - 0.08)),
+    }
+  }
 
   const addCameraAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
@@ -395,7 +397,6 @@ export default function NexusVisionArchitectClient() {
     setSelectedId(pin.id)
     setSideTab('cctv')
     setViewMode('plano')
-    setPlaceNetKind(null)
     setCalibrateMode(false)
     setCalibPoints([])
     setDrawStructureMaterial(null)
@@ -405,15 +406,52 @@ export default function NexusVisionArchitectClient() {
   /** Agrega cámara por botón (centro del plano, con leve desplazamiento si ya hay otras). */
   const addCameraFromButton = () => {
     if (!project.planoUrl) {
-      setError('Carga un plano antes de agregar cámaras.')
+      setError('Carga un plano antes de agregar equipos.')
       return
     }
-    const idx = project.cameras.length
-    const offset = (idx % 8) * 0.04
-    const row = Math.floor(idx / 8) * 0.04
-    const x = Math.min(0.9, 0.5 + offset - 0.14)
-    const y = Math.min(0.9, 0.5 + row - 0.08)
-    addCameraAt(x, y)
+    const pos = buttonSpawnPos(project.cameras.length, 0.5, 0.45)
+    addCameraAt(pos.x, pos.y)
+  }
+
+  const addNetworkAt = (kind: NetworkNodeKind, normX: number, normY: number) => {
+    if (!project.planoUrl) return
+    const count = project.networkNodes.filter((n) => n.kind === kind).length + 1
+    const prefix = labelPrefixForKind(kind)
+    const node: DesignNetworkNode = {
+      id: uid(),
+      x: Math.round(normX * 1000) / 1000,
+      y: Math.round(normY * 1000) / 1000,
+      label: `${prefix}-${String(count).padStart(2, '0')}`,
+      kind,
+      modelId: defaultNetModels[kind],
+      linkedCameraIds: [],
+      wifiChannel: kind === 'ap' ? 36 : undefined,
+    }
+    setError(null)
+    setProject((p) => ({ ...p, networkNodes: [...p.networkNodes, node] }))
+    setSelectedId(node.id)
+    setSideTab('red')
+    setViewMode('plano')
+    setCalibrateMode(false)
+    setCalibPoints([])
+  }
+
+  /** Agrega switch / AP / NVR / injector por botón (sin clic en el plano). */
+  const addNetworkFromButton = (kind: NetworkNodeKind) => {
+    if (!project.planoUrl) {
+      setError('Carga un plano antes de agregar equipos.')
+      return
+    }
+    const bases: Record<NetworkNodeKind, { x: number; y: number }> = {
+      switch: { x: 0.35, y: 0.35 },
+      ap: { x: 0.65, y: 0.35 },
+      nvr: { x: 0.35, y: 0.65 },
+      injector: { x: 0.65, y: 0.65 },
+    }
+    const base = bases[kind]
+    const idx = project.networkNodes.filter((n) => n.kind === kind).length
+    const pos = buttonSpawnPos(idx, base.x, base.y)
+    addNetworkAt(kind, pos.x, pos.y)
   }
 
   const addStructureSegment = (
@@ -497,25 +535,6 @@ export default function NexusVisionArchitectClient() {
         normY,
       )
       setStructureDraft(null)
-      return
-    }
-
-    if (placeNetKind) {
-      const count = project.networkNodes.filter((n) => n.kind === placeNetKind).length + 1
-      const prefix = labelPrefixForKind(placeNetKind)
-      const node: DesignNetworkNode = {
-        id: uid(),
-        x: Math.round(normX * 1000) / 1000,
-        y: Math.round(normY * 1000) / 1000,
-        label: `${prefix}-${String(count).padStart(2, '0')}`,
-        kind: placeNetKind,
-        modelId: defaultNetModels[placeNetKind],
-        linkedCameraIds: [],
-        wifiChannel: placeNetKind === 'ap' ? 36 : undefined,
-      }
-      setProject((p) => ({ ...p, networkNodes: [...p.networkNodes, node] }))
-      setSelectedId(node.id)
-      setSideTab('red')
     }
   }
 
@@ -586,11 +605,7 @@ export default function NexusVisionArchitectClient() {
     downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
   }
 
-  const exportJson = () => {
-    downloadJson('netvision-design.json', projectToExportJson(project, bom))
-  }
-
-  const placeMode = !!placeNetKind || calibrateMode || !!drawStructureMaterial
+  const placeMode = calibrateMode || !!drawStructureMaterial
 
   return (
     <div className="space-y-6">
@@ -624,17 +639,6 @@ export default function NexusVisionArchitectClient() {
                 <Download className="mr-2 h-4 w-4" />
                 PNG
               </Button>
-              <Button type="button" variant="glass" onClick={exportJson}>
-                <FileJson className="mr-2 h-4 w-4" />
-                JSON
-              </Button>
-              <Button
-                type="button"
-                variant="glass"
-                onClick={() => openSpecsPrintable(project, bom)}
-              >
-                PDF specs
-              </Button>
               <Button type="button" variant="glass" onClick={limpiarPlano}>
                 <Undo2 className="mr-2 h-4 w-4" />
                 Nuevo plano
@@ -661,8 +665,8 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                Usa + Cámara para agregar CCTV; switches PoE y APs desde Red. Revisa FOV, WiFi y
-                enlaces.
+                Agrega cámara, switch, AP o NVR con los botones +; luego arrastra en el plano.
+                Revisa FOV, WiFi y enlaces.
               </p>
             </button>
           ) : (
@@ -805,7 +809,6 @@ export default function NexusVisionArchitectClient() {
                       onClick={() => {
                         setCalibrateMode((v) => !v)
                         setCalibPoints([])
-                        setPlaceNetKind(null)
                         setDrawStructureMaterial(null)
                         setStructureDraft(null)
                       }}
@@ -823,19 +826,18 @@ export default function NexusVisionArchitectClient() {
                         ({calibPoints.length}/2)
                       </label>
                     ) : null}
-                    {!placeNetKind ? (
-                      <select
-                        value={defaultModelId}
-                        onChange={(e) => setDefaultModelId(e.target.value)}
-                        className="max-w-[180px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
-                      >
-                        {CAMERA_CATALOG.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.brand} · {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
+                    <select
+                      value={defaultModelId}
+                      onChange={(e) => setDefaultModelId(e.target.value)}
+                      className="max-w-[180px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+                      title="Modelo de cámara al agregar"
+                    >
+                      {CAMERA_CATALOG.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.brand} · {m.name}
+                        </option>
+                      ))}
+                    </select>
                   </>
                 ) : null}
               </div>
@@ -917,7 +919,6 @@ export default function NexusVisionArchitectClient() {
                   }
                   if (id === 'muros') {
                     setViewMode('plano')
-                    setPlaceNetKind(null)
                     setCalibrateMode(false)
                   } else {
                     setDrawStructureMaterial(null)
@@ -940,7 +941,6 @@ export default function NexusVisionArchitectClient() {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)
                 if (id) {
-                  setPlaceNetKind(null)
                   setCalibrateMode(false)
                   setViewMode('plano')
                   setShowFov(true)
@@ -1004,17 +1004,15 @@ export default function NexusVisionArchitectClient() {
           ) : sideTab === 'red' ? (
             <NetworkDesigner
               nodes={project.networkNodes}
-              placeKind={placeNetKind}
               defaultModels={defaultNetModels}
               poeRows={poeAnalysis.rows}
               linkAdvice={linkAdvice}
-              onPlaceKind={(kind) => {
-                setPlaceNetKind(kind)
-                if (kind) {
-                  setCalibrateMode(false)
-                  setDrawStructureMaterial(null)
-                  setStructureDraft(null)
-                }
+              disabled={!project.planoUrl || loading}
+              onAddKind={(kind) => {
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setCalibrateMode(false)
+                addNetworkFromButton(kind)
               }}
               onDefaultModel={(kind, modelId) =>
                 setDefaultNetModels((m) => ({ ...m, [kind]: modelId }))
