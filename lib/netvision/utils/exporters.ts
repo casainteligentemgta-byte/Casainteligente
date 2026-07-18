@@ -42,6 +42,7 @@ export function projectToExportJson(project: NetVisionProject, bom: BomSummary) 
         },
       }
     }),
+    structures: project.structures ?? [],
     bom,
   }
 }

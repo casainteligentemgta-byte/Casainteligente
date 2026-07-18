@@ -21,6 +21,7 @@ import NetworkDesigner from '@/components/netvision/NetworkDesigner'
 import NetVisionLayerHelp, {
   layerHelpTitle,
 } from '@/components/netvision/NetVisionLayerHelp'
+import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator'
 import BIMViewer from '@/components/netvision/BIMViewer'
@@ -41,6 +42,7 @@ import {
 } from '@/lib/netvision/catalog/network'
 import {
   buildCoverageSectors,
+  buildVisionSpectrum,
   defaultScale,
 } from '@/lib/netvision/services/coverageCalculator'
 import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
@@ -54,7 +56,10 @@ import { optimizeApChannels } from '@/lib/netvision/services/channelOptimizer'
 import {
   analyzeWifiCoverage,
   buildWifiCoverage,
+  buildWifiSpectrum,
 } from '@/lib/netvision/services/wifiPredictor'
+import { buildSoundSpectrum } from '@/lib/netvision/services/soundPredictor'
+import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import {
   buildCableRoutes,
   validateCableRoutes,
@@ -84,8 +89,10 @@ import {
 import type {
   DesignCamera,
   DesignNetworkNode,
+  DesignStructure,
   NetVisionProject,
   NetworkNodeKind,
+  StructureMaterialId,
 } from '@/lib/netvision/types'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 
@@ -126,9 +133,15 @@ export default function NexusVisionArchitectClient() {
   const [hydrated, setHydrated] = useState(false)
   const [showFov, setShowFov] = useState(true)
   const [showWifi, setShowWifi] = useState(true)
+  const [showSound, setShowSound] = useState(false)
   const [showLinks, setShowLinks] = useState(true)
   const [showCableRoutes, setShowCableRoutes] = useState(true)
   const [showUnderground, setShowUnderground] = useState(false)
+  const [drawStructureMaterial, setDrawStructureMaterial] =
+    useState<StructureMaterialId | null>(null)
+  const [structureDraft, setStructureDraft] = useState<{ x: number; y: number } | null>(
+    null,
+  )
   const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
@@ -147,7 +160,7 @@ export default function NexusVisionArchitectClient() {
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
   const [sideTab, setSideTab] = useState<
-    'cctv' | 'red' | 'cable' | 'sub' | 'norm' | 'bim'
+    'cctv' | 'red' | 'muros' | 'cable' | 'sub' | 'norm' | 'bim'
   >('cctv')
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const [complianceCountry, setComplianceCountry] = useState('VE')
@@ -166,14 +179,43 @@ export default function NexusVisionArchitectClient() {
     saveProject(project)
   }, [project, hydrated])
 
+  const structures = project.structures ?? []
+
   const sectors = useMemo(
-    () => buildCoverageSectors(project.cameras, project.scale, nightMode ? 'night' : 'day'),
-    [project.cameras, project.scale, nightMode],
+    () =>
+      buildCoverageSectors(
+        project.cameras,
+        project.scale,
+        nightMode ? 'night' : 'day',
+        structures,
+      ),
+    [project.cameras, project.scale, nightMode, structures],
+  )
+
+  const visionSpectrum = useMemo(
+    () =>
+      buildVisionSpectrum(
+        project.cameras,
+        project.scale,
+        nightMode ? 'night' : 'day',
+        structures,
+      ),
+    [project.cameras, project.scale, nightMode, structures],
   )
 
   const wifiCircles = useMemo(
     () => buildWifiCoverage(project.networkNodes, project.scale),
     [project.networkNodes, project.scale],
+  )
+
+  const wifiSpectrum = useMemo(
+    () => buildWifiSpectrum(project.networkNodes, project.scale, structures),
+    [project.networkNodes, project.scale, structures],
+  )
+
+  const soundSpectrum = useMemo(
+    () => buildSoundSpectrum(project.cameras, project.scale, structures),
+    [project.cameras, project.scale, structures],
   )
 
   const linkAdvice = useMemo(
@@ -205,7 +247,12 @@ export default function NexusVisionArchitectClient() {
 
   const validations = useMemo(() => {
     const cov = analyzeRedundancy(project.cameras, sectors)
-    const wifi = analyzeWifiCoverage(project.networkNodes, project.scale)
+    const wifi = analyzeWifiCoverage(
+      project.networkNodes,
+      project.scale,
+      20,
+      structures,
+    )
     const cab = validateCableRoutes(cableRoutes)
     const cnd = validateConduits(conduitPlans)
     const ug = validateUnderground(undergroundPlan)
@@ -231,6 +278,7 @@ export default function NexusVisionArchitectClient() {
     project.cameras,
     project.networkNodes,
     project.scale,
+    structures,
     sectors,
     poeAnalysis.validations,
     cableRoutes,
@@ -279,6 +327,8 @@ export default function NexusVisionArchitectClient() {
 
   const selectedCam = project.cameras.find((c) => c.id === selectedId) ?? null
   const selectedNet = project.networkNodes.find((n) => n.id === selectedId) ?? null
+  const selectedStructure =
+    structures.find((s) => s.id === selectedId) ?? null
 
   const onFile = useCallback(async (file: File | null) => {
     if (!file) return
@@ -306,10 +356,13 @@ export default function NexusVisionArchitectClient() {
         planoNombre: file.name,
         cameras: [],
         networkNodes: [],
+        structures: [],
       }))
       setSelectedId(null)
       setCalibrateMode(false)
       setCalibPoints([])
+      setDrawStructureMaterial(null)
+      setStructureDraft(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
@@ -346,6 +399,8 @@ export default function NexusVisionArchitectClient() {
     setViewMode('plano')
     setCalibrateMode(false)
     setCalibPoints([])
+    setDrawStructureMaterial(null)
+    setStructureDraft(null)
   }
 
   /** Agrega cámara por botón (centro del plano, con leve desplazamiento si ya hay otras). */
@@ -399,6 +454,41 @@ export default function NexusVisionArchitectClient() {
     addNetworkAt(kind, pos.x, pos.y)
   }
 
+  const addStructureSegment = (
+    materialId: StructureMaterialId,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+  ) => {
+    const n = (project.structures?.length ?? 0) + 1
+    const prefix =
+      materialId === 'window'
+        ? 'VEN'
+        : materialId === 'glass'
+          ? 'VID'
+          : materialId === 'block'
+            ? 'BLO'
+            : 'DRY'
+    const seg: DesignStructure = {
+      id: uid(),
+      label: `${prefix}-${String(n).padStart(2, '0')}`,
+      materialId,
+      x1: Math.round(x1 * 1000) / 1000,
+      y1: Math.round(y1 * 1000) / 1000,
+      x2: Math.round(x2 * 1000) / 1000,
+      y2: Math.round(y2 * 1000) / 1000,
+    }
+    setError(null)
+    setProject((p) => ({
+      ...p,
+      structures: [...(p.structures ?? []), seg],
+    }))
+    setSelectedId(seg.id)
+    setSideTab('muros')
+    setViewMode('plano')
+  }
+
   const onAddAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
 
@@ -423,6 +513,28 @@ export default function NexusVisionArchitectClient() {
       } else {
         setCalibPoints(next)
       }
+      return
+    }
+
+    if (drawStructureMaterial) {
+      if (!structureDraft) {
+        setStructureDraft({ x: normX, y: normY })
+        return
+      }
+      const dx = Math.abs(structureDraft.x - normX)
+      const dy = Math.abs(structureDraft.y - normY)
+      if (dx + dy < 0.01) {
+        setError('El segmento es demasiado corto; elige otro punto.')
+        return
+      }
+      addStructureSegment(
+        drawStructureMaterial,
+        structureDraft.x,
+        structureDraft.y,
+        normX,
+        normY,
+      )
+      setStructureDraft(null)
     }
   }
 
@@ -454,11 +566,29 @@ export default function NexusVisionArchitectClient() {
     }))
   }
 
+  const onMoveStructureEndpoint = (
+    id: string,
+    end: 'a' | 'b',
+    normX: number,
+    normY: number,
+  ) => {
+    const nx = Math.round(normX * 1000) / 1000
+    const ny = Math.round(normY * 1000) / 1000
+    setProject((p) => ({
+      ...p,
+      structures: (p.structures ?? []).map((s) => {
+        if (s.id !== id) return s
+        return end === 'a' ? { ...s, x1: nx, y1: ny } : { ...s, x2: nx, y2: ny }
+      }),
+    }))
+  }
+
   const quitar = (id: string) => {
     setProject((p) => ({
       ...p,
       cameras: p.cameras.filter((c) => c.id !== id),
       networkNodes: p.networkNodes.filter((n) => n.id !== id),
+      structures: (p.structures ?? []).filter((s) => s.id !== id),
     }))
     if (selectedId === id) setSelectedId(null)
   }
@@ -474,6 +604,8 @@ export default function NexusVisionArchitectClient() {
     if (!stage) return
     downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
   }
+
+  const placeMode = calibrateMode || !!drawStructureMaterial
 
   return (
     <div className="space-y-6">
@@ -598,7 +730,7 @@ export default function NexusVisionArchitectClient() {
                         checked={showFov}
                         onChange={(e) => setShowFov(e.target.checked)}
                       />
-                      FOV
+                      Visión
                     </label>
                     <label
                       title={layerHelpTitle('wifi')}
@@ -610,6 +742,17 @@ export default function NexusVisionArchitectClient() {
                         onChange={(e) => setShowWifi(e.target.checked)}
                       />
                       WiFi
+                    </label>
+                    <label
+                      title={layerHelpTitle('sound')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showSound}
+                        onChange={(e) => setShowSound(e.target.checked)}
+                      />
+                      Sonido
                     </label>
                     <label
                       title={layerHelpTitle('links')}
@@ -666,6 +809,8 @@ export default function NexusVisionArchitectClient() {
                       onClick={() => {
                         setCalibrateMode((v) => !v)
                         setCalibPoints([])
+                        setDrawStructureMaterial(null)
+                        setStructureDraft(null)
                       }}
                     >
                       Calibrar
@@ -708,27 +853,34 @@ export default function NexusVisionArchitectClient() {
               ) : (
                 <div
                   className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
-                    calibrateMode ? 'cursor-crosshair' : 'cursor-default'
+                    placeMode ? 'cursor-crosshair' : 'cursor-default'
                   }`}
                 >
                   <CameraPlacementTool
                     backgroundUrl={project.planoUrl}
                     cameras={project.cameras}
                     networkNodes={project.networkNodes}
+                    structures={structures}
                     sectors={sectors}
+                    visionSpectrum={visionSpectrum}
                     wifiCircles={wifiCircles}
+                    wifiSpectrum={wifiSpectrum}
+                    soundSpectrum={soundSpectrum}
                     linkLines={linkLines}
                     cableRoutes={cableRoutes}
                     undergroundRuns={undergroundPlan.runs}
                     selectedId={selectedId}
-                    placeMode={calibrateMode}
+                    placeMode={placeMode}
+                    draftPoint={structureDraft}
                     showFov={showFov}
                     showWifi={showWifi}
+                    showSound={showSound}
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
                     showUnderground={showUnderground}
                     onAddAt={onAddAt}
                     onMove={onMove}
+                    onMoveStructureEndpoint={onMoveStructureEndpoint}
                     onSelect={setSelectedId}
                     stageRef={stageRef}
                   />
@@ -744,6 +896,7 @@ export default function NexusVisionArchitectClient() {
               [
                 ['cctv', 'CCTV'],
                 ['red', 'Red'],
+                ['muros', 'Muros'],
                 ['cable', 'Cable'],
                 ['sub', 'Sub'],
                 ['norm', 'Norm'],
@@ -764,6 +917,13 @@ export default function NexusVisionArchitectClient() {
                     setShowUnderground(true)
                     setViewMode('plano')
                   }
+                  if (id === 'muros') {
+                    setViewMode('plano')
+                    setCalibrateMode(false)
+                  } else {
+                    setDrawStructureMaterial(null)
+                    setStructureDraft(null)
+                  }
                 }}
               >
                 {label}
@@ -771,7 +931,25 @@ export default function NexusVisionArchitectClient() {
             ))}
           </div>
 
-          {sideTab === 'norm' ? (
+          {sideTab === 'muros' ? (
+            <StructureDesigner
+              structures={structures}
+              drawMaterialId={drawStructureMaterial}
+              draftPoint={structureDraft}
+              disabled={!project.planoUrl || loading}
+              onDrawMaterial={(id) => {
+                setDrawStructureMaterial(id)
+                setStructureDraft(null)
+                if (id) {
+                  setCalibrateMode(false)
+                  setViewMode('plano')
+                  setShowFov(true)
+                }
+              }}
+              onSelect={setSelectedId}
+              onRemove={quitar}
+            />
+          ) : sideTab === 'norm' ? (
             <ComplianceValidatorPanel
               countryCode={complianceCountry}
               onCountry={(code) => {
@@ -830,7 +1008,12 @@ export default function NexusVisionArchitectClient() {
               poeRows={poeAnalysis.rows}
               linkAdvice={linkAdvice}
               disabled={!project.planoUrl || loading}
-              onAddKind={addNetworkFromButton}
+              onAddKind={(kind) => {
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setCalibrateMode(false)
+                addNetworkFromButton(kind)
+              }}
               onDefaultModel={(kind, modelId) =>
                 setDefaultNetModels((m) => ({ ...m, [kind]: modelId }))
               }
@@ -926,6 +1109,30 @@ export default function NexusVisionArchitectClient() {
                     Quitar cámara
                   </Button>
                 </div>
+              ) : selectedStructure ? (
+                <div className="space-y-2 text-xs">
+                  <p className="text-[10px] uppercase text-[var(--nexus-text-dim)]">
+                    Estructura · {getStructureMaterialOrDefault(selectedStructure.materialId).label}
+                  </p>
+                  <p className="font-semibold text-white">{selectedStructure.label}</p>
+                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                    {(() => {
+                      const m = getStructureMaterialOrDefault(selectedStructure.materialId)
+                      return m.blocksVision
+                        ? `Corta visión · WiFi −${m.wifiLossDb} dB · Sonido −${m.soundLossDb} dB`
+                        : `Transparente · WiFi −${m.wifiLossDb} dB · Sonido −${m.soundLossDb} dB`
+                    })()}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="glass"
+                    className="w-full"
+                    onClick={() => quitar(selectedStructure.id)}
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    Quitar estructura
+                  </Button>
+                </div>
               ) : selectedNet ? (
                 <div className="space-y-2 text-xs">
                   <p className="text-[10px] uppercase text-[var(--nexus-text-dim)]">
@@ -974,7 +1181,7 @@ export default function NexusVisionArchitectClient() {
                 </div>
               ) : (
                 <p className="text-xs text-[var(--nexus-text-dim)]">
-                  Selecciona una cámara o nodo de red.
+                  Selecciona una cámara, nodo de red o muro.
                 </p>
               )}
 

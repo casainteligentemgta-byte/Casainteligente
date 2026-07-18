@@ -7,7 +7,12 @@ Diseño CCTV / redes / cableado / subterráneo / normativas / BIM en Nexus (`/ne
 ### 1 — CCTV
 FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/PDF.
 Agregar cámara con botón **+ Cámara** (no por clic en el plano); luego arrastrar el pin.
-Guía rápida de capas (FOV / WiFi / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
+Guía rápida de capas (FOV / WiFi / Sonido / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
+
+### 1b — Muros / materiales
+Pestaña **Muros**: drywall, bloque, vidrio, ventana (2 toques en el plano).
+- Drywall/bloque cortan FOV; vidrio/ventana dejan ver.
+- WiFi y Sonido usan mapa de calor atenuado por material (`structureAttenuation`, `buildWifiSpectrum`, `buildSoundSpectrum`).
 
 ### 2 — Redes
 Switches PoE, APs WiFi, NVR, injectors, canales, presupuesto PoE.

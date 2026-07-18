@@ -69,12 +69,39 @@ export type DesignNetworkNode = {
   linkedCameraIds: string[]
 }
 
+/** Material constructivo que afecta visión / WiFi / sonido. */
+export type StructureMaterialId = 'drywall' | 'block' | 'glass' | 'window'
+
+export type StructureMaterial = {
+  id: StructureMaterialId
+  label: string
+  kind: 'wall_drywall' | 'wall_block' | 'glass' | 'window'
+  /** Si true, corta el FOV de la cámara */
+  blocksVision: boolean
+  wifiLossDb: number
+  soundLossDb: number
+  color: string
+  dash: number[] | null
+}
+
+/** Segmento de muro / vidrio / ventana en el plano (coords 0–1). */
+export type DesignStructure = {
+  id: string
+  label: string
+  materialId: StructureMaterialId
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
 export type NetVisionProject = {
   version: 1
   planoUrl: string | null
   planoNombre: string
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
+  structures: DesignStructure[]
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string
@@ -99,6 +126,18 @@ export type CoverageSector = {
   startAngleRad: number
   endAngleRad: number
   mode: 'day' | 'night'
+  /** Polígono FOV recortado por muros opacos (incluye el centro). */
+  polygon?: { x: number; y: number }[]
+}
+
+/** Celda de mapa de calor (WiFi o sonido), valor normalizado 0–1. */
+export type SpectrumCell = {
+  x: number
+  y: number
+  w: number
+  h: number
+  /** 0 = sin cobertura, 1 = excelente */
+  strength: number
 }
 
 export type BomCategory =
