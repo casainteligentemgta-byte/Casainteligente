@@ -12,9 +12,9 @@ export type LayerHelpItem = {
 export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
   {
     id: 'fov',
-    label: 'FOV',
+    label: 'Visión',
     blurb:
-      'Campo de visión de cada cámara. Con muros de drywall/bloque se recorta; vidrio y ventana dejan ver.',
+      'Espectro de visión CCTV (mapa de calor + cono). Drywall y bloque cortan la vista; vidrio/ventana no.',
   },
   {
     id: 'wifi',

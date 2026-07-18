@@ -43,6 +43,7 @@ import {
 } from '@/lib/netvision/catalog/network'
 import {
   buildCoverageSectors,
+  buildVisionSpectrum,
   defaultScale,
 } from '@/lib/netvision/services/coverageCalculator'
 import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
@@ -190,6 +191,17 @@ export default function NexusVisionArchitectClient() {
   const sectors = useMemo(
     () =>
       buildCoverageSectors(
+        project.cameras,
+        project.scale,
+        nightMode ? 'night' : 'day',
+        structures,
+      ),
+    [project.cameras, project.scale, nightMode, structures],
+  )
+
+  const visionSpectrum = useMemo(
+    () =>
+      buildVisionSpectrum(
         project.cameras,
         project.scale,
         nightMode ? 'night' : 'day',
@@ -714,7 +726,7 @@ export default function NexusVisionArchitectClient() {
                         checked={showFov}
                         onChange={(e) => setShowFov(e.target.checked)}
                       />
-                      FOV
+                      Visión
                     </label>
                     <label
                       title={layerHelpTitle('wifi')}
@@ -848,6 +860,7 @@ export default function NexusVisionArchitectClient() {
                     networkNodes={project.networkNodes}
                     structures={structures}
                     sectors={sectors}
+                    visionSpectrum={visionSpectrum}
                     wifiCircles={wifiCircles}
                     wifiSpectrum={wifiSpectrum}
                     soundSpectrum={soundSpectrum}

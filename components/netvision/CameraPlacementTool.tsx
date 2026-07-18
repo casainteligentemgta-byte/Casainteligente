@@ -31,6 +31,7 @@ export type CameraPlacementToolProps = {
   networkNodes: DesignNetworkNode[]
   structures?: DesignStructure[]
   sectors: CoverageSector[]
+  visionSpectrum?: SpectrumCell[]
   wifiCircles: WifiCoverageCircle[]
   wifiSpectrum?: SpectrumCell[]
   soundSpectrum?: SpectrumCell[]
@@ -58,9 +59,9 @@ export type CameraPlacementToolProps = {
   stageRef?: React.MutableRefObject<Konva.Stage | null>
 }
 
-function spectrumFill(strength: number, hue: number) {
-  const a = 0.08 + strength * 0.42
-  return `hsla(${hue}, 85%, ${45 + strength * 20}%, ${a})`
+function spectrumFill(strength: number, hue: number, boost = 0) {
+  const a = Math.min(0.72, 0.1 + boost + strength * 0.48)
+  return `hsla(${hue}, 90%, ${42 + strength * 22}%, ${a})`
 }
 
 const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
@@ -149,6 +150,7 @@ export default function CameraPlacementTool({
   networkNodes,
   structures = [],
   sectors,
+  visionSpectrum = [],
   wifiCircles,
   wifiSpectrum = [],
   soundSpectrum = [],
@@ -444,6 +446,19 @@ export default function CameraPlacementTool({
             />
           )}
 
+          {showFov &&
+            visionSpectrum.map((c, i) => (
+              <Rect
+                key={`vis-cell-${i}`}
+                x={offsetX + c.x * drawW}
+                y={offsetY + c.y * drawH}
+                width={Math.max(1, c.w * drawW)}
+                height={Math.max(1, c.h * drawH)}
+                fill={spectrumFill(c.strength, 190, 0.12)}
+                listening={false}
+              />
+            ))}
+
           {showWifi &&
             wifiSpectrum.map((c, i) => (
               <Rect
@@ -494,9 +509,10 @@ export default function CameraPlacementTool({
           {showFov &&
             sectors.map((s) => {
               const selected = s.cameraId === selectedId
-              if (s.polygon && s.polygon.length >= 3) {
+              const poly = s.polygon
+              if (poly && poly.length >= 3) {
                 const pts: number[] = []
-                for (const p of s.polygon) {
+                for (const p of poly) {
                   pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
                 }
                 return (
@@ -504,9 +520,9 @@ export default function CameraPlacementTool({
                     key={`fov-${s.cameraId}`}
                     points={pts}
                     closed
-                    fill={selected ? 'rgba(34,211,238,0.28)' : 'rgba(6,182,212,0.18)'}
-                    stroke={selected ? 'rgba(34,211,238,0.85)' : 'rgba(6,182,212,0.45)'}
-                    strokeWidth={1}
+                    fill={selected ? 'rgba(34,211,238,0.42)' : 'rgba(6,182,212,0.32)'}
+                    stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
+                    strokeWidth={selected ? 2.5 : 2}
                     listening={false}
                   />
                 )
@@ -522,12 +538,12 @@ export default function CameraPlacementTool({
                   x={cx}
                   y={cy}
                   innerRadius={0}
-                  outerRadius={Math.max(8, radius)}
+                  outerRadius={Math.max(12, radius)}
                   angle={angle}
                   rotation={rotation}
-                  fill={selected ? 'rgba(34,211,238,0.28)' : 'rgba(6,182,212,0.18)'}
-                  stroke={selected ? 'rgba(34,211,238,0.85)' : 'rgba(6,182,212,0.45)'}
-                  strokeWidth={1}
+                  fill={selected ? 'rgba(34,211,238,0.42)' : 'rgba(6,182,212,0.32)'}
+                  stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
+                  strokeWidth={selected ? 2.5 : 2}
                   listening={false}
                 />
               )

@@ -83,7 +83,7 @@ export function buildFovPolygon(
   startAngleRad: number,
   endAngleRad: number,
   structures: DesignStructure[],
-  rays = 36,
+  rays = 64,
 ): { x: number; y: number }[] {
   let start = startAngleRad
   let end = endAngleRad
@@ -96,4 +96,22 @@ export function buildFovPolygon(
     pts.push(polarToNorm(cx, cy, r, ang))
   }
   return pts
+}
+
+/** ¿Hay línea de visión libre (sin muro opaco) entre dos puntos? */
+export function hasClearVision(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  structures: DesignStructure[],
+): boolean {
+  if (structures.length === 0) return true
+  const segs = structuresToSegs(structures)
+  const hits = rayCrossings(ax, ay, bx, by, segs)
+  for (const hit of hits) {
+    const s = structures[hit.index]!
+    if (getStructureMaterialOrDefault(s.materialId).blocksVision) return false
+  }
+  return true
 }
