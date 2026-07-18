@@ -145,7 +145,7 @@ const navItems: NavItem[] = [
   {
     id: 'domotica',
     href: '/nexus/vision',
-    label: 'Cámaras',
+    label: 'NetVision',
     icon: (active: boolean) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path
@@ -305,7 +305,7 @@ function colorActivo(label: string): string {
   if (label === 'Almacenes') return '#FF2D55';
   if (label === 'Productos') return '#FF9500';
   if (label === 'Proyectos') return '#F59E0B';
-  if (label === 'Cámaras') return '#06B6D4';
+  if (label === 'NetVision' || label === 'Cámaras') return '#06B6D4';
   if (label === 'Entidades') return '#A78BFA';
   if (label === 'Equipo') return '#38BDF8';
   if (label === 'Legal') return '#FBBF24';

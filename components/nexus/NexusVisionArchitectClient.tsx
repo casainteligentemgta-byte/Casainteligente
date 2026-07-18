@@ -2,33 +2,107 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Camera, Trash2, Upload, Undo2 } from 'lucide-react'
+import type Konva from 'konva'
+import {
+  Camera,
+  Download,
+  FileJson,
+  Trash2,
+  Upload,
+  Undo2,
+} from 'lucide-react'
 import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
-import type { VisionCameraPin } from '@/components/nexus/NexusVisionKonvaStage'
+import BOMGenerator from '@/components/netvision/BOMGenerator'
+import CableRoutingEngine from '@/components/netvision/CableRoutingEngine'
+import ConduitCalculator from '@/components/netvision/ConduitCalculator'
+import DiagramGenerator from '@/components/netvision/DiagramGenerator'
+import NetworkDesigner from '@/components/netvision/NetworkDesigner'
+import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
+import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator'
+import BIMViewer from '@/components/netvision/BIMViewer'
+import ValidationEngine from '@/components/netvision/ValidationEngine'
+import {
+  CAMERA_CATALOG,
+  DEFAULT_CAMERA_MODEL_ID,
+  getCameraModelOrDefault,
+} from '@/lib/netvision/catalog/cameras'
+import {
+  DEFAULT_AP_ID,
+  DEFAULT_INJECTOR_ID,
+  DEFAULT_NVR_ID,
+  DEFAULT_SWITCH_ID,
+  getNetworkModelOrDefault,
+  labelPrefixForKind,
+  networkCatalogByKind,
+} from '@/lib/netvision/catalog/network'
+import {
+  buildCoverageSectors,
+  defaultScale,
+} from '@/lib/netvision/services/coverageCalculator'
+import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
+import { analyzeRedundancy } from '@/lib/netvision/services/redundancyAnalyzer'
+import {
+  adviseCameraLinks,
+  analyzePoeBudget,
+  autoAssignCamerasToPoe,
+} from '@/lib/netvision/services/poeAnalyzer'
+import { optimizeApChannels } from '@/lib/netvision/services/channelOptimizer'
+import {
+  analyzeWifiCoverage,
+  buildWifiCoverage,
+} from '@/lib/netvision/services/wifiPredictor'
+import {
+  buildCableRoutes,
+  validateCableRoutes,
+} from '@/lib/netvision/services/cableRoutingEngine'
+import {
+  planConduits,
+  validateConduits,
+} from '@/lib/netvision/services/conduitCalculator'
+import {
+  buildUndergroundPlan,
+  validateUnderground,
+  type ChamberMaterial,
+  type TerrainType,
+  type ZoneType,
+} from '@/lib/netvision/services/canalizationCalculator'
+import {
+  complianceValidator,
+  designFromRoutes,
+  profilesForCountry,
+} from '@/lib/netvision/services/complianceValidator'
+import {
+  clearProjectStorage,
+  emptyProject,
+  loadProject,
+  saveProject,
+} from '@/lib/netvision/storage'
+import type {
+  DesignCamera,
+  DesignNetworkNode,
+  NetVisionProject,
+  NetworkNodeKind,
+} from '@/lib/netvision/types'
+import {
+  downloadDataUrl,
+  downloadJson,
+  openSpecsPrintable,
+  projectToExportJson,
+} from '@/lib/netvision/utils/exporters'
 
-const NexusVisionKonvaStage = dynamic(
-  () => import('@/components/nexus/NexusVisionKonvaStage'),
+const CameraPlacementTool = dynamic(
+  () => import('@/components/netvision/CameraPlacementTool'),
   {
     ssr: false,
     loading: () => (
       <div className="flex min-h-[320px] items-center justify-center text-sm text-[var(--nexus-text-muted)]">
-        Cargando editor Konva…
+        Cargando NetVision Pro…
       </div>
     ),
   },
 )
-
-type CamaraPin = {
-  id: string
-  /** 0–1 normalizado sobre el plano */
-  x: number
-  y: number
-  label: string
-}
-
-const STORAGE_KEY = 'nexus.vision.architect.v2'
 
 function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -50,58 +124,166 @@ async function renderPdfFirstPage(file: File): Promise<string> {
   return canvas.toDataURL('image/jpeg', 0.92)
 }
 
-function normalizeLegacyPin(c: { id: string; x: number; y: number; label: string }): CamaraPin {
-  // v1 guardaba 0–100 %; v2 usa 0–1
-  const looksPercent = c.x > 1 || c.y > 1
-  return {
-    id: c.id,
-    label: c.label,
-    x: looksPercent ? c.x / 100 : c.x,
-    y: looksPercent ? c.y / 100 : c.y,
-  }
-}
-
 export default function NexusVisionArchitectClient() {
-  const [planoUrl, setPlanoUrl] = useState<string | null>(null)
-  const [planoNombre, setPlanoNombre] = useState('')
-  const [camaras, setCamaras] = useState<CamaraPin[]>([])
-  const [modoColocar, setModoColocar] = useState(true)
+  const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
+  const [hydrated, setHydrated] = useState(false)
+  const [modoColocarCam, setModoColocarCam] = useState(true)
+  const [placeNetKind, setPlaceNetKind] = useState<NetworkNodeKind | null>(null)
+  const [showFov, setShowFov] = useState(true)
+  const [showWifi, setShowWifi] = useState(true)
+  const [showLinks, setShowLinks] = useState(true)
+  const [showCableRoutes, setShowCableRoutes] = useState(true)
+  const [showUnderground, setShowUnderground] = useState(false)
+  const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
+  const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
+  const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
+  const [nightMode, setNightMode] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [defaultModelId, setDefaultModelId] = useState(DEFAULT_CAMERA_MODEL_ID)
+  const [defaultNetModels, setDefaultNetModels] = useState<Record<NetworkNodeKind, string>>({
+    switch: DEFAULT_SWITCH_ID,
+    ap: DEFAULT_AP_ID,
+    nvr: DEFAULT_NVR_ID,
+    injector: DEFAULT_INJECTOR_ID,
+  })
+  const [calibrateMode, setCalibrateMode] = useState(false)
+  const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
+  const [calibMeters, setCalibMeters] = useState('10')
+  const [sideTab, setSideTab] = useState<
+    'cctv' | 'red' | 'cable' | 'sub' | 'norm' | 'bim'
+  >('cctv')
+  const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
+  const [complianceCountry, setComplianceCountry] = useState('VE')
   const fileRef = useRef<HTMLInputElement>(null)
+  const stageRef = useRef<Konva.Stage | null>(null)
 
   useEffect(() => {
-    try {
-      const raw =
-        sessionStorage.getItem(STORAGE_KEY) ??
-        sessionStorage.getItem('nexus.vision.architect.v1')
-      if (!raw) return
-      const parsed = JSON.parse(raw) as {
-        planoUrl?: string
-        planoNombre?: string
-        camaras?: CamaraPin[]
-      }
-      if (parsed.planoUrl) setPlanoUrl(parsed.planoUrl)
-      if (parsed.planoNombre) setPlanoNombre(parsed.planoNombre)
-      if (Array.isArray(parsed.camaras)) {
-        setCamaras(parsed.camaras.map(normalizeLegacyPin))
-      }
-    } catch {
-      /* ignore */
-    }
+    const p = loadProject()
+    setProject(p)
+    if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
+    setHydrated(true)
   }, [])
 
   useEffect(() => {
-    try {
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ planoUrl, planoNombre, camaras }),
-      )
-    } catch {
-      /* ignore quota */
-    }
-  }, [planoUrl, planoNombre, camaras])
+    if (!hydrated) return
+    saveProject(project)
+  }, [project, hydrated])
+
+  const sectors = useMemo(
+    () => buildCoverageSectors(project.cameras, project.scale, nightMode ? 'night' : 'day'),
+    [project.cameras, project.scale, nightMode],
+  )
+
+  const wifiCircles = useMemo(
+    () => buildWifiCoverage(project.networkNodes, project.scale),
+    [project.networkNodes, project.scale],
+  )
+
+  const linkAdvice = useMemo(
+    () => adviseCameraLinks(project.cameras, project.networkNodes, project.scale),
+    [project.cameras, project.networkNodes, project.scale],
+  )
+
+  const poeAnalysis = useMemo(
+    () => analyzePoeBudget(project.cameras, project.networkNodes),
+    [project.cameras, project.networkNodes],
+  )
+
+  const cableRoutes = useMemo(
+    () => buildCableRoutes(project.cameras, project.networkNodes, project.scale),
+    [project.cameras, project.networkNodes, project.scale],
+  )
+
+  const conduitPlans = useMemo(() => planConduits(cableRoutes), [cableRoutes])
+
+  const undergroundPlan = useMemo(
+    () =>
+      buildUndergroundPlan(cableRoutes, {
+        zone: ugZone,
+        terrain: ugTerrain,
+        chamberMaterial: ugChamberMat,
+      }),
+    [cableRoutes, ugZone, ugTerrain, ugChamberMat],
+  )
+
+  const validations = useMemo(() => {
+    const cov = analyzeRedundancy(project.cameras, sectors)
+    const wifi = analyzeWifiCoverage(project.networkNodes, project.scale)
+    const cab = validateCableRoutes(cableRoutes)
+    const cnd = validateConduits(conduitPlans)
+    const ug = validateUnderground(undergroundPlan)
+    const design = designFromRoutes(
+      project.cameras,
+      cableRoutes,
+      project.networkNodes,
+    )
+    const norm = complianceValidator.validateAll(
+      design,
+      profilesForCountry(complianceCountry),
+    )
+    return [
+      ...cov,
+      ...poeAnalysis.validations,
+      ...wifi,
+      ...cab,
+      ...cnd,
+      ...ug,
+      ...norm,
+    ]
+  }, [
+    project.cameras,
+    project.networkNodes,
+    project.scale,
+    sectors,
+    poeAnalysis.validations,
+    cableRoutes,
+    conduitPlans,
+    undergroundPlan,
+    complianceCountry,
+  ])
+
+  const bom = useMemo(
+    () =>
+      buildBom(
+        project.cameras,
+        project.retentionDays,
+        project.networkNodes,
+        cableRoutes,
+        conduitPlans,
+        undergroundPlan,
+      ),
+    [
+      project.cameras,
+      project.retentionDays,
+      project.networkNodes,
+      cableRoutes,
+      conduitPlans,
+      undergroundPlan,
+    ],
+  )
+
+  const linkLines = useMemo(() => {
+    const nodeById = new Map(project.networkNodes.map((n) => [n.id, n]))
+    const camById = new Map(project.cameras.map((c) => [c.id, c]))
+    return linkAdvice
+      .filter((a) => a.nearestNodeId)
+      .map((a) => {
+        const cam = camById.get(a.cameraId)!
+        const node = nodeById.get(a.nearestNodeId!)!
+        return {
+          fromX: cam.x,
+          fromY: cam.y,
+          toX: node.x,
+          toY: node.y,
+          warn: a.needsInjector || a.distanceM > 90,
+        }
+      })
+  }, [linkAdvice, project.cameras, project.networkNodes])
+
+  const selectedCam = project.cameras.find((c) => c.id === selectedId) ?? null
+  const selectedNet = project.networkNodes.find((n) => n.id === selectedId) ?? null
 
   const onFile = useCallback(async (file: File | null) => {
     if (!file) return
@@ -123,11 +305,18 @@ export default function NexusVisionArchitectClient() {
       } else {
         throw new Error('Usa una imagen (JPG/PNG/WEBP) o un PDF.')
       }
-      setPlanoUrl(url)
-      setPlanoNombre(file.name)
-      setCamaras([])
+      setProject((p) => ({
+        ...p,
+        planoUrl: url,
+        planoNombre: file.name,
+        cameras: [],
+        networkNodes: [],
+      }))
       setSelectedId(null)
-      setModoColocar(true)
+      setModoColocarCam(true)
+      setPlaceNetKind(null)
+      setCalibrateMode(false)
+      setCalibPoints([])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
@@ -135,81 +324,130 @@ export default function NexusVisionArchitectClient() {
     }
   }, [])
 
-  const pins: VisionCameraPin[] = useMemo(
-    () =>
-      camaras.map((c) => ({
-        id: c.id,
-        name: c.label,
-        x: c.x,
-        y: c.y,
-        selected: c.id === selectedId,
-      })),
-    [camaras, selectedId],
-  )
-
   const onAddAt = (normX: number, normY: number) => {
-    if (!modoColocar || !planoUrl) return
-    const n = camaras.length + 1
-    const pin: CamaraPin = {
+    if (!project.planoUrl) return
+
+    if (calibrateMode) {
+      const next = [...calibPoints, { x: normX, y: normY }]
+      if (next.length >= 2) {
+        const a = next[0]!
+        const b = next[1]!
+        const meters = Math.max(0.5, Number(calibMeters) || 10)
+        const distN = Math.hypot(a.x - b.x, a.y - b.y) || 1e-6
+        const metersPerNorm = meters / distN
+        setProject((p) => ({
+          ...p,
+          scale: {
+            metersPerNormX: metersPerNorm,
+            metersPerNormY: metersPerNorm,
+            calibrated: true,
+          },
+        }))
+        setCalibPoints([])
+        setCalibrateMode(false)
+      } else {
+        setCalibPoints(next)
+      }
+      return
+    }
+
+    if (placeNetKind) {
+      const count = project.networkNodes.filter((n) => n.kind === placeNetKind).length + 1
+      const prefix = labelPrefixForKind(placeNetKind)
+      const node: DesignNetworkNode = {
+        id: uid(),
+        x: Math.round(normX * 1000) / 1000,
+        y: Math.round(normY * 1000) / 1000,
+        label: `${prefix}-${String(count).padStart(2, '0')}`,
+        kind: placeNetKind,
+        modelId: defaultNetModels[placeNetKind],
+        linkedCameraIds: [],
+        wifiChannel: placeNetKind === 'ap' ? 36 : undefined,
+      }
+      setProject((p) => ({ ...p, networkNodes: [...p.networkNodes, node] }))
+      setSelectedId(node.id)
+      setSideTab('red')
+      return
+    }
+
+    if (!modoColocarCam) return
+    const n = project.cameras.length + 1
+    const pin: DesignCamera = {
       id: uid(),
       x: Math.round(normX * 1000) / 1000,
       y: Math.round(normY * 1000) / 1000,
       label: `CAM-${String(n).padStart(2, '0')}`,
+      modelId: defaultModelId,
+      yawDeg: 0,
+      mountHeightM: 2.8,
     }
-    setCamaras((prev) => [...prev, pin])
+    setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
     setSelectedId(pin.id)
+    setSideTab('cctv')
   }
 
   const onMove = (id: string, normX: number, normY: number) => {
-    setCamaras((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              x: Math.round(normX * 1000) / 1000,
-              y: Math.round(normY * 1000) / 1000,
-            }
-          : c,
+    const nx = Math.round(normX * 1000) / 1000
+    const ny = Math.round(normY * 1000) / 1000
+    setProject((p) => ({
+      ...p,
+      cameras: p.cameras.map((c) => (c.id === id ? { ...c, x: nx, y: ny } : c)),
+      networkNodes: p.networkNodes.map((n) => (n.id === id ? { ...n, x: nx, y: ny } : n)),
+    }))
+  }
+
+  const updateSelectedCam = (patch: Partial<DesignCamera>) => {
+    if (!selectedId) return
+    setProject((p) => ({
+      ...p,
+      cameras: p.cameras.map((c) => (c.id === selectedId ? { ...c, ...patch } : c)),
+    }))
+  }
+
+  const updateSelectedNet = (patch: Partial<DesignNetworkNode>) => {
+    if (!selectedId) return
+    setProject((p) => ({
+      ...p,
+      networkNodes: p.networkNodes.map((n) =>
+        n.id === selectedId ? { ...n, ...patch } : n,
       ),
-    )
+    }))
   }
 
   const quitar = (id: string) => {
-    setCamaras((prev) => prev.filter((c) => c.id !== id))
+    setProject((p) => ({
+      ...p,
+      cameras: p.cameras.filter((c) => c.id !== id),
+      networkNodes: p.networkNodes.filter((n) => n.id !== id),
+    }))
     if (selectedId === id) setSelectedId(null)
   }
 
   const limpiarPlano = () => {
-    setPlanoUrl(null)
-    setPlanoNombre('')
-    setCamaras([])
+    setProject(emptyProject())
     setSelectedId(null)
-    try {
-      sessionStorage.removeItem(STORAGE_KEY)
-      sessionStorage.removeItem('nexus.vision.architect.v1')
-    } catch {
-      /* ignore */
-    }
+    clearProjectStorage()
   }
 
-  const resumen = useMemo(
-    () =>
-      camaras
-        .map(
-          (c) =>
-            `${c.label}: ${(c.x * 100).toFixed(1)}%, ${(c.y * 100).toFixed(1)}%`,
-        )
-        .join('\n'),
-    [camaras],
-  )
+  const exportPng = () => {
+    const stage = stageRef.current
+    if (!stage) return
+    downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
+  }
+
+  const exportJson = () => {
+    downloadJson('netvision-design.json', projectToExportJson(project, bom))
+  }
+
+  const placeMode = modoColocarCam || !!placeNetKind || calibrateMode
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">AI Architect · Cámaras</h1>
+          <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            Carga un PDF o imagen del plano y ubica las cámaras en el lienzo Konva.
+            CCTV · redes · cableado · subterráneo · normas · BIM
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -229,11 +467,28 @@ export default function NexusVisionArchitectClient() {
             className="hidden"
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
           />
-          {planoUrl ? (
-            <Button type="button" variant="glass" onClick={limpiarPlano}>
-              <Undo2 className="mr-2 h-4 w-4" />
-              Nuevo plano
-            </Button>
+          {project.planoUrl ? (
+            <>
+              <Button type="button" variant="glass" onClick={exportPng}>
+                <Download className="mr-2 h-4 w-4" />
+                PNG
+              </Button>
+              <Button type="button" variant="glass" onClick={exportJson}>
+                <FileJson className="mr-2 h-4 w-4" />
+                JSON
+              </Button>
+              <Button
+                type="button"
+                variant="glass"
+                onClick={() => openSpecsPrintable(project, bom)}
+              >
+                PDF specs
+              </Button>
+              <Button type="button" variant="glass" onClick={limpiarPlano}>
+                <Undo2 className="mr-2 h-4 w-4" />
+                Nuevo plano
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -244,9 +499,9 @@ export default function NexusVisionArchitectClient() {
         </p>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 xl:grid-cols-[1fr_300px_280px]">
         <GlassCardMotion className="overflow-hidden p-3 sm:p-4">
-          {!planoUrl ? (
+          {!project.planoUrl ? (
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -255,109 +510,461 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                PDF (primera página) o imagen JPG/PNG/WEBP. Luego toca el lienzo Konva para
-                colocar cada cámara y arrástrala para reposicionar.
+                Coloca cámaras, switches PoE y APs. Revisa FOV, WiFi, enlaces y presupuesto PoE.
               </p>
             </button>
           ) : (
             <>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <div className="flex gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
+                  <button
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                      viewMode === 'plano'
+                        ? 'bg-[var(--nexus-cyan)] text-black'
+                        : 'text-[var(--nexus-text-muted)]'
+                    }`}
+                    onClick={() => setViewMode('plano')}
+                  >
+                    Plano
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                      viewMode === 'diagrama'
+                        ? 'bg-[var(--nexus-cyan)] text-black'
+                        : 'text-[var(--nexus-text-muted)]'
+                    }`}
+                    onClick={() => setViewMode('diagrama')}
+                  >
+                    Diagrama
+                  </button>
+                </div>
                 <p className="truncate text-xs text-[var(--nexus-text-muted)]">
-                  <Mono>{planoNombre || 'Plano'}</Mono>
+                  <Mono>{project.planoNombre || 'Plano'}</Mono>
                   {' · '}
-                  {camaras.length} cámara{camaras.length === 1 ? '' : 's'}
+                  {project.cameras.length} cam · {project.networkNodes.length} red
+                  {' · '}
+                  {project.scale.calibrated ? (
+                    <span className="text-[var(--nexus-green)]">escala OK</span>
+                  ) : (
+                    <span className="text-amber-300">escala ~40 m</span>
+                  )}
                 </p>
-                <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-[var(--nexus-cyan)]">
+                {viewMode === 'plano' ? (
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
                   <input
                     type="checkbox"
-                    checked={modoColocar}
-                    onChange={(e) => setModoColocar(e.target.checked)}
+                    checked={modoColocarCam && !calibrateMode && !placeNetKind}
+                    onChange={(e) => {
+                      setModoColocarCam(e.target.checked)
+                      if (e.target.checked) {
+                        setCalibrateMode(false)
+                        setPlaceNetKind(null)
+                      }
+                    }}
                   />
-                  Modo colocar cámaras
+                  Cámara
                 </label>
+                ) : null}
+                {viewMode === 'plano' ? (
+                  <>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showFov}
+                        onChange={(e) => setShowFov(e.target.checked)}
+                      />
+                      FOV
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showWifi}
+                        onChange={(e) => setShowWifi(e.target.checked)}
+                      />
+                      WiFi
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showLinks}
+                        onChange={(e) => setShowLinks(e.target.checked)}
+                      />
+                      Enlaces
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showCableRoutes}
+                        onChange={(e) => setShowCableRoutes(e.target.checked)}
+                      />
+                      Rutas
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={showUnderground}
+                        onChange={(e) => setShowUnderground(e.target.checked)}
+                      />
+                      Sub
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]">
+                      <input
+                        type="checkbox"
+                        checked={nightMode}
+                        onChange={(e) => setNightMode(e.target.checked)}
+                      />
+                      Noche
+                    </label>
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                        calibrateMode
+                          ? 'bg-[var(--nexus-cyan)] text-black'
+                          : 'text-[var(--nexus-cyan)]'
+                      }`}
+                      onClick={() => {
+                        setCalibrateMode((v) => !v)
+                        setCalibPoints([])
+                        setModoColocarCam(false)
+                        setPlaceNetKind(null)
+                      }}
+                    >
+                      Calibrar
+                    </button>
+                    {calibrateMode ? (
+                      <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
+                        m
+                        <input
+                          value={calibMeters}
+                          onChange={(e) => setCalibMeters(e.target.value)}
+                          className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
+                        />
+                        ({calibPoints.length}/2)
+                      </label>
+                    ) : null}
+                    {!placeNetKind ? (
+                      <select
+                        value={defaultModelId}
+                        onChange={(e) => setDefaultModelId(e.target.value)}
+                        className="max-w-[180px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+                      >
+                        {CAMERA_CATALOG.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.brand} · {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
-              <div
-                className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
-                  modoColocar ? 'cursor-crosshair' : 'cursor-default'
-                }`}
-              >
-                <NexusVisionKonvaStage
-                  backgroundUrl={planoUrl}
-                  cameras={pins}
-                  onAddAt={onAddAt}
-                  onMove={onMove}
-                  onSelect={setSelectedId}
+              {viewMode === 'diagrama' ? (
+                <DiagramGenerator
+                  cameras={project.cameras}
+                  networkNodes={project.networkNodes}
+                  scale={project.scale}
+                  planoNombre={project.planoNombre}
+                  onSelectNode={setSelectedId}
+                  expanded
                 />
-              </div>
-              <p className="mt-2 text-[11px] text-[var(--nexus-text-dim)]">
-                {modoColocar
-                  ? 'Toca el plano vacío para agregar. Arrastra un pin para moverlo. Selecciónalo para editar a la derecha.'
-                  : 'Modo colocar desactivado — puedes seleccionar y arrastrar pins sin agregar nuevos.'}
-              </p>
+              ) : (
+                <div
+                  className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                    placeMode ? 'cursor-crosshair' : 'cursor-default'
+                  }`}
+                >
+                  <CameraPlacementTool
+                    backgroundUrl={project.planoUrl}
+                    cameras={project.cameras}
+                    networkNodes={project.networkNodes}
+                    sectors={sectors}
+                    wifiCircles={wifiCircles}
+                    linkLines={linkLines}
+                    cableRoutes={cableRoutes}
+                    undergroundRuns={undergroundPlan.runs}
+                    selectedId={selectedId}
+                    placeMode={placeMode}
+                    showFov={showFov}
+                    showWifi={showWifi}
+                    showLinks={showLinks}
+                    showCableRoutes={showCableRoutes}
+                    showUnderground={showUnderground}
+                    onAddAt={onAddAt}
+                    onMove={onMove}
+                    onSelect={setSelectedId}
+                    stageRef={stageRef}
+                  />
+                </div>
+              )}
             </>
           )}
         </GlassCardMotion>
 
-        <GlassCardMotion delay={0.06} className="space-y-3 p-4">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
-            Cámaras colocadas
-          </h2>
-          {camaras.length === 0 ? (
-            <p className="text-xs text-[var(--nexus-text-dim)]">
-              Aún no hay cámaras. Carga un plano y toca donde irán.
-            </p>
-          ) : (
-            <ul className="max-h-[420px] space-y-2 overflow-auto pr-1">
-              {camaras.map((c) => (
-                <li
-                  key={c.id}
-                  className={`rounded-lg border px-2.5 py-2 ${
-                    selectedId === c.id
-                      ? 'border-[var(--nexus-cyan)] bg-[rgba(0,242,254,0.08)]'
-                      : 'border-white/10 bg-black/20'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={c.label}
-                      onChange={(e) =>
-                        setCamaras((prev) =>
-                          prev.map((x) =>
-                            x.id === c.id ? { ...x, label: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      onFocus={() => setSelectedId(c.id)}
-                      className="min-w-0 flex-1 rounded border border-white/10 bg-black/40 px-2 py-1 text-xs font-semibold text-white outline-none focus:border-[var(--nexus-cyan)]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => quitar(c.id)}
-                      className="rounded p-1.5 text-red-300 hover:bg-red-500/20"
-                      aria-label={`Quitar ${c.label}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <p className="mt-1 text-[10px] text-[var(--nexus-text-dim)]">
-                    X {(c.x * 100).toFixed(1)}% · Y {(c.y * 100).toFixed(1)}%
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {camaras.length > 0 ? (
-            <Button
-              type="button"
-              variant="glass"
-              className="w-full"
-              onClick={() => {
-                void navigator.clipboard?.writeText(resumen)
+        <GlassCardMotion delay={0.04} className="space-y-3 p-4">
+          <div className="flex flex-wrap gap-1 rounded-lg border border-white/10 bg-black/30 p-0.5">
+            {(
+              [
+                ['cctv', 'CCTV'],
+                ['red', 'Red'],
+                ['cable', 'Cable'],
+                ['sub', 'Sub'],
+                ['norm', 'Norm'],
+                ['bim', 'BIM'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${
+                  sideTab === id
+                    ? 'bg-[var(--nexus-cyan)] text-black'
+                    : 'text-[var(--nexus-text-muted)]'
+                }`}
+                onClick={() => {
+                  setSideTab(id)
+                  if (id === 'sub') {
+                    setShowUnderground(true)
+                    setViewMode('plano')
+                  }
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {sideTab === 'norm' ? (
+            <ComplianceValidatorPanel
+              countryCode={complianceCountry}
+              onCountry={(code) => {
+                setComplianceCountry(code)
+                setProject((p) => ({ ...p, complianceProfileId: code }))
               }}
-            >
-              Copiar lista de posiciones
-            </Button>
+              cameras={project.cameras}
+              networkNodes={project.networkNodes}
+              cableRoutes={cableRoutes}
+              conduitPlans={conduitPlans}
+              onSelect={setSelectedId}
+            />
+          ) : sideTab === 'bim' ? (
+            <BIMViewer project={project} cableRoutes={cableRoutes} />
+          ) : sideTab === 'sub' ? (
+            <div className="space-y-4">
+              <UndergroundCanalizationTool
+                plan={undergroundPlan}
+                zone={ugZone}
+                terrain={ugTerrain}
+                chamberMaterial={ugChamberMat}
+                onZone={setUgZone}
+                onTerrain={setUgTerrain}
+                onChamberMaterial={setUgChamberMat}
+              />
+              <div className="border-t border-white/10 pt-3">
+                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+                  Validaciones
+                </h3>
+                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+              </div>
+            </div>
+          ) : sideTab === 'cable' ? (
+            <div className="space-y-4">
+              <CableRoutingEngine
+                routes={cableRoutes}
+                onSelect={(fromId) => setSelectedId(fromId)}
+              />
+              <div className="border-t border-white/10 pt-3">
+                <ConduitCalculator
+                  plans={conduitPlans}
+                  onSelectNode={setSelectedId}
+                />
+              </div>
+              <div className="border-t border-white/10 pt-3">
+                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+                  Validaciones
+                </h3>
+                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+              </div>
+            </div>
+          ) : sideTab === 'red' ? (
+            <NetworkDesigner
+              nodes={project.networkNodes}
+              placeKind={placeNetKind}
+              defaultModels={defaultNetModels}
+              poeRows={poeAnalysis.rows}
+              linkAdvice={linkAdvice}
+              onPlaceKind={(kind) => {
+                setPlaceNetKind(kind)
+                if (kind) {
+                  setModoColocarCam(false)
+                  setCalibrateMode(false)
+                }
+              }}
+              onDefaultModel={(kind, modelId) =>
+                setDefaultNetModels((m) => ({ ...m, [kind]: modelId }))
+              }
+              onOptimizeChannels={() =>
+                setProject((p) => ({
+                  ...p,
+                  networkNodes: optimizeApChannels(p.networkNodes, p.scale),
+                }))
+              }
+              onAutoAssignPoe={() =>
+                setProject((p) => ({
+                  ...p,
+                  networkNodes: autoAssignCamerasToPoe(
+                    p.cameras,
+                    p.networkNodes,
+                    p.scale,
+                  ),
+                }))
+              }
+              onSelectNode={setSelectedId}
+              onRemoveNode={quitar}
+            />
+          ) : (
+            <>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
+                Inspector CCTV
+              </h2>
+              {selectedCam ? (
+                <div className="space-y-2 text-xs">
+                  <label className="block">
+                    <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
+                    <input
+                      value={selectedCam.label}
+                      onChange={(e) => updateSelectedCam({ label: e.target.value })}
+                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[var(--nexus-text-dim)]">Modelo</span>
+                    <select
+                      value={selectedCam.modelId}
+                      onChange={(e) => updateSelectedCam({ modelId: e.target.value })}
+                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                    >
+                      {CAMERA_CATALOG.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.brand} · {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[var(--nexus-text-dim)]">
+                      Orientación (yaw) {selectedCam.yawDeg}°
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={359}
+                      value={selectedCam.yawDeg}
+                      onChange={(e) =>
+                        updateSelectedCam({ yawDeg: Number(e.target.value) })
+                      }
+                      className="mt-1 w-full"
+                    />
+                  </label>
+                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                    {(() => {
+                      const m = getCameraModelOrDefault(selectedCam.modelId)
+                      return `${m.fovDeg}° FOV · ${m.poeWatts} W · ${m.bitrateMbps} Mbps`
+                    })()}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="glass"
+                    className="w-full"
+                    onClick={() => quitar(selectedCam.id)}
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    Quitar cámara
+                  </Button>
+                </div>
+              ) : selectedNet ? (
+                <div className="space-y-2 text-xs">
+                  <p className="text-[10px] uppercase text-[var(--nexus-text-dim)]">
+                    Nodo red · {selectedNet.kind}
+                  </p>
+                  <label className="block">
+                    <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
+                    <input
+                      value={selectedNet.label}
+                      onChange={(e) => updateSelectedNet({ label: e.target.value })}
+                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[var(--nexus-text-dim)]">Modelo</span>
+                    <select
+                      value={selectedNet.modelId}
+                      onChange={(e) => updateSelectedNet({ modelId: e.target.value })}
+                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                    >
+                      {networkCatalogByKind(selectedNet.kind).map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.brand} · {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                    {(() => {
+                      const m = getNetworkModelOrDefault(
+                        selectedNet.modelId,
+                        selectedNet.kind,
+                      )
+                      return `${m.poeBudgetW} W PoE · ${m.poePorts} puertos · $${m.priceUsd}`
+                    })()}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="glass"
+                    className="w-full"
+                    onClick={() => quitar(selectedNet.id)}
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    Quitar nodo
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--nexus-text-dim)]">
+                  Selecciona una cámara o nodo de red.
+                </p>
+              )}
+
+              <div className="border-t border-white/10 pt-3">
+                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+                  Validaciones
+                </h3>
+                <ValidationEngine
+                  results={validations}
+                  onSelectCamera={setSelectedId}
+                />
+              </div>
+            </>
+          )}
+
+          {sideTab === 'red' ? (
+            <div className="border-t border-white/10 pt-3">
+              <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
+                Validaciones
+              </h3>
+              <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+            </div>
           ) : null}
+        </GlassCardMotion>
+
+        <GlassCardMotion delay={0.08} className="space-y-3 p-4">
+          <BOMGenerator
+            bom={bom}
+            retentionDays={project.retentionDays}
+            onRetentionChange={(days) =>
+              setProject((p) => ({ ...p, retentionDays: days }))
+            }
+          />
         </GlassCardMotion>
       </div>
     </div>

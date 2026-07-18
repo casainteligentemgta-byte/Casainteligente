@@ -1,0 +1,10 @@
+{
+  "US": { "label": "USA", "profiles": ["NEC", "NFPA", "TIA_EIA_568"] },
+  "EU": { "label": "Europa", "profiles": ["IEC", "TIA_EIA_568"] },
+  "GB": { "label": "UK", "profiles": ["IEC", "TIA_EIA_568"] },
+  "CA": { "label": "Canadá", "profiles": ["NEC", "TIA_EIA_568"] },
+  "JP": { "label": "Japón", "profiles": ["IEC"] },
+  "MX": { "label": "México", "profiles": ["IEC", "TIA_EIA_568"] },
+  "AR": { "label": "Argentina", "profiles": ["IEC", "TIA_EIA_568"] },
+  "VE": { "label": "Venezuela", "profiles": ["IEC", "TIA_EIA_568", "NFPA", "ISO27001"] }
+}
