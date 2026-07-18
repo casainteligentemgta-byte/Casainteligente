@@ -3,7 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import type Konva from 'konva'
+import Link from 'next/link'
 import {
+  BookOpen,
   Camera,
   Download,
   Trash2,
@@ -85,6 +87,7 @@ import {
   designFromRoutes,
   profilesForCountry,
 } from '@/lib/netvision/services/complianceValidator'
+import { cloudUpsertProject } from '@/lib/netvision/cloud'
 import {
   emptyProject,
   loadProject,
@@ -189,6 +192,21 @@ export default function NexusVisionArchitectClient() {
   useEffect(() => {
     if (!hydrated) return
     saveProject(project)
+  }, [project, hydrated])
+
+  /** Sync diferido a Supabase (si hay sesión). */
+  useEffect(() => {
+    if (!hydrated) return
+    const t = window.setTimeout(() => {
+      void cloudUpsertProject(project).then((r) => {
+        if (!r.authenticated) return
+        if (!r.ok && r.error) {
+          // Silencioso si la tabla aún no existe; evita spamear UI
+          if (r.error.includes('migración 274') || r.error.includes('42P01')) return
+        }
+      })
+    }, 1800)
+    return () => window.clearTimeout(t)
   }, [project, hydrated])
 
   useEffect(() => {
@@ -657,6 +675,12 @@ export default function NexusVisionArchitectClient() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="glass" asChild>
+            <Link href="/nexus/vision/manual">
+              <BookOpen className="mr-2 h-4 w-4" />
+              Manual
+            </Link>
+          </Button>
           <NetVisionProjectsPanel
             activeId={project.id}
             projectName={project.name}

@@ -115,6 +115,9 @@ function setActiveId(id: string) {
   }
 }
 
+/** Límite aprox. para subir plano (data URL) a Supabase. */
+export const NETVISION_CLOUD_MAX_PLANO_CHARS = 450_000
+
 export function listProjectIndex(): NetVisionProjectIndexEntry[] {
   const { projects } = readLibrary()
   return Object.values(projects)
@@ -127,6 +130,43 @@ export function listProjectIndex(): NetVisionProjectIndexEntry[] {
       networkCount: p.networkNodes.length,
     }))
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+}
+
+export function listLocalProjects(): NetVisionProject[] {
+  return Object.values(readLibrary().projects).sort((a, b) =>
+    a.updatedAt < b.updatedAt ? 1 : -1,
+  )
+}
+
+/** Copia lista para nube: omite plano si es demasiado grande. */
+export function projectForCloud(project: NetVisionProject): NetVisionProject {
+  const normalized = normalizeProject(project)
+  const plano = normalized.planoUrl
+  if (plano && plano.length > NETVISION_CLOUD_MAX_PLANO_CHARS) {
+    return { ...normalized, planoUrl: null }
+  }
+  return normalized
+}
+
+/** Inserta o actualiza en biblioteca local (p. ej. al bajar de la nube). */
+export function upsertLocalProject(project: NetVisionProject): NetVisionProject {
+  const next = normalizeProject(project)
+  const lib = readLibrary()
+  const prev = lib.projects[next.id]
+  if (prev?.planoUrl && !next.planoUrl) {
+    // Conserva plano local si la nube no trae imagen
+    next.planoUrl = prev.planoUrl
+  }
+  lib.projects[next.id] = next
+  writeLibrary(lib)
+  return next
+}
+
+export function projectFromPartial(
+  p: Partial<NetVisionProject>,
+  fallbackId?: string,
+): NetVisionProject {
+  return normalizeProject(p, fallbackId)
 }
 
 export function createProject(name?: string): NetVisionProject {
