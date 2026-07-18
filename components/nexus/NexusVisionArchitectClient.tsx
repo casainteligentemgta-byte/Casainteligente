@@ -27,8 +27,9 @@ import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator
 import BIMViewer from '@/components/netvision/BIMViewer'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
-  CAMERA_CATALOG,
+  CAMERA_BRANDS,
   DEFAULT_CAMERA_MODEL_ID,
+  cameraCatalogGrouped,
   effectiveCameraVision,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
@@ -667,7 +668,7 @@ export default function NexusVisionArchitectClient() {
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
                 Agrega cámara, switch, AP o NVR con los botones +; luego arrastra en el plano.
-                Revisa FOV, WiFi y enlaces.
+                CCTV: {CAMERA_BRANDS.join(', ')}.
               </p>
             </button>
           ) : (
@@ -830,13 +831,17 @@ export default function NexusVisionArchitectClient() {
                     <select
                       value={defaultModelId}
                       onChange={(e) => setDefaultModelId(e.target.value)}
-                      className="max-w-[180px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+                      className="max-w-[200px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
                       title="Modelo de cámara al agregar"
                     >
-                      {CAMERA_CATALOG.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.brand} · {m.name}
-                        </option>
+                      {cameraCatalogGrouped().map((g) => (
+                        <optgroup key={g.brand} label={g.brand}>
+                          {g.models.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </>
@@ -1081,13 +1086,20 @@ export default function NexusVisionArchitectClient() {
                       }
                       className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
                     >
-                      {CAMERA_CATALOG.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.brand} · {m.name}
-                        </option>
+                      {cameraCatalogGrouped().map((g) => (
+                        <optgroup key={g.brand} label={g.brand}>
+                          {g.models.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </label>
+                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                    Marcas: {CAMERA_BRANDS.join(' · ')}
+                  </p>
                   {(() => {
                     const vision = effectiveCameraVision(
                       selectedCam,
