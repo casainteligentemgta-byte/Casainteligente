@@ -20,6 +20,8 @@ import ConduitCalculator from '@/components/netvision/ConduitCalculator'
 import DiagramGenerator from '@/components/netvision/DiagramGenerator'
 import NetworkDesigner from '@/components/netvision/NetworkDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
+import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator'
+import BIMViewer from '@/components/netvision/BIMViewer'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
   CAMERA_CATALOG,
@@ -66,6 +68,11 @@ import {
   type TerrainType,
   type ZoneType,
 } from '@/lib/netvision/services/canalizationCalculator'
+import {
+  complianceValidator,
+  designFromRoutes,
+  profilesForCountry,
+} from '@/lib/netvision/services/complianceValidator'
 import {
   clearProjectStorage,
   emptyProject,
@@ -144,13 +151,18 @@ export default function NexusVisionArchitectClient() {
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
-  const [sideTab, setSideTab] = useState<'cctv' | 'red' | 'cable' | 'sub'>('cctv')
+  const [sideTab, setSideTab] = useState<
+    'cctv' | 'red' | 'cable' | 'sub' | 'norm' | 'bim'
+  >('cctv')
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
+  const [complianceCountry, setComplianceCountry] = useState('VE')
   const fileRef = useRef<HTMLInputElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
 
   useEffect(() => {
-    setProject(loadProject())
+    const p = loadProject()
+    setProject(p)
+    if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
     setHydrated(true)
   }, [])
 
@@ -202,7 +214,24 @@ export default function NexusVisionArchitectClient() {
     const cab = validateCableRoutes(cableRoutes)
     const cnd = validateConduits(conduitPlans)
     const ug = validateUnderground(undergroundPlan)
-    return [...cov, ...poeAnalysis.validations, ...wifi, ...cab, ...cnd, ...ug]
+    const design = designFromRoutes(
+      project.cameras,
+      cableRoutes,
+      project.networkNodes,
+    )
+    const norm = complianceValidator.validateAll(
+      design,
+      profilesForCountry(complianceCountry),
+    )
+    return [
+      ...cov,
+      ...poeAnalysis.validations,
+      ...wifi,
+      ...cab,
+      ...cnd,
+      ...ug,
+      ...norm,
+    ]
   }, [
     project.cameras,
     project.networkNodes,
@@ -212,6 +241,7 @@ export default function NexusVisionArchitectClient() {
     cableRoutes,
     conduitPlans,
     undergroundPlan,
+    complianceCountry,
   ])
 
   const bom = useMemo(
@@ -417,7 +447,7 @@ export default function NexusVisionArchitectClient() {
         <div>
           <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
           <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            CCTV + redes + cableado + subterráneo + diagrama.
+            CCTV · redes · cableado · subterráneo · normas · BIM
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -673,50 +703,54 @@ export default function NexusVisionArchitectClient() {
         </GlassCardMotion>
 
         <GlassCardMotion delay={0.04} className="space-y-3 p-4">
-          <div className="flex gap-1 rounded-lg border border-white/10 bg-black/30 p-0.5">
-            <button
-              type="button"
-              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
-                sideTab === 'cctv' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
-              }`}
-              onClick={() => setSideTab('cctv')}
-            >
-              CCTV
-            </button>
-            <button
-              type="button"
-              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
-                sideTab === 'red' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
-              }`}
-              onClick={() => setSideTab('red')}
-            >
-              Red
-            </button>
-            <button
-              type="button"
-              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
-                sideTab === 'cable' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
-              }`}
-              onClick={() => setSideTab('cable')}
-            >
-              Cable
-            </button>
-            <button
-              type="button"
-              className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
-                sideTab === 'sub' ? 'bg-[var(--nexus-cyan)] text-black' : 'text-[var(--nexus-text-muted)]'
-              }`}
-              onClick={() => {
-                setSideTab('sub')
-                setShowUnderground(true)
-                setViewMode('plano')
-              }}
-            >
-              Sub
-            </button>
+          <div className="flex flex-wrap gap-1 rounded-lg border border-white/10 bg-black/30 p-0.5">
+            {(
+              [
+                ['cctv', 'CCTV'],
+                ['red', 'Red'],
+                ['cable', 'Cable'],
+                ['sub', 'Sub'],
+                ['norm', 'Norm'],
+                ['bim', 'BIM'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${
+                  sideTab === id
+                    ? 'bg-[var(--nexus-cyan)] text-black'
+                    : 'text-[var(--nexus-text-muted)]'
+                }`}
+                onClick={() => {
+                  setSideTab(id)
+                  if (id === 'sub') {
+                    setShowUnderground(true)
+                    setViewMode('plano')
+                  }
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          {sideTab === 'sub' ? (
+          {sideTab === 'norm' ? (
+            <ComplianceValidatorPanel
+              countryCode={complianceCountry}
+              onCountry={(code) => {
+                setComplianceCountry(code)
+                setProject((p) => ({ ...p, complianceProfileId: code }))
+              }}
+              cameras={project.cameras}
+              networkNodes={project.networkNodes}
+              cableRoutes={cableRoutes}
+              conduitPlans={conduitPlans}
+              onSelect={setSelectedId}
+            />
+          ) : sideTab === 'bim' ? (
+            <BIMViewer project={project} cableRoutes={cableRoutes} />
+          ) : sideTab === 'sub' ? (
             <div className="space-y-4">
               <UndergroundCanalizationTool
                 plan={undergroundPlan}

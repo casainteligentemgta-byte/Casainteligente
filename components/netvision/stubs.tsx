@@ -1,6 +1,6 @@
 'use client'
 
-/** Stubs de módulos Fase 2–7 (roadmap NetVision Pro). */
+/** Stubs residuales NetVision Pro (módulos ya implementados se importan directo). */
 
 function ComingSoon({ title, phase }: { title: string; phase: string }) {
   return (
@@ -11,22 +11,13 @@ function ComingSoon({ title, phase }: { title: string; phase: string }) {
   )
 }
 
-/** NetworkDesigner real: components/netvision/NetworkDesigner.tsx (Fase 2). */
-
-/** DiagramGenerator real: components/netvision/DiagramGenerator.tsx (Fase 3). */
-
-/** CableRoutingEngine / ConduitCalculator reales (Fase 4). */
-
-/** UndergroundCanalizationTool real (Fase 5). */
-
-export function ComplianceValidatorPanel() {
-  return <ComingSoon title="Validador NEC / IEC / NFPA / TIA" phase="Fase 6" />
-}
-
-export function BIMViewer() {
-  return <ComingSoon title="Visor BIM / IFC / Revit package" phase="Fase 7" />
-}
+/** Fases 1–7 implementadas en components/netvision/* dedicados. */
 
 export function AutomationEditor() {
-  return <ComingSoon title="Automatización / Dynamo scripts" phase="Fase 7" />
+  return (
+    <ComingSoon
+      title="Editor automatización avanzada"
+      phase="Dynamo ya se exporta desde pestaña BIM"
+    />
+  )
 }

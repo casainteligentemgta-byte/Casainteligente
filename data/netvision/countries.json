@@ -6,5 +6,5 @@
   "JP": { "label": "Japón", "profiles": ["IEC"] },
   "MX": { "label": "México", "profiles": ["IEC", "TIA_EIA_568"] },
   "AR": { "label": "Argentina", "profiles": ["IEC", "TIA_EIA_568"] },
-  "VE": { "label": "Venezuela", "profiles": ["IEC", "TIA_EIA_568", "NFPA"] }
+  "VE": { "label": "Venezuela", "profiles": ["IEC", "TIA_EIA_568", "NFPA", "ISO27001"] }
 }
