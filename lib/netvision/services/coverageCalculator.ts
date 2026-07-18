@@ -1,4 +1,4 @@
-import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import {
   buildFovPolygon,
   hasClearVision,
@@ -33,14 +33,13 @@ export function buildCoverageSectors(
   structures: DesignStructure[] = [],
 ): CoverageSector[] {
   return cameras.map((cam) => {
-    const model = getCameraModelOrDefault(cam.modelId)
-    const rangeM = mode === 'night' ? model.rangeNightM : model.rangeDayM
+    const { fovDeg, rangeM, yawDeg } = effectiveCameraVision(cam, mode)
     const radiusNorm = metersToNormRadius(
       rangeM,
       scale.metersPerNormX,
       scale.metersPerNormY,
     )
-    const { startAngleRad, endAngleRad } = fovSectorAngles(cam.yawDeg, model.fovDeg)
+    const { startAngleRad, endAngleRad } = fovSectorAngles(yawDeg, fovDeg)
     // Siempre polígono: recorta contra muros opacos (drywall/bloque)
     const polygon = buildFovPolygon(
       cam.x,
@@ -77,14 +76,13 @@ export function buildVisionSpectrum(
   if (cameras.length === 0) return []
 
   const prepared = cameras.map((cam) => {
-    const model = getCameraModelOrDefault(cam.modelId)
-    const rangeM = mode === 'night' ? model.rangeNightM : model.rangeDayM
+    const { fovDeg, rangeM, yawDeg } = effectiveCameraVision(cam, mode)
     const radiusNorm = metersToNormRadius(
       rangeM,
       scale.metersPerNormX,
       scale.metersPerNormY,
     )
-    const { startAngleRad, endAngleRad } = fovSectorAngles(cam.yawDeg, model.fovDeg)
+    const { startAngleRad, endAngleRad } = fovSectorAngles(yawDeg, fovDeg)
     return { cam, rangeM, radiusNorm, startAngleRad, endAngleRad }
   })
 

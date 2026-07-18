@@ -94,6 +94,14 @@ function normalizeProject(p: Partial<NetVisionProject>): NetVisionProject {
 
 function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignCamera {
   const looksPercent = (c.x ?? 0) > 1 || (c.y ?? 0) > 1
+  const fovDeg =
+    typeof c.fovDeg === 'number' && Number.isFinite(c.fovDeg)
+      ? Math.min(170, Math.max(20, c.fovDeg))
+      : undefined
+  const rangeM =
+    typeof c.rangeM === 'number' && Number.isFinite(c.rangeM)
+      ? Math.min(120, Math.max(2, c.rangeM))
+      : undefined
   return {
     id: c.id ?? `${Date.now()}`,
     label: c.label ?? 'CAM',
@@ -102,6 +110,8 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     modelId: c.modelId ?? DEFAULT_CAMERA_MODEL_ID,
     yawDeg: typeof c.yawDeg === 'number' ? c.yawDeg : 0,
     mountHeightM: typeof c.mountHeightM === 'number' ? c.mountHeightM : 2.8,
+    ...(fovDeg != null ? { fovDeg } : {}),
+    ...(rangeM != null ? { rangeM } : {}),
   }
 }
 
