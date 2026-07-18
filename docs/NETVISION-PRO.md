@@ -11,6 +11,7 @@ Guía rápida de capas (FOV / WiFi / Enlaces / Rutas / Sub / Noche): botón **?*
 
 ### 2 — Redes
 Switches PoE, APs WiFi, NVR, injectors, canales, presupuesto PoE.
+Botones **+ Switch / + AP / + NVR / + Injector** agregan el equipo al plano de inmediato (igual que + Cámara); luego arrastrar.
 
 ### 3 — Diagrama
 Unifilar en tiempo real (Plano/Diagrama) + SVG/PNG.
