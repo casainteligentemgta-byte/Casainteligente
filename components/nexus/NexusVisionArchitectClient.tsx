@@ -584,23 +584,6 @@ export default function NexusVisionArchitectClient() {
     }))
   }
 
-  const onMoveStructureEndpoint = (
-    id: string,
-    end: 'a' | 'b',
-    normX: number,
-    normY: number,
-  ) => {
-    const nx = Math.round(normX * 1000) / 1000
-    const ny = Math.round(normY * 1000) / 1000
-    setProject((p) => ({
-      ...p,
-      structures: (p.structures ?? []).map((s) => {
-        if (s.id !== id) return s
-        return end === 'a' ? { ...s, x1: nx, y1: ny } : { ...s, x2: nx, y2: ny }
-      }),
-    }))
-  }
-
   const quitar = (id: string) => {
     setProject((p) => ({
       ...p,
@@ -898,7 +881,6 @@ export default function NexusVisionArchitectClient() {
                     showUnderground={showUnderground}
                     onAddAt={onAddAt}
                     onMove={onMove}
-                    onMoveStructureEndpoint={onMoveStructureEndpoint}
                     onAdjustCameraVision={adjustCameraVision}
                     metersPerNormX={project.scale.metersPerNormX}
                     metersPerNormY={project.scale.metersPerNormY}
