@@ -51,12 +51,6 @@ export type CameraPlacementToolProps = {
   showUnderground?: boolean
   onAddAt: (normX: number, normY: number) => void
   onMove: (id: string, normX: number, normY: number) => void
-  onMoveStructureEndpoint?: (
-    id: string,
-    end: 'a' | 'b',
-    normX: number,
-    normY: number,
-  ) => void
   /** Ajuste interactivo de óptica (yaw / FOV / alcance) desde el plano. */
   onAdjustCameraVision?: (
     id: string,
@@ -178,7 +172,6 @@ export default function CameraPlacementTool({
   showUnderground = false,
   onAddAt,
   onMove,
-  onMoveStructureEndpoint,
   onAdjustCameraVision,
   metersPerNormX = 40,
   metersPerNormY = 40,
@@ -724,43 +717,6 @@ export default function CameraPlacementTool({
               />
             )
           })}
-
-          {onMoveStructureEndpoint
-            ? structures.flatMap((s) => {
-                const mat = getStructureMaterialOrDefault(s.materialId)
-                const selected = s.id === selectedId
-                const ends: Array<['a' | 'b', number, number]> = [
-                  ['a', s.x1, s.y1],
-                  ['b', s.x2, s.y2],
-                ]
-                return ends.map(([end, nx, ny]) => (
-                  <Circle
-                    key={`str-end-${s.id}-${end}`}
-                    x={offsetX + nx * drawW}
-                    y={offsetY + ny * drawH}
-                    radius={selected ? 7 : 5}
-                    fill={mat.color}
-                    stroke="#0f172a"
-                    strokeWidth={1.5}
-                    opacity={selected ? 1 : 0.55}
-                    draggable
-                    onClick={(e) => {
-                      e.cancelBubble = true
-                      onSelect(s.id)
-                    }}
-                    onTap={(e) => {
-                      e.cancelBubble = true
-                      onSelect(s.id)
-                    }}
-                    onDragEnd={(e: KonvaEventObject<DragEvent>) => {
-                      const node = e.target as Konva.Circle
-                      const n = toNorm(node.x(), node.y())
-                      onMoveStructureEndpoint(s.id, end, n.x, n.y)
-                    }}
-                  />
-                ))
-              })
-            : null}
 
           {draftPoint ? (
             <Circle

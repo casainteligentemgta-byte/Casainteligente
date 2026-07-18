@@ -66,7 +66,7 @@ export default function StructureDesigner({
         </p>
       ) : (
         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-          Elige un material y marca 2 puntos. Arrastra los extremos para ajustar.
+          Elige un material y marca 2 puntos en el plano.
         </p>
       )}
 
