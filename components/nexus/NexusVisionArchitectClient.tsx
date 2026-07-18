@@ -475,14 +475,6 @@ export default function NexusVisionArchitectClient() {
     downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
   }
 
-<<<<<<< HEAD
-  const exportJson = () => {
-    downloadJson('netvision-design.json', projectToExportJson(project, bom))
-  }
-=======
-  const placeMode = !!placeNetKind || calibrateMode
->>>>>>> origin/main
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
