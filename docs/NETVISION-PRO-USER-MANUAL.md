@@ -2,7 +2,8 @@
 
 Cómo manejar la plataforma paso a paso.
 
-> Complementa el [manual explicativo](./NETVISION-PRO-MANUAL.md). En la app: [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario).  
+> Complementa el [manual explicativo](./NETVISION-PRO-MANUAL.md) y la [guía de instaladores](./NETVISION-PRO-INSTALLER-GUIDE.md).  
+> En la app: [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario).  
 > Estado técnico: [`NETVISION-PRO.md`](./NETVISION-PRO.md).
 
 **Nota de interfaz:** Los nombres de botones de este manual describen el flujo completo del producto. En la app actual: **Cargar PDF / imagen**, **+ Cámara / + Switch / + AP / + NVR / + Injector**, pestañas Plano · Diagrama · Red · Cable · Sub · Norm · BIM, capas con **?**, y **Manual** en la cabecera. El diseño se guarda en `sessionStorage` del navegador.

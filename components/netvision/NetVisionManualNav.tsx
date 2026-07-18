@@ -1,11 +1,16 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
-type ManualTab = 'explicativo' | 'usuario'
+type ManualTab = 'explicativo' | 'usuario' | 'instaladores'
 
 const tabs: { id: ManualTab; href: string; label: string }[] = [
   { id: 'explicativo', href: '/nexus/vision/manual', label: 'Explicativo' },
   { id: 'usuario', href: '/nexus/vision/manual/usuario', label: 'Usuario' },
+  {
+    id: 'instaladores',
+    href: '/nexus/vision/manual/instaladores',
+    label: 'Instaladores',
+  },
 ]
 
 export default function NetVisionManualNav({ active }: { active: ManualTab }) {
@@ -18,7 +23,7 @@ export default function NetVisionManualNav({ active }: { active: ManualTab }) {
         <ArrowLeft className="h-4 w-4" />
         Volver a NetVision Pro
       </Link>
-      <div className="flex gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
+      <div className="flex flex-wrap gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
         {tabs.map((tab) => {
           const isActive = tab.id === active
           return (
