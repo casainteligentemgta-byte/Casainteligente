@@ -60,10 +60,16 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
       'Marca dos puntos en el plano e indica la distancia real en metros para fijar la escala del diseño.',
   },
   {
+    id: 'structures',
+    label: 'Estructuras',
+    blurb:
+      'Muestra u oculta muros, vidrio, ventanas y puertas en el plano. Siguen afectando FOV/WiFi/sonido aunque la capa esté oculta.',
+  },
+  {
     id: 'muros',
     label: 'Muros',
     blurb:
-      'Pestaña Muros: dibuja drywall, bloque, vidrio o ventana (2 toques) para afinar FOV, WiFi y sonido.',
+      'Pestaña Muros: dibuja drywall, bloque, vidrio, ventana o puerta (2 toques). Arrastra para mover; la capa Estructuras las muestra u oculta.',
   },
 ]
 

@@ -92,12 +92,17 @@ export type DesignNetworkNode = {
 }
 
 /** Material constructivo que afecta visión / WiFi / sonido. */
-export type StructureMaterialId = 'drywall' | 'block' | 'glass' | 'window'
+export type StructureMaterialId =
+  | 'drywall'
+  | 'block'
+  | 'glass'
+  | 'window'
+  | 'door'
 
 export type StructureMaterial = {
   id: StructureMaterialId
   label: string
-  kind: 'wall_drywall' | 'wall_block' | 'glass' | 'window'
+  kind: 'wall_drywall' | 'wall_block' | 'glass' | 'window' | 'door'
   /** Si true, corta el FOV de la cámara */
   blocksVision: boolean
   wifiLossDb: number

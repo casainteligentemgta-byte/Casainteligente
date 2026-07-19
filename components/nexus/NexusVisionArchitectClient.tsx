@@ -163,6 +163,7 @@ export default function NexusVisionArchitectClient() {
   const [showLinks, setShowLinks] = useState(true)
   const [showCableRoutes, setShowCableRoutes] = useState(true)
   const [showUnderground, setShowUnderground] = useState(false)
+  const [showStructures, setShowStructures] = useState(true)
   const [drawStructureMaterial, setDrawStructureMaterial] =
     useState<StructureMaterialId | null>(null)
   const [structureDraft, setStructureDraft] = useState<{ x: number; y: number } | null>(
@@ -654,13 +655,15 @@ export default function NexusVisionArchitectClient() {
   ) => {
     const n = (project.structures?.length ?? 0) + 1
     const prefix =
-      materialId === 'window'
-        ? 'VEN'
-        : materialId === 'glass'
-          ? 'VID'
-          : materialId === 'block'
-            ? 'BLO'
-            : 'DRY'
+      materialId === 'door'
+        ? 'PUE'
+        : materialId === 'window'
+          ? 'VEN'
+          : materialId === 'glass'
+            ? 'VID'
+            : materialId === 'block'
+              ? 'BLO'
+              : 'DRY'
     const seg: DesignStructure = {
       id: uid(),
       label: `${prefix}-${String(n).padStart(2, '0')}`,
@@ -831,6 +834,27 @@ export default function NexusVisionArchitectClient() {
       ...p,
       cameras: p.cameras.map((c) => (c.id === id ? { ...c, x: nx, y: ny } : c)),
       networkNodes: p.networkNodes.map((n) => (n.id === id ? { ...n, x: nx, y: ny } : n)),
+    }))
+  }
+
+  const onStructureMove = (
+    id: string,
+    patch: { x1: number; y1: number; x2: number; y2: number },
+  ) => {
+    const clamp = (n: number) => Math.min(1, Math.max(0, Math.round(n * 1000) / 1000))
+    const next = {
+      x1: clamp(patch.x1),
+      y1: clamp(patch.y1),
+      x2: clamp(patch.x2),
+      y2: clamp(patch.y2),
+    }
+    // Evitar muro degenerado
+    if (Math.abs(next.x1 - next.x2) + Math.abs(next.y1 - next.y2) < 0.008) return
+    setProject((p) => ({
+      ...p,
+      structures: (p.structures ?? []).map((s) =>
+        s.id === id ? { ...s, ...next } : s,
+      ),
     }))
   }
 
@@ -1137,6 +1161,17 @@ export default function NexusVisionArchitectClient() {
                       Rutas
                     </label>
                     <label
+                      title={layerHelpTitle('structures')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showStructures}
+                        onChange={(e) => setShowStructures(e.target.checked)}
+                      />
+                      Estructuras
+                    </label>
+                    <label
                       title={layerHelpTitle('sub')}
                       className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
                     >
@@ -1247,6 +1282,7 @@ export default function NexusVisionArchitectClient() {
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
                     showUnderground={showUnderground || sideTab === 'sub'}
+                    showStructures={showStructures}
                     onAddAt={onAddAt}
                     onMove={onMove}
                     onAdjustCameraVision={adjustCameraVision}
@@ -1265,6 +1301,16 @@ export default function NexusVisionArchitectClient() {
                         setUndergroundDraft(null)
                         setDrawCable(false)
                         setCableDraft(null)
+                      } else if ((project.structures ?? []).some((s) => s.id === id)) {
+                        setSideTab('muros')
+                        setViewMode('plano')
+                        setShowStructures(true)
+                        setDrawStructureMaterial(null)
+                        setStructureDraft(null)
+                        setDrawUnderground(false)
+                        setUndergroundDraft(null)
+                        setDrawCable(false)
+                        setCableDraft(null)
                       } else if (cableRoutes.some((r) => r.id === id)) {
                         setSideTab('cable')
                         setShowCableRoutes(true)
@@ -1275,6 +1321,7 @@ export default function NexusVisionArchitectClient() {
                     onCableWaypointMove={moveBreakOnRoute}
                     onCableWaypointInsert={insertBreakOnRoute}
                     onCableWaypointRemove={removeBreakOnRoute}
+                    onStructureMove={onStructureMove}
                     stageRef={stageRef}
                   />
                 </div>
@@ -1345,6 +1392,7 @@ export default function NexusVisionArchitectClient() {
                   } else if (id === 'muros') {
                     setViewMode('plano')
                     setCalibrateMode(false)
+                    setShowStructures(true)
                     setDrawUnderground(false)
                     setUndergroundDraft(null)
                     setDrawCable(false)
@@ -1370,6 +1418,8 @@ export default function NexusVisionArchitectClient() {
               drawMaterialId={drawStructureMaterial}
               draftPoint={structureDraft}
               disabled={!project.planoUrl || loading}
+              showOnPlan={showStructures}
+              onShowOnPlan={setShowStructures}
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)
@@ -1381,6 +1431,7 @@ export default function NexusVisionArchitectClient() {
                   setCalibrateMode(false)
                   setViewMode('plano')
                   setShowFov(true)
+                  setShowStructures(true)
                 }
               }}
               onSelect={setSelectedId}

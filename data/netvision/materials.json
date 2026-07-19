@@ -39,6 +39,16 @@
       "soundLossDb": 3,
       "color": "#22d3ee",
       "dash": [4, 4]
+    },
+    {
+      "id": "door",
+      "label": "Puerta",
+      "kind": "door",
+      "blocksVision": false,
+      "wifiLossDb": 0.5,
+      "soundLossDb": 1,
+      "color": "#f59e0b",
+      "dash": [3, 5]
     }
   ]
 }
