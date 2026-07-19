@@ -29,7 +29,6 @@ import NetVisionLayerHelp, {
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator'
-import BIMViewer from '@/components/netvision/BIMViewer'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
   CAMERA_BRANDS,
@@ -175,7 +174,7 @@ export default function NexusVisionArchitectClient() {
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
   const [sideTab, setSideTab] = useState<
-    'cctv' | 'red' | 'muros' | 'cable' | 'sub' | 'norm' | 'prefs' | 'bim'
+    'cctv' | 'red' | 'muros' | 'cable' | 'sub' | 'norm' | 'prefs'
   >('cctv')
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const [complianceCountry, setComplianceCountry] = useState('VE')
@@ -1028,7 +1027,6 @@ export default function NexusVisionArchitectClient() {
                 ['sub', 'Sub'],
                 ['norm', 'Norm'],
                 ['prefs', 'Prefs'],
-                ['bim', 'BIM'],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -1099,8 +1097,6 @@ export default function NexusVisionArchitectClient() {
               client={project.client ?? ''}
               onChange={(patch) => setProject((p) => ({ ...p, ...patch }))}
             />
-          ) : sideTab === 'bim' ? (
-            <BIMViewer project={project} cableRoutes={cableRoutes} />
           ) : sideTab === 'sub' ? (
             <div className="space-y-4">
               <UndergroundCanalizationTool

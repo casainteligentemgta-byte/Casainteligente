@@ -42,8 +42,7 @@ Profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
 - Matriz CSV + PDF de cumplimiento (asistencia de ingeniería)
 
 ### 7 — BIM
-- Pestaña **BIM**: elementos por fase Revit (diseño/cableado/equipamiento/docs)
-- Export paquete: JSON + IFC-lite + shared parameters CSV + script Dynamo
+- Exportador en `lib/netvision/services/bimExporter` (JSON + IFC-lite + CSV + Dynamo); sin pestaña en la UI
 - `.RVT` nativo requiere worker/add-in (no en browser)
 
 ### 8 — Proyectos, preferencias y BOM
