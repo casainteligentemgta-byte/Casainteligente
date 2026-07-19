@@ -654,13 +654,15 @@ export default function NexusVisionArchitectClient() {
   ) => {
     const n = (project.structures?.length ?? 0) + 1
     const prefix =
-      materialId === 'window'
-        ? 'VEN'
-        : materialId === 'glass'
-          ? 'VID'
-          : materialId === 'block'
-            ? 'BLO'
-            : 'DRY'
+      materialId === 'door'
+        ? 'PUE'
+        : materialId === 'window'
+          ? 'VEN'
+          : materialId === 'glass'
+            ? 'VID'
+            : materialId === 'block'
+              ? 'BLO'
+              : 'DRY'
     const seg: DesignStructure = {
       id: uid(),
       label: `${prefix}-${String(n).padStart(2, '0')}`,

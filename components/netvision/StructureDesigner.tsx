@@ -29,12 +29,12 @@ export default function StructureDesigner({
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
-        Muros · visión / WiFi / sonido
+        Muros · vidrio · puertas
       </h2>
       <p className="text-[11px] text-[var(--nexus-text-dim)]">
-        Dibuja segmentos en el plano (2 toques). Luego arrastra el muro o sus
-        extremos para moverlo. Drywall y bloque cortan el FOV; vidrio y ventana
-        dejan ver pero atenúan WiFi y sonido.
+        Dibuja con 2 toques (muro, vidrio, ventana o puerta). Después arrastra
+        el segmento o sus extremos para moverlo. Drywall/bloque cortan FOV;
+        vidrio, ventana y puerta dejan ver (aberturas).
       </p>
 
       <div className="flex flex-wrap gap-1.5">
@@ -77,12 +77,17 @@ export default function StructureDesigner({
         </h3>
         {structures.length === 0 ? (
           <p className="text-[11px] text-[var(--nexus-text-dim)]">
-            Sin muros aún. Ejemplo: drywall, bloque, vidrio, ventana.
+            Sin segmentos aún. Ejemplo: drywall, bloque, vidrio, ventana, puerta.
           </p>
         ) : (
           <ul className="max-h-40 space-y-1 overflow-auto text-[11px]">
             {structures.map((s) => {
               const mat = getStructureMaterialOrDefault(s.materialId)
+              const visionNote = mat.blocksVision
+                ? ' · corta visión'
+                : mat.id === 'door'
+                  ? ' · abertura'
+                  : ' · transparente'
               return (
                 <li
                   key={s.id}
@@ -96,7 +101,8 @@ export default function StructureDesigner({
                     <span className="font-semibold text-white">{s.label}</span>
                     <span className="mt-0.5 block truncate" style={{ color: mat.color }}>
                       {mat.label}
-                      {mat.blocksVision ? ' · corta visión' : ' · transparente'}
+                      {visionNote}
+                      {' · arrastrable'}
                     </span>
                   </button>
                   <button
