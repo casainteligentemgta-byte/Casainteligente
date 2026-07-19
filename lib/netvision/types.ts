@@ -148,6 +148,11 @@ export type NetVisionProject = {
   structures: DesignStructure[]
   /** Tramos subterráneos dibujados en el plano (además de los derivados de cable ≥ 8 m). */
   undergroundSegments: DesignUndergroundSegment[]
+  /**
+   * Quiebres (waypoints intermedios) de rutas auto cámara/AP→PoE.
+   * Clave: `${fromId}__${toId}` — sin extremos (siguen al equipo).
+   */
+  cableRouteOverrides: Record<string, { x: number; y: number }[]>
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string

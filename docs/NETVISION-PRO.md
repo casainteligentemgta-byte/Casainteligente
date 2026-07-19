@@ -31,7 +31,7 @@ Botones **+ Switch / + AP / + NVR / + Injector** agregan el equipo al plano de i
 Unifilar en tiempo real (Plano/Diagrama) + SVG/PNG.
 
 ### 4 — Cableado
-Rutas ortogonales, Cat6/Cat6A/fibra, cajetines, BOM cables/RJ45.
+Rutas cámara→switch con **varios quiebres** (tocar línea / arrastrar puntos / + Añadir quiebre); Cat6/Cat6A/fibra; cajetines; BOM.
 
 ### 5 — Subterráneo
 Dibujo de tramos en el plano (2 toques) + auto desde cable ≥ 8 m; profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.

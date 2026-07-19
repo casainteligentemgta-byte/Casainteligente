@@ -69,7 +69,13 @@ import { buildSoundSpectrum } from '@/lib/netvision/services/soundPredictor'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import {
   buildCableRoutes,
+  cableRouteKey,
+  insertMidWaypoint,
+  longestSegmentBreak,
+  moveMidWaypoint,
+  removeMidWaypoint,
   validateCableRoutes,
+  type NormPoint,
 } from '@/lib/netvision/services/cableRoutingEngine'
 import {
   planConduits,
@@ -270,10 +276,113 @@ export default function NexusVisionArchitectClient() {
     [project.cameras, project.networkNodes],
   )
 
+  const cableRouteOverrides = project.cableRouteOverrides ?? {}
+
   const cableRoutes = useMemo(
-    () => buildCableRoutes(project.cameras, project.networkNodes, project.scale),
-    [project.cameras, project.networkNodes, project.scale],
+    () =>
+      buildCableRoutes(
+        project.cameras,
+        project.networkNodes,
+        project.scale,
+        cableRouteOverrides,
+      ),
+    [project.cameras, project.networkNodes, project.scale, cableRouteOverrides],
   )
+
+  const selectedCableRoute =
+    cableRoutes.find((r) => r.id === selectedId) ?? null
+
+  const setRouteMids = (routeId: string, mids: NormPoint[]) => {
+    const route = cableRoutes.find((r) => r.id === routeId)
+    if (!route) return
+    const key = cableRouteKey(route.fromId, route.toId)
+    setProject((p) => {
+      const next = { ...(p.cableRouteOverrides ?? {}) }
+      if (mids.length === 0) delete next[key]
+      else next[key] = mids
+      return { ...p, cableRouteOverrides: next }
+    })
+  }
+
+  const ensureRouteMids = (routeId: string): NormPoint[] => {
+    const route = cableRoutes.find((r) => r.id === routeId)
+    if (!route) return []
+    const key = cableRouteKey(route.fromId, route.toId)
+    const existing = cableRouteOverrides[key]
+    if (existing && existing.length > 0) return existing
+    // Sembrar el codo L actual como primer quiebre editable
+    return route.points.slice(1, -1).map((p) => ({ x: p.x, y: p.y }))
+  }
+
+  const addBreakToRoute = (routeId: string) => {
+    const route = cableRoutes.find((r) => r.id === routeId)
+    if (!route) return
+    const seeded = ensureRouteMids(routeId)
+    const composed = [
+      route.points[0]!,
+      ...seeded,
+      route.points[route.points.length - 1]!,
+    ]
+    const br = longestSegmentBreak(composed)
+    const mids = insertMidWaypoint(composed, br.afterIndex, br.point)
+    setRouteMids(routeId, mids)
+    setSelectedId(routeId)
+    setSideTab('cable')
+    setShowCableRoutes(true)
+    setShowUnderground(false)
+    setViewMode('plano')
+  }
+
+  const insertBreakOnRoute = (
+    routeId: string,
+    afterPointIndex: number,
+    x: number,
+    y: number,
+  ) => {
+    const route = cableRoutes.find((r) => r.id === routeId)
+    if (!route) return
+    const seeded = ensureRouteMids(routeId)
+    const composed = [
+      route.points[0]!,
+      ...seeded,
+      route.points[route.points.length - 1]!,
+    ]
+    // Si la ruta visible aún era L auto y seeded coincide, usar points actuales
+    const base =
+      composed.length === route.points.length ? route.points : composed
+    const mids = insertMidWaypoint(base, afterPointIndex, { x, y })
+    setRouteMids(routeId, mids)
+    setSelectedId(routeId)
+    setSideTab('cable')
+  }
+
+  const moveBreakOnRoute = (
+    routeId: string,
+    midIndex: number,
+    x: number,
+    y: number,
+  ) => {
+    const mids = moveMidWaypoint(ensureRouteMids(routeId), midIndex, { x, y })
+    setRouteMids(routeId, mids)
+  }
+
+  const removeBreakOnRoute = (routeId: string, midIndex: number) => {
+    const mids = removeMidWaypoint(ensureRouteMids(routeId), midIndex)
+    setRouteMids(routeId, mids)
+  }
+
+  const removeLastBreakOnRoute = (routeId: string) => {
+    const mids = ensureRouteMids(routeId)
+    if (mids.length === 0) {
+      setRouteMids(routeId, [])
+      return
+    }
+    setRouteMids(routeId, mids.slice(0, -1))
+  }
+
+  const resetRoutePath = (routeId: string) => {
+    setRouteMids(routeId, [])
+  }
 
   const conduitPlans = useMemo(() => planConduits(cableRoutes), [cableRoutes])
 
@@ -413,6 +522,7 @@ export default function NexusVisionArchitectClient() {
         networkNodes: [],
         structures: [],
         undergroundSegments: [],
+        cableRouteOverrides: {},
       }))
       setSelectedId(null)
       setCalibrateMode(false)
@@ -692,13 +802,24 @@ export default function NexusVisionArchitectClient() {
   }
 
   const quitar = (id: string) => {
-    setProject((p) => ({
-      ...p,
-      cameras: p.cameras.filter((c) => c.id !== id),
-      networkNodes: p.networkNodes.filter((n) => n.id !== id),
-      structures: (p.structures ?? []).filter((s) => s.id !== id),
-      undergroundSegments: (p.undergroundSegments ?? []).filter((s) => s.id !== id),
-    }))
+    setProject((p) => {
+      const overrides = { ...(p.cableRouteOverrides ?? {}) }
+      for (const key of Object.keys(overrides)) {
+        if (key.startsWith(`${id}__`) || key.endsWith(`__${id}`)) {
+          delete overrides[key]
+        }
+      }
+      return {
+        ...p,
+        cameras: p.cameras.filter((c) => c.id !== id),
+        networkNodes: p.networkNodes.filter((n) => n.id !== id),
+        structures: (p.structures ?? []).filter((s) => s.id !== id),
+        undergroundSegments: (p.undergroundSegments ?? []).filter(
+          (s) => s.id !== id,
+        ),
+        cableRouteOverrides: overrides,
+      }
+    })
     if (selectedId === id) setSelectedId(null)
   }
 
@@ -1063,8 +1184,16 @@ export default function NexusVisionArchitectClient() {
                         setDrawStructureMaterial(null)
                         setDrawUnderground(false)
                         setUndergroundDraft(null)
+                      } else if (cableRoutes.some((r) => r.id === id)) {
+                        setSideTab('cable')
+                        setShowCableRoutes(true)
+                        setShowUnderground(false)
+                        setViewMode('plano')
                       }
                     }}
+                    onCableWaypointMove={moveBreakOnRoute}
+                    onCableWaypointInsert={insertBreakOnRoute}
+                    onCableWaypointRemove={removeBreakOnRoute}
                     stageRef={stageRef}
                   />
                 </div>
@@ -1121,6 +1250,15 @@ export default function NexusVisionArchitectClient() {
                     setCalibrateMode(false)
                     setDrawStructureMaterial(null)
                     setStructureDraft(null)
+                  } else if (id === 'cable') {
+                    setShowCableRoutes(true)
+                    setShowUnderground(false)
+                    setViewMode('plano')
+                    setCalibrateMode(false)
+                    setDrawStructureMaterial(null)
+                    setStructureDraft(null)
+                    setDrawUnderground(false)
+                    setUndergroundDraft(null)
                   } else if (id === 'muros') {
                     setViewMode('plano')
                     setCalibrateMode(false)
@@ -1227,7 +1365,16 @@ export default function NexusVisionArchitectClient() {
             <div className="space-y-4">
               <CableRoutingEngine
                 routes={cableRoutes}
-                onSelect={(fromId) => setSelectedId(fromId)}
+                selectedRouteId={selectedCableRoute?.id ?? null}
+                onSelectRoute={(routeId) => {
+                  setSelectedId(routeId)
+                  setShowCableRoutes(true)
+                  setShowUnderground(false)
+                  setViewMode('plano')
+                }}
+                onAddBreak={addBreakToRoute}
+                onResetRoute={resetRoutePath}
+                onRemoveBreak={removeLastBreakOnRoute}
               />
               <div className="border-t border-white/10 pt-3">
                 <ConduitCalculator

@@ -27,6 +27,7 @@ import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials
 import { degToRad, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
+import { nearestSegmentOnRoute } from '@/lib/netvision/services/cableRoutingEngine'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -63,6 +64,22 @@ export type CameraPlacementToolProps = {
   metersPerNormY?: number
   nightMode?: boolean
   onSelect: (id: string) => void
+  /** Mover un quiebre (índice 0-based entre extremos) de una ruta auto. */
+  onCableWaypointMove?: (
+    routeId: string,
+    midIndex: number,
+    normX: number,
+    normY: number,
+  ) => void
+  /** Insertar quiebre al tocar un segmento de la ruta. */
+  onCableWaypointInsert?: (
+    routeId: string,
+    afterPointIndex: number,
+    normX: number,
+    normY: number,
+  ) => void
+  /** Doble toque en quiebre para eliminarlo. */
+  onCableWaypointRemove?: (routeId: string, midIndex: number) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
 }
 
@@ -190,6 +207,9 @@ export default function CameraPlacementTool({
   metersPerNormY = 40,
   nightMode = false,
   onSelect,
+  onCableWaypointMove,
+  onCableWaypointInsert,
+  onCableWaypointRemove,
   stageRef,
 }: CameraPlacementToolProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -637,18 +657,116 @@ export default function CameraPlacementTool({
               for (const p of r.points) {
                 pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
               }
+              const selected = selectedId === r.id
               return (
                 <Line
                   key={r.id}
                   points={pts}
-                  stroke={r.warn ? '#f87171' : 'rgba(250,204,21,0.75)'}
-                  strokeWidth={r.warn ? 2.5 : 2}
+                  stroke={
+                    selected
+                      ? '#fef08a'
+                      : r.warn
+                        ? '#f87171'
+                        : 'rgba(250,204,21,0.75)'
+                  }
+                  strokeWidth={selected ? 3.5 : r.warn ? 2.5 : 2}
                   lineCap="round"
                   lineJoin="round"
-                  listening={false}
+                  hitStrokeWidth={18}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    const already = selectedId === r.id
+                    onSelect(r.id)
+                    // 2º toque en la ruta seleccionada → insertar quiebre
+                    if (!already || !onCableWaypointInsert || placeMode) return
+                    const stage = e.target.getStage()
+                    const pos = stage?.getPointerPosition()
+                    if (!pos) return
+                    const transform = e.target.getAbsoluteTransform().copy().invert()
+                    const local = transform.point(pos)
+                    const nx = (local.x - offsetX) / Math.max(drawW, 1)
+                    const ny = (local.y - offsetY) / Math.max(drawH, 1)
+                    const hit = nearestSegmentOnRoute(r.points, nx, ny)
+                    onCableWaypointInsert(r.id, hit.afterIndex, hit.point.x, hit.point.y)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    const already = selectedId === r.id
+                    onSelect(r.id)
+                    if (!already || !onCableWaypointInsert || placeMode) return
+                    const stage = e.target.getStage()
+                    const pos = stage?.getPointerPosition()
+                    if (!pos) return
+                    const transform = e.target.getAbsoluteTransform().copy().invert()
+                    const local = transform.point(pos)
+                    const nx = (local.x - offsetX) / Math.max(drawW, 1)
+                    const ny = (local.y - offsetY) / Math.max(drawH, 1)
+                    const hit = nearestSegmentOnRoute(r.points, nx, ny)
+                    onCableWaypointInsert(r.id, hit.afterIndex, hit.point.x, hit.point.y)
+                  }}
                 />
               )
             })}
+
+          {/* Quiebres arrastrables de la ruta seleccionada */}
+          {showCableRoutes &&
+            !showUnderground &&
+            !placeMode &&
+            onCableWaypointMove &&
+            cableRoutes
+              .filter((r) => r.id === selectedId)
+              .flatMap((r) =>
+                r.points.slice(1, -1).map((p, midIndex) => {
+                  const cx = offsetX + p.x * drawW
+                  const cy = offsetY + p.y * drawH
+                  return (
+                    <Circle
+                      key={`${r.id}-wp-${midIndex}`}
+                      x={cx}
+                      y={cy}
+                      radius={7}
+                      fill="#facc15"
+                      stroke="#fff"
+                      strokeWidth={1.5}
+                      draggable
+                      onClick={(e) => {
+                        e.cancelBubble = true
+                        onSelect(r.id)
+                      }}
+                      onTap={(e) => {
+                        e.cancelBubble = true
+                        onSelect(r.id)
+                      }}
+                      onDblClick={(e) => {
+                        e.cancelBubble = true
+                        onCableWaypointRemove?.(r.id, midIndex)
+                      }}
+                      onDblTap={(e) => {
+                        e.cancelBubble = true
+                        onCableWaypointRemove?.(r.id, midIndex)
+                      }}
+                      onDragStart={(e) => {
+                        e.cancelBubble = true
+                        pauseStageDrag(e.target.getStage())
+                        onSelect(r.id)
+                      }}
+                      onDragMove={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        const n = toNorm(node.x(), node.y())
+                        onCableWaypointMove(r.id, midIndex, n.x, n.y)
+                      }}
+                      onDragEnd={(e) => {
+                        e.cancelBubble = true
+                        const node = e.target as Konva.Circle
+                        const n = toNorm(node.x(), node.y())
+                        onCableWaypointMove(r.id, midIndex, n.x, n.y)
+                        resumeStageDrag(e.target.getStage())
+                      }}
+                    />
+                  )
+                }),
+              )}
 
           {showUnderground &&
             undergroundRuns.map((run) => {

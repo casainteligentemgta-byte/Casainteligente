@@ -14,6 +14,7 @@ export function generateConfig(project: NetVisionProject) {
     project.cameras,
     project.networkNodes ?? [],
     project.scale,
+    project.cableRouteOverrides ?? {},
   )
   const conduitPlans = planConduits(cableRoutes)
   const undergroundPlan = withManualUndergroundSegments(

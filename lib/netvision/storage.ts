@@ -59,6 +59,7 @@ export function emptyProject(partial?: {
     networkNodes: [],
     structures: [],
     undergroundSegments: [],
+    cableRouteOverrides: {},
     scale: defaultScale(),
     retentionDays: 30,
     complianceProfileId: 'VE',
@@ -380,6 +381,7 @@ function normalizeProject(
     undergroundSegments: Array.isArray(p.undergroundSegments)
       ? p.undergroundSegments.map(normalizeUndergroundSegment)
       : [],
+    cableRouteOverrides: normalizeCableRouteOverrides(p.cableRouteOverrides),
     scale,
     retentionDays: typeof p.retentionDays === 'number' ? p.retentionDays : 30,
     complianceProfileId: p.complianceProfileId ?? 'VE',
@@ -461,6 +463,31 @@ function normalizeUndergroundSegment(
     x2: typeof s.x2 === 'number' ? s.x2 : 0.7,
     y2: typeof s.y2 === 'number' ? s.y2 : 0.3,
   }
+}
+
+function normalizeCableRouteOverrides(
+  raw: unknown,
+): Record<string, { x: number; y: number }[]> {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, { x: number; y: number }[]> = {}
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof key !== 'string' || !key.includes('__')) continue
+    if (!Array.isArray(val)) continue
+    const mids = val
+      .filter(
+        (p): p is { x: number; y: number } =>
+          !!p &&
+          typeof p === 'object' &&
+          typeof (p as { x?: unknown }).x === 'number' &&
+          typeof (p as { y?: unknown }).y === 'number',
+      )
+      .map((p) => ({
+        x: Math.min(1, Math.max(0, Math.round(p.x * 1000) / 1000)),
+        y: Math.min(1, Math.max(0, Math.round(p.y * 1000) / 1000)),
+      }))
+    if (mids.length) out[key] = mids
+  }
+  return out
 }
 
 function migrateLegacy(parsed: {
