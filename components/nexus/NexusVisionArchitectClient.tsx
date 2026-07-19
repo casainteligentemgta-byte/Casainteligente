@@ -16,6 +16,7 @@ import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
 import BOMGenerator from '@/components/netvision/BOMGenerator'
+import NetVisionCollapsible from '@/components/netvision/NetVisionCollapsible'
 import NetVisionPrefsPanel from '@/components/netvision/NetVisionPrefsPanel'
 import NetVisionProjectsPanel from '@/components/netvision/NetVisionProjectsPanel'
 import CableRoutingEngine from '@/components/netvision/CableRoutingEngine'
@@ -1112,10 +1113,17 @@ export default function NexusVisionArchitectClient() {
                 onChamberMaterial={setUgChamberMat}
               />
               <div className="border-t border-white/10 pt-3">
-                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
-                  Validaciones
-                </h3>
-                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+                <NetVisionCollapsible
+                  title="Validaciones"
+                  summary={
+                    validations.length === 0
+                      ? 'Sin avisos'
+                      : `${validations.length} aviso(s)`
+                  }
+                  defaultOpen={false}
+                >
+                  <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+                </NetVisionCollapsible>
               </div>
             </div>
           ) : sideTab === 'cable' ? (
@@ -1131,10 +1139,17 @@ export default function NexusVisionArchitectClient() {
                 />
               </div>
               <div className="border-t border-white/10 pt-3">
-                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
-                  Validaciones
-                </h3>
-                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+                <NetVisionCollapsible
+                  title="Validaciones"
+                  summary={
+                    validations.length === 0
+                      ? 'Sin avisos'
+                      : `${validations.length} aviso(s)`
+                  }
+                  defaultOpen={false}
+                >
+                  <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+                </NetVisionCollapsible>
               </div>
             </div>
           ) : sideTab === 'red' ? (
@@ -1235,7 +1250,11 @@ export default function NexusVisionArchitectClient() {
                     const model = getCameraModelOrDefault(selectedCam.modelId)
                     const bands = visionBandRangesM(vision.rangeM)
                     return (
-                      <>
+                      <NetVisionCollapsible
+                        title="Óptica · orientación / FOV / alcance"
+                        summary={`${vision.yawDeg}° · FOV ${vision.fovDeg}° · ${formatLength(vision.rangeM, project.unitSystem ?? 'metric')}`}
+                        defaultOpen={false}
+                      >
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
                           Espectro de visión · semáforo
                         </p>
@@ -1320,11 +1339,10 @@ export default function NexusVisionArchitectClient() {
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                          Tras mover la cámara: arrastra el punto cyan (orientación/alcance) o los
-                          laterales (apertura), o usa los sliders. Capa Visión debe estar activa.
+                          En el plano: punto cyan = orientación/alcance; laterales = apertura.
                           {` · ${model.poeWatts} W · ${model.bitrateMbps} Mbps`}
                         </p>
-                      </>
+                      </NetVisionCollapsible>
                     )
                   })()}
                   <Button
@@ -1414,41 +1432,61 @@ export default function NexusVisionArchitectClient() {
               )}
 
               <div className="border-t border-white/10 pt-3">
-                <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
-                  Validaciones
-                </h3>
-                <ValidationEngine
-                  results={validations}
-                  onSelectCamera={setSelectedId}
-                />
+                <NetVisionCollapsible
+                  title="Validaciones"
+                  summary={
+                    validations.length === 0
+                      ? 'Sin avisos'
+                      : `${validations.length} aviso(s)`
+                  }
+                  defaultOpen={false}
+                >
+                  <ValidationEngine
+                    results={validations}
+                    onSelectCamera={setSelectedId}
+                  />
+                </NetVisionCollapsible>
               </div>
             </>
           )}
 
           {sideTab === 'red' ? (
             <div className="border-t border-white/10 pt-3">
-              <h3 className="mb-2 text-xs font-bold uppercase text-[var(--nexus-text-muted)]">
-                Validaciones
-              </h3>
-              <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+              <NetVisionCollapsible
+                title="Validaciones"
+                summary={
+                  validations.length === 0
+                    ? 'Sin avisos'
+                    : `${validations.length} aviso(s)`
+                }
+                defaultOpen={false}
+              >
+                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+              </NetVisionCollapsible>
             </div>
           ) : null}
         </GlassCardMotion>
 
         <GlassCardMotion delay={0.08} className="space-y-3 p-4">
-          <BOMGenerator
-            bom={bom}
-            retentionDays={project.retentionDays}
-            onRetentionChange={(days) =>
-              setProject((p) => ({ ...p, retentionDays: days }))
-            }
-            projectName={project.name}
-            currency={project.currency ?? 'USD'}
-            distributorMarginPct={project.distributorMarginPct ?? 15}
-            onMarginChange={(pct) =>
-              setProject((p) => ({ ...p, distributorMarginPct: pct }))
-            }
-          />
+          <NetVisionCollapsible
+            title="Presupuesto / BOM"
+            summary={`${bom.lines.length} ítems · $${bom.totalUsd.toFixed(0)}`}
+            defaultOpen={false}
+          >
+            <BOMGenerator
+              bom={bom}
+              retentionDays={project.retentionDays}
+              onRetentionChange={(days) =>
+                setProject((p) => ({ ...p, retentionDays: days }))
+              }
+              projectName={project.name}
+              currency={project.currency ?? 'USD'}
+              distributorMarginPct={project.distributorMarginPct ?? 15}
+              onMarginChange={(pct) =>
+                setProject((p) => ({ ...p, distributorMarginPct: pct }))
+              }
+            />
+          </NetVisionCollapsible>
         </GlassCardMotion>
       </div>
     </div>
