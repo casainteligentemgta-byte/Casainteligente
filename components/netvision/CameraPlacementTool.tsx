@@ -80,6 +80,11 @@ export type CameraPlacementToolProps = {
   ) => void
   /** Doble toque en quiebre para eliminarlo. */
   onCableWaypointRemove?: (routeId: string, midIndex: number) => void
+  /** Mover / redimensionar un muro (coords normalizadas 0–1). */
+  onStructureMove?: (
+    id: string,
+    patch: { x1: number; y1: number; x2: number; y2: number },
+  ) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
 }
 
@@ -210,6 +215,7 @@ export default function CameraPlacementTool({
   onCableWaypointMove,
   onCableWaypointInsert,
   onCableWaypointRemove,
+  onStructureMove,
   stageRef,
 }: CameraPlacementToolProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -627,25 +633,126 @@ export default function CameraPlacementTool({
             const y1 = offsetY + s.y1 * drawH
             const x2 = offsetX + s.x2 * drawW
             const y2 = offsetY + s.y2 * drawH
+            const canDrag = !!onStructureMove && !placeMode
             return (
-              <Line
-                key={`str-${s.id}`}
-                points={[x1, y1, x2, y2]}
-                stroke={mat.color}
-                strokeWidth={selected ? 2 : 1.25}
-                hitStrokeWidth={14}
-                dash={mat.dash ?? undefined}
-                lineCap="round"
-                opacity={selected ? 1 : 0.9}
-                onClick={(e) => {
-                  e.cancelBubble = true
-                  onSelect(s.id)
-                }}
-                onTap={(e) => {
-                  e.cancelBubble = true
-                  onSelect(s.id)
-                }}
-              />
+              <Fragment key={`str-${s.id}`}>
+                <Line
+                  points={[x1, y1, x2, y2]}
+                  stroke={mat.color}
+                  strokeWidth={selected ? 2.5 : 1.25}
+                  hitStrokeWidth={16}
+                  dash={mat.dash ?? undefined}
+                  lineCap="round"
+                  opacity={selected ? 1 : 0.9}
+                  draggable={canDrag}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    onSelect(s.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    onSelect(s.id)
+                  }}
+                  onDragStart={(e) => {
+                    e.cancelBubble = true
+                    pauseStageDrag(e.target.getStage())
+                    onSelect(s.id)
+                  }}
+                  onDragEnd={(e) => {
+                    e.cancelBubble = true
+                    const node = e.target as Konva.Line
+                    const dx = node.x()
+                    const dy = node.y()
+                    node.position({ x: 0, y: 0 })
+                    resumeStageDrag(e.target.getStage())
+                    if (!onStructureMove) return
+                    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+                    const n1 = toNorm(x1 + dx, y1 + dy)
+                    const n2 = toNorm(x2 + dx, y2 + dy)
+                    onStructureMove(s.id, {
+                      x1: n1.x,
+                      y1: n1.y,
+                      x2: n2.x,
+                      y2: n2.y,
+                    })
+                  }}
+                />
+                {selected && canDrag
+                  ? (
+                      [
+                        { end: 'a' as const, x: x1, y: y1 },
+                        { end: 'b' as const, x: x2, y: y2 },
+                      ] as const
+                    ).map((h) => (
+                      <Circle
+                        key={`str-${s.id}-${h.end}`}
+                        x={h.x}
+                        y={h.y}
+                        radius={6}
+                        fill={mat.color}
+                        stroke="#fff"
+                        strokeWidth={1.5}
+                        draggable
+                        onClick={(e) => {
+                          e.cancelBubble = true
+                          onSelect(s.id)
+                        }}
+                        onTap={(e) => {
+                          e.cancelBubble = true
+                          onSelect(s.id)
+                        }}
+                        onDragStart={(e) => {
+                          e.cancelBubble = true
+                          pauseStageDrag(e.target.getStage())
+                          onSelect(s.id)
+                        }}
+                        onDragMove={(e) => {
+                          e.cancelBubble = true
+                          if (!onStructureMove) return
+                          const node = e.target as Konva.Circle
+                          const n = toNorm(node.x(), node.y())
+                          if (h.end === 'a') {
+                            onStructureMove(s.id, {
+                              x1: n.x,
+                              y1: n.y,
+                              x2: s.x2,
+                              y2: s.y2,
+                            })
+                          } else {
+                            onStructureMove(s.id, {
+                              x1: s.x1,
+                              y1: s.y1,
+                              x2: n.x,
+                              y2: n.y,
+                            })
+                          }
+                        }}
+                        onDragEnd={(e) => {
+                          e.cancelBubble = true
+                          if (!onStructureMove) return
+                          const node = e.target as Konva.Circle
+                          const n = toNorm(node.x(), node.y())
+                          if (h.end === 'a') {
+                            onStructureMove(s.id, {
+                              x1: n.x,
+                              y1: n.y,
+                              x2: s.x2,
+                              y2: s.y2,
+                            })
+                          } else {
+                            onStructureMove(s.id, {
+                              x1: s.x1,
+                              y1: s.y1,
+                              x2: n.x,
+                              y2: n.y,
+                            })
+                          }
+                          resumeStageDrag(e.target.getStage())
+                        }}
+                      />
+                    ))
+                  : null}
+              </Fragment>
             )
           })}
 

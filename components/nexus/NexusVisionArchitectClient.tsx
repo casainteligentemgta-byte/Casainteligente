@@ -834,6 +834,27 @@ export default function NexusVisionArchitectClient() {
     }))
   }
 
+  const onStructureMove = (
+    id: string,
+    patch: { x1: number; y1: number; x2: number; y2: number },
+  ) => {
+    const clamp = (n: number) => Math.min(1, Math.max(0, Math.round(n * 1000) / 1000))
+    const next = {
+      x1: clamp(patch.x1),
+      y1: clamp(patch.y1),
+      x2: clamp(patch.x2),
+      y2: clamp(patch.y2),
+    }
+    // Evitar muro degenerado
+    if (Math.abs(next.x1 - next.x2) + Math.abs(next.y1 - next.y2) < 0.008) return
+    setProject((p) => ({
+      ...p,
+      structures: (p.structures ?? []).map((s) =>
+        s.id === id ? { ...s, ...next } : s,
+      ),
+    }))
+  }
+
   const patchCamera = (id: string, patch: Partial<DesignCamera>) => {
     setProject((p) => ({
       ...p,
@@ -1265,6 +1286,15 @@ export default function NexusVisionArchitectClient() {
                         setUndergroundDraft(null)
                         setDrawCable(false)
                         setCableDraft(null)
+                      } else if ((project.structures ?? []).some((s) => s.id === id)) {
+                        setSideTab('muros')
+                        setViewMode('plano')
+                        setDrawStructureMaterial(null)
+                        setStructureDraft(null)
+                        setDrawUnderground(false)
+                        setUndergroundDraft(null)
+                        setDrawCable(false)
+                        setCableDraft(null)
                       } else if (cableRoutes.some((r) => r.id === id)) {
                         setSideTab('cable')
                         setShowCableRoutes(true)
@@ -1275,6 +1305,7 @@ export default function NexusVisionArchitectClient() {
                     onCableWaypointMove={moveBreakOnRoute}
                     onCableWaypointInsert={insertBreakOnRoute}
                     onCableWaypointRemove={removeBreakOnRoute}
+                    onStructureMove={onStructureMove}
                     stageRef={stageRef}
                   />
                 </div>

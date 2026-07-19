@@ -32,8 +32,9 @@ export default function StructureDesigner({
         Muros · visión / WiFi / sonido
       </h2>
       <p className="text-[11px] text-[var(--nexus-text-dim)]">
-        Dibuja segmentos en el plano (2 toques). Drywall y bloque cortan el FOV;
-        vidrio y ventana dejan ver pero atenúan WiFi y sonido.
+        Dibuja segmentos en el plano (2 toques). Luego arrastra el muro o sus
+        extremos para moverlo. Drywall y bloque cortan el FOV; vidrio y ventana
+        dejan ver pero atenúan WiFi y sonido.
       </p>
 
       <div className="flex flex-wrap gap-1.5">
