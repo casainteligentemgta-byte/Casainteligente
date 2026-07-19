@@ -979,7 +979,16 @@ export default function NexusVisionArchitectClient() {
                     metersPerNormX={project.scale.metersPerNormX}
                     metersPerNormY={project.scale.metersPerNormY}
                     nightMode={nightMode}
-                    onSelect={setSelectedId}
+                    onSelect={(id) => {
+                      setSelectedId(id)
+                      if (project.cameras.some((c) => c.id === id)) {
+                        setShowFov(true)
+                        setSideTab('cctv')
+                        setViewMode('plano')
+                        setCalibrateMode(false)
+                        setDrawStructureMaterial(null)
+                      }
+                    }}
                     stageRef={stageRef}
                   />
                 </div>
@@ -1311,7 +1320,8 @@ export default function NexusVisionArchitectClient() {
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                          En el plano: punto cyan = girar/alcance; puntos laterales = apertura.
+                          Tras mover la cámara: arrastra el punto cyan (orientación/alcance) o los
+                          laterales (apertura), o usa los sliders. Capa Visión debe estar activa.
                           {` · ${model.poeWatts} W · ${model.bitrateMbps} Mbps`}
                         </p>
                       </>
