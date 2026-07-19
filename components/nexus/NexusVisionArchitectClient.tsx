@@ -34,6 +34,7 @@ import {
   CAMERA_BRANDS,
   DEFAULT_CAMERA_MODEL_ID,
   cameraCatalogGrouped,
+  effectiveCameraLenses,
   effectiveCameraVision,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
@@ -75,6 +76,7 @@ import {
   moveMidWaypoint,
   removeMidWaypoint,
   validateCableRoutes,
+  withManualCableSegments,
   type NormPoint,
 } from '@/lib/netvision/services/cableRoutingEngine'
 import {
@@ -108,6 +110,8 @@ import {
   parseCalibrationToMeters,
 } from '@/lib/netvision/utils/units'
 import type {
+  CableType,
+  DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
   DesignStructure,
@@ -169,6 +173,11 @@ export default function NexusVisionArchitectClient() {
     x: number
     y: number
   } | null>(null)
+  const [drawCable, setDrawCable] = useState(false)
+  const [cableDraft, setCableDraft] = useState<{ x: number; y: number } | null>(
+    null,
+  )
+  const [drawCableType, setDrawCableType] = useState<CableType>('CAT6')
   const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
@@ -277,16 +286,27 @@ export default function NexusVisionArchitectClient() {
   )
 
   const cableRouteOverrides = project.cableRouteOverrides ?? {}
+  const cableSegments = project.cableSegments ?? []
 
   const cableRoutes = useMemo(
     () =>
-      buildCableRoutes(
-        project.cameras,
-        project.networkNodes,
+      withManualCableSegments(
+        buildCableRoutes(
+          project.cameras,
+          project.networkNodes,
+          project.scale,
+          cableRouteOverrides,
+        ),
+        cableSegments,
         project.scale,
-        cableRouteOverrides,
       ),
-    [project.cameras, project.networkNodes, project.scale, cableRouteOverrides],
+    [
+      project.cameras,
+      project.networkNodes,
+      project.scale,
+      cableRouteOverrides,
+      cableSegments,
+    ],
   )
 
   const selectedCableRoute =
@@ -522,6 +542,7 @@ export default function NexusVisionArchitectClient() {
         networkNodes: [],
         structures: [],
         undergroundSegments: [],
+        cableSegments: [],
         cableRouteOverrides: {},
       }))
       setSelectedId(null)
@@ -531,6 +552,8 @@ export default function NexusVisionArchitectClient() {
       setStructureDraft(null)
       setDrawUnderground(false)
       setUndergroundDraft(null)
+      setDrawCable(false)
+      setCableDraft(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
@@ -683,6 +706,35 @@ export default function NexusVisionArchitectClient() {
     setViewMode('plano')
   }
 
+  const addCableSegment = (
+    type: CableType,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+  ) => {
+    const n = (project.cableSegments?.length ?? 0) + 1
+    const seg: DesignCableSegment = {
+      id: uid(),
+      label: `CAB-${String(n).padStart(2, '0')}`,
+      type,
+      x1: Math.round(x1 * 1000) / 1000,
+      y1: Math.round(y1 * 1000) / 1000,
+      x2: Math.round(x2 * 1000) / 1000,
+      y2: Math.round(y2 * 1000) / 1000,
+    }
+    setError(null)
+    setProject((p) => ({
+      ...p,
+      cableSegments: [...(p.cableSegments ?? []), seg],
+    }))
+    setSelectedId(seg.id)
+    setSideTab('cable')
+    setShowCableRoutes(true)
+    setShowUnderground(false)
+    setViewMode('plano')
+  }
+
   const onAddAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
 
@@ -710,6 +762,22 @@ export default function NexusVisionArchitectClient() {
       } else {
         setCalibPoints(next)
       }
+      return
+    }
+
+    if (drawCable) {
+      if (!cableDraft) {
+        setCableDraft({ x: normX, y: normY })
+        return
+      }
+      const dx = Math.abs(cableDraft.x - normX)
+      const dy = Math.abs(cableDraft.y - normY)
+      if (dx + dy < 0.01) {
+        setError('El cable es demasiado corto; elige otro punto.')
+        return
+      }
+      addCableSegment(drawCableType, cableDraft.x, cableDraft.y, normX, normY)
+      setCableDraft(null)
       return
     }
 
@@ -817,6 +885,7 @@ export default function NexusVisionArchitectClient() {
         undergroundSegments: (p.undergroundSegments ?? []).filter(
           (s) => s.id !== id,
         ),
+        cableSegments: (p.cableSegments ?? []).filter((s) => s.id !== id),
         cableRouteOverrides: overrides,
       }
     })
@@ -846,9 +915,15 @@ export default function NexusVisionArchitectClient() {
     downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
   }
 
-  const placeMode = calibrateMode || !!drawStructureMaterial || drawUnderground
-  const draftPoint = undergroundDraft ?? structureDraft
-  const draftColor = undergroundDraft || drawUnderground ? '#fb923c' : '#22d3ee'
+  const placeMode =
+    calibrateMode || !!drawStructureMaterial || drawUnderground || drawCable
+  const draftPoint = cableDraft ?? undergroundDraft ?? structureDraft
+  const draftColor =
+    cableDraft || drawCable
+      ? '#facc15'
+      : undergroundDraft || drawUnderground
+        ? '#fb923c'
+        : '#22d3ee'
 
   return (
     <div className="space-y-6">
@@ -1096,6 +1171,10 @@ export default function NexusVisionArchitectClient() {
                         setCalibPoints([])
                         setDrawStructureMaterial(null)
                         setStructureDraft(null)
+                        setDrawUnderground(false)
+                        setUndergroundDraft(null)
+                        setDrawCable(false)
+                        setCableDraft(null)
                       }}
                     >
                       Calibrar
@@ -1184,6 +1263,8 @@ export default function NexusVisionArchitectClient() {
                         setDrawStructureMaterial(null)
                         setDrawUnderground(false)
                         setUndergroundDraft(null)
+                        setDrawCable(false)
+                        setCableDraft(null)
                       } else if (cableRoutes.some((r) => r.id === id)) {
                         setSideTab('cable')
                         setShowCableRoutes(true)
@@ -1250,6 +1331,8 @@ export default function NexusVisionArchitectClient() {
                     setCalibrateMode(false)
                     setDrawStructureMaterial(null)
                     setStructureDraft(null)
+                    setDrawCable(false)
+                    setCableDraft(null)
                   } else if (id === 'cable') {
                     setShowCableRoutes(true)
                     setShowUnderground(false)
@@ -1264,11 +1347,15 @@ export default function NexusVisionArchitectClient() {
                     setCalibrateMode(false)
                     setDrawUnderground(false)
                     setUndergroundDraft(null)
+                    setDrawCable(false)
+                    setCableDraft(null)
                   } else {
                     setDrawStructureMaterial(null)
                     setStructureDraft(null)
                     setDrawUnderground(false)
                     setUndergroundDraft(null)
+                    setDrawCable(false)
+                    setCableDraft(null)
                   }
                 }}
               >
@@ -1288,6 +1375,8 @@ export default function NexusVisionArchitectClient() {
                 setStructureDraft(null)
                 setDrawUnderground(false)
                 setUndergroundDraft(null)
+                setDrawCable(false)
+                setCableDraft(null)
                 if (id) {
                   setCalibrateMode(false)
                   setViewMode('plano')
@@ -1340,6 +1429,8 @@ export default function NexusVisionArchitectClient() {
                     setCalibrateMode(false)
                     setDrawStructureMaterial(null)
                     setStructureDraft(null)
+                    setDrawCable(false)
+                    setCableDraft(null)
                     setShowUnderground(true)
                     setViewMode('plano')
                   }
@@ -1371,10 +1462,45 @@ export default function NexusVisionArchitectClient() {
                   setShowCableRoutes(true)
                   setShowUnderground(false)
                   setViewMode('plano')
+                  setSideTab('cable')
                 }}
                 onAddBreak={addBreakToRoute}
                 onResetRoute={resetRoutePath}
                 onRemoveBreak={removeLastBreakOnRoute}
+                manualSegments={cableSegments}
+                drawType={drawCableType}
+                drawMode={drawCable}
+                draftPoint={cableDraft}
+                disabled={!project.planoUrl || loading}
+                onDrawType={setDrawCableType}
+                onDrawMode={(active) => {
+                  setDrawCable(active)
+                  setCableDraft(null)
+                  if (active) {
+                    setCalibrateMode(false)
+                    setDrawStructureMaterial(null)
+                    setStructureDraft(null)
+                    setDrawUnderground(false)
+                    setUndergroundDraft(null)
+                    setShowCableRoutes(true)
+                    setShowUnderground(false)
+                    setViewMode('plano')
+                  }
+                }}
+                onSelect={(id) => {
+                  setSelectedId(id)
+                  setSideTab('cable')
+                  setShowCableRoutes(true)
+                }}
+                onRemoveSegment={quitar}
+                onChangeSegmentType={(id, type) => {
+                  setProject((p) => ({
+                    ...p,
+                    cableSegments: (p.cableSegments ?? []).map((s) =>
+                      s.id === id ? { ...s, type } : s,
+                    ),
+                  }))
+                }}
               />
               <div className="border-t border-white/10 pt-3">
                 <ConduitCalculator
@@ -1487,20 +1613,54 @@ export default function NexusVisionArchitectClient() {
                     Marcas: {CAMERA_BRANDS.join(' · ')}
                   </p>
                   {(() => {
-                    const vision = effectiveCameraVision(
-                      selectedCam,
-                      nightMode ? 'night' : 'day',
-                    )
+                    const mode = nightMode ? 'night' : 'day'
+                    const vision = effectiveCameraVision(selectedCam, mode)
+                    const lenses = effectiveCameraLenses(selectedCam, mode)
+                    const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
                     const bands = visionBandRangesM(vision.rangeM)
+                    const dualSummary = isDual
+                      ? lenses
+                          .map(
+                            (l) =>
+                              `${l.label.split(' ')[0]} ${l.fovDeg}°/${formatLength(l.rangeM, project.unitSystem ?? 'metric')}`,
+                          )
+                          .join(' · ')
+                      : `${vision.yawDeg}° · FOV ${vision.fovDeg}° · ${formatLength(vision.rangeM, project.unitSystem ?? 'metric')}`
                     return (
                       <NetVisionCollapsible
                         title="Óptica · orientación / FOV / alcance"
-                        summary={`${vision.yawDeg}° · FOV ${vision.fovDeg}° · ${formatLength(vision.rangeM, project.unitSystem ?? 'metric')}`}
+                        summary={
+                          isDual
+                            ? `${vision.yawDeg}° · Dual · ${dualSummary}`
+                            : dualSummary
+                        }
                         defaultOpen={false}
                       >
+                        {isDual ? (
+                          <div className="space-y-1.5 rounded-lg border border-orange-400/25 bg-orange-400/5 px-2 py-1.5 text-[10px]">
+                            <p className="font-semibold uppercase tracking-wide text-orange-200">
+                              Dual · 2 espectros en el plano
+                            </p>
+                            {lenses.map((l) => (
+                              <p
+                                key={l.lensId}
+                                className={
+                                  l.lensId === 'tele'
+                                    ? 'text-orange-200'
+                                    : 'text-[var(--nexus-cyan)]'
+                                }
+                              >
+                                {l.lensId === 'tele' ? 'Naranja' : 'Cyan'} · {l.label}: FOV{' '}
+                                {l.fovDeg}° ·{' '}
+                                {formatLength(l.rangeM, project.unitSystem ?? 'metric')}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
                           Espectro de visión · semáforo
+                          {isDual ? ' (gran angular)' : ''}
                         </p>
                         <ul className="space-y-0.5 rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px]">
                           <li className="flex items-center gap-1.5 text-emerald-300">
@@ -1540,6 +1700,7 @@ export default function NexusVisionArchitectClient() {
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Apertura FOV {vision.fovDeg}°
+                            {isDual ? ' · gran angular' : ''}
                             {selectedCam.fovDeg == null ? ' · catálogo' : ''}
                           </span>
                           <input
@@ -1557,6 +1718,7 @@ export default function NexusVisionArchitectClient() {
                           <span className="text-[var(--nexus-text-dim)]">
                             Alcance{' '}
                             {formatLength(vision.rangeM, project.unitSystem ?? 'metric')}
+                            {isDual ? ' · gran angular' : ''}
                             {selectedCam.rangeM == null ? ' · catálogo' : ''}
                             {nightMode ? ' · noche' : ' · día'}
                           </span>
@@ -1584,6 +1746,9 @@ export default function NexusVisionArchitectClient() {
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
                           En el plano: punto cyan = orientación/alcance; laterales = apertura.
+                          {isDual
+                            ? ' Dual: cono cyan (angular) + naranja (tele).'
+                            : ''}
                           {` · ${model.poeWatts} W · ${model.bitrateMbps} Mbps`}
                         </p>
                       </NetVisionCollapsible>

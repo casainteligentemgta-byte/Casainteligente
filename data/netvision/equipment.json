@@ -201,8 +201,24 @@
       "name": "H9c Dual 2K",
       "formFactor": "bullet",
       "fovDeg": 130,
-      "rangeDayM": 26,
-      "rangeNightM": 22,
+      "rangeDayM": 22,
+      "rangeNightM": 18,
+      "lenses": [
+        {
+          "id": "wide",
+          "label": "Gran angular 2.8 mm",
+          "fovDeg": 130,
+          "rangeDayM": 22,
+          "rangeNightM": 18
+        },
+        {
+          "id": "tele",
+          "label": "Tele 6 mm",
+          "fovDeg": 62,
+          "rangeDayM": 35,
+          "rangeNightM": 30
+        }
+      ],
       "resolution": "2K Dual",
       "bitrateMbps": 6,
       "poeWatts": 10,

@@ -1,4 +1,4 @@
-import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
+import { effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
 import {
   buildFovPolygon,
   hasClearVision,
@@ -69,33 +69,36 @@ export function buildCoverageSectors(
   mode: 'day' | 'night' = 'day',
   structures: DesignStructure[] = [],
 ): CoverageSector[] {
-  return cameras.map((cam) => {
-    const { fovDeg, rangeM, yawDeg } = effectiveCameraVision(cam, mode)
-    const radiusNorm = metersToNormRadius(
-      rangeM,
-      scale.metersPerNormX,
-      scale.metersPerNormY,
-    )
-    const { startAngleRad, endAngleRad } = fovSectorAngles(yawDeg, fovDeg)
-    // Siempre polígono: recorta contra muros opacos (drywall/bloque)
-    const polygon = buildFovPolygon(
-      cam.x,
-      cam.y,
-      radiusNorm,
-      startAngleRad,
-      endAngleRad,
-      structures,
-    )
-    return {
-      cameraId: cam.id,
-      cx: cam.x,
-      cy: cam.y,
-      radiusNorm,
-      startAngleRad,
-      endAngleRad,
-      mode,
-      polygon,
-    }
+  return cameras.flatMap((cam) => {
+    const lenses = effectiveCameraLenses(cam, mode)
+    return lenses.map((lens) => {
+      const radiusNorm = metersToNormRadius(
+        lens.rangeM,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
+      )
+      const { startAngleRad, endAngleRad } = fovSectorAngles(lens.yawDeg, lens.fovDeg)
+      // Siempre polígono: recorta contra muros opacos (drywall/bloque)
+      const polygon = buildFovPolygon(
+        cam.x,
+        cam.y,
+        radiusNorm,
+        startAngleRad,
+        endAngleRad,
+        structures,
+      )
+      return {
+        cameraId: cam.id,
+        lensId: lens.lensId,
+        cx: cam.x,
+        cy: cam.y,
+        radiusNorm,
+        startAngleRad,
+        endAngleRad,
+        mode,
+        polygon,
+      }
+    })
   })
 }
 
@@ -113,16 +116,23 @@ export function buildVisionSpectrum(
 ): SpectrumCell[] {
   if (cameras.length === 0) return []
 
-  const prepared = cameras.map((cam) => {
-    const { fovDeg, rangeM, yawDeg } = effectiveCameraVision(cam, mode)
-    const radiusNorm = metersToNormRadius(
-      rangeM,
-      scale.metersPerNormX,
-      scale.metersPerNormY,
-    )
-    const { startAngleRad, endAngleRad } = fovSectorAngles(yawDeg, fovDeg)
-    return { cam, rangeM, radiusNorm, startAngleRad, endAngleRad }
-  })
+  const prepared = cameras.flatMap((cam) =>
+    effectiveCameraLenses(cam, mode).map((lens) => {
+      const radiusNorm = metersToNormRadius(
+        lens.rangeM,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
+      )
+      const { startAngleRad, endAngleRad } = fovSectorAngles(lens.yawDeg, lens.fovDeg)
+      return {
+        cam,
+        rangeM: lens.rangeM,
+        radiusNorm,
+        startAngleRad,
+        endAngleRad,
+      }
+    }),
+  )
 
   const cell = 1 / grid
   const cells: SpectrumCell[] = []

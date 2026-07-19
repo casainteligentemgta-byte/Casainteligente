@@ -1,11 +1,15 @@
 import {
   ROUTE_SLACK,
+  cableMaxM,
+  cableTypeLabel,
   cableWarning,
+  isDataCableType,
   recommendCableType,
 } from '@/lib/netvision/services/cableCalculator'
 import { adviseCameraLinks } from '@/lib/netvision/services/poeAnalyzer'
 import type {
   CableRoute,
+  DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
   ScaleCalibration,
@@ -23,6 +27,9 @@ export function cableRouteKey(fromId: string, toId: string): string {
 export function makeCableRouteId(fromId: string, toId: string): string {
   return `cable-${fromId}-${toId}`
 }
+
+/** Id de destino ficticio para cables dibujados a mano (no van a conducto). */
+export const MANUAL_CABLE_TO_ID = 'manual'
 
 /** Ruta ortogonal L (horizontal→vertical) en coords normalizadas. */
 export function orthogonalPath(
@@ -309,34 +316,88 @@ export function buildCableRoutes(
   return routes
 }
 
+/** Convierte un segmento dibujado en el plano a CableRoute. */
+export function cableSegmentToRoute(
+  seg: DesignCableSegment,
+  scale: ScaleCalibration,
+): CableRoute {
+  const points = [
+    { x: seg.x1, y: seg.y1 },
+    { x: seg.x2, y: seg.y2 },
+  ]
+  const lengthM =
+    Math.round(
+      distMeters(
+        seg.x1,
+        seg.y1,
+        seg.x2,
+        seg.y2,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
+      ) * 10,
+    ) / 10
+  const warning = cableWarning(lengthM, seg.type)
+  return {
+    id: seg.id,
+    fromId: seg.id,
+    toId: MANUAL_CABLE_TO_ID,
+    fromLabel: seg.label,
+    toLabel: cableTypeLabel(seg.type),
+    points,
+    straightM: lengthM,
+    routeM: lengthM,
+    type: seg.type,
+    certified: isDataCableType(seg.type),
+    warn: !!warning || lengthM > cableMaxM(seg.type),
+    warning,
+  }
+}
+
+export function withManualCableSegments(
+  autoRoutes: CableRoute[],
+  segments: DesignCableSegment[],
+  scale: ScaleCalibration,
+): CableRoute[] {
+  if (!segments.length) return autoRoutes
+  const autoIds = new Set(autoRoutes.map((r) => r.id))
+  const manual = segments
+    .map((s) => cableSegmentToRoute(s, scale))
+    .filter((r) => !autoIds.has(r.id))
+  return [...autoRoutes, ...manual]
+}
+
 export function validateCableRoutes(routes: CableRoute[]): ValidationResult[] {
   const results: ValidationResult[] = []
   for (const r of routes) {
-    if (r.routeM > 100 && r.type !== 'FIBER') {
+    const max = cableMaxM(r.type)
+    if (r.routeM > max) {
       results.push({
         level: 'ERROR',
         code: 'CAB-001',
-        message: `${r.fromLabel}→${r.toLabel}: ${r.routeM} m supera 100 m (${r.type})`,
-        solution: 'Usar fibra óptica o repetidor / injector midspan',
+        message: `${r.fromLabel}→${r.toLabel}: ${r.routeM} m supera ${max} m (${cableTypeLabel(r.type)})`,
+        solution:
+          r.type === 'POWER_12V' || r.type === 'AUDIO'
+            ? 'Acorta el tramo o usa calibre / amplificación adecuada'
+            : 'Usar fibra óptica o repetidor / injector midspan',
         cameraId:
           r.fromId.startsWith('cam') || r.fromLabel.startsWith('CAM')
             ? r.fromId
             : undefined,
-        nodeId: r.toId,
-      })
+        nodeId: r.toId === MANUAL_CABLE_TO_ID ? undefined : r.toId,      })
     } else if (r.warning) {
       results.push({
         level: 'WARNING',
         code: 'CAB-002',
         message: `${r.fromLabel}→${r.toLabel}: ${r.warning}`,
         solution: 'Revisar longitud o tipo de cable',
-        nodeId: r.toId,
+        nodeId: r.toId === MANUAL_CABLE_TO_ID ? undefined : r.toId,
       })
     }
   }
 
   const byTo = new Map<string, number>()
   for (const r of routes) {
+    if (r.toId === MANUAL_CABLE_TO_ID) continue
     byTo.set(r.toId, (byTo.get(r.toId) ?? 0) + 1)
   }
   Array.from(byTo.entries()).forEach(([toId, count]) => {

@@ -27,7 +27,7 @@ import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials
 import { degToRad, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
-import { nearestSegmentOnRoute } from '@/lib/netvision/services/cableRoutingEngine'
+import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -556,6 +556,27 @@ export default function CameraPlacementTool({
           {showFov &&
             sectors.map((s) => {
               const selected = s.cameraId === selectedId
+              const isTele = s.lensId === 'tele'
+              const stroke = isTele
+                ? selected
+                  ? 'rgba(253,186,116,0.95)'
+                  : 'rgba(251,146,60,0.85)'
+                : selected
+                  ? 'rgba(165,243,252,0.95)'
+                  : 'rgba(34,211,238,0.8)'
+              const fill =
+                visionSpectrum.length > 0
+                  ? isTele
+                    ? 'rgba(251,146,60,0.03)'
+                    : 'rgba(6,182,212,0.04)'
+                  : selected
+                    ? isTele
+                      ? 'rgba(251,146,60,0.28)'
+                      : 'rgba(34,211,238,0.42)'
+                    : isTele
+                      ? 'rgba(251,146,60,0.2)'
+                      : 'rgba(6,182,212,0.32)'
+              const fovKey = `fov-${s.cameraId}-${s.lensId ?? 'main'}`
               const poly = s.polygon
               if (poly && poly.length >= 3) {
                 const pts: number[] = []
@@ -565,18 +586,13 @@ export default function CameraPlacementTool({
                 // Contorno del cono; el relleno lo da el semáforo del espectro
                 return (
                   <Line
-                    key={`fov-${s.cameraId}`}
+                    key={fovKey}
                     points={pts}
                     closed
-                    fill={
-                      visionSpectrum.length > 0
-                        ? 'rgba(6,182,212,0.04)'
-                        : selected
-                          ? 'rgba(34,211,238,0.42)'
-                          : 'rgba(6,182,212,0.32)'
-                    }
-                    stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
-                    strokeWidth={selected ? 2.5 : 2}
+                    fill={fill}
+                    stroke={stroke}
+                    strokeWidth={selected ? (isTele ? 2 : 2.5) : isTele ? 1.75 : 2}
+                    dash={isTele ? [7, 5] : undefined}
                     listening={false}
                   />
                 )
@@ -588,22 +604,17 @@ export default function CameraPlacementTool({
               const rotation = (s.startAngleRad * 180) / Math.PI
               return (
                 <Arc
-                  key={`fov-${s.cameraId}`}
+                  key={fovKey}
                   x={cx}
                   y={cy}
                   innerRadius={0}
                   outerRadius={Math.max(12, radius)}
                   angle={angle}
                   rotation={rotation}
-                  fill={
-                    visionSpectrum.length > 0
-                      ? 'rgba(6,182,212,0.04)'
-                      : selected
-                        ? 'rgba(34,211,238,0.42)'
-                        : 'rgba(6,182,212,0.32)'
-                  }
-                  stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
-                  strokeWidth={selected ? 2.5 : 2}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth={selected ? (isTele ? 2 : 2.5) : isTele ? 1.75 : 2}
+                  dash={isTele ? [7, 5] : undefined}
                   listening={false}
                 />
               )
@@ -657,7 +668,19 @@ export default function CameraPlacementTool({
               for (const p of r.points) {
                 pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
               }
-              const selected = selectedId === r.id
+              const selected = selectedId === r.id || selectedId === r.fromId
+              const isManual = r.toId === MANUAL_CABLE_TO_ID
+              const stroke = r.warn
+                ? '#f87171'
+                : r.type === 'FIBER'
+                  ? 'rgba(167,139,250,0.9)'
+                  : r.type === 'AUDIO'
+                    ? 'rgba(244,114,182,0.9)'
+                    : r.type === 'POWER_12V'
+                      ? 'rgba(248,113,113,0.9)'
+                      : r.type === 'CAT5E'
+                        ? 'rgba(163,230,53,0.85)'
+                        : 'rgba(250,204,21,0.85)'
               return (
                 <Line
                   key={r.id}
@@ -665,11 +688,16 @@ export default function CameraPlacementTool({
                   stroke={
                     selected
                       ? '#fef08a'
-                      : r.warn
-                        ? '#f87171'
-                        : 'rgba(250,204,21,0.75)'
+                      : stroke
                   }
                   strokeWidth={selected ? 3.5 : r.warn ? 2.5 : 2}
+                  dash={
+                    r.type === 'FIBER'
+                      ? [6, 4]
+                      : r.type === 'AUDIO' || r.type === 'POWER_12V'
+                        ? [4, 3]
+                        : undefined
+                  }
                   lineCap="round"
                   lineJoin="round"
                   hitStrokeWidth={18}
@@ -677,8 +705,9 @@ export default function CameraPlacementTool({
                     e.cancelBubble = true
                     const already = selectedId === r.id
                     onSelect(r.id)
-                    // 2º toque en la ruta seleccionada → insertar quiebre
-                    if (!already || !onCableWaypointInsert || placeMode) return
+                    // 2º toque en la ruta auto seleccionada → insertar quiebre
+                    if (isManual || !already || !onCableWaypointInsert || placeMode)
+                      return
                     const stage = e.target.getStage()
                     const pos = stage?.getPointerPosition()
                     if (!pos) return
@@ -693,7 +722,8 @@ export default function CameraPlacementTool({
                     e.cancelBubble = true
                     const already = selectedId === r.id
                     onSelect(r.id)
-                    if (!already || !onCableWaypointInsert || placeMode) return
+                    if (isManual || !already || !onCableWaypointInsert || placeMode)
+                      return
                     const stage = e.target.getStage()
                     const pos = stage?.getPointerPosition()
                     if (!pos) return
@@ -714,7 +744,7 @@ export default function CameraPlacementTool({
             !placeMode &&
             onCableWaypointMove &&
             cableRoutes
-              .filter((r) => r.id === selectedId)
+              .filter((r) => r.id === selectedId && r.toId !== MANUAL_CABLE_TO_ID)
               .flatMap((r) =>
                 r.points.slice(1, -1).map((p, midIndex) => {
                   const cx = offsetX + p.x * drawW
@@ -885,7 +915,12 @@ export default function CameraPlacementTool({
               .filter((c) => c.id === selectedId)
               .map((cam) => {
                 const vision = effectiveCameraVision(cam, nightMode ? 'night' : 'day')
-                const sector = sectors.find((s) => s.cameraId === cam.id)
+                // Asas sobre la óptica primaria (gran angular en Dual)
+                const sector = sectors.find(
+                  (s) =>
+                    s.cameraId === cam.id &&
+                    (!s.lensId || s.lensId === 'main' || s.lensId === 'wide'),
+                )
                 const avgMPerNorm = Math.max((metersPerNormX + metersPerNormY) / 2, 0.01)
                 const radiusNorm =
                   sector?.radiusNorm ?? vision.rangeM / avgMPerNorm

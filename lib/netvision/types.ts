@@ -9,6 +9,15 @@ export type CameraBrand =
   | 'Ezviz'
   | 'Aqara'
 
+/** Lente adicional (cámaras Dual / multi-óptica). */
+export type CameraLens = {
+  id: string
+  label: string
+  fovDeg: number
+  rangeDayM: number
+  rangeNightM: number
+}
+
 export type CameraModel = {
   id: string
   brand: CameraBrand
@@ -17,6 +26,8 @@ export type CameraModel = {
   fovDeg: number
   rangeDayM: number
   rangeNightM: number
+  /** Si hay ≥2, el plano dibuja un espectro/cono por lente. */
+  lenses?: CameraLens[]
   resolution: string
   bitrateMbps: number
   poeWatts: number
@@ -148,6 +159,8 @@ export type NetVisionProject = {
   structures: DesignStructure[]
   /** Tramos subterráneos dibujados en el plano (además de los derivados de cable ≥ 8 m). */
   undergroundSegments: DesignUndergroundSegment[]
+  /** Cables dibujados en el plano (además de rutas auto cámara→PoE). */
+  cableSegments: DesignCableSegment[]
   /**
    * Quiebres (waypoints intermedios) de rutas auto cámara/AP→PoE.
    * Clave: `${fromId}__${toId}` — sin extremos (siguen al equipo).
@@ -171,6 +184,8 @@ export type ValidationResult = {
 
 export type CoverageSector = {
   cameraId: string
+  /** Identificador de lente (wide/tele…) en cámaras Dual. */
+  lensId?: string
   cx: number
   cy: number
   radiusNorm: number
@@ -217,7 +232,25 @@ export type BomLine = {
   totalUsd: number
 }
 
-export type CableType = 'CAT5E' | 'CAT6' | 'CAT6A' | 'FIBER' | 'COAX'
+export type CableType =
+  | 'CAT5E'
+  | 'CAT6'
+  | 'CAT6A'
+  | 'FIBER'
+  | 'COAX'
+  | 'AUDIO'
+  | 'POWER_12V'
+
+/** Cable dibujado a mano en el plano (2 puntos + tipo). */
+export type DesignCableSegment = {
+  id: string
+  label: string
+  type: CableType
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
 
 export type CableRoute = {
   id: string
@@ -247,7 +280,7 @@ export type BomSummary = {
 
 export type ProjectCable = {
   id: string
-  type: 'CAT5E' | 'CAT6' | 'CAT6A' | 'FIBER' | 'COAX'
+  type: CableType
   length: number
   certified: boolean
   fromId: string

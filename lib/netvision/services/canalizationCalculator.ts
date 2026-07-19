@@ -1,4 +1,6 @@
 import underground from '@/data/netvision/underground.json'
+import { isDataCableType } from '@/lib/netvision/services/cableCalculator'
+import { MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 import type {
   CableRoute,
   BomLine,
@@ -227,7 +229,13 @@ export function buildUndergroundPlan(
 ): UndergroundPlan {
   const minLen = opts.minLengthM ?? 8
   const depthCm = minDepthCm(opts.zone)
-  const eligible = routes.filter((r) => r.routeM >= minLen)
+  // Solo datos auto (cámara→PoE); cables dibujados / audio / 12V no generan zanja
+  const eligible = routes.filter(
+    (r) =>
+      r.routeM >= minLen &&
+      r.toId !== MANUAL_CABLE_TO_ID &&
+      isDataCableType(r.type),
+  )
 
   // Agrupar por destino para un tronco subterráneo por switch
   const byTo = new Map<string, CableRoute[]>()

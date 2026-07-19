@@ -15,6 +15,7 @@ FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/PDF.
 **Marcas:** Hikvision, Axis, Uniview, Dahua, Sony, Ezviz (catálogo amplio), Aqara (catálogo amplio).
 Agregar cámara con botón **+ Cámara** (no por clic en el plano); luego arrastrar el pin.
 Espectro de visión ajustable por cámara: orientación, apertura FOV y alcance (sliders + asas en el plano).
+Cámaras **Dual** (p. ej. Ezviz H9c): dos conos/espectros — gran angular (cyan) + tele (naranja).
 **Calcular cobertura**: semáforo por alcance — verde (detección objetos/personas ≤40%), amarillo (≤70%), rojo (visión dudosa hasta 100%).
 Guía rápida de capas (Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
 
@@ -31,7 +32,7 @@ Botones **+ Switch / + AP / + NVR / + Injector** agregan el equipo al plano de i
 Unifilar en tiempo real (Plano/Diagrama) + SVG/PNG.
 
 ### 4 — Cableado
-Rutas cámara→switch con **varios quiebres** (tocar línea / arrastrar puntos / + Añadir quiebre); Cat6/Cat6A/fibra; cajetines; BOM.
+Dibujo en el plano (2 toques) con tipo Cat5e / Cat6 / Cat6A / fibra / sonido / 12V; rutas auto cámara→PoE con **varios quiebres** (tocar línea / arrastrar puntos / + Añadir quiebre); cajetines; BOM.
 
 ### 5 — Subterráneo
 Dibujo de tramos en el plano (2 toques) + auto desde cable ≥ 8 m; profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
