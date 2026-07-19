@@ -658,33 +658,36 @@ export default function NexusVisionArchitectClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="glass" asChild>
+      <div className="space-y-3">
+        <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
             <Link href="/nexus/vision/manual">
-              <BookOpen className="mr-2 h-4 w-4" />
+              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
               Manual
             </Link>
           </Button>
-          <NetVisionProjectsPanel
-            activeId={project.id}
-            projectName={project.name}
-            onOpen={switchToProject}
-            onNameChange={(name) =>
-              setProject((p) => ({ ...p, name: name.slice(0, 120) }))
-            }
-          />
+          <div className="shrink-0">
+            <NetVisionProjectsPanel
+              activeId={project.id}
+              projectName={project.name}
+              onOpen={switchToProject}
+              onNameChange={(name) =>
+                setProject((p) => ({ ...p, name: name.slice(0, 120) }))
+              }
+              triggerSize="sm"
+            />
+          </div>
           <Button
             type="button"
             variant="glass"
+            size="sm"
+            className="shrink-0"
             onClick={() => fileRef.current?.click()}
             disabled={loading}
           >
-            <Upload className="mr-2 h-4 w-4" />
-            {loading ? 'Cargando…' : 'Cargar PDF / imagen'}
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            {loading ? 'Cargando…' : 'Cargar'}
           </Button>
           <input
             ref={fileRef}
@@ -693,18 +696,28 @@ export default function NexusVisionArchitectClient() {
             className="hidden"
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
           />
-          {project.planoUrl ? (
-            <>
-              <Button type="button" variant="glass" onClick={exportPng}>
-                <Download className="mr-2 h-4 w-4" />
-                PNG
-              </Button>
-              <Button type="button" variant="glass" onClick={limpiarPlano}>
-                <Undo2 className="mr-2 h-4 w-4" />
-                Nuevo plano
-              </Button>
-            </>
-          ) : null}
+          <Button
+            type="button"
+            variant="glass"
+            size="sm"
+            className="shrink-0"
+            onClick={exportPng}
+            disabled={!project.planoUrl}
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            PNG
+          </Button>
+          <Button
+            type="button"
+            variant="glass"
+            size="sm"
+            className="shrink-0"
+            onClick={limpiarPlano}
+            disabled={!project.planoUrl}
+          >
+            <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+            Nuevo plano
+          </Button>
         </div>
       </div>
 

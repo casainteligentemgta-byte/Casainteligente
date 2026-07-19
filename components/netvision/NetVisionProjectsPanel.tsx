@@ -26,6 +26,7 @@ type Props = {
   projectName: string
   onOpen: (project: NetVisionProject) => void
   onNameChange: (name: string) => void
+  triggerSize?: 'default' | 'sm'
 }
 
 function formatWhen(iso: string): string {
@@ -48,6 +49,7 @@ export default function NetVisionProjectsPanel({
   projectName,
   onOpen,
   onNameChange,
+  triggerSize = 'default',
 }: Props) {
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<NetVisionProjectIndexEntry[]>([])
@@ -131,8 +133,16 @@ export default function NetVisionProjectsPanel({
 
   return (
     <>
-      <Button type="button" variant="glass" onClick={() => setOpen((v) => !v)}>
-        <FolderOpen className="mr-2 h-4 w-4" />
+      <Button
+        type="button"
+        variant="glass"
+        size={triggerSize}
+        className="shrink-0"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <FolderOpen
+          className={triggerSize === 'sm' ? 'mr-1.5 h-3.5 w-3.5' : 'mr-2 h-4 w-4'}
+        />
         Mis proyectos
       </Button>
 
