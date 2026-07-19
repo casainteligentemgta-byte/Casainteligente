@@ -34,6 +34,7 @@ import {
   CAMERA_BRANDS,
   DEFAULT_CAMERA_MODEL_ID,
   cameraCatalogGrouped,
+  effectiveCameraLenses,
   effectiveCameraVision,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
@@ -1340,20 +1341,54 @@ export default function NexusVisionArchitectClient() {
                     Marcas: {CAMERA_BRANDS.join(' · ')}
                   </p>
                   {(() => {
-                    const vision = effectiveCameraVision(
-                      selectedCam,
-                      nightMode ? 'night' : 'day',
-                    )
+                    const mode = nightMode ? 'night' : 'day'
+                    const vision = effectiveCameraVision(selectedCam, mode)
+                    const lenses = effectiveCameraLenses(selectedCam, mode)
+                    const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
                     const bands = visionBandRangesM(vision.rangeM)
+                    const dualSummary = isDual
+                      ? lenses
+                          .map(
+                            (l) =>
+                              `${l.label.split(' ')[0]} ${l.fovDeg}°/${formatLength(l.rangeM, project.unitSystem ?? 'metric')}`,
+                          )
+                          .join(' · ')
+                      : `${vision.yawDeg}° · FOV ${vision.fovDeg}° · ${formatLength(vision.rangeM, project.unitSystem ?? 'metric')}`
                     return (
                       <NetVisionCollapsible
                         title="Óptica · orientación / FOV / alcance"
-                        summary={`${vision.yawDeg}° · FOV ${vision.fovDeg}° · ${formatLength(vision.rangeM, project.unitSystem ?? 'metric')}`}
+                        summary={
+                          isDual
+                            ? `${vision.yawDeg}° · Dual · ${dualSummary}`
+                            : dualSummary
+                        }
                         defaultOpen={false}
                       >
+                        {isDual ? (
+                          <div className="space-y-1.5 rounded-lg border border-orange-400/25 bg-orange-400/5 px-2 py-1.5 text-[10px]">
+                            <p className="font-semibold uppercase tracking-wide text-orange-200">
+                              Dual · 2 espectros en el plano
+                            </p>
+                            {lenses.map((l) => (
+                              <p
+                                key={l.lensId}
+                                className={
+                                  l.lensId === 'tele'
+                                    ? 'text-orange-200'
+                                    : 'text-[var(--nexus-cyan)]'
+                                }
+                              >
+                                {l.lensId === 'tele' ? 'Naranja' : 'Cyan'} · {l.label}: FOV{' '}
+                                {l.fovDeg}° ·{' '}
+                                {formatLength(l.rangeM, project.unitSystem ?? 'metric')}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
                           Espectro de visión · semáforo
+                          {isDual ? ' (gran angular)' : ''}
                         </p>
                         <ul className="space-y-0.5 rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px]">
                           <li className="flex items-center gap-1.5 text-emerald-300">
@@ -1393,6 +1428,7 @@ export default function NexusVisionArchitectClient() {
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Apertura FOV {vision.fovDeg}°
+                            {isDual ? ' · gran angular' : ''}
                             {selectedCam.fovDeg == null ? ' · catálogo' : ''}
                           </span>
                           <input
@@ -1410,6 +1446,7 @@ export default function NexusVisionArchitectClient() {
                           <span className="text-[var(--nexus-text-dim)]">
                             Alcance{' '}
                             {formatLength(vision.rangeM, project.unitSystem ?? 'metric')}
+                            {isDual ? ' · gran angular' : ''}
                             {selectedCam.rangeM == null ? ' · catálogo' : ''}
                             {nightMode ? ' · noche' : ' · día'}
                           </span>
@@ -1437,6 +1474,9 @@ export default function NexusVisionArchitectClient() {
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
                           En el plano: punto cyan = orientación/alcance; laterales = apertura.
+                          {isDual
+                            ? ' Dual: cono cyan (angular) + naranja (tele).'
+                            : ''}
                           {` · ${model.poeWatts} W · ${model.bitrateMbps} Mbps`}
                         </p>
                       </NetVisionCollapsible>

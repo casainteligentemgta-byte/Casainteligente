@@ -9,6 +9,15 @@ export type CameraBrand =
   | 'Ezviz'
   | 'Aqara'
 
+/** Lente adicional (cámaras Dual / multi-óptica). */
+export type CameraLens = {
+  id: string
+  label: string
+  fovDeg: number
+  rangeDayM: number
+  rangeNightM: number
+}
+
 export type CameraModel = {
   id: string
   brand: CameraBrand
@@ -17,6 +26,8 @@ export type CameraModel = {
   fovDeg: number
   rangeDayM: number
   rangeNightM: number
+  /** Si hay ≥2, el plano dibuja un espectro/cono por lente. */
+  lenses?: CameraLens[]
   resolution: string
   bitrateMbps: number
   poeWatts: number
@@ -166,6 +177,8 @@ export type ValidationResult = {
 
 export type CoverageSector = {
   cameraId: string
+  /** Identificador de lente (wide/tele…) en cámaras Dual. */
+  lensId?: string
   cx: number
   cy: number
   radiusNorm: number

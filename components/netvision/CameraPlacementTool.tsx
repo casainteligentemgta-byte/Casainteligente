@@ -536,6 +536,27 @@ export default function CameraPlacementTool({
           {showFov &&
             sectors.map((s) => {
               const selected = s.cameraId === selectedId
+              const isTele = s.lensId === 'tele'
+              const stroke = isTele
+                ? selected
+                  ? 'rgba(253,186,116,0.95)'
+                  : 'rgba(251,146,60,0.85)'
+                : selected
+                  ? 'rgba(165,243,252,0.95)'
+                  : 'rgba(34,211,238,0.8)'
+              const fill =
+                visionSpectrum.length > 0
+                  ? isTele
+                    ? 'rgba(251,146,60,0.03)'
+                    : 'rgba(6,182,212,0.04)'
+                  : selected
+                    ? isTele
+                      ? 'rgba(251,146,60,0.28)'
+                      : 'rgba(34,211,238,0.42)'
+                    : isTele
+                      ? 'rgba(251,146,60,0.2)'
+                      : 'rgba(6,182,212,0.32)'
+              const fovKey = `fov-${s.cameraId}-${s.lensId ?? 'main'}`
               const poly = s.polygon
               if (poly && poly.length >= 3) {
                 const pts: number[] = []
@@ -545,18 +566,13 @@ export default function CameraPlacementTool({
                 // Contorno del cono; el relleno lo da el semáforo del espectro
                 return (
                   <Line
-                    key={`fov-${s.cameraId}`}
+                    key={fovKey}
                     points={pts}
                     closed
-                    fill={
-                      visionSpectrum.length > 0
-                        ? 'rgba(6,182,212,0.04)'
-                        : selected
-                          ? 'rgba(34,211,238,0.42)'
-                          : 'rgba(6,182,212,0.32)'
-                    }
-                    stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
-                    strokeWidth={selected ? 2.5 : 2}
+                    fill={fill}
+                    stroke={stroke}
+                    strokeWidth={selected ? (isTele ? 2 : 2.5) : isTele ? 1.75 : 2}
+                    dash={isTele ? [7, 5] : undefined}
                     listening={false}
                   />
                 )
@@ -568,22 +584,17 @@ export default function CameraPlacementTool({
               const rotation = (s.startAngleRad * 180) / Math.PI
               return (
                 <Arc
-                  key={`fov-${s.cameraId}`}
+                  key={fovKey}
                   x={cx}
                   y={cy}
                   innerRadius={0}
                   outerRadius={Math.max(12, radius)}
                   angle={angle}
                   rotation={rotation}
-                  fill={
-                    visionSpectrum.length > 0
-                      ? 'rgba(6,182,212,0.04)'
-                      : selected
-                        ? 'rgba(34,211,238,0.42)'
-                        : 'rgba(6,182,212,0.32)'
-                  }
-                  stroke={selected ? 'rgba(165,243,252,0.95)' : 'rgba(34,211,238,0.8)'}
-                  strokeWidth={selected ? 2.5 : 2}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth={selected ? (isTele ? 2 : 2.5) : isTele ? 1.75 : 2}
+                  dash={isTele ? [7, 5] : undefined}
                   listening={false}
                 />
               )
@@ -767,7 +778,12 @@ export default function CameraPlacementTool({
               .filter((c) => c.id === selectedId)
               .map((cam) => {
                 const vision = effectiveCameraVision(cam, nightMode ? 'night' : 'day')
-                const sector = sectors.find((s) => s.cameraId === cam.id)
+                // Asas sobre la óptica primaria (gran angular en Dual)
+                const sector = sectors.find(
+                  (s) =>
+                    s.cameraId === cam.id &&
+                    (!s.lensId || s.lensId === 'main' || s.lensId === 'wide'),
+                )
                 const avgMPerNorm = Math.max((metersPerNormX + metersPerNormY) / 2, 0.01)
                 const radiusNorm =
                   sector?.radiusNorm ?? vision.rangeM / avgMPerNorm
