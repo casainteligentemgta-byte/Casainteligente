@@ -725,7 +725,8 @@ export default function CameraPlacementTool({
                 key={`str-${s.id}`}
                 points={[x1, y1, x2, y2]}
                 stroke={mat.color}
-                strokeWidth={selected ? 5 : 3.5}
+                strokeWidth={selected ? 2 : 1.25}
+                hitStrokeWidth={14}
                 dash={mat.dash ?? undefined}
                 lineCap="round"
                 opacity={selected ? 1 : 0.9}
