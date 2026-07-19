@@ -1,4 +1,6 @@
 import conduits from '@/data/netvision/conduits.json'
+import { isDataCableType } from '@/lib/netvision/services/cableCalculator'
+import { MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 import type { BomLine, CableRoute, ValidationResult } from '@/lib/netvision/types'
 
 export type ConduitBox = {
@@ -31,6 +33,7 @@ export function recommendConduitBox(cat6Count: number): ConduitBox {
 export function planConduits(routes: CableRoute[]): ConduitPlan[] {
   const byTo = new Map<string, CableRoute[]>()
   for (const r of routes) {
+    if (r.toId === MANUAL_CABLE_TO_ID || !isDataCableType(r.type)) continue
     const list = byTo.get(r.toId) ?? []
     list.push(r)
     byTo.set(r.toId, list)

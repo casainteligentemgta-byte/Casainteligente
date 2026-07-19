@@ -1,9 +1,11 @@
 {
-  "CAT5E": { "maxM": 100, "usdPerM": 0.08, "poeOk": true },
-  "CAT6": { "maxM": 100, "usdPerM": 0.12, "poeOk": true },
-  "CAT6A": { "maxM": 55, "usdPerM": 0.15, "poeOk": true, "note": "hasta 55m sin repetidor a 10G" },
-  "FIBER": { "maxM": 2000, "usdPerM": 0.5, "poeOk": false },
-  "COAX": { "maxM": 300, "usdPerM": 0.18, "poeOk": false },
+  "CAT5E": { "maxM": 100, "usdPerM": 0.08, "poeOk": true, "label": "Cat 5e" },
+  "CAT6": { "maxM": 100, "usdPerM": 0.12, "poeOk": true, "label": "Cat 6" },
+  "CAT6A": { "maxM": 55, "usdPerM": 0.15, "poeOk": true, "label": "Cat 6A", "note": "hasta 55m sin repetidor a 10G" },
+  "FIBER": { "maxM": 2000, "usdPerM": 0.5, "poeOk": false, "label": "Fibra óptica" },
+  "COAX": { "maxM": 300, "usdPerM": 0.18, "poeOk": false, "label": "Coaxial" },
+  "AUDIO": { "maxM": 50, "usdPerM": 0.1, "poeOk": false, "label": "Sonido" },
+  "POWER_12V": { "maxM": 30, "usdPerM": 0.09, "poeOk": false, "label": "12V" },
   "connectors": {
     "RJ45": { "usdEach": 0.5 }
   }

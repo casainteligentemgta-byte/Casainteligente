@@ -637,15 +637,42 @@ export default function CameraPlacementTool({
               for (const p of r.points) {
                 pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
               }
+              const selected = selectedId === r.id || selectedId === r.fromId
+              const stroke = r.warn
+                ? '#f87171'
+                : r.type === 'FIBER'
+                  ? 'rgba(167,139,250,0.9)'
+                  : r.type === 'AUDIO'
+                    ? 'rgba(244,114,182,0.9)'
+                    : r.type === 'POWER_12V'
+                      ? 'rgba(248,113,113,0.9)'
+                      : r.type === 'CAT5E'
+                        ? 'rgba(163,230,53,0.85)'
+                        : 'rgba(250,204,21,0.85)'
               return (
                 <Line
                   key={r.id}
                   points={pts}
-                  stroke={r.warn ? '#f87171' : 'rgba(250,204,21,0.75)'}
-                  strokeWidth={r.warn ? 2.5 : 2}
+                  stroke={selected ? '#fef08a' : stroke}
+                  strokeWidth={selected ? 3.5 : r.warn ? 2.5 : 2}
+                  dash={
+                    r.type === 'FIBER'
+                      ? [6, 4]
+                      : r.type === 'AUDIO' || r.type === 'POWER_12V'
+                        ? [4, 3]
+                        : undefined
+                  }
                   lineCap="round"
                   lineJoin="round"
-                  listening={false}
+                  hitStrokeWidth={14}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    onSelect(r.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    onSelect(r.id)
+                  }}
                 />
               )
             })}
