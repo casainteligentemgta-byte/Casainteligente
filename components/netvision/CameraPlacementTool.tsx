@@ -840,13 +840,14 @@ export default function CameraPlacementTool({
                 key={cam.id}
                 x={cx}
                 y={cy}
-                radius={selected ? 14 : 11}
+                radius={selected ? 5 : 4}
                 fill={selected ? '#22d3ee' : '#06b6d4'}
                 stroke="#0f172a"
-                strokeWidth={2}
+                strokeWidth={1.25}
+                hitStrokeWidth={14}
                 shadowColor="black"
-                shadowBlur={8}
-                shadowOpacity={0.35}
+                shadowBlur={3}
+                shadowOpacity={0.3}
                 draggable
                 onClick={(e) => {
                   e.cancelBubble = true
