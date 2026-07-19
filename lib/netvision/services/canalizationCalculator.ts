@@ -1,5 +1,12 @@
 import underground from '@/data/netvision/underground.json'
-import type { CableRoute, BomLine, ValidationResult } from '@/lib/netvision/types'
+import type {
+  CableRoute,
+  BomLine,
+  DesignUndergroundSegment,
+  ScaleCalibration,
+  ValidationResult,
+} from '@/lib/netvision/types'
+import { distMeters } from '@/lib/netvision/utils/geometryHelpers'
 
 export type ZoneType = 'pedestrian' | 'vehicle' | 'road_crossing' | 'railway'
 export type TerrainType = 'soft' | 'medium' | 'rocky'
@@ -118,7 +125,7 @@ export function estimateAccessChambers(lengthM: number, turnsOver30: number): nu
   return Math.max(2, 2 + byDistance + turnsOver30)
 }
 
-function placeChambersAlongRoute(
+export function placeChambersAlongRoute(
   runId: string,
   points: { x: number; y: number }[],
   lengthM: number,
@@ -271,9 +278,77 @@ export function buildUndergroundPlan(
     void lengthM
   })
 
+  return finalizeUndergroundPlan(
+    opts.zone,
+    opts.terrain,
+    opts.chamberMaterial,
+    runs,
+  )
+}
+
+/** Tramo subterráneo dibujado a mano (2 puntos en el plano). */
+export function buildManualUndergroundRun(
+  seg: DesignUndergroundSegment,
+  scale: ScaleCalibration,
+  opts: {
+    zone: ZoneType
+    chamberMaterial: ChamberMaterial
+    cableCount?: number
+  },
+): UndergroundRun {
+  const points = [
+    { x: seg.x1, y: seg.y1 },
+    { x: seg.x2, y: seg.y2 },
+  ]
+  const lengthM =
+    Math.round(
+      distMeters(
+        seg.x1,
+        seg.y1,
+        seg.x2,
+        seg.y2,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
+      ) * 10,
+    ) / 10
+  const depthCm = minDepthCm(opts.zone)
+  const cableCount = opts.cableCount ?? 1
+  const pipe = recommendPipe(cableCount)
+  const occupancy =
+    pipe.maxCat6 > 0 ? Math.round((cableCount / pipe.maxCat6) * 100) / 100 : 1
+  const turns = countTurnsOver30(points)
+  const chambers = placeChambersAlongRoute(
+    seg.id,
+    points,
+    lengthM,
+    depthCm,
+    opts.chamberMaterial,
+  )
+  return {
+    id: seg.id,
+    routeId: seg.id,
+    fromLabel: seg.label,
+    toLabel: 'manual',
+    lengthM,
+    cableCount,
+    zone: opts.zone,
+    depthCm,
+    pipe,
+    occupancy,
+    points,
+    chambers,
+    turnsOver30: turns,
+  }
+}
+
+function finalizeUndergroundPlan(
+  zone: ZoneType,
+  terrain: TerrainType,
+  chamberMaterial: ChamberMaterial,
+  runs: UndergroundRun[],
+): UndergroundPlan {
   const totalPipeM = runs.reduce((s, r) => s + r.lengthM, 0)
   const allChambers = runs.flatMap((r) => r.chambers)
-  // dedupe chambers cercanos
   const uniqueChambers: AccessChamber[] = []
   for (const ch of allChambers) {
     if (uniqueChambers.some((u) => Math.hypot(u.x - ch.x, u.y - ch.y) < 0.025)) {
@@ -281,23 +356,43 @@ export function buildUndergroundPlan(
     }
     uniqueChambers.push(ch)
   }
-
-  const excavation = buildExcavationSpec(
-    totalPipeM,
-    depthCm,
-    opts.terrain,
-    opts.zone,
-  )
-
+  const depthCm = runs[0]?.depthCm ?? minDepthCm(zone)
+  const excavation = buildExcavationSpec(totalPipeM, depthCm, terrain, zone)
   return {
-    zone: opts.zone,
-    terrain: opts.terrain,
-    chamberMaterial: opts.chamberMaterial,
+    zone,
+    terrain,
+    chamberMaterial,
     runs,
     excavation,
     totalPipeM: Math.round(totalPipeM * 10) / 10,
     totalChambers: uniqueChambers.length,
   }
+}
+
+/** Combina tramos auto (cable ≥ 8 m) con segmentos dibujados en el plano. */
+export function withManualUndergroundSegments(
+  base: UndergroundPlan,
+  segments: DesignUndergroundSegment[],
+  scale: ScaleCalibration,
+): UndergroundPlan {
+  if (!segments.length) return base
+  const manualRuns = segments.map((seg) =>
+    buildManualUndergroundRun(seg, scale, {
+      zone: base.zone,
+      chamberMaterial: base.chamberMaterial,
+    }),
+  )
+  const autoIds = new Set(base.runs.map((r) => r.id))
+  const runs = [
+    ...base.runs,
+    ...manualRuns.filter((r) => !autoIds.has(r.id)),
+  ]
+  return finalizeUndergroundPlan(
+    base.zone,
+    base.terrain,
+    base.chamberMaterial,
+    runs,
+  )
 }
 
 export function buildExcavationSpec(
@@ -335,8 +430,8 @@ export function validateUnderground(plan: UndergroundPlan): ValidationResult[] {
     results.push({
       level: 'INFO',
       code: 'UG-000',
-      message: 'Sin tramos subterráneos (rutas < 8 m o sin cableado)',
-      solution: 'Coloca enlaces más largos o baja el umbral de longitud',
+      message: 'Sin tramos subterráneos (rutas < 8 m o sin dibujo en plano)',
+      solution: 'Dibuja un tramo en Sub o coloca enlaces de cable ≥ 8 m',
     })
     return results
   }

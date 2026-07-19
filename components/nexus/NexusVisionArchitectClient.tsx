@@ -79,6 +79,7 @@ import {
 import {
   buildUndergroundPlan,
   validateUnderground,
+  withManualUndergroundSegments,
   type ChamberMaterial,
   type TerrainType,
   type ZoneType,
@@ -105,6 +106,7 @@ import type {
   DesignCamera,
   DesignNetworkNode,
   DesignStructure,
+  DesignUndergroundSegment,
   NetVisionProject,
   NetworkNodeKind,
   StructureMaterialId,
@@ -157,6 +159,11 @@ export default function NexusVisionArchitectClient() {
   const [structureDraft, setStructureDraft] = useState<{ x: number; y: number } | null>(
     null,
   )
+  const [drawUnderground, setDrawUnderground] = useState(false)
+  const [undergroundDraft, setUndergroundDraft] = useState<{
+    x: number
+    y: number
+  } | null>(null)
   const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
@@ -271,14 +278,27 @@ export default function NexusVisionArchitectClient() {
 
   const conduitPlans = useMemo(() => planConduits(cableRoutes), [cableRoutes])
 
+  const undergroundSegments = project.undergroundSegments ?? []
+
   const undergroundPlan = useMemo(
     () =>
-      buildUndergroundPlan(cableRoutes, {
-        zone: ugZone,
-        terrain: ugTerrain,
-        chamberMaterial: ugChamberMat,
-      }),
-    [cableRoutes, ugZone, ugTerrain, ugChamberMat],
+      withManualUndergroundSegments(
+        buildUndergroundPlan(cableRoutes, {
+          zone: ugZone,
+          terrain: ugTerrain,
+          chamberMaterial: ugChamberMat,
+        }),
+        undergroundSegments,
+        project.scale,
+      ),
+    [
+      cableRoutes,
+      ugZone,
+      ugTerrain,
+      ugChamberMat,
+      undergroundSegments,
+      project.scale,
+    ],
   )
 
   const validations = useMemo(() => {
@@ -393,12 +413,15 @@ export default function NexusVisionArchitectClient() {
         cameras: [],
         networkNodes: [],
         structures: [],
+        undergroundSegments: [],
       }))
       setSelectedId(null)
       setCalibrateMode(false)
       setCalibPoints([])
       setDrawStructureMaterial(null)
       setStructureDraft(null)
+      setDrawUnderground(false)
+      setUndergroundDraft(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
@@ -525,6 +548,32 @@ export default function NexusVisionArchitectClient() {
     setViewMode('plano')
   }
 
+  const addUndergroundSegment = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+  ) => {
+    const n = (project.undergroundSegments?.length ?? 0) + 1
+    const seg: DesignUndergroundSegment = {
+      id: uid(),
+      label: `SUB-${String(n).padStart(2, '0')}`,
+      x1: Math.round(x1 * 1000) / 1000,
+      y1: Math.round(y1 * 1000) / 1000,
+      x2: Math.round(x2 * 1000) / 1000,
+      y2: Math.round(y2 * 1000) / 1000,
+    }
+    setError(null)
+    setProject((p) => ({
+      ...p,
+      undergroundSegments: [...(p.undergroundSegments ?? []), seg],
+    }))
+    setSelectedId(seg.id)
+    setSideTab('sub')
+    setShowUnderground(true)
+    setViewMode('plano')
+  }
+
   const onAddAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
 
@@ -552,6 +601,27 @@ export default function NexusVisionArchitectClient() {
       } else {
         setCalibPoints(next)
       }
+      return
+    }
+
+    if (drawUnderground) {
+      if (!undergroundDraft) {
+        setUndergroundDraft({ x: normX, y: normY })
+        return
+      }
+      const dx = Math.abs(undergroundDraft.x - normX)
+      const dy = Math.abs(undergroundDraft.y - normY)
+      if (dx + dy < 0.01) {
+        setError('El tramo es demasiado corto; elige otro punto.')
+        return
+      }
+      addUndergroundSegment(
+        undergroundDraft.x,
+        undergroundDraft.y,
+        normX,
+        normY,
+      )
+      setUndergroundDraft(null)
       return
     }
 
@@ -628,6 +698,7 @@ export default function NexusVisionArchitectClient() {
       cameras: p.cameras.filter((c) => c.id !== id),
       networkNodes: p.networkNodes.filter((n) => n.id !== id),
       structures: (p.structures ?? []).filter((s) => s.id !== id),
+      undergroundSegments: (p.undergroundSegments ?? []).filter((s) => s.id !== id),
     }))
     if (selectedId === id) setSelectedId(null)
   }
@@ -655,7 +726,9 @@ export default function NexusVisionArchitectClient() {
     downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
   }
 
-  const placeMode = calibrateMode || !!drawStructureMaterial
+  const placeMode = calibrateMode || !!drawStructureMaterial || drawUnderground
+  const draftPoint = undergroundDraft ?? structureDraft
+  const draftColor = undergroundDraft || drawUnderground ? '#fb923c' : '#22d3ee'
 
   return (
     <div className="space-y-6">
@@ -967,13 +1040,14 @@ export default function NexusVisionArchitectClient() {
                     undergroundRuns={undergroundPlan.runs}
                     selectedId={selectedId}
                     placeMode={placeMode}
-                    draftPoint={structureDraft}
+                    draftPoint={draftPoint}
+                    draftColor={draftColor}
                     showFov={showFov}
                     showWifi={showWifi}
                     showSound={showSound}
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
-                    showUnderground={showUnderground}
+                    showUnderground={showUnderground || sideTab === 'sub'}
                     onAddAt={onAddAt}
                     onMove={onMove}
                     onAdjustCameraVision={adjustCameraVision}
@@ -988,6 +1062,8 @@ export default function NexusVisionArchitectClient() {
                         setViewMode('plano')
                         setCalibrateMode(false)
                         setDrawStructureMaterial(null)
+                        setDrawUnderground(false)
+                        setUndergroundDraft(null)
                       }
                     }}
                     stageRef={stageRef}
@@ -1044,13 +1120,19 @@ export default function NexusVisionArchitectClient() {
                   if (id === 'sub') {
                     setShowUnderground(true)
                     setViewMode('plano')
-                  }
-                  if (id === 'muros') {
+                    setCalibrateMode(false)
+                    setDrawStructureMaterial(null)
+                    setStructureDraft(null)
+                  } else if (id === 'muros') {
                     setViewMode('plano')
                     setCalibrateMode(false)
+                    setDrawUnderground(false)
+                    setUndergroundDraft(null)
                   } else {
                     setDrawStructureMaterial(null)
                     setStructureDraft(null)
+                    setDrawUnderground(false)
+                    setUndergroundDraft(null)
                   }
                 }}
               >
@@ -1068,6 +1150,8 @@ export default function NexusVisionArchitectClient() {
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)
+                setDrawUnderground(false)
+                setUndergroundDraft(null)
                 if (id) {
                   setCalibrateMode(false)
                   setViewMode('plano')
@@ -1105,12 +1189,29 @@ export default function NexusVisionArchitectClient() {
             <div className="space-y-4">
               <UndergroundCanalizationTool
                 plan={undergroundPlan}
+                manualSegments={undergroundSegments}
                 zone={ugZone}
                 terrain={ugTerrain}
                 chamberMaterial={ugChamberMat}
+                drawMode={drawUnderground}
+                draftPoint={undergroundDraft}
+                disabled={!project.planoUrl || loading}
                 onZone={setUgZone}
                 onTerrain={setUgTerrain}
                 onChamberMaterial={setUgChamberMat}
+                onDrawMode={(active) => {
+                  setDrawUnderground(active)
+                  setUndergroundDraft(null)
+                  if (active) {
+                    setCalibrateMode(false)
+                    setDrawStructureMaterial(null)
+                    setStructureDraft(null)
+                    setShowUnderground(true)
+                    setViewMode('plano')
+                  }
+                }}
+                onSelectSegment={setSelectedId}
+                onRemoveSegment={quitar}
               />
               <div className="border-t border-white/10 pt-3">
                 <NetVisionCollapsible

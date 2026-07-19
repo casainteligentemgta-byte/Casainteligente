@@ -2,6 +2,7 @@ import type {
   DesignCamera,
   DesignNetworkNode,
   DesignStructure,
+  DesignUndergroundSegment,
   NetVisionCurrency,
   NetVisionProject,
   NetVisionProjectIndexEntry,
@@ -57,6 +58,7 @@ export function emptyProject(partial?: {
     cameras: [],
     networkNodes: [],
     structures: [],
+    undergroundSegments: [],
     scale: defaultScale(),
     retentionDays: 30,
     complianceProfileId: 'VE',
@@ -375,6 +377,9 @@ function normalizeProject(
     structures: Array.isArray(p.structures)
       ? p.structures.map(normalizeStructure)
       : [],
+    undergroundSegments: Array.isArray(p.undergroundSegments)
+      ? p.undergroundSegments.map(normalizeUndergroundSegment)
+      : [],
     scale,
     retentionDays: typeof p.retentionDays === 'number' ? p.retentionDays : 30,
     complianceProfileId: p.complianceProfileId ?? 'VE',
@@ -438,6 +443,19 @@ function normalizeStructure(s: Partial<DesignStructure>): DesignStructure {
     id: s.id ?? `${Date.now()}`,
     label: s.label ?? 'MUR-01',
     materialId,
+    x1: typeof s.x1 === 'number' ? s.x1 : 0.3,
+    y1: typeof s.y1 === 'number' ? s.y1 : 0.3,
+    x2: typeof s.x2 === 'number' ? s.x2 : 0.7,
+    y2: typeof s.y2 === 'number' ? s.y2 : 0.3,
+  }
+}
+
+function normalizeUndergroundSegment(
+  s: Partial<DesignUndergroundSegment>,
+): DesignUndergroundSegment {
+  return {
+    id: s.id ?? `${Date.now()}`,
+    label: s.label ?? 'SUB-01',
     x1: typeof s.x1 === 'number' ? s.x1 : 0.3,
     y1: typeof s.y1 === 'number' ? s.y1 : 0.3,
     x2: typeof s.x2 === 'number' ? s.x2 : 0.7,

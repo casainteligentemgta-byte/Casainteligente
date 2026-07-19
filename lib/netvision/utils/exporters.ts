@@ -75,6 +75,7 @@ export function projectToExportJson(project: NetVisionProject, bom: BomSummary) 
       }
     }),
     structures: project.structures ?? [],
+    undergroundSegments: project.undergroundSegments ?? [],
     bom,
   }
 }
