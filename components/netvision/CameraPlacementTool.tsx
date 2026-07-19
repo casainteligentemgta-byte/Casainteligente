@@ -44,6 +44,8 @@ export type CameraPlacementToolProps = {
   selectedId: string | null
   placeMode: boolean
   draftPoint?: { x: number; y: number } | null
+  /** Color del punto de borrador (muros cyan, sub naranja). */
+  draftColor?: string
   showFov: boolean
   showWifi: boolean
   showSound?: boolean
@@ -174,6 +176,7 @@ export default function CameraPlacementTool({
   selectedId,
   placeMode,
   draftPoint = null,
+  draftColor = '#22d3ee',
   showFov,
   showWifi,
   showSound = false,
@@ -620,7 +623,7 @@ export default function CameraPlacementTool({
               x={offsetX + draftPoint.x * drawW}
               y={offsetY + draftPoint.y * drawH}
               radius={6}
-              fill="#22d3ee"
+              fill={draftColor}
               stroke="#fff"
               strokeWidth={1}
               listening={false}
@@ -653,16 +656,25 @@ export default function CameraPlacementTool({
               for (const p of run.points) {
                 pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
               }
+              const selected = selectedId === run.id
               return (
                 <Line
                   key={run.id}
                   points={pts}
-                  stroke="rgba(251,146,60,0.9)"
-                  strokeWidth={3.5}
+                  stroke={selected ? '#fdba74' : 'rgba(251,146,60,0.9)'}
+                  strokeWidth={selected ? 5 : 3.5}
                   dash={[10, 6]}
                   lineCap="round"
                   lineJoin="round"
-                  listening={false}
+                  hitStrokeWidth={16}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    onSelect(run.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    onSelect(run.id)
+                  }}
                 />
               )
             })}

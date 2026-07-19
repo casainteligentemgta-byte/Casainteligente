@@ -34,7 +34,7 @@ Unifilar en tiempo real (Plano/Diagrama) + SVG/PNG.
 Rutas ortogonales, Cat6/Cat6A/fibra, cajetines, BOM cables/RJ45.
 
 ### 5 — Subterráneo
-Profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
+Dibujo de tramos en el plano (2 toques) + auto desde cable ≥ 8 m; profundidad por zona, tubería, cámaras de acceso, excavación, perfil 2D.
 
 ### 6 — Normativas
 - Pestaña **Norm**: país/región → perfiles NEC / IEC / NFPA / TIA / ISO27001

@@ -106,6 +106,16 @@ export type DesignStructure = {
   y2: number
 }
 
+/** Tramo de canalización subterránea dibujado a mano en el plano (2 puntos). */
+export type DesignUndergroundSegment = {
+  id: string
+  label: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
 /** Sistema de visualización de unidades (cálculos internos siempre en metros). */
 export type UnitSystem = 'metric' | 'imperial' | 'mixed'
 
@@ -136,6 +146,8 @@ export type NetVisionProject = {
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   structures: DesignStructure[]
+  /** Tramos subterráneos dibujados en el plano (además de los derivados de cable ≥ 8 m). */
+  undergroundSegments: DesignUndergroundSegment[]
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string
