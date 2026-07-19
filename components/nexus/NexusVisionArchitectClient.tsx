@@ -661,18 +661,6 @@ export default function NexusVisionArchitectClient() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
-          <p className="mt-1 text-sm text-[var(--nexus-text-muted)]">
-            CCTV · redes · cableado · subterráneo · normas · BIM
-          </p>
-          <input
-            value={project.name}
-            onChange={(e) =>
-              setProject((p) => ({ ...p, name: e.target.value.slice(0, 120) }))
-            }
-            className="mt-2 w-full max-w-md rounded-lg border border-white/10 bg-black/30 px-2.5 py-1 text-sm font-medium text-white placeholder:text-[var(--nexus-text-dim)]"
-            placeholder="Nombre del proyecto"
-            aria-label="Nombre del proyecto"
-          />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="glass" asChild>
