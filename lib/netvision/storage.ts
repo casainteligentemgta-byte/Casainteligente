@@ -1,4 +1,6 @@
 import type {
+  CableType,
+  DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
   DesignStructure,
@@ -11,6 +13,7 @@ import type {
   StructureMaterialId,
   UnitSystem,
 } from '@/lib/netvision/types'
+import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
 import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
@@ -59,6 +62,7 @@ export function emptyProject(partial?: {
     networkNodes: [],
     structures: [],
     undergroundSegments: [],
+    cableSegments: [],
     scale: defaultScale(),
     retentionDays: 30,
     complianceProfileId: 'VE',
@@ -380,6 +384,9 @@ function normalizeProject(
     undergroundSegments: Array.isArray(p.undergroundSegments)
       ? p.undergroundSegments.map(normalizeUndergroundSegment)
       : [],
+    cableSegments: Array.isArray(p.cableSegments)
+      ? p.cableSegments.map(normalizeCableSegment)
+      : [],
     scale,
     retentionDays: typeof p.retentionDays === 'number' ? p.retentionDays : 30,
     complianceProfileId: p.complianceProfileId ?? 'VE',
@@ -456,6 +463,25 @@ function normalizeUndergroundSegment(
   return {
     id: s.id ?? `${Date.now()}`,
     label: s.label ?? 'SUB-01',
+    x1: typeof s.x1 === 'number' ? s.x1 : 0.3,
+    y1: typeof s.y1 === 'number' ? s.y1 : 0.3,
+    x2: typeof s.x2 === 'number' ? s.x2 : 0.7,
+    y2: typeof s.y2 === 'number' ? s.y2 : 0.3,
+  }
+}
+
+const CABLE_TYPE_SET = new Set<string>(DRAWABLE_CABLE_TYPES.concat(['COAX']))
+
+function normalizeCableSegment(
+  s: Partial<DesignCableSegment>,
+): DesignCableSegment {
+  const type = (
+    typeof s.type === 'string' && CABLE_TYPE_SET.has(s.type) ? s.type : 'CAT6'
+  ) as CableType
+  return {
+    id: s.id ?? `${Date.now()}`,
+    label: s.label ?? 'CAB-01',
+    type,
     x1: typeof s.x1 === 'number' ? s.x1 : 0.3,
     y1: typeof s.y1 === 'number' ? s.y1 : 0.3,
     x2: typeof s.x2 === 'number' ? s.x2 : 0.7,

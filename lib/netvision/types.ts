@@ -159,6 +159,8 @@ export type NetVisionProject = {
   structures: DesignStructure[]
   /** Tramos subterráneos dibujados en el plano (además de los derivados de cable ≥ 8 m). */
   undergroundSegments: DesignUndergroundSegment[]
+  /** Cables dibujados en el plano (además de rutas auto cámara→PoE). */
+  cableSegments: DesignCableSegment[]
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string
@@ -225,7 +227,25 @@ export type BomLine = {
   totalUsd: number
 }
 
-export type CableType = 'CAT5E' | 'CAT6' | 'CAT6A' | 'FIBER' | 'COAX'
+export type CableType =
+  | 'CAT5E'
+  | 'CAT6'
+  | 'CAT6A'
+  | 'FIBER'
+  | 'COAX'
+  | 'AUDIO'
+  | 'POWER_12V'
+
+/** Cable dibujado a mano en el plano (2 puntos + tipo). */
+export type DesignCableSegment = {
+  id: string
+  label: string
+  type: CableType
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
 
 export type CableRoute = {
   id: string
@@ -255,7 +275,7 @@ export type BomSummary = {
 
 export type ProjectCable = {
   id: string
-  type: 'CAT5E' | 'CAT6' | 'CAT6A' | 'FIBER' | 'COAX'
+  type: CableType
   length: number
   certified: boolean
   fromId: string
