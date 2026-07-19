@@ -163,6 +163,7 @@ export default function NexusVisionArchitectClient() {
   const [showLinks, setShowLinks] = useState(true)
   const [showCableRoutes, setShowCableRoutes] = useState(true)
   const [showUnderground, setShowUnderground] = useState(false)
+  const [showStructures, setShowStructures] = useState(true)
   const [drawStructureMaterial, setDrawStructureMaterial] =
     useState<StructureMaterialId | null>(null)
   const [structureDraft, setStructureDraft] = useState<{ x: number; y: number } | null>(
@@ -1160,6 +1161,17 @@ export default function NexusVisionArchitectClient() {
                       Rutas
                     </label>
                     <label
+                      title={layerHelpTitle('structures')}
+                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showStructures}
+                        onChange={(e) => setShowStructures(e.target.checked)}
+                      />
+                      Estructuras
+                    </label>
+                    <label
                       title={layerHelpTitle('sub')}
                       className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
                     >
@@ -1270,6 +1282,7 @@ export default function NexusVisionArchitectClient() {
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
                     showUnderground={showUnderground || sideTab === 'sub'}
+                    showStructures={showStructures}
                     onAddAt={onAddAt}
                     onMove={onMove}
                     onAdjustCameraVision={adjustCameraVision}
@@ -1291,6 +1304,7 @@ export default function NexusVisionArchitectClient() {
                       } else if ((project.structures ?? []).some((s) => s.id === id)) {
                         setSideTab('muros')
                         setViewMode('plano')
+                        setShowStructures(true)
                         setDrawStructureMaterial(null)
                         setStructureDraft(null)
                         setDrawUnderground(false)
@@ -1378,6 +1392,7 @@ export default function NexusVisionArchitectClient() {
                   } else if (id === 'muros') {
                     setViewMode('plano')
                     setCalibrateMode(false)
+                    setShowStructures(true)
                     setDrawUnderground(false)
                     setUndergroundDraft(null)
                     setDrawCable(false)
@@ -1403,6 +1418,8 @@ export default function NexusVisionArchitectClient() {
               drawMaterialId={drawStructureMaterial}
               draftPoint={structureDraft}
               disabled={!project.planoUrl || loading}
+              showOnPlan={showStructures}
+              onShowOnPlan={setShowStructures}
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)
@@ -1414,6 +1431,7 @@ export default function NexusVisionArchitectClient() {
                   setCalibrateMode(false)
                   setViewMode('plano')
                   setShowFov(true)
+                  setShowStructures(true)
                 }
               }}
               onSelect={setSelectedId}

@@ -6,12 +6,16 @@ import {
   getStructureMaterialOrDefault,
 } from '@/lib/netvision/catalog/materials'
 import type { DesignStructure, StructureMaterialId } from '@/lib/netvision/types'
+import NetVisionCollapsible from '@/components/netvision/NetVisionCollapsible'
 
 type Props = {
   structures: DesignStructure[]
   drawMaterialId: StructureMaterialId | null
   draftPoint: { x: number; y: number } | null
   disabled?: boolean
+  /** Capa visible en el plano */
+  showOnPlan?: boolean
+  onShowOnPlan?: (visible: boolean) => void
   onDrawMaterial: (id: StructureMaterialId | null) => void
   onSelect: (id: string) => void
   onRemove: (id: string) => void
@@ -22,20 +26,37 @@ export default function StructureDesigner({
   drawMaterialId,
   draftPoint,
   disabled = false,
+  showOnPlan = true,
+  onShowOnPlan,
   onDrawMaterial,
   onSelect,
   onRemove,
 }: Props) {
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
-        Muros · vidrio · puertas
-      </h2>
-      <p className="text-[11px] text-[var(--nexus-text-dim)]">
-        Dibuja con 2 toques (muro, vidrio, ventana o puerta). Después arrastra
-        el segmento o sus extremos para moverlo. Drywall/bloque cortan FOV;
-        vidrio, ventana y puerta dejan ver (aberturas).
-      </p>
+      <div>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
+          Muros · vidrio · puertas
+        </h2>
+        <p className="text-[11px] text-[var(--nexus-text-dim)]">
+          Dibuja con 2 toques. Arrastra segmento o extremos para mover. Drywall/bloque
+          cortan FOV; vidrio, ventana y puerta dejan ver.
+        </p>
+      </div>
+
+      {onShowOnPlan ? (
+        <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2 text-[11px]">
+          <span className="text-[var(--nexus-text-muted)]">
+            {showOnPlan ? 'Estructuras visibles en el plano' : 'Estructuras ocultas en el plano'}
+          </span>
+          <input
+            type="checkbox"
+            checked={showOnPlan}
+            onChange={(e) => onShowOnPlan(e.target.checked)}
+            className="accent-[var(--nexus-cyan)]"
+          />
+        </label>
+      ) : null}
 
       <div className="flex flex-wrap gap-1.5">
         {STRUCTURE_MATERIALS.map((m) => {
@@ -71,10 +92,18 @@ export default function StructureDesigner({
         </p>
       )}
 
-      <div>
-        <h3 className="mb-1 text-[10px] font-bold uppercase text-[var(--nexus-text-dim)]">
-          Estructuras ({structures.length})
-        </h3>
+      <NetVisionCollapsible
+        title={`Estructuras (${structures.length})`}
+        summary={
+          structures.length === 0
+            ? 'Sin segmentos'
+            : structures
+                .slice(0, 3)
+                .map((s) => s.label)
+                .join(' · ') + (structures.length > 3 ? '…' : '')
+        }
+        defaultOpen={structures.length > 0 && structures.length <= 8}
+      >
         {structures.length === 0 ? (
           <p className="text-[11px] text-[var(--nexus-text-dim)]">
             Sin segmentos aún. Ejemplo: drywall, bloque, vidrio, ventana, puerta.
@@ -99,7 +128,10 @@ export default function StructureDesigner({
                     onClick={() => onSelect(s.id)}
                   >
                     <span className="font-semibold text-white">{s.label}</span>
-                    <span className="mt-0.5 block truncate" style={{ color: mat.color }}>
+                    <span
+                      className="mt-0.5 block truncate"
+                      style={{ color: mat.color }}
+                    >
                       {mat.label}
                       {visionNote}
                       {' · arrastrable'}
@@ -117,7 +149,7 @@ export default function StructureDesigner({
             })}
           </ul>
         )}
-      </div>
+      </NetVisionCollapsible>
 
       {!drawMaterialId && structures.length === 0 ? (
         <button

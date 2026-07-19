@@ -53,6 +53,8 @@ export type CameraPlacementToolProps = {
   showLinks: boolean
   showCableRoutes?: boolean
   showUnderground?: boolean
+  /** Muros / vidrio / ventana / puerta en el plano. */
+  showStructures?: boolean
   onAddAt: (normX: number, normY: number) => void
   onMove: (id: string, normX: number, normY: number) => void
   /** Ajuste interactivo de óptica (yaw / FOV / alcance) desde el plano. */
@@ -205,6 +207,7 @@ export default function CameraPlacementTool({
   showLinks,
   showCableRoutes = false,
   showUnderground = false,
+  showStructures = true,
   onAddAt,
   onMove,
   onAdjustCameraVision,
@@ -626,7 +629,8 @@ export default function CameraPlacementTool({
               )
             })}
 
-          {structures.map((s) => {
+          {showStructures &&
+            structures.map((s) => {
             const mat = getStructureMaterialOrDefault(s.materialId)
             const selected = s.id === selectedId
             const x1 = offsetX + s.x1 * drawW
