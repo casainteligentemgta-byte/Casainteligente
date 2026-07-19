@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/nexus/ui/button'
 import { Mono } from '@/components/nexus/Mono'
 import {
@@ -47,6 +48,10 @@ export default function NetworkDesigner({
   onSelectNode,
   onRemoveNode,
 }: Props) {
+  const [focusKind, setFocusKind] = useState<NetworkNodeKind>('switch')
+  const active = KINDS.find((k) => k.kind === focusKind) ?? KINDS[0]!
+  const models = networkCatalogByKind(focusKind)
+
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
@@ -54,42 +59,52 @@ export default function NetworkDesigner({
       </h2>
 
       <div className="flex flex-wrap gap-1.5">
-        {KINDS.map((k) => (
-          <button
-            key={k.kind}
-            type="button"
-            disabled={disabled}
-            onClick={() => onAddKind(k.kind)}
-            className="rounded-lg bg-[var(--nexus-cyan)] px-2 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
-          >
-            + {k.label}
-          </button>
-        ))}
+        {KINDS.map((k) => {
+          const selected = focusKind === k.kind
+          return (
+            <button
+              key={k.kind}
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                setFocusKind(k.kind)
+                onAddKind(k.kind)
+              }}
+              className={`rounded-lg px-2 py-1 text-[11px] font-semibold disabled:opacity-40 ${
+                selected
+                  ? 'bg-[var(--nexus-cyan)] text-black'
+                  : 'border border-white/15 bg-black/30 text-[var(--nexus-text-muted)]'
+              }`}
+            >
+              + {k.label}
+            </button>
+          )
+        })}
       </div>
       <p className="text-[10px] text-[var(--nexus-text-dim)]">
-        Cada botón agrega un equipo al plano; arrástralo para ubicarlo.
+        Elige el tipo: se agrega al plano y solo ves modelos de ese tipo.
       </p>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <h3 className="text-[10px] font-bold uppercase text-[var(--nexus-text-dim)]">
-          Modelo al agregar
+          Modelo al agregar · {active.label}
         </h3>
-        {KINDS.map((k) => (
-          <label key={k.kind} className="block text-[11px] text-[var(--nexus-text-dim)]">
-            {k.label}
-            <select
-              value={defaultModels[k.kind]}
-              onChange={(e) => onDefaultModel(k.kind, e.target.value)}
-              className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-xs text-white"
-            >
-              {networkCatalogByKind(k.kind).map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.brand} · {m.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
+        <label className="block text-[11px] text-[var(--nexus-text-dim)]">
+          <select
+            value={defaultModels[focusKind]}
+            onChange={(e) => onDefaultModel(focusKind, e.target.value)}
+            className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white"
+          >
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.brand} · {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-[10px] text-[var(--nexus-text-dim)]">
+          {models.length} modelo(s) {active.label}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
