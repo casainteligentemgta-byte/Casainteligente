@@ -64,6 +64,16 @@ export function ContractSignClient() {
 
   const getCtx = () => canvasRef.current?.getContext('2d');
 
+  /** Convierte coords de pantalla al espacio interno del canvas (evita tinta gruesa por CSS). */
+  const toCanvasXY = (clientX: number, clientY: number) => {
+    const c = canvasRef.current;
+    if (!c) return { x: 0, y: 0 };
+    const r = c.getBoundingClientRect();
+    const sx = c.width / Math.max(r.width, 1);
+    const sy = c.height / Math.max(r.height, 1);
+    return { x: (clientX - r.left) * sx, y: (clientY - r.top) * sy };
+  };
+
   const start = useCallback((x: number, y: number) => {
     drawing.current = true;
     const ctx = getCtx();
@@ -71,10 +81,12 @@ export function ContractSignClient() {
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.strokeStyle = '#00f2fe';
-    ctx.lineWidth = 2;
+    // Tinta fina de bolígrafo (antes 2 + blur 6 se veía gruesa)
+    ctx.lineWidth = 1;
     ctx.lineCap = 'round';
-    ctx.shadowColor = 'rgba(0,242,254,0.8)';
-    ctx.shadowBlur = 6;
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0,242,254,0.35)';
+    ctx.shadowBlur = 1;
   }, []);
 
   const move = useCallback((x: number, y: number) => {
@@ -83,6 +95,8 @@ export function ContractSignClient() {
     if (!ctx) return;
     ctx.lineTo(x, y);
     ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
     setHasInk(true);
   }, []);
 
@@ -138,26 +152,26 @@ export function ContractSignClient() {
             height={200}
             className="touch-none w-full max-w-full"
             onMouseDown={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              start(e.clientX - r.left, e.clientY - r.top);
+              const { x, y } = toCanvasXY(e.clientX, e.clientY);
+              start(x, y);
             }}
             onMouseMove={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              move(e.clientX - r.left, e.clientY - r.top);
+              const { x, y } = toCanvasXY(e.clientX, e.clientY);
+              move(x, y);
             }}
             onMouseUp={end}
             onMouseLeave={end}
             onTouchStart={(e) => {
               e.preventDefault();
-              const r = e.currentTarget.getBoundingClientRect();
               const t = e.touches[0];
-              start(t.clientX - r.left, t.clientY - r.top);
+              const { x, y } = toCanvasXY(t.clientX, t.clientY);
+              start(x, y);
             }}
             onTouchMove={(e) => {
               e.preventDefault();
-              const r = e.currentTarget.getBoundingClientRect();
               const t = e.touches[0];
-              move(t.clientX - r.left, t.clientY - r.top);
+              const { x, y } = toCanvasXY(t.clientX, t.clientY);
+              move(x, y);
             }}
             onTouchEnd={end}
           />
