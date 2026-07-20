@@ -313,13 +313,16 @@ export function parseCsvMaestroV4(
   const iTasa = pickCol(headers, ['tasa', 'tasa_bcv', 'tc'], { allowFuzzy: false });
   const iMontoBs = pickCol(
     headers,
-    ['monto_bs', 'monto_ves', 'monto_bolivares', 'monto_orig', 'monto_original'],
-    { allowFuzzy: true },
+    ['monto_bs', 'monto_ves', 'monto_bolivares'],
+    { allowFuzzy: false },
   );
+  const iMontoOrig = pickCol(headers, ['monto_orig', 'monto_original'], {
+    allowFuzzy: false,
+  });
   const iMontoUsd = pickCol(
     headers,
-    ['monto_base_usd', 'monto_base', 'monto_usd', 'base_usd'],
-    { allowFuzzy: true },
+    ['monto_base_usd', 'monto_base', 'base_usd'],
+    { allowFuzzy: false },
   );
   const iMontoPagado = pickCol(headers, ['monto_pagado', 'pagado', 'abonado'], {
     allowFuzzy: false,
@@ -425,7 +428,8 @@ export function parseCsvMaestroV4(
           : monedaRaw || 'USD';
 
     const tasa = parseNumCell(cell(cols, iTasa));
-    const montoBs = parseNumCell(cell(cols, iMontoBs));
+    const montoBs =
+      parseNumCell(cell(cols, iMontoBs)) || parseNumCell(cell(cols, iMontoOrig));
     const montoUsd = parseNumCell(cell(cols, iMontoUsd));
     const montoPagado = parseNumCell(cell(cols, iMontoPagado));
     const honorarios = parseNumCell(cell(cols, iHonorarios));
@@ -479,22 +483,38 @@ export function parseCsvMaestroV4(
     if (capitulo) ensureCapitulo(capitulo);
     if (capitulo && subcapitulo) ensureSubcapitulo(subcapitulo, capitulo);
 
-    if (brecha != null && Number.isFinite(brecha) && brecha !== 0) {
+    // Devaluación: solo GASTO con brecha (evita mezclar INGRESO/CONTRATO).
+    if (
+      clase === 'GASTO' &&
+      brecha != null &&
+      Number.isFinite(brecha) &&
+      brecha !== 0
+    ) {
       brechas.push(brecha);
     }
 
-    const montoBaseUsd =
-      montoUsd > 0
-        ? montoUsd
-        : moneda === 'USD' && montoPagado > 0
-          ? montoPagado
-          : moneda === 'VES' && tasa > 0 && montoBs > 0
-            ? Math.round((montoBs / tasa) * 10000) / 10000
-            : costeTotal > 0 && honorarios > 0
-              ? Math.max(0, costeTotal - honorarios)
-              : costeTotal > 0
-                ? costeTotal
-                : 0;
+    /**
+     * Base USD para paridad con V4 / dashboard (gastos netos = Σ monto_base).
+     * Nunca usar COSTE TOTAL crudo (trae honorarios) → doble conteo en CI.
+     */
+    let montoBaseUsd = 0;
+    if (montoUsd > 0) {
+      montoBaseUsd = montoUsd;
+    } else if (moneda === 'VES' && tasa > 0 && montoBs > 0) {
+      montoBaseUsd = Math.round((montoBs / tasa) * 10000) / 10000;
+    } else if (costeTotal > 0 && honorarios > 0 && costeTotal > honorarios) {
+      montoBaseUsd = Math.round((costeTotal - honorarios) * 10000) / 10000;
+    } else if (costeTotal > 0 && pctAdmin > 0) {
+      montoBaseUsd =
+        Math.round((costeTotal / (1 + pctAdmin / 100)) * 10000) / 10000;
+    } else if (clase === 'INGRESO' || clase === 'PRESUPUESTO' || clase === 'CONTRATO') {
+      // En estas clases a veces solo viene pagado / coste
+      if (montoPagado > 0) montoBaseUsd = montoPagado;
+      else if (costeTotal > 0) montoBaseUsd = costeTotal;
+    } else if (montoPagado > 0 && costeTotal <= 0 && honorarios <= 0) {
+      // GASTO: último recurso si no hay base ni coste
+      montoBaseUsd = montoPagado;
+    }
 
     const montoOrig =
       moneda === 'VES'
@@ -556,9 +576,18 @@ export function parseCsvMaestroV4(
     });
   }
 
+  // Brecha CSV suele ser spread Binance/BCV (>0). El dashboard CI aplica
+  // factor (1 + deval/100) como V4: hay que guardar la devaluación en forma
+  // V4 (p. ej. +34,45% → −25,62%).
   const devaluacionPromedio =
     brechas.length > 0
-      ? Math.round((brechas.reduce((a, b) => a + b, 0) / brechas.length) * 100000) / 100000
+      ? (() => {
+          const avg =
+            brechas.reduce((a, b) => a + b, 0) / brechas.length;
+          const deval =
+            avg > 0 && avg < 200 ? (-avg / (100 + avg)) * 100 : avg;
+          return Math.round(deval * 100000) / 100000;
+        })()
       : 0;
 
   return {

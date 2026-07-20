@@ -123,11 +123,24 @@ export async function importarMaestroV4(
 
   await report('Configurando obra…', true);
 
+  // No pisar devaluación/honorarios buenos con 0 del payload (CSV sin brechas).
+  const { data: cfgExist } = await supabase
+    .from('cco_proyecto_config')
+    .select('honorarios_admin_pct,devaluacion_pct')
+    .eq('proyecto_id', proyectoId)
+    .maybeSingle();
+
+  const devalPayload = num(payload.devaluacion_pct);
+  const devalFinal =
+    devalPayload !== 0
+      ? devalPayload
+      : num((cfgExist as { devaluacion_pct?: number } | null)?.devaluacion_pct);
+
   await supabase.from('cco_proyecto_config').upsert(
     {
       proyecto_id: proyectoId,
       honorarios_admin_pct: pctGlobal,
-      devaluacion_pct: num(payload.devaluacion_pct),
+      devaluacion_pct: devalFinal,
       obra_alias: payload.obra_alias ?? null,
       updated_at: new Date().toISOString(),
     },
