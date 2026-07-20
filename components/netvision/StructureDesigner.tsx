@@ -39,8 +39,8 @@ export default function StructureDesigner({
           Muros · vidrio · puertas
         </h2>
         <p className="text-[11px] text-[var(--nexus-text-dim)]">
-          Dibuja con 2 toques. Arrastra segmento o extremos para mover. Drywall/bloque
-          cortan FOV; vidrio, ventana y puerta dejan ver.
+          Dibuja con 2 toques. Arrastra segmento o extremos para mover. Drywall,
+          bloque y concreto cortan el FOV; vidrio, ventana y puerta dejan ver.
         </p>
       </div>
 
@@ -106,7 +106,7 @@ export default function StructureDesigner({
       >
         {structures.length === 0 ? (
           <p className="text-[11px] text-[var(--nexus-text-dim)]">
-            Sin segmentos aún. Ejemplo: drywall, bloque, vidrio, ventana, puerta.
+            Sin segmentos aún. Ejemplo: drywall, bloque, concreto, vidrio, ventana, puerta.
           </p>
         ) : (
           <ul className="max-h-40 space-y-1 overflow-auto text-[11px]">

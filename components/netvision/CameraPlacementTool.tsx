@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   Arc,
   Circle,
+  Group,
   Image as KonvaImage,
   Layer,
   Line,
@@ -502,18 +503,37 @@ export default function CameraPlacementTool({
             />
           )}
 
-          {showFov &&
-            visionSpectrum.map((c, i) => (
-              <Rect
-                key={`vis-cell-${i}`}
-                x={offsetX + c.x * drawW}
-                y={offsetY + c.y * drawH}
-                width={Math.max(1, c.w * drawW)}
-                height={Math.max(1, c.h * drawH)}
-                fill={visionBandFill(c.band, c.strength)}
-                listening={false}
-              />
-            ))}
+          {showFov && visionSpectrum.length > 0 && (
+            <Group
+              listening={false}
+              clipFunc={(ctx) => {
+                // Recorta el semáforo al polígono FOV (no atraviesa drywall/concreto)
+                for (const s of sectors) {
+                  const poly = s.polygon
+                  if (!poly || poly.length < 3) continue
+                  const p0 = poly[0]!
+                  ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
+                  for (let i = 1; i < poly.length; i++) {
+                    const p = poly[i]!
+                    ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
+                  }
+                  ctx.closePath()
+                }
+              }}
+            >
+              {visionSpectrum.map((c, i) => (
+                <Rect
+                  key={`vis-cell-${i}`}
+                  x={offsetX + c.x * drawW}
+                  y={offsetY + c.y * drawH}
+                  width={Math.max(1, c.w * drawW)}
+                  height={Math.max(1, c.h * drawH)}
+                  fill={visionBandFill(c.band, c.strength)}
+                  listening={false}
+                />
+              ))}
+            </Group>
+          )}
 
           {showWifi &&
             wifiSpectrum.map((c, i) => (

@@ -1,4 +1,5 @@
 import { effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
+import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import {
   buildFovPolygon,
   hasClearVision,
@@ -15,6 +16,7 @@ import {
   distMeters,
   fovSectorAngles,
   metersToNormRadius,
+  pointInPolygon,
   pointInSector,
 } from '@/lib/netvision/utils/geometryHelpers'
 
@@ -63,6 +65,10 @@ export function visionBandRangesM(rangeM: number): {
   }
 }
 
+function hasOpaqueWalls(structures: DesignStructure[]): boolean {
+  return structures.some((s) => getStructureMaterialOrDefault(s.materialId).blocksVision)
+}
+
 export function buildCoverageSectors(
   cameras: DesignCamera[],
   scale: ScaleCalibration,
@@ -78,7 +84,7 @@ export function buildCoverageSectors(
         scale.metersPerNormY,
       )
       const { startAngleRad, endAngleRad } = fovSectorAngles(lens.yawDeg, lens.fovDeg)
-      // Siempre polígono: recorta contra muros opacos (drywall/bloque)
+      // Siempre polígono: recorta contra muros opacos (drywall/bloque/concreto)
       const polygon = buildFovPolygon(
         cam.x,
         cam.y,
@@ -106,6 +112,7 @@ export function buildCoverageSectors(
  * Espectro de visión CCTV con semáforo de cobertura automática:
  * verde = detección objetos/personas, amarillo = más lejos,
  * rojo = detección dudosa pero con visión.
+ * Las celdas solo cuentan si caen dentro del polígono FOV recortado por muros.
  */
 export function buildVisionSpectrum(
   cameras: DesignCamera[],
@@ -116,6 +123,9 @@ export function buildVisionSpectrum(
 ): SpectrumCell[] {
   if (cameras.length === 0) return []
 
+  const opaque = hasOpaqueWalls(structures)
+  const resolvedGrid = opaque ? Math.max(grid, 56) : grid
+
   const prepared = cameras.flatMap((cam) =>
     effectiveCameraLenses(cam, mode).map((lens) => {
       const radiusNorm = metersToNormRadius(
@@ -124,39 +134,37 @@ export function buildVisionSpectrum(
         scale.metersPerNormY,
       )
       const { startAngleRad, endAngleRad } = fovSectorAngles(lens.yawDeg, lens.fovDeg)
+      const polygon = buildFovPolygon(
+        cam.x,
+        cam.y,
+        radiusNorm,
+        startAngleRad,
+        endAngleRad,
+        structures,
+      )
       return {
         cam,
         rangeM: lens.rangeM,
         radiusNorm,
         startAngleRad,
         endAngleRad,
+        polygon,
       }
     }),
   )
 
-  const cell = 1 / grid
+  const cell = 1 / resolvedGrid
   const cells: SpectrumCell[] = []
 
-  for (let iy = 0; iy < grid; iy++) {
-    for (let ix = 0; ix < grid; ix++) {
+  for (let iy = 0; iy < resolvedGrid; iy++) {
+    for (let ix = 0; ix < resolvedGrid; ix++) {
       const px = (ix + 0.5) * cell
       const py = (iy + 0.5) * cell
       let bestBand: VisionBand | null = null
       let bestStrength = 0
       for (const p of prepared) {
-        if (
-          !pointInSector(
-            px,
-            py,
-            p.cam.x,
-            p.cam.y,
-            p.radiusNorm,
-            p.startAngleRad,
-            p.endAngleRad,
-          )
-        ) {
-          continue
-        }
+        // Fuente de verdad: polígono FOV ya recortado por drywall/bloque/concreto
+        if (!pointInPolygon(px, py, p.polygon)) continue
         if (!hasClearVision(p.cam.x, p.cam.y, px, py, structures)) continue
         const d = distMeters(
           p.cam.x,
@@ -209,6 +217,9 @@ export function estimateCoverageRatio(
       const px = (ix + 0.5) / grid
       const py = (iy + 0.5) / grid
       const hit = sectors.some((s) => {
+        if (s.polygon && s.polygon.length >= 3) {
+          return pointInPolygon(px, py, s.polygon)
+        }
         if (
           !pointInSector(
             px,
