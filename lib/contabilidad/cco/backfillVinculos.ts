@@ -92,8 +92,9 @@ export async function backfillVinculosContratos(
     await supabase.from('cco_auditoria_eventos').insert({
       proyecto_id: proyectoId,
       accion: 'BACKFILL VINCULOS CONTRATO',
-      detalle: `Vinculados ${vinculados} de ${(huerfanos ?? []).length} huérfanos (umbral ${umbral})`,
-      metadata: { vinculados, sinMatch, umbral },
+      detalle: `Vinculó ${vinculados} pago(s) huérfano(s) a contrato (de ${(huerfanos ?? []).length} revisados · umbral ${umbral}${sinMatch ? ` · ${sinMatch} sin match` : ''})`,
+      actor: 'sistema',
+      metadata: { vinculados, sinMatch, umbral, revisados: (huerfanos ?? []).length },
     });
   }
 

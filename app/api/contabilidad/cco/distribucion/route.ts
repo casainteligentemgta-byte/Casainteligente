@@ -10,6 +10,7 @@ import {
   validarSplits,
   type CcoSplitParte,
 } from '@/lib/contabilidad/cco/splitGasto';
+import { registrarEventoAuditoriaCco } from '@/lib/contabilidad/cco/registrarAuditoria';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -116,11 +117,23 @@ export async function POST(req: Request) {
     }
 
     const db = admin.client as SupabaseClient;
-    await db.from('cco_auditoria_eventos').insert({
+    const caps = partes.map((p) => `${p.capitulo} ${p.pct}% ($${p.monto_usd})`).join(', ');
+    await registrarEventoAuditoriaCco(db, {
       proyecto_id: proyectoId,
       accion: 'DISTRIBUCION MASIVA',
-      detalle: `${proveedor} · $${montoUsd} → ${creados.length} partes · ${descripcion}`,
-      metadata: { creados, errores, batch },
+      detalle: `Repartió $${montoUsd} de «${proveedor}» (${descripcion}) en ${creados.length} parte(s): ${caps}`,
+      metadata: {
+        creados,
+        errores,
+        batch,
+        proveedor,
+        monto_usd: montoUsd,
+        partes: partes.map((p) => ({
+          capitulo: p.capitulo,
+          pct: p.pct,
+          monto_usd: p.monto_usd,
+        })),
+      },
     });
 
     if (errores.length && !creados.length) {

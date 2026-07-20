@@ -102,12 +102,23 @@ export async function guardarConfigCco(
   await supabase.from('cco_auditoria_eventos').insert({
     proyecto_id: input.proyecto_id,
     accion: 'AJUSTES CCO',
-    detalle: `% admin ${honorarios} · devaluación ${devaluacion}%`,
+    detalle: [
+      `Cambió ajustes CCO`,
+      `% admin → ${honorarios}`,
+      `devaluación → ${devaluacion}%`,
+      input.obra_alias ? `alias «${input.obra_alias}»` : null,
+      input.empresa_nombre ? `empresa «${input.empresa_nombre}»` : null,
+      input.area_m2 != null ? `área ${input.area_m2} m²` : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
     actor: input.actor ?? 'cco_ajustes',
     metadata: {
       honorarios_admin_pct: honorarios,
       devaluacion_pct: devaluacion,
       obra_alias: input.obra_alias ?? null,
+      empresa_nombre: input.empresa_nombre ?? null,
+      area_m2: input.area_m2 ?? null,
     },
   });
 

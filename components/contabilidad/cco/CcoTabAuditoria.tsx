@@ -3,12 +3,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { CcoAuditoriaEvento } from '@/lib/contabilidad/cco/cargarAuditoria';
+import {
+  enriquecerDetalleAuditoria,
+  etiquetaActor,
+} from '@/lib/contabilidad/cco/auditoriaUi';
 
 export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [eventos, setEventos] = useState<CcoAuditoriaEvento[]>([]);
+  const [expandido, setExpandido] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -40,7 +45,7 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar acción / detalle…"
+          placeholder="Buscar acción / detalle / actor…"
           style={input}
         />
         <button type="button" onClick={() => void cargar()} style={btn}>
@@ -48,7 +53,7 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
         </button>
       </div>
       <p style={muted}>
-        Eventos append-only (import V4, contratos, ajustes, backfill).{' '}
+        Quién hizo qué: actor de sesión + detalle puntual (import, ediciones, contratos, ajustes).{' '}
         {proyectoId ? 'Filtrado por obra.' : 'Todas las obras — selecciona una para acotar.'}
       </p>
       {error ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{error}</p> : null}
@@ -57,11 +62,11 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
           <Loader2 className="animate-spin" size={16} /> Cargando…
         </div>
       ) : (
-        <div style={{ overflow: 'auto', maxHeight: 520 }}>
+        <div style={{ overflow: 'auto', maxHeight: 560 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
-                {['FECHA', 'ACCIÓN', 'DETALLE', 'ACTOR'].map((h) => (
+                {['FECHA', 'ACTOR', 'ACCIÓN', 'DETALLE'].map((h) => (
                   <th key={h} style={{ padding: '8px 6px', position: 'sticky', top: 0, background: '#F1F5F9' }}>
                     {h}
                   </th>
@@ -69,18 +74,42 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
               </tr>
             </thead>
             <tbody>
-              {eventos.map((e) => (
-                <tr key={e.id} style={{ borderTop: '1px solid #E2E8F0' }}>
-                  <td style={td}>{e.fecha || '—'}</td>
-                  <td style={td}>
-                    <span style={badge}>{e.accion}</span>
-                  </td>
-                  <td style={{ ...td, maxWidth: 360 }} title={e.detalle ?? ''}>
-                    {(e.detalle ?? '—').slice(0, 120)}
-                  </td>
-                  <td style={td}>{e.actor ?? '—'}</td>
-                </tr>
-              ))}
+              {eventos.map((e) => {
+                const detalle = enriquecerDetalleAuditoria({
+                  accion: e.accion,
+                  detalle: e.detalle,
+                  metadata: e.metadata,
+                });
+                const abierto = expandido === e.id;
+                const corto = detalle.length > 180 && !abierto;
+                return (
+                  <tr key={e.id} style={{ borderTop: '1px solid #E2E8F0' }}>
+                    <td style={{ ...td, whiteSpace: 'nowrap', color: '#64748B' }}>{e.fecha || '—'}</td>
+                    <td style={td}>
+                      <span style={actorBadge} title={e.actor ?? undefined}>
+                        {etiquetaActor(e.actor)}
+                      </span>
+                    </td>
+                    <td style={td}>
+                      <span style={badge}>{e.accion}</span>
+                    </td>
+                    <td style={{ ...td, maxWidth: 480, lineHeight: 1.45 }}>
+                      <span title={detalle}>
+                        {corto ? `${detalle.slice(0, 180)}…` : detalle}
+                      </span>
+                      {detalle.length > 180 ? (
+                        <button
+                          type="button"
+                          onClick={() => setExpandido(abierto ? null : e.id)}
+                          style={linkBtn}
+                        >
+                          {abierto ? 'menos' : 'más'}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {eventos.length === 0 ? <p style={muted}>Sin eventos para el filtro actual.</p> : null}
@@ -97,7 +126,7 @@ const box: React.CSSProperties = {
   padding: 20,
 };
 const muted: React.CSSProperties = { color: '#64748B', fontSize: 13, margin: '0 0 12px' };
-const td: React.CSSProperties = { padding: '7px 6px', verticalAlign: 'top', color: '#334155' };
+const td: React.CSSProperties = { padding: '8px 6px', verticalAlign: 'top', color: '#334155' };
 const input: React.CSSProperties = {
   padding: '6px 10px',
   borderRadius: 8,
@@ -122,4 +151,27 @@ const badge: React.CSSProperties = {
   color: '#3730A3',
   fontWeight: 800,
   fontSize: 10,
+};
+const actorBadge: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '3px 8px',
+  borderRadius: 8,
+  background: '#ECFDF5',
+  color: '#065F46',
+  fontWeight: 700,
+  fontSize: 11,
+  maxWidth: 200,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+const linkBtn: React.CSSProperties = {
+  marginLeft: 6,
+  border: 'none',
+  background: 'transparent',
+  color: '#1D4ED8',
+  fontWeight: 700,
+  fontSize: 11,
+  cursor: 'pointer',
+  padding: 0,
 };

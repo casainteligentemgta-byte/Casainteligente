@@ -115,6 +115,19 @@ export default function CcoImportarCsvPanel({
         proyectoIdInicial={proyectoIdInicial}
         onGuardado={(pid) => {
           setOpen(false);
+          if (pid) {
+            void fetch('/api/contabilidad/cco/auditoria-log', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                proyecto_id: pid,
+                accion: 'IMPORTACION CSV',
+                detalle:
+                  'Importó CSV/tabla de compras al cuadro contable de la obra (anti-duplicados · sin stock)',
+                metadata: { fuente: 'cco_importar_csv' },
+              }),
+            }).catch(() => undefined);
+          }
           onImportado?.(pid);
         }}
       />

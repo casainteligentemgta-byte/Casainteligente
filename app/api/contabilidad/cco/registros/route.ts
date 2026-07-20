@@ -6,6 +6,12 @@ import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
 import { normalizarTipoGastoCco } from '@/lib/contabilidad/cco/normalizarTipoGasto';
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
 import { upsertContratoObra } from '@/lib/contabilidad/cco/contratosJerarquia';
+import {
+  construirDetalleCambios,
+  registrarEventoAuditoriaCco,
+  resumirCambioEgreso,
+  type ResumenCambioFila,
+} from '@/lib/contabilidad/cco/registrarAuditoria';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -78,6 +84,12 @@ export async function POST(req: Request) {
         admin_pct: body.admin_pct,
         pct_global: pctGlobal,
       });
+      await registrarEventoAuditoriaCco(admin.client as SupabaseClient, {
+        proyecto_id: proyectoId,
+        accion: 'REGISTRO CONTRATO',
+        detalle: `Alta de contrato: «${proveedor}» · ${descripcion} · $${montoUsd}`,
+        metadata: { contrato_id: contrato.id, proveedor, monto_usd: montoUsd },
+      });
       return NextResponse.json({ ok: true, clase, id: contrato.id, contrato });
     }
 
@@ -89,6 +101,7 @@ export async function POST(req: Request) {
       const montoVes = moneda === 'VES' ? montoOrig : 0;
       const metodo = /EFECTIVO/i.test(String(body.forma_pago ?? '')) ? 'EFECTIVO' : 'TRANSFERENCIA';
       const origenFondo = `CCO · ${descripcion}`.slice(0, 200);
+      const proveedorIng = String(body.proveedor ?? '').trim();
 
       const db = admin.client as SupabaseClient;
       const { data, error } = await db
@@ -115,10 +128,22 @@ export async function POST(req: Request) {
       if (error) {
         return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
       }
+      const ingresoId = String((data as { id: string }).id);
+      await registrarEventoAuditoriaCco(db, {
+        proyecto_id: proyectoId,
+        accion: 'REGISTRO INGRESO',
+        detalle: `Alta de ingreso: ${proveedorIng ? `«${proveedorIng}» · ` : ''}${descripcion} · $${montoUsd} (${moneda} · ${metodo})`,
+        metadata: {
+          ingreso_id: ingresoId,
+          monto_usd: montoUsd,
+          moneda,
+          metodo,
+        },
+      });
       return NextResponse.json({
         ok: true,
         clase,
-        id: String((data as { id: string }).id),
+        id: ingresoId,
       });
     }
 
@@ -174,11 +199,20 @@ export async function POST(req: Request) {
     }
 
     const db = admin.client as SupabaseClient;
-    await db.from('cco_auditoria_eventos').insert({
+    await registrarEventoAuditoriaCco(db, {
       proyecto_id: proyectoId,
       accion: `REGISTRO ${clase}`,
-      detalle: `${proveedor} · ${descripcion} · $${montoUsd}`,
-      metadata: { compra_id: up.id, clase },
+      detalle: `Alta de gasto: proveedor «${proveedor}» · ${descripcion} · $${montoUsd}${
+        body.capitulo_cco ? ` · capítulo «${body.capitulo_cco}»` : ''
+      }${body.tipo_gasto_cco ? ` · tipo «${body.tipo_gasto_cco}»` : ''}`,
+      metadata: {
+        compra_id: up.id,
+        clase,
+        proveedor,
+        monto_usd: montoUsd,
+        capitulo: body.capitulo_cco ?? null,
+        tipo: body.tipo_gasto_cco ?? null,
+      },
     });
 
     return NextResponse.json({ ok: true, clase, id: up.id, action: up.action });
@@ -244,6 +278,7 @@ export async function PATCH(req: Request) {
     let updated = 0;
     let deleted = 0;
     const errores: string[] = [];
+    const resúmenes: ResumenCambioFila[] = [];
 
     if (clase === 'INGRESO') {
       const { buildOrigenIngreso, parseOrigenIngreso } = await import(
@@ -304,6 +339,34 @@ export async function PATCH(req: Request) {
         const forma = String(c.forma_pago ?? prevR.metodo_pago ?? 'TRANSFERENCIA').toUpperCase();
         const metodo = /EFECTIVO/.test(forma) ? 'EFECTIVO' : 'TRANSFERENCIA';
 
+        const cambiosFila: string[] = [];
+        if (c.proveedor != null && proveedor !== parsed.proveedor) {
+          cambiosFila.push(`proveedor: «${parsed.proveedor}» → «${proveedor}»`);
+        }
+        if (c.descripcion != null && descripcion !== parsed.descripcion) {
+          cambiosFila.push(`descripción: «${parsed.descripcion}» → «${descripcion}»`);
+        }
+        if (c.fecha != null && String(c.fecha).slice(0, 10) !== String(prevR.fecha_ingreso ?? '').slice(0, 10)) {
+          cambiosFila.push(
+            `fecha: «${String(prevR.fecha_ingreso ?? '').slice(0, 10)}» → «${String(c.fecha).slice(0, 10)}»`,
+          );
+        }
+        if (c.moneda != null && moneda !== String(prevR.moneda_recibida ?? 'USD').toUpperCase()) {
+          cambiosFila.push(`moneda: «${prevR.moneda_recibida}» → «${moneda}»`);
+        }
+        if (
+          c.monto_orig != null &&
+          Number.isFinite(montoOrig) &&
+          Number(prevR.monto_recibido || prevR.monto_usd) !== montoOrigOk
+        ) {
+          cambiosFila.push(
+            `monto: $${Number(prevR.monto_recibido || prevR.monto_usd)} → $${montoOrigOk}`,
+          );
+        }
+        if (c.forma_pago != null && metodo !== String(prevR.metodo_pago ?? '')) {
+          cambiosFila.push(`forma pago: «${prevR.metodo_pago}» → «${metodo}»`);
+        }
+
         const patch: Record<string, unknown> = {
           origen_fondo: buildOrigenIngreso({
             origen_v4_id: parsed.origen_v4_id,
@@ -329,14 +392,28 @@ export async function PATCH(req: Request) {
           continue;
         }
         updated += 1;
+        resúmenes.push({
+          id,
+          etiqueta: proveedor || descripcion || id.slice(0, 8),
+          cambios: cambiosFila.length ? cambiosFila : ['campos guardados'],
+        });
       }
 
       if (updated > 0 || deleted > 0) {
-        await db.from('cco_auditoria_eventos').insert({
+        await registrarEventoAuditoriaCco(db, {
           proyecto_id: proyectoId,
           accion: 'GUARDAR INGRESOS',
-          detalle: `${updated} actualizada(s) · ${deleted} eliminada(s)`,
-          metadata: { updated, deleted, errores: errores.slice(0, 20) },
+          detalle: construirDetalleCambios({
+            verbo: 'Editó ingresos',
+            filas: resúmenes,
+            eliminadas: deleted,
+          }),
+          metadata: {
+            updated,
+            deleted,
+            cambios_resumen: resúmenes.flatMap((r) => r.cambios).slice(0, 20),
+            errores: errores.slice(0, 20),
+          },
         });
       }
 
@@ -367,7 +444,7 @@ export async function PATCH(req: Request) {
       const { data: prev, error: prevErr } = await db
         .from('contabilidad_compras')
         .select(
-          'id,proyecto_id,moneda_original,monto_usd,monto_ves,tasa_bcv_ves_por_usd,admin_pct_override,notas,supplier_name,fecha',
+          'id,proyecto_id,moneda_original,monto_usd,monto_ves,tasa_bcv_ves_por_usd,admin_pct_override,notas,supplier_name,fecha,tipo_gasto_cco,capitulo_cco,subcapitulo_cco,cco_estado,forma_pago_cco',
         )
         .eq('id', id)
         .eq('proyecto_id', proyectoId)
@@ -416,6 +493,8 @@ export async function PATCH(req: Request) {
         pctGlobal,
       );
 
+      const cambiosFila = resumirCambioEgreso(prevR, c);
+
       const patch: Record<string, unknown> = {
         monto_usd: Math.round(montoUsd * 10000) / 10000,
         monto_ves: Math.round(montoVes * 100) / 100,
@@ -442,14 +521,30 @@ export async function PATCH(req: Request) {
         continue;
       }
       updated += 1;
+      resúmenes.push({
+        id,
+        etiqueta:
+          String(c.proveedor ?? prevR.supplier_name ?? '').trim() ||
+          String(c.capitulo ?? prevR.capitulo_cco ?? id).slice(0, 40),
+        cambios: cambiosFila.length ? cambiosFila : ['campos guardados'],
+      });
     }
 
     if (updated > 0) {
-      await db.from('cco_auditoria_eventos').insert({
+      await registrarEventoAuditoriaCco(db, {
         proyecto_id: proyectoId,
         accion: 'GUARDAR EGRESOS',
-        detalle: `${updated} fila(s) actualizada(s)`,
-        metadata: { updated, errores: errores.slice(0, 20) },
+        detalle: construirDetalleCambios({
+          verbo: 'Editó egresos',
+          filas: resúmenes,
+        }),
+        metadata: {
+          updated,
+          cambios_resumen: resúmenes.flatMap((r) =>
+            r.cambios.map((ch) => `${r.etiqueta}: ${ch}`),
+          ).slice(0, 30),
+          errores: errores.slice(0, 20),
+        },
       });
     }
 

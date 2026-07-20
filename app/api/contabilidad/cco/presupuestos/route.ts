@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cargarPresupuestosCco } from '@/lib/contabilidad/cco/cargarPresupuestos';
+import {
+  construirDetalleCambios,
+  registrarEventoAuditoriaCco,
+  type ResumenCambioFila,
+} from '@/lib/contabilidad/cco/registrarAuditoria';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -56,6 +61,7 @@ export async function PATCH(req: Request) {
     const db = admin.client as SupabaseClient;
     let updated = 0;
     const errores: string[] = [];
+    const resúmenes: ResumenCambioFila[] = [];
 
     for (const c of cambios) {
       const id = String(c.id ?? '').trim();
@@ -63,13 +69,40 @@ export async function PATCH(req: Request) {
         errores.push(`${id || '?'}: fila no editable`);
         continue;
       }
+
+      const { data: prev } = await db
+        .from('cco_presupuestos_capitulo')
+        .select('id,capitulo,subcapitulo,descripcion,estimado_usd')
+        .eq('id', id)
+        .eq('proyecto_id', proyectoId)
+        .maybeSingle();
+      if (!prev) {
+        errores.push(`${id}: no encontrado`);
+        continue;
+      }
+      const prevR = prev as Record<string, unknown>;
+
       const patch: Record<string, unknown> = {};
-      if (c.capitulo != null) patch.capitulo = String(c.capitulo).trim();
+      const cambiosFila: string[] = [];
+      if (c.capitulo != null) {
+        patch.capitulo = String(c.capitulo).trim();
+        if (String(prevR.capitulo ?? '') !== String(patch.capitulo)) {
+          cambiosFila.push(`capítulo: «${prevR.capitulo}» → «${patch.capitulo}»`);
+        }
+      }
       if (c.subcapitulo !== undefined) {
         patch.subcapitulo = c.subcapitulo ? String(c.subcapitulo).trim() : null;
+        if (String(prevR.subcapitulo ?? '') !== String(patch.subcapitulo ?? '')) {
+          cambiosFila.push(`subcapítulo: «${prevR.subcapitulo ?? ''}» → «${patch.subcapitulo ?? ''}»`);
+        }
       }
       if (c.descripcion !== undefined) {
         patch.descripcion = c.descripcion ? String(c.descripcion).trim() : null;
+        if (String(prevR.descripcion ?? '') !== String(patch.descripcion ?? '')) {
+          cambiosFila.push(
+            `descripción: «${String(prevR.descripcion ?? '').slice(0, 40)}» → «${String(patch.descripcion ?? '').slice(0, 40)}»`,
+          );
+        }
       }
       if (c.estimado_usd !== undefined) {
         const n = Number(c.estimado_usd);
@@ -78,6 +111,9 @@ export async function PATCH(req: Request) {
           continue;
         }
         patch.estimado_usd = Math.round(n * 100) / 100;
+        if (Number(prevR.estimado_usd) !== Number(patch.estimado_usd)) {
+          cambiosFila.push(`estimado: $${prevR.estimado_usd} → $${patch.estimado_usd}`);
+        }
       }
       if (Object.keys(patch).length === 0) continue;
 
@@ -91,14 +127,28 @@ export async function PATCH(req: Request) {
         continue;
       }
       updated += 1;
+      resúmenes.push({
+        id,
+        etiqueta: String(patch.capitulo ?? prevR.capitulo ?? id).slice(0, 40),
+        cambios: cambiosFila.length ? cambiosFila : ['campos guardados'],
+      });
     }
 
     if (updated > 0) {
-      await db.from('cco_auditoria_eventos').insert({
+      await registrarEventoAuditoriaCco(db, {
         proyecto_id: proyectoId,
         accion: 'GUARDAR PRESUPUESTOS',
-        detalle: `${updated} fila(s) actualizada(s)`,
-        metadata: { updated, errores: errores.slice(0, 20) },
+        detalle: construirDetalleCambios({
+          verbo: 'Editó presupuestos',
+          filas: resúmenes,
+        }),
+        metadata: {
+          updated,
+          cambios_resumen: resúmenes.flatMap((r) =>
+            r.cambios.map((ch) => `${r.etiqueta}: ${ch}`),
+          ).slice(0, 30),
+          errores: errores.slice(0, 20),
+        },
       });
     }
 
