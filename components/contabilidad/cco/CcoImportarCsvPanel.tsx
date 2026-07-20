@@ -59,7 +59,9 @@ export default function CcoImportarCsvPanel({
           <strong>Nivel 2:</strong> índice único <code>dedup_hash</code> en Supabase (migración 268).
         </li>
         <li>
-          <strong>Nivel 3:</strong> upsert al guardar — si ya existe, actualiza; si no, crea.
+          <strong>Maestro V4:</strong> si el CSV trae columna <code>CLASE</code>, solo se importan filas{' '}
+          <code>GASTO</code> (ingresos/contratos/presupuestos no entran como compras). Se conservan
+          honorarios, capítulo, estado y brecha para que el dashboard cuadre con el programa madre.
         </li>
       </ul>
 

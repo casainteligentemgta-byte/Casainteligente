@@ -204,10 +204,15 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
     return rows;
   }, [filas, rubroFiltro, query]);
 
-  const egresosTotal = useMemo(
+  const egresosBase = useMemo(
     () => filasFiltradas.reduce((s, r) => s + (Number(r.monto_base_usd) || 0), 0),
     [filasFiltradas],
   );
+  const honorariosTotal = useMemo(
+    () => filasFiltradas.reduce((s, r) => s + (Number(r.honorarios_usd) || 0), 0),
+    [filasFiltradas],
+  );
+  const egresosTotal = egresosBase + honorariosTotal;
   const saldo = ingresosTotal - egresosTotal;
 
   const pageCount = Math.max(1, Math.ceil(filasFiltradas.length / PAGE_SIZE));
@@ -282,15 +287,15 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           accent="#22C55E"
         />
         <KpiCard
-          title="Total de Egresos"
+          title="Costo Total"
           value={fmtUsd(egresosTotal)}
-          footnote={`${filasFiltradas.length} registro(s)`}
+          footnote={`Base ${fmtUsd(egresosBase)} + Admin ${fmtUsd(honorariosTotal)}`}
           accent="#EF4444"
         />
         <KpiCard
           title="Saldo"
           value={fmtUsd(saldo)}
-          footnote="Ingresos − egresos"
+          footnote="Ingresos − costo total (como dashboard)"
           accent="#3B82F6"
         />
       </div>

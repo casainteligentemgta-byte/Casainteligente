@@ -22,6 +22,19 @@ export type FilaCsvCompra = {
   precio_unitario: number;
   subtotal: number;
   moneda: string;
+  /** Solo filas CLASE=GASTO del maestro V4; omitido en CSV genérico. */
+  cco?: {
+    clase?: string;
+    tipo_gasto_cco?: string | null;
+    capitulo_cco?: string | null;
+    subcapitulo_cco?: string | null;
+    honorarios_usd?: number | null;
+    admin_pct_override?: number | null;
+    cco_estado?: string | null;
+    monto_pagado_usd?: number | null;
+    tasa?: number | null;
+    porcentaje_brecha_real?: number | null;
+  };
 };
 
 function splitCsvLine(line: string, sep: string): string[] {
@@ -215,8 +228,9 @@ function resolverMontoMaestro(
     if (pagado > 0) return pagado;
     if (usd > 0) return usd;
   }
+  // No usar honorarios como monto base (rompe KPIs vs programa madre).
+  if (coste > 0 && honor > 0 && coste > honor) return coste - honor;
   if (coste > 0) return coste;
-  if (honor > 0) return honor;
   if (generic > 0) return generic;
   return 0;
 }
@@ -370,6 +384,19 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
   );
 
   const iMoneda = pickCol(headers, ['moneda', 'currency', 'divisa'], { allowFuzzy: false });
+  const iClase = pickCol(headers, ['clase'], { allowFuzzy: false });
+  const iEstado = pickCol(headers, ['estado'], { allowFuzzy: false });
+  const iAdminPct = pickCol(
+    headers,
+    ['porcentaje_admin', 'admin_pct', 'pct_admin', 'admiv'],
+    { allowFuzzy: true },
+  );
+  const iTasa = pickCol(headers, ['tasa'], { allowFuzzy: false });
+  const iBrecha = pickCol(
+    headers,
+    ['porcentaje_brecha_real', 'brecha_real', 'brecha'],
+    { allowFuzzy: true },
+  );
 
   if (iProveedor < 0 && iDesc < 0 && iFactura < 0 && iMontoUsd < 0 && iMontoBs < 0) {
     throw new Error(
@@ -378,9 +405,19 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
   }
 
   const filas: FilaCsvCompra[] = [];
+  let omitidasPorClase = 0;
   for (let r = headerIdx + 1; r < lines.length; r++) {
     const cols = splitCsvLine(lines[r]!, sep);
     if (cols.every((c) => !c.trim())) continue;
+
+    // Maestro V4: solo importar GASTO (ingresos/contratos/presupuestos van por otros flujos).
+    if (iClase >= 0) {
+      const clase = cell(cols, iClase).trim().toUpperCase();
+      if (clase && clase !== 'GASTO') {
+        omitidasPorClase += 1;
+        continue;
+      }
+    }
 
     const monedaRaw = cell(cols, iMoneda).toUpperCase();
     const moneda: 'VES' | 'USD' =
@@ -443,6 +480,29 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     // No usar TIPO/CAPITULO como si fueran el proveedor
     if (!descripcion && !(subtotal > 0) && !invoice && !proveedor) continue;
 
+    const honorariosRaw = parseNumCell(cell(cols, iHonorarios));
+    const adminPctRaw = parseNumCell(cell(cols, iAdminPct));
+    const pagadoRaw = parseNumCell(cell(cols, iMontoPagado));
+    const tasaRaw = parseNumCell(cell(cols, iTasa));
+    const brechaRaw = parseNumCell(cell(cols, iBrecha));
+    const estadoRaw = cell(cols, iEstado).trim();
+
+    const cco =
+      maestro || iClase >= 0 || iTipo >= 0 || iCapitulo >= 0 || iHonorarios >= 0
+        ? {
+            clase: iClase >= 0 ? cell(cols, iClase).trim().toUpperCase() || 'GASTO' : 'GASTO',
+            tipo_gasto_cco: tipo || null,
+            capitulo_cco: capitulo || null,
+            subcapitulo_cco: subcap || null,
+            honorarios_usd: iHonorarios >= 0 ? honorariosRaw : null,
+            admin_pct_override: iAdminPct >= 0 && adminPctRaw > 0 ? adminPctRaw : null,
+            cco_estado: estadoRaw || null,
+            monto_pagado_usd: iMontoPagado >= 0 ? pagadoRaw : null,
+            tasa: iTasa >= 0 && tasaRaw > 0 ? tasaRaw : null,
+            porcentaje_brecha_real: iBrecha >= 0 ? brechaRaw : null,
+          }
+        : undefined;
+
     filas.push({
       invoice_number: invoice,
       supplier_name: proveedor,
@@ -455,11 +515,16 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
       precio_unitario: precio > 0 ? precio : subtotal > 0 ? subtotal / cantidad : 0,
       subtotal,
       moneda,
+      cco,
     });
   }
 
   if (filas.length === 0) {
-    throw new Error('No se encontraron filas válidas en el CSV.');
+    const hint =
+      omitidasPorClase > 0
+        ? ` Se omitieron ${omitidasPorClase} fila(s) que no son CLASE=GASTO (ingresos/contratos/presupuestos).`
+        : '';
+    throw new Error(`No se encontraron filas válidas en el CSV.${hint}`);
   }
   return filas;
 }

@@ -47,6 +47,18 @@ type FilaApi = {
   precio_unitario?: number;
   subtotal?: number;
   moneda?: string;
+  cco?: {
+    clase?: string;
+    tipo_gasto_cco?: string | null;
+    capitulo_cco?: string | null;
+    subcapitulo_cco?: string | null;
+    honorarios_usd?: number | null;
+    admin_pct_override?: number | null;
+    cco_estado?: string | null;
+    monto_pagado_usd?: number | null;
+    tasa?: number | null;
+    porcentaje_brecha_real?: number | null;
+  };
 };
 
 type LineaGrupo = {
@@ -77,6 +89,8 @@ type GrupoFactura = {
   fotoId: string | null;
   certificada: boolean;
   tasaBcv: string;
+  /** Metadatos CCO V4 del maestro (primera fila del grupo). */
+  cco?: FilaApi['cco'];
 };
 
 type Props = {
@@ -171,7 +185,8 @@ function agruparFilas(filas: FilaApi[]): GrupoFactura[] {
         lineas: [linea],
         fotoId: null,
         certificada: false,
-        tasaBcv: '',
+        tasaBcv: f.cco?.tasa && f.cco.tasa > 0 ? String(f.cco.tasa) : '',
+        cco: f.cco,
       });
     }
   });
@@ -934,6 +949,19 @@ export default function CargarFacturaCuadroModal({
               document_storage_path,
               document_file_name,
               lineas,
+              cco: g.cco
+                ? {
+                    tipo_gasto_cco: g.cco.tipo_gasto_cco ?? null,
+                    capitulo_cco: g.cco.capitulo_cco ?? null,
+                    subcapitulo_cco: g.cco.subcapitulo_cco ?? null,
+                    honorarios_usd: g.cco.honorarios_usd ?? null,
+                    admin_pct_override: g.cco.admin_pct_override ?? null,
+                    cco_estado: g.cco.cco_estado ?? 'PAGADO',
+                    monto_pagado_usd: g.cco.monto_pagado_usd ?? null,
+                    porcentaje_brecha_real: g.cco.porcentaje_brecha_real ?? null,
+                    tasa_usada: g.moneda === 'USD' ? 'USD' : 'BCV',
+                  }
+                : undefined,
             }),
           });
           const ct = res.headers.get('content-type') ?? '';
