@@ -307,6 +307,9 @@ export default function CcoImportarCsvPanel({
           </label>
         ))}
         <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748B', lineHeight: 1.5 }}>
+          Prompt para Antigravity (suegro):{' '}
+          <code style={code}>docs/PROMPT-ANTIGRAVITY-EXPORT-MAESTRO-CCO.md</code>
+          <br />
           Automático en el PC (carpeta OneDrive sincronizada):
           <br />
           <code style={code}>{COMANDO_IMPORT_ONEDRIVE}</code>
