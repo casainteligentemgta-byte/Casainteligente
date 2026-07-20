@@ -122,6 +122,7 @@ import type {
 } from '@/lib/netvision/types'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
+import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -205,6 +206,8 @@ export default function NexusVisionArchitectClient() {
   const [complianceCountry, setComplianceCountry] = useState('VE')
   const fileRef = useRef<HTMLInputElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
+  const zoomControlsRef = useRef<NetVisionZoomControls | null>(null)
+  const [zoomPercent, setZoomPercent] = useState(100)
 
   useEffect(() => {
     const p = loadProject()
@@ -1281,6 +1284,41 @@ export default function NexusVisionArchitectClient() {
                         </optgroup>
                       ))}
                     </select>
+                    <div
+                      className="flex overflow-hidden rounded-md border border-white/15 bg-black/40"
+                      title="Zoom del plano"
+                    >
+                      <button
+                        type="button"
+                        title="Acercar"
+                        aria-label="Acercar"
+                        disabled={!project.planoUrl}
+                        className="min-h-8 min-w-8 touch-manipulation px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
+                        onClick={() => zoomControlsRef.current?.zoomIn()}
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        title="Alejar"
+                        aria-label="Alejar"
+                        disabled={!project.planoUrl}
+                        className="min-h-8 min-w-8 touch-manipulation border-l border-white/15 px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
+                        onClick={() => zoomControlsRef.current?.zoomOut()}
+                      >
+                        −
+                      </button>
+                      <button
+                        type="button"
+                        title="Restablecer zoom"
+                        aria-label="Restablecer zoom"
+                        disabled={!project.planoUrl}
+                        className="min-h-8 min-w-[3rem] touch-manipulation border-l border-white/15 px-2 py-1 text-[11px] font-medium tabular-nums text-[var(--nexus-text-muted)] hover:bg-white/10 disabled:opacity-40"
+                        onClick={() => zoomControlsRef.current?.reset()}
+                      >
+                        {zoomPercent}%
+                      </button>
+                    </div>
                   </>
                 ) : null}
               </div>
@@ -1363,6 +1401,9 @@ export default function NexusVisionArchitectClient() {
                     onCableWaypointRemove={removeBreakOnRoute}
                     onStructureMove={onStructureMove}
                     stageRef={stageRef}
+                    showZoomOverlay={false}
+                    zoomControlsRef={zoomControlsRef}
+                    onZoomChange={(z) => setZoomPercent(Math.round(z * 100))}
                   />
                 </div>
               )}
