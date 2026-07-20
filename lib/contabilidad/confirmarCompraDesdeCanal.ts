@@ -13,6 +13,7 @@ import {
 } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
+import { aplicarDefaultsCcoCompraTelegram } from '@/lib/contabilidad/cco/aplicarDefaultsCcoCompraTelegram';
 import {
   condicionPagoExtractedConfirmada,
   diasCreditoExtractedValido,
@@ -542,6 +543,22 @@ async function confirmarCompraDesdeCanalInterno(
   const { error: auditErr } = await updateContabilidadCompraRow(supabase, compraId, patchAuditoria);
   if (auditErr && !auditErr.message?.includes('alerta_fecha')) {
     console.warn('[confirmarCompraDesdeCanal] alerta_fecha:', auditErr.message);
+  }
+
+  // CCO (obra): tipo/estado/forma de pago + honorarios. Soft-fail si mig. 269 falta.
+  if (!gastoEntidad && proyectoId) {
+    await aplicarDefaultsCcoCompraTelegram(supabase, {
+      compraId,
+      proyectoId,
+      supplierName: (extracted.supplier_name ?? 'Proveedor').trim(),
+      condicionPago: extracted.condicion_pago,
+      montoUsd: Number(montos.montoUsd) || 0,
+    }).catch((e) => {
+      console.warn(
+        '[confirmarCompraDesdeCanal] CCO defaults:',
+        e instanceof Error ? e.message : e,
+      );
+    });
   }
 
   await supabase

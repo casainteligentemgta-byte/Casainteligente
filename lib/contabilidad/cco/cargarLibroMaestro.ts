@@ -133,12 +133,7 @@ export async function cargarLibroMaestro(
         estado: String(r.cco_estado ?? 'PAGADO'),
         forma_pago: r.forma_pago_cco != null ? String(r.forma_pago_cco) : null,
         invoice_number: invoice,
-        link_factura:
-          r.compra_factura_id != null
-            ? `/contabilidad/compras?factura=${String(r.compra_factura_id)}`
-            : invoice && !/^CCO-/i.test(invoice)
-              ? invoice
-              : null,
+        link_factura: `/contabilidad/compras?compra=${String(r.id)}`,
         split_group_key: claveGastoDividido({
           invoice_number: invoice,
           fecha,
