@@ -61,6 +61,18 @@ export type CcoV4ImportResult = {
   errores: string[];
 };
 
+export type CcoV4ImportProgress = {
+  /** 0–100 */
+  pct: number;
+  etapa: string;
+  actual: number;
+  total: number;
+};
+
+export type CcoV4ImportOptions = {
+  onProgress?: (p: CcoV4ImportProgress) => void | Promise<void>;
+};
+
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -75,6 +87,7 @@ function fechaIso(raw: string | null | undefined): string {
 export async function importarMaestroV4(
   supabase: SupabaseClient,
   payload: CcoV4ImportPayload,
+  opts?: CcoV4ImportOptions,
 ): Promise<CcoV4ImportResult> {
   const proyectoId = payload.proyecto_id;
   const pctGlobal = num(payload.honorarios_admin_pct) || 15;
@@ -91,6 +104,25 @@ export async function importarMaestroV4(
     errores,
   };
 
+  const estructuraLen = (payload.estructura ?? []).length;
+  const txsLen = (payload.transacciones ?? []).length;
+  const totalWork = Math.max(1, estructuraLen + txsLen + 1);
+  let doneWork = 0;
+  let lastPctSent = -1;
+  let lastDoneSent = 0;
+
+  const report = async (etapa: string, force = false) => {
+    // Reserva 0–4% para snapshot en la ruta; aquí 5–98.
+    const pct = Math.min(98, Math.max(5, Math.round(5 + (doneWork / totalWork) * 93)));
+    const minStep = Math.max(1, Math.floor(totalWork / 100));
+    if (!force && pct === lastPctSent && doneWork - lastDoneSent < minStep) return;
+    lastPctSent = pct;
+    lastDoneSent = doneWork;
+    await opts?.onProgress?.({ pct, etapa, actual: doneWork, total: totalWork });
+  };
+
+  await report('Configurando obra…', true);
+
   await supabase.from('cco_proyecto_config').upsert(
     {
       proyecto_id: proyectoId,
@@ -101,6 +133,8 @@ export async function importarMaestroV4(
     },
     { onConflict: 'proyecto_id' },
   );
+  doneWork += 1;
+  await report('Configurando obra…');
 
   // Estructura: primero capítulos, luego subcapítulos
   const estructuraIdByV4 = new Map<number, string>();
@@ -134,6 +168,8 @@ export async function importarMaestroV4(
       estructuraIdByV4.set(e.origen_v4_id, String(data.id));
       result.estructura += 1;
     }
+    doneWork += 1;
+    await report(`Estructura ${doneWork}/${totalWork}`);
   }
 
   const txs = payload.transacciones ?? [];
@@ -184,6 +220,8 @@ export async function importarMaestroV4(
       });
       result.contratos += 1;
     }
+    doneWork += 1;
+    await report(`Contratos ${result.contratos}/${contratosTx.length || 1}`);
   }
 
   for (const t of presupTx) {
@@ -201,6 +239,8 @@ export async function importarMaestroV4(
     );
     if (error) errores.push(`presupuesto ${t.origen_v4_id}: ${error.message}`);
     else result.presupuestos += 1;
+    doneWork += 1;
+    await report(`Presupuestos ${result.presupuestos}/${presupTx.length || 1}`);
   }
 
   for (const t of auditTx) {
@@ -210,7 +250,11 @@ export async function importarMaestroV4(
       .eq('proyecto_id', proyectoId)
       .eq('origen_v4_id', t.origen_v4_id)
       .maybeSingle();
-    if (auditYa?.id) continue;
+    if (auditYa?.id) {
+      doneWork += 1;
+      await report(`Auditoría ${result.auditoria}/${auditTx.length || 1}`);
+      continue;
+    }
 
     const { error } = await supabase.from('cco_auditoria_eventos').insert({
       proyecto_id: proyectoId,
@@ -225,11 +269,17 @@ export async function importarMaestroV4(
         errores.push(`auditoria ${t.origen_v4_id}: ${error.message}`);
       }
     } else result.auditoria += 1;
+    doneWork += 1;
+    await report(`Auditoría ${result.auditoria}/${auditTx.length || 1}`);
   }
 
   for (const t of ingresosTx) {
     const montoUsd = num(t.monto_base_usd);
-    if (montoUsd <= 0) continue;
+    if (montoUsd <= 0) {
+      doneWork += 1;
+      await report(`Ingresos ${result.ingresos}/${ingresosTx.length || 1}`);
+      continue;
+    }
     const moneda = String(t.moneda ?? 'USD').toUpperCase() === 'VES' ? 'VES' : 'USD';
     const tasa = num(t.tasa) || (moneda === 'USD' ? 1 : 0);
     const tasaAplicada = tasa > 0 ? tasa : 1;
@@ -247,7 +297,11 @@ export async function importarMaestroV4(
       .eq('proyecto_id', proyectoId)
       .eq('origen_fondo', origenFondo)
       .maybeSingle();
-    if (ya?.id) continue;
+    if (ya?.id) {
+      doneWork += 1;
+      await report(`Ingresos ${result.ingresos}/${ingresosTx.length || 1}`);
+      continue;
+    }
 
     const { error } = await supabase.from('ci_inyecciones_capital').insert({
       proyecto_id: proyectoId,
@@ -268,12 +322,18 @@ export async function importarMaestroV4(
     });
     if (error) errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
     else result.ingresos += 1;
+    doneWork += 1;
+    await report(`Ingresos ${result.ingresos}/${ingresosTx.length || 1}`);
   }
 
+  let gastosDone = 0;
   for (const t of gastosTx) {
     const montoUsd = num(t.monto_base_usd);
     if (montoUsd <= 0) {
       result.gastos.skipped += 1;
+      doneWork += 1;
+      gastosDone += 1;
+      await report(`Gastos ${gastosDone}/${gastosTx.length || 1}`);
       continue;
     }
     const proveedor = String(t.proveedor ?? 'Sin proveedor').trim() || 'Sin proveedor';
@@ -359,8 +419,14 @@ export async function importarMaestroV4(
       errores.push(`gasto ${t.origen_v4_id}: ${up.error}`);
     } else if (up.action === 'created') result.gastos.created += 1;
     else result.gastos.updated += 1;
+
+    doneWork += 1;
+    gastosDone += 1;
+    // En lotes grandes, reportar cada fila pero el throttle interno evita spam de %.
+    await report(`Gastos ${gastosDone}/${gastosTx.length || 1}`, gastosDone === gastosTx.length);
   }
 
   void contratoUuidByV4;
+  await report('Finalizando…', true);
   return result;
 }

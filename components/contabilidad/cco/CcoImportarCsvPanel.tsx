@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Cloud, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 import CargarFacturaCuadroModal from '@/components/contabilidad/CargarFacturaCuadroModal';
+import GuardadoCsvProgreso from '@/components/contabilidad/GuardadoCsvProgreso';
 import {
   esCsvMaestroCco,
   parseCsvMaestroV4,
@@ -13,6 +14,21 @@ type Props = {
   proyectos: ProyectoCatalogo[];
   proyectoIdInicial?: string | null;
   onImportado?: (proyectoId: string) => void;
+};
+
+type DoneJson = {
+  ok?: boolean;
+  error?: string;
+  hint?: string;
+  gastos?: { created?: number; updated?: number };
+  contratos?: number;
+  ingresos?: number;
+  presupuestos?: number;
+  estructura?: number;
+  vinculados?: number;
+  auditoria?: number;
+  errores?: string[];
+  pre_snapshot_id?: string | null;
 };
 
 export default function CcoImportarCsvPanel({
@@ -27,6 +43,10 @@ export default function CcoImportarCsvPanel({
   }, [proyectoIdInicial]);
 
   const [busy, setBusy] = useState(false);
+  const [pct, setPct] = useState(0);
+  const [etapa, setEtapa] = useState('');
+  const [actual, setActual] = useState(0);
+  const [total, setTotal] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
   const [log, setLog] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,14 +67,22 @@ export default function CcoImportarCsvPanel({
     setError(null);
     setLog(null);
     setPreview(null);
+    setPct(1);
+    setEtapa('Leyendo archivo…');
+    setActual(0);
+    setTotal(0);
     try {
       const text = await file.text();
+      setPct(4);
+      setEtapa('Detectando formato maestro…');
       if (!esCsvMaestroCco(text)) {
         throw new Error(
           'Este archivo no parece el CSV maestro (falta columna CLASE). ' +
             'Use el export de OneDrive del programa CCO, o el botón «Solo compras» más abajo.',
         );
       }
+      setPct(8);
+      setEtapa('Parseando filas del CSV…');
       const parsed = parseCsvMaestroV4(text, {
         proyecto_id: proyectoId,
         obra_alias: obraNombre ? `${obraNombre} / CSV OneDrive` : 'CSV OneDrive / CCO V4',
@@ -68,36 +96,110 @@ export default function CcoImportarCsvPanel({
             ? ` · devaluación media ${Number(parsed.devaluacion_pct).toFixed(2)}%`
             : ''),
       );
+      setTotal(parsed.resumen.total);
+      setActual(0);
+      setPct(10);
+      setEtapa(`Enviando ${parsed.resumen.total} filas al servidor…`);
 
       const { resumen: _r, ...payload } = parsed;
-      const res = await fetch('/api/contabilidad/cco/import-v4', {
+      const res = await fetch('/api/contabilidad/cco/import-v4?stream=1', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/x-ndjson',
+        },
         body: JSON.stringify({
           ...payload,
           proyecto_id: proyectoId,
           auto_vincular: true,
         }),
       });
-      const json = await res.json();
-      if (!res.ok || json.ok === false) {
-        throw new Error(
-          [json.error, json.hint].filter(Boolean).join(' · ') || 'Error de importación',
-        );
+
+      if (!res.ok || !res.body) {
+        let message = `Error de importación (HTTP ${res.status})`;
+        try {
+          const j = (await res.json()) as DoneJson;
+          message = [j.error, j.hint].filter(Boolean).join(' · ') || message;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(message);
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let doneJson: DoneJson | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          let ev: {
+            type?: string;
+            pct?: number;
+            etapa?: string;
+            actual?: number;
+            total?: number;
+            error?: string;
+            hint?: string;
+          } & DoneJson;
+          try {
+            ev = JSON.parse(trimmed);
+          } catch {
+            continue;
+          }
+          if (ev.type === 'progress') {
+            if (typeof ev.pct === 'number') setPct(Math.min(99, Math.max(0, ev.pct)));
+            if (ev.etapa) setEtapa(ev.etapa);
+            if (typeof ev.actual === 'number') setActual(ev.actual);
+            if (typeof ev.total === 'number' && ev.total > 0) setTotal(ev.total);
+          } else if (ev.type === 'error') {
+            throw new Error([ev.error, ev.hint].filter(Boolean).join(' · ') || 'Error de importación');
+          } else if (ev.type === 'done') {
+            doneJson = ev;
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const ev = JSON.parse(buffer.trim()) as { type?: string } & DoneJson;
+          if (ev.type === 'done') doneJson = ev;
+          if (ev.type === 'error') {
+            throw new Error(
+              [ev.error, ev.hint].filter(Boolean).join(' · ') || 'Error de importación',
+            );
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message !== 'Unexpected end of JSON input') throw e;
+        }
+      }
+
+      if (!doneJson) {
+        throw new Error('La importación terminó sin confirmación del servidor.');
+      }
+
+      setPct(100);
+      setEtapa('Completado');
       setLog(
         [
           `Listo: misma ruta que el programa CCO (gastos, ingresos, contratos, presupuestos).`,
-          `Gastos: +${json.gastos?.created ?? 0} creados / ${json.gastos?.updated ?? 0} actualizados`,
-          `Contratos: ${json.contratos}`,
-          `Ingresos: ${json.ingresos}`,
-          `Presupuestos: ${json.presupuestos}`,
-          `Estructura: ${json.estructura}`,
-          `Vinculados auto: ${json.vinculados}`,
-          json.pre_snapshot_id
-            ? `Snapshot previo: ${String(json.pre_snapshot_id).slice(0, 8)}…`
+          `Gastos: +${doneJson.gastos?.created ?? 0} creados / ${doneJson.gastos?.updated ?? 0} actualizados`,
+          `Contratos: ${doneJson.contratos}`,
+          `Ingresos: ${doneJson.ingresos}`,
+          `Presupuestos: ${doneJson.presupuestos}`,
+          `Estructura: ${doneJson.estructura}`,
+          `Vinculados auto: ${doneJson.vinculados}`,
+          doneJson.pre_snapshot_id
+            ? `Snapshot previo: ${String(doneJson.pre_snapshot_id).slice(0, 8)}…`
             : null,
-          json.errores?.length ? `Avisos: ${json.errores.length}` : null,
+          doneJson.errores?.length ? `Avisos: ${doneJson.errores.length}` : null,
         ]
           .filter(Boolean)
           .join('\n'),
@@ -105,6 +207,7 @@ export default function CcoImportarCsvPanel({
       onImportado?.(proyectoId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al importar CSV');
+      setEtapa('');
     } finally {
       setBusy(false);
     }
@@ -120,6 +223,14 @@ export default function CcoImportarCsvPanel({
         maxWidth: 760,
       }}
     >
+      <GuardadoCsvProgreso
+        open={busy}
+        pct={pct}
+        actual={actual}
+        total={total || Math.max(actual, 1)}
+        etapa={etapa || 'Importando maestro…'}
+      />
+
       <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A' }}>
         Importar CSV (OneDrive / programa CCO)
       </h2>
@@ -189,7 +300,7 @@ export default function CcoImportarCsvPanel({
       >
         <Cloud size={18} />
         {busy
-          ? 'Importando maestro…'
+          ? `Importando… ${Math.round(pct)}%`
           : proyectos.length === 0
             ? 'Cargando obras…'
             : 'Elegir CSV de OneDrive'}
@@ -201,6 +312,60 @@ export default function CcoImportarCsvPanel({
           onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
         />
       </label>
+
+      {busy || pct > 0 ? (
+        <div style={{ marginTop: 14, maxWidth: 420 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              marginBottom: 6,
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+              {busy ? etapa || 'Importando…' : pct >= 100 ? 'Completado' : etapa}
+            </span>
+            <span
+              style={{
+                fontSize: 18,
+                fontWeight: 900,
+                color: '#1D4ED8',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {Math.round(pct)}%
+            </span>
+          </div>
+          <div
+            style={{
+              height: 12,
+              borderRadius: 999,
+              background: '#E2E8F0',
+              overflow: 'hidden',
+            }}
+            role="progressbar"
+            aria-valuenow={Math.round(pct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.min(100, Math.max(0, pct))}%`,
+                background: 'linear-gradient(90deg, #2563EB, #38BDF8)',
+                transition: 'width 0.25s ease-out',
+              }}
+            />
+          </div>
+          {total > 0 ? (
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: '#64748B' }}>
+              {actual} / {total} pasos
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {preview ? (
         <p style={{ marginTop: 14, fontSize: 13, color: '#334155', fontWeight: 600 }}>{preview}</p>
@@ -274,7 +439,7 @@ export default function CcoImportarCsvPanel({
         </p>
         <button
           type="button"
-          disabled={proyectos.length === 0}
+          disabled={proyectos.length === 0 || busy}
           onClick={() => setOpenCompras(true)}
           style={{
             display: 'inline-flex',
@@ -287,7 +452,7 @@ export default function CcoImportarCsvPanel({
             padding: '10px 14px',
             fontWeight: 700,
             fontSize: 13,
-            cursor: proyectos.length === 0 ? 'wait' : 'pointer',
+            cursor: proyectos.length === 0 || busy ? 'not-allowed' : 'pointer',
           }}
         >
           <FileSpreadsheet size={16} />
