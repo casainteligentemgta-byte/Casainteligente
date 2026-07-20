@@ -1,5 +1,13 @@
 # Bot standalone (proceso aparte; no forma parte del build Next en Vercel)
 mi-asistente-ai/node_modules
 mi-asistente-ai/.env
+
+# WIP local (no commiteado) que rompe el build de producción
 .tmp-fotos-analisis
 build-output.log
+app/prueba-camara
+components/proyectos/EspectroCamaraCanvas.tsx
+components/proyectos/EspectroCamaraPanel.tsx
+lib/proyectos/cameraCatalog.ts
+lib/proyectos/espectroCamara.ts
+lib/proyectos/pdfPlanoAImagen.ts
