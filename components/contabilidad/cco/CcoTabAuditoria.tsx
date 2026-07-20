@@ -7,7 +7,7 @@ import {
   fmtBytes,
   fmtResumen,
   type CcoSnapshotMeta,
-} from '@/lib/contabilidad/cco/snapshots';
+} from '@/lib/contabilidad/cco/snapshotsUi';
 
 export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) {
   const [loading, setLoading] = useState(false);
