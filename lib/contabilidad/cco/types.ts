@@ -75,8 +75,15 @@ export type CcoLibroFila = {
   estado: string;
   forma_pago: string | null;
   invoice_number: string | null;
-  /** URL o referencia de factura; null → «None» en UI V4. */
+  /**
+   * Referencia de factura para UI V4.
+   * Si hay documento en Storage (o vía purchase_invoice), apunta a la API de documento.
+   * null → «None» / permitir adjuntar desde egresos.
+   */
   link_factura: string | null;
+  /** True si la compra tiene PDF/imagen en Storage o factura de recepción vinculada. */
+  tiene_documento: boolean;
+  document_file_name: string | null;
   /** Clave para «Agrupar Gastos Divididos»; null si no es split. */
   split_group_key: string | null;
   contrato_obra_id: string | null;

@@ -80,6 +80,9 @@ export async function cargarLibroMaestro(
           'origen_v4_id',
           'forma_pago_cco',
           'compra_factura_id',
+          'document_storage_path',
+          'document_file_name',
+          'purchase_invoice_id',
         ].join(','),
       )
       .eq('proyecto_id', proyectoId)
@@ -88,7 +91,9 @@ export async function cargarLibroMaestro(
       .limit(limit);
     if (
       error &&
-      !/tipo_gasto_cco|capitulo_cco|schema cache|origen_v4|compra_factura/i.test(error.message ?? '')
+      !/tipo_gasto_cco|capitulo_cco|schema cache|origen_v4|compra_factura|document_storage|purchase_invoice/i.test(
+        error.message ?? '',
+      )
     ) {
       throw error;
     }
@@ -111,9 +116,15 @@ export async function cargarLibroMaestro(
       const origenV4 = r.origen_v4_id != null ? num(r.origen_v4_id) : null;
       const proveedor = String(r.supplier_name ?? '').trim() || 'Sin proveedor';
       const fecha = r.fecha != null ? String(r.fecha).slice(0, 10) : null;
+      const compraId = String(r.id);
+      const docPath = String(r.document_storage_path ?? '').trim();
+      const docName = String(r.document_file_name ?? '').trim() || null;
+      const purchaseInvoiceId = String(r.purchase_invoice_id ?? '').trim();
+      // Documento real en Storage o factura de recepción vinculada (misma fuente que /compras).
+      const tieneDocumento = Boolean(docPath || purchaseInvoiceId);
       filas.push({
-        id: String(r.id),
-        display_id: origenV4 && origenV4 > 0 ? origenV4 : String(r.id).slice(0, 8),
+        id: compraId,
+        display_id: origenV4 && origenV4 > 0 ? origenV4 : compraId.slice(0, 8),
         origen_v4_id: origenV4 && origenV4 > 0 ? origenV4 : null,
         clase: 'GASTO',
         fecha,
@@ -133,7 +144,11 @@ export async function cargarLibroMaestro(
         estado: String(r.cco_estado ?? 'PAGADO'),
         forma_pago: r.forma_pago_cco != null ? String(r.forma_pago_cco) : null,
         invoice_number: invoice,
-        link_factura: `/contabilidad/compras?compra=${String(r.id)}`,
+        link_factura: tieneDocumento
+          ? `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`
+          : null,
+        tiene_documento: tieneDocumento,
+        document_file_name: docName,
         split_group_key: claveGastoDividido({
           invoice_number: invoice,
           fecha,
@@ -195,6 +210,8 @@ export async function cargarLibroMaestro(
         forma_pago: r.metodo_pago != null ? String(r.metodo_pago) : null,
         invoice_number: null,
         link_factura: null,
+        tiene_documento: false,
+        document_file_name: null,
         split_group_key: null,
         contrato_obra_id: null,
         fuente: 'inyeccion',
@@ -237,6 +254,8 @@ export async function cargarLibroMaestro(
         forma_pago: null,
         invoice_number: null,
         link_factura: null,
+        tiene_documento: false,
+        document_file_name: null,
         split_group_key: null,
         contrato_obra_id: String(r.id),
         fuente: 'contrato',
@@ -279,6 +298,8 @@ export async function cargarLibroMaestro(
         forma_pago: null,
         invoice_number: null,
         link_factura: null,
+        tiene_documento: false,
+        document_file_name: null,
         split_group_key: null,
         contrato_obra_id: null,
         fuente: 'presupuesto',

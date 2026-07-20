@@ -24,6 +24,7 @@ import {
   type EgresosColKey,
 } from '@/lib/contabilidad/cco/egresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
+import EgresoFacturaCell from '@/components/contabilidad/cco/EgresoFacturaCell';
 
 function fmtUsd(n: number): string {
   return n.toLocaleString('en-US', {
@@ -591,8 +592,10 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
         }}
       >
         <p style={{ margin: 0, fontSize: 13, color: '#1E3A8A', flex: 1, minWidth: 200 }}>
-          Mostrando <strong>{filasVista.length}</strong> registros según los filtros actuales
-          {totalApi !== filasVista.length ? ` · ${totalApi} en libro` : ''}.
+          Mostrando <strong>{filasVista.length}</strong> egresos desde compras de obra
+          {totalApi !== filasVista.length ? ` · ${totalApi} en libro` : ''}. En{' '}
+          <strong>LINK FACTURA</strong> puede ver el documento o adjuntar PDF/imagen y
+          enlazarlo al egreso.
         </p>
         <label
           style={{
@@ -976,19 +979,34 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                           );
                         }
                         if (c.key === 'link_factura') {
+                          const puedeAdjuntar =
+                            !readonly && f.fuente === 'compra' && !f._agrupada;
                           return (
-                            <td key={c.key} style={cell}>
-                              {f.link_factura ? (
-                                <a
-                                  href={f.link_factura}
-                                  style={{ color: '#1D4ED8', fontWeight: 700 }}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Ver
-                                </a>
+                            <td key={c.key} style={{ ...cell, whiteSpace: 'normal' }}>
+                              {f.fuente === 'compra' ? (
+                                <EgresoFacturaCell
+                                  compraId={f.id}
+                                  tieneDocumento={!!f.tiene_documento}
+                                  fileName={f.document_file_name}
+                                  puedeAdjuntar={puedeAdjuntar}
+                                  onAdjuntado={(compraId, name) => {
+                                    setFilas((prev) =>
+                                      prev.map((row) =>
+                                        row.id === compraId
+                                          ? {
+                                              ...row,
+                                              tiene_documento: true,
+                                              document_file_name: name,
+                                              link_factura: `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`,
+                                            }
+                                          : row,
+                                      ),
+                                    );
+                                    setOkMsg('Factura enlazada al egreso.');
+                                  }}
+                                />
                               ) : (
-                                'None'
+                                noneLabel(null)
                               )}
                             </td>
                           );
