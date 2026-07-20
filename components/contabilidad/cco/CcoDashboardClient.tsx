@@ -48,7 +48,7 @@ type NavId =
 /** Menú lateral CCO V4. */
 const NAV_ITEMS: { id: NavId; label: string; ready: boolean; hint?: string }[] = [
   { id: 'dashboard', label: 'Dashboard', ready: true },
-  { id: 'importar-csv', label: 'Importar CSV', ready: true, hint: 'Anti-duplicados' },
+  { id: 'importar-csv', label: 'Importar CSV', ready: true, hint: 'OneDrive / maestro' },
   { id: 'importar-pdf', label: 'Importar PDF', ready: true, hint: 'OCR / tabla' },
   { id: 'importar-v4', label: 'Importar V4 SQLite', ready: true, hint: 'JSON ETL' },
   { id: 'libro', label: 'Libro maestro', ready: true },

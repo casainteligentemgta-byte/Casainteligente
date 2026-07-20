@@ -24,6 +24,7 @@ import {
   parseCsvTablaCompras,
   pareceRutaONombreArchivo,
 } from '@/lib/contabilidad/parseCsvTablaCompras';
+import { esCsvMaestroCco } from '@/lib/contabilidad/cco/parseCsvMaestroV4';
 import GuardadoCsvProgreso from '@/components/contabilidad/GuardadoCsvProgreso';
 import {
   etiquetaRifCompra,
@@ -514,6 +515,12 @@ export default function CargarFacturaCuadroModal({
         setExtractPct(20);
         setExtractEtapa('Leyendo CSV…');
         const text = await file.text();
+        if (esCsvMaestroCco(text)) {
+          throw new Error(
+            'Este es el CSV maestro del programa CCO (columna CLASE). ' +
+              'Para alinear ambas aplicaciones use Contabilidad → CCO → Importar CSV (OneDrive).',
+          );
+        }
         setExtractPct(70);
         setExtractEtapa('Procesando filas…');
         const filas = parseCsvTablaCompras(text);
