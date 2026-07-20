@@ -26,12 +26,12 @@ export type ModuloNavDef = {
 /** Orden y rutas del dock (alineado a IOSNavBar). */
 export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'inicio', href: '/', label: 'Inicio' },
+  { id: 'domotica', href: '/nexus/vision', label: 'CCTV · NetVision' },
   { id: 'clientes', href: '/clientes', label: 'Clientes' },
   { id: 'presupuestos', href: '/presupuestos', label: 'Presupuestos' },
   { id: 'ventas', href: '/ventas', label: 'Ventas' },
   { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
-  { id: 'domotica', href: '/nexus/vision', label: 'NetVision Pro' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   { id: 'equipo', href: '/configuracion/equipo', label: 'Equipo' },
   { id: 'legal', href: '/legal', label: 'Legal' },
