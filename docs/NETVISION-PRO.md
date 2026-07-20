@@ -11,7 +11,7 @@ Diseño CCTV / redes / cableado / subterráneo / normativas / BIM en Nexus (`/ne
 ## Fases implementadas
 
 ### 1 — CCTV
-FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/PDF.
+FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/**PDF del plano** (captura A4 apaisada).
 **Marcas:** Hikvision, Axis, Uniview, Dahua, Sony, Ezviz (catálogo amplio), Aqara (catálogo amplio).
 Agregar cámara con botón **+ Cámara** (no por clic en el plano); luego arrastrar el pin.
 Espectro de visión ajustable por cámara: orientación, apertura FOV y alcance (sliders + asas en el plano).

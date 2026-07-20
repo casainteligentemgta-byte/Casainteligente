@@ -121,6 +121,7 @@ import type {
   StructureMaterialId,
 } from '@/lib/netvision/types'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
+import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -184,6 +185,7 @@ export default function NexusVisionArchitectClient() {
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
   const [nightMode, setNightMode] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [defaultModelId, setDefaultModelId] = useState(DEFAULT_CAMERA_MODEL_ID)
@@ -939,6 +941,33 @@ export default function NexusVisionArchitectClient() {
     downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
   }
 
+  const exportPdf = async () => {
+    const stage = stageRef.current
+    if (!stage || !project.planoUrl || exportingPdf) return
+    setExportingPdf(true)
+    setError(null)
+    try {
+      // JPEG reduce tamaño del PDF; capas visibles del Stage se capturan tal cual
+      const imageDataUrl = stage.toDataURL({
+        pixelRatio: 2,
+        mimeType: 'image/jpeg',
+        quality: 0.92,
+      })
+      await downloadNetVisionPlanPdf({
+        imageDataUrl,
+        projectName: project.name || 'Proyecto NetVision',
+        planoNombre: project.planoNombre,
+        cameraCount: project.cameras.length,
+        networkCount: project.networkNodes.length,
+        structureCount: (project.structures ?? []).length,
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo exportar el PDF del plano.')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   const placeMode =
     calibrateMode || !!drawStructureMaterial || drawUnderground || drawCable
   const draftPoint = cableDraft ?? undergroundDraft ?? structureDraft
@@ -999,6 +1028,17 @@ export default function NexusVisionArchitectClient() {
           >
             <Download className="mr-1.5 h-3.5 w-3.5" />
             PNG
+          </Button>
+          <Button
+            type="button"
+            variant="glass"
+            size="sm"
+            className="shrink-0"
+            onClick={() => void exportPdf()}
+            disabled={!project.planoUrl || exportingPdf}
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            {exportingPdf ? 'PDF…' : 'PDF'}
           </Button>
           <Button
             type="button"
