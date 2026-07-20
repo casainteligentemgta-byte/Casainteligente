@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, Menu, PanelLeftClose, X } from 'lucide-react';
+import { Loader2, Menu, X } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -277,9 +277,13 @@ export default function CcoDashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [periodicidad, setPeriodicidad] = useState('Mensual');
   const [modo, setModo] = useState<'acumulado' | 'periodo'>('acumulado');
-  /** Menú izquierdo: abierto en desktop, cerrado en móvil por defecto. */
+  /**
+   * Menú izquierdo CCO: se oculta/muestra con el icono de tres rayas.
+   * Cerrado en móvil por defecto; en desktop abre solo en la primera detección.
+   */
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const menuInicializadoRef = React.useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -287,7 +291,14 @@ export default function CcoDashboardClient() {
     const apply = () => {
       const desktop = mq.matches;
       setIsDesktop(desktop);
-      setMenuOpen(desktop);
+      // No pisar el toggle del usuario tras la primera sincronización.
+      if (!menuInicializadoRef.current) {
+        menuInicializadoRef.current = true;
+        setMenuOpen(desktop);
+        return;
+      }
+      // Al pasar a móvil, cerrar el drawer para no dejarlo abierto fuera de pantalla.
+      if (!desktop) setMenuOpen(false);
     };
     apply();
     mq.addEventListener('change', apply);
@@ -397,6 +408,7 @@ export default function CcoDashboardClient() {
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}
             aria-controls="cco-sidebar"
+            aria-label={menuOpen ? 'Ocultar menú CCO' : 'Mostrar menú CCO'}
             title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
             style={{
               display: 'inline-flex',
@@ -404,16 +416,19 @@ export default function CcoDashboardClient() {
               justifyContent: 'center',
               gap: 6,
               border: '1px solid #CBD5E1',
-              background: '#fff',
+              background: menuOpen ? '#DBEAFE' : '#fff',
               borderRadius: 8,
               padding: '6px 10px',
               fontWeight: 700,
               cursor: 'pointer',
               color: '#334155',
               flexShrink: 0,
+              minWidth: 40,
+              minHeight: 36,
             }}
           >
-            {menuOpen ? <PanelLeftClose size={16} /> : <Menu size={16} />}
+            {/* Tres rayas = abrir; X = cerrar */}
+            {menuOpen ? <X size={20} strokeWidth={2.25} /> : <Menu size={20} strokeWidth={2.25} />}
             <span style={{ fontSize: 12 }}>{menuOpen ? 'Ocultar' : 'Menú'}</span>
           </button>
           <Link
@@ -474,9 +489,10 @@ export default function CcoDashboardClient() {
           />
         ) : null}
 
-        {/* Menú izquierdo: colapsable; en móvil es drawer */}
+        {/* Menú izquierdo: colapsable con las tres rayas; en móvil es drawer */}
         <aside
           id="cco-sidebar"
+          aria-hidden={!menuOpen}
           style={{
             ...(isDesktop
               ? {
@@ -496,12 +512,14 @@ export default function CcoDashboardClient() {
             flexShrink: 0,
             background: '#0F172A',
             color: '#E2E8F0',
-            padding: menuOpen || !isDesktop ? '18px 12px' : 0,
-            borderRight: '1px solid #1E293B',
+            padding: menuOpen ? '18px 12px' : 0,
+            borderRight: menuOpen ? '1px solid #1E293B' : 'none',
             overflow: 'hidden',
-            overflowY: 'auto',
+            overflowY: menuOpen ? 'auto' : 'hidden',
             transition: 'width 0.2s ease, transform 0.2s ease, padding 0.2s ease',
             boxShadow: !isDesktop && menuOpen ? '8px 0 24px rgba(0,0,0,0.35)' : 'none',
+            pointerEvents: menuOpen ? 'auto' : 'none',
+            visibility: menuOpen || !isDesktop ? 'visible' : 'hidden',
           }}
         >
           <div
