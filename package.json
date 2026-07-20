@@ -37,6 +37,7 @@
     "db:diag:254": "node scripts/diag-migration-254-prod.mjs",
     "clientes:backfill-customer": "node scripts/backfill-proyectos-customer-id.mjs",
     "verify:ci-empleados": "node scripts/verify-ci-empleados.mjs",
+    "cco:import-onedrive": "npx tsx scripts/cco-import-onedrive.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"

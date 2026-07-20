@@ -8,6 +8,11 @@ import {
   esCsvMaestroCco,
   parseCsvMaestroV4,
 } from '@/lib/contabilidad/cco/parseCsvMaestroV4';
+import {
+  CHECKLIST_EXPORT_SUEGRO,
+  COMANDO_IMPORT_ONEDRIVE,
+  mensajeAdvertenciaIds,
+} from '@/lib/contabilidad/cco/onedriveImportChecklist';
 import type { ProyectoCatalogo } from '@/lib/proyectos/proyectosUnificados';
 
 type Props = {
@@ -51,11 +56,18 @@ export default function CcoImportarCsvPanel({
   const [log, setLog] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openCompras, setOpenCompras] = useState(false);
+  const [warnIds, setWarnIds] = useState<string | null>(null);
+  const [allowNoId, setAllowNoId] = useState(false);
+  const [checklistDone, setChecklistDone] = useState<Record<string, boolean>>({});
 
   const obraNombre = useMemo(() => {
     const p = proyectos.find((x) => x.id === proyectoId);
     return p?.nombre ?? null;
   }, [proyectoId, proyectos]);
+
+  function toggleCheck(id: string) {
+    setChecklistDone((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
 
   async function onFile(file: File | null) {
     if (!file) return;
@@ -67,6 +79,7 @@ export default function CcoImportarCsvPanel({
     setError(null);
     setLog(null);
     setPreview(null);
+    setWarnIds(null);
     setPct(1);
     setEtapa('Leyendo archivo…');
     setActual(0);
@@ -87,13 +100,28 @@ export default function CcoImportarCsvPanel({
         proyecto_id: proyectoId,
         obra_alias: obraNombre ? `${obraNombre} / CSV OneDrive` : 'CSV OneDrive / CCO V4',
       });
+      const idWarn = mensajeAdvertenciaIds(
+        parsed.resumen.conIdExplicit,
+        parsed.resumen.total,
+      );
+      if (idWarn) {
+        setWarnIds(idWarn);
+        if (parsed.resumen.conIdExplicit <= 0 && !allowNoId) {
+          throw new Error(
+            idWarn +
+              ' Marque «Permitir importar sin ID» abajo solo si es una carga de prueba.',
+          );
+        }
+      }
+
       const clasesTxt = Object.entries(parsed.resumen.porClase)
         .map(([k, v]) => `${k}: ${v}`)
         .join(' · ');
       setPreview(
-        `${parsed.resumen.total} filas (${clasesTxt}) · estructura ${parsed.resumen.estructura}` +
+        `${parsed.resumen.total} filas (${clasesTxt}) · IDs ${parsed.resumen.conIdExplicit}/${parsed.resumen.total}` +
+          ` · estructura ${parsed.resumen.estructura}` +
           (parsed.devaluacion_pct
-            ? ` · devaluación media ${Number(parsed.devaluacion_pct).toFixed(2)}%`
+            ? ` · devaluación ${Number(parsed.devaluacion_pct).toFixed(2)}%`
             : ''),
       );
       setTotal(parsed.resumen.total);
@@ -235,24 +263,55 @@ export default function CcoImportarCsvPanel({
         Importar CSV (OneDrive / programa CCO)
       </h2>
       <p style={{ margin: '8px 0 0', fontSize: 14, color: '#64748B', lineHeight: 1.55 }}>
-        El programa de contabilidad genera el CSV y lo sube a OneDrive. Descárguelo aquí y se
-        cargará el <strong>maestro completo</strong> (GASTO, INGRESO, CONTRATO, PRESUPUESTO) para
-        que el dashboard quede alineado con la otra aplicación. No toca stock.
+        Puente entre el programa del suegro y Casa Inteligente: misma data, IDs estables, sin tocar
+        stock. Marque el checklist y suba el maestro (o use el script automático en PC).
       </p>
 
-      <ol
+      <div
         style={{
           margin: '16px 0 18px',
-          paddingLeft: 20,
-          color: '#334155',
-          fontSize: 13,
-          lineHeight: 1.7,
+          padding: '14px 16px',
+          borderRadius: 12,
+          border: '1px solid #E2E8F0',
+          background: '#F8FAFC',
         }}
       >
-        <li>En el programa CCO: exportar / publicar CSV a OneDrive.</li>
-        <li>Descargar el archivo (p. ej. <code style={code}>MAESTRO_…csv</code>).</li>
-        <li>Elegir la obra destino abajo y subir el CSV.</li>
-      </ol>
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>
+          Checklist suegro → OneDrive → CI
+        </div>
+        {CHECKLIST_EXPORT_SUEGRO.map((step) => (
+          <label
+            key={step.id}
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-start',
+              marginBottom: 10,
+              cursor: 'pointer',
+              fontSize: 13,
+              color: '#334155',
+              lineHeight: 1.45,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={Boolean(checklistDone[step.id])}
+              onChange={() => toggleCheck(step.id)}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              <strong style={{ color: '#0F172A' }}>{step.titulo}</strong>
+              <br />
+              <span style={{ color: '#64748B', fontSize: 12 }}>{step.detalle}</span>
+            </span>
+          </label>
+        ))}
+        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748B', lineHeight: 1.5 }}>
+          Automático en el PC (carpeta OneDrive sincronizada):
+          <br />
+          <code style={code}>{COMANDO_IMPORT_ONEDRIVE}</code>
+        </p>
+      </div>
 
       <label style={{ display: 'block', marginBottom: 14, maxWidth: 420 }}>
         <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
@@ -312,6 +371,48 @@ export default function CcoImportarCsvPanel({
           onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
         />
       </label>
+
+      <label
+        style={{
+          display: 'flex',
+          gap: 8,
+          alignItems: 'flex-start',
+          marginTop: 12,
+          marginBottom: 4,
+          fontSize: 12,
+          color: '#64748B',
+          maxWidth: 480,
+          cursor: 'pointer',
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={allowNoId}
+          disabled={busy}
+          onChange={(e) => setAllowNoId(e.target.checked)}
+          style={{ marginTop: 2 }}
+        />
+        <span>
+          Permitir importar sin columna ID (solo pruebas; riesgo de duplicados al reimportar).
+        </span>
+      </label>
+
+      {warnIds ? (
+        <div
+          style={{
+            marginTop: 12,
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: '#FFFBEB',
+            border: '1px solid #FCD34D',
+            fontSize: 12,
+            color: '#92400E',
+            lineHeight: 1.45,
+          }}
+        >
+          {warnIds}
+        </div>
+      ) : null}
 
       {busy || pct > 0 ? (
         <div style={{ marginTop: 14, maxWidth: 420 }}>
