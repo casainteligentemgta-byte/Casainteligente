@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, Menu, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Menu, X } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -45,17 +45,35 @@ type NavId =
   | 'auditoria'
   | 'ajustes';
 
+type NavLeaf = { id: NavId; label: string; ready: boolean; hint?: string };
+type NavGroup = {
+  kind: 'group';
+  id: 'importar';
+  label: string;
+  children: NavLeaf[];
+};
+type NavEntry = ({ kind?: 'item' } & NavLeaf) | NavGroup;
+
 /** Menú lateral CCO V4. */
-const NAV_ITEMS: { id: NavId; label: string; ready: boolean; hint?: string }[] = [
+const NAV_ITEMS: NavEntry[] = [
   { id: 'dashboard', label: 'Dashboard', ready: true },
-  { id: 'importar-csv', label: 'Importar CSV', ready: true, hint: 'OneDrive / maestro' },
-  { id: 'importar-pdf', label: 'Importar PDF', ready: true, hint: 'OCR / tabla' },
-  { id: 'importar-v4', label: 'Importar V4 SQLite', ready: true, hint: 'JSON ETL' },
+  {
+    kind: 'group',
+    id: 'importar',
+    label: 'Importar',
+    children: [
+      { id: 'importar-csv', label: 'CSV', ready: true, hint: 'OneDrive / maestro' },
+      { id: 'importar-pdf', label: 'PDF', ready: true, hint: 'OCR / tabla' },
+      { id: 'importar-v4', label: 'V4 SQLite', ready: true, hint: 'JSON ETL' },
+    ],
+  },
   { id: 'libro', label: 'Libro maestro', ready: true },
   { id: 'presupuestos', label: 'Presupuestos', ready: true },
   { id: 'auditoria', label: 'Auditoría', ready: true },
   { id: 'ajustes', label: 'Ajustes CCO', ready: true },
 ];
+
+const IMPORTAR_NAV_IDS: NavId[] = ['importar-csv', 'importar-pdf', 'importar-v4'];
 
 type TabId =
   | 'graficos'
@@ -284,6 +302,12 @@ export default function CcoDashboardClient() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const menuInicializadoRef = React.useRef(false);
+  /** Submenú Importar: CSV / PDF / V4 SQLite. */
+  const [importarOpen, setImportarOpen] = useState(false);
+
+  useEffect(() => {
+    if (IMPORTAR_NAV_IDS.includes(nav)) setImportarOpen(true);
+  }, [nav]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -562,7 +586,93 @@ export default function CcoDashboardClient() {
             ) : null}
           </div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 196 }}>
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.map((entry) => {
+              if (entry.kind === 'group') {
+                const groupActive = IMPORTAR_NAV_IDS.includes(nav);
+                return (
+                  <div key={entry.id} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <button
+                      type="button"
+                      aria-expanded={importarOpen}
+                      aria-controls="cco-nav-importar"
+                      onClick={() => {
+                        setImportarOpen((o) => {
+                          const next = !o;
+                          if (next && !IMPORTAR_NAV_IDS.includes(nav)) {
+                            seleccionarNav('importar-csv');
+                          }
+                          return next;
+                        });
+                      }}
+                      style={{
+                        textAlign: 'left',
+                        border: 'none',
+                        borderRadius: 10,
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        background: groupActive && !importarOpen ? '#1E3A8A' : 'transparent',
+                        color: groupActive ? '#fff' : '#CBD5E1',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                      }}
+                    >
+                      <span>{entry.label}</span>
+                      {importarOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                    {importarOpen ? (
+                      <div id="cco-nav-importar" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {entry.children.map((item) => {
+                          const active = nav === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              disabled={!item.ready}
+                              title={item.ready ? undefined : 'Próximamente'}
+                              onClick={() => {
+                                if (item.ready) seleccionarNav(item.id);
+                              }}
+                              style={{
+                                textAlign: 'left',
+                                border: 'none',
+                                borderRadius: 10,
+                                padding: '8px 12px 8px 22px',
+                                cursor: item.ready ? 'pointer' : 'not-allowed',
+                                background: active ? '#2563EB' : 'transparent',
+                                color: item.ready ? (active ? '#fff' : '#94A3B8') : '#475569',
+                                fontWeight: 700,
+                                fontSize: 12,
+                                opacity: item.ready ? 1 : 0.55,
+                              }}
+                            >
+                              <span style={{ display: 'block' }}>{item.label}</span>
+                              {item.hint ? (
+                                <span
+                                  style={{
+                                    display: 'block',
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    marginTop: 2,
+                                    color: active ? 'rgba(255,255,255,0.75)' : '#64748B',
+                                  }}
+                                >
+                                  {item.hint}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              const item = entry;
               const active = nav === item.id;
               return (
                 <button
@@ -1187,7 +1297,7 @@ export default function CcoDashboardClient() {
             tab !== 'importar' ? (
               <SeccionLista
                 title={TABS.find((t) => t.id === tab)?.label ?? 'Sección'}
-                desc="Menú CCO V4 cableado (CSV, PDF, SQLite, libro, contratos, exports)."
+                desc="Menú CCO V4 cableado (Importar → CSV/PDF/V4 SQLite, libro, contratos, exports)."
                 href="/contabilidad/compras"
                 hrefLabel="Ir a módulos secundarios →"
                 lines={[
