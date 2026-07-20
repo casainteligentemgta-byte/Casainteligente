@@ -4,6 +4,7 @@ import {
   importarMaestroV4,
   type CcoV4ImportPayload,
 } from '@/lib/contabilidad/cco/importarMaestroV4';
+import { registrarEventoAuditoriaCco } from '@/lib/contabilidad/cco/registrarAuditoria';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -40,10 +41,17 @@ export async function POST(req: Request) {
     const result = await importarMaestroV4(admin.client, body);
 
     const db = admin.client as SupabaseClient;
-    await db.from('cco_auditoria_eventos').insert({
+    await registrarEventoAuditoriaCco(db, {
       proyecto_id: body.proyecto_id,
-      accion: 'IMPORTACION V4 SQLITE',
-      detalle: `gastos +${result.gastos.created}/~${result.gastos.updated} · contratos ${result.contratos} · ingresos ${result.ingresos}`,
+      accion: 'IMPORTACION V4 LITE',
+      detalle: [
+        `Importó V4 lite: ${body.transacciones.length} txs`,
+        `gastos +${result.gastos?.created ?? 0} / ~${result.gastos?.updated ?? 0}`,
+        `contratos ${result.contratos}`,
+        `ingresos ${result.ingresos}`,
+        `presupuestos ${result.presupuestos}`,
+        `vinculados ${result.vinculados}`,
+      ].join(' · '),
       metadata: result as unknown as Record<string, unknown>,
     });
 

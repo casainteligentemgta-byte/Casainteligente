@@ -216,9 +216,17 @@ export async function importarMaestroV4(
       proyecto_id: proyectoId,
       fecha: fechaIso(t.fecha),
       accion: String(t.tipo ?? t.descripcion ?? 'AUDITORIA').slice(0, 200),
-      detalle: String(t.descripcion ?? ''),
+      detalle: [
+        String(t.descripcion ?? '').trim() || null,
+        t.proveedor ? `proveedor «${t.proveedor}»` : null,
+        t.monto_base_usd != null ? `$${t.monto_base_usd}` : null,
+        t.capitulo ? `capítulo «${t.capitulo}»` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      actor: 'import_v4_lite',
       origen_v4_id: t.origen_v4_id,
-      metadata: { proveedor: t.proveedor ?? null },
+      metadata: { proveedor: t.proveedor ?? null, origen: 'v4_tx' },
     });
     if (error) {
       if (!/duplicate|unique/i.test(error.message)) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { registrarEventoAuditoriaCco } from '@/lib/contabilidad/cco/registrarAuditoria';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,7 @@ export async function POST(req: Request) {
       accion?: string;
       detalle?: string;
       actor?: string;
+      metadata?: Record<string, unknown>;
     };
 
     const accion = String(body.accion ?? '').trim();
@@ -23,15 +25,13 @@ export async function POST(req: Request) {
     }
 
     const db = admin.client as SupabaseClient;
-    const { error } = await db.from('cco_auditoria_eventos').insert({
+    await registrarEventoAuditoriaCco(db, {
       proyecto_id: body.proyecto_id?.trim() || null,
       accion: accion.slice(0, 200),
-      detalle: body.detalle?.slice(0, 2000) || null,
-      actor: body.actor?.trim() || 'cco_ui',
+      detalle: body.detalle?.slice(0, 4000) || null,
+      actor: body.actor?.trim() || undefined,
+      metadata: body.metadata ?? {},
     });
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al registrar auditoría.';
