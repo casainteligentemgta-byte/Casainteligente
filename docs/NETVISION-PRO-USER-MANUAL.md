@@ -241,7 +241,7 @@ ANÁLISIS DE COBERTURA
 
 RECOMENDACIONES:
 → Agregar o reposicionar cámaras
-→ Revisar muros (drywall/bloque cortan FOV)
+→ Revisar muros (drywall/bloque/concreto cortan FOV)
 ```
 
 **Muros:** pestaña **Muros** — dos toques en el plano (drywall, bloque, vidrio, ventana).

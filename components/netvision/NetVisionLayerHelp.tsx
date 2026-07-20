@@ -15,7 +15,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'fov',
     label: 'Visión',
     blurb:
-      'Cobertura automática por alcance (semáforo): verde detección objetos/personas, amarillo más lejos, rojo detección dudosa. Muros opacos cortan la vista.',
+      'Cobertura automática por alcance (semáforo): verde detección objetos/personas, amarillo más lejos, rojo detección dudosa. Drywall, bloque y concreto cortan la vista; el espectro no atraviesa esos muros.',
   },
   {
     id: 'wifi',
@@ -69,7 +69,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'muros',
     label: 'Muros',
     blurb:
-      'Pestaña Muros: dibuja drywall, bloque, vidrio, ventana o puerta (2 toques). Arrastra para mover; la capa Estructuras las muestra u oculta.',
+      'Pestaña Muros: dibuja drywall, bloque, concreto, vidrio, ventana o puerta (2 toques). Drywall/bloque/concreto cortan el FOV. Arrastra para mover; la capa Estructuras las muestra u oculta.',
   },
 ]
 

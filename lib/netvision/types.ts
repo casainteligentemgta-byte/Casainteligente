@@ -95,6 +95,7 @@ export type DesignNetworkNode = {
 export type StructureMaterialId =
   | 'drywall'
   | 'block'
+  | 'concrete'
   | 'glass'
   | 'window'
   | 'door'
@@ -102,7 +103,7 @@ export type StructureMaterialId =
 export type StructureMaterial = {
   id: StructureMaterialId
   label: string
-  kind: 'wall_drywall' | 'wall_block' | 'glass' | 'window' | 'door'
+  kind: 'wall_drywall' | 'wall_block' | 'wall_concrete' | 'glass' | 'window' | 'door'
   /** Si true, corta el FOV de la cámara */
   blocksVision: boolean
   wifiLossDb: number

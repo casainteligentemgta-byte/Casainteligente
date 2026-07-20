@@ -21,6 +21,16 @@
       "dash": null
     },
     {
+      "id": "concrete",
+      "label": "Muro de concreto",
+      "kind": "wall_concrete",
+      "blocksVision": true,
+      "wifiLossDb": 14,
+      "soundLossDb": 26,
+      "color": "#57534e",
+      "dash": null
+    },
+    {
       "id": "glass",
       "label": "Vidrio",
       "kind": "glass",

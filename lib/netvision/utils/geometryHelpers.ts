@@ -138,3 +138,23 @@ export function rayCrossings(
   hits.sort((a, b) => a.t - b.t)
   return hits
 }
+
+/** Point-in-polygon (ray casting). Polígono cerrado o abierto (se asume cierre). */
+export function pointInPolygon(
+  px: number,
+  py: number,
+  pts: readonly { x: number; y: number }[],
+): boolean {
+  if (pts.length < 3) return false
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i]!.x
+    const yi = pts[i]!.y
+    const xj = pts[j]!.x
+    const yj = pts[j]!.y
+    if (yi > py === yj > py) continue
+    const xCross = ((xj - xi) * (py - yi)) / (yj - yi) + xi
+    if (px < xCross) inside = !inside
+  }
+  return inside
+}
