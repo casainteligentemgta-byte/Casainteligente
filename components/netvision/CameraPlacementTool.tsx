@@ -88,6 +88,18 @@ export type CameraPlacementToolProps = {
     patch: { x1: number; y1: number; x2: number; y2: number },
   ) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
+  /** Oculta el overlay +/−/% del plano (p. ej. si están en la barra junto al modelo). */
+  showZoomOverlay?: boolean
+  /** Notifica el factor de zoom actual (1 = 100%). */
+  onZoomChange?: (zoom: number) => void
+  /** API imperativa para botones externos de zoom. */
+  zoomControlsRef?: React.MutableRefObject<NetVisionZoomControls | null>
+}
+
+export type NetVisionZoomControls = {
+  zoomIn: () => void
+  zoomOut: () => void
+  reset: () => void
 }
 
 function spectrumFill(strength: number, hue: number, boost = 0) {
@@ -220,6 +232,9 @@ export default function CameraPlacementTool({
   onCableWaypointRemove,
   onStructureMove,
   stageRef,
+  showZoomOverlay = true,
+  onZoomChange,
+  zoomControlsRef,
 }: CameraPlacementToolProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const localStageRef = useRef<Konva.Stage | null>(null)
@@ -233,6 +248,10 @@ export default function CameraPlacementTool({
   const suppressTapUntilRef = useRef(0)
 
   viewRef.current = { zoom, stagePos }
+
+  useEffect(() => {
+    onZoomChange?.(zoom)
+  }, [zoom, onZoomChange])
 
   useEffect(() => {
     setZoom(1)
@@ -376,6 +395,20 @@ export default function CameraPlacementTool({
     setStagePos({ x: 0, y: 0 })
   }
 
+  useEffect(() => {
+    if (!zoomControlsRef) return
+    zoomControlsRef.current = {
+      zoomIn: () => applyZoomAt(viewRef.current.zoom * ZOOM_STEP, null),
+      zoomOut: () => applyZoomAt(viewRef.current.zoom / ZOOM_STEP, null),
+      reset: resetView,
+    }
+    return () => {
+      zoomControlsRef.current = null
+    }
+    // applyZoomAt / resetView cierran sobre width/height actuales vía viewRef
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- API estable vía viewRef
+  }, [zoomControlsRef, width, height])
+
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
     const stage = e.target.getStage()
@@ -422,42 +455,44 @@ export default function CameraPlacementTool({
       className="relative h-full min-h-[320px] w-full overscroll-none touch-none select-none"
       style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
     >
-      <div className="pointer-events-none absolute right-3 top-3 z-10 flex flex-col items-stretch gap-1">
-        <div className="pointer-events-auto flex overflow-hidden rounded-md border border-slate-600/80 bg-slate-900/90 shadow-lg backdrop-blur">
-          <button
-            type="button"
-            title="Acercar"
-            aria-label="Acercar"
-            className="min-h-11 min-w-11 touch-manipulation px-3 py-2 text-base font-medium text-slate-100 hover:bg-slate-700/80 active:bg-slate-600/80"
-            onClick={() => applyZoomAt(viewRef.current.zoom * ZOOM_STEP, null)}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            title="Alejar"
-            aria-label="Alejar"
-            className="min-h-11 min-w-11 touch-manipulation border-l border-slate-600/80 px-3 py-2 text-base font-medium text-slate-100 hover:bg-slate-700/80 active:bg-slate-600/80"
-            onClick={() => applyZoomAt(viewRef.current.zoom / ZOOM_STEP, null)}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            title="Restablecer zoom"
-            aria-label="Restablecer zoom"
-            className="min-h-11 min-w-[3.25rem] touch-manipulation border-l border-slate-600/80 px-3 py-2 text-sm font-medium tabular-nums text-slate-200 hover:bg-slate-700/80 active:bg-slate-600/80"
-            onClick={resetView}
-          >
-            {Math.round(zoom * 100)}%
-          </button>
+      {showZoomOverlay ? (
+        <div className="pointer-events-none absolute right-3 top-3 z-10 flex flex-col items-stretch gap-1">
+          <div className="pointer-events-auto flex overflow-hidden rounded-md border border-slate-600/80 bg-slate-900/90 shadow-lg backdrop-blur">
+            <button
+              type="button"
+              title="Acercar"
+              aria-label="Acercar"
+              className="min-h-11 min-w-11 touch-manipulation px-3 py-2 text-base font-medium text-slate-100 hover:bg-slate-700/80 active:bg-slate-600/80"
+              onClick={() => applyZoomAt(viewRef.current.zoom * ZOOM_STEP, null)}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              title="Alejar"
+              aria-label="Alejar"
+              className="min-h-11 min-w-11 touch-manipulation border-l border-slate-600/80 px-3 py-2 text-base font-medium text-slate-100 hover:bg-slate-700/80 active:bg-slate-600/80"
+              onClick={() => applyZoomAt(viewRef.current.zoom / ZOOM_STEP, null)}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              title="Restablecer zoom"
+              aria-label="Restablecer zoom"
+              className="min-h-11 min-w-[3.25rem] touch-manipulation border-l border-slate-600/80 px-3 py-2 text-sm font-medium tabular-nums text-slate-200 hover:bg-slate-700/80 active:bg-slate-600/80"
+              onClick={resetView}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+          </div>
+          <p className="rounded bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
+            {placeMode
+              ? 'Pellizca para zoom · toca para colocar · arrastra para mover'
+              : 'Pellizca para zoom · un dedo para mover'}
+          </p>
         </div>
-        <p className="rounded bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
-          {placeMode
-            ? 'Pellizca para zoom · toca para colocar · arrastra para mover'
-            : 'Pellizca para zoom · un dedo para mover'}
-        </p>
-      </div>
+      ) : null}
       <Stage
         ref={setStage}
         width={width}
