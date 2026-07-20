@@ -127,8 +127,14 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link
+            href="/nexus/vision"
+            className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-cyan)] ring-1 ring-[rgba(0,242,254,0.45)] bg-[rgba(0,242,254,0.08)] hover:bg-[rgba(0,242,254,0.16)] transition-all"
+          >
+            CCTV
+          </Link>
+          <Link
             href="/nexus"
-            className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-cyan)] ring-1 ring-[rgba(0,242,254,0.3)] hover:bg-[rgba(0,242,254,0.1)] transition-all"
+            className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-text-muted)] ring-1 ring-white/15 hover:bg-white/5 transition-all"
           >
             Nexus
           </Link>
@@ -155,13 +161,16 @@ export default function DashboardPage() {
             cardClass="!bg-blue-500/5 border-blue-500/20"
           />
           <StatTile
-            icon="📈"
-            value="$48.2K"
-            label="Ventas"
-            badge="+8.3%"
-            cardClass="!bg-green-500/5 border-green-500/20"
+            href="/nexus/vision"
+            icon="📹"
+            value="NV"
+            label="CCTV NetVision"
+            badge="Pro"
+            valueClass="text-[var(--nexus-cyan)]"
+            cardClass="!bg-cyan-500/5 border-cyan-500/25"
           />
           <StatTile
+            href="/proyectos/modulo"
             icon="🏗️"
             value="18"
             label="Proyectos"

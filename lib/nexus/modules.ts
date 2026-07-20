@@ -46,6 +46,13 @@ export const NEXUS_MODULES: NexusModule[] = [
     group: 'core',
   },
   {
+    href: '/nexus/vision',
+    label: 'CCTV · NetVision Pro',
+    description: 'Cámaras, redes, cableado, normas y BIM',
+    icon: Sparkles,
+    group: 'commercial',
+  },
+  {
     href: '/nexus/builder',
     label: 'Nexus Builder',
     description: 'Presupuesto arrastrar-soltar',
@@ -64,13 +71,6 @@ export const NEXUS_MODULES: NexusModule[] = [
     label: 'Firma (demo)',
     description: 'Contratación digital y cierre',
     icon: PenLine,
-    group: 'commercial',
-  },
-  {
-    href: '/nexus/vision',
-    label: 'NetVision Pro',
-    description: 'CCTV, redes, cableado, normas y BIM',
-    icon: Sparkles,
     group: 'commercial',
   },
 ];

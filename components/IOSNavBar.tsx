@@ -39,6 +39,46 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'domotica',
+    href: '/nexus/vision',
+    label: 'CCTV',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        {/* Cámara CCTV / NetVision */}
+        <rect
+          x="3"
+          y="6"
+          width="12"
+          height="9"
+          rx="2"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
+        />
+        <circle
+          cx="9"
+          cy="10.5"
+          r="2.25"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+        />
+        <path
+          d="M15 9.5l5-2.5v7l-5-2.5v-2z"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
+        />
+        <path
+          d="M7 18h4"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: 'clientes',
     href: '/clientes',
     label: 'Clientes',
@@ -138,43 +178,6 @@ const navItems: NavItem[] = [
           strokeLinecap="round"
           strokeLinejoin="round"
           fill={active ? 'rgba(245,158,11,0.12)' : 'none'}
-        />
-      </svg>
-    ),
-  },
-  {
-    id: 'domotica',
-    href: '/nexus/vision',
-    label: 'NetVision',
-    icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M3 11l9-7 9 7"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M5 10v10h14V10"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
-        />
-        <circle
-          cx="12"
-          cy="14"
-          r="2.25"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="2"
-        />
-        <path
-          d="M12 11.5v.75M12 16.25V17M9.5 14H8.75M15.25 14H14.5"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="1.75"
-          strokeLinecap="round"
         />
       </svg>
     ),
@@ -305,7 +308,7 @@ function colorActivo(label: string): string {
   if (label === 'Almacenes') return '#FF2D55';
   if (label === 'Productos') return '#FF9500';
   if (label === 'Proyectos') return '#F59E0B';
-  if (label === 'NetVision' || label === 'Cámaras') return '#06B6D4';
+  if (label === 'CCTV' || label === 'NetVision' || label === 'Cámaras') return '#06B6D4';
   if (label === 'Entidades') return '#A78BFA';
   if (label === 'Equipo') return '#38BDF8';
   if (label === 'Legal') return '#FBBF24';
