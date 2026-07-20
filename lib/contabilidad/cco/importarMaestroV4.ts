@@ -199,8 +199,9 @@ export async function importarMaestroV4(
       .limit(1)
       .maybeSingle();
 
-    let data: { id: string; proveedor: string; descripcion: string } | null = null;
-    let error: { message: string } | null = null;
+    type ContratoRow = { id: string; proveedor: string; descripcion: string };
+    let data: ContratoRow | null = null;
+    let errorMsg: string | null = null;
     if (prevBiz?.id) {
       const up = await supabase
         .from('cco_contratos_obra')
@@ -208,19 +209,19 @@ export async function importarMaestroV4(
         .eq('id', prevBiz.id)
         .select('id,proveedor,descripcion')
         .maybeSingle();
-      data = up.data as typeof data;
-      error = up.error;
+      data = (up.data as ContratoRow | null) ?? null;
+      errorMsg = up.error?.message ?? null;
     } else {
       const up = await supabase
         .from('cco_contratos_obra')
         .upsert(row, { onConflict: 'proyecto_id,origen_v4_id' })
-        .select('id,proveedor,descripcion,origen_v4_id')
+        .select('id,proveedor,descripcion')
         .maybeSingle();
-      data = up.data as typeof data;
-      error = up.error;
+      data = (up.data as ContratoRow | null) ?? null;
+      errorMsg = up.error?.message ?? null;
     }
-    if (error) {
-      errores.push(`contrato ${t.origen_v4_id}: ${error.message}`);
+    if (errorMsg) {
+      errores.push(`contrato ${t.origen_v4_id}: ${errorMsg}`);
       continue;
     }
     if (data?.id) {
