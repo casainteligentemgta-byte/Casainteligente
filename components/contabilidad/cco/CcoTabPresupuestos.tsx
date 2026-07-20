@@ -263,7 +263,7 @@ export default function CcoTabPresupuestos({ proyectoId }: { proyectoId: string 
                   tick={{ fill: '#334155', fontSize: 11 }}
                 />
                 <Tooltip
-                  formatter={(value: number, name: string) => [fmtUsd(value), name]}
+                  formatter={(value, name) => [fmtUsd(Number(value) || 0), String(name)]}
                   labelFormatter={(_, payload) => {
                     const p = payload?.[0]?.payload as { full?: string } | undefined;
                     return p?.full ?? '';

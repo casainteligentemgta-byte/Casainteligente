@@ -299,7 +299,7 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
                   <XAxis type="number" tickFormatter={fmtUsdTick} tick={{ fill: '#64748B', fontSize: 11 }} />
                   <YAxis type="category" dataKey="name" width={130} tick={{ fill: '#334155', fontSize: 11 }} />
                   <Tooltip
-                    formatter={(value: number, name: string) => [fmtUsd(value), name]}
+                    formatter={(value, name) => [fmtUsd(Number(value) || 0), String(name)]}
                     labelFormatter={(_, payload) => {
                       const p = payload?.[0]?.payload as { full?: string } | undefined;
                       return p?.full ?? '';
