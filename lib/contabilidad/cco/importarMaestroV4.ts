@@ -5,6 +5,7 @@ import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
 import { normalizarTipoGastoCco } from '@/lib/contabilidad/cco/normalizarTipoGasto';
 import { resolverContratoVinculado } from '@/lib/contabilidad/cco/vincularContrato';
+import { devaluacionPctDesdeOficialYReal } from '@/lib/contabilidad/cco/tasas';
 
 export type CcoV4EstructuraRow = {
   origen_v4_id: number;
@@ -91,11 +92,36 @@ export async function importarMaestroV4(
     errores,
   };
 
+  const txs = payload.transacciones ?? [];
+  const contratosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'CONTRATO');
+  const gastosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'GASTO');
+  const ingresosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'INGRESO');
+  const presupTx = txs.filter((t) => String(t.clase).toUpperCase() === 'PRESUPUESTO');
+  const auditTx = txs.filter((t) => String(t.clase).toUpperCase() === 'AUDITORIA');
+
+  // Contabilidad Real V4: devaluación = oficial_BCV / real_Binance − 1
+  let devaluacionPct = num(payload.devaluacion_pct);
+  if (!(devaluacionPct > 0)) {
+    let oficialIng = 0;
+    let realIng = 0;
+    for (const t of ingresosTx) {
+      const base = num(t.monto_base_usd);
+      if (base <= 0) continue;
+      oficialIng += base;
+      const moneda = String(t.moneda ?? 'USD').toUpperCase();
+      const ves = num(t.monto_orig);
+      const bin = num(t.tasa_binance);
+      if (moneda === 'VES' && ves > 0 && bin > 0) realIng += ves / bin;
+      else realIng += base;
+    }
+    devaluacionPct = devaluacionPctDesdeOficialYReal(oficialIng, realIng);
+  }
+
   await supabase.from('cco_proyecto_config').upsert(
     {
       proyecto_id: proyectoId,
       honorarios_admin_pct: pctGlobal,
-      devaluacion_pct: num(payload.devaluacion_pct),
+      devaluacion_pct: devaluacionPct,
       obra_alias: payload.obra_alias ?? null,
       updated_at: new Date().toISOString(),
     },
@@ -135,13 +161,6 @@ export async function importarMaestroV4(
       result.estructura += 1;
     }
   }
-
-  const txs = payload.transacciones ?? [];
-  const contratosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'CONTRATO');
-  const gastosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'GASTO');
-  const ingresosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'INGRESO');
-  const presupTx = txs.filter((t) => String(t.clase).toUpperCase() === 'PRESUPUESTO');
-  const auditTx = txs.filter((t) => String(t.clase).toUpperCase() === 'AUDITORIA');
 
   const contratoUuidByV4 = new Map<number, string>();
   const contratoCandidatos: { id: string; proveedor: string; descripcion: string }[] = [];

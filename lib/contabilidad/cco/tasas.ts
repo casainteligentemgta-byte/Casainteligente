@@ -14,10 +14,25 @@ export function usdDesdeVes(montoVes: number, tasa: number): number {
   return Math.round((ves / t) * 10000) / 10000;
 }
 
+/**
+ * Contabilidad Real V4: convierte USD a tasa oficial (BCV) hacia poder de compra
+ * a tasa paralela (Binance). Con devaluación d% → real = oficial / (1 + d/100).
+ * Ejemplo: 34,45% → factor ≈ 0,7438 (ingresos BCV 625 265 → reales 465 057).
+ */
 export function aplicarFactorDevaluacion(montoUsd: number, devaluacionPct: number): number {
   const m = Number(montoUsd) || 0;
   const d = Number(devaluacionPct) || 0;
-  return m * (1 + d / 100);
+  if (!Number.isFinite(m)) return 0;
+  if (!Number.isFinite(d) || d <= 0) return m;
+  return m / (1 + d / 100);
+}
+
+/** % devaluación implícito dado oficial (BCV) vs real (Binance). */
+export function devaluacionPctDesdeOficialYReal(oficialUsd: number, realUsd: number): number {
+  const o = Number(oficialUsd);
+  const r = Number(realUsd);
+  if (!Number.isFinite(o) || !Number.isFinite(r) || o <= 0 || r <= 0) return 0;
+  return Math.round((o / r - 1) * 10000) / 100;
 }
 
 export function elegirTasaUsada(opts: {

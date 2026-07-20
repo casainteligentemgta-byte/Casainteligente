@@ -16,15 +16,33 @@ export type CcoPresupuestoFila = {
   pct_ejecutado: number;
 };
 
+/** Fila agregada por capítulo (vista V4 / Streamlit). */
+export type CcoPresupuestoCapituloAgg = {
+  capitulo: string;
+  estimado_usd: number;
+  ejecutado_usd: number;
+  /** Margen positivo (estimado − ejecutado) o 0 si hay exceso. */
+  restante_usd: number;
+  /** Desviación cuando ejecutado > estimado. */
+  exceso_usd: number;
+  pct_ejecutado: number;
+};
+
 export type CcoPresupuestosResumen = {
   filas: CcoPresupuestoFila[];
+  porCapitulo: CcoPresupuestoCapituloAgg[];
   totalEstimado: number;
   totalEjecutado: number;
   totalSaldo: number;
+  avancePct: number;
+  areaM2: number | null;
+  costoRealM2: number | null;
+  costoProyectadoM2: number | null;
 };
 
 /**
  * Presupuestos por capítulo + ejecutado desde compras con mismo capitulo_cco.
+ * Incluye agregados y KPIs m² (área en cco_proyecto_config) como en CCO V4.
  */
 export async function cargarPresupuestosCco(
   supabase: SupabaseClient,
@@ -38,9 +56,18 @@ export async function cargarPresupuestosCco(
     .order('subcapitulo');
   if (error) throw error;
 
+  const { data: cfg } = await supabase
+    .from('cco_proyecto_config')
+    .select('area_m2')
+    .eq('proyecto_id', proyectoId)
+    .maybeSingle();
+
+  const areaM2Raw = cfg && (cfg as { area_m2?: number | null }).area_m2;
+  const areaM2 = areaM2Raw != null && Number(areaM2Raw) > 0 ? num(areaM2Raw) : null;
+
   const { data: compras, error: cErr } = await supabase
     .from('contabilidad_compras')
-    .select('capitulo_cco,monto_usd')
+    .select('capitulo_cco,monto_usd,honorarios_usd')
     .eq('proyecto_id', proyectoId)
     .not('capitulo_cco', 'is', null)
     .limit(8000);
@@ -52,10 +79,9 @@ export async function cargarPresupuestosCco(
       .trim()
       .toUpperCase();
     if (!cap) continue;
-    ejecutadoPorCap.set(
-      cap,
-      (ejecutadoPorCap.get(cap) ?? 0) + num((row as { monto_usd?: number }).monto_usd),
-    );
+    const base = num((row as { monto_usd?: number }).monto_usd);
+    const hon = num((row as { honorarios_usd?: number | null }).honorarios_usd);
+    ejecutadoPorCap.set(cap, (ejecutadoPorCap.get(cap) ?? 0) + base + hon);
   }
 
   const filas: CcoPresupuestoFila[] = (presup ?? []).map((row) => {
@@ -77,7 +103,6 @@ export async function cargarPresupuestosCco(
     };
   });
 
-  // Capítulos con gasto pero sin fila presupuesto
   const capsPresup = new Set(filas.map((f) => f.capitulo.toUpperCase()));
   for (const [cap, usd] of Array.from(ejecutadoPorCap.entries())) {
     if (capsPresup.has(cap)) continue;
@@ -95,13 +120,54 @@ export async function cargarPresupuestosCco(
 
   filas.sort((a, b) => a.capitulo.localeCompare(b.capitulo, 'es'));
 
-  const totalEstimado = filas.reduce((a, f) => a + f.estimado_usd, 0);
-  const totalEjecutado = filas.reduce((a, f) => a + f.ejecutado_usd, 0);
+  // Agregar por capítulo (varias filas sub → una barra en el gráfico V4).
+  // Ejecutado viene por capítulo completo; no duplicar si hay varios subcapítulos.
+  const aggMap = new Map<string, { estimado: number; ejecutado: number; label: string }>();
+  for (const f of filas) {
+    const k = f.capitulo.toUpperCase();
+    const cur = aggMap.get(k);
+    if (!cur) {
+      aggMap.set(k, {
+        estimado: f.estimado_usd,
+        ejecutado: f.ejecutado_usd,
+        label: f.capitulo,
+      });
+    } else {
+      cur.estimado += f.estimado_usd;
+    }
+  }
+
+  const porCapitulo: CcoPresupuestoCapituloAgg[] = Array.from(aggMap.values())
+    .map((v) => {
+      const restante = Math.max(0, v.estimado - v.ejecutado);
+      const exceso = Math.max(0, v.ejecutado - v.estimado);
+      return {
+        capitulo: v.label,
+        estimado_usd: v.estimado,
+        ejecutado_usd: v.ejecutado,
+        restante_usd: restante,
+        exceso_usd: exceso,
+        pct_ejecutado:
+          v.estimado > 0 ? Math.min(999, Math.round((v.ejecutado / v.estimado) * 1000) / 10) : 0,
+      };
+    })
+    .sort((a, b) => b.estimado_usd - a.estimado_usd);
+
+  const totalEstimado = porCapitulo.reduce((a, f) => a + f.estimado_usd, 0);
+  const totalEjecutado = porCapitulo.reduce((a, f) => a + f.ejecutado_usd, 0);
+  const totalSaldo = totalEstimado - totalEjecutado;
+  const avancePct =
+    totalEstimado > 0 ? Math.round((totalEjecutado / totalEstimado) * 10000) / 100 : 0;
 
   return {
     filas,
+    porCapitulo,
     totalEstimado,
     totalEjecutado,
-    totalSaldo: totalEstimado - totalEjecutado,
+    totalSaldo,
+    avancePct,
+    areaM2,
+    costoRealM2: areaM2 ? Math.round((totalEjecutado / areaM2) * 100) / 100 : null,
+    costoProyectadoM2: areaM2 ? Math.round((totalEstimado / areaM2) * 100) / 100 : null,
   };
 }

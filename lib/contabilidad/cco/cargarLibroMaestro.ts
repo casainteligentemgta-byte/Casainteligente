@@ -3,6 +3,12 @@ import { IMPUTACION_ENTIDAD } from '@/lib/contabilidad/imputacionCompra';
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
+import {
+  CCO_ORIGEN_HISTORICO,
+  CCO_ORIGEN_V4,
+  esIngresoLibroCcoV4,
+  fetchAllRows,
+} from '@/lib/contabilidad/cco/fetchAllRows';
 
 function num(v: unknown): number {
   const n = Number(v);
@@ -14,7 +20,7 @@ export async function cargarLibroMaestro(
   params: { proyectoId: string; clase?: string | null; limit?: number },
 ): Promise<{ filas: CcoLibroFila[]; total: number }> {
   const proyectoId = params.proyectoId;
-  const limit = params.limit ?? 2000;
+  const limit = params.limit ?? 50_000;
   const claseFiltro = params.clase?.trim().toUpperCase() || null;
   const filas: CcoLibroFila[] = [];
 
@@ -25,21 +31,31 @@ export async function cargarLibroMaestro(
     .maybeSingle();
   const pctGlobal = num(cfg?.honorarios_admin_pct) || 15;
 
+  let tieneLibroV4 = false;
+
   if (!claseFiltro || claseFiltro === 'GASTO') {
-    const { data: compras, error } = await supabase
-      .from('contabilidad_compras')
-      .select(
-        'id,fecha,supplier_name,notas,monto_usd,tipo_gasto_cco,capitulo_cco,subcapitulo_cco,honorarios_usd,admin_pct_override,cco_estado,contrato_obra_id,moneda_original,invoice_number',
-      )
-      .eq('proyecto_id', proyectoId)
-      .neq('imputacion', IMPUTACION_ENTIDAD)
-      .order('fecha', { ascending: false })
-      .limit(limit);
-    if (error && !/tipo_gasto_cco|capitulo_cco|schema cache/i.test(error.message ?? '')) {
+    const { data: compras, error } = await fetchAllRows<Record<string, unknown>>(
+      () =>
+        supabase
+          .from('contabilidad_compras')
+          .select(
+            'id,fecha,supplier_name,notas,monto_usd,tipo_gasto_cco,capitulo_cco,subcapitulo_cco,honorarios_usd,admin_pct_override,cco_estado,contrato_obra_id,moneda_original,invoice_number,origen,origen_v4_id',
+          )
+          .eq('proyecto_id', proyectoId)
+          .neq('imputacion', IMPUTACION_ENTIDAD)
+          .neq('origen', CCO_ORIGEN_HISTORICO)
+          .order('fecha', { ascending: false })
+          .order('id', { ascending: false }),
+      { maxRows: limit },
+    );
+    if (error && !/tipo_gasto_cco|capitulo_cco|origen|schema cache/i.test(error.message ?? '')) {
       throw error;
     }
     for (const row of compras ?? []) {
       const r = row as Record<string, unknown>;
+      const origen = String(r.origen ?? '');
+      if (origen === CCO_ORIGEN_HISTORICO) continue;
+      if (origen === CCO_ORIGEN_V4 || r.origen_v4_id != null) tieneLibroV4 = true;
       const base = num(r.monto_usd);
       const tipo =
         String(r.tipo_gasto_cco ?? '').trim() ||
@@ -67,18 +83,41 @@ export async function cargarLibroMaestro(
         fuente: 'compra',
       });
     }
+  } else {
+    const { count } = await supabase
+      .from('contabilidad_compras')
+      .select('id', { count: 'exact', head: true })
+      .eq('proyecto_id', proyectoId)
+      .eq('origen', CCO_ORIGEN_V4);
+    tieneLibroV4 = (count ?? 0) > 0;
   }
 
   if (!claseFiltro || claseFiltro === 'INGRESO') {
-    const { data: iny, error } = await supabase
-      .from('ci_inyecciones_capital')
-      .select('id,fecha_ingreso,creado_al,monto_usd,metodo_pago,origen_fondo,moneda_recibida')
-      .eq('proyecto_id', proyectoId)
-      .order('fecha_ingreso', { ascending: false })
-      .limit(limit);
+    const { data: iny, error } = await fetchAllRows<Record<string, unknown>>(
+      () =>
+        supabase
+          .from('ci_inyecciones_capital')
+          .select(
+            'id,fecha_ingreso,creado_al,monto_usd,metodo_pago,origen_fondo,moneda_recibida,creado_por,banco_origen',
+          )
+          .eq('proyecto_id', proyectoId)
+          .order('fecha_ingreso', { ascending: false })
+          .order('id', { ascending: false }),
+      { maxRows: limit },
+    );
     if (error && error.code !== '42P01') throw error;
     for (const row of iny ?? []) {
       const r = row as Record<string, unknown>;
+      if (
+        tieneLibroV4 &&
+        !esIngresoLibroCcoV4({
+          creado_por: r.creado_por as string | null,
+          origen_fondo: r.origen_fondo as string | null,
+          banco_origen: r.banco_origen as string | null,
+        })
+      ) {
+        continue;
+      }
       const base = num(r.monto_usd);
       filas.push({
         id: String(r.id),
@@ -102,12 +141,16 @@ export async function cargarLibroMaestro(
   }
 
   if (!claseFiltro || claseFiltro === 'CONTRATO') {
-    const { data: contratos, error } = await supabase
-      .from('cco_contratos_obra')
-      .select('*')
-      .eq('proyecto_id', proyectoId)
-      .order('fecha', { ascending: false })
-      .limit(limit);
+    const { data: contratos, error } = await fetchAllRows<Record<string, unknown>>(
+      () =>
+        supabase
+          .from('cco_contratos_obra')
+          .select('*')
+          .eq('proyecto_id', proyectoId)
+          .order('fecha', { ascending: false })
+          .order('id', { ascending: false }),
+      { maxRows: limit },
+    );
     if (error && !/cco_contratos_obra|schema cache/i.test(error.message ?? '')) throw error;
     for (const row of contratos ?? []) {
       const r = row as Record<string, unknown>;
@@ -132,12 +175,15 @@ export async function cargarLibroMaestro(
   }
 
   if (!claseFiltro || claseFiltro === 'PRESUPUESTO') {
-    const { data: presup, error } = await supabase
-      .from('cco_presupuestos_capitulo')
-      .select('*')
-      .eq('proyecto_id', proyectoId)
-      .order('capitulo')
-      .limit(limit);
+    const { data: presup, error } = await fetchAllRows<Record<string, unknown>>(
+      () =>
+        supabase
+          .from('cco_presupuestos_capitulo')
+          .select('*')
+          .eq('proyecto_id', proyectoId)
+          .order('capitulo'),
+      { maxRows: limit },
+    );
     if (error && !/cco_presupuestos|schema cache/i.test(error.message ?? '')) throw error;
     for (const row of presup ?? []) {
       const r = row as Record<string, unknown>;

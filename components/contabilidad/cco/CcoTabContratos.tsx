@@ -1,7 +1,17 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import type { CcoProveedorContratos, CcoPagoVinculado } from '@/lib/contabilidad/cco/types';
 
 function fmtUsd(n: number): string {
@@ -11,6 +21,11 @@ function fmtUsd(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function fmtUsdTick(n: number): string {
+  if (Math.abs(n) >= 1000) return `${Math.round(n / 1000)}k`;
+  return String(Math.round(n));
 }
 
 type Props = {
@@ -25,6 +40,7 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
   const [porProveedor, setPorProveedor] = useState<CcoProveedorContratos[]>([]);
   const [huerfanos, setHuerfanos] = useState<CcoPagoVinculado[]>([]);
   const [resumen, setResumen] = useState({ contratos: 0, contratado: 0, pagado: 0, saldo: 0 });
+  const [totalesFin, setTotalesFin] = useState({ montoOrig: 0, honorarios: 0, costoTotal: 0 });
   const [openProv, setOpenProv] = useState<string | null>(null);
   const [form, setForm] = useState({
     proveedor: '',
@@ -54,9 +70,16 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
         setHint(json.hint ?? null);
         throw new Error(json.error ?? 'Error al cargar contratos');
       }
-      setPorProveedor(json.porProveedor ?? []);
+      const lista: CcoProveedorContratos[] = json.porProveedor ?? [];
+      setPorProveedor(lista);
       setHuerfanos(json.huerfanos ?? []);
       setResumen(json.resumen ?? { contratos: 0, contratado: 0, pagado: 0, saldo: 0 });
+      const flat = lista.flatMap((p) => p.contratos);
+      setTotalesFin({
+        montoOrig: flat.reduce((a, c) => a + c.monto_base_usd, 0),
+        honorarios: flat.reduce((a, c) => a + c.honorarios_usd, 0),
+        costoTotal: flat.reduce((a, c) => a + c.costo_total_usd, 0),
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
       setPorProveedor([]);
@@ -65,6 +88,20 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
       setLoading(false);
     }
   }, [proyectoId, onNeedProyecto]);
+
+  const chartSub = useMemo(
+    () =>
+      [...porProveedor]
+        .sort((a, b) => b.total_contratado - a.total_contratado)
+        .slice(0, 12)
+        .map((p) => ({
+          name: p.proveedor.length > 22 ? `${p.proveedor.slice(0, 20)}…` : p.proveedor,
+          full: p.proveedor,
+          ejecutado: Math.round(p.total_pagado * 100) / 100,
+          pendiente: Math.round(p.total_saldo * 100) / 100,
+        })),
+    [porProveedor],
+  );
 
   useEffect(() => {
     void cargar();
@@ -169,10 +206,12 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
         {[
-          { t: 'Contratos', v: String(resumen.contratos) },
-          { t: 'Contratado', v: fmtUsd(resumen.contratado) },
-          { t: 'Pagado', v: fmtUsd(resumen.pagado) },
-          { t: 'Saldo', v: fmtUsd(resumen.saldo) },
+          { t: 'Registros', v: String(resumen.contratos) },
+          { t: 'Contratos monto orig.', v: fmtUsd(totalesFin.montoOrig) },
+          { t: 'Contratos honorarios', v: fmtUsd(totalesFin.honorarios) },
+          { t: 'Contratos costo total', v: fmtUsd(totalesFin.costoTotal) },
+          { t: 'Pagado / ejecutado', v: fmtUsd(resumen.pagado) },
+          { t: 'Saldo pendiente', v: fmtUsd(resumen.saldo) },
         ].map((k) => (
           <div key={k.t} style={{ ...box, padding: '12px 14px' }}>
             <p style={{ ...muted, margin: 0, fontSize: 11, fontWeight: 800 }}>{k.t}</p>
@@ -180,6 +219,101 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
           </div>
         ))}
       </div>
+
+      {!loading && porProveedor.length > 0 ? (
+        <>
+          <div style={box}>
+            <h3 style={h3}>Resumen consolidado de subcontratistas</h3>
+            <p style={muted}>Monto contratado vs ejecutado/pagado y % de avance (vista V4).</p>
+            <div style={{ overflow: 'auto', maxHeight: 360 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
+                    {[
+                      'SUBCONTRATISTA',
+                      'MONTO CONTRATADO',
+                      'EJECUTADO / PAGADO',
+                      'SALDO PENDIENTE',
+                      '% EJECUCIÓN',
+                    ].map((h) => (
+                      <th key={h} style={{ padding: '8px 6px', position: 'sticky', top: 0, background: '#F1F5F9' }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {porProveedor.map((p) => {
+                    const pct =
+                      p.total_contratado > 0
+                        ? Math.min(100, Math.round((p.total_pagado / p.total_contratado) * 1000) / 10)
+                        : 0;
+                    return (
+                      <tr key={p.proveedor} style={{ borderTop: '1px solid #E2E8F0' }}>
+                        <td style={td}>
+                          <strong>{p.proveedor}</strong>
+                        </td>
+                        <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(p.total_contratado)}</td>
+                        <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(p.total_pagado)}</td>
+                        <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(p.total_saldo)}</td>
+                        <td style={td}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div
+                              style={{
+                                flex: 1,
+                                height: 8,
+                                background: '#FEE2E2',
+                                borderRadius: 99,
+                                overflow: 'hidden',
+                                minWidth: 70,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${pct}%`,
+                                  height: '100%',
+                                  background: '#DC2626',
+                                }}
+                              />
+                            </div>
+                            <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{pct.toFixed(2)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={box}>
+            <h3 style={{ ...h3, marginBottom: 4 }}>Gráfico comparativo de subcontratistas</h3>
+            <p style={{ ...muted, marginTop: 0 }}>
+              Verde = ejecutado (pagado) · Rojo = pendiente · Top 12 por monto contratado
+            </p>
+            <div style={{ width: '100%', height: Math.max(260, chartSub.length * 40) }}>
+              <ResponsiveContainer>
+                <BarChart data={chartSub} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                  <XAxis type="number" tickFormatter={fmtUsdTick} tick={{ fill: '#64748B', fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" width={130} tick={{ fill: '#334155', fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [fmtUsd(value), name]}
+                    labelFormatter={(_, payload) => {
+                      const p = payload?.[0]?.payload as { full?: string } | undefined;
+                      return p?.full ?? '';
+                    }}
+                  />
+                  <Legend />
+                  <Bar dataKey="ejecutado" name="Ejecutado (pagado)" stackId="a" fill="#16A34A" />
+                  <Bar dataKey="pendiente" name="Pendiente" stackId="a" fill="#DC2626" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       <form onSubmit={crearContrato} style={{ ...box, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
         <div style={{ gridColumn: '1 / -1' }}>
@@ -454,3 +588,5 @@ const btnPrimary: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: 13,
 };
+
+const td: React.CSSProperties = { padding: '8px 6px', verticalAlign: 'middle', color: '#334155' };

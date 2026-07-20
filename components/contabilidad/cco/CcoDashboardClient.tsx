@@ -246,10 +246,65 @@ const SECUNDARIOS = [
   { title: 'Canal Telegram', href: '/contabilidad/compras/canal' },
 ];
 
+const CCO_OBRA_LS_KEY = 'ci-cco-obra-v1';
+
+/** Secciones del menú lateral que exigen obra concreta (no «todas»). */
+const NAV_REQUIERE_OBRA: NavId[] = [
+  'libro',
+  'presupuestos',
+  'auditoria',
+  'ajustes',
+  'importar-v4',
+];
+
+/** Pestañas del dashboard que también exigen obra concreta. */
+const TAB_REQUIERE_OBRA: TabId[] = [
+  'egresos',
+  'ingresos',
+  'rubros',
+  'contratos',
+  'deudas',
+  'editor',
+  'distribucion',
+  'auditoria',
+  'importar',
+];
+
+function leerObraGuardada(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return localStorage.getItem(CCO_OBRA_LS_KEY)?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
+function guardarObra(id: string) {
+  try {
+    if (id) localStorage.setItem(CCO_OBRA_LS_KEY, id);
+    else localStorage.removeItem(CCO_OBRA_LS_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function preferirObra(
+  proyectos: { id: string; nombre: string }[],
+  guardada: string,
+): string {
+  if (guardada && proyectos.some((p) => p.id === guardada)) return guardada;
+  const flamboyant = proyectos.find((p) =>
+    /flamboyant|flamboyan/i.test(p.nombre),
+  );
+  if (flamboyant) return flamboyant.id;
+  return proyectos[0]?.id ?? '';
+}
+
 export default function CcoDashboardClient() {
   const [nav, setNav] = useState<NavId>('dashboard');
   const [tab, setTab] = useState<TabId>('graficos');
   const [proyectoId, setProyectoId] = useState('');
+  const [obraHydrated, setObraHydrated] = useState(false);
   const [devaluacion, setDevaluacion] = useState(0);
   const [devalManual, setDevalManual] = useState(false);
   const devaluacionRef = React.useRef(devaluacion);
@@ -265,7 +320,48 @@ export default function CcoDashboardClient() {
     [data?.proyectos],
   );
 
+  const proyectoNombre = useMemo(() => {
+    if (!proyectoId) return 'Todas las obras';
+    return (
+      proyectosCatalogo.find((p) => p.id === proyectoId)?.nombre ||
+      data?.proyectoNombre ||
+      'Obra'
+    );
+  }, [proyectoId, proyectosCatalogo, data?.proyectoNombre]);
+
+  const elegirObra = useCallback((id: string) => {
+    setProyectoId(id);
+    guardarObra(id);
+  }, []);
+
+  useEffect(() => {
+    const saved = leerObraGuardada();
+    if (saved) setProyectoId(saved);
+    setObraHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!obraHydrated || proyectosCatalogo.length === 0) return;
+    if (proyectoId && proyectosCatalogo.some((p) => p.id === proyectoId)) {
+      guardarObra(proyectoId);
+      return;
+    }
+    // ID inválido o sección que exige obra concreta sin selección.
+    if (
+      (proyectoId && !proyectosCatalogo.some((p) => p.id === proyectoId)) ||
+      (NAV_REQUIERE_OBRA.includes(nav) && !proyectoId) ||
+      (nav === 'dashboard' && TAB_REQUIERE_OBRA.includes(tab) && !proyectoId)
+    ) {
+      const next = preferirObra(proyectosCatalogo, leerObraGuardada());
+      if (next) {
+        setProyectoId(next);
+        guardarObra(next);
+      }
+    }
+  }, [obraHydrated, proyectosCatalogo, proyectoId, nav, tab]);
+
   const cargar = useCallback(async () => {
+    if (!obraHydrated) return;
     setLoading(true);
     setError(null);
     try {
@@ -287,7 +383,7 @@ export default function CcoDashboardClient() {
     } finally {
       setLoading(false);
     }
-  }, [proyectoId, devalManual]);
+  }, [proyectoId, devalManual, obraHydrated]);
 
   useEffect(() => {
     setDevalManual(false);
@@ -313,6 +409,46 @@ export default function CcoDashboardClient() {
       ? `Flujo de Caja Acumulado (${periodicidad})`
       : `Flujo de Caja por Período (${periodicidad})`;
 
+  const obraBar = (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 16,
+        alignItems: 'flex-end',
+        background: '#fff',
+        border: '1px solid #E2E8F0',
+        borderRadius: 12,
+        padding: '12px 14px',
+      }}
+    >
+      <label style={{ flex: '1 1 260px' }}>
+        <span style={labelStyle}>Obra activa (CCO)</span>
+        <select
+          value={proyectoId}
+          onChange={(e) => elegirObra(e.target.value)}
+          style={selectStyle}
+        >
+          <option value="">Todas las obras</option>
+          {proyectosCatalogo.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nombre}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div style={{ flex: '1 1 180px', paddingBottom: 4 }}>
+        <p style={{ margin: 0, fontSize: 12, color: '#64748B' }}>
+          Contexto actual:{' '}
+          <strong style={{ color: '#0F172A' }}>{proyectoNombre}</strong>
+        </p>
+        <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94A3B8' }}>
+          Libro, rubros, egresos e importaciones usan esta obra.
+        </p>
+      </div>
+    </div>
+  );
   return (
     <div
       suppressHydrationWarning
@@ -441,12 +577,14 @@ export default function CcoDashboardClient() {
         </aside>
 
         <div style={{ flex: 1, minWidth: 0, padding: '16px 20px 24px' }}>
+      {obraBar}
+
       {nav === 'importar-csv' ? (
         <CcoImportarCsvPanel
           proyectos={proyectosCatalogo}
           proyectoIdInicial={proyectoId || null}
           onImportado={(pid) => {
-            if (pid) setProyectoId(pid);
+            if (pid) elegirObra(pid);
             void cargar();
             setNav('dashboard');
           }}
@@ -458,35 +596,11 @@ export default function CcoDashboardClient() {
           proyectos={proyectosCatalogo}
           proyectoIdInicial={proyectoId || null}
           onImportado={(pid) => {
-            if (pid) setProyectoId(pid);
+            if (pid) elegirObra(pid);
             void cargar();
             setNav('dashboard');
           }}
         />
-      ) : null}
-
-      {nav === 'importar-v4' ||
-      nav === 'libro' ||
-      nav === 'presupuestos' ||
-      nav === 'auditoria' ||
-      nav === 'ajustes' ? (
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', maxWidth: 360 }}>
-            <span style={labelStyle}>Obra destino</span>
-            <select
-              value={proyectoId}
-              onChange={(e) => setProyectoId(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="">Seleccionar obra…</option>
-              {(data?.proyectos ?? proyectosCatalogo).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
       ) : null}
 
       {nav === 'importar-v4' ? (
@@ -536,7 +650,7 @@ export default function CcoDashboardClient() {
                 letterSpacing: '-0.02em',
               }}
             >
-              Proyecto: {data?.proyectoNombre ?? '…'}
+              Proyecto: {proyectoNombre}
             </p>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -554,21 +668,6 @@ export default function CcoDashboardClient() {
             alignItems: 'flex-end',
           }}
         >
-          <label style={{ flex: '1 1 220px' }}>
-            <span style={labelStyle}>Obra</span>
-            <select
-              value={proyectoId}
-              onChange={(e) => setProyectoId(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="">Todas las obras</option>
-              {(data?.proyectos ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
           <label style={{ flex: '0 1 180px' }}>
             <span style={labelStyle}>Devaluación promedio (%)</span>
             <input
@@ -843,28 +942,47 @@ export default function CcoDashboardClient() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div
                   style={{
-                    background: '#fff',
-                    borderRadius: 14,
-                    border: '1px solid #E2E8F0',
-                    padding: 18,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                    gap: 10,
                   }}
                 >
-                  <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Egresos</h3>
-                  <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
-                    Gastos netos desde cuadro de compras (imputación obra).
-                  </p>
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#334155', lineHeight: 1.7 }}>
-                    <li>Gastos netos: {fmtUsd(data.oficial.gastosNetos)}</li>
-                    <li>
-                      Admin delegada ({data.honorariosPct.toFixed(1)}%): {fmtUsd(data.oficial.adminDelegada)}
-                    </li>
-                    <li>Costo total: {fmtUsd(data.oficial.costoTotal)}</li>
-                  </ul>
+                  {[
+                    {
+                      t: 'Gastos netos',
+                      v: fmtUsd(data.oficial.gastosNetos),
+                      f: `${data.oficial.countGastos} registros`,
+                    },
+                    {
+                      t: `Admin delegada (${data.honorariosPct.toFixed(1)}%)`,
+                      v: fmtUsd(data.oficial.adminDelegada),
+                      f: 'Honorarios CCO',
+                    },
+                    {
+                      t: 'Costo total',
+                      v: fmtUsd(data.oficial.costoTotal),
+                      f: 'Gastos + admin',
+                    },
+                  ].map((k) => (
+                    <div
+                      key={k.t}
+                      style={{
+                        background: '#fff',
+                        borderRadius: 14,
+                        border: '1px solid #E2E8F0',
+                        padding: '14px 16px',
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: '#64748B' }}>{k.t}</p>
+                      <p style={{ margin: '8px 0 4px', fontSize: 22, fontWeight: 800 }}>{k.v}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: '#94A3B8' }}>{k.f}</p>
+                    </div>
+                  ))}
                 </div>
                 <CcoLibroMaestro
                   proyectoId={proyectoId}
                   claseFija="GASTO"
-                  titulo="Detalle de egresos (libro)"
+                  titulo="Control de egresos (detalle)"
                 />
               </div>
             ) : null}
@@ -872,25 +990,47 @@ export default function CcoDashboardClient() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div
                   style={{
-                    background: '#fff',
-                    borderRadius: 14,
-                    border: '1px solid #E2E8F0',
-                    padding: 18,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                    gap: 10,
                   }}
                 >
-                  <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Ingresos</h3>
-                  <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
-                    Inyecciones de capital registradas en CI.
-                  </p>
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#334155', lineHeight: 1.7 }}>
-                    <li>Total ingresos: {fmtUsd(data.oficial.ingresos)}</li>
-                    <li>Registros: {data.oficial.countIngresos}</li>
-                  </ul>
+                  {[
+                    {
+                      t: 'Total ingresos',
+                      v: fmtUsd(data.oficial.ingresos),
+                      f: 'Inyecciones de capital',
+                    },
+                    {
+                      t: 'Registros',
+                      v: String(data.oficial.countIngresos),
+                      f: 'Filas en control de ingresos',
+                    },
+                    {
+                      t: 'Saldo caja (oficial)',
+                      v: fmtUsd(data.oficial.saldoCaja),
+                      f: 'Ingresos − costo total',
+                    },
+                  ].map((k) => (
+                    <div
+                      key={k.t}
+                      style={{
+                        background: '#fff',
+                        borderRadius: 14,
+                        border: '1px solid #E2E8F0',
+                        padding: '14px 16px',
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: '#64748B' }}>{k.t}</p>
+                      <p style={{ margin: '8px 0 4px', fontSize: 22, fontWeight: 800 }}>{k.v}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: '#94A3B8' }}>{k.f}</p>
+                    </div>
+                  ))}
                 </div>
                 <CcoLibroMaestro
                   proyectoId={proyectoId}
                   claseFija="INGRESO"
-                  titulo="Detalle de ingresos (libro)"
+                  titulo="Control de ingresos (detalle)"
                 />
               </div>
             ) : null}
@@ -930,7 +1070,7 @@ export default function CcoDashboardClient() {
                 proyectos={proyectosCatalogo}
                 proyectoIdInicial={proyectoId || null}
                 onImportado={(pid) => {
-                  if (pid) setProyectoId(pid);
+                  if (pid) elegirObra(pid);
                   void cargar();
                 }}
               />

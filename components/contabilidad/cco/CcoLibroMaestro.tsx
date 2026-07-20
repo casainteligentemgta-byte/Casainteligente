@@ -64,7 +64,10 @@ export default function CcoLibroMaestro({
     return (
       <div style={box}>
         <h3 style={h3}>{titulo ?? 'Libro maestro'}</h3>
-        <p style={muted}>Selecciona una obra para ver el libro unificado (df_maestro).</p>
+        <p style={muted}>
+          Selecciona una obra en el selector <strong>Obra activa (CCO)</strong> de arriba para ver
+          el libro unificado.
+        </p>
       </div>
     );
   }
@@ -101,7 +104,7 @@ export default function CcoLibroMaestro({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
-                {['CLASE', 'FECHA', 'PROVEEDOR', 'TIPO', 'CAPÍTULO', 'DESCRIPCIÓN', 'BASE USD', 'HONOR.', 'TOTAL'].map(
+                {['CLASE', 'FECHA', 'PROVEEDOR', 'TIPO', 'CAPÍTULO', 'SUB', 'DESCRIPCIÓN', 'BASE USD', 'HONOR.', 'TOTAL', 'ESTADO'].map(
                   (h) => (
                     <th key={h} style={{ padding: '8px 6px', position: 'sticky', top: 0, background: '#F1F5F9' }}>
                       {h}
@@ -120,6 +123,7 @@ export default function CcoLibroMaestro({
                   <td style={td}>{f.proveedor}</td>
                   <td style={td}>{f.tipo}</td>
                   <td style={td}>{f.capitulo}</td>
+                  <td style={td}>{f.subcapitulo || '—'}</td>
                   <td style={{ ...td, maxWidth: 220 }} title={f.descripcion}>
                     {f.descripcion.slice(0, 80)}
                   </td>
@@ -127,6 +131,25 @@ export default function CcoLibroMaestro({
                   <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(f.honorarios_usd)}</td>
                   <td style={{ ...td, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                     {fmtUsd(f.costo_total_usd)}
+                  </td>
+                  <td style={td}>
+                    {f.estado ? (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: /pagado/i.test(f.estado) ? '#CCFBF1' : '#F1F5F9',
+                          color: /pagado/i.test(f.estado) ? '#0F766E' : '#475569',
+                        }}
+                      >
+                        {f.estado}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                 </tr>
               ))}

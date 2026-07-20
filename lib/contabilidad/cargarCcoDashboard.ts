@@ -7,6 +7,13 @@ import {
   clasificarTipoGasto,
   type CcoTipoGasto,
 } from '@/lib/contabilidad/ccoClasificarGasto';
+import { aplicarFactorDevaluacion } from '@/lib/contabilidad/cco/tasas';
+import {
+  CCO_ORIGEN_HISTORICO,
+  CCO_ORIGEN_V4,
+  esIngresoLibroCcoV4,
+  fetchAllRows,
+} from '@/lib/contabilidad/cco/fetchAllRows';
 
 export type CcoSeriePunto = {
   periodo: string;
@@ -101,14 +108,14 @@ function ym(fecha: string | null | undefined): string | null {
   return s.slice(0, 7);
 }
 
+/** Contabilidad Real V4: real = oficial / (1 + devaluación%). */
 function aplicarDevaluacion(oficial: CcoKpiBloque, devalPct: number): CcoKpiBloque {
-  const f = 1 + devalPct / 100;
   return {
-    ingresos: oficial.ingresos * f,
-    gastosNetos: oficial.gastosNetos * f,
-    adminDelegada: oficial.adminDelegada * f,
-    costoTotal: oficial.costoTotal * f,
-    saldoCaja: oficial.saldoCaja * f,
+    ingresos: aplicarFactorDevaluacion(oficial.ingresos, devalPct),
+    gastosNetos: aplicarFactorDevaluacion(oficial.gastosNetos, devalPct),
+    adminDelegada: aplicarFactorDevaluacion(oficial.adminDelegada, devalPct),
+    costoTotal: aplicarFactorDevaluacion(oficial.costoTotal, devalPct),
+    saldoCaja: aplicarFactorDevaluacion(oficial.saldoCaja, devalPct),
     countIngresos: oficial.countIngresos,
   };
 }
@@ -169,7 +176,7 @@ export async function cargarCcoDashboard(
     : 'Todas las obras';
 
   const selectComprasBase =
-    'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name';
+    'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name,origen,origen_v4_id';
   const selectComprasCco = `${selectComprasBase},tipo_gasto_cco,capitulo_cco`;
 
   const buildComprasQ = (cols: string) => {
@@ -178,30 +185,71 @@ export async function cargarCcoDashboard(
       .select(cols)
       .not('proyecto_id', 'is', null)
       .neq('imputacion', IMPUTACION_ENTIDAD)
+      .neq('origen', CCO_ORIGEN_HISTORICO)
       .order('fecha', { ascending: true })
-      .limit(8000);
+      .order('id', { ascending: true });
     if (proyectoId) q = q.eq('proyecto_id', proyectoId);
     return q;
   };
 
-  let { data: compras, error: cErr } = await buildComprasQ(selectComprasCco);
-  if (cErr && /tipo_gasto_cco|capitulo_cco|42703|PGRST204|schema cache/i.test(cErr.message ?? '')) {
-    ({ data: compras, error: cErr } = await buildComprasQ(selectComprasBase));
+  let { data: comprasRaw, error: cErr } = await fetchAllRows<Record<string, unknown>>(() =>
+    buildComprasQ(selectComprasCco),
+  );
+  if (cErr && /tipo_gasto_cco|capitulo_cco|origen_v4_id|42703|PGRST204|schema cache/i.test(cErr.message ?? '')) {
+    // Fallback sin columnas CCO / origen_v4; aún excluye HISTORICO_TABLA si `origen` existe.
+    const baseCols = selectComprasBase.replace(',origen_v4_id', '');
+    ({ data: comprasRaw, error: cErr } = await fetchAllRows<Record<string, unknown>>(() =>
+      buildComprasQ(baseCols),
+    ));
+    if (cErr && /origen|42703|PGRST204|schema cache/i.test(cErr.message ?? '')) {
+      ({ data: comprasRaw, error: cErr } = await fetchAllRows<Record<string, unknown>>(() => {
+        let q = supabase
+          .from('contabilidad_compras')
+          .select(selectComprasBase.replace(',origen,origen_v4_id', ''))
+          .not('proyecto_id', 'is', null)
+          .neq('imputacion', IMPUTACION_ENTIDAD)
+          .order('fecha', { ascending: true })
+          .order('id', { ascending: true });
+        if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+        return q;
+      }));
+    }
   }
   if (cErr) throw cErr;
 
-  let inyQ = supabase
-    .from('ci_inyecciones_capital')
-    .select('id,fecha_ingreso,creado_al,monto_usd,proyecto_id')
-    .order('fecha_ingreso', { ascending: true })
-    .limit(8000);
+  // Si la obra tiene libro V4, no mezclar el histórico legacy (por si el neq falló en fallback).
+  const tieneLibroV4 =
+    Boolean(proyectoId) &&
+    (comprasRaw ?? []).some((r) => {
+      const origen = String((r as { origen?: string }).origen ?? '');
+      const v4 = (r as { origen_v4_id?: unknown }).origen_v4_id;
+      return origen === CCO_ORIGEN_V4 || v4 != null;
+    });
+  const compras = (comprasRaw ?? []).filter((r) => {
+    const origen = String((r as { origen?: string }).origen ?? '');
+    if (origen === CCO_ORIGEN_HISTORICO) return false;
+    return true;
+  });
 
-  if (proyectoId) inyQ = inyQ.eq('proyecto_id', proyectoId);
-
-  const { data: inyecciones, error: iErr } = await inyQ;
+  const { data: inyeccionesRaw, error: iErr } = await fetchAllRows<Record<string, unknown>>(() => {
+    let q = supabase
+      .from('ci_inyecciones_capital')
+      .select('id,fecha_ingreso,creado_al,monto_usd,proyecto_id,creado_por,origen_fondo,banco_origen')
+      .order('fecha_ingreso', { ascending: true })
+      .order('id', { ascending: true });
+    if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+    return q;
+  });
   if (iErr && iErr.code !== '42P01' && !/ci_inyecciones_capital|schema cache/i.test(iErr.message ?? '')) {
     throw iErr;
   }
+
+  // Con libro V4 de la obra activa, Contabilidad usa solo inyecciones del import.
+  const inyecciones = tieneLibroV4
+    ? (inyeccionesRaw ?? []).filter((r) =>
+        esIngresoLibroCcoV4(r as { creado_por?: string; origen_fondo?: string; banco_origen?: string }),
+      )
+    : (inyeccionesRaw ?? []);
 
   let honorariosPct = 15;
   let devaluacionDesdeConfig: number | null = null;

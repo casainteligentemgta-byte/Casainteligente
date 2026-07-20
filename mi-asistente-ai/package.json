@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "dev:tls": "node --watch --env-file=.env src/index.js",
+    "oauth:drive": "node scripts/google-oauth-refresh.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@supabase/supabase-js": "^2.109.0",
     "dotenv": "^16.4.5",
     "googleapis": "^144.0.0",
     "telegraf": "^4.16.3"

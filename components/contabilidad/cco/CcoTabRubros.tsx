@@ -49,7 +49,7 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
     return (
       <div style={box}>
         <h3 style={h3}>Lista de rubros</h3>
-        <p style={muted}>Selecciona una obra para ver rubros (contratos) por subcontratista.</p>
+        <p style={muted}>Selecciona una obra en <strong>Obra activa (CCO)</strong> arriba.</p>
       </div>
     );
   }

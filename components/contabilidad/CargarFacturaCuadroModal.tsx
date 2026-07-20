@@ -805,7 +805,8 @@ export default function CargarFacturaCuadroModal({
     };
 
     try {
-      // Completar tasas BCV faltantes antes de insertar
+      // Completar tasas BCV faltantes en paralelo (una por fecha única)
+      const fechasSinTasa = new Set<string>();
       const porFecha = new Map<string, number>();
       for (const g of candidatas) {
         const fecha = fechaParaInputDate(g.fecha) || hoyIso();
@@ -813,14 +814,18 @@ export default function CargarFacturaCuadroModal({
           porFecha.set(fecha, parseNum(g.tasaBcv));
           continue;
         }
-        if (porFecha.has(fecha)) continue;
-        try {
-          const r = await resolverTasaBcvVesPorUsd(fecha);
-          if (r.tasa_bcv_ves_por_usd > 0) porFecha.set(fecha, r.tasa_bcv_ves_por_usd);
-        } catch {
-          /* se pide tasa manual abajo */
-        }
+        if (!porFecha.has(fecha)) fechasSinTasa.add(fecha);
       }
+      await Promise.all(
+        Array.from(fechasSinTasa).map(async (fecha) => {
+          try {
+            const r = await resolverTasaBcvVesPorUsd(fecha);
+            if (r.tasa_bcv_ves_por_usd > 0) porFecha.set(fecha, r.tasa_bcv_ves_por_usd);
+          } catch {
+            /* se pide tasa manual abajo */
+          }
+        }),
+      );
 
       /** Nivel 1: dedupe dentro del lote CSV (misma llave natural → una sola). */
       const vistasLlave = new Set<string>();
@@ -856,12 +861,63 @@ export default function CargarFacturaCuadroModal({
 
       totalSave = aGuardar.length;
       setSaveTotal(totalSave);
-      marcarProgreso(0, 'Guardando facturas…');
+      marcarProgreso(0, 'Preparando lotes…');
 
-      for (let i = 0; i < aGuardar.length; i++) {
-        const g = aGuardar[i]!;
-        const etiqueta = g.invoice_number.trim() || `fila ${i + 1}`;
-        marcarProgreso(i, `Guardando ${etiqueta}…`);
+      // Subir fotos en paralelo (solo las referenciadas)
+      const fotoCache = new Map<string, { path: string; fileName: string }>();
+      const fotoIds = Array.from(
+        new Set(aGuardar.map((g) => g.fotoId).filter((id): id is string => Boolean(id))),
+      );
+      const FOTO_CONCURRENCY = 4;
+      for (let i = 0; i < fotoIds.length; i += FOTO_CONCURRENCY) {
+        const slice = fotoIds.slice(i, i + FOTO_CONCURRENCY);
+        await Promise.all(
+          slice.map(async (fotoId) => {
+            const foto = fotos.find((f) => f.id === fotoId);
+            if (!foto) return;
+            try {
+              const uploaded = await uploadProcurementDocument(
+                supabase,
+                `libro-${crypto.randomUUID()}`,
+                foto.file,
+              );
+              fotoCache.set(fotoId, { path: uploaded.path, fileName: uploaded.fileName });
+            } catch (e) {
+              console.error('[guardarGrupos] foto', fotoId, e);
+            }
+          }),
+        );
+      }
+
+      type PayloadCompra = {
+        key: string;
+        proyecto_id: string;
+        imputacion: 'obra';
+        invoice_number: string;
+        supplier_name: string;
+        supplier_rif: string;
+        fecha: string;
+        monto_ves: number;
+        monto_usd: number;
+        tasa_bcv_fecha: number;
+        moneda_original: string;
+        origen: string;
+        upsert_dedup: boolean;
+        notas: string;
+        document_storage_path: string | null;
+        document_file_name: string | null;
+        lineas: Array<{
+          descripcion: string;
+          item_code: string | null;
+          unidad: string;
+          cantidad: number;
+          precio_unitario: number;
+          subtotal: number;
+        }>;
+      };
+
+      const payloads: PayloadCompra[] = [];
+      for (const g of aGuardar) {
         try {
           const bloqueo = motivoBloqueoGuardado(g);
           if (bloqueo) throw new Error(bloqueo);
@@ -873,31 +929,15 @@ export default function CargarFacturaCuadroModal({
             throw new Error('Indique tasa BCV (no se pudo obtener automáticamente)');
           }
 
-          const foto = fotos.find((f) => f.id === g.fotoId);
-          let document_storage_path: string | null = null;
-          let document_file_name: string | null = null;
-          if (foto) {
-            const uploaded = await uploadProcurementDocument(
-              supabase,
-              `libro-${crypto.randomUUID()}`,
-              foto.file,
-            );
-            document_storage_path = uploaded.path;
-            document_file_name = uploaded.fileName;
-          }
-
+          const doc = g.fotoId ? fotoCache.get(g.fotoId) : undefined;
           const total = totalGrupo(g);
           const montos = calcularGastoBimonetario(total, g.moneda, tasa);
-          // Par coherente para el API: monto_ves = round(monto_usd × tasa, 2).
-          // Evita fallos por redondeo VES→USD (p. ej. diferencia 1–3 Bs con tolerancia 0.05).
           const montoUsd = montos.montoUsd;
-          const montoVes =
-            Math.round(montoUsd * montos.tasaApplied * 100) / 100;
+          const montoVes = Math.round(montoUsd * montos.tasaApplied * 100) / 100;
           const lineas = g.lineas.map((l) => {
             const cantidad = parseNum(l.cantidad) || 1;
             const precio = parseNum(l.precio_unitario);
-            const sub =
-              parseNum(l.subtotal) || Math.round(cantidad * precio * 100) / 100;
+            const sub = parseNum(l.subtotal) || Math.round(cantidad * precio * 100) / 100;
             return {
               descripcion: l.descripcion.trim() || 'Ítem',
               item_code: l.item_code.trim() || null,
@@ -908,56 +948,117 @@ export default function CargarFacturaCuadroModal({
             };
           });
 
-          const conFoto = Boolean(document_storage_path);
-          const notas = conFoto
-            ? 'Importación desde tabla histórica con foto de factura (solo contabilidad, sin stock).'
-            : 'Importación desde CSV/tabla histórica (solo contabilidad, sin stock). Fotos opcionales.';
-
-          const res = await fetch('/api/contabilidad/compras', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              proyecto_id: proyectoId,
-              imputacion: 'obra',
-              invoice_number: numeroFacturaGuardado(g),
-              supplier_name: nombreProveedorGuardado(g),
-              // Solo RIF con V/J/E/G/P; nunca un nombre de persona
-              supplier_rif: rifParaGuardarCompra(g.supplier_rif),
-              fecha,
-              monto_ves: montoVes,
-              monto_usd: montoUsd,
-              tasa_bcv_fecha: montos.tasaApplied,
-              moneda_original: g.moneda,
-              origen: 'HISTORICO_TABLA',
-              upsert_dedup: true,
-              notas,
-              document_storage_path,
-              document_file_name,
-              lineas,
-            }),
+          payloads.push({
+            key: g.key,
+            proyecto_id: proyectoId,
+            imputacion: 'obra',
+            invoice_number: numeroFacturaGuardado(g),
+            supplier_name: nombreProveedorGuardado(g),
+            supplier_rif: rifParaGuardarCompra(g.supplier_rif),
+            fecha,
+            monto_ves: montoVes,
+            monto_usd: montoUsd,
+            tasa_bcv_fecha: montos.tasaApplied,
+            moneda_original: g.moneda,
+            origen: 'HISTORICO_TABLA',
+            upsert_dedup: true,
+            notas: doc
+              ? 'Importación desde tabla histórica con foto de factura (solo contabilidad, sin stock).'
+              : 'Importación desde CSV/tabla histórica (solo contabilidad, sin stock). Fotos opcionales.',
+            document_storage_path: doc?.path ?? null,
+            document_file_name: doc?.fileName ?? null,
+            lineas,
           });
-          const ct = res.headers.get('content-type') ?? '';
-          let data: { error?: string; hint?: string; action?: string } = {};
-          if (ct.includes('application/json')) {
-            data = (await res.json()) as typeof data;
-          } else {
-            const t = (await res.text()).trim();
-            throw new Error(t.slice(0, 200) || `Error HTTP ${res.status}`);
-          }
-          if (!res.ok) {
-            throw new Error(data.hint ? `${data.error} (${data.hint})` : data.error || 'Error');
-          }
-          ok += 1;
-          if (data.action === 'updated') updated += 1;
-          keysOk.add(g.key);
         } catch (e) {
           fail += 1;
-          console.error('[guardarGrupos]', g.invoice_number, e);
+          console.error('[guardarGrupos] prep', g.invoice_number, e);
           toast.error(
             `Factura ${g.invoice_number || '?'}: ${e instanceof Error ? e.message : 'falló'}`,
           );
         }
-        marcarProgreso(i + 1, `Listo ${i + 1}/${totalSave}`);
+      }
+
+      const BATCH_SIZE = 60;
+      const PARALLEL_BATCHES = 2;
+      let hecho = 0;
+
+      const runBatch = async (chunk: PayloadCompra[]) => {
+        const res = await fetch('/api/contabilidad/compras/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ compras: chunk }),
+        });
+        const ct = res.headers.get('content-type') ?? '';
+        let data: {
+          error?: string;
+          results?: Array<{
+            key?: string;
+            ok: boolean;
+            action?: string;
+            error?: string;
+            hint?: string;
+          }>;
+        } = {};
+        if (ct.includes('application/json')) {
+          data = (await res.json()) as typeof data;
+        } else {
+          throw new Error((await res.text()).trim().slice(0, 200) || `HTTP ${res.status}`);
+        }
+        if (!res.ok) {
+          throw new Error(data.error || `Error HTTP ${res.status}`);
+        }
+
+        let batchOk = 0;
+        let batchUpdated = 0;
+        let batchFail = 0;
+        const keys: string[] = [];
+        for (const r of data.results ?? []) {
+          if (r.ok) {
+            batchOk += 1;
+            if (r.action === 'updated') batchUpdated += 1;
+            if (r.key) keys.push(r.key);
+          } else {
+            batchFail += 1;
+          }
+        }
+        return { batchOk, batchUpdated, batchFail, keys };
+      };
+
+      const chunks: PayloadCompra[][] = [];
+      for (let i = 0; i < payloads.length; i += BATCH_SIZE) {
+        chunks.push(payloads.slice(i, i + BATCH_SIZE));
+      }
+
+      for (let i = 0; i < chunks.length; i += PARALLEL_BATCHES) {
+        const wave = chunks.slice(i, i + PARALLEL_BATCHES);
+        marcarProgreso(
+          hecho,
+          `Guardando lote ${Math.min(i + 1, chunks.length)}–${Math.min(i + wave.length, chunks.length)}/${chunks.length}…`,
+        );
+        const waveResults = await Promise.all(
+          wave.map(async (chunk) => {
+            try {
+              return await runBatch(chunk);
+            } catch (e) {
+              console.error('[guardarGrupos] batch', e);
+              toast.error(e instanceof Error ? e.message : 'Error en lote');
+              return {
+                batchOk: 0,
+                batchUpdated: 0,
+                batchFail: chunk.length,
+                keys: [] as string[],
+              };
+            }
+          }),
+        );
+        for (const wr of waveResults) {
+          ok += wr.batchOk;
+          updated += wr.batchUpdated;
+          fail += wr.batchFail;
+          for (const k of wr.keys) keysOk.add(k);
+          hecho += wr.batchOk + wr.batchFail;
+        }
+        marcarProgreso(Math.min(hecho, totalSave), `Listo ${Math.min(hecho, totalSave)}/${totalSave}`);
       }
 
       setSavePct(100);

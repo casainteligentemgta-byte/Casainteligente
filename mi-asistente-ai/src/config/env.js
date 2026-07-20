@@ -47,6 +47,11 @@ export const env = {
   // iCloud: carpeta local sincronizada (iCloud Drive montado)
   icloudContainerPath: () => optional('ICLOUD_CONTAINER_PATH'),
 
+  // Casa Inteligente (Supabase) — lectura de obras / compras
+  supabaseUrl: () =>
+    optional('NEXT_PUBLIC_SUPABASE_URL') || optional('SUPABASE_URL'),
+  supabaseServiceKey: () => optional('SUPABASE_SERVICE_ROLE_KEY'),
+
   webhookDomain: () => optional('WEBHOOK_DOMAIN'),
   webhookPath: () => optional('WEBHOOK_PATH', '/telegram'),
   port: () => Number(optional('PORT', '3001')) || 3001,

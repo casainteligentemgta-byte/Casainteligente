@@ -139,6 +139,9 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
               onChange={(e) => setForm((f) => ({ ...f, devaluacion_pct: e.target.value }))}
               style={input}
             />
+            <span style={{ fontWeight: 600, color: '#94A3B8', fontSize: 11 }}>
+              Contabilidad Real = Oficial ÷ (1 + %/100). Ej. 34,45% → factor ≈ 0,74 (BCV→Binance).
+            </span>
           </label>
 
           <label style={label}>
