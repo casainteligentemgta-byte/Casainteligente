@@ -25,6 +25,7 @@ import {
 } from '@/lib/contabilidad/cco/egresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 import EgresoFacturaCell from '@/components/contabilidad/cco/EgresoFacturaCell';
+import EgresoCargaSoportesPanel from '@/components/contabilidad/cco/EgresoCargaSoportesPanel';
 
 function fmtUsd(n: number): string {
   return n.toLocaleString('en-US', {
@@ -340,16 +341,28 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
             return (a.draft?.proveedor ?? a.proveedor).toUpperCase();
           case 'descripcion':
             return (a.draft?.descripcion ?? a.descripcion).toUpperCase();
+          case 'factura':
+            return (a.invoice_number ?? '').toUpperCase();
           case 'moneda':
             return a.draft?.moneda ?? a.moneda;
           case 'tasa':
             return Number(a.draft?.tasa ?? a.tasa) || 0;
+          case 'tasa_binance':
+            return a.tasa_binance || 0;
+          case 'tasa_usada':
+            return a.tasa_usada ?? '';
           case 'monto_orig':
             return Number(a.draft?.monto_orig ?? a.monto_orig) || 0;
+          case 'monto_base':
+            return a.monto_base_usd;
+          case 'monto_pagado':
+            return a.monto_pagado_usd ?? -1;
           case 'pct_dist':
             return a.pct_distribucion;
           case 'admin_pct':
             return Number(a.draft?.admin_pct ?? a.admin_pct) || 0;
+          case 'brecha':
+            return a.porcentaje_brecha_real ?? -1;
           case 'honorarios':
             return a.honorarios_usd;
           case 'costo_total':
@@ -360,6 +373,8 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
             return a.capitulo;
           case 'subcapitulo':
             return a.subcapitulo;
+          case 'contrato':
+            return a.contrato_label ?? '';
           case 'estado':
             return a.estado;
           case 'forma_pago':
@@ -378,16 +393,28 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
             return (b.draft?.proveedor ?? b.proveedor).toUpperCase();
           case 'descripcion':
             return (b.draft?.descripcion ?? b.descripcion).toUpperCase();
+          case 'factura':
+            return (b.invoice_number ?? '').toUpperCase();
           case 'moneda':
             return b.draft?.moneda ?? b.moneda;
           case 'tasa':
             return Number(b.draft?.tasa ?? b.tasa) || 0;
+          case 'tasa_binance':
+            return b.tasa_binance || 0;
+          case 'tasa_usada':
+            return b.tasa_usada ?? '';
           case 'monto_orig':
             return Number(b.draft?.monto_orig ?? b.monto_orig) || 0;
+          case 'monto_base':
+            return b.monto_base_usd;
+          case 'monto_pagado':
+            return b.monto_pagado_usd ?? -1;
           case 'pct_dist':
             return b.pct_distribucion;
           case 'admin_pct':
             return Number(b.draft?.admin_pct ?? b.admin_pct) || 0;
+          case 'brecha':
+            return b.porcentaje_brecha_real ?? -1;
           case 'honorarios':
             return b.honorarios_usd;
           case 'costo_total':
@@ -398,6 +425,8 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
             return b.capitulo;
           case 'subcapitulo':
             return b.subcapitulo;
+          case 'contrato':
+            return b.contrato_label ?? '';
           case 'estado':
             return b.estado;
           case 'forma_pago':
@@ -792,6 +821,13 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                             </td>
                           );
                         }
+                        if (c.key === 'factura') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {noneLabel(f.invoice_number)}
+                            </td>
+                          );
+                        }
                         if (c.key === 'moneda') {
                           return (
                             <td key={c.key} style={cell}>
@@ -825,6 +861,20 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                             </td>
                           );
                         }
+                        if (c.key === 'tasa_binance') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {f.tasa_binance > 0 ? fmtNum(f.tasa_binance, 4) : '—'}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'tasa_usada') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {noneLabel(f.tasa_usada)}
+                            </td>
+                          );
+                        }
                         if (c.key === 'monto_orig') {
                           return (
                             <td key={c.key} style={cell}>
@@ -837,6 +887,23 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                                   style={{ ...inputCell, width: 96, textAlign: 'right' }}
                                 />
                               )}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'monto_base') {
+                          return (
+                            <td
+                              key={c.key}
+                              style={{ ...cell, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
+                            >
+                              {fmtUsd(rec.monto_base_usd)}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'monto_pagado') {
+                          return (
+                            <td key={c.key} style={{ ...cell, fontVariantNumeric: 'tabular-nums' }}>
+                              {f.monto_pagado_usd != null ? fmtUsd(f.monto_pagado_usd) : '—'}
                             </td>
                           );
                         }
@@ -859,6 +926,15 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                                   style={{ ...inputCell, width: 64, textAlign: 'right' }}
                                 />
                               )}
+                            </td>
+                          );
+                        }
+                        if (c.key === 'brecha') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {f.porcentaje_brecha_real != null
+                                ? `${fmtNum(f.porcentaje_brecha_real)}%`
+                                : '—'}
                             </td>
                           );
                         }
@@ -978,6 +1054,13 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                             </td>
                           );
                         }
+                        if (c.key === 'contrato') {
+                          return (
+                            <td key={c.key} style={{ ...cell, maxWidth: 160, whiteSpace: 'normal' }}>
+                              {noneLabel(f.contrato_label)}
+                            </td>
+                          );
+                        }
                         if (c.key === 'link_factura') {
                           const puedeAdjuntar =
                             !readonly && f.fuente === 'compra' && !f._agrupada;
@@ -1063,6 +1146,25 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           </button>
         </div>
       </div>
+
+      <EgresoCargaSoportesPanel
+        filas={filas}
+        onAdjuntado={(compraId, name) => {
+          setFilas((prev) =>
+            prev.map((row) =>
+              row.id === compraId
+                ? {
+                    ...row,
+                    tiene_documento: true,
+                    document_file_name: name,
+                    link_factura: `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`,
+                  }
+                : row,
+            ),
+          );
+          setOkMsg('Factura enlazada al egreso.');
+        }}
+      />
     </div>
   );
 }

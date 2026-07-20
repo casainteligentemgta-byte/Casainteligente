@@ -84,6 +84,13 @@ export type CcoLibroFila = {
   /** True si la compra tiene PDF/imagen en Storage o factura de recepción vinculada. */
   tiene_documento: boolean;
   document_file_name: string | null;
+  /** Monto pagado USD (V4); null si no informado. */
+  monto_pagado_usd: number | null;
+  tasa_binance: number;
+  tasa_usada: string | null;
+  porcentaje_brecha_real: number | null;
+  /** Etiqueta corta del contrato vinculado (si hay). */
+  contrato_label: string | null;
   /** Clave para «Agrupar Gastos Divididos»; null si no es split. */
   split_group_key: string | null;
   contrato_obra_id: string | null;

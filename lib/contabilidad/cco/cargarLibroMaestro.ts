@@ -39,6 +39,160 @@ function resolverMontoOrig(
   return montoUsd;
 }
 
+const GASTO_SELECT_FULL = [
+  'id',
+  'fecha',
+  'supplier_name',
+  'notas',
+  'monto_usd',
+  'monto_ves',
+  'tasa_bcv_ves_por_usd',
+  'tasa_binance',
+  'tasa_usada',
+  'porcentaje_brecha_real',
+  'monto_pagado_usd',
+  'tipo_gasto_cco',
+  'capitulo_cco',
+  'subcapitulo_cco',
+  'honorarios_usd',
+  'admin_pct_override',
+  'cco_estado',
+  'contrato_obra_id',
+  'moneda_original',
+  'invoice_number',
+  'origen_v4_id',
+  'forma_pago_cco',
+  'compra_factura_id',
+  'document_storage_path',
+  'document_file_name',
+  'purchase_invoice_id',
+  'origen',
+].join(',');
+
+const GASTO_SELECT_BASE = [
+  'id',
+  'fecha',
+  'supplier_name',
+  'notas',
+  'monto_usd',
+  'monto_ves',
+  'tasa_bcv_ves_por_usd',
+  'tasa_binance',
+  'tipo_gasto_cco',
+  'capitulo_cco',
+  'subcapitulo_cco',
+  'honorarios_usd',
+  'admin_pct_override',
+  'cco_estado',
+  'contrato_obra_id',
+  'moneda_original',
+  'invoice_number',
+  'origen_v4_id',
+  'forma_pago_cco',
+  'document_storage_path',
+  'document_file_name',
+  'purchase_invoice_id',
+].join(',');
+
+const META_VACIO = {
+  tiene_documento: false,
+  document_file_name: null as string | null,
+  monto_pagado_usd: null as number | null,
+  tasa_binance: 0,
+  tasa_usada: null as string | null,
+  porcentaje_brecha_real: null as number | null,
+  contrato_label: null as string | null,
+};
+
+function descripcionDebil(desc: string, invoice: string | null): boolean {
+  const d = desc.trim();
+  if (!d || d === 'Gasto') return true;
+  if (invoice && d === invoice) return true;
+  if (/^RUBRO:\s*[^|]+$/i.test(d)) return true;
+  return false;
+}
+
+/** Quita prefijo RUBRO: … | de notas del egreso manual antiguo. */
+function limpiarNotasEgreso(notas: string): string {
+  const m = notas.match(/^RUBRO:\s*[^|\n]+\|\s*(.+)$/i);
+  if (m?.[1]?.trim()) return m[1].trim();
+  if (/^RUBRO:/i.test(notas)) return '';
+  return notas.trim();
+}
+
+async function enriquecerDescripcionesDesdeLineas(
+  supabase: SupabaseClient,
+  filas: CcoLibroFila[],
+): Promise<void> {
+  const ids = filas
+    .filter((f) => f.fuente === 'compra' && descripcionDebil(f.descripcion, f.invoice_number))
+    .map((f) => f.id);
+  if (ids.length === 0) return;
+
+  const porCompra = new Map<string, string[]>();
+  const chunk = 200;
+  for (let i = 0; i < ids.length; i += chunk) {
+    const slice = ids.slice(i, i + chunk);
+    const { data, error } = await supabase
+      .from('contabilidad_compra_lineas')
+      .select('compra_id,descripcion')
+      .in('compra_id', slice)
+      .order('created_at', { ascending: true });
+    if (error) {
+      if (!/contabilidad_compra_lineas|schema cache/i.test(error.message ?? '')) {
+        console.warn('[cargarLibroMaestro] lineas:', error.message);
+      }
+      return;
+    }
+    for (const row of data ?? []) {
+      const r = row as { compra_id?: string; descripcion?: string };
+      const cid = String(r.compra_id ?? '');
+      const d = String(r.descripcion ?? '').trim();
+      if (!cid || !d) continue;
+      const list = porCompra.get(cid) ?? [];
+      if (list.length < 3) list.push(d);
+      porCompra.set(cid, list);
+    }
+  }
+
+  for (const f of filas) {
+    if (f.fuente !== 'compra') continue;
+    const parts = porCompra.get(f.id);
+    if (!parts?.length) continue;
+    if (!descripcionDebil(f.descripcion, f.invoice_number)) continue;
+    f.descripcion = parts.join(' · ');
+    f.split_group_key = claveGastoDividido({
+      invoice_number: f.invoice_number,
+      fecha: f.fecha,
+      proveedor: f.proveedor,
+      descripcion: f.descripcion,
+    });
+  }
+}
+
+async function cargarContratoLabels(
+  supabase: SupabaseClient,
+  contratoIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const uniq = Array.from(new Set(contratoIds.filter(Boolean)));
+  if (uniq.length === 0) return out;
+  const { data, error } = await supabase
+    .from('cco_contratos_obra')
+    .select('id,descripcion,proveedor')
+    .in('id', uniq);
+  if (error) return out;
+  for (const row of data ?? []) {
+    const r = row as { id: string; descripcion?: string; proveedor?: string };
+    const label =
+      String(r.descripcion ?? '').trim() ||
+      String(r.proveedor ?? '').trim() ||
+      String(r.id).slice(0, 8);
+    out.set(String(r.id), label.slice(0, 80));
+  }
+  return out;
+}
+
 export async function cargarLibroMaestro(
   supabase: SupabaseClient,
   params: { proyectoId: string; clase?: string | null; limit?: number },
@@ -56,47 +210,57 @@ export async function cargarLibroMaestro(
   const pctGlobal = num(cfg?.honorarios_admin_pct) || 15;
 
   if (!claseFiltro || claseFiltro === 'GASTO') {
-    const { data: compras, error } = await supabase
+    let compras: unknown[] | null = null;
+    let error: { message?: string } | null = null;
+
+    const full = await supabase
       .from('contabilidad_compras')
-      .select(
-        [
-          'id',
-          'fecha',
-          'supplier_name',
-          'notas',
-          'monto_usd',
-          'monto_ves',
-          'tasa_bcv_ves_por_usd',
-          'tasa_binance',
-          'tipo_gasto_cco',
-          'capitulo_cco',
-          'subcapitulo_cco',
-          'honorarios_usd',
-          'admin_pct_override',
-          'cco_estado',
-          'contrato_obra_id',
-          'moneda_original',
-          'invoice_number',
-          'origen_v4_id',
-          'forma_pago_cco',
-          'compra_factura_id',
-          'document_storage_path',
-          'document_file_name',
-          'purchase_invoice_id',
-        ].join(','),
-      )
+      .select(GASTO_SELECT_FULL)
       .eq('proyecto_id', proyectoId)
       .neq('imputacion', IMPUTACION_ENTIDAD)
       .order('fecha', { ascending: false })
       .limit(limit);
-    if (
-      error &&
-      !/tipo_gasto_cco|capitulo_cco|schema cache|origen_v4|compra_factura|document_storage|purchase_invoice/i.test(
-        error.message ?? '',
-      )
-    ) {
-      throw error;
+
+    if (full.error) {
+      const msg = full.error.message ?? '';
+      const soft =
+        /tipo_gasto_cco|capitulo_cco|schema cache|origen_v4|compra_factura|document_storage|purchase_invoice|tasa_usada|porcentaje_brecha|monto_pagado/i.test(
+          msg,
+        );
+      if (!soft) throw full.error;
+      const base = await supabase
+        .from('contabilidad_compras')
+        .select(GASTO_SELECT_BASE)
+        .eq('proyecto_id', proyectoId)
+        .neq('imputacion', IMPUTACION_ENTIDAD)
+        .order('fecha', { ascending: false })
+        .limit(limit);
+      if (base.error) {
+        const soft2 =
+          /tipo_gasto_cco|capitulo_cco|schema cache|origen_v4|document_storage|purchase_invoice/i.test(
+            base.error.message ?? '',
+          );
+        if (!soft2) throw base.error;
+        error = base.error;
+        compras = base.data;
+      } else {
+        compras = base.data;
+      }
+    } else {
+      compras = full.data;
     }
+
+    if (error && !(compras?.length)) {
+      /* sin filas por columnas ausentes: continuar vacío */
+    }
+
+    const contratoIds: string[] = [];
+    for (const row of compras ?? []) {
+      const r = row as unknown as Record<string, unknown>;
+      if (r.contrato_obra_id) contratoIds.push(String(r.contrato_obra_id));
+    }
+    const contratoLabels = await cargarContratoLabels(supabase, contratoIds);
+
     for (const row of compras ?? []) {
       const r = row as unknown as Record<string, unknown>;
       const base = num(r.monto_usd);
@@ -106,13 +270,13 @@ export async function cargarLibroMaestro(
       const calc = aplicarHonorariosABase(base, num(r.admin_pct_override) || null, pctGlobal);
       const honorarios = r.honorarios_usd != null ? num(r.honorarios_usd) : calc.honorariosUsd;
       const moneda = String(r.moneda_original ?? 'USD').toUpperCase() || 'USD';
+      const tasaBinance = num(r.tasa_binance);
       const tasa = resolverTasa(r, moneda, base);
-      const descripcion =
-        String(r.notas ?? '').trim() ||
-        String(r.invoice_number ?? '').trim() ||
-        'Gasto';
-      const pctDist = parsePctDistribucion(descripcion) ?? 100;
+      const notasRaw = String(r.notas ?? '').trim();
+      const notasLimpias = limpiarNotasEgreso(notasRaw);
       const invoice = String(r.invoice_number ?? '').trim() || null;
+      const descripcion = notasLimpias || invoice || 'Gasto';
+      const pctDist = parsePctDistribucion(descripcion) ?? 100;
       const origenV4 = r.origen_v4_id != null ? num(r.origen_v4_id) : null;
       const proveedor = String(r.supplier_name ?? '').trim() || 'Sin proveedor';
       const fecha = r.fecha != null ? String(r.fecha).slice(0, 10) : null;
@@ -120,8 +284,20 @@ export async function cargarLibroMaestro(
       const docPath = String(r.document_storage_path ?? '').trim();
       const docName = String(r.document_file_name ?? '').trim() || null;
       const purchaseInvoiceId = String(r.purchase_invoice_id ?? '').trim();
-      // Documento real en Storage o factura de recepción vinculada (misma fuente que /compras).
       const tieneDocumento = Boolean(docPath || purchaseInvoiceId);
+      const estado = String(r.cco_estado ?? 'PAGADO');
+      const montoPagadoRaw =
+        r.monto_pagado_usd != null && r.monto_pagado_usd !== ''
+          ? num(r.monto_pagado_usd)
+          : null;
+      const montoPagado =
+        montoPagadoRaw != null
+          ? montoPagadoRaw
+          : /^PAGADO$/i.test(estado)
+            ? base
+            : null;
+      const contratoId = r.contrato_obra_id != null ? String(r.contrato_obra_id) : null;
+
       filas.push({
         id: compraId,
         display_id: origenV4 && origenV4 > 0 ? origenV4 : compraId.slice(0, 8),
@@ -141,7 +317,7 @@ export async function cargarLibroMaestro(
         monto_base_usd: base,
         honorarios_usd: honorarios,
         costo_total_usd: base + honorarios,
-        estado: String(r.cco_estado ?? 'PAGADO'),
+        estado,
         forma_pago: r.forma_pago_cco != null ? String(r.forma_pago_cco) : null,
         invoice_number: invoice,
         link_factura: tieneDocumento
@@ -149,16 +325,24 @@ export async function cargarLibroMaestro(
           : null,
         tiene_documento: tieneDocumento,
         document_file_name: docName,
+        monto_pagado_usd: montoPagado,
+        tasa_binance: tasaBinance,
+        tasa_usada: r.tasa_usada != null ? String(r.tasa_usada) : null,
+        porcentaje_brecha_real:
+          r.porcentaje_brecha_real != null ? num(r.porcentaje_brecha_real) : null,
+        contrato_label: contratoId ? contratoLabels.get(contratoId) ?? null : null,
         split_group_key: claveGastoDividido({
           invoice_number: invoice,
           fecha,
           proveedor,
           descripcion,
         }),
-        contrato_obra_id: r.contrato_obra_id != null ? String(r.contrato_obra_id) : null,
+        contrato_obra_id: contratoId,
         fuente: 'compra',
       });
     }
+
+    await enriquecerDescripcionesDesdeLineas(supabase, filas);
   }
 
   if (!claseFiltro || claseFiltro === 'INGRESO') {
@@ -210,8 +394,7 @@ export async function cargarLibroMaestro(
         forma_pago: r.metodo_pago != null ? String(r.metodo_pago) : null,
         invoice_number: null,
         link_factura: null,
-        tiene_documento: false,
-        document_file_name: null,
+        ...META_VACIO,
         split_group_key: null,
         contrato_obra_id: null,
         fuente: 'inyeccion',
@@ -254,8 +437,7 @@ export async function cargarLibroMaestro(
         forma_pago: null,
         invoice_number: null,
         link_factura: null,
-        tiene_documento: false,
-        document_file_name: null,
+        ...META_VACIO,
         split_group_key: null,
         contrato_obra_id: String(r.id),
         fuente: 'contrato',
@@ -298,8 +480,7 @@ export async function cargarLibroMaestro(
         forma_pago: null,
         invoice_number: null,
         link_factura: null,
-        tiene_documento: false,
-        document_file_name: null,
+        ...META_VACIO,
         split_group_key: null,
         contrato_obra_id: null,
         fuente: 'presupuesto',

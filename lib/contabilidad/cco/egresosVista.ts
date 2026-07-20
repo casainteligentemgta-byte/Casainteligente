@@ -38,11 +38,17 @@ export type EgresosColKey =
   | 'fecha'
   | 'proveedor'
   | 'descripcion'
+  | 'factura'
   | 'moneda'
   | 'tasa'
+  | 'tasa_binance'
+  | 'tasa_usada'
   | 'monto_orig'
+  | 'monto_base'
+  | 'monto_pagado'
   | 'pct_dist'
   | 'admin_pct'
+  | 'brecha'
   | 'honorarios'
   | 'costo_total'
   | 'estado'
@@ -50,6 +56,7 @@ export type EgresosColKey =
   | 'tipo'
   | 'capitulo'
   | 'subcapitulo'
+  | 'contrato'
   | 'link_factura';
 
 export type EgresosColDef = {
@@ -60,24 +67,31 @@ export type EgresosColDef = {
   editable?: boolean;
 };
 
-/** Orden y etiquetas alineados al cuadro Streamlit V4. */
+/** Orden y etiquetas alineados al cuadro Streamlit V4 + campos que faltaban en la UI. */
 export const EGRESOS_COLUMNAS: EgresosColDef[] = [
   { key: 'id', label: 'ID', defaultVisible: true },
   { key: 'fecha', label: 'Fecha', defaultVisible: true, editable: true },
   { key: 'proveedor', label: 'PROVEEDOR', defaultVisible: true, editable: true },
   { key: 'descripcion', label: 'DESCRIPCION', defaultVisible: true, editable: true },
+  { key: 'factura', label: 'Nº Factura', defaultVisible: true },
   { key: 'moneda', label: 'Moneda', defaultVisible: true, editable: true },
   { key: 'tasa', label: 'Tasa', defaultVisible: true, align: 'right', editable: true },
+  { key: 'tasa_binance', label: 'Tasa Binance', defaultVisible: false, align: 'right' },
+  { key: 'tasa_usada', label: 'Tasa Usada', defaultVisible: true },
   { key: 'monto_orig', label: 'Monto Orig.', defaultVisible: true, align: 'right', editable: true },
+  { key: 'monto_base', label: 'Monto Base (USD)', defaultVisible: true, align: 'right' },
+  { key: 'monto_pagado', label: 'Monto Pagado', defaultVisible: true, align: 'right' },
   { key: 'pct_dist', label: '% Distribución', defaultVisible: true, align: 'right' },
   { key: 'admin_pct', label: '% Admin', defaultVisible: true, align: 'right', editable: true },
+  { key: 'brecha', label: '% Brecha', defaultVisible: false, align: 'right' },
   { key: 'honorarios', label: 'Honorarios (USD)', defaultVisible: true, align: 'right' },
   { key: 'costo_total', label: 'Costo Total (USD)', defaultVisible: true, align: 'right' },
   { key: 'estado', label: 'Estado', defaultVisible: true, editable: true },
   { key: 'forma_pago', label: 'Forma de Pago', defaultVisible: true, editable: true },
-  { key: 'tipo', label: 'TIPO', defaultVisible: true, editable: true },
+  { key: 'tipo', label: 'TIPO / Rubro', defaultVisible: true, editable: true },
   { key: 'capitulo', label: 'Capítulo', defaultVisible: true, editable: true },
   { key: 'subcapitulo', label: 'Sub-Capítulo', defaultVisible: true, editable: true },
+  { key: 'contrato', label: 'Contrato', defaultVisible: false },
   { key: 'link_factura', label: 'LINK FACTURA', defaultVisible: true },
 ];
 
@@ -88,7 +102,7 @@ export function defaultVisibleCols(): Record<EgresosColKey, boolean> {
 }
 
 export function storageKeyColumnas(proyectoId: string): string {
-  return `cco.egresos.cols.v2.${proyectoId}`;
+  return `cco.egresos.cols.v3.${proyectoId}`;
 }
 
 export const EGRESOS_ESTADOS = ['PAGADO', 'PENDIENTE', 'ANULADO', 'PARCIAL'] as const;
