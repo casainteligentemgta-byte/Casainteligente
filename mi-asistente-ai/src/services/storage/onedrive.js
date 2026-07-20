@@ -1,8 +1,13 @@
 import { Client } from '@microsoft/microsoft-graph-client';
-import { env } from '../../config/env.js';
+import { env, isRealSecret } from '../../config/env.js';
 
 export function isOneDriveConfigured() {
-  return Boolean(env.msClientId() && env.msTenantId() && env.msClientSecret());
+  return (
+    isRealSecret(env.msClientId()) &&
+    isRealSecret(env.msTenantId()) &&
+    isRealSecret(env.msClientSecret()) &&
+    isRealSecret(env.msUserId())
+  );
 }
 
 async function getAccessToken() {

@@ -107,7 +107,8 @@ export async function upsertCompraContableDedup(
     proyecto_id: proyectoId,
   });
 
-  const { data: existente, error: findErr } = await supabase
+  let existente: { id: string } | null = null;
+  const { data: byHash, error: findErr } = await supabase
     .from('contabilidad_compras')
     .select('id')
     .eq('dedup_hash', dedup_hash)
@@ -120,6 +121,18 @@ export async function upsertCompraContableDedup(
   const sinColumnaHash = Boolean(
     findErr && /dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message),
   );
+  if (byHash?.id) existente = { id: String(byHash.id) };
+
+  // Reimport CSV/SQLite: misma obra + origen_v4_id (aunque cambie invoice/hash).
+  if (!existente && input.cco?.origen_v4_id != null && proyectoId) {
+    const { data: byV4 } = await supabase
+      .from('contabilidad_compras')
+      .select('id')
+      .eq('proyecto_id', proyectoId)
+      .eq('origen_v4_id', input.cco.origen_v4_id)
+      .maybeSingle();
+    if (byV4?.id) existente = { id: String(byV4.id) };
+  }
 
   const rowBase: Record<string, unknown> = {
     purchase_invoice_id: input.purchase_invoice_id ?? null,

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { CcoV4ImportPayload } from '@/lib/contabilidad/cco/importarMaestroV4';
+import { parseCcoV4Csv } from '@/lib/contabilidad/cco/parseCcoV4Csv';
 
 type Props = {
   proyectoId: string;
@@ -24,14 +25,25 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
     setLog(null);
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text) as CcoV4ImportPayload;
-      const payload: CcoV4ImportPayload = {
-        ...parsed,
-        proyecto_id: proyectoId,
-        auto_vincular: parsed.auto_vincular !== false,
-      };
+      const name = file.name.toLowerCase();
+      let payload: CcoV4ImportPayload;
+
+      if (name.endsWith('.csv') || text.trimStart().toUpperCase().startsWith('CLASE,')) {
+        payload = await parseCcoV4Csv(text, {
+          proyecto_id: proyectoId,
+          obra_alias: 'RANCHO FLAMBOYANT',
+        });
+      } else {
+        const parsed = JSON.parse(text) as CcoV4ImportPayload;
+        payload = {
+          ...parsed,
+          proyecto_id: proyectoId,
+          auto_vincular: parsed.auto_vincular !== false,
+        };
+      }
+
       if (!Array.isArray(payload.transacciones)) {
-        throw new Error('JSON inválido: falta transacciones[]');
+        throw new Error('Archivo inválido: falta transacciones[]');
       }
       const res = await fetch('/api/contabilidad/cco/import-v4', {
         method: 'POST',
@@ -46,6 +58,8 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
       }
       setLog(
         [
+          `Fuente: ${name.endsWith('.csv') ? 'CSV Antigravity' : 'JSON V4'}`,
+          `Filas: ${payload.transacciones.length}`,
           `Gastos: +${json.gastos?.created ?? 0} creados / ${json.gastos?.updated ?? 0} actualizados`,
           `Contratos: ${json.contratos}`,
           `Ingresos: ${json.ingresos}`,
@@ -75,14 +89,11 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
         padding: 24,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Importar SQLite / JSON V4</h3>
+      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Importar CSV / JSON V4</h3>
       <p style={{ color: '#64748B', fontSize: 13, margin: '8px 0 14px', lineHeight: 1.55 }}>
-        1) Genera el JSON con{' '}
-        <code style={code}>python scripts/etl_cco_v4_sqlite.py --out tmp/cco_v4.json</code>
-        <br />
-        2) Aplica migraciones <code style={code}>268</code> + <code style={code}>269</code> en Supabase
-        <br />
-        3) Elige la obra destino arriba y sube el JSON aquí (sin tocar stock).
+        Sube el <strong>CSV del Antigravity</strong> (ej. <code style={code}>RANCHO 20072026.csv</code>) o el
+        JSON del ETL. Anti-duplicados por huella de negocio + <code style={code}>origen_v4_id</code>. Sin tocar
+        stock. Requiere migraciones <code style={code}>268</code> + <code style={code}>269</code>.
       </p>
       {!proyectoId ? (
         <p style={{ color: '#B45309', fontSize: 13, fontWeight: 700 }}>
@@ -105,10 +116,10 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
           opacity: busy || !proyectoId ? 0.6 : 1,
         }}
       >
-        {busy ? 'Importando…' : 'Elegir cco_v4_import.json'}
+        {busy ? 'Importando…' : 'Elegir CSV o JSON V4'}
         <input
           type="file"
-          accept="application/json,.json"
+          accept=".csv,text/csv,application/json,.json"
           disabled={busy || !proyectoId}
           style={{ display: 'none' }}
           onChange={(e) => void onFile(e.target.files?.[0] ?? null)}

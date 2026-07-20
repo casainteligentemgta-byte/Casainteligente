@@ -15,7 +15,21 @@ import {
   listarObras,
   buscarObraPorNombre,
   resumenObra,
+  consultaCco,
+  formatConsultaCco,
 } from './services/casaDatos.js';
+import {
+  listarRecordatorios,
+  cancelarRecordatorio,
+  startRecordatoriosTicker,
+} from './services/recordatorios.js';
+import { redactarActaMarkdown, guardarActa } from './services/actas.js';
+import {
+  crearOActualizarChecklist,
+  obtenerChecklist,
+  marcarItem,
+  formatChecklist,
+} from './services/checklist.js';
 
 const bot = new Telegraf(env.telegramToken());
 
@@ -47,7 +61,7 @@ async function replySafe(ctx, text) {
   }
 }
 
-/** @param {{ text: string, ics?: { fileName: string, buffer: Buffer, mimeType: string } }} resultado */
+/** @param {{ text: string, ics?: { fileName: string, buffer: Buffer, mimeType: string }, doc?: { fileName: string, buffer: Buffer, mimeType: string } }} resultado */
 async function replyResultado(ctx, resultado) {
   await replySafe(ctx, resultado.text);
   if (resultado.ics?.buffer) {
@@ -59,6 +73,17 @@ async function replyResultado(ctx, resultado) {
     } catch (e) {
       console.warn('[ics send]', e);
       await ctx.reply('La cita se creó, pero no pude adjuntar el .ics. Revisa la carpeta Agenda en iCloud.');
+    }
+  }
+  if (resultado.doc?.buffer) {
+    try {
+      await ctx.replyWithDocument({
+        source: resultado.doc.buffer,
+        filename: resultado.doc.fileName,
+      });
+    } catch (e) {
+      console.warn('[doc send]', e);
+      await ctx.reply('El documento se generó, pero no pude adjuntarlo. Revisa iCloud/Actas o .data/actas.');
     }
   }
 }
@@ -86,8 +111,18 @@ bot.command('ayuda', (ctx) =>
       '/obras — lista obras de Casa Inteligente',
       '/obra <nombre> — fija obra activa',
       '/resumen — resumen de compras de la obra activa',
+      '/cco [YYYY-MM] — dashboard CCO (saldo, top proveedores, mes)',
+      '/saldo — solo saldo de caja CCO',
+      '/proveedores [YYYY-MM] — top proveedores',
       '',
-      'Agenda: escribe “agenda mañana 10am reunión con proveedor” (te manda .ics para iPhone)',
+      'Agenda: “agenda mañana 10am reunión…” → .ics',
+      'Recordatorio: “avísame en 2 minutos llamar al proveedor”',
+      '/recordatorios — lista pendientes',
+      '',
+      '/acta <notas> — genera acta .md (también con nota de voz: “acta: …”)',
+      '/checklist [ítems] — ver o crear checklist del día',
+      '/check <n> — marcar ítem del checklist',
+      '',
       '/storage — Drive / OneDrive / iCloud',
       '/buscar <nombre> — buscar archivos',
       '',
@@ -181,6 +216,173 @@ bot.command('resumen', async (ctx) => {
   );
 });
 
+async function requireObraActiva(ctx) {
+  const activa = getObraChat(ctx.chat.id);
+  if (!activa) {
+    await ctx.reply('Primero fija una obra con /obra nombre o /obras');
+    return null;
+  }
+  if (!isCasaDatosConfigured()) {
+    await ctx.reply('Supabase no configurado.');
+    return null;
+  }
+  return activa;
+}
+
+bot.command('cco', async (ctx) => {
+  const activa = await requireObraActiva(ctx);
+  if (!activa) return;
+  const arg = (ctx.message.text || '').replace(/^\/cco(@\w+)?\s*/i, '').trim();
+  const mes = /^\d{4}-\d{2}$/.test(arg) ? arg : undefined;
+  await ctx.sendChatAction('typing');
+  const r = await consultaCco(activa.id, { mes, topN: 10 });
+  if (!r.ok) {
+    await ctx.reply(`Error CCO: ${r.error}`);
+    return;
+  }
+  await replySafe(ctx, formatConsultaCco(r, mes ? 'mes' : 'completo'));
+});
+
+bot.command('saldo', async (ctx) => {
+  const activa = await requireObraActiva(ctx);
+  if (!activa) return;
+  await ctx.sendChatAction('typing');
+  const r = await consultaCco(activa.id, { topN: 5 });
+  if (!r.ok) {
+    await ctx.reply(`Error CCO: ${r.error}`);
+    return;
+  }
+  await replySafe(ctx, formatConsultaCco(r, 'saldo'));
+});
+
+bot.command('proveedores', async (ctx) => {
+  const activa = await requireObraActiva(ctx);
+  if (!activa) return;
+  const arg = (ctx.message.text || '').replace(/^\/proveedores(@\w+)?\s*/i, '').trim();
+  const mes = /^\d{4}-\d{2}$/.test(arg) ? arg : undefined;
+  await ctx.sendChatAction('typing');
+  const r = await consultaCco(activa.id, { mes, topN: 15 });
+  if (!r.ok) {
+    await ctx.reply(`Error CCO: ${r.error}`);
+    return;
+  }
+  await replySafe(ctx, formatConsultaCco(r, 'proveedores'));
+});
+
+bot.command('recordatorios', async (ctx) => {
+  const list = listarRecordatorios(ctx.chat.id);
+  if (!list.length) {
+    await ctx.reply('No tienes recordatorios pendientes.\nEjemplo: avísame en 2 minutos revisar obra');
+    return;
+  }
+  const lines = list.map((r, i) => {
+    const cuando = new Date(r.cuandoIso).toLocaleString('es-VE', {
+      timeZone: 'America/Caracas',
+    });
+    return `${i + 1}. ${cuando} — ${r.texto}\n   cancelar: /cancelar ${r.id}`;
+  });
+  await replySafe(ctx, `*Recordatorios pendientes*\n${lines.join('\n')}`);
+});
+
+bot.command('cancelar', async (ctx) => {
+  const id = (ctx.message.text || '').replace(/^\/cancelar(@\w+)?\s*/i, '').trim();
+  if (!id) {
+    await ctx.reply('Uso: /cancelar r_… (id del recordatorio)');
+    return;
+  }
+  const ok = cancelarRecordatorio(id, ctx.chat.id);
+  await ctx.reply(ok ? 'Recordatorio cancelado.' : 'No encontré ese recordatorio.');
+});
+
+bot.command('acta', async (ctx) => {
+  const notas = (ctx.message.text || '').replace(/^\/acta(@\w+)?\s*/i, '').trim();
+  if (!notas) {
+    await ctx.reply(
+      'Uso: /acta notas de la reunión…\nO manda nota de voz y di: “acta: visitamos Flamboyant, acordamos…”',
+    );
+    return;
+  }
+  await ctx.sendChatAction('typing');
+  try {
+    const obra = getObraChat(ctx.chat.id);
+    const acta = await redactarActaMarkdown({
+      notas,
+      obraNombre: obra?.nombre || null,
+    });
+    await guardarActa({
+      fileName: acta.fileName,
+      buffer: acta.buffer,
+      chatId: ctx.chat.id,
+    });
+    await replyResultado(ctx, {
+      text: [
+        `Acta lista: *${acta.titulo}*`,
+        `Archivo: \`${acta.fileName}\``,
+        '',
+        acta.markdown.slice(0, 1500) + (acta.markdown.length > 1500 ? '\n…' : ''),
+      ].join('\n'),
+      doc: {
+        fileName: acta.fileName,
+        buffer: acta.buffer,
+        mimeType: acta.mimeType,
+      },
+    });
+  } catch (e) {
+    console.error('[acta]', e);
+    await ctx.reply(`Error al crear acta: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+bot.command('checklist', async (ctx) => {
+  const arg = (ctx.message.text || '').replace(/^\/checklist(@\w+)?\s*/i, '').trim();
+  const obra = getObraChat(ctx.chat.id);
+
+  if (!arg) {
+    const row = obtenerChecklist(ctx.chat.id, { obraId: obra?.id || null });
+    if (!row) {
+      await ctx.reply(
+        'No hay checklist para hoy.\nEjemplo: /checklist hormigón, acero, visita Dimáquinas',
+      );
+      return;
+    }
+    await replySafe(ctx, formatChecklist(row));
+    return;
+  }
+
+  try {
+    const row = crearOActualizarChecklist({
+      chatId: ctx.chat.id,
+      obraId: obra?.id || null,
+      obraNombre: obra?.nombre || null,
+      items: arg,
+    });
+    await replySafe(ctx, formatChecklist(row));
+  } catch (e) {
+    await ctx.reply(`Error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+bot.command('check', async (ctx) => {
+  const ref = (ctx.message.text || '').replace(/^\/check(@\w+)?\s*/i, '').trim();
+  if (!ref) {
+    await ctx.reply('Uso: /check 1  (o /check hormigón)');
+    return;
+  }
+  try {
+    const obra = getObraChat(ctx.chat.id);
+    const { checklist, item } = marcarItem(ctx.chat.id, ref, {
+      obraId: obra?.id || null,
+    });
+    const estado = item.hecho ? 'hecho ✅' : 'pendiente ⬜';
+    await replySafe(
+      ctx,
+      `Ítem ${estado}: ${item.texto}\n\n${formatChecklist(checklist)}`,
+    );
+  } catch (e) {
+    await ctx.reply(`Error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
 bot.command('buscar', async (ctx) => {
   const query = (ctx.message.text || '').replace(/^\/buscar(@\w+)?\s*/i, '').trim();
   if (!query) {
@@ -219,6 +421,22 @@ bot.action(/^storage:(drive|onedrive|icloud)$/, async (ctx) => {
   );
 });
 
+function formatUserError(error) {
+  if (error?.userMessage) return error.userMessage;
+  const msg = String(error?.message || error || '');
+  if (/429|RESOURCE_EXHAUSTED|quota|rate.?limit/i.test(msg)) {
+    return (
+      'Se agotó la cuota gratuita de la IA. ' +
+      'Pon GROQ_API_KEY (gratis en console.groq.com) en mi-asistente-ai/.env, ' +
+      'o usa /cco /saldo /checklist /obras /recordatorios.'
+    );
+  }
+  if (/GROQ_API_KEY|GEMINI_API_KEY|Sin proveedor/i.test(msg)) {
+    return msg.length < 280 ? msg : 'Falta configurar la IA en .env (GROQ_API_KEY o GEMINI_API_KEY).';
+  }
+  return 'Ocurrió un error al procesar tu solicitud.';
+}
+
 bot.on('text', async (ctx) => {
   const chatId = ctx.chat.id;
   const userMessage = ctx.message.text?.trim();
@@ -240,7 +458,7 @@ bot.on('text', async (ctx) => {
     await replyResultado(ctx, resultado);
   } catch (error) {
     console.error('Error al procesar el mensaje:', error);
-    await ctx.reply('Ocurrió un error al procesar tu solicitud.');
+    await ctx.reply(formatUserError(error));
   }
 });
 
@@ -279,10 +497,11 @@ bot.on(['voice', 'audio'], async (ctx) => {
     await replyResultado(ctx, {
       text: `🎤 _${transcript}_\n\n${resultado.text}`,
       ics: resultado.ics,
+      doc: resultado.doc,
     });
   } catch (error) {
     console.error('Error en nota de voz:', error);
-    await ctx.reply('Ocurrió un error al procesar la nota de voz.');
+    await ctx.reply(formatUserError(error));
   }
 });
 
@@ -378,14 +597,23 @@ async function main() {
         hookPath: path,
       },
     });
+    startRecordatoriosTicker(bot);
     console.log(`Asistente AI webhook en https://${domain}${path} (puerto ${port})`);
   } else {
     // launch() en polling no resuelve hasta stop; no await antes del log
     bot.launch().then(() => {
       console.log('Asistente AI detenido.');
     });
+    startRecordatoriosTicker(bot);
     console.log('🚀 Asistente AI en Telegram activo...');
     console.log('Bot: @AsistentecasaInteligenteBOT — escribe /start en Telegram');
+    try {
+      const { resolveAiProvider } = await import('./services/llm.js');
+      console.log(`IA: ${resolveAiProvider()} (AI_PROVIDER=${env.aiProvider()})`);
+    } catch (e) {
+      console.warn('IA:', e?.userMessage || e?.message || e);
+    }
+    console.log('Recordatorios: ticker cada 20s (el PC debe estar encendido)');
   }
 }
 

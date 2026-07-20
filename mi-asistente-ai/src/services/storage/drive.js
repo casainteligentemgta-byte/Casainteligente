@@ -1,6 +1,6 @@
 import { Readable } from 'stream';
 import { google } from 'googleapis';
-import { env } from '../../config/env.js';
+import { env, isRealSecret } from '../../config/env.js';
 
 function getOAuthClient() {
   const clientId = env.googleClientId();
@@ -8,7 +8,7 @@ function getOAuthClient() {
   const redirectUri = env.googleRedirectUri();
   const refreshToken = env.googleRefreshToken();
 
-  if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
+  if (!isRealSecret(clientId) || !isRealSecret(clientSecret) || !redirectUri || !isRealSecret(refreshToken)) {
     throw new Error(
       'Google Drive no configurado (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_REFRESH_TOKEN)',
     );
@@ -24,11 +24,11 @@ function getDrive() {
 }
 
 export function isDriveConfigured() {
-  return Boolean(
-    env.googleClientId() &&
-      env.googleClientSecret() &&
-      env.googleRedirectUri() &&
-      env.googleRefreshToken(),
+  return (
+    isRealSecret(env.googleClientId()) &&
+    isRealSecret(env.googleClientSecret()) &&
+    Boolean(env.googleRedirectUri()) &&
+    isRealSecret(env.googleRefreshToken())
   );
 }
 
@@ -53,7 +53,8 @@ export async function searchGoogleDrive(fileName) {
     });
     return response.data.files || [];
   } catch (error) {
-    console.error('Error en Google Drive:', error);
+    const msg = error?.response?.data?.error || error?.message || String(error);
+    console.warn('[drive] búsqueda omitida:', msg);
     return [];
   }
 }

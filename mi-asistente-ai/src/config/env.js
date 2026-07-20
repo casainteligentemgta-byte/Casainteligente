@@ -10,10 +10,44 @@ function optional(name, fallback = '') {
   return process.env[name]?.trim() || fallback;
 }
 
+/** Valores tipo "tu_token_aqui" no cuentan como configurados. */
+export function isRealSecret(v) {
+  const s = String(v || '').trim();
+  if (!s) return false;
+  if (/^(tu_|your_|xxx|placeholder|example|change.?me|dummy)/i.test(s)) return false;
+  if (/_aqui\b|_here\b|reemplazar|replace.?me/i.test(s)) return false;
+  return true;
+}
+
 export const env = {
   telegramToken: () => required('TELEGRAM_BOT_TOKEN'),
-  geminiApiKey: () => required('GEMINI_API_KEY'),
-  geminiModel: () => optional('GEMINI_MODEL', 'gemini-2.5-flash'),
+
+  /**
+   * auto | groq | gemini
+   * auto: usa Groq si hay GROQ_API_KEY; si no, Gemini.
+   */
+  aiProvider: () => optional('AI_PROVIDER', 'auto').toLowerCase(),
+
+  geminiApiKey: () => optional('GEMINI_API_KEY'),
+  /** Preferir modelos con cuota free más estable. */
+  geminiModel: () => optional('GEMINI_MODEL', 'gemini-flash-latest'),
+  geminiFallbackModels: () => {
+    const primary = optional('GEMINI_MODEL', 'gemini-flash-latest');
+    const extra = optional(
+      'GEMINI_FALLBACK_MODELS',
+      'gemini-flash-latest,gemini-2.0-flash,gemini-2.5-flash-lite,gemini-2.5-flash',
+    )
+      .split(/[,;\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return [...new Set([primary, ...extra])];
+  },
+
+  /** Groq (gratis): https://console.groq.com/keys */
+  groqApiKey: () => optional('GROQ_API_KEY'),
+  groqModel: () => optional('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+  groqWhisperModel: () => optional('GROQ_WHISPER_MODEL', 'whisper-large-v3'),
+  groqVisionModel: () => optional('GROQ_VISION_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct'),
 
   /** drive | onedrive | icloud */
   storageProvider: () => optional('STORAGE_PROVIDER', 'drive').toLowerCase(),

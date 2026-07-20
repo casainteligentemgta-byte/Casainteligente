@@ -230,6 +230,11 @@ export async function cargarCcoDashboard(
   const compras = (comprasRaw ?? []).filter((r) => {
     const origen = String((r as { origen?: string }).origen ?? '');
     if (origen === CCO_ORIGEN_HISTORICO) return false;
+    // Obra con libro V4: solo gastos del import V4 (no mezclar Telegram/manual).
+    if (tieneLibroV4) {
+      const v4 = (r as { origen_v4_id?: unknown }).origen_v4_id;
+      return origen === CCO_ORIGEN_V4 || v4 != null;
+    }
     return true;
   });
 
@@ -387,11 +392,11 @@ export async function cargarCcoDashboard(
     ) || 1;
 
   const oficial: CcoKpiBloque = {
-    ingresos,
-    gastosNetos,
-    adminDelegada,
-    costoTotal,
-    saldoCaja,
+    ingresos: Math.round(ingresos * 100) / 100,
+    gastosNetos: Math.round(gastosNetos * 100) / 100,
+    adminDelegada: Math.round(adminDelegada * 100) / 100,
+    costoTotal: Math.round(costoTotal * 100) / 100,
+    saldoCaja: Math.round(saldoCaja * 100) / 100,
     countIngresos,
     countGastos: (compras ?? []).length,
   };

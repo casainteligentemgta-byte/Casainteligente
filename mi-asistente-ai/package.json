@@ -15,6 +15,7 @@
     "@supabase/supabase-js": "^2.109.0",
     "dotenv": "^16.4.5",
     "googleapis": "^144.0.0",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "ws": "^8.21.1"
   }
 }

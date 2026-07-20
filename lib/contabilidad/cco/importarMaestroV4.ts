@@ -168,28 +168,57 @@ export async function importarMaestroV4(
   for (const t of contratosTx) {
     const base = num(t.monto_base_usd);
     const calc = aplicarHonorariosABase(base, num(t.porcentaje_admin) || null, pctGlobal);
-    const { data, error } = await supabase
+    const proveedor = String(t.proveedor ?? 'Sin proveedor').trim() || 'Sin proveedor';
+    const descripcion = String(t.descripcion ?? 'Contrato').trim() || 'Contrato';
+    const fecha = fechaIso(t.fecha);
+    const row = {
+      proyecto_id: proyectoId,
+      proveedor,
+      descripcion,
+      fecha,
+      moneda: String(t.moneda ?? 'USD').toUpperCase() || 'USD',
+      monto_base_usd: base,
+      admin_pct: calc.adminPct,
+      honorarios_usd: num(t.honorarios) || calc.honorariosUsd,
+      costo_total_usd: num(t.costo_total) || calc.costoTotalUsd,
+      estado: String(t.estado ?? 'PENDIENTE'),
+      tipo_gasto_cco: 'CONTRATO',
+      origen_v4_id: t.origen_v4_id,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Si ya existía desde SQLite (otro origen_v4_id), reutilizar la fila.
+    const { data: prevBiz } = await supabase
       .from('cco_contratos_obra')
-      .upsert(
-        {
-          proyecto_id: proyectoId,
-          proveedor: String(t.proveedor ?? 'Sin proveedor').trim() || 'Sin proveedor',
-          descripcion: String(t.descripcion ?? 'Contrato').trim() || 'Contrato',
-          fecha: fechaIso(t.fecha),
-          moneda: String(t.moneda ?? 'USD').toUpperCase() || 'USD',
-          monto_base_usd: base,
-          admin_pct: calc.adminPct,
-          honorarios_usd: num(t.honorarios) || calc.honorariosUsd,
-          costo_total_usd: num(t.costo_total) || calc.costoTotalUsd,
-          estado: String(t.estado ?? 'PENDIENTE'),
-          tipo_gasto_cco: 'CONTRATO',
-          origen_v4_id: t.origen_v4_id,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'proyecto_id,origen_v4_id' },
-      )
-      .select('id,proveedor,descripcion,origen_v4_id')
+      .select('id')
+      .eq('proyecto_id', proyectoId)
+      .eq('proveedor', proveedor)
+      .eq('descripcion', descripcion)
+      .eq('fecha', fecha)
+      .eq('monto_base_usd', base)
+      .limit(1)
       .maybeSingle();
+
+    let data: { id: string; proveedor: string; descripcion: string } | null = null;
+    let error: { message: string } | null = null;
+    if (prevBiz?.id) {
+      const up = await supabase
+        .from('cco_contratos_obra')
+        .update(row)
+        .eq('id', prevBiz.id)
+        .select('id,proveedor,descripcion')
+        .maybeSingle();
+      data = up.data as typeof data;
+      error = up.error;
+    } else {
+      const up = await supabase
+        .from('cco_contratos_obra')
+        .upsert(row, { onConflict: 'proyecto_id,origen_v4_id' })
+        .select('id,proveedor,descripcion,origen_v4_id')
+        .maybeSingle();
+      data = up.data as typeof data;
+      error = up.error;
+    }
     if (error) {
       errores.push(`contrato ${t.origen_v4_id}: ${error.message}`);
       continue;
@@ -257,18 +286,29 @@ export async function importarMaestroV4(
     const forma = String(t.forma_pago ?? '').toUpperCase();
     const metodoPago = /EFECTIVO/.test(forma) ? 'EFECTIVO' : 'TRANSFERENCIA';
     const fecha = fechaIso(t.fecha);
-    const origenFondo = `CCO-V4 #${t.origen_v4_id} · ${String(t.descripcion ?? t.proveedor ?? 'Ingreso').slice(0, 180)}`;
+    const desc = String(t.descripcion ?? t.proveedor ?? 'Ingreso').slice(0, 180);
+    const origenFondo = `CCO-V4 #${t.origen_v4_id} · ${desc}`;
+    const refBancaria = metodoPago === 'TRANSFERENCIA' ? `V4-${t.origen_v4_id}` : null;
 
-    // Evitar reimport duplicado por origen_fondo
-    const { data: ya } = await supabase
+    // Anti-dup estricto: solo origen_fondo o referencia V4-{id} (no fecha+monto: duplicaba).
+    const { data: yaFondo } = await supabase
       .from('ci_inyecciones_capital')
       .select('id')
       .eq('proyecto_id', proyectoId)
       .eq('origen_fondo', origenFondo)
       .maybeSingle();
-    if (ya?.id) continue;
+    let yaId = yaFondo?.id ? String(yaFondo.id) : null;
+    if (!yaId && refBancaria) {
+      const { data: yaRef } = await supabase
+        .from('ci_inyecciones_capital')
+        .select('id')
+        .eq('proyecto_id', proyectoId)
+        .eq('referencia_bancaria', refBancaria)
+        .maybeSingle();
+      if (yaRef?.id) yaId = String(yaRef.id);
+    }
 
-    const { error } = await supabase.from('ci_inyecciones_capital').insert({
+    const payloadIng = {
       proyecto_id: proyectoId,
       origen_fondo: origenFondo,
       monto_recibido: montoOrig,
@@ -281,15 +321,32 @@ export async function importarMaestroV4(
       metodo_pago: metodoPago,
       banco_origen: metodoPago === 'TRANSFERENCIA' ? 'CCO-V4' : 'EFECTIVO',
       cuenta_bancaria_destino: metodoPago === 'TRANSFERENCIA' ? 'IMPORT-V4' : null,
-      referencia_bancaria: metodoPago === 'TRANSFERENCIA' ? `V4-${t.origen_v4_id}` : null,
+      referencia_bancaria: refBancaria,
       fecha_ingreso: fecha,
       creado_por: 'cco_v4_import',
-    });
+    };
+
+    if (yaId) {
+      const { error } = await supabase.from('ci_inyecciones_capital').update(payloadIng).eq('id', yaId);
+      if (error) errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
+      else result.ingresos += 1;
+      continue;
+    }
+
+    const { error } = await supabase.from('ci_inyecciones_capital').insert(payloadIng);
     if (error) errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
     else result.ingresos += 1;
   }
 
+  const logProgress = process.env.CCO_IMPORT_PROGRESS === '1';
+  let gastoIdx = 0;
   for (const t of gastosTx) {
+    gastoIdx += 1;
+    if (logProgress && (gastoIdx === 1 || gastoIdx % 50 === 0 || gastoIdx === gastosTx.length)) {
+      console.log(
+        `gastos ${gastoIdx}/${gastosTx.length} +${result.gastos.created}/~${result.gastos.updated}`,
+      );
+    }
     const montoUsd = num(t.monto_base_usd);
     if (montoUsd <= 0) {
       result.gastos.skipped += 1;
@@ -303,6 +360,7 @@ export async function importarMaestroV4(
     const tasa = num(t.tasa) || 1;
     const montoOrig = num(t.monto_orig) || montoUsd;
     const montoVes = moneda === 'VES' ? montoOrig : montoUsd * (tasa > 1 ? tasa : 0);
+    const honorariosUsd = num(t.honorarios) || calc.honorariosUsd;
 
     let contratoId: string | null = null;
     if (payload.auto_vincular !== false && (tipo === 'CONTRATISTA' || String(t.tipo).toUpperCase() === 'CONTRATO')) {
@@ -359,7 +417,7 @@ export async function importarMaestroV4(
         tipo_gasto_cco: tipo,
         contrato_obra_id: contratoId,
         admin_pct_override: num(t.porcentaje_admin) || null,
-        honorarios_usd: num(t.honorarios) || calc.honorariosUsd,
+        honorarios_usd: honorariosUsd,
         capitulo_cco: t.capitulo ? String(t.capitulo) : null,
         subcapitulo_cco: t.subcapitulo ? String(t.subcapitulo) : null,
         tasa_binance: t.tasa_binance != null ? num(t.tasa_binance) : null,
