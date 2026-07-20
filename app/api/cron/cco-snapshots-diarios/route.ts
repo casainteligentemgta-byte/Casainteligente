@@ -29,7 +29,12 @@ export async function GET(req: Request) {
 
   try {
     const stats = await crearSnapshotsDiariosTodasLasObras(admin.client);
-    return NextResponse.json({ ok: true, ...stats });
+    return NextResponse.json({
+      ok: true,
+      creados: stats.ok,
+      fallidos: stats.fail,
+      detalles: stats.detalles,
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error cron snapshots CCO';
     console.error('[cron cco-snapshots-diarios]', err);

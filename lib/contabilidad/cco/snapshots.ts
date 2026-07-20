@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { IMPUTACION_ENTIDAD } from '@/lib/contabilidad/imputacionCompra';
+import type { CcoSnapshotMeta, CcoSnapshotMotivo } from '@/lib/contabilidad/cco/snapshotsUi';
+
+export type { CcoSnapshotMeta, CcoSnapshotMotivo } from '@/lib/contabilidad/cco/snapshotsUi';
+export { fmtBytes, fmtResumen } from '@/lib/contabilidad/cco/snapshotsUi';
 
 export const CCO_SNAPSHOT_VERSION = 1 as const;
 export const CCO_SNAPSHOT_MOTIVOS = [
@@ -9,8 +13,6 @@ export const CCO_SNAPSHOT_MOTIVOS = [
   'pre_import',
   'pre_edit',
 ] as const;
-
-export type CcoSnapshotMotivo = (typeof CCO_SNAPSHOT_MOTIVOS)[number];
 
 export type CcoSnapshotPayload = {
   version: typeof CCO_SNAPSHOT_VERSION;
@@ -23,18 +25,6 @@ export type CcoSnapshotPayload = {
   ingresos: Record<string, unknown>[];
   gastos: Record<string, unknown>[];
   lineas: Record<string, unknown>[];
-};
-
-export type CcoSnapshotMeta = {
-  id: string;
-  proyecto_id: string;
-  label: string | null;
-  motivo: CcoSnapshotMotivo;
-  punto_en_tiempo: string;
-  creado_por: string | null;
-  resumen: Record<string, unknown>;
-  bytes_aprox: number;
-  created_at: string;
 };
 
 export type CcoSnapshotCreateResult = {
@@ -459,7 +449,7 @@ export async function restaurarSnapshotCco(
     // 6) Lineas: replace for snapshot compra ids
     let lineasN = 0;
     if (payload.lineas.length) {
-      const compraIds = [...snapIds];
+      const compraIds = Array.from(snapIds);
       const chunk = 200;
       for (let i = 0; i < compraIds.length; i += chunk) {
         await supabase
@@ -570,21 +560,4 @@ export async function crearSnapshotsDiariosTodasLasObras(
   }
 
   return { ok, fail, detalles };
-}
-
-export function fmtBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-export function fmtResumen(r: Record<string, unknown> | null | undefined): string {
-  if (!r) return '—';
-  const parts = [
-    r.gastos != null ? `${r.gastos} gastos` : null,
-    r.ingresos != null ? `${r.ingresos} ingresos` : null,
-    r.contratos != null ? `${r.contratos} contratos` : null,
-    r.presupuestos != null ? `${r.presupuestos} presup.` : null,
-  ].filter(Boolean);
-  return parts.join(' · ') || '—';
 }
