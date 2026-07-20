@@ -45,6 +45,7 @@ export type CcoKpiBloque = {
   costoTotal: number;
   saldoCaja: number;
   countIngresos: number;
+  countGastos: number;
 };
 
 export type CcoProyectoOpcion = { id: string; nombre: string };
@@ -117,6 +118,7 @@ function aplicarDevaluacion(oficial: CcoKpiBloque, devalPct: number): CcoKpiBloq
     costoTotal: aplicarFactorDevaluacion(oficial.costoTotal, devalPct),
     saldoCaja: aplicarFactorDevaluacion(oficial.saldoCaja, devalPct),
     countIngresos: oficial.countIngresos,
+    countGastos: oficial.countGastos,
   };
 }
 
@@ -391,6 +393,7 @@ export async function cargarCcoDashboard(
     costoTotal,
     saldoCaja,
     countIngresos,
+    countGastos: (compras ?? []).length,
   };
 
   const { periodo: flujoPeriodo, acumulado: flujoAcumulado, gastos: gastosMensual } =
