@@ -24,6 +24,16 @@ function resolverTasa(r: Record<string, unknown>, moneda: string, montoUsd: numb
   return moneda === 'VES' ? 1 : 0;
 }
 
+/** Si monto_usd viene en 0 pero hay VES+tasa (CSV mal tipado), deriva USD. */
+function resolverMontoBaseUsd(r: Record<string, unknown>, moneda: string): number {
+  const montoUsd = num(r.monto_usd);
+  if (montoUsd > 0) return montoUsd;
+  const montoVes = num(r.monto_ves);
+  const tasa = resolverTasa(r, moneda, 0);
+  if (montoVes > 0 && tasa > 0) return montoVes / tasa;
+  return 0;
+}
+
 function resolverMontoOrig(
   r: Record<string, unknown>,
   moneda: string,
@@ -31,12 +41,18 @@ function resolverMontoOrig(
   tasa: number,
 ): number {
   const montoVes = num(r.monto_ves);
-  if (moneda === 'VES') {
+  if (moneda === 'VES' || (montoUsd <= 0 && montoVes > 0)) {
     if (montoVes > 0) return montoVes;
-    if (tasa > 0) return montoUsd * tasa;
+    if (tasa > 0 && montoUsd > 0) return montoUsd * tasa;
     return montoUsd;
   }
-  return montoUsd;
+  if (montoUsd > 0) return montoUsd;
+  if (montoVes > 0 && tasa > 0) return montoVes; // mostrar orig en Bs si USD faltaba
+  return 0;
+}
+
+function esNotaImportacionGenerica(notas: string): boolean {
+  return /importaci[oó]n desde (csv|tabla)/i.test(notas);
 }
 
 const GASTO_SELECT_FULL = [
@@ -109,6 +125,7 @@ function descripcionDebil(desc: string, invoice: string | null): boolean {
   if (!d || d === 'Gasto') return true;
   if (invoice && d === invoice) return true;
   if (/^RUBRO:\s*[^|]+$/i.test(d)) return true;
+  if (esNotaImportacionGenerica(d)) return true;
   return false;
 }
 
@@ -263,19 +280,25 @@ export async function cargarLibroMaestro(
 
     for (const row of compras ?? []) {
       const r = row as unknown as Record<string, unknown>;
-      const base = num(r.monto_usd);
+      const monedaRaw = String(r.moneda_original ?? 'USD').toUpperCase() || 'USD';
+      const base = resolverMontoBaseUsd(r, monedaRaw);
+      // Si USD faltaba y venía solo VES, tratar como VES para Monto Orig.
+      const moneda =
+        num(r.monto_usd) <= 0 && num(r.monto_ves) > 0 && monedaRaw === 'USD' ? 'VES' : monedaRaw;
       const tipo =
         String(r.tipo_gasto_cco ?? '').trim() ||
         clasificarTipoGasto(String(r.supplier_name ?? ''));
       const calc = aplicarHonorariosABase(base, num(r.admin_pct_override) || null, pctGlobal);
       const honorarios = r.honorarios_usd != null ? num(r.honorarios_usd) : calc.honorariosUsd;
-      const moneda = String(r.moneda_original ?? 'USD').toUpperCase() || 'USD';
       const tasaBinance = num(r.tasa_binance);
       const tasa = resolverTasa(r, moneda, base);
       const notasRaw = String(r.notas ?? '').trim();
       const notasLimpias = limpiarNotasEgreso(notasRaw);
       const invoice = String(r.invoice_number ?? '').trim() || null;
-      const descripcion = notasLimpias || invoice || 'Gasto';
+      const descripcion =
+        (notasLimpias && !esNotaImportacionGenerica(notasLimpias) ? notasLimpias : '') ||
+        invoice ||
+        'Gasto';
       const pctDist = parsePctDistribucion(descripcion) ?? 100;
       const origenV4 = r.origen_v4_id != null ? num(r.origen_v4_id) : null;
       const proveedor = String(r.supplier_name ?? '').trim() || 'Sin proveedor';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { CloudUpload, FileUp, Loader2 } from 'lucide-react';
+import { CloudUpload, FileUp, Loader2, Plus } from 'lucide-react';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 
 type FilaSoporte = CcoLibroFila & { _agrupada?: boolean };
@@ -12,8 +12,8 @@ type Props = {
 };
 
 /**
- * Panel inferior tipo «Carga Manual de Soportes»:
- * elige un egreso sin factura (o cualquiera) y sube PDF/imagen enlazado.
+ * Carga Manual de Soportes (estilo referencia):
+ * 1) Seleccione el egreso  2) Elegir archivo imagen/PDF  3) Enlazar
  */
 export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,6 +27,7 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
   );
 
   const [compraId, setCompraId] = useState('');
+  const [filasExtra, setFilasExtra] = useState(1);
   const [subiendo, setSubiendo] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
 
   const subir = async (file: File) => {
     if (!compraId) {
-      setErr('Seleccione el egreso al que enlazar la factura.');
+      setErr('Seleccione el egreso (soporte) al que enlazar la factura.');
       return;
     }
     setSubiendo(true);
@@ -51,8 +52,7 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
       const data = (await res.json()) as { ok?: boolean; error?: string; fileName?: string };
       if (!res.ok || !data.ok) throw new Error(data.error || 'No se pudo cargar el soporte');
       onAdjuntado(compraId, data.fileName || file.name);
-      setMsg(`Factura enlazada al egreso (${data.fileName || file.name}).`);
-      setCompraId('');
+      setMsg(`Soporte enlazado (${data.fileName || file.name}).`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Error al subir');
     } finally {
@@ -72,7 +72,7 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <CloudUpload size={20} color="#1D4ED8" />
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0F172A' }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
           Carga Manual de Soportes
         </h3>
       </div>
@@ -88,75 +88,98 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
           lineHeight: 1.45,
         }}
       >
-        Suba la imagen o PDF de la factura y enlácela a un egreso de la tabla. También puede
-        usar <strong>Adjuntar</strong> en la columna LINK FACTURA de cada fila.
+        Presione en el ícono + para subir archivos adicionales o según pida el siguiente formulario.
+        Formatos: <strong>PNG, JPG, BMP, PDF</strong>
         {sinDoc.length > 0 ? (
           <>
             {' '}
-            Hay <strong>{sinDoc.length}</strong> egreso(s) sin soporte.
+            · <strong>{sinDoc.length}</strong> egreso(s) sin soporte.
           </>
         ) : null}
       </p>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 12,
-          alignItems: 'end',
-        }}
+      {Array.from({ length: filasExtra }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 12,
+            alignItems: 'end',
+            marginBottom: 12,
+            paddingBottom: 12,
+            borderBottom: i < filasExtra - 1 ? '1px dashed #E2E8F0' : undefined,
+          }}
+        >
+          <div>
+            <label style={label}>1. Seleccione Soporte</label>
+            <select
+              value={i === 0 ? compraId : ''}
+              onChange={(e) => {
+                if (i === 0) setCompraId(e.target.value);
+              }}
+              style={select}
+              disabled={opciones.length === 0 || i > 0}
+            >
+              <option value="">Seleccione Soporte</option>
+              {opciones.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.fecha ?? 's/f'} · {f.proveedor.slice(0, 24)} ·{' '}
+                  {(f.invoice_number || f.descripcion).slice(0, 32)} ·{' '}
+                  {f.monto_base_usd.toLocaleString('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={label}>Cargar Soporte como imagen</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                ref={i === 0 ? inputRef : undefined}
+                type="file"
+                accept="image/*,application/pdf,.bmp,.zip"
+                disabled={subiendo || !compraId || i > 0}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f && i === 0) void subir(f);
+                }}
+                style={{ ...select, padding: '8px 10px' }}
+              />
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94A3B8' }}>
+              PNG, JPG, BMP, PDF, ZIP
+            </p>
+          </div>
+          {i === 0 ? (
+            <div>
+              <button
+                type="button"
+                disabled={subiendo || !compraId}
+                onClick={() => inputRef.current?.click()}
+                style={{
+                  ...btn,
+                  opacity: subiendo || !compraId ? 0.55 : 1,
+                }}
+              >
+                {subiendo ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
+                {subiendo ? 'Subiendo…' : 'Elegir'}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={() => setFilasExtra((n) => Math.min(n + 1, 5))}
+        style={btnAdd}
       >
-        <div>
-          <label style={label}>Egreso / factura a enlazar</label>
-          <select
-            value={compraId}
-            onChange={(e) => setCompraId(e.target.value)}
-            style={select}
-            disabled={opciones.length === 0}
-          >
-            <option value="">— Seleccionar —</option>
-            {opciones.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.fecha ?? 's/f'} · {f.proveedor.slice(0, 28)} ·{' '}
-                {(f.invoice_number || f.descripcion).slice(0, 36)} ·{' '}
-                {f.monto_base_usd.toLocaleString('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                })}
-                {f.tiene_documento ? ' (ya tiene)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label style={label}>Archivo (JPG, PNG, PDF)</label>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*,application/pdf"
-            disabled={subiendo || !compraId}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void subir(f);
-            }}
-            style={{ ...select, padding: '8px 10px' }}
-          />
-        </div>
-        <div>
-          <button
-            type="button"
-            disabled={subiendo || !compraId}
-            onClick={() => inputRef.current?.click()}
-            style={{
-              ...btn,
-              opacity: subiendo || !compraId ? 0.55 : 1,
-            }}
-          >
-            {subiendo ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
-            {subiendo ? 'Subiendo…' : 'Cargar y enlazar'}
-          </button>
-        </div>
-      </div>
+        <Plus size={16} /> Añadir Fila
+      </button>
+
       {err ? <p style={{ color: '#B91C1C', fontSize: 13, margin: '10px 0 0' }}>{err}</p> : null}
       {msg ? <p style={{ color: '#15803D', fontSize: 13, margin: '10px 0 0' }}>{msg}</p> : null}
     </div>
@@ -193,4 +216,17 @@ const btn: CSSProperties = {
   cursor: 'pointer',
   width: '100%',
   justifyContent: 'center',
+};
+const btnAdd: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  border: '1px dashed #93C5FD',
+  background: '#EFF6FF',
+  color: '#1D4ED8',
+  borderRadius: 10,
+  padding: '8px 12px',
+  fontWeight: 800,
+  fontSize: 13,
+  cursor: 'pointer',
 };

@@ -2,30 +2,19 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Briefcase,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  CircleDollarSign,
   Eye,
-  HelpCircle,
+  FileText,
   Loader2,
-  Save,
+  Pencil,
+  RefreshCw,
 } from 'lucide-react';
-import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
 import { CCO_TIPOS_GASTO } from '@/lib/contabilidad/ccoClasificarGasto';
-import {
-  EGRESOS_COLUMNAS,
-  EGRESOS_ESTADOS,
-  FORMAS_PAGO_CCO,
-  baseDescripcionSinPct,
-  defaultVisibleCols,
-  storageKeyColumnas,
-  type EgresosColKey,
-} from '@/lib/contabilidad/cco/egresosVista';
+import { FORMAS_PAGO_CCO } from '@/lib/contabilidad/cco/egresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 import EgresoFacturaCell from '@/components/contabilidad/cco/EgresoFacturaCell';
 import EgresoCargaSoportesPanel from '@/components/contabilidad/cco/EgresoCargaSoportesPanel';
+
+const PAGE_SIZE = 15;
 
 function fmtUsd(n: number): string {
   return n.toLocaleString('en-US', {
@@ -36,266 +25,110 @@ function fmtUsd(n: number): string {
   });
 }
 
-function fmtNum(n: number, digits = 2): string {
-  return n.toLocaleString('en-US', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
+function fmtFecha(iso: string | null): string {
+  const s = String(iso ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '—';
+  const [y, m, d] = s.split('-');
+  return `${d}/${m}/${y.slice(2)}`;
 }
 
-type Draft = {
-  fecha: string;
-  proveedor: string;
-  descripcion: string;
-  moneda: string;
-  tasa: string;
-  monto_orig: string;
-  admin_pct: string;
-  tipo: string;
-  capitulo: string;
-  subcapitulo: string;
-  estado: string;
-  forma_pago: string;
-};
-
-type VistaFila = CcoLibroFila & {
-  _groupIds?: string[];
-  _agrupada?: boolean;
-  dirty?: boolean;
-  draft?: Draft;
-};
-
-function toDraft(f: CcoLibroFila): Draft {
-  return {
-    fecha: f.fecha ?? '',
-    proveedor: f.proveedor,
-    descripcion: f.descripcion,
-    moneda: f.moneda || 'USD',
-    tasa: f.tasa > 0 ? String(f.tasa) : '',
-    monto_orig: String(f.monto_orig ?? f.monto_base_usd),
-    admin_pct: String(f.admin_pct ?? ''),
-    tipo: f.tipo || '',
-    capitulo: f.capitulo === '—' ? '' : f.capitulo,
-    subcapitulo: f.subcapitulo === '—' ? '' : f.subcapitulo,
-    estado: f.estado || 'PAGADO',
-    forma_pago: f.forma_pago ?? '',
-  };
-}
-
-function noneLabel(v: string | null | undefined): string {
-  const t = String(v ?? '').trim();
-  return t ? t : 'None';
-}
-
-function EstadoBadge({ estado }: { estado: string }) {
-  const e = String(estado || '').toUpperCase();
-  const ok = e === 'PAGADO';
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        padding: '2px 8px',
-        borderRadius: 999,
-        background: ok ? '#DCFCE7' : e === 'PENDIENTE' ? '#FEF3C7' : '#F1F5F9',
-        color: ok ? '#166534' : e === 'PENDIENTE' ? '#92400E' : '#475569',
-        fontWeight: 800,
-        fontSize: 11,
-      }}
-    >
-      {ok ? <CheckCircle2 size={12} /> : null}
-      {e || '—'}
-    </span>
-  );
-}
-
-function recalcFromDraft(
-  base: CcoLibroFila,
-  draft: Draft,
-  pctGlobal: number,
-): Pick<CcoLibroFila, 'monto_base_usd' | 'honorarios_usd' | 'costo_total_usd' | 'admin_pct' | 'tasa' | 'monto_orig' | 'moneda'> {
-  const moneda = draft.moneda.toUpperCase().startsWith('VE') ? 'VES' : 'USD';
-  const tasa = Number(draft.tasa) || 0;
-  const montoOrig = Number(draft.monto_orig) || 0;
-  let montoUsd = base.monto_base_usd;
-  if (moneda === 'VES') {
-    montoUsd = tasa > 0 ? montoOrig / tasa : montoUsd;
-  } else {
-    montoUsd = montoOrig;
-  }
-  const adminRaw = Number(draft.admin_pct);
-  const calc = aplicarHonorariosABase(
-    montoUsd,
-    Number.isFinite(adminRaw) && adminRaw > 0 ? adminRaw : null,
-    pctGlobal,
-  );
-  return {
-    moneda,
-    tasa,
-    monto_orig: montoOrig,
-    monto_base_usd: montoUsd,
-    admin_pct: calc.adminPct,
-    honorarios_usd: calc.honorariosUsd,
-    costo_total_usd: calc.costoTotalUsd,
-  };
-}
-
-function agruparFilas(filas: VistaFila[]): VistaFila[] {
-  const groups = new Map<string, VistaFila[]>();
-  const singles: VistaFila[] = [];
-  for (const f of filas) {
-    if (!f.split_group_key) {
-      singles.push(f);
-      continue;
-    }
-    const list = groups.get(f.split_group_key) ?? [];
-    list.push(f);
-    groups.set(f.split_group_key, list);
-  }
-  const out: VistaFila[] = [...singles];
-  for (const parts of Array.from(groups.values())) {
-    if (parts.length < 2) {
-      out.push(...parts);
-      continue;
-    }
-    const sorted = [...parts].sort((a, b) =>
-      String(b.display_id).localeCompare(String(a.display_id), undefined, { numeric: true }),
-    );
-    const head = sorted[0];
-    const montoBase = parts.reduce((s: number, p: VistaFila) => s + p.monto_base_usd, 0);
-    const honor = parts.reduce((s: number, p: VistaFila) => s + p.honorarios_usd, 0);
-    const montoOrig = parts.reduce((s: number, p: VistaFila) => s + p.monto_orig, 0);
-    out.push({
-      ...head,
-      descripcion: baseDescripcionSinPct(head.descripcion) || head.descripcion,
-      monto_base_usd: montoBase,
-      honorarios_usd: honor,
-      costo_total_usd: montoBase + honor,
-      monto_orig: montoOrig,
-      pct_distribucion: 100,
-      _agrupada: true,
-      _groupIds: parts.map((p: VistaFila) => p.id),
-      dirty: false,
-      draft: undefined,
-    });
-  }
-  out.sort((a, b) => {
-    const fa = a.fecha ?? '';
-    const fb = b.fecha ?? '';
-    if (fa !== fb) return fb.localeCompare(fa);
-    return String(b.display_id).localeCompare(String(a.display_id), undefined, { numeric: true });
-  });
-  return out;
-}
-
-function KpiSuma({
+function KpiCard({
   title,
   value,
+  footnote,
   accent,
-  icon,
 }: {
   title: string;
   value: string;
+  footnote: string;
   accent: string;
-  icon: React.ReactNode;
 }) {
   return (
     <div
       style={{
         background: '#fff',
-        borderRadius: 14,
+        borderRadius: 12,
         border: '1px solid #E2E8F0',
-        padding: '18px 20px',
+        borderTop: `4px solid ${accent}`,
+        padding: '14px 16px',
+        minHeight: 104,
         boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
-        minHeight: 96,
-        display: 'flex',
-        gap: 12,
-        alignItems: 'flex-start',
       }}
     >
-      <div
+      <p
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: 999,
-          background: accent,
-          display: 'grid',
-          placeItems: 'center',
-          flexShrink: 0,
-          color: '#fff',
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: '#64748B',
         }}
       >
-        {icon}
-      </div>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 12,
-            fontWeight: 800,
-            letterSpacing: '0.04em',
-            color: '#64748B',
-            textTransform: 'uppercase',
-          }}
-        >
-          {title}
-        </p>
-        <p
-          style={{
-            margin: '8px 0 0',
-            fontSize: 26,
-            fontWeight: 800,
-            color: '#0F172A',
-            fontVariantNumeric: 'tabular-nums',
-            letterSpacing: '-0.02em',
-          }}
-        >
-          {value}
-        </p>
-      </div>
+        {title}
+      </p>
+      <p
+        style={{
+          margin: '10px 0 6px',
+          fontSize: 22,
+          fontWeight: 800,
+          color: '#0F172A',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+      </p>
+      <p style={{ margin: 0, fontSize: 12, color: '#64748B' }}>{footnote}</p>
     </div>
   );
 }
 
+type DraftLite = {
+  tipo: string;
+  forma_pago: string;
+  estado: string;
+  descripcion: string;
+};
+
+function toDraft(f: CcoLibroFila): DraftLite {
+  return {
+    tipo: f.tipo || '',
+    forma_pago: f.forma_pago ?? '',
+    estado: f.estado || 'PAGADO',
+    descripcion: f.descripcion,
+  };
+}
+
 export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
-  const [filas, setFilas] = useState<VistaFila[]>([]);
-  const [totalApi, setTotalApi] = useState(0);
-  const [pctGlobal, setPctGlobal] = useState(15);
+  const [filas, setFilas] = useState<CcoLibroFila[]>([]);
+  const [ingresosTotal, setIngresosTotal] = useState(0);
+  const [countIngresos, setCountIngresos] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [agrupar, setAgrupar] = useState(false);
-  const [cfgOpen, setCfgOpen] = useState(false);
-  const [visible, setVisible] = useState<Record<EgresosColKey, boolean>>(defaultVisibleCols);
-  const [sortKey, setSortKey] = useState<EgresosColKey>('id');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [query, setQuery] = useState('');
+  const [rubroFiltro, setRubroFiltro] = useState('');
+  const [page, setPage] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, DraftLite>>({});
+  const [dirty, setDirty] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!proyectoId || typeof window === 'undefined') return;
-    try {
-      const raw = localStorage.getItem(storageKeyColumnas(proyectoId));
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<Record<EgresosColKey, boolean>>;
-      setVisible((prev) => ({ ...prev, ...parsed }));
-    } catch {
-      /* ignore */
-    }
-  }, [proyectoId]);
-
-  const persistCols = useCallback(
-    (next: Record<EgresosColKey, boolean>) => {
-      setVisible(next);
-      if (!proyectoId || typeof window === 'undefined') return;
-      try {
-        localStorage.setItem(storageKeyColumnas(proyectoId), JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-    },
-    [proyectoId],
-  );
+  const marcarDoc = useCallback((compraId: string, name: string) => {
+    setFilas((prev) =>
+      prev.map((row) =>
+        row.id === compraId
+          ? {
+              ...row,
+              tiene_documento: true,
+              document_file_name: name,
+              link_factura: `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`,
+            }
+          : row,
+      ),
+    );
+    setOkMsg('Factura enlazada al egreso.');
+  }, []);
 
   const cargar = useCallback(async () => {
     if (!proyectoId) return;
@@ -303,18 +136,44 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
     setError(null);
     setOkMsg(null);
     try {
-      const qs = new URLSearchParams({
-        proyecto: proyectoId,
-        clase: 'GASTO',
-        limit: '5000',
-      });
-      const res = await fetch(`/api/contabilidad/cco/libro?${qs}`, { cache: 'no-store' });
-      const json = await res.json();
-      if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error al cargar egresos');
-      const rows = (json.filas ?? []) as CcoLibroFila[];
-      setFilas(rows.map((f) => ({ ...f, dirty: false, draft: toDraft(f) })));
-      setTotalApi(Number(json.total) || rows.length);
-      setPctGlobal(Number(json.honorarios_admin_pct) || 15);
+      const [gRes, iRes] = await Promise.all([
+        fetch(
+          `/api/contabilidad/cco/libro?${new URLSearchParams({
+            proyecto: proyectoId,
+            clase: 'GASTO',
+            limit: '5000',
+          })}`,
+          { cache: 'no-store' },
+        ),
+        fetch(
+          `/api/contabilidad/cco/libro?${new URLSearchParams({
+            proyecto: proyectoId,
+            clase: 'INGRESO',
+            limit: '5000',
+          })}`,
+          { cache: 'no-store' },
+        ),
+      ]);
+      const gJson = await gRes.json();
+      const iJson = await iRes.json();
+      if (!gRes.ok || gJson.ok === false) throw new Error(gJson.error ?? 'Error al cargar egresos');
+      const rows = (gJson.filas ?? []) as CcoLibroFila[];
+      setFilas(rows);
+      const nextDrafts: Record<string, DraftLite> = {};
+      for (const r of rows) nextDrafts[r.id] = toDraft(r);
+      setDrafts(nextDrafts);
+      setDirty(new Set());
+      setEditingId(null);
+      setPage(0);
+
+      const ingresos = (iJson.filas ?? []) as CcoLibroFila[];
+      if (iRes.ok && iJson.ok !== false) {
+        setIngresosTotal(ingresos.reduce((s, r) => s + (Number(r.monto_base_usd) || 0), 0));
+        setCountIngresos(ingresos.length);
+      } else {
+        setIngresosTotal(0);
+        setCountIngresos(0);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
       setFilas([]);
@@ -327,231 +186,59 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
     void cargar();
   }, [cargar]);
 
-  const filasVista = useMemo(() => {
-    const base = agrupar ? agruparFilas(filas) : filas;
-    const sorted = [...base].sort((a, b) => {
-      const dir = sortDir === 'asc' ? 1 : -1;
-      const va = (() => {
-        switch (sortKey) {
-          case 'id':
-            return Number(a.display_id) || String(a.display_id);
-          case 'fecha':
-            return a.draft?.fecha ?? a.fecha ?? '';
-          case 'proveedor':
-            return (a.draft?.proveedor ?? a.proveedor).toUpperCase();
-          case 'descripcion':
-            return (a.draft?.descripcion ?? a.descripcion).toUpperCase();
-          case 'factura':
-            return (a.invoice_number ?? '').toUpperCase();
-          case 'moneda':
-            return a.draft?.moneda ?? a.moneda;
-          case 'tasa':
-            return Number(a.draft?.tasa ?? a.tasa) || 0;
-          case 'tasa_binance':
-            return a.tasa_binance || 0;
-          case 'tasa_usada':
-            return a.tasa_usada ?? '';
-          case 'monto_orig':
-            return Number(a.draft?.monto_orig ?? a.monto_orig) || 0;
-          case 'monto_base':
-            return a.monto_base_usd;
-          case 'monto_pagado':
-            return a.monto_pagado_usd ?? -1;
-          case 'pct_dist':
-            return a.pct_distribucion;
-          case 'admin_pct':
-            return Number(a.draft?.admin_pct ?? a.admin_pct) || 0;
-          case 'brecha':
-            return a.porcentaje_brecha_real ?? -1;
-          case 'honorarios':
-            return a.honorarios_usd;
-          case 'costo_total':
-            return a.costo_total_usd;
-          case 'tipo':
-            return a.tipo;
-          case 'capitulo':
-            return a.capitulo;
-          case 'subcapitulo':
-            return a.subcapitulo;
-          case 'contrato':
-            return a.contrato_label ?? '';
-          case 'estado':
-            return a.estado;
-          case 'forma_pago':
-            return a.forma_pago ?? '';
-          default:
-            return 0;
-        }
-      })();
-      const vb = (() => {
-        switch (sortKey) {
-          case 'id':
-            return Number(b.display_id) || String(b.display_id);
-          case 'fecha':
-            return b.draft?.fecha ?? b.fecha ?? '';
-          case 'proveedor':
-            return (b.draft?.proveedor ?? b.proveedor).toUpperCase();
-          case 'descripcion':
-            return (b.draft?.descripcion ?? b.descripcion).toUpperCase();
-          case 'factura':
-            return (b.invoice_number ?? '').toUpperCase();
-          case 'moneda':
-            return b.draft?.moneda ?? b.moneda;
-          case 'tasa':
-            return Number(b.draft?.tasa ?? b.tasa) || 0;
-          case 'tasa_binance':
-            return b.tasa_binance || 0;
-          case 'tasa_usada':
-            return b.tasa_usada ?? '';
-          case 'monto_orig':
-            return Number(b.draft?.monto_orig ?? b.monto_orig) || 0;
-          case 'monto_base':
-            return b.monto_base_usd;
-          case 'monto_pagado':
-            return b.monto_pagado_usd ?? -1;
-          case 'pct_dist':
-            return b.pct_distribucion;
-          case 'admin_pct':
-            return Number(b.draft?.admin_pct ?? b.admin_pct) || 0;
-          case 'brecha':
-            return b.porcentaje_brecha_real ?? -1;
-          case 'honorarios':
-            return b.honorarios_usd;
-          case 'costo_total':
-            return b.costo_total_usd;
-          case 'tipo':
-            return b.tipo;
-          case 'capitulo':
-            return b.capitulo;
-          case 'subcapitulo':
-            return b.subcapitulo;
-          case 'contrato':
-            return b.contrato_label ?? '';
-          case 'estado':
-            return b.estado;
-          case 'forma_pago':
-            return b.forma_pago ?? '';
-          default:
-            return 0;
-        }
-      })();
-      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
-      return String(va).localeCompare(String(vb), 'es', { numeric: true }) * dir;
-    });
-    return sorted;
-  }, [filas, agrupar, sortKey, sortDir]);
-
-  const kpis = useMemo(() => {
-    const rows = filasVista;
-    return {
-      montoOrig: rows.reduce((s, r) => {
-        const d = r.draft;
-        if (d && !r._agrupada) {
-          const rec = recalcFromDraft(r, d, pctGlobal);
-          return s + rec.monto_base_usd;
-        }
-        return s + r.monto_base_usd;
-      }, 0),
-      honorarios: rows.reduce((s, r) => {
-        const d = r.draft;
-        if (d && !r._agrupada) {
-          const rec = recalcFromDraft(r, d, pctGlobal);
-          return s + rec.honorarios_usd;
-        }
-        return s + r.honorarios_usd;
-      }, 0),
-      costo: rows.reduce((s, r) => {
-        const d = r.draft;
-        if (d && !r._agrupada) {
-          const rec = recalcFromDraft(r, d, pctGlobal);
-          return s + rec.costo_total_usd;
-        }
-        return s + r.costo_total_usd;
-      }, 0),
-    };
-  }, [filasVista, pctGlobal]);
-
-  const dirtyCount = filas.filter((f) => f.dirty).length;
-  const colsActivas = EGRESOS_COLUMNAS.filter((c) => visible[c.key]);
-
-  const patchDraft = (id: string, patch: Partial<Draft>) => {
-    setFilas((prev) =>
-      prev.map((f) => {
-        if (f.id !== id || f._agrupada) return f;
-        const draft = { ...(f.draft ?? toDraft(f)), ...patch };
-        const rec = recalcFromDraft(f, draft, pctGlobal);
-        return {
-          ...f,
-          ...rec,
-          draft,
-          dirty: true,
-          fecha: draft.fecha || f.fecha,
-          proveedor: draft.proveedor,
-          descripcion: draft.descripcion,
-        };
-      }),
-    );
-  };
-
-  const toggleSort = (key: EgresosColKey) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else {
-      setSortKey(key);
-      setSortDir(key === 'proveedor' || key === 'descripcion' ? 'asc' : 'desc');
+  const filasFiltradas = useMemo(() => {
+    let rows = filas;
+    if (rubroFiltro) {
+      rows = rows.filter((r) => String(r.tipo).toUpperCase() === rubroFiltro.toUpperCase());
     }
-  };
-
-  const mostrarOcultasORestablecer = () => {
-    const next = defaultVisibleCols();
-    for (const c of EGRESOS_COLUMNAS) next[c.key] = true;
-    persistCols(next);
-    setCfgOpen(true);
-  };
-
-  const capitulosOpts = useMemo(() => {
-    const set = new Set<string>();
-    for (const f of filas) {
-      if (f.capitulo && f.capitulo !== '—') set.add(f.capitulo);
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.descripcion.toLowerCase().includes(q) ||
+          r.proveedor.toLowerCase().includes(q) ||
+          (r.invoice_number ?? '').toLowerCase().includes(q) ||
+          r.tipo.toLowerCase().includes(q),
+      );
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [filas]);
+    return rows;
+  }, [filas, rubroFiltro, query]);
 
-  const subcapitulosOpts = useMemo(() => {
-    const set = new Set<string>();
-    for (const f of filas) {
-      if (f.subcapitulo && f.subcapitulo !== '—') set.add(f.subcapitulo);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [filas]);
+  const egresosTotal = useMemo(
+    () => filasFiltradas.reduce((s, r) => s + (Number(r.monto_base_usd) || 0), 0),
+    [filasFiltradas],
+  );
+  const saldo = ingresosTotal - egresosTotal;
+
+  const pageCount = Math.max(1, Math.ceil(filasFiltradas.length / PAGE_SIZE));
+  const pageRows = filasFiltradas.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const patchDraft = (id: string, patch: Partial<DraftLite>) => {
+    setDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] ?? toDraft(filas.find((f) => f.id === id)!)), ...patch } }));
+    setDirty((prev) => new Set(prev).add(id));
+  };
 
   const guardar = async () => {
-    const cambios = filas
-      .filter((f) => f.dirty && f.draft && !f._agrupada && f.fuente === 'compra')
-      .map((f) => {
-        const d = f.draft!;
+    const cambios = Array.from(dirty)
+      .map((id) => {
+        const f = filas.find((r) => r.id === id);
+        const d = drafts[id];
+        if (!f || !d || f.fuente !== 'compra') return null;
         return {
-          id: f.id,
-          fecha: d.fecha || undefined,
-          proveedor: d.proveedor,
+          id,
           descripcion: d.descripcion,
-          moneda: d.moneda,
-          tasa: Number(d.tasa) || 0,
-          monto_orig: Number(d.monto_orig) || 0,
-          admin_pct: Number(d.admin_pct) || null,
           tipo: d.tipo,
-          capitulo: d.capitulo,
-          subcapitulo: d.subcapitulo,
-          estado: d.estado,
           forma_pago: d.forma_pago || null,
+          estado: d.estado,
         };
-      });
+      })
+      .filter(Boolean);
     if (cambios.length === 0) {
       setOkMsg('No hay cambios pendientes.');
       return;
     }
     setSaving(true);
     setError(null);
-    setOkMsg(null);
     try {
       const res = await fetch('/api/contabilidad/cco/registros', {
         method: 'PATCH',
@@ -559,10 +246,8 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
         body: JSON.stringify({ proyecto_id: proyectoId, clase: 'GASTO', cambios }),
       });
       const json = await res.json();
-      if (!res.ok || json.ok === false) {
-        throw new Error(json.error ?? 'No se pudo guardar');
-      }
-      setOkMsg(`Guardados ${json.updated ?? cambios.length} cambio(s) de egresos.`);
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo guardar');
+      setOkMsg(`Guardados ${json.updated ?? cambios.length} cambio(s).`);
       await cargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al guardar');
@@ -574,13 +259,15 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
   if (!proyectoId) {
     return (
       <div style={box}>
-        <p style={muted}>Selecciona una obra para ver el cuadro de egresos.</p>
+        <p style={{ margin: 0, color: '#64748B', fontSize: 13 }}>
+          Selecciona una obra para ver el listado de egresos.
+        </p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div
         style={{
           display: 'grid',
@@ -588,426 +275,178 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           gap: 12,
         }}
       >
-        <KpiSuma
-          title="Suma Monto Original"
-          value={fmtNum(kpis.montoOrig)}
-          accent="#EAB308"
-          icon={<CircleDollarSign size={18} />}
+        <KpiCard
+          title="Total de Ingresos"
+          value={fmtUsd(ingresosTotal)}
+          footnote={`${countIngresos} registro(s)`}
+          accent="#22C55E"
         />
-        <KpiSuma
-          title="Suma Honorarios"
-          value={fmtUsd(kpis.honorarios)}
-          accent="#16A34A"
-          icon={<Briefcase size={18} />}
+        <KpiCard
+          title="Total de Egresos"
+          value={fmtUsd(egresosTotal)}
+          footnote={`${filasFiltradas.length} registro(s)`}
+          accent="#EF4444"
         />
-        <KpiSuma
-          title="Suma Costo Total"
-          value={fmtUsd(kpis.costo)}
-          accent="#DC2626"
-          icon={<CircleDollarSign size={18} />}
+        <KpiCard
+          title="Saldo"
+          value={fmtUsd(saldo)}
+          footnote="Ingresos − egresos"
+          accent="#3B82F6"
         />
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 12,
-          background: '#EFF6FF',
-          border: '1px solid #BFDBFE',
-          borderRadius: 12,
-          padding: '10px 14px',
-        }}
-      >
-        <p style={{ margin: 0, fontSize: 13, color: '#1E3A8A', flex: 1, minWidth: 200 }}>
-          Mostrando <strong>{filasVista.length}</strong> egresos desde compras de obra
-          {totalApi !== filasVista.length ? ` · ${totalApi} en libro` : ''}. En{' '}
-          <strong>LINK FACTURA</strong> puede ver el documento o adjuntar PDF/imagen y
-          enlazarlo al egreso.
-        </p>
-        <label
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            fontSize: 13,
-            fontWeight: 700,
-            color: '#1E40AF',
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-          title="Combina filas de un mismo gasto dividido (split) en una sola línea."
-        >
-          <input
-            type="checkbox"
-            checked={agrupar}
-            onChange={(e) => setAgrupar(e.target.checked)}
-          />
-          Agrupar Gastos Divididos
-          <HelpCircle size={14} color="#64748B" />
-        </label>
-        <button type="button" onClick={() => void cargar()} style={btnGhost} disabled={loading}>
-          Actualizar
-        </button>
       </div>
 
       <div style={box}>
-        <button
-          type="button"
-          onClick={() => setCfgOpen((o) => !o)}
+        <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            fontWeight: 800,
-            fontSize: 14,
-            color: '#0F172A',
-            marginBottom: cfgOpen ? 12 : 0,
+            flexWrap: 'wrap',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 14,
           }}
         >
-          {cfgOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <Eye size={16} color="#64748B" />
-          Configurar Columnas Visibles (Egresos)
-        </button>
-        {cfgOpen ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
-            {EGRESOS_COLUMNAS.map((c) => (
-              <label
-                key={c.key}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: '#334155',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={!!visible[c.key]}
-                  onChange={(e) => persistCols({ ...visible, [c.key]: e.target.checked })}
-                />
-                {c.label}
-              </label>
-            ))}
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0F172A' }}>
+              Listado de Egresos registrados
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
+              Compras de obra · enlaza facturas desde la columna Factura o la carga manual
+            </p>
           </div>
-        ) : null}
+          <button type="button" onClick={() => void cargar()} style={btnGhost} disabled={loading}>
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Actualizar
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: 10,
+            marginBottom: 14,
+          }}
+        >
+          <div>
+            <label style={label}>Categoría</label>
+            <select
+              value={rubroFiltro}
+              onChange={(e) => {
+                setRubroFiltro(e.target.value);
+                setPage(0);
+              }}
+              style={input}
+            >
+              <option value="">Todas</option>
+              {CCO_TIPOS_GASTO.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ gridColumn: 'span 2' }}>
+            <label style={label}>Buscar</label>
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
+              placeholder="Concepto, proveedor, factura…"
+              style={input}
+            />
+          </div>
+        </div>
 
         {error ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{error}</p> : null}
         {okMsg ? <p style={{ color: '#15803D', fontSize: 13 }}>{okMsg}</p> : null}
 
         {loading ? (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#64748B', padding: 16 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#64748B', padding: 28 }}>
             <Loader2 className="animate-spin" size={16} /> Cargando egresos…
           </div>
         ) : (
-          <div style={{ overflow: 'auto', maxHeight: 'min(70vh, 640px)', borderRadius: 10, border: '1px solid #E2E8F0' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 980 }}>
-              <thead>
-                <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
-                  {colsActivas.map((c) => (
-                    <th
-                      key={c.key}
-                      onClick={() => toggleSort(c.key)}
-                      style={{
-                        padding: '9px 8px',
-                        position: 'sticky',
-                        top: 0,
-                        background: '#F1F5F9',
-                        zIndex: 1,
-                        whiteSpace: 'nowrap',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                        textAlign: c.align === 'right' ? 'right' : 'left',
-                        color: '#334155',
-                        fontWeight: 800,
-                        borderBottom: '1px solid #E2E8F0',
-                      }}
-                    >
-                      {c.label}
-                      {sortKey === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filasVista.map((f, idx) => {
-                  const d = f.draft ?? toDraft(f);
-                  const rec = f._agrupada ? f : { ...f, ...recalcFromDraft(f, d, pctGlobal) };
-                  const readonly = !!f._agrupada || agrupar;
-                  return (
-                    <tr
-                      key={f._agrupada ? `g-${f.split_group_key}` : f.id}
-                      style={{
-                        borderTop: '1px solid #E2E8F0',
-                        background: f.dirty ? '#FFF7ED' : idx % 2 ? '#F8FAFC' : '#fff',
-                      }}
-                    >
-                      {colsActivas.map((c) => {
-                        const align = c.align === 'right' ? 'right' : 'left';
-                        const cell: React.CSSProperties = {
-                          ...td,
-                          textAlign: align,
-                          background: f.dirty ? '#FFF7ED' : undefined,
-                        };
-                        if (c.key === 'id') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {f.display_id}
-                              {f._agrupada ? (
-                                <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>
-                                  {f._groupIds?.length} partes
-                                </span>
-                              ) : null}
+          <>
+            <div style={{ overflow: 'auto', border: '1px solid #E2E8F0', borderRadius: 10 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 880, fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
+                    <th style={th}>#</th>
+                    <th style={th}>Fecha</th>
+                    <th style={th}>Concepto</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Monto</th>
+                    <th style={th}>Categoría</th>
+                    <th style={th}>Método</th>
+                    <th style={th}>Factura</th>
+                    <th style={{ ...th, textAlign: 'center' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: 28, textAlign: 'center', color: '#94A3B8' }}>
+                        Sin egresos para el filtro actual.
+                      </td>
+                    </tr>
+                  ) : (
+                    pageRows.map((f, idx) => {
+                      const n = page * PAGE_SIZE + idx + 1;
+                      const d = drafts[f.id] ?? toDraft(f);
+                      const editing = editingId === f.id;
+                      return (
+                        <React.Fragment key={f.id}>
+                          <tr
+                            style={{
+                              background: dirty.has(f.id)
+                                ? '#FFF7ED'
+                                : n % 2
+                                  ? '#F8FAFC'
+                                  : '#fff',
+                              borderTop: '1px solid #E2E8F0',
+                            }}
+                          >
+                            <td style={{ ...td, color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
+                              {n}
                             </td>
-                          );
-                        }
-                        if (c.key === 'fecha') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                d.fecha || '—'
-                              ) : (
-                                <input
-                                  type="date"
-                                  value={d.fecha}
-                                  onChange={(e) => patchDraft(f.id, { fecha: e.target.value })}
-                                  style={inputCell}
-                                />
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'proveedor') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                d.proveedor
-                              ) : (
-                                <input
-                                  value={d.proveedor}
-                                  onChange={(e) => patchDraft(f.id, { proveedor: e.target.value })}
-                                  style={{ ...inputCell, minWidth: 110 }}
-                                />
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'descripcion') {
-                          return (
-                            <td key={c.key} style={{ ...cell, maxWidth: 260 }}>
-                              {readonly ? (
-                                <span title={d.descripcion}>{d.descripcion}</span>
-                              ) : (
+                            <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmtFecha(f.fecha)}</td>
+                            <td style={td}>
+                              {editing ? (
                                 <input
                                   value={d.descripcion}
                                   onChange={(e) => patchDraft(f.id, { descripcion: e.target.value })}
-                                  style={{ ...inputCell, minWidth: 160 }}
+                                  style={input}
                                 />
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'factura') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {noneLabel(f.invoice_number)}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'moneda') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                d.moneda
                               ) : (
-                                <select
-                                  value={d.moneda.toUpperCase().startsWith('VE') ? 'VES' : 'USD'}
-                                  onChange={(e) => patchDraft(f.id, { moneda: e.target.value })}
-                                  style={inputCell}
-                                >
-                                  <option value="USD">USD</option>
-                                  <option value="VES">VES</option>
-                                </select>
+                                <>
+                                  <div style={{ fontWeight: 600, color: '#0F172A' }}>
+                                    {d.descripcion || '—'}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                                    {f.proveedor}
+                                    {f.invoice_number ? ` · ${f.invoice_number}` : ''}
+                                  </div>
+                                </>
                               )}
                             </td>
-                          );
-                        }
-                        if (c.key === 'tasa') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                f.tasa > 0 ? fmtNum(f.tasa, 4) : '—'
-                              ) : (
-                                <input
-                                  value={d.tasa}
-                                  onChange={(e) => patchDraft(f.id, { tasa: e.target.value })}
-                                  style={{ ...inputCell, width: 88, textAlign: 'right' }}
-                                />
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'tasa_binance') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {f.tasa_binance > 0 ? fmtNum(f.tasa_binance, 4) : '—'}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'tasa_usada') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {noneLabel(f.tasa_usada)}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'monto_orig') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                fmtNum(rec.monto_orig)
-                              ) : (
-                                <input
-                                  value={d.monto_orig}
-                                  onChange={(e) => patchDraft(f.id, { monto_orig: e.target.value })}
-                                  style={{ ...inputCell, width: 96, textAlign: 'right' }}
-                                />
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'monto_base') {
-                          return (
                             <td
-                              key={c.key}
-                              style={{ ...cell, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
+                              style={{
+                                ...td,
+                                textAlign: 'right',
+                                fontWeight: 800,
+                                fontVariantNumeric: 'tabular-nums',
+                                whiteSpace: 'nowrap',
+                              }}
                             >
-                              {fmtUsd(rec.monto_base_usd)}
+                              {fmtUsd(f.monto_base_usd)}
                             </td>
-                          );
-                        }
-                        if (c.key === 'monto_pagado') {
-                          return (
-                            <td key={c.key} style={{ ...cell, fontVariantNumeric: 'tabular-nums' }}>
-                              {f.monto_pagado_usd != null ? fmtUsd(f.monto_pagado_usd) : '—'}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'pct_dist') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {fmtNum(f.pct_distribucion)}%
-                            </td>
-                          );
-                        }
-                        if (c.key === 'admin_pct') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                fmtNum(rec.admin_pct)
-                              ) : (
-                                <input
-                                  value={d.admin_pct}
-                                  onChange={(e) => patchDraft(f.id, { admin_pct: e.target.value })}
-                                  style={{ ...inputCell, width: 64, textAlign: 'right' }}
-                                />
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'brecha') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {f.porcentaje_brecha_real != null
-                                ? `${fmtNum(f.porcentaje_brecha_real)}%`
-                                : '—'}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'honorarios') {
-                          return (
-                            <td key={c.key} style={{ ...cell, fontVariantNumeric: 'tabular-nums' }}>
-                              {fmtUsd(rec.honorarios_usd)}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'costo_total') {
-                          return (
-                            <td
-                              key={c.key}
-                              style={{ ...cell, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              {fmtUsd(rec.costo_total_usd)}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'estado') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                <EstadoBadge estado={d.estado} />
-                              ) : (
-                                <select
-                                  value={d.estado}
-                                  onChange={(e) => patchDraft(f.id, { estado: e.target.value })}
-                                  style={inputCell}
-                                >
-                                  {EGRESOS_ESTADOS.map((st) => (
-                                    <option key={st} value={st}>
-                                      {st}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'forma_pago') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                noneLabel(d.forma_pago)
-                              ) : (
-                                <select
-                                  value={d.forma_pago}
-                                  onChange={(e) => patchDraft(f.id, { forma_pago: e.target.value })}
-                                  style={inputCell}
-                                >
-                                  <option value="">None</option>
-                                  {FORMAS_PAGO_CCO.map((fp) => (
-                                    <option key={fp} value={fp}>
-                                      {fp}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'tipo') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                d.tipo || '—'
-                              ) : (
+                            <td style={td}>
+                              {editing ? (
                                 <select
                                   value={d.tipo}
                                   onChange={(e) => patchDraft(f.id, { tipo: e.target.value })}
-                                  style={{ ...inputCell, minWidth: 120 }}
+                                  style={input}
                                 >
                                   <option value="">—</option>
                                   {[...CCO_TIPOS_GASTO]
@@ -1018,153 +457,139 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                                       </option>
                                     ))}
                                 </select>
-                              )}
-                            </td>
-                          );
-                        }
-                        if (c.key === 'capitulo') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                d.capitulo || '—'
                               ) : (
-                                <input
-                                  list={`cap-${proyectoId}`}
-                                  value={d.capitulo}
-                                  onChange={(e) => patchDraft(f.id, { capitulo: e.target.value })}
-                                  style={{ ...inputCell, minWidth: 100 }}
-                                />
+                                <span style={{ fontWeight: 700, color: '#334155', fontSize: 12 }}>
+                                  {d.tipo || '—'}
+                                </span>
                               )}
                             </td>
-                          );
-                        }
-                        if (c.key === 'subcapitulo') {
-                          return (
-                            <td key={c.key} style={cell}>
-                              {readonly ? (
-                                d.subcapitulo || '—'
+                            <td style={td}>
+                              {editing ? (
+                                <select
+                                  value={d.forma_pago}
+                                  onChange={(e) => patchDraft(f.id, { forma_pago: e.target.value })}
+                                  style={input}
+                                >
+                                  <option value="">—</option>
+                                  {FORMAS_PAGO_CCO.map((fp) => (
+                                    <option key={fp} value={fp}>
+                                      {fp}
+                                    </option>
+                                  ))}
+                                </select>
                               ) : (
-                                <input
-                                  list={`sub-${proyectoId}`}
-                                  value={d.subcapitulo}
-                                  onChange={(e) => patchDraft(f.id, { subcapitulo: e.target.value })}
-                                  style={{ ...inputCell, minWidth: 110 }}
-                                />
+                                <span style={{ fontSize: 12, color: '#475569' }}>
+                                  {d.forma_pago || '—'}
+                                </span>
                               )}
                             </td>
-                          );
-                        }
-                        if (c.key === 'contrato') {
-                          return (
-                            <td key={c.key} style={{ ...cell, maxWidth: 160, whiteSpace: 'normal' }}>
-                              {noneLabel(f.contrato_label)}
+                            <td style={{ ...td, whiteSpace: 'normal' }}>
+                              <EgresoFacturaCell
+                                compraId={f.id}
+                                tieneDocumento={!!f.tiene_documento}
+                                fileName={f.document_file_name}
+                                puedeAdjuntar={f.fuente === 'compra'}
+                                onAdjuntado={marcarDoc}
+                              />
                             </td>
-                          );
-                        }
-                        if (c.key === 'link_factura') {
-                          const puedeAdjuntar =
-                            !readonly && f.fuente === 'compra' && !f._agrupada;
-                          return (
-                            <td key={c.key} style={{ ...cell, whiteSpace: 'normal' }}>
-                              {f.fuente === 'compra' ? (
-                                <EgresoFacturaCell
-                                  compraId={f.id}
-                                  tieneDocumento={!!f.tiene_documento}
-                                  fileName={f.document_file_name}
-                                  puedeAdjuntar={puedeAdjuntar}
-                                  onAdjuntado={(compraId, name) => {
-                                    setFilas((prev) =>
-                                      prev.map((row) =>
-                                        row.id === compraId
-                                          ? {
-                                              ...row,
-                                              tiene_documento: true,
-                                              document_file_name: name,
-                                              link_factura: `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`,
-                                            }
-                                          : row,
-                                      ),
+                            <td style={{ ...td, textAlign: 'center' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  gap: 6,
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  title={f.tiene_documento ? 'Ver factura' : 'Sin factura'}
+                                  disabled={!f.tiene_documento}
+                                  onClick={async () => {
+                                    const res = await fetch(
+                                      `/api/contabilidad/compras/${encodeURIComponent(f.id)}/document`,
                                     );
-                                    setOkMsg('Factura enlazada al egreso.');
+                                    const data = await res.json();
+                                    if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
                                   }}
-                                />
-                              ) : (
-                                noneLabel(null)
-                              )}
+                                  style={iconBtn}
+                                >
+                                  {f.tiene_documento ? (
+                                    <Eye size={16} color="#2563EB" />
+                                  ) : (
+                                    <FileText size={16} color="#CBD5E1" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Editar"
+                                  onClick={() =>
+                                    setEditingId((cur) => (cur === f.id ? null : f.id))
+                                  }
+                                  style={iconBtn}
+                                >
+                                  <Pencil size={16} color="#64748B" />
+                                </button>
+                              </div>
                             </td>
-                          );
-                        }
-                        return <td key={c.key} style={cell}>—</td>;
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <datalist id={`cap-${proyectoId}`}>
-              {capitulosOpts.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-            <datalist id={`sub-${proyectoId}`}>
-              {subcapitulosOpts.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-            {filasVista.length === 0 ? (
-              <p style={{ ...muted, padding: 16 }}>Sin egresos para el filtro actual.</p>
-            ) : null}
-          </div>
-        )}
+                          </tr>
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            marginTop: 14,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => void guardar()}
-            disabled={saving || dirtyCount === 0 || agrupar}
-            style={{
-              ...btnSave,
-              opacity: saving || dirtyCount === 0 || agrupar ? 0.55 : 1,
-            }}
-            title={agrupar ? 'Desactiva «Agrupar» para editar y guardar filas.' : undefined}
-          >
-            {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-            Guardar Cambios de Egresos
-            {dirtyCount > 0 ? ` (${dirtyCount})` : ''}
-          </button>
-          <button type="button" onClick={mostrarOcultasORestablecer} style={btnLink}>
-            <Eye size={14} /> Mostrar Columnas Ocultas / Restablecer Vista
-          </button>
-        </div>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 10,
+                marginTop: 12,
+                fontSize: 13,
+                color: '#64748B',
+              }}
+            >
+              <span>
+                {filasFiltradas.length} egreso(s)
+                {dirty.size ? ` · ${dirty.size} editado(s)` : ''}
+              </span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {dirty.size > 0 ? (
+                  <button type="button" onClick={() => void guardar()} disabled={saving} style={btnPrimary}>
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+                    Guardar cambios
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={page <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  style={btnPage}
+                >
+                  ←
+                </button>
+                <span>
+                  {page + 1} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={page >= pageCount - 1}
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  style={btnPage}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      <EgresoCargaSoportesPanel
-        filas={filas}
-        onAdjuntado={(compraId, name) => {
-          setFilas((prev) =>
-            prev.map((row) =>
-              row.id === compraId
-                ? {
-                    ...row,
-                    tiene_documento: true,
-                    document_file_name: name,
-                    link_factura: `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`,
-                  }
-                : row,
-            ),
-          );
-          setOkMsg('Factura enlazada al egreso.');
-        }}
-      />
+      <EgresoCargaSoportesPanel filas={filas} onAdjuntado={marcarDoc} />
     </div>
   );
 }
@@ -1175,55 +600,74 @@ const box: React.CSSProperties = {
   border: '1px solid #E2E8F0',
   padding: 16,
 };
-
-const muted: React.CSSProperties = { color: '#64748B', fontSize: 13, margin: 0 };
-const td: React.CSSProperties = {
-  padding: '6px 8px',
-  verticalAlign: 'middle',
+const th: React.CSSProperties = {
+  padding: '10px 8px',
+  fontSize: 12,
+  fontWeight: 800,
   color: '#334155',
   whiteSpace: 'nowrap',
+  borderBottom: '1px solid #E2E8F0',
 };
-const inputCell: React.CSSProperties = {
+const td: React.CSSProperties = {
+  padding: '10px 8px',
+  verticalAlign: 'middle',
+  color: '#334155',
+};
+const label: React.CSSProperties = {
+  display: 'block',
+  fontSize: 12,
+  fontWeight: 700,
+  color: '#64748B',
+  marginBottom: 4,
+};
+const input: React.CSSProperties = {
   width: '100%',
   border: '1px solid #CBD5E1',
-  borderRadius: 6,
-  padding: '4px 6px',
-  fontSize: 12,
+  borderRadius: 8,
+  padding: '8px 10px',
+  fontSize: 13,
   color: '#0F172A',
   background: '#fff',
 };
 const btnGhost: React.CSSProperties = {
-  border: '1px solid #93C5FD',
-  background: '#fff',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  border: '1px solid #CBD5E1',
+  background: '#F8FAFC',
   borderRadius: 8,
-  padding: '6px 12px',
+  padding: '8px 12px',
   fontWeight: 700,
   cursor: 'pointer',
   fontSize: 12,
-  color: '#1D4ED8',
+  color: '#334155',
 };
-const btnSave: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  border: 'none',
-  background: '#DC2626',
-  color: '#fff',
-  borderRadius: 10,
-  padding: '10px 16px',
-  fontWeight: 800,
-  cursor: 'pointer',
-  fontSize: 13,
-};
-const btnLink: React.CSSProperties = {
+const btnPrimary: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 6,
   border: 'none',
-  background: 'transparent',
-  color: '#475569',
-  fontWeight: 700,
+  background: '#2563EB',
+  color: '#fff',
+  borderRadius: 8,
+  padding: '8px 12px',
+  fontWeight: 800,
   cursor: 'pointer',
   fontSize: 12,
+};
+const btnPage: React.CSSProperties = {
+  border: '1px solid #CBD5E1',
+  background: '#fff',
+  borderRadius: 8,
+  padding: '4px 10px',
+  cursor: 'pointer',
+  fontWeight: 700,
+};
+const iconBtn: React.CSSProperties = {
+  border: 'none',
+  background: 'transparent',
+  cursor: 'pointer',
   padding: 4,
+  display: 'inline-flex',
+  alignItems: 'center',
 };
