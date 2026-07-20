@@ -77,12 +77,15 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
     >
       <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Importar SQLite / JSON V4</h3>
       <p style={{ color: '#64748B', fontSize: 13, margin: '8px 0 14px', lineHeight: 1.55 }}>
+        Alternativa técnica si tiene el <code style={code}>database_v4.db</code> local.
+        <br />
+        Si el suegro publica el CSV en OneDrive, use el menú <strong>Importar CSV</strong> (maestro
+        completo, misma data).
+        <br />
         1) Genera el JSON con{' '}
         <code style={code}>python scripts/etl_cco_v4_sqlite.py --out tmp/cco_v4.json</code>
         <br />
-        2) Aplica migraciones <code style={code}>268</code> + <code style={code}>269</code> en Supabase
-        <br />
-        3) Elige la obra destino arriba y sube el JSON aquí (sin tocar stock).
+        2) Elige la obra destino arriba y sube el JSON aquí (sin tocar stock).
       </p>
       {!proyectoId ? (
         <p style={{ color: '#B45309', fontSize: 13, fontWeight: 700 }}>

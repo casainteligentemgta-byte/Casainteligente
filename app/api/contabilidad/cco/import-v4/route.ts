@@ -39,10 +39,13 @@ export async function POST(req: Request) {
     }
 
     // Punto de seguridad antes de importar (si la migración 275 está aplicada)
+    const esCsvOnedrive = /csv|onedrive/i.test(String(body.obra_alias ?? ''));
     const pre = await crearSnapshotCco(admin.client, {
       proyectoId: body.proyecto_id,
       motivo: 'pre_import',
-      label: 'Antes de importar V4 lite',
+      label: esCsvOnedrive
+        ? 'Antes de importar CSV OneDrive'
+        : 'Antes de importar V4 lite',
     });
 
     const result = await importarMaestroV4(admin.client, body);
@@ -50,12 +53,13 @@ export async function POST(req: Request) {
     const db = admin.client as SupabaseClient;
     await db.from('cco_auditoria_eventos').insert({
       proyecto_id: body.proyecto_id,
-      accion: 'IMPORTACION V4 SQLITE',
+      accion: esCsvOnedrive ? 'IMPORTACION CSV ONEDRIVE' : 'IMPORTACION V4 SQLITE',
       detalle: `gastos +${result.gastos.created}/~${result.gastos.updated} · contratos ${result.contratos} · ingresos ${result.ingresos}${
         pre.ok ? ` · snapshot previo ${pre.snapshot.id.slice(0, 8)}` : ''
       }`,
       metadata: {
         ...(result as unknown as Record<string, unknown>),
+        fuente: esCsvOnedrive ? 'csv_onedrive' : 'json_v4',
         pre_snapshot_id: pre.ok ? pre.snapshot.id : null,
         pre_snapshot_error: pre.ok ? null : pre.error,
       },
