@@ -350,6 +350,7 @@ export async function importarMaestroV4(
         forma_pago_cco: t.forma_pago ? String(t.forma_pago) : null,
         origen_v4_id: t.origen_v4_id,
         cco_estado: t.estado ? String(t.estado) : 'PAGADO',
+        monto_pagado_usd: t.monto_pagado != null ? num(t.monto_pagado) : null,
       },
     });
 

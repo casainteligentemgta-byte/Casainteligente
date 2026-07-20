@@ -47,6 +47,7 @@ export type UpsertCompraDedupInput = {
     forma_pago_cco?: string | null;
     origen_v4_id?: number | null;
     cco_estado?: string | null;
+    monto_pagado_usd?: number | null;
   };
 };
 
@@ -165,6 +166,7 @@ export async function upsertCompraContableDedup(
     if (c.forma_pago_cco != null) rowBase.forma_pago_cco = c.forma_pago_cco;
     if (c.origen_v4_id !== undefined) rowBase.origen_v4_id = c.origen_v4_id;
     if (c.cco_estado != null) rowBase.cco_estado = c.cco_estado;
+    if (c.monto_pagado_usd !== undefined) rowBase.monto_pagado_usd = c.monto_pagado_usd;
   }
 
   if (existente?.id) {
