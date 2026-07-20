@@ -83,13 +83,13 @@ export async function POST(req: Request) {
 
     // Resolver entidad una vez por proyecto (cache)
     const entidadCache = new Map<string, string | null>();
-    async function entidadDe(proyectoId: string | null): Promise<string | null> {
+    const entidadDe = async (proyectoId: string | null): Promise<string | null> => {
       if (!proyectoId) return null;
       if (entidadCache.has(proyectoId)) return entidadCache.get(proyectoId) ?? null;
       const e = (await resolverEntidadIdDesdeProyecto(supabase, proyectoId)) ?? null;
       entidadCache.set(proyectoId, e);
       return e;
-    }
+    };
 
     const prepared: Array<{
       originalIndex: number;
