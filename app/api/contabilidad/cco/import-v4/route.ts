@@ -4,6 +4,7 @@ import {
   importarMaestroV4,
   type CcoV4ImportPayload,
 } from '@/lib/contabilidad/cco/importarMaestroV4';
+import { crearSnapshotCco } from '@/lib/contabilidad/cco/snapshots';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -37,21 +38,37 @@ export async function POST(req: Request) {
       );
     }
 
+    // Punto de seguridad antes de importar (si la migración 275 está aplicada)
+    const pre = await crearSnapshotCco(admin.client, {
+      proyectoId: body.proyecto_id,
+      motivo: 'pre_import',
+      label: 'Antes de importar V4 lite',
+    });
+
     const result = await importarMaestroV4(admin.client, body);
 
     const db = admin.client as SupabaseClient;
     await db.from('cco_auditoria_eventos').insert({
       proyecto_id: body.proyecto_id,
       accion: 'IMPORTACION V4 SQLITE',
-      detalle: `gastos +${result.gastos.created}/~${result.gastos.updated} · contratos ${result.contratos} · ingresos ${result.ingresos}`,
-      metadata: result as unknown as Record<string, unknown>,
+      detalle: `gastos +${result.gastos.created}/~${result.gastos.updated} · contratos ${result.contratos} · ingresos ${result.ingresos}${
+        pre.ok ? ` · snapshot previo ${pre.snapshot.id.slice(0, 8)}` : ''
+      }`,
+      metadata: {
+        ...(result as unknown as Record<string, unknown>),
+        pre_snapshot_id: pre.ok ? pre.snapshot.id : null,
+        pre_snapshot_error: pre.ok ? null : pre.error,
+      },
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      pre_snapshot_id: pre.ok ? pre.snapshot.id : null,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al importar CCO V4.';
     const hint = /cco_|tipo_gasto_cco|schema cache|42703/i.test(message)
-      ? 'Ejecuta migraciones 268 + 269 en Supabase (dedup_hash + tablas CCO).'
+      ? 'Ejecuta migraciones 268 + 269 (+ 275 snapshots) en Supabase.'
       : undefined;
     return NextResponse.json({ ok: false, error: message, hint }, { status: 500 });
   }

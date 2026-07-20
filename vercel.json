@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/avance-diario-campo",
       "schedule": "0 21 * * 1-5"
+    },
+    {
+      "path": "/api/cron/cco-snapshots-diarios",
+      "schedule": "0 4 * * *"
     }
   ]
 }
