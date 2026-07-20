@@ -90,6 +90,8 @@ async function reemplazarLineas(
 
 /**
  * Inserta o actualiza compra contable usando dedup_hash (SHA-256 llave natural).
+ * Si hay `cco.origen_v4_id`, busca primero por (proyecto_id, origen_v4_id) para
+ * reimports CCO idempotentes aunque cambie monto/fecha (el hash natural cambia).
  */
 export async function upsertCompraContableDedup(
   supabase: SupabaseClient,
@@ -108,19 +110,48 @@ export async function upsertCompraContableDedup(
     proyecto_id: proyectoId,
   });
 
-  const { data: existente, error: findErr } = await supabase
-    .from('contabilidad_compras')
-    .select('id')
-    .eq('dedup_hash', dedup_hash)
-    .maybeSingle();
+  let existenteId: string | null = null;
+  let sinColumnaHash = false;
+  let sinColumnaOrigenV4 = false;
 
-  if (findErr && !/dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message)) {
-    return { ok: false, status: 500, error: findErr.message };
+  const origenV4 =
+    input.cco?.origen_v4_id != null && Number.isFinite(Number(input.cco.origen_v4_id))
+      ? Number(input.cco.origen_v4_id)
+      : null;
+
+  if (origenV4 != null && proyectoId) {
+    const { data: byV4, error: v4Err } = await supabase
+      .from('contabilidad_compras')
+      .select('id')
+      .eq('proyecto_id', proyectoId)
+      .eq('origen_v4_id', origenV4)
+      .maybeSingle();
+    if (v4Err && /origen_v4_id|42703|PGRST204|schema cache/i.test(v4Err.message)) {
+      sinColumnaOrigenV4 = true;
+    } else if (v4Err) {
+      return { ok: false, status: 500, error: v4Err.message };
+    } else if (byV4?.id) {
+      existenteId = String(byV4.id);
+    }
   }
 
-  const sinColumnaHash = Boolean(
-    findErr && /dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message),
-  );
+  if (!existenteId) {
+    const { data: existente, error: findErr } = await supabase
+      .from('contabilidad_compras')
+      .select('id')
+      .eq('dedup_hash', dedup_hash)
+      .maybeSingle();
+
+    if (findErr && !/dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message)) {
+      return { ok: false, status: 500, error: findErr.message };
+    }
+
+    sinColumnaHash = Boolean(
+      findErr && /dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message),
+    );
+
+    if (existente?.id) existenteId = String(existente.id);
+  }
 
   const rowBase: Record<string, unknown> = {
     purchase_invoice_id: input.purchase_invoice_id ?? null,
@@ -164,42 +195,44 @@ export async function upsertCompraContableDedup(
       rowBase.porcentaje_brecha_real = c.porcentaje_brecha_real;
     }
     if (c.forma_pago_cco != null) rowBase.forma_pago_cco = c.forma_pago_cco;
-    if (c.origen_v4_id !== undefined) rowBase.origen_v4_id = c.origen_v4_id;
+    if (c.origen_v4_id !== undefined && !sinColumnaOrigenV4) {
+      rowBase.origen_v4_id = c.origen_v4_id;
+    }
     if (c.cco_estado != null) rowBase.cco_estado = c.cco_estado;
     if (c.monto_pagado_usd !== undefined) rowBase.monto_pagado_usd = c.monto_pagado_usd;
   }
 
-  if (existente?.id) {
+  if (existenteId) {
     if (!input.upsert) {
       return {
         ok: false,
         status: 409,
-        error: 'Compra duplicada (misma llave natural).',
-        hint: `dedup_hash ya existe · compra_id: ${existente.id}`,
-        id: String(existente.id),
+        error: 'Compra duplicada (misma llave natural o origen V4).',
+        hint: `ya existe · compra_id: ${existenteId}`,
+        id: existenteId,
       };
     }
 
     const { error: updErr } = await supabase
       .from('contabilidad_compras')
       .update(rowBase)
-      .eq('id', existente.id);
+      .eq('id', existenteId);
 
     if (updErr) {
       return { ok: false, status: 500, error: updErr.message };
     }
 
-    const lineErr = await reemplazarLineas(supabase, String(existente.id), input.lineas ?? []);
+    const lineErr = await reemplazarLineas(supabase, existenteId, input.lineas ?? []);
     if (lineErr) {
       return {
         ok: false,
         status: 500,
         error: `Actualizada la cabecera pero falló el detalle: ${lineErr}`,
-        id: String(existente.id),
+        id: existenteId,
       };
     }
 
-    return { ok: true, id: String(existente.id), action: 'updated', dedup_hash };
+    return { ok: true, id: existenteId, action: 'updated', dedup_hash };
   }
 
   const { data: compra, error: compraError } = await supabase
@@ -209,32 +242,53 @@ export async function upsertCompraContableDedup(
     .single();
 
   if (compraError) {
-    if (/uq_contabilidad_compras_dedup_hash|dedup_hash|duplicate key/i.test(compraError.message)) {
-      if (!input.upsert) {
-        return {
-          ok: false,
-          status: 409,
-          error: 'Compra duplicada (restricción única en BD).',
-          hint: compraError.message,
-        };
+    const isDupHash = /uq_contabilidad_compras_dedup_hash|dedup_hash|duplicate key/i.test(
+      compraError.message,
+    );
+    const isDupV4 = /uq_contabilidad_compras_origen_v4|origen_v4/i.test(compraError.message);
+
+    if ((isDupHash || isDupV4) && input.upsert) {
+      let raceId: string | null = null;
+      if (isDupV4 && origenV4 != null && proyectoId) {
+        const { data: race } = await supabase
+          .from('contabilidad_compras')
+          .select('id')
+          .eq('proyecto_id', proyectoId)
+          .eq('origen_v4_id', origenV4)
+          .maybeSingle();
+        if (race?.id) raceId = String(race.id);
       }
-      const { data: race } = await supabase
-        .from('contabilidad_compras')
-        .select('id')
-        .eq('dedup_hash', dedup_hash)
-        .maybeSingle();
-      if (race?.id) {
-        await supabase.from('contabilidad_compras').update(rowBase).eq('id', race.id);
-        await reemplazarLineas(supabase, String(race.id), input.lineas ?? []);
-        return { ok: true, id: String(race.id), action: 'updated', dedup_hash };
+      if (!raceId && !sinColumnaHash) {
+        const { data: race } = await supabase
+          .from('contabilidad_compras')
+          .select('id')
+          .eq('dedup_hash', dedup_hash)
+          .maybeSingle();
+        if (race?.id) raceId = String(race.id);
       }
+      if (raceId) {
+        await supabase.from('contabilidad_compras').update(rowBase).eq('id', raceId);
+        await reemplazarLineas(supabase, raceId, input.lineas ?? []);
+        return { ok: true, id: raceId, action: 'updated', dedup_hash };
+      }
+    }
+
+    if (isDupHash && !input.upsert) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Compra duplicada (restricción única en BD).',
+        hint: compraError.message,
+      };
     }
 
     const hint = /dedup_hash/i.test(compraError.message)
       ? 'Ejecuta la migración 268_contabilidad_compras_dedup_hash.sql en Supabase.'
-      : /monto_ves|tasa_bcv|moneda_original/i.test(compraError.message)
-        ? 'Ejecuta las migraciones 144/148 y recarga el schema.'
-        : undefined;
+      : /origen_v4/i.test(compraError.message)
+        ? 'Ejecuta la migración 269_cco_obra_fusion_v4.sql en Supabase.'
+        : /monto_ves|tasa_bcv|moneda_original/i.test(compraError.message)
+          ? 'Ejecuta las migraciones 144/148 y recarga el schema.'
+          : undefined;
     return {
       ok: false,
       status: 500,
