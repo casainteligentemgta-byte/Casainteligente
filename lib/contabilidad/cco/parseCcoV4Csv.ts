@@ -206,7 +206,7 @@ export async function parseCcoV4Csv(
     });
   }
 
-  const estructura = [...caps.values()].sort((a, b) => {
+  const estructura = Array.from(caps.values()).sort((a, b) => {
     if (a.tipo_nivel === b.tipo_nivel) return a.origen_v4_id - b.origen_v4_id;
     return a.tipo_nivel === 'CAPITULO' ? -1 : 1;
   });
