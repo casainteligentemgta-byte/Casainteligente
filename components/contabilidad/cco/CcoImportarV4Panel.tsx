@@ -75,8 +75,10 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
         padding: 24,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Importar SQLite / JSON V4</h3>
+      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Importar V4 lite</h3>
       <p style={{ color: '#64748B', fontSize: 13, margin: '8px 0 14px', lineHeight: 1.55 }}>
+        Importación ligera desde JSON exportado del CCO V4 (SQLite → ETL).
+        <br />
         1) Genera el JSON con{' '}
         <code style={code}>python scripts/etl_cco_v4_sqlite.py --out tmp/cco_v4.json</code>
         <br />
