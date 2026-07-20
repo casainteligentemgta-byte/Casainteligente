@@ -287,7 +287,7 @@ export function parseCsvMaestroV4(
 
   const iId = pickCol(
     headers,
-    ['id', 'origen_v4_id', 'id_v4', 'nro', 'numero', 'num', 'correlativo', 'txid'],
+    ['id', 'origen_v4_id', 'id_v4', 'txid', 'correlativo'],
     { allowFuzzy: false, excludeNorm: esHeaderLinkOSoporte },
   );
   const iFecha = pickCol(headers, ['fecha', 'date', 'fecha_factura', 'fecha_emision']);
@@ -373,7 +373,6 @@ export function parseCsvMaestroV4(
 
   const capByKey = new Map<string, { id: number; nombre: string }>();
   const subByKey = new Map<string, { id: number; nombre: string; padreKey: string }>();
-  let nextEstructuraId = 1;
 
   const ensureCapitulo = (nombre: string): number | null => {
     const n = nombre.trim();
@@ -381,7 +380,8 @@ export function parseCsvMaestroV4(
     const key = n.toUpperCase();
     const existing = capByKey.get(key);
     if (existing) return existing.id;
-    const id = nextEstructuraId++;
+    // ID estable por nombre (no depende del orden de aparición en el CSV).
+    const id = stableOrigenId(['CAP', key]);
     capByKey.set(key, { id, nombre: n });
     return id;
   };
@@ -395,7 +395,7 @@ export function parseCsvMaestroV4(
     const existing = subByKey.get(key);
     if (existing) return existing.id;
     ensureCapitulo(p);
-    const id = nextEstructuraId++;
+    const id = stableOrigenId(['SUB', padreKey, n.toUpperCase()]);
     subByKey.set(key, { id, nombre: n, padreKey });
     return id;
   };
@@ -458,6 +458,8 @@ export function parseCsvMaestroV4(
       }
     }
     if (origen == null) {
+      // Sin columna ID: hash de negocio (sin índice de fila) para reimports estables
+      // aunque se inserten/borren otras filas en el CSV.
       origen = stableOrigenId([
         clase,
         fecha ?? '',
@@ -467,7 +469,7 @@ export function parseCsvMaestroV4(
         subcapitulo,
         descripcion,
         String(montoUsd || montoBs || costeTotal),
-        String(r),
+        moneda,
       ]);
     }
     // Evitar colisión rara de hash en el mismo lote

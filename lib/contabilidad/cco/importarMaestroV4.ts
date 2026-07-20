@@ -288,22 +288,10 @@ export async function importarMaestroV4(
     const forma = String(t.forma_pago ?? '').toUpperCase();
     const metodoPago = /EFECTIVO/.test(forma) ? 'EFECTIVO' : 'TRANSFERENCIA';
     const fecha = fechaIso(t.fecha);
+    const refV4 = `V4-${t.origen_v4_id}`;
     const origenFondo = `CCO-V4 #${t.origen_v4_id} · ${String(t.descripcion ?? t.proveedor ?? 'Ingreso').slice(0, 180)}`;
 
-    // Evitar reimport duplicado por origen_fondo
-    const { data: ya } = await supabase
-      .from('ci_inyecciones_capital')
-      .select('id')
-      .eq('proyecto_id', proyectoId)
-      .eq('origen_fondo', origenFondo)
-      .maybeSingle();
-    if (ya?.id) {
-      doneWork += 1;
-      await report(`Ingresos ${result.ingresos}/${ingresosTx.length || 1}`);
-      continue;
-    }
-
-    const { error } = await supabase.from('ci_inyecciones_capital').insert({
+    const rowIngreso = {
       proyecto_id: proyectoId,
       origen_fondo: origenFondo,
       monto_recibido: montoOrig,
@@ -316,12 +304,72 @@ export async function importarMaestroV4(
       metodo_pago: metodoPago,
       banco_origen: metodoPago === 'TRANSFERENCIA' ? 'CCO-V4' : 'EFECTIVO',
       cuenta_bancaria_destino: metodoPago === 'TRANSFERENCIA' ? 'IMPORT-V4' : null,
-      referencia_bancaria: metodoPago === 'TRANSFERENCIA' ? `V4-${t.origen_v4_id}` : null,
+      // Siempre V4-{id}: identidad estable para reimport (migración 276).
+      referencia_bancaria: refV4,
       fecha_ingreso: fecha,
       creado_por: 'cco_v4_import',
-    });
-    if (error) errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
-    else result.ingresos += 1;
+    };
+
+    // 1) Por referencia V4-{id} (estable aunque cambie la descripción)
+    let existenteId: string | null = null;
+    const { data: byRef } = await supabase
+      .from('ci_inyecciones_capital')
+      .select('id')
+      .eq('proyecto_id', proyectoId)
+      .eq('referencia_bancaria', refV4)
+      .maybeSingle();
+    if (byRef?.id) existenteId = String(byRef.id);
+
+    // 2) Compat: imports viejos solo tenían origen_fondo / ref solo en TRANSFERENCIA
+    if (!existenteId) {
+      const { data: byFondo } = await supabase
+        .from('ci_inyecciones_capital')
+        .select('id')
+        .eq('proyecto_id', proyectoId)
+        .eq('origen_fondo', origenFondo)
+        .maybeSingle();
+      if (byFondo?.id) existenteId = String(byFondo.id);
+    }
+    if (!existenteId) {
+      const { data: legacyRows } = await supabase
+        .from('ci_inyecciones_capital')
+        .select('id')
+        .eq('proyecto_id', proyectoId)
+        .like('origen_fondo', `CCO-V4 #${t.origen_v4_id} ·%`)
+        .limit(1);
+      if (legacyRows?.[0]?.id) existenteId = String(legacyRows[0].id);
+    }
+
+    if (existenteId) {
+      const { error } = await supabase
+        .from('ci_inyecciones_capital')
+        .update(rowIngreso)
+        .eq('id', existenteId);
+      if (error) errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
+      else result.ingresos += 1;
+    } else {
+      const { error } = await supabase.from('ci_inyecciones_capital').insert(rowIngreso);
+      if (error) {
+        if (/uq_ci_inyecciones_ref_v4|duplicate|unique/i.test(error.message)) {
+          const { data: race } = await supabase
+            .from('ci_inyecciones_capital')
+            .select('id')
+            .eq('proyecto_id', proyectoId)
+            .eq('referencia_bancaria', refV4)
+            .maybeSingle();
+          if (race?.id) {
+            await supabase.from('ci_inyecciones_capital').update(rowIngreso).eq('id', race.id);
+            result.ingresos += 1;
+          } else {
+            errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
+          }
+        } else {
+          errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
+        }
+      } else {
+        result.ingresos += 1;
+      }
+    }
     doneWork += 1;
     await report(`Ingresos ${result.ingresos}/${ingresosTx.length || 1}`);
   }
