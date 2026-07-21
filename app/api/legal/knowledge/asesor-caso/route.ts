@@ -37,9 +37,10 @@ export async function POST(req: Request) {
   }
 
   const messages: AsesorTurnMessage[] = rawMessages
-    .map((m) => {
+    .map((m): AsesorTurnMessage => {
       const row = m as Record<string, unknown>;
-      const role = row.role === 'assistant' ? 'assistant' : 'user';
+      const role: AsesorTurnMessage['role'] =
+        row.role === 'assistant' ? 'assistant' : 'user';
       return { role, content: String(row.content ?? '').trim() };
     })
     .filter((m) => m.content);
