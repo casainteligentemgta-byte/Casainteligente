@@ -8,10 +8,12 @@ export type IngresosColKey =
   | 'descripcion'
   | 'moneda'
   | 'tasa'
+  | 'brecha'
   | 'monto_orig'
   | 'monto_usd'
   | 'forma_pago'
-  | 'estado';
+  | 'estado'
+  | 'link_comprobante';
 
 export type IngresosColDef = {
   key: IngresosColKey;
@@ -21,19 +23,30 @@ export type IngresosColDef = {
   editable?: boolean;
 };
 
+/** Orden y etiquetas alineados al Control de Ingresos Streamlit V4. */
 export const INGRESOS_COLUMNAS: IngresosColDef[] = [
-  { key: 'sel', label: '', defaultVisible: true },
+  { key: 'sel', label: 'Seleccionar', defaultVisible: true },
   { key: 'id', label: 'ID', defaultVisible: true },
-  { key: 'fecha', label: 'Fecha', defaultVisible: true, editable: true },
+  { key: 'fecha', label: '📅 Fecha', defaultVisible: true, editable: true },
   { key: 'proveedor', label: 'PROVEEDOR', defaultVisible: true, editable: true },
   { key: 'descripcion', label: 'DESCRIPCION', defaultVisible: true, editable: true },
-  { key: 'moneda', label: 'Moneda', defaultVisible: true, editable: true },
-  { key: 'tasa', label: 'Tasa', defaultVisible: true, align: 'right', editable: true },
-  { key: 'monto_orig', label: 'Monto Orig.', defaultVisible: true, align: 'right', editable: true },
-  { key: 'monto_usd', label: 'Monto USD', defaultVisible: true, align: 'right' },
-  { key: 'forma_pago', label: 'Forma de Pago', defaultVisible: false, editable: true },
+  { key: 'moneda', label: '💵 Moneda', defaultVisible: true, editable: true },
+  { key: 'tasa', label: 'Tasa', defaultVisible: false, align: 'right', editable: true },
+  { key: 'brecha', label: '⚖️ % Brecha', defaultVisible: true, align: 'right' },
+  { key: 'monto_orig', label: 'Monto Orig.', defaultVisible: false, align: 'right', editable: true },
+  { key: 'monto_usd', label: 'Monto USD', defaultVisible: false, align: 'right' },
+  { key: 'forma_pago', label: '💳 Forma de Pago', defaultVisible: true, editable: true },
   { key: 'estado', label: 'Estado', defaultVisible: false },
+  { key: 'link_comprobante', label: 'LINK COMPROBANTE', defaultVisible: true },
 ];
+
+export const FORMAS_PAGO_INGRESO = [
+  'TRANSFERENCIA',
+  'TRANSFERENCIA BANCARIA',
+  'EFECTIVO',
+  'ZELLE',
+  'PAGO MOVIL',
+] as const;
 
 export function defaultVisibleColsIngresos(): Record<IngresosColKey, boolean> {
   const out = {} as Record<IngresosColKey, boolean>;
@@ -42,7 +55,7 @@ export function defaultVisibleColsIngresos(): Record<IngresosColKey, boolean> {
 }
 
 export function storageKeyColumnasIngresos(proyectoId: string): string {
-  return `cco.ingresos.cols.v1.${proyectoId}`;
+  return `cco.ingresos.cols.v2.${proyectoId}`;
 }
 
 /** Parsea origen_fondo CCO → id V4, proveedor y descripción. */
@@ -104,4 +117,11 @@ export function buildOrigenIngreso(opts: {
     return `CCO-V4 #${opts.origen_v4_id} · ${prov} · ${desc}`.slice(0, 200);
   }
   return `CCO · ${prov} · ${desc}`.slice(0, 200);
+}
+
+/** Normaliza forma de pago UI → valor aceptado por ci_inyecciones_capital. */
+export function metodoPagoDbDesdeForma(forma: string | null | undefined): 'TRANSFERENCIA' | 'EFECTIVO' {
+  const u = String(forma ?? '').toUpperCase();
+  if (/EFECTIVO/.test(u)) return 'EFECTIVO';
+  return 'TRANSFERENCIA';
 }

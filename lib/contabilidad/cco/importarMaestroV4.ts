@@ -307,9 +307,18 @@ export async function importarMaestroV4(
     const metodoPago = /EFECTIVO/.test(forma) ? 'EFECTIVO' : 'TRANSFERENCIA';
     const fecha = fechaIso(t.fecha);
     const refV4 = `V4-${t.origen_v4_id}`;
-    const origenFondo = `CCO-V4 #${t.origen_v4_id} · ${String(t.descripcion ?? t.proveedor ?? 'Ingreso').slice(0, 180)}`;
+    const prov = String(t.proveedor ?? '').trim() || 'CLIENTE';
+    const desc = String(t.descripcion ?? 'Ingreso').trim() || 'Ingreso';
+    // Formato parseOrigenIngreso: CCO-V4 #id · proveedor · descripción
+    const origenFondo = `CCO-V4 #${t.origen_v4_id} · ${prov} · ${desc}`.slice(0, 200);
+    const brecha =
+      t.porcentaje_brecha_real != null && Number.isFinite(num(t.porcentaje_brecha_real))
+        ? num(t.porcentaje_brecha_real)
+        : null;
+    const tasaBin =
+      t.tasa_binance != null && Number.isFinite(num(t.tasa_binance)) ? num(t.tasa_binance) : null;
 
-    const rowIngreso = {
+    const rowIngreso: Record<string, unknown> = {
       proyecto_id: proyectoId,
       origen_fondo: origenFondo,
       monto_recibido: montoOrig,
@@ -327,6 +336,8 @@ export async function importarMaestroV4(
       fecha_ingreso: fecha,
       creado_por: 'cco_v4_import',
     };
+    if (brecha != null) rowIngreso.porcentaje_brecha_real = brecha;
+    if (tasaBin != null && tasaBin > 0) rowIngreso.tasa_binance = tasaBin;
 
     // 1) Por referencia V4-{id} (estable aunque cambie la descripción)
     let existenteId: string | null = null;
@@ -358,35 +369,54 @@ export async function importarMaestroV4(
       if (legacyRows?.[0]?.id) existenteId = String(legacyRows[0].id);
     }
 
-    if (existenteId) {
-      const { error } = await supabase
-        .from('ci_inyecciones_capital')
-        .update(rowIngreso)
-        .eq('id', existenteId);
-      if (error) errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
-      else result.ingresos += 1;
-    } else {
-      const { error } = await supabase.from('ci_inyecciones_capital').insert(rowIngreso);
-      if (error) {
-        if (/uq_ci_inyecciones_ref_v4|duplicate|unique/i.test(error.message)) {
-          const { data: race } = await supabase
-            .from('ci_inyecciones_capital')
-            .select('id')
-            .eq('proyecto_id', proyectoId)
-            .eq('referencia_bancaria', refV4)
-            .maybeSingle();
-          if (race?.id) {
-            await supabase.from('ci_inyecciones_capital').update(rowIngreso).eq('id', race.id);
-            result.ingresos += 1;
-          } else {
-            errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
+    const upsertIngreso = async (payload: Record<string, unknown>, idExistente: string | null) => {
+      if (idExistente) {
+        return supabase.from('ci_inyecciones_capital').update(payload).eq('id', idExistente);
+      }
+      return supabase.from('ci_inyecciones_capital').insert(payload);
+    };
+
+    let { error } = await upsertIngreso(rowIngreso, existenteId);
+    if (
+      error &&
+      /porcentaje_brecha_real|tasa_binance|42703|PGRST204|schema cache/i.test(error.message ?? '')
+    ) {
+      const fallback = { ...rowIngreso };
+      delete fallback.porcentaje_brecha_real;
+      delete fallback.tasa_binance;
+      ({ error } = await upsertIngreso(fallback, existenteId));
+    }
+    if (error) {
+      if (/uq_ci_inyecciones_ref_v4|duplicate|unique/i.test(error.message)) {
+        const { data: race } = await supabase
+          .from('ci_inyecciones_capital')
+          .select('id')
+          .eq('proyecto_id', proyectoId)
+          .eq('referencia_bancaria', refV4)
+          .maybeSingle();
+        if (race?.id) {
+          let { error: upErr } = await upsertIngreso(rowIngreso, String(race.id));
+          if (
+            upErr &&
+            /porcentaje_brecha_real|tasa_binance|42703|PGRST204|schema cache/i.test(
+              upErr.message ?? '',
+            )
+          ) {
+            const fallback = { ...rowIngreso };
+            delete fallback.porcentaje_brecha_real;
+            delete fallback.tasa_binance;
+            ({ error: upErr } = await upsertIngreso(fallback, String(race.id)));
           }
+          if (upErr) errores.push(`ingreso ${t.origen_v4_id}: ${upErr.message}`);
+          else result.ingresos += 1;
         } else {
           errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
         }
       } else {
-        result.ingresos += 1;
+        errores.push(`ingreso ${t.origen_v4_id}: ${error.message}`);
       }
+    } else {
+      result.ingresos += 1;
     }
     doneWork += 1;
     await report(`Ingresos ${result.ingresos}/${ingresosTx.length || 1}`);

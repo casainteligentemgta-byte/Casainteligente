@@ -419,15 +419,39 @@ export async function cargarLibroMaestro(
   }
 
   if (!claseFiltro || claseFiltro === 'INGRESO') {
-    const { data: iny, error } = await supabase
-      .from('ci_inyecciones_capital')
-      .select(
-        'id,fecha_ingreso,creado_al,monto_usd,monto_ves,tasa_bcv,tasa_aplicada,metodo_pago,origen_fondo,moneda_recibida',
-      )
-      .eq('proyecto_id', proyectoId)
-      .order('fecha_ingreso', { ascending: false })
-      .limit(limit);
-    if (error && error.code !== '42P01') throw error;
+    const selectInyFull =
+      'id,fecha_ingreso,creado_al,monto_usd,monto_ves,monto_recibido,tasa_bcv,tasa_aplicada,metodo_pago,origen_fondo,moneda_recibida,soporte_storage_path,porcentaje_brecha_real,tasa_binance';
+    const selectInyBase =
+      'id,fecha_ingreso,creado_al,monto_usd,monto_ves,monto_recibido,tasa_bcv,tasa_aplicada,metodo_pago,origen_fondo,moneda_recibida,soporte_storage_path';
+
+    let inyCols = selectInyFull;
+    let iny: unknown[] | null = null;
+    let inyErr: { message?: string; code?: string } | null = null;
+    {
+      const res = await supabase
+        .from('ci_inyecciones_capital')
+        .select(inyCols)
+        .eq('proyecto_id', proyectoId)
+        .order('fecha_ingreso', { ascending: false })
+        .limit(limit);
+      iny = res.data;
+      inyErr = res.error;
+      if (
+        inyErr &&
+        /porcentaje_brecha_real|tasa_binance|42703|PGRST204|schema cache/i.test(inyErr.message ?? '')
+      ) {
+        inyCols = selectInyBase;
+        const retry = await supabase
+          .from('ci_inyecciones_capital')
+          .select(inyCols)
+          .eq('proyecto_id', proyectoId)
+          .order('fecha_ingreso', { ascending: false })
+          .limit(limit);
+        iny = retry.data;
+        inyErr = retry.error;
+      }
+    }
+    if (inyErr && inyErr.code !== '42P01') throw inyErr;
     for (const row of iny ?? []) {
       const r = row as unknown as Record<string, unknown>;
       const base = num(r.monto_usd);
@@ -436,6 +460,12 @@ export async function cargarLibroMaestro(
       const montoVes = num(r.monto_ves);
       const parsed = parseOrigenIngreso(String(r.origen_fondo ?? ''));
       const montoRecibido = num(r.monto_recibido);
+      const soporte = String(r.soporte_storage_path ?? '').trim();
+      const brecha =
+        r.porcentaje_brecha_real != null && r.porcentaje_brecha_real !== ''
+          ? num(r.porcentaje_brecha_real)
+          : null;
+      const tasaBin = num(r.tasa_binance);
       filas.push({
         id: String(r.id),
         display_id:
@@ -466,8 +496,16 @@ export async function cargarLibroMaestro(
         estado: 'REGISTRADO',
         forma_pago: r.metodo_pago != null ? String(r.metodo_pago) : null,
         invoice_number: null,
-        link_factura: null,
-        ...META_VACIO,
+        link_factura: soporte
+          ? `/api/contabilidad/inyecciones/${encodeURIComponent(String(r.id))}/soporte`
+          : null,
+        tiene_documento: Boolean(soporte),
+        document_file_name: soporte ? soporte.split('/').pop() ?? null : null,
+        monto_pagado_usd: null,
+        tasa_binance: tasaBin,
+        tasa_usada: tasaBin > 0 ? 'BINANCE' : tasa > 0 ? 'BCV' : null,
+        porcentaje_brecha_real: brecha != null && Number.isFinite(brecha) ? brecha : null,
+        contrato_label: null,
         split_group_key: null,
         contrato_obra_id: null,
         fuente: 'inyeccion',
