@@ -4,37 +4,106 @@ import React, { useCallback, useEffect, useState } from 'react';
 import CcoFormRegistroModal from '@/components/contabilidad/cco/CcoFormRegistroModal';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 
-function fmtMonto(n: number, moneda?: string): string {
-  const m = (moneda ?? 'USD').toUpperCase().startsWith('VE') ? 'VES' : 'USD';
-  return `${n.toLocaleString('en-US', {
+function fmtFecha(raw: string | null | undefined): string {
+  if (!raw) return '—';
+  const s = String(raw).trim();
+  // ISO / YYYY-MM-DD
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  // Ya DD/MM/YYYY
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s.slice(0, 10);
+  return s.slice(0, 10);
+}
+
+function monedaNorm(moneda?: string | null): string {
+  const m = (moneda ?? 'USD').toUpperCase();
+  if (m.startsWith('VE')) return 'VES';
+  if (m.startsWith('US') || m === 'USD') return 'USD';
+  return m.slice(0, 3) || 'USD';
+}
+
+/** Monto original sin código de moneda (la moneda va en columna aparte). */
+function fmtMontoOrig(n: number, moneda?: string | null): string {
+  const m = monedaNorm(moneda);
+  const num = (Number.isFinite(n) ? n : 0).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  })} ${m}`;
+  });
+  return m === 'USD' ? `$${num}` : num;
+}
+
+function fmtMontoUsd(n: number): string {
+  const num = (Number.isFinite(n) ? n : 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `$${num}`;
+}
+
+function fmtTasa(tasa: number): string {
+  if (!(tasa > 0)) return '—';
+  return tasa.toLocaleString('en-US', {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  });
+}
+
+function textoProv(p: string | null | undefined): string {
+  const t = String(p ?? '').trim();
+  return t || 'None';
 }
 
 function MiniTable({
   title,
+  subtitle,
   headers,
   rows,
+  accent,
 }: {
   title: string;
+  subtitle?: string | null;
   headers: string[];
   rows: string[][];
+  /** Color de acento del título (egresos / ingresos). */
+  accent?: string;
 }) {
   return (
     <div style={{ marginTop: 14, minWidth: 196 }}>
       <p
         style={{
-          margin: '0 0 8px',
+          margin: '0 0 4px',
           fontSize: 11,
           fontWeight: 800,
           letterSpacing: '0.04em',
           textTransform: 'uppercase',
-          color: '#94A3B8',
+          color: accent ?? '#94A3B8',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
         }}
       >
+        {accent ? (
+          <span
+            aria-hidden
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 2,
+              background: accent,
+              transform: 'rotate(45deg)',
+              flexShrink: 0,
+            }}
+          />
+        ) : null}
         {title}
       </p>
+      {subtitle ? (
+        <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748B', fontWeight: 600 }}>
+          {subtitle}
+        </p>
+      ) : (
+        <div style={{ height: 4 }} />
+      )}
       {rows.length === 0 ? (
         <p style={{ margin: 0, fontSize: 11, color: '#64748B' }}>Sin datos</p>
       ) : (
@@ -42,11 +111,19 @@ function MiniTable({
           style={{
             background: '#1E293B',
             borderRadius: 10,
-            overflow: 'hidden',
+            overflow: 'auto',
             border: '1px solid #334155',
+            maxWidth: '100%',
           }}
         >
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 10,
+              minWidth: headers.length > 4 ? 420 : 260,
+            }}
+          >
             <thead>
               <tr>
                 {headers.map((h) => (
@@ -58,6 +135,10 @@ function MiniTable({
                       color: '#94A3B8',
                       fontWeight: 800,
                       borderBottom: '1px solid #334155',
+                      whiteSpace: 'nowrap',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.02em',
+                      fontSize: 9,
                     }}
                   >
                     {h}
@@ -74,11 +155,11 @@ function MiniTable({
                       style={{
                         padding: '6px 6px',
                         color: '#E2E8F0',
-                        maxWidth: j === 0 ? 88 : undefined,
+                        maxWidth: j === headers.length - 1 ? 120 : j === 1 ? 88 : undefined,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        fontVariantNumeric: j > 0 ? 'tabular-nums' : undefined,
+                        fontVariantNumeric: 'tabular-nums',
                       }}
                       title={cell}
                     >
@@ -104,12 +185,14 @@ export default function CcoSidebarResumen({
 }) {
   const [egresos, setEgresos] = useState<CcoLibroFila[]>([]);
   const [ingresos, setIngresos] = useState<CcoLibroFila[]>([]);
-  const [egresosLabel, setEgresosLabel] = useState('Próximos 3 Egresos');
+  const [egresosLabel, setEgresosLabel] = useState('Últimos 3 Egresos');
+  const [ultimoRegistroGlobal, setUltimoRegistroGlobal] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     if (!proyectoId) {
       setEgresos([]);
       setIngresos([]);
+      setUltimoRegistroGlobal(null);
       return;
     }
     try {
@@ -128,6 +211,13 @@ export default function CcoSidebarResumen({
       const gastos = (gJson.filas ?? []) as CcoLibroFila[];
       const ings = (iJson.filas ?? []) as CcoLibroFila[];
 
+      const porFechaDesc = (a: CcoLibroFila, b: CcoLibroFila) =>
+        String(b.fecha ?? '').localeCompare(String(a.fecha ?? ''));
+
+      const gastosOrdenados = [...gastos].sort(porFechaDesc);
+      const ultimo = gastosOrdenados[0]?.fecha ?? ings.map((x) => x.fecha).filter(Boolean).sort().at(-1) ?? null;
+      setUltimoRegistroGlobal(ultimo ? fmtFecha(ultimo) : null);
+
       const pendientes = gastos
         .filter((f) => String(f.estado).toUpperCase() === 'PENDIENTE')
         .sort((a, b) => String(a.fecha ?? '').localeCompare(String(b.fecha ?? '')));
@@ -136,20 +226,13 @@ export default function CcoSidebarResumen({
         setEgresos(pendientes.slice(0, 3));
       } else {
         setEgresosLabel('Últimos 3 Egresos');
-        setEgresos(
-          [...gastos]
-            .sort((a, b) => String(b.fecha ?? '').localeCompare(String(a.fecha ?? '')))
-            .slice(0, 3),
-        );
+        setEgresos(gastosOrdenados.slice(0, 3));
       }
-      setIngresos(
-        [...ings]
-          .sort((a, b) => String(b.fecha ?? '').localeCompare(String(a.fecha ?? '')))
-          .slice(0, 3),
-      );
+      setIngresos([...ings].sort(porFechaDesc).slice(0, 3));
     } catch {
       setEgresos([]);
       setIngresos([]);
+      setUltimoRegistroGlobal(null);
     }
   }, [proyectoId]);
 
@@ -178,22 +261,39 @@ export default function CcoSidebarResumen({
 
       <MiniTable
         title={`${egresosLabel} (Gastos)`}
-        headers={['PROVEEDOR', 'Monto Orig.', 'MO.']}
+        subtitle={
+          ultimoRegistroGlobal ? `Último Registro Global: ${ultimoRegistroGlobal}` : null
+        }
+        headers={['FECHA', 'PROVEEDOR', 'Monto Orig.', 'MONEDA', 'DESCRIPCION']}
         rows={egresos.map((f) => [
-          f.proveedor,
-          fmtMonto(f.monto_orig || f.monto_base_usd, f.moneda),
-          (f.moneda || 'USD').slice(0, 3),
+          fmtFecha(f.fecha),
+          textoProv(f.proveedor),
+          fmtMontoOrig(f.monto_orig || f.monto_base_usd, f.moneda),
+          monedaNorm(f.moneda),
+          String(f.descripcion ?? '').trim() || '—',
         ])}
       />
 
       <MiniTable
         title="Últimos 3 Ingresos"
-        headers={['FECHA', 'PROVEEDOR', 'Monto', 'Tasa']}
+        accent="#38BDF8"
+        headers={[
+          'FECHA',
+          'PROVEEDOR',
+          'Monto Orig.',
+          'MONEDA',
+          'Tasa',
+          'Monto USD',
+          'DESCRIPCION',
+        ]}
         rows={ingresos.map((f) => [
-          f.fecha ?? '—',
-          f.proveedor,
-          fmtMonto(f.monto_orig || f.monto_base_usd, f.moneda),
-          f.tasa > 0 ? f.tasa.toFixed(1) : '—',
+          fmtFecha(f.fecha),
+          textoProv(f.proveedor),
+          fmtMontoOrig(f.monto_orig || f.monto_base_usd, f.moneda),
+          monedaNorm(f.moneda),
+          fmtTasa(f.tasa),
+          fmtMontoUsd(f.monto_base_usd),
+          String(f.descripcion ?? '').trim() || '—',
         ])}
       />
     </div>

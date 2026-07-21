@@ -565,12 +565,12 @@ export default function CcoDashboardClient() {
           style={{
             ...(isDesktop
               ? {
-                  width: menuOpen ? 220 : 0,
+                  width: menuOpen ? 300 : 0,
                   position: 'relative' as const,
                   transform: 'none',
                 }
               : {
-                  width: 260,
+                  width: 300,
                   position: 'fixed' as const,
                   top: 0,
                   left: 0,
@@ -596,7 +596,7 @@ export default function CcoDashboardClient() {
               alignItems: 'center',
               justifyContent: 'space-between',
               margin: '0 8px 12px',
-              minWidth: 196,
+              minWidth: 260,
             }}
           >
             <p
@@ -628,7 +628,7 @@ export default function CcoDashboardClient() {
               {isDesktop ? <PanelLeftClose size={18} /> : <X size={18} />}
             </button>
           </div>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 196 }}>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 260 }}>
             {NAV_ITEMS.map((entry) => {
               if (entry.kind === 'group') {
                 const groupActive = IMPORTAR_NAV_IDS.includes(nav);
