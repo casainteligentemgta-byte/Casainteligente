@@ -135,7 +135,10 @@ import {
     type ComprasCuadroFiltrosState,
 } from '@/lib/contabilidad/comprasCuadroShare';
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
-import { esCompraSoloAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
+import {
+  esCompraSoloAuditoriaCco,
+  esDescripcionAuditoriaCco,
+} from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { recalcularPreciosLineasCompra } from '@/lib/contabilidad/filtrosFacturaCanal';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
 import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
@@ -233,15 +236,18 @@ function lineCount(row: CompraRow): number {
 }
 
 function lineasParaProductosToggle(row: CompraRow) {
-    return lineasDetalle(row).map((l) => ({
-        descripcion: l.descripcion,
-        item_code: l.item_code,
-        subtotal: l.subtotal,
-        cantidad: l.cantidad,
-        unidad: null,
-        precio_unitario:
-            l.precio_unitario ?? (l.cantidad > 0 ? l.subtotal / l.cantidad : null),
-    }));
+    // No mostrar logs de bitácora CCO (p. ej. «cambio proyecto:…») al expandir.
+    return lineasDetalle(row)
+        .filter((l) => !esDescripcionAuditoriaCco(l.descripcion))
+        .map((l) => ({
+            descripcion: l.descripcion,
+            item_code: l.item_code,
+            subtotal: l.subtotal,
+            cantidad: l.cantidad,
+            unidad: null,
+            precio_unitario:
+                l.precio_unitario ?? (l.cantidad > 0 ? l.subtotal / l.cantidad : null),
+        }));
 }
 
 function puedeReubicarCompra(c: CompraRow): boolean {

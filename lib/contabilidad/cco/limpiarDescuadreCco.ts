@@ -63,7 +63,7 @@ async function fetchAllComprasProyecto(
     const { data, error } = await supabase
       .from('contabilidad_compras')
       .select(
-        'id,fecha,supplier_name,notas,invoice_number,monto_usd,origen,origen_v4_id,created_at,purchase_invoice_id',
+        'id,fecha,supplier_name,notas,invoice_number,monto_usd,origen,origen_v4_id,created_at,purchase_invoice_id,contabilidad_compra_lineas(descripcion)',
       )
       .eq('proyecto_id', proyectoId)
       .order('fecha', { ascending: true })
@@ -75,6 +75,16 @@ async function fetchAllComprasProyecto(
     from += pageSize;
   }
   return all;
+}
+
+function lineasDescDesdeCompra(r: Record<string, unknown>): Array<{ descripcion: string }> {
+  const raw = r.contabilidad_compra_lineas;
+  const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return arr
+    .map((l) => ({
+      descripcion: String((l as { descripcion?: string | null }).descripcion ?? ''),
+    }))
+    .filter((l) => l.descripcion.trim());
 }
 
 async function borrarCompraContableSuave(
@@ -108,14 +118,20 @@ export async function limpiarDescuadreCco(
   for (const r of compras) {
     const notas = r.notas != null ? String(r.notas) : '';
     const invoice = r.invoice_number != null ? String(r.invoice_number) : '';
-    const esAudit =
-      esDescripcionAuditoriaCco(notas) ||
-      esCompraSoloAuditoriaCco({
-        supplier_name: r.supplier_name != null ? String(r.supplier_name) : null,
-        notas,
-        invoice_number: invoice,
-        lineas: notas ? [{ descripcion: notas }] : [],
-      });
+    const lineas = lineasDescDesdeCompra(r);
+    // Si no hay líneas embed, usar notas solo si parecen log (no nota genérica de import).
+    const lineasParaFiltro =
+      lineas.length > 0
+        ? lineas
+        : notas && esDescripcionAuditoriaCco(notas)
+          ? [{ descripcion: notas }]
+          : [];
+    const esAudit = esCompraSoloAuditoriaCco({
+      supplier_name: r.supplier_name != null ? String(r.supplier_name) : null,
+      notas,
+      invoice_number: invoice,
+      lineas: lineasParaFiltro,
+    });
     // No tocar compras con factura de procurement real.
     if (esAudit && !r.purchase_invoice_id) {
       idsAuditoria.push(String(r.id));
