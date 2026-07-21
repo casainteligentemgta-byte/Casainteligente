@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const proyectoId = searchParams.get('proyecto')?.trim() || null;
     const devalRaw = searchParams.get('devaluacion');
-    // Si no viene el query, el loader usa cco_proyecto_config.
+    // Si no viene el query, el loader usa cco_proyecto_config (y normaliza a forma V4).
     const devaluacionPromedio =
       devalRaw != null && devalRaw !== '' && Number.isFinite(Number(devalRaw))
         ? Number(devalRaw)

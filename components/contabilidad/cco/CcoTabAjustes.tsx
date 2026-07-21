@@ -38,9 +38,11 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error');
       const c = json.config as CcoProyectoConfig;
       setHonorariosAd(json.honorarios_ad != null ? Number(json.honorarios_ad) : null);
+      const deval = Number(c.devaluacion_pct ?? 0);
       setForm({
         honorarios_admin_pct: String(c.honorarios_admin_pct ?? 15),
-        devaluacion_pct: String(c.devaluacion_pct ?? 0),
+        // API ya normaliza a forma V4 (−); forzar string del valor corregido.
+        devaluacion_pct: String(Number.isFinite(deval) ? deval : 0),
         empresa_nombre: c.empresa_nombre ?? '',
         obra_alias: c.obra_alias ?? '',
         area_m2: c.area_m2 != null ? String(c.area_m2) : '',
