@@ -7,6 +7,7 @@ import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
 import { normalizarTipoGastoCco } from '@/lib/contabilidad/cco/normalizarTipoGasto';
 import { resolverContratoVinculado } from '@/lib/contabilidad/cco/vincularContrato';
+import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
 
 export type CcoV4EstructuraRow = {
   origen_v4_id: number;
@@ -135,8 +136,10 @@ export async function importarMaestroV4(
   const devalPayload = num(payload.devaluacion_pct);
   const devalFinal =
     devalPayload !== 0
-      ? devalPayload
-      : num((cfgExist as { devaluacion_pct?: number } | null)?.devaluacion_pct);
+      ? normalizarDevaluacionConfig(devalPayload)
+      : normalizarDevaluacionConfig(
+          num((cfgExist as { devaluacion_pct?: number } | null)?.devaluacion_pct),
+        );
 
   await supabase.from('cco_proyecto_config').upsert(
     {
@@ -211,8 +214,8 @@ export async function importarMaestroV4(
           moneda: String(t.moneda ?? 'USD').toUpperCase() || 'USD',
           monto_base_usd: base,
           admin_pct: calc.adminPct,
-          honorarios_usd: num(t.honorarios) || calc.honorariosUsd,
-          costo_total_usd: num(t.costo_total) || calc.costoTotalUsd,
+          honorarios_usd: t.honorarios != null ? num(t.honorarios) : calc.honorariosUsd,
+          costo_total_usd: t.costo_total != null ? num(t.costo_total) : calc.costoTotalUsd,
           estado: String(t.estado ?? 'PENDIENTE'),
           tipo_gasto_cco: 'CONTRATO',
           origen_v4_id: t.origen_v4_id,
@@ -467,7 +470,7 @@ export async function importarMaestroV4(
         tipo_gasto_cco: tipo,
         contrato_obra_id: contratoId,
         admin_pct_override: num(t.porcentaje_admin) || null,
-        honorarios_usd: num(t.honorarios) || calc.honorariosUsd,
+        honorarios_usd: t.honorarios != null ? num(t.honorarios) : calc.honorariosUsd,
         capitulo_cco: t.capitulo ? String(t.capitulo) : null,
         subcapitulo_cco: t.subcapitulo ? String(t.subcapitulo) : null,
         tasa_binance: t.tasa_binance != null ? num(t.tasa_binance) : null,

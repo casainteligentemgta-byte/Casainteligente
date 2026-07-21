@@ -215,11 +215,11 @@ function KpiRow({ bloque, honorariosPct, real }: { bloque: CcoKpiBloque; honorar
           footnote: `+ ${bloque.countIngresos} Registros`,
           tone: 'green' as const,
         },
-        { title: 'GASTOS NETOS', value: fmtUsd(bloque.gastosNetos), footnote: 'Filtrado', tone: 'brown' as const },
+        { title: 'GASTOS NETOS', value: fmtUsd(bloque.gastosNetos), footnote: 'Sin anulados', tone: 'brown' as const },
         {
           title: 'ADMIN DELEGADA',
           value: fmtUsd(bloque.adminDelegada),
-          footnote: `Honorarios ${honorariosPct.toFixed(1)}%`,
+          footnote: `Honorarios fila · ${honorariosPct.toFixed(1)}%`,
           tone: 'brown' as const,
         },
         { title: 'COSTO TOTAL', value: fmtUsd(bloque.costoTotal), footnote: 'Gastos + Admin', tone: 'red' as const },

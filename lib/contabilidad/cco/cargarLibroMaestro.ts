@@ -247,13 +247,32 @@ export async function cargarLibroMaestro(
     let compras: unknown[] | null = null;
     let error: { message?: string } | null = null;
 
-    const full = await supabase
-      .from('contabilidad_compras')
-      .select(GASTO_SELECT_FULL)
-      .eq('proyecto_id', proyectoId)
-      .neq('imputacion', IMPUTACION_ENTIDAD)
-      .order('fecha', { ascending: false })
-      .limit(limit);
+    async function fetchGastosPaged(cols: string): Promise<{
+      data: unknown[] | null;
+      error: { message?: string } | null;
+    }> {
+      const pageSize = Math.min(1000, Math.max(100, limit));
+      const all: unknown[] = [];
+      let from = 0;
+      for (let guard = 0; guard < 60 && all.length < limit; guard += 1) {
+        const to = Math.min(from + pageSize - 1, from + (limit - all.length) - 1);
+        const { data, error: qErr } = await supabase
+          .from('contabilidad_compras')
+          .select(cols)
+          .eq('proyecto_id', proyectoId)
+          .neq('imputacion', IMPUTACION_ENTIDAD)
+          .order('fecha', { ascending: false })
+          .range(from, to);
+        if (qErr) return { data: all.length ? all : null, error: qErr };
+        const batch = data ?? [];
+        all.push(...batch);
+        if (batch.length < pageSize) break;
+        from += pageSize;
+      }
+      return { data: all, error: null };
+    }
+
+    const full = await fetchGastosPaged(GASTO_SELECT_FULL);
 
     if (full.error) {
       const msg = full.error.message ?? '';
@@ -262,13 +281,7 @@ export async function cargarLibroMaestro(
           msg,
         );
       if (!soft) throw full.error;
-      const base = await supabase
-        .from('contabilidad_compras')
-        .select(GASTO_SELECT_BASE)
-        .eq('proyecto_id', proyectoId)
-        .neq('imputacion', IMPUTACION_ENTIDAD)
-        .order('fecha', { ascending: false })
-        .limit(limit);
+      const base = await fetchGastosPaged(GASTO_SELECT_BASE);
       if (base.error) {
         const soft2 =
           /tipo_gasto_cco|capitulo_cco|schema cache|origen_v4|document_storage|purchase_invoice/i.test(

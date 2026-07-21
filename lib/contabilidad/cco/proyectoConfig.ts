@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
 
 export type CcoProyectoConfig = {
   proyecto_id: string;
@@ -83,8 +84,11 @@ export async function guardarConfigCco(
   },
 ): Promise<CcoProyectoConfig> {
   const honorarios = Math.min(100, Math.max(0, num(input.honorarios_admin_pct, 15)));
-  // V4 puede reportar brecha negativa (p. ej. −25,6 %); no forzar a ≥ 0.
-  const devaluacion = Math.min(100, Math.max(-100, num(input.devaluacion_pct, 0)));
+  // Brecha CSV positiva → forma V4 (−); valores ya negativos se respetan.
+  const devaluacion = Math.min(
+    100,
+    Math.max(-100, normalizarDevaluacionConfig(num(input.devaluacion_pct, 0))),
+  );
 
   const { error } = await supabase.from('cco_proyecto_config').upsert(
     {

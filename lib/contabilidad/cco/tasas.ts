@@ -20,6 +20,29 @@ export function aplicarFactorDevaluacion(montoUsd: number, devaluacionPct: numbe
   return m * (1 + d / 100);
 }
 
+/**
+ * El CSV maestro suele traer brecha Binance/BCV positiva (p. ej. +34,45%).
+ * Contabilidad Real en V4 aplica devaluación como factor (1 + d/100) con d negativo
+ * (poder adquisitivo): +34,45% → ≈ −25,62%.
+ */
+export function brechaCsvADevaluacionV4(brechaPct: number): number {
+  const avg = Number(brechaPct);
+  if (!Number.isFinite(avg) || avg === 0) return 0;
+  const deval = avg > 0 && avg < 200 ? (-avg / (100 + avg)) * 100 : avg;
+  return Math.round(deval * 100000) / 100000;
+}
+
+/**
+ * Si la config quedó con la brecha cruda (>0), la normaliza a forma V4.
+ * Valores ya negativos (o fuera del rango de spread) se respetan.
+ */
+export function normalizarDevaluacionConfig(devaluacionPct: number): number {
+  const d = Number(devaluacionPct);
+  if (!Number.isFinite(d) || d === 0) return 0;
+  if (d > 0 && d < 200) return brechaCsvADevaluacionV4(d);
+  return Math.round(d * 100000) / 100000;
+}
+
 export function elegirTasaUsada(opts: {
   moneda: string;
   tasaBcv?: number | null;

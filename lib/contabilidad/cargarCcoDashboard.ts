@@ -7,6 +7,17 @@ import {
   clasificarTipoGasto,
   type CcoTipoGasto,
 } from '@/lib/contabilidad/ccoClasificarGasto';
+import {
+  calcularKpisOficiales,
+  esGastoAnulado,
+  honorariosDeFila,
+  resolverMontoBaseUsdKpi,
+} from '@/lib/contabilidad/cco/kpisOficiales';
+import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
+import {
+  esCompraSoloAuditoriaCco,
+  esDescripcionAuditoriaCco,
+} from '@/lib/contabilidad/compraEsAuditoriaCco';
 
 export type CcoSeriePunto = {
   periodo: string;
@@ -169,36 +180,65 @@ export async function cargarCcoDashboard(
     : 'Todas las obras';
 
   const selectComprasBase =
-    'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name';
-  const selectComprasCco = `${selectComprasBase},tipo_gasto_cco,capitulo_cco`;
+    'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name,notas,invoice_number,tasa_bcv_ves_por_usd,moneda_original';
+  const selectComprasCco = `${selectComprasBase},tipo_gasto_cco,capitulo_cco,honorarios_usd,admin_pct_override,cco_estado,tasa_binance,porcentaje_brecha_real`;
 
-  const buildComprasQ = (cols: string) => {
-    let q = supabase
-      .from('contabilidad_compras')
-      .select(cols)
-      .not('proyecto_id', 'is', null)
-      .neq('imputacion', IMPUTACION_ENTIDAD)
-      .order('fecha', { ascending: true })
-      .limit(8000);
-    if (proyectoId) q = q.eq('proyecto_id', proyectoId);
-    return q;
-  };
+  type CompraRow = Record<string, unknown>;
 
-  let { data: compras, error: cErr } = await buildComprasQ(selectComprasCco);
-  if (cErr && /tipo_gasto_cco|capitulo_cco|42703|PGRST204|schema cache/i.test(cErr.message ?? '')) {
-    ({ data: compras, error: cErr } = await buildComprasQ(selectComprasBase));
+  async function fetchAllCompras(cols: string): Promise<{ data: CompraRow[]; error: { message?: string } | null }> {
+    const pageSize = 1000;
+    const all: CompraRow[] = [];
+    let from = 0;
+    for (let guard = 0; guard < 60; guard += 1) {
+      let q = supabase
+        .from('contabilidad_compras')
+        .select(cols)
+        .not('proyecto_id', 'is', null)
+        .neq('imputacion', IMPUTACION_ENTIDAD)
+        .order('fecha', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+      const { data, error } = await q;
+      if (error) return { data: all, error };
+      const batch = (data ?? []) as unknown as CompraRow[];
+      all.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+    return { data: all, error: null };
+  }
+
+  let { data: compras, error: cErr } = await fetchAllCompras(selectComprasCco);
+  if (cErr && /tipo_gasto_cco|capitulo_cco|honorarios_usd|cco_estado|42703|PGRST204|schema cache/i.test(cErr.message ?? '')) {
+    ({ data: compras, error: cErr } = await fetchAllCompras(selectComprasBase));
   }
   if (cErr) throw cErr;
 
-  let inyQ = supabase
-    .from('ci_inyecciones_capital')
-    .select('id,fecha_ingreso,creado_al,monto_usd,proyecto_id')
-    .order('fecha_ingreso', { ascending: true })
-    .limit(8000);
+  async function fetchAllInyecciones(): Promise<{
+    data: CompraRow[];
+    error: { message?: string; code?: string } | null;
+  }> {
+    const pageSize = 1000;
+    const all: CompraRow[] = [];
+    let from = 0;
+    for (let guard = 0; guard < 60; guard += 1) {
+      let q = supabase
+        .from('ci_inyecciones_capital')
+        .select('id,fecha_ingreso,creado_al,monto_usd,proyecto_id')
+        .order('fecha_ingreso', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+      const { data, error } = await q;
+      if (error) return { data: all, error };
+      const batch = (data ?? []) as unknown as CompraRow[];
+      all.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+    return { data: all, error: null };
+  }
 
-  if (proyectoId) inyQ = inyQ.eq('proyecto_id', proyectoId);
-
-  const { data: inyecciones, error: iErr } = await inyQ;
+  const { data: inyecciones, error: iErr } = await fetchAllInyecciones();
   if (iErr && iErr.code !== '42P01' && !/ci_inyecciones_capital|schema cache/i.test(iErr.message ?? '')) {
     throw iErr;
   }
@@ -249,23 +289,18 @@ export async function cargarCcoDashboard(
     }
   }
 
-  // Override del query param gana; si no, config de obra.
-  const devaluacionPromedio = devaluacionOverride ?? devaluacionDesdeConfig ?? 0;
-
   const porMesIngresos = new Map<string, number>();
   const porMesEgresos = new Map<string, number>();
   const porProveedor = new Map<string, number>();
   const porProyectoUsd = new Map<string, number>();
-  /** cap -> tipo -> usd (compras) */
+  /** cap -> tipo -> usd (compras + admin prorrateado) */
   const porCapTipo = new Map<string, Map<CcoTipoGasto, number>>();
   const porTipoTotal = new Map<CcoTipoGasto, number>();
 
-  let ingresos = 0;
-  let countIngresos = 0;
+  const ingresosUsdList: number[] = [];
   for (const row of inyecciones ?? []) {
     const usd = num((row as { monto_usd?: number }).monto_usd);
-    ingresos += usd;
-    countIngresos += 1;
+    ingresosUsdList.push(usd);
     const periodo = ym(
       (row as { fecha_ingreso?: string }).fecha_ingreso ??
         String((row as { creado_al?: string }).creado_al ?? ''),
@@ -275,21 +310,88 @@ export async function cargarCcoDashboard(
 
   const nombrePorId = new Map(proyectos.map((p) => [p.id, p.nombre]));
 
-  let gastosNetos = 0;
-  for (const row of compras ?? []) {
-    const usd = num((row as { monto_usd?: number }).monto_usd);
-    gastosNetos += usd;
-    const periodo = ym((row as { fecha?: string }).fecha);
-    if (periodo) porMesEgresos.set(periodo, (porMesEgresos.get(periodo) ?? 0) + usd);
+  function esFilaAuditoriaKpi(r: CompraRow): boolean {
+    const notas = r.notas != null ? String(r.notas) : '';
+    const invoice = r.invoice_number != null ? String(r.invoice_number) : '';
+    if (esDescripcionAuditoriaCco(notas)) return true;
+    return esCompraSoloAuditoriaCco({
+      supplier_name: r.supplier_name != null ? String(r.supplier_name) : null,
+      notas,
+      invoice_number: invoice,
+      lineas: notas ? [{ descripcion: notas }] : [],
+    });
+  }
 
-    const prov =
-      String((row as { supplier_name?: string }).supplier_name ?? '').trim() || 'Sin proveedor';
+  const comprasKpi = (compras ?? []).filter((row) => !esFilaAuditoriaKpi(row as CompraRow));
+  const gastosKpiInput = comprasKpi.map((row) => row as CompraRow);
+
+  const kpisCalc = calcularKpisOficiales({
+    ingresosUsd: ingresosUsdList,
+    gastos: gastosKpiInput.map((r) => ({
+      monto_usd: num(r.monto_usd),
+      monto_ves: num(r.monto_ves),
+      tasa_bcv_ves_por_usd: num(r.tasa_bcv_ves_por_usd),
+      tasa_binance: num(r.tasa_binance),
+      moneda_original: r.moneda_original != null ? String(r.moneda_original) : null,
+      honorarios_usd: r.honorarios_usd != null ? num(r.honorarios_usd) : null,
+      admin_pct_override: r.admin_pct_override != null ? num(r.admin_pct_override) : null,
+      cco_estado: r.cco_estado != null ? String(r.cco_estado) : null,
+      porcentaje_brecha_real:
+        r.porcentaje_brecha_real != null ? num(r.porcentaje_brecha_real) : null,
+    })),
+    honorariosPctGlobal: honorariosPct,
+  });
+
+  // Override manual > config (normalizada si quedó brecha cruda +) > brechas V4 > 0
+  const devaluacionPromedio =
+    devaluacionOverride != null
+      ? devaluacionOverride
+      : devaluacionDesdeConfig != null
+        ? normalizarDevaluacionConfig(devaluacionDesdeConfig)
+        : kpisCalc.devaluacionPromedioBrechas !== 0
+          ? kpisCalc.devaluacionPromedioBrechas
+          : 0;
+
+  const {
+    ingresos,
+    gastosNetos,
+    adminDelegada,
+    costoTotal,
+    saldoCaja,
+    countIngresos,
+  } = kpisCalc;
+
+  for (const row of comprasKpi) {
+    const r = row as CompraRow;
+    if (esGastoAnulado(r.cco_estado != null ? String(r.cco_estado) : null)) continue;
+    const usd = resolverMontoBaseUsdKpi({
+      monto_usd: num(r.monto_usd),
+      monto_ves: num(r.monto_ves),
+      tasa_bcv_ves_por_usd: num(r.tasa_bcv_ves_por_usd),
+      tasa_binance: num(r.tasa_binance),
+      moneda_original: r.moneda_original != null ? String(r.moneda_original) : null,
+    });
+    if (usd <= 0) continue;
+    const honorarios = honorariosDeFila(
+      usd,
+      {
+        honorarios_usd: r.honorarios_usd != null ? num(r.honorarios_usd) : null,
+        admin_pct_override: r.admin_pct_override != null ? num(r.admin_pct_override) : null,
+      },
+      honorariosPct,
+    );
+    // Flujo de caja del gráfico: costo (base + admin) para cuadrar con SALDO EN CAJA.
+    const costoFila = usd + honorarios;
+    const periodo = ym(r.fecha != null ? String(r.fecha) : null);
+    if (periodo) porMesEgresos.set(periodo, (porMesEgresos.get(periodo) ?? 0) + costoFila);
+
+    const prov = String(r.supplier_name ?? '').trim() || 'Sin proveedor';
     porProveedor.set(prov, (porProveedor.get(prov) ?? 0) + usd);
 
-    const pid = String((row as { proyecto_id?: string }).proyecto_id ?? '').trim();
+    const pid = String(r.proyecto_id ?? '').trim();
     if (pid) porProyectoUsd.set(pid, (porProyectoUsd.get(pid) ?? 0) + usd);
 
-    const capRaw = String((row as { capitulo_cco?: string }).capitulo_cco ?? '').trim();
+    const capRaw = String(r.capitulo_cco ?? '').trim();
     const cap = (
       capRaw ||
       nombrePorId.get(pid) ||
@@ -298,7 +400,7 @@ export async function cargarCcoDashboard(
     )
       .slice(0, 28)
       .toUpperCase();
-    const tipoPersistido = String((row as { tipo_gasto_cco?: string }).tipo_gasto_cco ?? '').trim();
+    const tipoPersistido = String(r.tipo_gasto_cco ?? '').trim();
     const tipo = (CCO_TIPOS_GASTO as readonly string[]).includes(tipoPersistido)
       ? (tipoPersistido as CcoTipoGasto)
       : clasificarTipoGasto(prov);
@@ -308,11 +410,7 @@ export async function cargarCcoDashboard(
     porTipoTotal.set(tipo, (porTipoTotal.get(tipo) ?? 0) + usd);
   }
 
-  const adminDelegada = gastosNetos * (honorariosPct / 100);
-  const costoTotal = gastosNetos + adminDelegada;
-  const saldoCaja = ingresos - costoTotal;
-
-  // Prorratear admin delegada en cada capítulo
+  // Prorratear admin delegada en cada capítulo (misma proporción que V4)
   const totalGastos = gastosNetos || 1;
   for (const [cap, tipos] of Array.from(porCapTipo.entries())) {
     const matCap = Array.from(tipos.values()).reduce((a, b) => a + b, 0);
@@ -451,7 +549,7 @@ export async function cargarCcoDashboard(
   return {
     proyectoId,
     proyectoNombre,
-    totalRegistros: (compras?.length ?? 0) + (inyecciones?.length ?? 0),
+    totalRegistros: comprasKpi.length + (inyecciones?.length ?? 0),
     honorariosPct,
     devaluacionPromedio,
     oficial,

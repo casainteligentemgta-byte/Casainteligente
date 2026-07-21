@@ -14,6 +14,7 @@ import type {
   CcoV4ImportPayload,
   CcoV4TransaccionRow,
 } from '@/lib/contabilidad/cco/importarMaestroV4';
+import { brechaCsvADevaluacionV4 } from '@/lib/contabilidad/cco/tasas';
 
 export type CcoCsvMaestroParseResult = CcoV4ImportPayload & {
   resumen: {
@@ -576,18 +577,10 @@ export function parseCsvMaestroV4(
     });
   }
 
-  // Brecha CSV suele ser spread Binance/BCV (>0). El dashboard CI aplica
-  // factor (1 + deval/100) como V4: hay que guardar la devaluación en forma
-  // V4 (p. ej. +34,45% → −25,62%).
+  // Brecha CSV → devaluación V4 (−).
   const devaluacionPromedio =
     brechas.length > 0
-      ? (() => {
-          const avg =
-            brechas.reduce((a, b) => a + b, 0) / brechas.length;
-          const deval =
-            avg > 0 && avg < 200 ? (-avg / (100 + avg)) * 100 : avg;
-          return Math.round(deval * 100000) / 100000;
-        })()
+      ? brechaCsvADevaluacionV4(brechas.reduce((a, b) => a + b, 0) / brechas.length)
       : 0;
 
   return {

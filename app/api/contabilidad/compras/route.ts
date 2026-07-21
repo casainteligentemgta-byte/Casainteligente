@@ -52,6 +52,20 @@ type CompraInsertBody = {
    * false → rechaza duplicado con 409.
    */
   upsert_dedup?: boolean;
+  /** Metadatos CCO V4 (maestro / import CSV). */
+  cco?: {
+    tipo_gasto_cco?: string | null;
+    capitulo_cco?: string | null;
+    subcapitulo_cco?: string | null;
+    honorarios_usd?: number | null;
+    admin_pct_override?: number | null;
+    cco_estado?: string | null;
+    monto_pagado_usd?: number | null;
+    porcentaje_brecha_real?: number | null;
+    tasa_binance?: number | null;
+    tasa_usada?: string | null;
+    forma_pago_cco?: string | null;
+  };
 };
 
 function extraerTasaCliente(body: CompraInsertBody): number | null {
@@ -221,6 +235,28 @@ export async function POST(req: Request) {
       document_file_name: body.document_file_name ?? null,
       lineas,
       upsert,
+      cco: body.cco
+        ? {
+            tipo_gasto_cco: body.cco.tipo_gasto_cco ?? null,
+            capitulo_cco: body.cco.capitulo_cco ?? null,
+            subcapitulo_cco: body.cco.subcapitulo_cco ?? null,
+            honorarios_usd:
+              body.cco.honorarios_usd != null ? Number(body.cco.honorarios_usd) : null,
+            admin_pct_override:
+              body.cco.admin_pct_override != null ? Number(body.cco.admin_pct_override) : null,
+            cco_estado: body.cco.cco_estado ?? null,
+            monto_pagado_usd:
+              body.cco.monto_pagado_usd != null ? Number(body.cco.monto_pagado_usd) : null,
+            porcentaje_brecha_real:
+              body.cco.porcentaje_brecha_real != null
+                ? Number(body.cco.porcentaje_brecha_real)
+                : null,
+            tasa_binance:
+              body.cco.tasa_binance != null ? Number(body.cco.tasa_binance) : null,
+            tasa_usada: body.cco.tasa_usada ?? null,
+            forma_pago_cco: body.cco.forma_pago_cco ?? null,
+          }
+        : undefined,
     });
 
     if (!result.ok) {
