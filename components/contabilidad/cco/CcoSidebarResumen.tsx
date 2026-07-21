@@ -243,16 +243,28 @@ export default function CcoSidebarResumen({
   return (
     <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #1E293B' }}>
       {proyectoId ? (
-        <CcoFormRegistroModal
-          proyectoId={proyectoId}
-          defaultClase="INGRESO"
-          triggerLabel="+ Ingreso"
-          triggerVariant="ingreso"
-          onSaved={() => {
-            void cargar();
-            onChanged?.();
-          }}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <CcoFormRegistroModal
+            proyectoId={proyectoId}
+            defaultClase="INGRESO"
+            triggerLabel="+ Ingreso"
+            triggerVariant="ingreso"
+            onSaved={() => {
+              void cargar();
+              onChanged?.();
+            }}
+          />
+          <CcoFormRegistroModal
+            proyectoId={proyectoId}
+            defaultClase="GASTO"
+            triggerLabel="+ Gasto"
+            triggerVariant="primary"
+            onSaved={() => {
+              void cargar();
+              onChanged?.();
+            }}
+          />
+        </div>
       ) : (
         <p style={{ margin: 0, fontSize: 11, color: '#64748B' }}>
           Selecciona una obra para registrar ingresos.

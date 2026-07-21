@@ -37,10 +37,18 @@ import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGrafic
 
 type NavId =
   | 'dashboard'
+  | 'datos'
+  | 'rubros'
+  | 'egresos'
+  | 'distribucion'
+  | 'ingresos'
+  | 'deudas'
+  | 'contratos'
   | 'importar-csv'
   | 'importar-pdf'
   | 'importar-v4'
   | 'libro'
+  | 'editor'
   | 'presupuestos'
   | 'auditoria'
   | 'ajustes';
@@ -54,9 +62,19 @@ type NavGroup = {
 };
 type NavEntry = ({ kind?: 'item' } & NavLeaf) | NavGroup;
 
-/** Menú lateral CCO V4. */
+/** Menú lateral CCO V4 — módulos operativos + importación/configuración. */
 const NAV_ITEMS: NavEntry[] = [
-  { id: 'dashboard', label: 'Dashboard', ready: true },
+  { id: 'dashboard', label: 'Dashboard', ready: true, hint: 'Gráficos y KPIs' },
+  { id: 'datos', label: 'Datos gráficos', ready: true },
+  { id: 'rubros', label: 'Lista de rubros', ready: true },
+  { id: 'egresos', label: 'Egresos', ready: true },
+  { id: 'distribucion', label: 'Distribución masiva', ready: true },
+  { id: 'ingresos', label: 'Ingresos', ready: true },
+  { id: 'deudas', label: 'Deudas', ready: true },
+  { id: 'contratos', label: 'Contratos', ready: true },
+  { id: 'presupuestos', label: 'Presupuestos', ready: true },
+  { id: 'libro', label: 'Libro maestro', ready: true },
+  { id: 'editor', label: 'Editor maestro', ready: true },
   {
     kind: 'group',
     id: 'importar',
@@ -67,13 +85,28 @@ const NAV_ITEMS: NavEntry[] = [
       { id: 'importar-v4', label: 'V4 SQLite', ready: true, hint: 'JSON ETL' },
     ],
   },
-  { id: 'libro', label: 'Libro maestro', ready: true },
-  { id: 'presupuestos', label: 'Presupuestos', ready: true },
   { id: 'auditoria', label: 'Auditoría', ready: true },
   { id: 'ajustes', label: 'Ajustes CCO', ready: true },
 ];
 
 const IMPORTAR_NAV_IDS: NavId[] = ['importar-csv', 'importar-pdf', 'importar-v4'];
+
+/** Módulos que necesitan selector de obra fuera del dashboard. */
+const MODULOS_CON_OBRA: NavId[] = [
+  'datos',
+  'rubros',
+  'egresos',
+  'distribucion',
+  'ingresos',
+  'deudas',
+  'contratos',
+  'presupuestos',
+  'libro',
+  'editor',
+  'importar-v4',
+  'auditoria',
+  'ajustes',
+];
 
 type TabId =
   | 'graficos'
@@ -798,11 +831,7 @@ export default function CcoDashboardClient() {
         />
       ) : null}
 
-      {nav === 'importar-v4' ||
-      nav === 'libro' ||
-      nav === 'presupuestos' ||
-      nav === 'auditoria' ||
-      nav === 'ajustes' ? (
+      {MODULOS_CON_OBRA.includes(nav) ? (
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'block', maxWidth: 360 }}>
             <span style={labelStyle}>Obra destino</span>
@@ -831,6 +860,39 @@ export default function CcoDashboardClient() {
       {nav === 'presupuestos' ? <CcoTabPresupuestos proyectoId={proyectoId} /> : null}
 
       {nav === 'auditoria' ? <CcoTabAuditoria proyectoId={proyectoId} /> : null}
+
+      {nav === 'egresos' ? <CcoTabEgresos proyectoId={proyectoId} /> : null}
+      {nav === 'ingresos' ? <CcoTabIngresos proyectoId={proyectoId} /> : null}
+      {nav === 'contratos' ? <CcoTabContratos proyectoId={proyectoId} /> : null}
+      {nav === 'deudas' ? <CcoTabDeudas proyectoId={proyectoId} /> : null}
+      {nav === 'rubros' ? <CcoTabRubros proyectoId={proyectoId} /> : null}
+      {nav === 'distribucion' ? (
+        <CcoTabDistribucion proyectoId={proyectoId} onDone={() => void cargar()} />
+      ) : null}
+      {nav === 'datos' && data ? <CcoTabDatosGraficos data={data} modo={modo} /> : null}
+
+      {nav === 'editor' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 14,
+              border: '1px solid #E2E8F0',
+              padding: 24,
+            }}
+          >
+            <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>Editor maestro</h3>
+            <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 16px' }}>
+              Alta de GASTO, INGRESO o CONTRATO sin afectar stock.
+            </p>
+            <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
+            <div style={{ marginTop: 20 }}>
+              <CcoExportBar proyectoId={proyectoId} />
+            </div>
+          </div>
+          <CcoLibroMaestro proyectoId={proyectoId} titulo="Libro maestro (todas las clases)" />
+        </div>
+      ) : null}
 
       {nav === 'ajustes' ? (
         <CcoTabAjustes
