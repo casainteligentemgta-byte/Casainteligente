@@ -81,6 +81,17 @@ export type CcoTreemapNodo = {
   pctTotal: number;
 };
 
+/** Fila del detalle V4: Capítulo → Sub-Capítulo → Tipo de gasto. */
+export type CcoDetalleJerarquia = {
+  capitulo: string;
+  subcapitulo: string;
+  tipo: string;
+  costo: number;
+};
+
+/** Total por capítulo (misma forma que tabla «Distribución por Capítulo» V4). */
+export type CcoCapituloTotal = { capitulo: string; costo: number };
+
 export type CcoDashboard = {
   proyectoId: string | null;
   proyectoNombre: string;
@@ -94,10 +105,14 @@ export type CcoDashboard = {
   gastosMensual: CcoGastoMensual[];
   topProveedores: CcoProveedorFila[];
   capitulos: CcoCapituloFila[];
+  /** Totales simples por capítulo (barras V4). */
+  capitulosTotal: CcoCapituloTotal[];
   jerarquiaCapitulos: CcoCapituloJerarquia[];
   subCapitulosStack: CcoSubCapituloStack[];
   tiposPie: CcoTipoPie[];
   treemapNodos: CcoTreemapNodo[];
+  /** Detalle completo capítulo / subcapítulo / tipo. */
+  detalleJerarquia: CcoDetalleJerarquia[];
   proyectos: CcoProyectoOpcion[];
 };
 
@@ -181,7 +196,7 @@ export async function cargarCcoDashboard(
 
   const selectComprasBase =
     'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name,notas,invoice_number,tasa_bcv_ves_por_usd,moneda_original';
-  const selectComprasCco = `${selectComprasBase},tipo_gasto_cco,capitulo_cco,honorarios_usd,admin_pct_override,cco_estado,tasa_binance,porcentaje_brecha_real`;
+  const selectComprasCco = `${selectComprasBase},tipo_gasto_cco,capitulo_cco,subcapitulo_cco,honorarios_usd,admin_pct_override,cco_estado,tasa_binance,porcentaje_brecha_real`;
 
   type CompraRow = Record<string, unknown>;
 
@@ -209,8 +224,22 @@ export async function cargarCcoDashboard(
   }
 
   let { data: compras, error: cErr } = await fetchAllCompras(selectComprasCco);
-  if (cErr && /tipo_gasto_cco|capitulo_cco|honorarios_usd|cco_estado|42703|PGRST204|schema cache/i.test(cErr.message ?? '')) {
-    ({ data: compras, error: cErr } = await fetchAllCompras(selectComprasBase));
+  if (
+    cErr &&
+    /tipo_gasto_cco|capitulo_cco|subcapitulo_cco|honorarios_usd|cco_estado|42703|PGRST204|schema cache/i.test(
+      cErr.message ?? '',
+    )
+  ) {
+    const selectSinSub = `${selectComprasBase},tipo_gasto_cco,capitulo_cco,honorarios_usd,admin_pct_override,cco_estado,tasa_binance,porcentaje_brecha_real`;
+    ({ data: compras, error: cErr } = await fetchAllCompras(selectSinSub));
+    if (
+      cErr &&
+      /tipo_gasto_cco|capitulo_cco|honorarios_usd|cco_estado|42703|PGRST204|schema cache/i.test(
+        cErr.message ?? '',
+      )
+    ) {
+      ({ data: compras, error: cErr } = await fetchAllCompras(selectComprasBase));
+    }
   }
   if (cErr) throw cErr;
 
@@ -296,6 +325,8 @@ export async function cargarCcoDashboard(
   /** cap -> tipo -> usd (compras + admin prorrateado) */
   const porCapTipo = new Map<string, Map<CcoTipoGasto, number>>();
   const porTipoTotal = new Map<CcoTipoGasto, number>();
+  /** clave "cap||sub||tipo" → usd (detalle V4) */
+  const porDetalle = new Map<string, { capitulo: string; subcapitulo: string; tipo: CcoTipoGasto; costo: number }>();
 
   const ingresosUsdList: number[] = [];
   for (const row of inyecciones ?? []) {
@@ -416,6 +447,8 @@ export async function cargarCcoDashboard(
     )
       .slice(0, 28)
       .toUpperCase();
+    const subRaw = String(r.subcapitulo_cco ?? '').trim();
+    const sub = (subRaw || cap).slice(0, 40).toUpperCase();
     const tipoPersistido = String(r.tipo_gasto_cco ?? '').trim();
     const tipo = (CCO_TIPOS_GASTO as readonly string[]).includes(tipoPersistido)
       ? (tipoPersistido as CcoTipoGasto)
@@ -424,6 +457,11 @@ export async function cargarCcoDashboard(
     const m = porCapTipo.get(cap)!;
     m.set(tipo, (m.get(tipo) ?? 0) + usd);
     porTipoTotal.set(tipo, (porTipoTotal.get(tipo) ?? 0) + usd);
+
+    const detKey = `${cap}||${sub}||${tipo}`;
+    const prev = porDetalle.get(detKey);
+    if (prev) prev.costo += usd;
+    else porDetalle.set(detKey, { capitulo: cap, subcapitulo: sub, tipo, costo: usd });
   }
 
   // Prorratear admin delegada en cada capítulo (misma proporción que V4)
@@ -440,8 +478,19 @@ export async function cargarCcoDashboard(
         'ADMINISTRACIÓN DELEGADA',
         (porTipoTotal.get('ADMINISTRACIÓN DELEGADA') ?? 0) + adminShare,
       );
+      // Fila de detalle al estilo V4 (capítulo / admin / admin)
+      const detKey = `${cap}||ADMINISTRACIÓN DELEGADA||ADMINISTRACIÓN DELEGADA`;
+      const prev = porDetalle.get(detKey);
+      if (prev) prev.costo += adminShare;
+      else {
+        porDetalle.set(detKey, {
+          capitulo: cap,
+          subcapitulo: 'ADMINISTRACIÓN DELEGADA',
+          tipo: 'ADMINISTRACIÓN DELEGADA',
+          costo: adminShare,
+        });
+      }
     }
-    void cap;
   }
 
   const grandTotal =
@@ -562,6 +611,24 @@ export async function cargarCcoDashboard(
     }
   }
 
+  const capitulosTotal: CcoCapituloTotal[] = Array.from(porCapTipo.entries())
+    .map(([capitulo, tipos]) => ({
+      capitulo,
+      costo: Array.from(tipos.values()).reduce((a, b) => a + b, 0),
+    }))
+    .filter((r) => r.costo > 0)
+    .sort((a, b) => b.costo - a.costo);
+
+  const detalleJerarquia: CcoDetalleJerarquia[] = Array.from(porDetalle.values())
+    .filter((r) => r.costo > 0)
+    .map((r) => ({
+      capitulo: r.capitulo,
+      subcapitulo: r.subcapitulo,
+      tipo: r.tipo,
+      costo: r.costo,
+    }))
+    .sort((a, b) => b.costo - a.costo);
+
   return {
     proyectoId,
     proyectoNombre,
@@ -575,10 +642,12 @@ export async function cargarCcoDashboard(
     gastosMensual,
     topProveedores,
     capitulos,
+    capitulosTotal,
     jerarquiaCapitulos,
     subCapitulosStack,
     tiposPie,
     treemapNodos,
+    detalleJerarquia,
     proyectos,
   };
 }
