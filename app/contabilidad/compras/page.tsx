@@ -135,8 +135,10 @@ import {
     type ComprasCuadroFiltrosState,
 } from '@/lib/contabilidad/comprasCuadroShare';
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
+import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { recalcularPreciosLineasCompra } from '@/lib/contabilidad/filtrosFacturaCanal';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 import {
     buildLineasCuadroDesdeCompras,
     exportarComprasCuadroExcel,
@@ -854,6 +856,22 @@ export default function ComprasPage() {
             filas = await enriquecerComprasRecepcionCampo(supabase, filas);
             filas = await enriquecerComprasConDestino(supabase, filas);
             filas = await enriquecerComprasEstadoLogistica(supabase, filas);
+
+            // Excluir siempre logs de auditoría CCO (no son compras ni proveedores reales).
+            filas = filas.filter((c) => {
+                const detalleAudit = lineasDetalle(c);
+                if (
+                    detalleAudit.length > 0 &&
+                    detalleAudit.every((l) => esDescripcionAuditoriaCco(l.descripcion)) &&
+                    !(Number(c.total_amount) > 0) &&
+                    !(Number(c.total_amount_usd) > 0) &&
+                    !(Number(c.monto_usd) > 0) &&
+                    !(Number(c.monto_ves) > 0)
+                ) {
+                    return false;
+                }
+                return true;
+            });
             setComprasCuadroBase(filas);
 
             filas = filas.filter((c) => {
@@ -3004,7 +3022,7 @@ export default function ComprasPage() {
                                             );
                                         })()}
                                         <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px' }}>
-                                            Factura #{c.invoice_number} · {c.supplier_rif}
+                                            Factura #{c.invoice_number} · RIF {etiquetaRifCompra(c.supplier_rif)}
                                             <span
                                                 style={{
                                                     marginLeft: '8px',

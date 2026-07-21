@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { IMPUTACION_OBRA } from '@/lib/contabilidad/imputacionCompra';
+import { proveedorYRifParaCompraCco } from '@/lib/contabilidad/rifVenezolano';
 import { upsertCompraContableDedup } from '@/lib/contabilidad/upsertCompraContableDedup';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
 import { normalizarTipoGastoCco } from '@/lib/contabilidad/cco/normalizarTipoGasto';
@@ -131,12 +132,13 @@ export async function POST(req: Request) {
     const calc = aplicarHonorariosABase(montoUsd, body.admin_pct, pctGlobal);
     const invoice = `CCO-${fecha.replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}`;
 
+    const { supplier_name: proveedorResuelto, supplier_rif } = proveedorYRifParaCompraCco(proveedor);
     const up = await upsertCompraContableDedup(admin.client, {
       proyecto_id: proyectoId,
       imputacion: IMPUTACION_OBRA,
       invoice_number: invoice,
-      supplier_rif: 'J-CCO',
-      supplier_name: proveedor,
+      supplier_rif,
+      supplier_name: proveedorResuelto,
       fecha,
       monto_ves: 0,
       monto_usd: montoUsd,
