@@ -18,11 +18,6 @@ import {
 } from '@/lib/contabilidad/cco/ingresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 
-function noneLabel(v: string | null | undefined): string {
-  const t = String(v ?? '').trim();
-  return t ? t : 'None';
-}
-
 function fmtUsd(n: number): string {
   return n.toLocaleString('en-US', {
     style: 'currency',
@@ -520,16 +515,19 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
                       }}
                     >
                       {c.key === 'sel' ? (
-                        <input
-                          type="checkbox"
-                          checked={filas.length > 0 && filas.every((f) => f.selected)}
-                          onChange={(e) =>
-                            setFilas((prev) =>
-                              prev.map((f) => ({ ...f, selected: e.target.checked })),
-                            )
-                          }
-                          aria-label="Seleccionar todos"
-                        />
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={filas.length > 0 && filas.every((f) => f.selected)}
+                            onChange={(e) =>
+                              setFilas((prev) =>
+                                prev.map((f) => ({ ...f, selected: e.target.checked })),
+                              )
+                            }
+                            aria-label="Seleccionar todos"
+                          />
+                          Seleccionar
+                        </span>
                       ) : (
                         <>
                           {c.label}
