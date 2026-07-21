@@ -39,9 +39,26 @@ function assert(cond: boolean, msg: string) {
 }
 
 {
+  // Caso producción: embed de líneas vacío → PRODUCTOS se carga al expandir.
+  const sinLineasEmbed = esCompraSoloAuditoriaCco({
+    supplier_name: 'CARLO DI MATTEO',
+    supplier_rif: '---',
+    invoice_number: 'SIN-2358',
+    origen: 'HISTORICO_TABLA',
+    monto_usd: 0,
+    total_amount: 0,
+    notas: 'Importación desde CSV/tabla histórica (solo contabilidad, sin stock).',
+    lineas: [],
+  });
+  assert(sinLineasEmbed, 'SIN-* sin lineas embed debe ocultarse');
+}
+
+{
   const real = esCompraSoloAuditoriaCco({
     supplier_name: 'FERRETERIA XYZ',
+    supplier_rif: 'J-12345678-9',
     invoice_number: 'F-100',
+    origen: 'TELEGRAM',
     notas: null,
     lineas: [{ descripcion: 'Cabilla 3/8' }],
   });
