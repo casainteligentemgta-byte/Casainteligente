@@ -12,6 +12,7 @@ type Props = {
 export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reparando, setReparando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [honorariosAd, setHonorariosAd] = useState<number | null>(null);
@@ -77,13 +78,73 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
       });
       const json = await res.json();
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo guardar');
+      const c = json.config as CcoProyectoConfig;
+      setForm((f) => ({
+        ...f,
+        fuente: 'cco',
+        devaluacion_pct: String(c.devaluacion_pct ?? f.devaluacion_pct),
+      }));
       setOkMsg('Ajustes guardados. El dashboard usará % admin y devaluación de esta obra.');
-      setForm((f) => ({ ...f, fuente: 'cco' }));
-      onSaved?.(json.config as CcoProyectoConfig);
+      onSaved?.(c);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function repararDescuadre() {
+    if (!proyectoId) return;
+    if (
+      !window.confirm(
+        '¿Reparar descuadre CCO?\n\n• Elimina logs de auditoría importados como gasto\n• Quita gastos gemelos duplicados\n• Corrige devaluación brecha→V4 (p. ej. +34,45% → −25,62%)\n\nNo toca facturas Telegram con purchase_invoice.',
+      )
+    ) {
+      return;
+    }
+    setReparando(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const res = await fetch('/api/contabilidad/cco/higiene', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proyecto_id: proyectoId, dry_run: false }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo reparar');
+      const partes = [
+        json.auditoriaEliminada
+          ? `${json.auditoriaEliminada} auditoría(s) eliminada(s)`
+          : null,
+        json.duplicadosEliminados
+          ? `${json.duplicadosEliminados} duplicado(s) eliminado(s)`
+          : null,
+        json.devaluacionCorregida
+          ? `devaluación ${json.devaluacionAntes} → ${json.devaluacionDespues}`
+          : null,
+      ].filter(Boolean);
+      setOkMsg(
+        partes.length
+          ? `Reparación OK: ${partes.join(' · ')}. Recarga el dashboard.`
+          : 'Sin cambios: libro ya limpio.',
+      );
+      if (json.devaluacionDespues != null) {
+        setForm((f) => ({ ...f, devaluacion_pct: String(json.devaluacionDespues) }));
+      }
+      onSaved?.({
+        proyecto_id: proyectoId,
+        honorarios_admin_pct: Number(form.honorarios_admin_pct),
+        devaluacion_pct: Number(json.devaluacionDespues ?? form.devaluacion_pct),
+        empresa_nombre: form.empresa_nombre || null,
+        obra_alias: form.obra_alias || null,
+        area_m2: form.area_m2 !== '' ? Number(form.area_m2) : null,
+        fuente_honorarios: 'cco',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setReparando(false);
     }
   }
 
@@ -132,13 +193,18 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
             Devaluación promedio (%)
             <input
               type="number"
-              min={0}
+              min={-100}
+              max={100}
               step="0.0001"
               required
               value={form.devaluacion_pct}
               onChange={(e) => setForm((f) => ({ ...f, devaluacion_pct: e.target.value }))}
               style={input}
             />
+            <span style={{ fontWeight: 600, color: '#94A3B8', fontSize: 11 }}>
+              Forma V4 (poder adquisitivo): suele ser negativa. Si pegas la brecha Binance/BCV
+              (+34,45%), al guardar se convierte a ≈ −25,62%.
+            </span>
           </label>
 
           <label style={label}>
@@ -175,12 +241,20 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
           {error ? <p style={{ color: '#B91C1C', fontSize: 13, margin: 0 }}>{error}</p> : null}
           {okMsg ? <p style={{ color: '#15803D', fontSize: 13, margin: 0 }}>{okMsg}</p> : null}
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" disabled={saving} style={btnPrimary}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="submit" disabled={saving || reparando} style={btnPrimary}>
               {saving ? 'Guardando…' : 'Guardar ajustes'}
             </button>
-            <button type="button" onClick={() => void cargar()} style={btnGhost}>
+            <button type="button" onClick={() => void cargar()} disabled={reparando} style={btnGhost}>
               Recargar
+            </button>
+            <button
+              type="button"
+              onClick={() => void repararDescuadre()}
+              disabled={saving || reparando}
+              style={btnWarn}
+            >
+              {reparando ? 'Reparando…' : 'Reparar oficial / real'}
             </button>
           </div>
         </form>
@@ -227,6 +301,16 @@ const btnGhost: React.CSSProperties = {
   background: '#fff',
   color: '#334155',
   border: '1px solid #CBD5E1',
+  borderRadius: 8,
+  padding: '10px 14px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontSize: 13,
+};
+const btnWarn: React.CSSProperties = {
+  background: '#FFF7ED',
+  color: '#9A3412',
+  border: '1px solid #FDBA74',
   borderRadius: 8,
   padding: '10px 14px',
   fontWeight: 700,

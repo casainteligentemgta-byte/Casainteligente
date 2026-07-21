@@ -307,6 +307,9 @@ export default function CcoImportarCsvPanel({
           </label>
         ))}
         <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748B', lineHeight: 1.5 }}>
+          Anti-duplicados: hash natural + <code>dedup_hash</code> (mig. 268). Solo CLASE=GASTO entra
+          como compra; honorarios/capítulo/brecha se conservan para cuadrar Oficial/Real con V4.
+          <br />
           Automático en el PC (carpeta OneDrive sincronizada):
           <br />
           <code style={code}>{COMANDO_IMPORT_ONEDRIVE}</code>
