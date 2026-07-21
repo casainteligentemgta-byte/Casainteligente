@@ -247,10 +247,12 @@ export async function cargarLibroMaestro(
     let compras: unknown[] | null = null;
     let error: { message?: string } | null = null;
 
-    async function fetchGastosPaged(cols: string): Promise<{
+    const fetchGastosPaged = async (
+      cols: string,
+    ): Promise<{
       data: unknown[] | null;
       error: { message?: string } | null;
-    }> {
+    }> => {
       const pageSize = Math.min(1000, Math.max(100, limit));
       const all: unknown[] = [];
       let from = 0;
@@ -270,7 +272,7 @@ export async function cargarLibroMaestro(
         from += pageSize;
       }
       return { data: all, error: null };
-    }
+    };
 
     const full = await fetchGastosPaged(GASTO_SELECT_FULL);
 
