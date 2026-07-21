@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { IMPUTACION_OBRA } from '@/lib/contabilidad/imputacionCompra';
+import { proveedorYRifParaCompraCco } from '@/lib/contabilidad/rifVenezolano';
 import { upsertCompraContableDedup } from '@/lib/contabilidad/upsertCompraContableDedup';
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
@@ -390,14 +392,18 @@ export async function importarMaestroV4(
   let gastosDone = 0;
   for (const t of gastosTx) {
     const montoUsd = num(t.monto_base_usd);
-    if (montoUsd <= 0) {
+    if (
+      montoUsd <= 0 ||
+      esDescripcionAuditoriaCco(t.descripcion) ||
+      esDescripcionAuditoriaCco(t.tipo)
+    ) {
       result.gastos.skipped += 1;
       doneWork += 1;
       gastosDone += 1;
       await report(`Gastos ${gastosDone}/${gastosTx.length || 1}`);
       continue;
     }
-    const proveedor = String(t.proveedor ?? 'Sin proveedor').trim() || 'Sin proveedor';
+    const { supplier_name: proveedor, supplier_rif } = proveedorYRifParaCompraCco(t.proveedor);
     const tipo =
       normalizarTipoGastoCco(t.tipo) ?? clasificarTipoGasto(proveedor);
     const calc = aplicarHonorariosABase(montoUsd, num(t.porcentaje_admin) || null, pctGlobal);
@@ -438,7 +444,7 @@ export async function importarMaestroV4(
       proyecto_id: proyectoId,
       imputacion: IMPUTACION_OBRA,
       invoice_number: invoice,
-      supplier_rif: 'J-CCO-V4',
+      supplier_rif,
       supplier_name: proveedor,
       fecha: fechaIso(t.fecha),
       monto_ves: montoVes,

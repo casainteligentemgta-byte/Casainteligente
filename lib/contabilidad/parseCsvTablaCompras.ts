@@ -8,6 +8,10 @@
  * — LINK FACTURA es ruta de soporte, no nº de factura.
  */
 
+import {
+  esClaseNoCompraCco,
+  esDescripcionAuditoriaCco,
+} from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { resolverProveedorYRif } from '@/lib/contabilidad/rifVenezolano';
 
 export type FilaCsvCompra = {
@@ -370,6 +374,7 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
   );
 
   const iMoneda = pickCol(headers, ['moneda', 'currency', 'divisa'], { allowFuzzy: false });
+  const iClase = pickCol(headers, ['clase', 'tipo_clase', 'class'], { allowFuzzy: false });
 
   if (iProveedor < 0 && iDesc < 0 && iFactura < 0 && iMontoUsd < 0 && iMontoBs < 0) {
     throw new Error(
@@ -381,6 +386,9 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
   for (let r = headerIdx + 1; r < lines.length; r++) {
     const cols = splitCsvLine(lines[r]!, sep);
     if (cols.every((c) => !c.trim())) continue;
+
+    // Maestro CCO: no importar AUDITORIA / INGRESO / CONTRATO / etc. al cuadro de compras.
+    if (iClase >= 0 && esClaseNoCompraCco(cell(cols, iClase))) continue;
 
     const monedaRaw = cell(cols, iMoneda).toUpperCase();
     const moneda: 'VES' | 'USD' =
@@ -439,6 +447,9 @@ export function parseCsvTablaCompras(text: string): FilaCsvCompra[] {
     if (!descripcion) {
       descripcion = proveedor ? `Compra ${proveedor}` : invoice ? `Compra factura ${invoice}` : '';
     }
+
+    // Logs de sesión/PDF/respaldo del programa CCO (PROVEEDOR = usuario, sin RIF).
+    if (esDescripcionAuditoriaCco(descripcion) || esDescripcionAuditoriaCco(tipo)) continue;
 
     // No usar TIPO/CAPITULO como si fueran el proveedor
     if (!descripcion && !(subtotal > 0) && !invoice && !proveedor) continue;

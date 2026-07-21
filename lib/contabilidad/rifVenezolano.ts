@@ -106,6 +106,26 @@ export function etiquetaRifCompra(raw: string | null | undefined): string {
   if (!s) return '—';
   if (/^SIN[-_]?RIF$/i.test(s)) return '—';
   if (s === RIF_PENDIENTE_PLACEHOLDER) return '—';
+  // Placeholders históricos del import CCO (no son RIF reales).
+  if (/^J-?CCO(-V4)?$/i.test(s)) return '—';
   const n = normalizarRifVenezolano(s);
   return n || '—';
+}
+
+/**
+ * Proveedor + RIF para altas CCO → cuadro de compras.
+ * Extrae RIF embebido en el nombre; no inventa RIF falsos tipo J-CCO.
+ */
+export function proveedorYRifParaCompraCco(proveedorRaw: string | null | undefined): {
+  supplier_name: string;
+  supplier_rif: string;
+} {
+  const resuelto = resolverProveedorYRif({
+    proveedor: String(proveedorRaw ?? '').trim(),
+    rif: '',
+  });
+  return {
+    supplier_name: resuelto.supplier_name || String(proveedorRaw ?? '').trim() || 'Sin proveedor',
+    supplier_rif: resuelto.supplier_rif || 'SIN-RIF',
+  };
 }
