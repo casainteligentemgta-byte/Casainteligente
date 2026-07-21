@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { CcoProveedorContratos } from '@/lib/contabilidad/cco/types';
 import CcoExportBar from '@/components/contabilidad/cco/CcoExportBar';
 
@@ -19,6 +19,8 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [porProveedor, setPorProveedor] = useState<CcoProveedorContratos[]>([]);
   const [resumen, setResumen] = useState({ contratos: 0, contratado: 0, pagado: 0, saldo: 0 });
+  /** Solo un subcontratista abierto a la vez; null = todos cerrados. */
+  const [abierto, setAbierto] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     if (!proyectoId) return;
@@ -33,9 +35,11 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error');
       setPorProveedor(json.porProveedor ?? []);
       setResumen(json.resumen ?? { contratos: 0, contratado: 0, pagado: 0, saldo: 0 });
+      setAbierto(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
       setPorProveedor([]);
+      setAbierto(null);
     } finally {
       setLoading(false);
     }
@@ -63,6 +67,9 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
             {resumen.contratos} contratos · Contratado {fmtUsd(resumen.contratado)} · Pagado{' '}
             {fmtUsd(resumen.pagado)} · Saldo {fmtUsd(resumen.saldo)}
           </p>
+          <p style={{ ...muted, margin: '4px 0 0', fontSize: 12 }}>
+            Toca el nombre del subcontratista para ver sus rubros.
+          </p>
         </div>
         <CcoExportBar proyectoId={proyectoId} />
         <button type="button" onClick={() => void cargar()} style={btn}>
@@ -85,53 +92,72 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
           <p style={muted}>Sin contratos. Impórtalos o créalos en la pestaña Contratos.</p>
         </div>
       ) : (
-        porProveedor.map((p) => (
-          <div key={p.proveedor} style={box}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: 15 }}>{p.proveedor}</strong>
-              <span style={{ fontSize: 13, color: '#64748B' }}>
-                {fmtUsd(p.total_contratado)} · saldo {fmtUsd(p.total_saldo)}
-              </span>
+        porProveedor.map((p) => {
+          const expandido = abierto === p.proveedor;
+          return (
+            <div key={p.proveedor} style={box}>
+              <button
+                type="button"
+                onClick={() => setAbierto((prev) => (prev === p.proveedor ? null : p.proveedor))}
+                aria-expanded={expandido}
+                style={headerBtn}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  {expandido ? (
+                    <ChevronDown size={18} style={{ flexShrink: 0, color: '#64748B' }} />
+                  ) : (
+                    <ChevronRight size={18} style={{ flexShrink: 0, color: '#64748B' }} />
+                  )}
+                  <strong style={{ fontSize: 15, textAlign: 'left' }}>{p.proveedor}</strong>
+                </span>
+                <span style={{ fontSize: 13, color: '#64748B', whiteSpace: 'nowrap' }}>
+                  {fmtUsd(p.total_contratado)} · saldo {fmtUsd(p.total_saldo)}
+                  {!expandido ? ` · ${p.contratos.length} rubro(s)` : ''}
+                </span>
+              </button>
+
+              {expandido ? (
+                <div style={{ overflow: 'auto', marginTop: 12 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
+                        {['RUBRO', 'COSTO', 'PAGADO', 'SALDO', '%'].map((h) => (
+                          <th key={h} style={{ padding: '6px' }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p.contratos.map((c) => (
+                        <tr key={c.id} style={{ borderTop: '1px solid #E2E8F0' }}>
+                          <td style={td}>{c.descripcion}</td>
+                          <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtUsd(c.costo_total_usd)}
+                          </td>
+                          <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtUsd(c.monto_pagado_usd)}
+                          </td>
+                          <td
+                            style={{
+                              ...td,
+                              fontVariantNumeric: 'tabular-nums',
+                              fontWeight: 700,
+                              color: c.saldo_usd > 0 ? '#B91C1C' : '#15803D',
+                            }}
+                          >
+                            {fmtUsd(c.saldo_usd)}
+                          </td>
+                          <td style={td}>{c.pct_avance}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </div>
-            <div style={{ overflow: 'auto', marginTop: 10 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
-                    {['RUBRO', 'COSTO', 'PAGADO', 'SALDO', '%'].map((h) => (
-                      <th key={h} style={{ padding: '6px' }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {p.contratos.map((c) => (
-                    <tr key={c.id} style={{ borderTop: '1px solid #E2E8F0' }}>
-                      <td style={td}>{c.descripcion}</td>
-                      <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtUsd(c.costo_total_usd)}
-                      </td>
-                      <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtUsd(c.monto_pagado_usd)}
-                      </td>
-                      <td
-                        style={{
-                          ...td,
-                          fontVariantNumeric: 'tabular-nums',
-                          fontWeight: 700,
-                          color: c.saldo_usd > 0 ? '#B91C1C' : '#15803D',
-                        }}
-                      >
-                        {fmtUsd(c.saldo_usd)}
-                      </td>
-                      <td style={td}>{c.pct_avance}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );
@@ -154,4 +180,19 @@ const btn: React.CSSProperties = {
   fontWeight: 700,
   cursor: 'pointer',
   fontSize: 13,
+};
+const headerBtn: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 8,
+  flexWrap: 'wrap',
+  width: '100%',
+  margin: 0,
+  padding: 0,
+  border: 'none',
+  background: 'transparent',
+  cursor: 'pointer',
+  color: 'inherit',
+  textAlign: 'left',
 };
