@@ -138,6 +138,7 @@ import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrint
 import {
   esCompraSoloAuditoriaCco,
   esDescripcionAuditoriaCco,
+  esProveedorActorBitacoraCco,
 } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { recalcularPreciosLineasCompra } from '@/lib/contabilidad/filtrosFacturaCanal';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
@@ -475,11 +476,25 @@ export default function ComprasPage() {
             const supabase = createClient();
             const { data } = await supabase
                 .from('contabilidad_compras')
-                .select('supplier_name, supplier_rif')
+                .select('supplier_name, supplier_rif, invoice_number')
                 .order('supplier_name')
                 .limit(800);
             if (data?.length) {
-                setProveedores(dedupeProveedores(data as { supplier_name: string; supplier_rif: string }[]));
+                const limpios = (
+                    data as {
+                        supplier_name: string;
+                        supplier_rif: string;
+                        invoice_number?: string | null;
+                    }[]
+                ).filter(
+                    (r) =>
+                        !esProveedorActorBitacoraCco({
+                            supplier_name: r.supplier_name,
+                            supplier_rif: r.supplier_rif,
+                            invoice_number: r.invoice_number,
+                        }),
+                );
+                setProveedores(dedupeProveedores(limpios));
             }
         } catch {
             /* catálogo opcional */
