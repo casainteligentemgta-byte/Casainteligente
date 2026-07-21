@@ -13,7 +13,7 @@ const groups: Record<string, string> = {
   concept: 'Visión',
 };
 
-export function NexusSidebar() {
+export function NexusSidebar({ className }: { className?: string }) {
   const pathname = usePathname();
   const byGroup = NEXUS_MODULES.reduce<Record<string, typeof NEXUS_MODULES>>((acc, m) => {
     (acc[m.group] ??= []).push(m);
@@ -23,8 +23,9 @@ export function NexusSidebar() {
   return (
     <aside
       className={cn(
-        'hidden w-64 shrink-0 flex-col border-r border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.75)] backdrop-blur-[20px] lg:flex',
+        'flex w-64 shrink-0 flex-col border-r border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.75)] backdrop-blur-[20px]',
         'min-h-screen pt-6 pb-8',
+        className,
       )}
     >
       <div className="px-5 pb-6">

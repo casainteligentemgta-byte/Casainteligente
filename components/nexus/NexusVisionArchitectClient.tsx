@@ -8,6 +8,8 @@ import {
   BookOpen,
   Camera,
   Download,
+  PanelRightClose,
+  PanelRightOpen,
   Trash2,
   Upload,
   Undo2,
@@ -202,6 +204,8 @@ export default function NexusVisionArchitectClient() {
   const [sideTab, setSideTab] = useState<
     'cctv' | 'red' | 'muros' | 'cable' | 'sub' | 'norm' | 'prefs'
   >('cctv')
+  /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
+  const [inspectorOpen, setInspectorOpen] = useState(true)
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const [complianceCountry, setComplianceCountry] = useState('VE')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -981,10 +985,68 @@ export default function NexusVisionArchitectClient() {
         ? '#fb923c'
         : '#22d3ee'
 
+  const inspectorFooter = (
+    <>
+      <div className="border-t border-white/10 pt-3">
+        <NetVisionCollapsible
+          title="Validaciones"
+          summary={
+            validations.length === 0
+              ? 'Sin avisos'
+              : `${validations.length} aviso(s)`
+          }
+          defaultOpen={false}
+        >
+          <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
+        </NetVisionCollapsible>
+      </div>
+      <div className="border-t border-white/10 pt-3">
+        <NetVisionCollapsible
+          title="Presupuestos"
+          summary={`${bom.lines.length} ítems · $${bom.totalUsd.toFixed(0)}`}
+          defaultOpen={false}
+        >
+          <BOMGenerator
+            bom={bom}
+            retentionDays={project.retentionDays}
+            onRetentionChange={(days) =>
+              setProject((p) => ({ ...p, retentionDays: days }))
+            }
+            projectName={project.name}
+            currency={project.currency ?? 'USD'}
+            distributorMarginPct={project.distributorMarginPct ?? 15}
+            onMarginChange={(pct) =>
+              setProject((p) => ({ ...p, distributorMarginPct: pct }))
+            }
+          />
+        </NetVisionCollapsible>
+      </div>
+    </>
+  )
+
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
+          <Button
+            type="button"
+            variant="glass"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setInspectorOpen((v) => !v)}
+            aria-expanded={inspectorOpen}
+            aria-label={inspectorOpen ? 'Ocultar panel derecho' : 'Mostrar panel derecho'}
+            title={inspectorOpen ? 'Ocultar panel' : 'Mostrar panel'}
+          >
+            {inspectorOpen ? (
+              <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />
+            ) : (
+              <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {inspectorOpen ? 'Ocultar panel' : 'Mostrar panel'}
+          </Button>
+        </div>
         <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
             <Link href="/nexus/vision/manual">
@@ -1063,7 +1125,13 @@ export default function NexusVisionArchitectClient() {
         </p>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_300px_280px]">
+      <div
+        className={
+          inspectorOpen
+            ? 'grid gap-6 xl:grid-cols-[1fr_300px]'
+            : 'grid gap-6 xl:grid-cols-1'
+        }
+      >
         <GlassCardMotion className="overflow-hidden p-3 sm:p-4">
           {!project.planoUrl ? (
             <button
@@ -1430,6 +1498,7 @@ export default function NexusVisionArchitectClient() {
           )}
         </GlassCardMotion>
 
+        {inspectorOpen ? (
         <GlassCardMotion delay={0.04} className="space-y-3 p-4">
           <div className="flex flex-wrap gap-1 rounded-lg border border-white/10 bg-black/30 p-0.5">
             {(
@@ -1570,19 +1639,6 @@ export default function NexusVisionArchitectClient() {
                 onSelectSegment={setSelectedId}
                 onRemoveSegment={quitar}
               />
-              <div className="border-t border-white/10 pt-3">
-                <NetVisionCollapsible
-                  title="Validaciones"
-                  summary={
-                    validations.length === 0
-                      ? 'Sin avisos'
-                      : `${validations.length} aviso(s)`
-                  }
-                  defaultOpen={false}
-                >
-                  <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
-                </NetVisionCollapsible>
-              </div>
             </div>
           ) : sideTab === 'cable' ? (
             <div className="space-y-4">
@@ -1639,19 +1695,6 @@ export default function NexusVisionArchitectClient() {
                   plans={conduitPlans}
                   onSelectNode={setSelectedId}
                 />
-              </div>
-              <div className="border-t border-white/10 pt-3">
-                <NetVisionCollapsible
-                  title="Validaciones"
-                  summary={
-                    validations.length === 0
-                      ? 'Sin avisos'
-                      : `${validations.length} aviso(s)`
-                  }
-                  defaultOpen={false}
-                >
-                  <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
-                </NetVisionCollapsible>
               </div>
             </div>
           ) : sideTab === 'red' ? (
@@ -1971,64 +2014,12 @@ export default function NexusVisionArchitectClient() {
                   Selecciona una cámara, nodo de red o muro.
                 </p>
               )}
-
-              <div className="border-t border-white/10 pt-3">
-                <NetVisionCollapsible
-                  title="Validaciones"
-                  summary={
-                    validations.length === 0
-                      ? 'Sin avisos'
-                      : `${validations.length} aviso(s)`
-                  }
-                  defaultOpen={false}
-                >
-                  <ValidationEngine
-                    results={validations}
-                    onSelectCamera={setSelectedId}
-                  />
-                </NetVisionCollapsible>
-              </div>
             </>
           )}
 
-          {sideTab === 'red' ? (
-            <div className="border-t border-white/10 pt-3">
-              <NetVisionCollapsible
-                title="Validaciones"
-                summary={
-                  validations.length === 0
-                    ? 'Sin avisos'
-                    : `${validations.length} aviso(s)`
-                }
-                defaultOpen={false}
-              >
-                <ValidationEngine results={validations} onSelectCamera={setSelectedId} />
-              </NetVisionCollapsible>
-            </div>
-          ) : null}
+          {inspectorFooter}
         </GlassCardMotion>
-
-        <GlassCardMotion delay={0.08} className="space-y-3 p-4">
-          <NetVisionCollapsible
-            title="Presupuesto / BOM"
-            summary={`${bom.lines.length} ítems · $${bom.totalUsd.toFixed(0)}`}
-            defaultOpen={false}
-          >
-            <BOMGenerator
-              bom={bom}
-              retentionDays={project.retentionDays}
-              onRetentionChange={(days) =>
-                setProject((p) => ({ ...p, retentionDays: days }))
-              }
-              projectName={project.name}
-              currency={project.currency ?? 'USD'}
-              distributorMarginPct={project.distributorMarginPct ?? 15}
-              onMarginChange={(pct) =>
-                setProject((p) => ({ ...p, distributorMarginPct: pct }))
-              }
-            />
-          </NetVisionCollapsible>
-        </GlassCardMotion>
+        ) : null}
       </div>
     </div>
   )
