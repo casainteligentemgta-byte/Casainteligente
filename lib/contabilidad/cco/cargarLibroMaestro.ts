@@ -173,18 +173,34 @@ async function enriquecerDescripcionesDesdeLineas(
     }
   }
 
+  const idsSoloAuditoria = new Set<string>();
+
   for (const f of filas) {
     if (f.fuente !== 'compra') continue;
     const parts = porCompra.get(f.id);
     if (!parts?.length) continue;
+
+    const partesOperativas = parts.filter((d) => !esDescripcionAuditoriaCco(d));
+    // Todas las líneas son logs de auditoría → no es un gasto real.
+    if (partesOperativas.length === 0) {
+      idsSoloAuditoria.add(f.id);
+      continue;
+    }
+
     if (!descripcionDebil(f.descripcion, f.invoice_number)) continue;
-    f.descripcion = parts.join(' · ');
+    f.descripcion = partesOperativas.join(' · ');
     f.split_group_key = claveGastoDividido({
       invoice_number: f.invoice_number,
       fecha: f.fecha,
       proveedor: f.proveedor,
       descripcion: f.descripcion,
     });
+  }
+
+  if (idsSoloAuditoria.size > 0) {
+    for (let i = filas.length - 1; i >= 0; i--) {
+      if (idsSoloAuditoria.has(filas[i]!.id)) filas.splice(i, 1);
+    }
   }
 }
 
@@ -375,6 +391,16 @@ export async function cargarLibroMaestro(
     }
 
     await enriquecerDescripcionesDesdeLineas(supabase, filas);
+
+    // Tras enriquecer desde líneas: la descripción ya no es SIN-* / «Gasto»,
+    // y ahí aparecen los logs (INICIO DE SESIÓN, PRESUPUESTO:, etc.).
+    for (let i = filas.length - 1; i >= 0; i--) {
+      const f = filas[i]!;
+      if (f.fuente !== 'compra') continue;
+      if (esDescripcionAuditoriaCco(f.descripcion)) {
+        filas.splice(i, 1);
+      }
+    }
   }
 
   if (!claseFiltro || claseFiltro === 'INGRESO') {
