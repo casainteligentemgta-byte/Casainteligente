@@ -135,7 +135,7 @@ import {
     type ComprasCuadroFiltrosState,
 } from '@/lib/contabilidad/comprasCuadroShare';
 import { abrirComprasCuadroVentana } from '@/lib/contabilidad/comprasCuadroPrintHtml';
-import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
+import { esCompraSoloAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { recalcularPreciosLineasCompra } from '@/lib/contabilidad/filtrosFacturaCanal';
 import type { FilaFacturaCanal } from '@/lib/contabilidad/filtrosFacturaCanal';
 import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
@@ -626,7 +626,7 @@ export default function ComprasPage() {
                 'compra_factura_id,ingresado_almacen_at,cuarentena_rechazo_total,compra_factura:compras_facturas(numero_factura,estado)';
 
             const selectCompraBase =
-                'id,purchase_invoice_id,proyecto_id,entidad_id,imputacion,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,origen,estado,document_file_name,document_storage_path,created_at';
+                'id,purchase_invoice_id,proyecto_id,entidad_id,imputacion,ubicacion_destino_id,invoice_number,supplier_rif,supplier_name,fecha,total_amount,total_amount_usd,tasa_bcv_ves_por_usd,moneda,moneda_original,monto_ves,monto_usd,origen,estado,notas,document_file_name,document_storage_path,created_at';
             const selectAuditoriaFecha = ',alerta_fecha,fecha_confirmada_manual';
             const selectClasificacionEntidad = ',clasificacion_gasto_entidad';
 
@@ -857,21 +857,16 @@ export default function ComprasPage() {
             filas = await enriquecerComprasConDestino(supabase, filas);
             filas = await enriquecerComprasEstadoLogistica(supabase, filas);
 
-            // Excluir siempre logs de auditoría CCO (no son compras ni proveedores reales).
-            filas = filas.filter((c) => {
-                const detalleAudit = lineasDetalle(c);
-                if (
-                    detalleAudit.length > 0 &&
-                    detalleAudit.every((l) => esDescripcionAuditoriaCco(l.descripcion)) &&
-                    !(Number(c.total_amount) > 0) &&
-                    !(Number(c.total_amount_usd) > 0) &&
-                    !(Number(c.monto_usd) > 0) &&
-                    !(Number(c.monto_ves) > 0)
-                ) {
-                    return false;
-                }
-                return true;
-            });
+            // Excluir siempre logs de auditoría CCO (artículos/sesión/PDF/respaldo, no compras).
+            filas = filas.filter(
+                (c) =>
+                    !esCompraSoloAuditoriaCco({
+                        supplier_name: c.supplier_name,
+                        invoice_number: c.invoice_number,
+                        notas: (c as { notas?: string | null }).notas ?? null,
+                        lineas: lineasDetalle(c),
+                    }),
+            );
             setComprasCuadroBase(filas);
 
             filas = filas.filter((c) => {

@@ -1,30 +1,62 @@
 /**
  * Detecta filas de auditoría del programa CCO que no deben vivir en el cuadro de compras.
- * En el CSV maestro, CLASE=AUDITORIA usa PROVEEDOR = usuario de sesión (p. ej. «CARLO DI MATTEO»).
+ * En el CSV maestro, CLASE=AUDITORIA usa PROVEEDOR = usuario de sesión (p. ej. «CARLO DI MATTEO»)
+ * y DESCRIPCION/TIPO = acción de log (sesión, PDF, respaldo…).
  */
 
-const ACCION_AUDITORIA =
-  /^(INICIO\s+DE\s+SESI[OÓ]N|CIERRE\s+DE\s+SESI[OÓ]N|IMPRESI[OÓ]N\s+PDF|RESPALDO\s+DISCO|EXPORTACI[OÓ]N|IMPORTACI[OÓ]N|ACCESO\s+AL\s+SISTEMA|LOGIN|LOGOUT|BACKUP)/i;
+const ACCIONES_AUDITORIA = [
+  'INICIO DE SESION',
+  'INICIO DE SESIÓN',
+  'CIERRE DE SESION',
+  'CIERRE DE SESIÓN',
+  'IMPRESION PDF',
+  'IMPRESIÓN PDF',
+  'RESPALDO DISCO',
+  'RESPALDO CSV',
+  'EXPORTACION',
+  'EXPORTACIÓN',
+  'IMPORTACION CSV',
+  'IMPORTACIÓN CSV',
+  'ACCESO AL SISTEMA',
+  'LOGIN',
+  'LOGOUT',
+  'BACKUP',
+  'CAMBIO DE OBRA',
+  'CAMBIO DE PROYECTO',
+  'APERTURA DE ARCHIVO',
+  'GUARDADO AUTOMATICO',
+  'GUARDADO AUTOMÁTICO',
+];
 
-const DETALLE_AUDITORIA =
-  /(ACCEDI[OÓ]\s+AL\s+SISTEMA|GENER[OÓ]\s+EL\s+REPORTE|GUARD[OÓ]\s+COPIA\s+CSV|COPIA\s+CSV\s+EN\s+DISCO)/i;
+const DETALLES_AUDITORIA = [
+  'ACCEDIO AL SISTEMA',
+  'ACCEDIÓ AL SISTEMA',
+  'GENERO EL REPORTE',
+  'GENERÓ EL REPORTE',
+  'GUARDO COPIA CSV',
+  'GUARDÓ COPIA CSV',
+  'COPIA CSV EN DISCO',
+  'REPORTE PDF DE RUBROS',
+  'PARA DESCARGA',
+];
 
-export function esClaseAuditoriaCco(clase: string | null | undefined): boolean {
-  const u = String(clase ?? '')
+function normalizarAuditTexto(raw: string): string {
+  return String(raw ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
+    .replace(/\s+/g, ' ')
     .trim();
+}
+
+export function esClaseAuditoriaCco(clase: string | null | undefined): boolean {
+  const u = normalizarAuditTexto(String(clase ?? ''));
   return u === 'AUDITORIA' || u.startsWith('AUDIT');
 }
 
 /** Clases del maestro CCO que no son compras/gastos del cuadro. */
 export function esClaseNoCompraCco(clase: string | null | undefined): boolean {
-  const u = String(clase ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toUpperCase()
-    .trim();
+  const u = normalizarAuditTexto(String(clase ?? ''));
   if (!u) return false;
   if (u === 'GASTO' || u === 'EGRESO') return false;
   return (
@@ -37,12 +69,52 @@ export function esClaseNoCompraCco(clase: string | null | undefined): boolean {
   );
 }
 
-/** Texto de artículo/descripción típico de logs CCO (sesión, PDF, respaldo…). */
+/** Texto de artículo/descripción/notas típico de logs CCO. */
 export function esDescripcionAuditoriaCco(descripcion: string | null | undefined): boolean {
-  const s = String(descripcion ?? '').trim();
+  const s = normalizarAuditTexto(String(descripcion ?? ''));
   if (!s) return false;
-  const cabeza = s.split(':')[0]?.trim() ?? s;
-  if (ACCION_AUDITORIA.test(cabeza) || ACCION_AUDITORIA.test(s)) return true;
-  if (DETALLE_AUDITORIA.test(s)) return true;
+
+  for (const a of ACCIONES_AUDITORIA) {
+    const n = normalizarAuditTexto(a);
+    if (s === n || s.startsWith(`${n}:`) || s.startsWith(`${n} ·`) || s.startsWith(`${n} -`)) {
+      return true;
+    }
+    if (s.includes(n) && (s.includes(':') || s.includes('SISTEMA') || s.includes('REPORTE') || s.includes('CSV'))) {
+      return true;
+    }
+  }
+  for (const d of DETALLES_AUDITORIA) {
+    if (s.includes(normalizarAuditTexto(d))) return true;
+  }
+  return false;
+}
+
+/**
+ * ¿Esta compra es solo auditoría CCO mal importada?
+ * No exige monto 0: esos logs a veces traen basura numérica del CSV.
+ */
+export function esCompraSoloAuditoriaCco(input: {
+  supplier_name?: string | null;
+  notas?: string | null;
+  invoice_number?: string | null;
+  lineas?: Array<{ descripcion?: string | null }>;
+}): boolean {
+  const lineas = input.lineas ?? [];
+  const textos = [
+    ...lineas.map((l) => String(l.descripcion ?? '')),
+    String(input.notas ?? ''),
+  ].filter((t) => t.trim());
+
+  if (textos.length === 0) return false;
+
+  // Todas las descripciones/notas parecen log de auditoría.
+  if (textos.every((t) => esDescripcionAuditoriaCco(t))) return true;
+
+  // Factura SIN-* + al menos un artículo de auditoría → basura de import.
+  const inv = String(input.invoice_number ?? '').trim().toUpperCase();
+  if (inv.startsWith('SIN-') && textos.some((t) => esDescripcionAuditoriaCco(t))) {
+    return true;
+  }
+
   return false;
 }
