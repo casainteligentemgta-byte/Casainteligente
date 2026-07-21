@@ -1,8 +1,27 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+} from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import type { CcoProveedorContratos, CcoPagoVinculado } from '@/lib/contabilidad/cco/types';
+import {
+  conciliarContratosPorProveedor,
+  type CcoConciliacionFila,
+} from '@/lib/contabilidad/cco/conciliacionContratos';
 
 function fmtUsd(n: number): string {
   return n.toLocaleString('en-US', {
@@ -11,6 +30,17 @@ function fmtUsd(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function fmtUsdTick(n: number): string {
+  if (Math.abs(n) >= 1000) return `${Math.round(n / 1000)}k`;
+  return String(Math.round(n));
+}
+
+function trunc(s: string, max: number): string {
+  const t = String(s ?? '').trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
 }
 
 type Props = {
@@ -24,13 +54,14 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
   const [hint, setHint] = useState<string | null>(null);
   const [porProveedor, setPorProveedor] = useState<CcoProveedorContratos[]>([]);
   const [huerfanos, setHuerfanos] = useState<CcoPagoVinculado[]>([]);
-  const [resumen, setResumen] = useState({ contratos: 0, contratado: 0, pagado: 0, saldo: 0 });
-  const [openProv, setOpenProv] = useState<string | null>(null);
+  const [openProv, setOpenProv] = useState<Set<string>>(new Set());
+  const [mostrarConciliacion, setMostrarConciliacion] = useState(true);
+  const [filtroEgresos, setFiltroEgresos] = useState<string | null>(null);
   const [form, setForm] = useState({
     proveedor: '',
     descripcion: '',
     monto_base_usd: '',
-    admin_pct: '15',
+    admin_pct: '0',
   });
   const [saving, setSaving] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
@@ -46,9 +77,10 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
     setError(null);
     setHint(null);
     try {
-      const res = await fetch(`/api/contabilidad/cco/contratos?proyecto=${encodeURIComponent(proyectoId)}`, {
-        cache: 'no-store',
-      });
+      const res = await fetch(
+        `/api/contabilidad/cco/contratos?proyecto=${encodeURIComponent(proyectoId)}`,
+        { cache: 'no-store' },
+      );
       const json = await res.json();
       if (!res.ok || json.ok === false) {
         setHint(json.hint ?? null);
@@ -56,7 +88,6 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
       }
       setPorProveedor(json.porProveedor ?? []);
       setHuerfanos(json.huerfanos ?? []);
-      setResumen(json.resumen ?? { contratos: 0, contratado: 0, pagado: 0, saldo: 0 });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
       setPorProveedor([]);
@@ -69,6 +100,36 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  const { filas, total } = useMemo(
+    () => conciliarContratosPorProveedor(porProveedor),
+    [porProveedor],
+  );
+
+  const chartData = useMemo(
+    () =>
+      [...filas]
+        .map((f) => ({
+          proveedor: trunc(f.proveedor, 18),
+          proveedorFull: f.proveedor,
+          ejecutado: Math.min(f.montoPagado, f.montoAcordado),
+          pendiente: Math.max(0, f.montoAcordado - f.montoPagado),
+        }))
+        .sort((a, b) => b.ejecutado + b.pendiente - (a.ejecutado + a.pendiente)),
+    [filas],
+  );
+
+  const egresosFiltrados = useMemo(() => {
+    if (!filtroEgresos) return [];
+    const p = porProveedor.find((x) => x.proveedor === filtroEgresos);
+    if (!p) return [];
+    return p.contratos.flatMap((c) =>
+      c.pagos.map((pago) => ({
+        ...pago,
+        contrato: c.descripcion,
+      })),
+    );
+  }, [filtroEgresos, porProveedor]);
 
   async function crearContrato(e: React.FormEvent) {
     e.preventDefault();
@@ -85,12 +146,12 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
           proveedor: form.proveedor,
           descripcion: form.descripcion,
           monto_base_usd: Number(form.monto_base_usd),
-          admin_pct: Number(form.admin_pct) || 15,
+          admin_pct: Number(form.admin_pct) || 0,
         }),
       });
       const json = await res.json();
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo guardar');
-      setForm({ proveedor: '', descripcion: '', monto_base_usd: '', admin_pct: '15' });
+      setForm({ proveedor: '', descripcion: '', monto_base_usd: '', admin_pct: '0' });
       await cargar();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
@@ -152,11 +213,28 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
     }
   }
 
+  function expandirTodo() {
+    setOpenProv(new Set(filas.map((f) => f.proveedor)));
+  }
+  function resumirTodo() {
+    setOpenProv(new Set());
+  }
+  function toggleProv(p: string) {
+    setOpenProv((prev) => {
+      const next = new Set(prev);
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next;
+    });
+  }
+
   if (!proyectoId) {
     return (
       <div style={box}>
         <h3 style={h3}>Contratos</h3>
-        <p style={muted}>Selecciona una obra en el filtro superior para ver y crear contratos de subcontratista.</p>
+        <p style={muted}>
+          Selecciona una obra en el filtro superior para ver y crear contratos de subcontratista.
+        </p>
       </div>
     );
   }
@@ -167,21 +245,302 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+      {/* KPIs V4 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 12,
+        }}
+      >
         {[
-          { t: 'Contratos', v: String(resumen.contratos) },
-          { t: 'Contratado', v: fmtUsd(resumen.contratado) },
-          { t: 'Pagado', v: fmtUsd(resumen.pagado) },
-          { t: 'Saldo', v: fmtUsd(resumen.saldo) },
+          { t: 'MONTO ACORDADO', v: fmtUsd(total.montoAcordado), accent: '#1D4ED8' },
+          { t: 'MONTO EJECUTADO', v: fmtUsd(total.montoEjecutado), accent: '#0F766E' },
+          { t: 'MONTO PAGADO', v: fmtUsd(total.montoPagado), accent: '#15803D' },
         ].map((k) => (
-          <div key={k.t} style={{ ...box, padding: '12px 14px' }}>
-            <p style={{ ...muted, margin: 0, fontSize: 11, fontWeight: 800 }}>{k.t}</p>
-            <p style={{ margin: '6px 0 0', fontSize: 18, fontWeight: 800 }}>{k.v}</p>
+          <div
+            key={k.t}
+            style={{
+              ...box,
+              padding: '16px 18px',
+              borderTop: `4px solid ${k.accent}`,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                color: '#64748B',
+              }}
+            >
+              {k.t}
+            </p>
+            <p
+              style={{
+                margin: '8px 0 0',
+                fontSize: 24,
+                fontWeight: 800,
+                color: '#0F172A',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {k.v}
+            </p>
           </div>
         ))}
       </div>
 
-      <form onSubmit={crearContrato} style={{ ...box, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+      <div style={box}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+            gap: 10,
+            alignItems: 'center',
+            marginBottom: 12,
+          }}
+        >
+          <h3 style={{ ...h3, margin: 0 }}>Contratos por Subcontratista</h3>
+          <button type="button" onClick={() => void cargar()} style={btnGhost} disabled={loading}>
+            Actualizar
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setMostrarConciliacion((v) => !v)}
+          style={btnBanner}
+        >
+          CUADRO DE CONCILIACIÓN DE CONTRATOS
+        </button>
+
+        {mostrarConciliacion ? (
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '12px 0' }}>
+              <button type="button" onClick={expandirTodo} style={btnGhost}>
+                Expandir Todo
+              </button>
+              <button type="button" onClick={resumirTodo} style={btnGhost}>
+                Resumir Todo
+              </button>
+            </div>
+
+            {loading ? (
+              <div style={{ display: 'flex', gap: 8, color: '#64748B', alignItems: 'center' }}>
+                <Loader2 className="animate-spin" size={16} /> Cargando…
+              </div>
+            ) : filas.length === 0 ? (
+              <p style={muted}>Sin contratos. Impórtalos desde V4 o créalos abajo.</p>
+            ) : (
+              <div style={{ overflow: 'auto', maxHeight: 520 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 1100 }}>
+                  <thead>
+                    <tr style={{ background: '#1E293B', color: '#fff', textAlign: 'left' }}>
+                      {[
+                        'SUBCONTRATISTA / CONTRATO',
+                        'MONTO ACORDADO',
+                        'MONTO EJECUTADO',
+                        'MONTO PAGADO',
+                        'MONTO POR EJECUTAR',
+                        'MONTO NO EJECUTADO PAGADO',
+                        'MONTO PAGADO DE MAS',
+                        'TOTAL ANTICIPADO',
+                        'EJECUTADO SIN PAGAR',
+                        'MONTO NO EJECUTADO POR PAGAR',
+                        'AVANCE',
+                        'ESTADO',
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            padding: '8px 6px',
+                            whiteSpace: 'nowrap',
+                            position: 'sticky',
+                            top: 0,
+                            background: '#1E293B',
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.map((f) => (
+                      <FilaProveedor
+                        key={f.proveedor}
+                        fila={f}
+                        open={openProv.has(f.proveedor)}
+                        onToggle={() => toggleProv(f.proveedor)}
+                      />
+                    ))}
+                    <tr style={{ background: '#F1F5F9', fontWeight: 800, borderTop: '2px solid #CBD5E1' }}>
+                      <td style={td}>TOTAL GENERAL</td>
+                      <td style={numTd}>{fmtUsd(total.montoAcordado)}</td>
+                      <td style={numTd}>{fmtUsd(total.montoEjecutado)}</td>
+                      <td style={numTd}>{fmtUsd(total.montoPagado)}</td>
+                      <td style={{ ...numTd, color: '#B91C1C' }}>{fmtUsd(total.montoPorEjecutar)}</td>
+                      <td style={{ ...numTd, color: '#B91C1C' }}>
+                        {fmtUsd(total.montoNoEjecutadoPagado)}
+                      </td>
+                      <td style={{ ...numTd, color: '#B91C1C' }}>{fmtUsd(total.montoPagadoDeMas)}</td>
+                      <td style={{ ...numTd, color: '#B91C1C' }}>{fmtUsd(total.totalAnticipado)}</td>
+                      <td style={{ ...numTd, color: '#15803D' }}>{fmtUsd(total.ejecutadoSinPagar)}</td>
+                      <td style={{ ...numTd, color: '#1D4ED8' }}>
+                        {fmtUsd(total.montoNoEjecutadoPorPagar)}
+                      </td>
+                      <td style={numTd}>{total.avancePct.toFixed(1)}%</td>
+                      <td style={td}>
+                        <EstadoBadge estado={total.estado} />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+
+      {/* Gráfico comparativo */}
+      {chartData.length > 0 ? (
+        <div style={box}>
+          <h3 style={{ ...h3, margin: '0 0 4px' }}>Gráfico Comparativo de Subcontratistas</h3>
+          <p style={{ ...muted, margin: '0 0 14px' }}>
+            Comparativa de Contratos: Monto Ejecutado vs. Pendiente por Subcontratista
+          </p>
+          <div style={{ width: '100%', height: Math.max(280, chartData.length * 36 + 40) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                layout="vertical"
+                data={chartData}
+                margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+              >
+                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tickFormatter={fmtUsdTick} tick={{ fill: '#64748B', fontSize: 11 }} />
+                <YAxis
+                  type="category"
+                  dataKey="proveedor"
+                  width={120}
+                  tick={{ fill: '#475569', fontSize: 10 }}
+                  interval={0}
+                />
+                <Tooltip
+                  labelFormatter={(_, payload) => {
+                    const p = payload?.[0]?.payload as { proveedorFull?: string } | undefined;
+                    return p?.proveedorFull ?? '';
+                  }}
+                  formatter={(v, name) => [
+                    fmtUsd(Number(v)),
+                    name === 'ejecutado' ? 'Ejecutado (Pagado)' : 'Pendiente',
+                  ]}
+                />
+                <Bar dataKey="ejecutado" stackId="a" fill="#22C55E" name="ejecutado" />
+                <Bar dataKey="pendiente" stackId="a" fill="#EF4444" name="pendiente" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, fontWeight: 700 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 12, height: 12, background: '#22C55E', borderRadius: 2 }} />
+              Ejecutado (Pagado)
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 12, height: 12, background: '#EF4444', borderRadius: 2 }} />
+              Pendiente
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => {
+          if (filtroEgresos) setFiltroEgresos(null);
+          else if (filas[0]) setFiltroEgresos(filas[0].proveedor);
+        }}
+        style={btnBannerDark}
+      >
+        DETALLE Y FILTRO DE EGRESOS POR SUBCONTRATISTA
+      </button>
+
+      {filtroEgresos ? (
+        <div style={box}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
+              Subcontratista{' '}
+              <select
+                value={filtroEgresos}
+                onChange={(e) => setFiltroEgresos(e.target.value)}
+                style={input}
+              >
+                {filas.map((f) => (
+                  <option key={f.proveedor} value={f.proveedor}>
+                    {f.proveedor}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={() => setFiltroEgresos(null)} style={btnGhost}>
+              Cerrar
+            </button>
+          </div>
+          {egresosFiltrados.length === 0 ? (
+            <p style={muted}>Sin egresos vinculados a este subcontratista.</p>
+          ) : (
+            <div style={{ overflow: 'auto', maxHeight: 360 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
+                    {['Fecha', 'Contrato', 'Descripción', 'Estado', 'Monto USD'].map((h) => (
+                      <th key={h} style={{ padding: '8px 6px' }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {egresosFiltrados.map((p) => (
+                    <tr key={p.id} style={{ borderTop: '1px solid #E2E8F0' }}>
+                      <td style={td}>{p.fecha ?? '—'}</td>
+                      <td style={td}>{p.contrato}</td>
+                      <td style={{ ...td, whiteSpace: 'normal' }}>{p.descripcion}</td>
+                      <td style={td}>{p.estado ?? 'PAGADO'}</td>
+                      <td style={numTd}>{fmtUsd(p.monto_usd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div style={{ ...box, borderColor: '#FECACA', background: '#FEF2F2', color: '#991B1B' }}>
+          {error}
+          {hint ? <p style={{ margin: '8px 0 0', fontSize: 12 }}>{hint}</p> : null}
+        </div>
+      ) : null}
+      {backfillMsg ? (
+        <div style={{ ...box, borderColor: '#BBF7D0', background: '#F0FDF4', color: '#14532D' }}>
+          {backfillMsg}
+        </div>
+      ) : null}
+
+      {/* Alta + huérfanos (operación) */}
+      <form
+        onSubmit={crearContrato}
+        style={{
+          ...box,
+          display: 'grid',
+          gap: 10,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        }}
+      >
         <div style={{ gridColumn: '1 / -1' }}>
           <h3 style={{ ...h3, marginBottom: 4 }}>Nuevo contrato</h3>
           <p style={{ ...muted, margin: 0 }}>Equivalente a CLASE=CONTRATO en V4 (subcontratista).</p>
@@ -235,183 +594,239 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
         </div>
       </form>
 
-      {error ? (
-        <div style={{ ...box, borderColor: '#FECACA', background: '#FEF2F2', color: '#991B1B' }}>
-          {error}
-          {hint ? <p style={{ margin: '8px 0 0', fontSize: 12 }}>{hint}</p> : null}
+      <div style={box}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <h3 style={{ ...h3, margin: 0 }}>Pagos huérfanos (CONTRATISTA sin vínculo)</h3>
+          <button
+            type="button"
+            disabled={saving || !huerfanos.length}
+            onClick={() => void autoVincular()}
+            style={{ ...btnPrimary, background: '#0F766E' }}
+          >
+            Auto-vincular por descripción
+          </button>
         </div>
-      ) : null}
-      {backfillMsg ? (
-        <div style={{ ...box, borderColor: '#BBF7D0', background: '#F0FDF4', color: '#14532D' }}>
-          {backfillMsg}
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748B' }}>
-          <Loader2 className="animate-spin" size={18} /> Cargando jerarquía…
-        </div>
-      ) : (
-        <>
-          <div style={box}>
-            <h3 style={h3}>Por subcontratista</h3>
-            {porProveedor.length === 0 ? (
-              <p style={muted}>Sin contratos. Impórtalos desde SQLite V4 o créalos arriba.</p>
-            ) : (
-              porProveedor.map((p) => {
-                const open = openProv === p.proveedor;
-                return (
-                  <div key={p.proveedor} style={{ borderTop: '1px solid #E2E8F0', padding: '10px 0' }}>
-                    <button
-                      type="button"
-                      onClick={() => setOpenProv(open ? null : p.proveedor)}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'none',
-                        border: 0,
-                        cursor: 'pointer',
-                        padding: '4px 0',
-                        fontWeight: 800,
-                        color: '#0F172A',
-                      }}
-                    >
-                      {open ? '▾' : '▸'} {p.proveedor}{' '}
-                      <span style={{ fontWeight: 600, color: '#64748B', fontSize: 13 }}>
-                        · {fmtUsd(p.total_contratado)} · saldo {fmtUsd(p.total_saldo)}
-                      </span>
-                    </button>
-                    {open
-                      ? p.contratos.map((c) => (
-                          <div
-                            key={c.id}
-                            style={{
-                              margin: '8px 0 8px 16px',
-                              padding: 12,
-                              background: '#F8FAFC',
-                              borderRadius: 10,
-                              border: '1px solid #E2E8F0',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                              <strong>{c.descripcion}</strong>
-                              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(c.costo_total_usd)}</span>
-                            </div>
-                            <div style={{ marginTop: 8, height: 8, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
-                              <div
-                                style={{
-                                  width: `${c.pct_avance}%`,
-                                  height: '100%',
-                                  background: c.pct_avance >= 100 ? '#16A34A' : '#2563EB',
-                                }}
-                              />
-                            </div>
-                            <p style={{ ...muted, margin: '6px 0 0', fontSize: 12 }}>
-                              Pagado {fmtUsd(c.monto_pagado_usd)} · Saldo {fmtUsd(c.saldo_usd)} · {c.pct_avance}% ·{' '}
-                              {c.pagos.length} pago(s)
-                            </p>
-                            {c.pagos.length ? (
-                              <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: '#334155' }}>
-                                {c.pagos.map((pago) => (
-                                  <li key={pago.id}>
-                                    {pago.fecha ?? '—'} · {pago.descripcion.slice(0, 60)} · {fmtUsd(pago.monto_usd)}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null}
-                          </div>
-                        ))
-                      : null}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          <div style={box}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ ...h3, margin: 0 }}>Pagos huérfanos (CONTRATISTA sin vínculo)</h3>
+        <p style={muted}>
+          En V4 muchos pagos existían sin CONTRATO_VINCULADO. Usa auto-vínculo o asigna a mano.
+        </p>
+        {huerfanos.length === 0 ? (
+          <p style={muted}>No hay pagos huérfanos tipados como CONTRATISTA.</p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <select
+                value={targetContrato}
+                onChange={(e) => setTargetContrato(e.target.value)}
+                style={input}
+              >
+                <option value="">Contrato destino…</option>
+                {allContratos.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
-                disabled={saving || !huerfanos.length}
-                onClick={() => void autoVincular()}
-                style={{ ...btnPrimary, background: '#0F766E' }}
+                disabled={!targetContrato || !selectedHuerfanos.size || saving}
+                onClick={() => void vincularSeleccionados()}
+                style={btnPrimary}
               >
-                Auto-vincular por descripción
+                Vincular seleccionados ({selectedHuerfanos.size})
               </button>
             </div>
-            <p style={muted}>
-              En V4 muchos pagos existían sin CONTRATO_VINCULADO. Usa auto-vínculo o asigna a mano.
-            </p>
-            {huerfanos.length === 0 ? (
-              <p style={muted}>No hay pagos huérfanos tipados como CONTRATISTA.</p>
-            ) : (
-              <>
-                <div style={{ maxHeight: 280, overflow: 'auto', marginBottom: 12 }}>
-                  {huerfanos.map((h) => {
-                    const checked = selectedHuerfanos.has(h.id);
-                    return (
-                      <label
-                        key={h.id}
-                        style={{
-                          display: 'flex',
-                          gap: 10,
-                          alignItems: 'flex-start',
-                          padding: '8px 0',
-                          borderBottom: '1px solid #F1F5F9',
-                          fontSize: 13,
-                          cursor: 'pointer',
-                        }}
-                      >
+            <div style={{ overflow: 'auto', maxHeight: 280 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
+                    {['', 'Fecha', 'Proveedor', 'Descripción', 'Monto'].map((h) => (
+                      <th key={h || 'sel'} style={{ padding: '6px' }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {huerfanos.map((h) => (
+                    <tr key={h.id} style={{ borderTop: '1px solid #E2E8F0' }}>
+                      <td style={td}>
                         <input
                           type="checkbox"
-                          checked={checked}
-                          onChange={() => {
+                          checked={selectedHuerfanos.has(h.id)}
+                          onChange={(e) => {
                             setSelectedHuerfanos((prev) => {
-                              const n = new Set(prev);
-                              if (n.has(h.id)) n.delete(h.id);
-                              else n.add(h.id);
-                              return n;
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(h.id);
+                              else next.delete(h.id);
+                              return next;
                             });
                           }}
                         />
-                        <span>
-                          <strong>{h.proveedor}</strong> · {h.fecha ?? '—'} · {fmtUsd(h.monto_usd)}
-                          <br />
-                          <span style={{ color: '#64748B' }}>{h.descripcion}</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                  <select
-                    value={targetContrato}
-                    onChange={(e) => setTargetContrato(e.target.value)}
-                    style={{ ...input, minWidth: 260 }}
-                  >
-                    <option value="">Contrato destino…</option>
-                    {allContratos.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={saving || !targetContrato || !selectedHuerfanos.size}
-                    onClick={() => void vincularSeleccionados()}
-                    style={btnPrimary}
-                  >
-                    Vincular {selectedHuerfanos.size || ''} pago(s)
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
+                      </td>
+                      <td style={td}>{h.fecha ?? '—'}</td>
+                      <td style={td}>{h.proveedor}</td>
+                      <td style={{ ...td, whiteSpace: 'normal' }}>{h.descripcion}</td>
+                      <td style={numTd}>{fmtUsd(h.monto_usd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
     </div>
+  );
+}
+
+function EstadoBadge({ estado }: { estado: 'Terminado' | 'En Ejecución' }) {
+  const ok = estado === 'Terminado';
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 8px',
+        borderRadius: 999,
+        background: ok ? '#DCFCE7' : '#FEF3C7',
+        color: ok ? '#166534' : '#92400E',
+        fontWeight: 800,
+        fontSize: 11,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {ok ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+      {estado}
+    </span>
+  );
+}
+
+function FilaProveedor({
+  fila,
+  open,
+  onToggle,
+}: {
+  fila: CcoConciliacionFila;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <tr style={{ borderTop: '1px solid #E2E8F0', background: '#fff' }}>
+        <td style={td}>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'none',
+              border: 0,
+              cursor: 'pointer',
+              fontWeight: 800,
+              color: '#0F172A',
+              padding: 0,
+              fontSize: 12,
+            }}
+          >
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {fila.proveedor}
+          </button>
+        </td>
+        <CeldasMetricas f={fila} />
+      </tr>
+      {open
+        ? fila.contratos.map((c) => {
+            const m = {
+              montoAcordado: c.acordado,
+              montoEjecutado: c.ejecutado,
+              montoPagado: c.pagado,
+              montoPorEjecutar: Math.max(0, c.acordado - c.ejecutado),
+              montoNoEjecutadoPagado: Math.max(0, Math.min(c.pagado - c.ejecutado, c.acordado - c.ejecutado)),
+              montoPagadoDeMas: Math.max(0, c.pagado - c.acordado),
+              totalAnticipado: 0,
+              ejecutadoSinPagar: Math.max(0, c.ejecutado - c.pagado),
+              montoNoEjecutadoPorPagar: 0,
+              avancePct: c.acordado > 0 ? Math.min(100, (c.ejecutado / c.acordado) * 100) : 0,
+              estado:
+                c.acordado > 0 && c.ejecutado / c.acordado >= 0.995
+                  ? ('Terminado' as const)
+                  : ('En Ejecución' as const),
+            };
+            m.totalAnticipado = m.montoNoEjecutadoPagado + m.montoPagadoDeMas;
+            m.montoNoEjecutadoPorPagar = Math.max(
+              0,
+              m.montoPorEjecutar - m.montoNoEjecutadoPagado,
+            );
+            return (
+              <tr key={c.id} style={{ background: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
+                <td style={{ ...td, paddingLeft: 28, fontWeight: 600, color: '#475569' }}>
+                  {c.descripcion}
+                </td>
+                <CeldasMetricas f={m} />
+              </tr>
+            );
+          })
+        : null}
+    </>
+  );
+}
+
+function CeldasMetricas({
+  f,
+}: {
+  f: {
+    montoAcordado: number;
+    montoEjecutado: number;
+    montoPagado: number;
+    montoPorEjecutar: number;
+    montoNoEjecutadoPagado: number;
+    montoPagadoDeMas: number;
+    totalAnticipado: number;
+    ejecutadoSinPagar: number;
+    montoNoEjecutadoPorPagar: number;
+    avancePct: number;
+    estado: 'Terminado' | 'En Ejecución';
+  };
+}) {
+  return (
+    <>
+      <td style={numTd}>{fmtUsd(f.montoAcordado)}</td>
+      <td style={numTd}>{fmtUsd(f.montoEjecutado)}</td>
+      <td style={numTd}>{fmtUsd(f.montoPagado)}</td>
+      <td style={{ ...numTd, color: f.montoPorEjecutar > 0 ? '#B91C1C' : undefined }}>
+        {fmtUsd(f.montoPorEjecutar)}
+      </td>
+      <td style={{ ...numTd, color: f.montoNoEjecutadoPagado > 0 ? '#B91C1C' : undefined }}>
+        {fmtUsd(f.montoNoEjecutadoPagado)}
+      </td>
+      <td style={{ ...numTd, color: f.montoPagadoDeMas > 0 ? '#B91C1C' : undefined }}>
+        {fmtUsd(f.montoPagadoDeMas)}
+      </td>
+      <td style={{ ...numTd, color: f.totalAnticipado > 0 ? '#B91C1C' : undefined }}>
+        {fmtUsd(f.totalAnticipado)}
+      </td>
+      <td style={{ ...numTd, color: f.ejecutadoSinPagar > 0 ? '#15803D' : undefined }}>
+        {fmtUsd(f.ejecutadoSinPagar)}
+      </td>
+      <td style={{ ...numTd, color: f.montoNoEjecutadoPorPagar > 0 ? '#1D4ED8' : undefined }}>
+        {fmtUsd(f.montoNoEjecutadoPorPagar)}
+      </td>
+      <td style={numTd}>{f.avancePct.toFixed(1)}%</td>
+      <td style={td}>
+        <EstadoBadge estado={f.estado} />
+      </td>
+    </>
   );
 }
 
@@ -421,36 +836,69 @@ const box: React.CSSProperties = {
   border: '1px solid #E2E8F0',
   padding: 20,
 };
-
-const h3: React.CSSProperties = { margin: '0 0 8px', fontSize: 16, fontWeight: 800 };
-
-const muted: React.CSSProperties = { color: '#64748B', fontSize: 13, margin: '0 0 12px' };
-
+const h3: React.CSSProperties = { fontSize: 18, fontWeight: 800, color: '#0F172A' };
+const muted: React.CSSProperties = { color: '#64748B', fontSize: 13, margin: '8px 0 12px' };
+const td: React.CSSProperties = {
+  padding: '8px 6px',
+  verticalAlign: 'middle',
+  color: '#334155',
+  whiteSpace: 'nowrap',
+};
+const numTd: React.CSSProperties = {
+  ...td,
+  fontVariantNumeric: 'tabular-nums',
+  textAlign: 'right',
+};
 const label: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 4,
   fontSize: 12,
   fontWeight: 700,
-  color: '#64748B',
+  color: '#475569',
 };
-
 const input: React.CSSProperties = {
   padding: '8px 10px',
   borderRadius: 8,
   border: '1px solid #CBD5E1',
-  fontSize: 14,
+  background: '#F8FAFC',
+  fontSize: 13,
   fontWeight: 600,
   color: '#0F172A',
 };
-
 const btnPrimary: React.CSSProperties = {
-  background: '#2563EB',
+  background: '#1D4ED8',
   color: '#fff',
   border: 0,
   borderRadius: 8,
   padding: '10px 14px',
-  fontWeight: 700,
-  cursor: 'pointer',
+  fontWeight: 800,
   fontSize: 13,
+  cursor: 'pointer',
+};
+const btnGhost: React.CSSProperties = {
+  border: '1px solid #CBD5E1',
+  background: '#fff',
+  borderRadius: 8,
+  padding: '8px 12px',
+  fontWeight: 700,
+  fontSize: 12,
+  cursor: 'pointer',
+  color: '#0F172A',
+};
+const btnBanner: React.CSSProperties = {
+  width: '100%',
+  background: '#2563EB',
+  color: '#fff',
+  border: 0,
+  borderRadius: 10,
+  padding: '12px 16px',
+  fontWeight: 800,
+  fontSize: 14,
+  cursor: 'pointer',
+  letterSpacing: '0.02em',
+};
+const btnBannerDark: React.CSSProperties = {
+  ...btnBanner,
+  background: '#0F172A',
 };
