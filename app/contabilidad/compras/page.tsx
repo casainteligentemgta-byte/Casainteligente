@@ -910,7 +910,9 @@ export default function ComprasPage() {
                                 subtotal: Number(row.subtotal) || 0,
                                 cantidad: Number(row.cantidad) || 0,
                                 precio_unitario:
-                                    row.precio_unitario != null ? Number(row.precio_unitario) : null,
+                                    row.precio_unitario != null
+                                        ? Number(row.precio_unitario)
+                                        : undefined,
                             });
                             porCompra.set(cid, lista);
                         }
