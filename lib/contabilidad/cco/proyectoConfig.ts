@@ -36,10 +36,22 @@ export async function obtenerConfigCco(
 
   if (data) {
     const r = data as Record<string, unknown>;
+    const devalRaw = num(r.devaluacion_pct, 0);
+    const devalNorm = normalizarDevaluacionConfig(devalRaw);
+    // Persistir forma V4 si la config quedó con brecha Binance/BCV (+).
+    if (Math.abs(devalNorm - devalRaw) > 0.00001) {
+      void supabase
+        .from('cco_proyecto_config')
+        .update({
+          devaluacion_pct: devalNorm,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('proyecto_id', proyectoId);
+    }
     return {
       proyecto_id: proyectoId,
       honorarios_admin_pct: num(r.honorarios_admin_pct, 15),
-      devaluacion_pct: num(r.devaluacion_pct, 0),
+      devaluacion_pct: devalNorm,
       empresa_nombre: r.empresa_nombre != null ? String(r.empresa_nombre) : null,
       obra_alias: r.obra_alias != null ? String(r.obra_alias) : null,
       area_m2: r.area_m2 != null ? num(r.area_m2) : null,
