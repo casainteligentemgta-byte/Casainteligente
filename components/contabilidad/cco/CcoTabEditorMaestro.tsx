@@ -239,7 +239,7 @@ export default function CcoTabEditorMaestro({
       const hon = f.dirty
         ? honorariosLive(base, Number(d.admin_pct) || 0)
         : f.honorarios_usd;
-      montoOrig += Number(d.monto_orig) || (f.dirty ? 0 : f.monto_orig);
+      montoOrig += Number(d.monto_orig) || 0;
       honorarios += hon;
       costoTotal += base + hon;
     }
