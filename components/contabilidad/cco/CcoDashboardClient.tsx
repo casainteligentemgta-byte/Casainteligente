@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, Loader2, Menu, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Menu, PanelLeftClose, X } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -281,6 +281,29 @@ const SECUNDARIOS = [
 ];
 
 const MQ_DESKTOP = '(min-width: 900px)';
+/** Preferencia de menú lateral CCO en desktop (`'1'` abierto, `'0'` cerrado). */
+const CCO_MENU_OPEN_KEY = 'ci-cco-menu-open';
+
+function leerMenuOpenGuardado(): boolean | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(CCO_MENU_OPEN_KEY);
+    if (raw === '1') return true;
+    if (raw === '0') return false;
+  } catch {
+    /* private mode / quota */
+  }
+  return null;
+}
+
+function guardarMenuOpen(open: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CCO_MENU_OPEN_KEY, open ? '1' : '0');
+  } catch {
+    /* private mode / quota */
+  }
+}
 
 export default function CcoDashboardClient() {
   const [nav, setNav] = useState<NavId>('dashboard');
@@ -297,13 +320,21 @@ export default function CcoDashboardClient() {
   const [modo, setModo] = useState<'acumulado' | 'periodo'>('acumulado');
   /**
    * Menú izquierdo CCO: se oculta/muestra con el icono de tres rayas.
-   * Cerrado en móvil por defecto; en desktop abre solo en la primera detección.
+   * Cerrado en móvil por defecto; en desktop respeta localStorage o abre.
    */
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const menuInicializadoRef = React.useRef(false);
   /** Submenú Importar: CSV / PDF / V4 SQLite. */
   const [importarOpen, setImportarOpen] = useState(false);
+
+  const setMenuOpenPersisted = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
+    setMenuOpen((prev) => {
+      const open = typeof next === 'function' ? next(prev) : next;
+      guardarMenuOpen(open);
+      return open;
+    });
+  }, []);
 
   useEffect(() => {
     if (IMPORTAR_NAV_IDS.includes(nav)) setImportarOpen(true);
@@ -315,14 +346,24 @@ export default function CcoDashboardClient() {
     const apply = () => {
       const desktop = mq.matches;
       setIsDesktop(desktop);
-      // No pisar el toggle del usuario tras la primera sincronización.
       if (!menuInicializadoRef.current) {
         menuInicializadoRef.current = true;
-        setMenuOpen(desktop);
+        if (desktop) {
+          const saved = leerMenuOpenGuardado();
+          setMenuOpen(saved ?? true);
+        } else {
+          setMenuOpen(false);
+        }
         return;
       }
       // Al pasar a móvil, cerrar el drawer para no dejarlo abierto fuera de pantalla.
-      if (!desktop) setMenuOpen(false);
+      if (!desktop) {
+        setMenuOpen(false);
+        return;
+      }
+      // Al volver a desktop, restaurar preferencia guardada (o abierto por defecto).
+      const saved = leerMenuOpenGuardado();
+      setMenuOpen(saved ?? true);
     };
     apply();
     mq.addEventListener('change', apply);
@@ -340,6 +381,7 @@ export default function CcoDashboardClient() {
 
   const seleccionarNav = useCallback((id: NavId) => {
     setNav(id);
+    // En móvil cierra el drawer sin pisar la preferencia desktop en localStorage.
     if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia(MQ_DESKTOP).matches) {
       setMenuOpen(false);
     }
@@ -429,7 +471,7 @@ export default function CcoDashboardClient() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <button
             type="button"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => setMenuOpenPersisted((v) => !v)}
             aria-expanded={menuOpen}
             aria-controls="cco-sidebar"
             aria-label={menuOpen ? 'Ocultar menú CCO' : 'Mostrar menú CCO'}
@@ -451,8 +493,11 @@ export default function CcoDashboardClient() {
               minHeight: 36,
             }}
           >
-            {/* Tres rayas = abrir; X = cerrar */}
-            {menuOpen ? <X size={20} strokeWidth={2.25} /> : <Menu size={20} strokeWidth={2.25} />}
+            {menuOpen ? (
+              <PanelLeftClose size={20} strokeWidth={2.25} />
+            ) : (
+              <Menu size={20} strokeWidth={2.25} />
+            )}
             <span style={{ fontSize: 12 }}>{menuOpen ? 'Ocultar' : 'Menú'}</span>
           </button>
           <Link
@@ -501,7 +546,7 @@ export default function CcoDashboardClient() {
           <button
             type="button"
             aria-label="Cerrar menú"
-            onClick={() => setMenuOpen(false)}
+            onClick={() => setMenuOpenPersisted(false)}
             style={{
               position: 'fixed',
               inset: 0,
@@ -543,7 +588,6 @@ export default function CcoDashboardClient() {
             transition: 'width 0.2s ease, transform 0.2s ease, padding 0.2s ease',
             boxShadow: !isDesktop && menuOpen ? '8px 0 24px rgba(0,0,0,0.35)' : 'none',
             pointerEvents: menuOpen ? 'auto' : 'none',
-            visibility: menuOpen || !isDesktop ? 'visible' : 'hidden',
           }}
         >
           <div
@@ -567,23 +611,22 @@ export default function CcoDashboardClient() {
             >
               Menú CCO
             </p>
-            {!isDesktop ? (
-              <button
-                type="button"
-                onClick={() => setMenuOpen(false)}
-                aria-label="Cerrar"
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#94A3B8',
-                  cursor: 'pointer',
-                  padding: 4,
-                  display: 'inline-flex',
-                }}
-              >
-                <X size={18} />
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setMenuOpenPersisted(false)}
+              aria-label="Cerrar menú"
+              title="Ocultar menú"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#94A3B8',
+                cursor: 'pointer',
+                padding: 4,
+                display: 'inline-flex',
+              }}
+            >
+              {isDesktop ? <PanelLeftClose size={18} /> : <X size={18} />}
+            </button>
           </div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 196 }}>
             {NAV_ITEMS.map((entry) => {
