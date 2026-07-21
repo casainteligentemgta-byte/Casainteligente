@@ -250,8 +250,20 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
 
       {/* Eventos */}
       <div style={box}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, flex: 1 }}>Auditoría CCO</h3>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 10,
+            alignItems: 'center',
+            marginBottom: 12,
+            borderBottom: 'none',
+            paddingBottom: 0,
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, flex: 1, borderBottom: 'none' }}>
+            Auditoría
+          </h3>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -262,10 +274,6 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
             Actualizar
           </button>
         </div>
-        <p style={muted}>
-          Eventos append-only (import, ediciones, snapshots, restauraciones).{' '}
-          {proyectoId ? 'Filtrado por obra.' : 'Todas las obras — selecciona una para acotar.'}
-        </p>
         {error ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{error}</p> : null}
         {loading ? (
           <div style={{ display: 'flex', gap: 8, color: '#64748B', alignItems: 'center' }}>
