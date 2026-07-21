@@ -10,6 +10,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import {
+  FORMAS_PAGO_INGRESO,
   INGRESOS_COLUMNAS,
   defaultVisibleColsIngresos,
   storageKeyColumnasIngresos,
@@ -146,6 +147,8 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
       const pick = (f: VistaFila) => {
         const d = f.draft ?? toDraft(f);
         switch (sortKey) {
+          case 'sel':
+            return f.selected ? 1 : 0;
           case 'id':
             return Number(f.display_id) || String(f.display_id);
           case 'fecha':
@@ -158,6 +161,8 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
             return d.moneda;
           case 'tasa':
             return Number(d.tasa) || 0;
+          case 'brecha':
+            return f.porcentaje_brecha_real ?? 0;
           case 'monto_orig':
             return Number(d.monto_orig) || 0;
           case 'monto_usd':
@@ -166,6 +171,8 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
             return d.forma_pago;
           case 'estado':
             return f.estado;
+          case 'link_comprobante':
+            return f.link_factura ?? '';
           default:
             return 0;
         }
@@ -508,16 +515,19 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
                       }}
                     >
                       {c.key === 'sel' ? (
-                        <input
-                          type="checkbox"
-                          checked={filas.length > 0 && filas.every((f) => f.selected)}
-                          onChange={(e) =>
-                            setFilas((prev) =>
-                              prev.map((f) => ({ ...f, selected: e.target.checked })),
-                            )
-                          }
-                          aria-label="Seleccionar todos"
-                        />
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={filas.length > 0 && filas.every((f) => f.selected)}
+                            onChange={(e) =>
+                              setFilas((prev) =>
+                                prev.map((f) => ({ ...f, selected: e.target.checked })),
+                              )
+                            }
+                            aria-label="Seleccionar todos"
+                          />
+                          Seleccionar
+                        </span>
                       ) : (
                         <>
                           {c.label}
@@ -588,8 +598,13 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
                           return (
                             <td key={c.key} style={cell}>
                               <input
-                                value={d.proveedor}
-                                onChange={(e) => patchDraft(f.id, { proveedor: e.target.value })}
+                                value={d.proveedor === 'CLIENTE' ? '' : d.proveedor}
+                                placeholder="None"
+                                onChange={(e) =>
+                                  patchDraft(f.id, {
+                                    proveedor: e.target.value.trim() || 'CLIENTE',
+                                  })
+                                }
                                 style={{ ...inputCell, minWidth: 120 }}
                               />
                             </td>
@@ -652,22 +667,79 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
                             </td>
                           );
                         }
+                        if (c.key === 'brecha') {
+                          return (
+                            <td key={c.key} style={{ ...cell, fontVariantNumeric: 'tabular-nums' }}>
+                              {f.porcentaje_brecha_real != null
+                                ? `${fmtNum(f.porcentaje_brecha_real, 3)}%`
+                                : 'None'}
+                            </td>
+                          );
+                        }
                         if (c.key === 'forma_pago') {
+                          const formaVal = d.forma_pago || '';
                           return (
                             <td key={c.key} style={cell}>
                               <select
-                                value={d.forma_pago}
+                                value={formaVal}
                                 onChange={(e) => patchDraft(f.id, { forma_pago: e.target.value })}
                                 style={inputCell}
                               >
-                                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
-                                <option value="EFECTIVO">EFECTIVO</option>
+                                <option value="">None</option>
+                                {FORMAS_PAGO_INGRESO.map((fp) => (
+                                  <option key={fp} value={fp}>
+                                    {fp}
+                                  </option>
+                                ))}
                               </select>
                             </td>
                           );
                         }
                         if (c.key === 'estado') {
                           return <td key={c.key} style={cell}>{f.estado}</td>;
+                        }
+                        if (c.key === 'link_comprobante') {
+                          return (
+                            <td key={c.key} style={cell}>
+                              {f.link_factura || f.tiene_documento ? (
+                                <button
+                                  type="button"
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#1D4ED8',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    fontSize: 12,
+                                  }}
+                                  onClick={() => {
+                                    void (async () => {
+                                      try {
+                                        const res = await fetch(
+                                          `/api/contabilidad/inyecciones/${encodeURIComponent(f.id)}/soporte`,
+                                          { cache: 'no-store' },
+                                        );
+                                        const json = await res.json();
+                                        if (!res.ok || !json.url) {
+                                          throw new Error(json.error ?? 'Sin comprobante');
+                                        }
+                                        window.open(json.url, '_blank', 'noopener,noreferrer');
+                                      } catch (e) {
+                                        setError(
+                                          e instanceof Error ? e.message : 'Error al abrir comprobante',
+                                        );
+                                      }
+                                    })();
+                                  }}
+                                >
+                                  Ver
+                                </button>
+                              ) : (
+                                'None'
+                              )}
+                            </td>
+                          );
                         }
                         return <td key={c.key} style={cell}>—</td>;
                       })}

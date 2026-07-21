@@ -359,6 +359,17 @@ export async function PATCH(req: Request) {
     const pctGlobal =
       Number((cfg as { honorarios_admin_pct?: number } | null)?.honorarios_admin_pct) || 15;
 
+    for (const id of eliminarIds) {
+      await db.from('contabilidad_compra_lineas').delete().eq('compra_id', id);
+      const { error: delErr } = await db
+        .from('contabilidad_compras')
+        .delete()
+        .eq('id', id)
+        .eq('proyecto_id', proyectoId);
+      if (delErr) errores.push(`${id}: ${delErr.message}`);
+      else deleted += 1;
+    }
+
     for (const c of cambios) {
       const id = String(c.id ?? '').trim();
       if (!id) {
@@ -446,19 +457,19 @@ export async function PATCH(req: Request) {
       updated += 1;
     }
 
-    if (updated > 0) {
+    if (updated > 0 || deleted > 0) {
       await db.from('cco_auditoria_eventos').insert({
         proyecto_id: proyectoId,
-        accion: 'GUARDAR EGRESOS',
-        detalle: `${updated} fila(s) actualizada(s)`,
-        metadata: { updated, errores: errores.slice(0, 20) },
+        accion: deleted > 0 && updated === 0 ? 'ELIMINAR EGRESOS' : 'GUARDAR EGRESOS',
+        detalle: `${updated} actualizada(s) · ${deleted} eliminada(s)`,
+        metadata: { updated, deleted, errores: errores.slice(0, 20) },
       });
     }
 
     return NextResponse.json({
       ok: errores.length === 0,
       updated,
-      deleted: 0,
+      deleted,
       errores,
       error: errores.length ? errores[0] : undefined,
     });

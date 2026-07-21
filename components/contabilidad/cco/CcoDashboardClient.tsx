@@ -24,14 +24,15 @@ import CcoFormRegistroModal from '@/components/contabilidad/cco/CcoFormRegistroM
 import CcoImportarPdfPanel from '@/components/contabilidad/cco/CcoImportarPdfPanel';
 import CcoImportarV4Panel from '@/components/contabilidad/cco/CcoImportarV4Panel';
 import CcoLibroMaestro from '@/components/contabilidad/cco/CcoLibroMaestro';
-import CcoTabEgresos from '@/components/contabilidad/cco/CcoTabEgresos';
-import CcoTabIngresos from '@/components/contabilidad/cco/CcoTabIngresos';
 import CcoSidebarResumen from '@/components/contabilidad/cco/CcoSidebarResumen';
 import CcoTabAjustes from '@/components/contabilidad/cco/CcoTabAjustes';
 import CcoTabAuditoria from '@/components/contabilidad/cco/CcoTabAuditoria';
 import CcoTabContratos from '@/components/contabilidad/cco/CcoTabContratos';
 import CcoTabDeudas from '@/components/contabilidad/cco/CcoTabDeudas';
 import CcoTabDistribucion from '@/components/contabilidad/cco/CcoTabDistribucion';
+import CcoTabEditorMaestro from '@/components/contabilidad/cco/CcoTabEditorMaestro';
+import CcoTabEgresos from '@/components/contabilidad/cco/CcoTabEgresos';
+import CcoTabIngresos from '@/components/contabilidad/cco/CcoTabIngresos';
 import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos';
 import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
 import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
@@ -878,26 +879,7 @@ export default function CcoDashboardClient() {
       {nav === 'datos' && data ? <CcoTabDatosGraficos data={data} modo={modo} /> : null}
 
       {nav === 'editor' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 14,
-              border: '1px solid #E2E8F0',
-              padding: 24,
-            }}
-          >
-            <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>Editor maestro</h3>
-            <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 16px' }}>
-              Alta de GASTO, INGRESO o CONTRATO sin afectar stock.
-            </p>
-            <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
-            <div style={{ marginTop: 20 }}>
-              <CcoExportBar proyectoId={proyectoId} />
-            </div>
-          </div>
-          <CcoLibroMaestro proyectoId={proyectoId} titulo="Libro maestro (todas las clases)" />
-        </div>
+        <CcoTabEditorMaestro proyectoId={proyectoId} onSaved={() => void cargar()} />
       ) : null}
 
       {nav === 'ajustes' ? (
@@ -1373,26 +1355,7 @@ export default function CcoDashboardClient() {
               <CcoTabDistribucion proyectoId={proyectoId} onDone={() => void cargar()} />
             ) : null}
             {tab === 'editor' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div
-                  style={{
-                    background: '#fff',
-                    borderRadius: 14,
-                    border: '1px solid #E2E8F0',
-                    padding: 24,
-                  }}
-                >
-                  <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800 }}>Editor maestro</h3>
-                  <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 16px' }}>
-                    Alta de GASTO, INGRESO o CONTRATO sin afectar stock. También disponible en la barra superior.
-                  </p>
-                  <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
-                  <div style={{ marginTop: 20 }}>
-                    <CcoExportBar proyectoId={proyectoId} />
-                  </div>
-                </div>
-                <CcoLibroMaestro proyectoId={proyectoId} titulo="Libro maestro (todas las clases)" />
-              </div>
+              <CcoTabEditorMaestro proyectoId={proyectoId} onSaved={() => void cargar()} />
             ) : null}
             {tab === 'auditoria' ? <CcoTabAuditoria proyectoId={proyectoId} /> : null}
             {tab === 'importar' ? (
