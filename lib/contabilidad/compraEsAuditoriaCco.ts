@@ -1,7 +1,8 @@
 /**
- * Detecta filas de auditoría del programa CCO que no deben vivir en el cuadro de compras.
+ * Detecta filas de auditoría del programa CCO que no deben vivir en el cuadro de compras
+ * ni en el listado de egresos (columna Concepto).
  * En el CSV maestro, CLASE=AUDITORIA usa PROVEEDOR = usuario de sesión (p. ej. «CARLO DI MATTEO»)
- * y DESCRIPCION/TIPO = acción de log (sesión, PDF, respaldo…).
+ * y DESCRIPCION/TIPO = acción de log (sesión, PDF, respaldo, editor maestro…).
  */
 
 const ACCIONES_AUDITORIA = [
@@ -28,6 +29,13 @@ const ACCIONES_AUDITORIA = [
   'GUARDADO AUTOMÁTICO',
   'EDICION CONTRATO',
   'EDICIÓN CONTRATO',
+  'EDITOR MAESTRO',
+  'EDICION GASTOS',
+  'EDICIÓN GASTOS',
+  'EDICION EGRESOS',
+  'EDICIÓN EGRESOS',
+  'DISTRIBUCION MASIVA',
+  'DISTRIBUCIÓN MASIVA',
 ];
 
 const DETALLES_AUDITORIA = [
@@ -44,6 +52,31 @@ const DETALLES_AUDITORIA = [
   'ACTUALIZÓ MONTOS ESTIMADOS',
   'AREAS DE CAPITULOS',
   'ÁREAS DE CAPÍTULOS',
+  'GRUPOS CONSOLIDADOS',
+  'FRACCIONES INTERNAS',
+  'GASTO DIVIDIDO',
+  'ANADIO GASTO DIVIDIDO',
+  'AÑADIÓ GASTO DIVIDIDO',
+];
+
+/** Prefijos de log tipo «MÓDULO: verbo …» que no son conceptos de gasto. */
+const PREFIJOS_LOG_AUDITORIA = [
+  'EDITOR MAESTRO',
+  'EDICION GASTOS',
+  'EDICION EGRESOS',
+  'DISTRIBUCION MASIVA',
+  'AUDITORIA',
+];
+
+/** Patrones de acciones de bitácora CCO en Concepto/descripción. */
+const PATRONES_LOG_AUDITORIA = [
+  /\bGRUPOS CONSOLIDADOS\b/,
+  /\bFRACCIONES INTERNAS\b/,
+  /\bGASTO DIVIDIDO\b/,
+  /\bANADIO GASTO\b/,
+  /\b(ELIMINO|MODIFICO|ANADIO|CREO|ACTUALIZO|DIVIDIO)\b.+\b(REGISTRO|REGISTROS|GRUPO|GRUPOS|FRACCION|FRACCIONES)\b/,
+  /^GASTO\s*:\s*(ELIMINO|MODIFICO|ANADIO|CREO|ACTUALIZO|DIVIDIO)\b/,
+  /^(INGRESO|CONTRATO|PRESUPUESTO)\s*:\s*(ELIMINO|MODIFICO|ANADIO|CREO|ACTUALIZO)\b/,
 ];
 
 function normalizarAuditTexto(raw: string): string {
@@ -91,6 +124,13 @@ export function esDescripcionAuditoriaCco(descripcion: string | null | undefined
   }
   for (const d of DETALLES_AUDITORIA) {
     if (s.includes(normalizarAuditTexto(d))) return true;
+  }
+  for (const p of PREFIJOS_LOG_AUDITORIA) {
+    const n = normalizarAuditTexto(p);
+    if (s === n || s.startsWith(`${n}:`) || s.startsWith(`${n} `)) return true;
+  }
+  for (const re of PATRONES_LOG_AUDITORIA) {
+    if (re.test(s)) return true;
   }
   return false;
 }
