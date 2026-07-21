@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { IMPUTACION_ENTIDAD } from '@/lib/contabilidad/imputacionCompra';
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
@@ -299,6 +300,14 @@ export async function cargarLibroMaestro(
         (notasLimpias && !esNotaImportacionGenerica(notasLimpias) ? notasLimpias : '') ||
         invoice ||
         'Gasto';
+      // Logs de auditoría CCO importados por error como gasto (no son artículos).
+      if (
+        esDescripcionAuditoriaCco(descripcion) ||
+        esDescripcionAuditoriaCco(notasRaw) ||
+        (invoice?.toUpperCase().startsWith('SIN-') && esDescripcionAuditoriaCco(descripcion))
+      ) {
+        continue;
+      }
       const pctDist = parsePctDistribucion(descripcion) ?? 100;
       const origenV4 = r.origen_v4_id != null ? num(r.origen_v4_id) : null;
       const proveedor = String(r.supplier_name ?? '').trim() || 'Sin proveedor';
