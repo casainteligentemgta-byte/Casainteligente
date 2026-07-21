@@ -83,6 +83,7 @@ const DETALLES_AUDITORIA = [
   'RESOLUTOR',
   'BORRADO SUB-REGISTROS',
   'CAMBIO AL PROYECTO MAESTRO',
+  'AL PROYECTO MAESTRO',
 ];
 
 /** Prefijos de log tipo «MÓDULO: verbo …» que no son conceptos de gasto. */
@@ -109,7 +110,8 @@ const PATRONES_LOG_AUDITORIA = [
   /^(INGRESO|CONTRATO|PRESUPUESTO)\s*:\s*(ELIMINO|MODIFICO|ANADIO|CREO|ACTUALIZO)\b/,
   // «cambio proyecto: cambio al proyecto maestro…» (sin «DE» en el CSV)
   /^CAMBIO\s+(DE\s+)?(PROYECTO|OBRA)\b/,
-  /\bCAMBIO\s+(DE\s+)?(PROYECTO|OBRA)\s*:/,
+  /\bCAMBIO\s+(DE\s+)?(PROYECTO|OBRA)\s*[:·\-]/,
+  /\bCAMBIO\s+AL\s+PROYECTO\s+MAESTRO\b/,
 ];
 
 function normalizarAuditTexto(raw: string): string {
@@ -124,6 +126,14 @@ function normalizarAuditTexto(raw: string): string {
 /** Notas genéricas del import CSV/tabla (no son concepto de gasto ni de log). */
 export function esNotaImportacionGenericaCco(notas: string | null | undefined): boolean {
   return /importaci[oó]n desde (csv|tabla)/i.test(String(notas ?? ''));
+}
+
+export function esRifVacioOPlaceholder(rif: string | null | undefined): boolean {
+  const r = String(rif ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+  return !r || r === '---' || r === '--' || r === '-' || r === 'SR' || r === 'N/A' || r === 'NA' || r === 'S/R';
 }
 
 export function esClaseAuditoriaCco(clase: string | null | undefined): boolean {
@@ -157,7 +167,7 @@ export function esDescripcionAuditoriaCco(descripcion: string | null | undefined
     if (s === n || s.startsWith(`${n}:`) || s.startsWith(`${n} ·`) || s.startsWith(`${n} -`)) {
       return true;
     }
-    if (s.includes(n) && (s.includes(':') || s.includes('SISTEMA') || s.includes('REPORTE') || s.includes('CSV'))) {
+    if (s.includes(n) && (s.includes(':') || s.includes('SISTEMA') || s.includes('REPORTE') || s.includes('CSV') || s.includes('·'))) {
       return true;
     }
   }
@@ -180,11 +190,18 @@ export function esDescripcionAuditoriaCco(descripcion: string | null | undefined
  * ¿Esta compra es solo auditoría CCO mal importada?
  * No exige monto 0: esos logs a veces traen basura numérica del CSV.
  * Ignora notas genéricas «Importación desde CSV/tabla…» (HISTORICO_TABLA).
+ *
+ * Importante: si las líneas aún no llegaron en el embed (PRODUCTOS se carga
+ * al expandir), usa heurística SIN-* + RIF vacío + origen histórico/CCO.
  */
 export function esCompraSoloAuditoriaCco(input: {
   supplier_name?: string | null;
+  supplier_rif?: string | null;
   notas?: string | null;
   invoice_number?: string | null;
+  origen?: string | null;
+  monto_usd?: number | null;
+  total_amount?: number | null;
   lineas?: Array<{ descripcion?: string | null }>;
 }): boolean {
   const lineasDesc = (input.lineas ?? [])
@@ -196,18 +213,33 @@ export function esCompraSoloAuditoriaCco(input: {
   // Preferir líneas de artículo; la nota genérica de import no cuenta como “concepto”.
   const textos = [...lineasDesc, ...(notasUtil ? [notasUtil] : [])];
 
-  if (textos.length === 0) return false;
+  if (textos.length > 0) {
+    if (textos.every((t) => esDescripcionAuditoriaCco(t))) return true;
+  }
 
-  if (textos.every((t) => esDescripcionAuditoriaCco(t))) return true;
-
-  // Factura SIN-* + al menos un artículo de auditoría → basura de import.
   const inv = String(input.invoice_number ?? '').trim().toUpperCase();
   if (inv.startsWith('SIN-') && textos.some((t) => esDescripcionAuditoriaCco(t))) {
     return true;
   }
 
-  // Todas las líneas son log (aunque haya nota genérica aparte).
   if (lineasDesc.length > 0 && lineasDesc.every((t) => esDescripcionAuditoriaCco(t))) {
+    return true;
+  }
+
+  // Heurística cuando el embed de líneas viene vacío (el toggle carga después):
+  // factura sintética SIN-* + RIF vacío + import histórico/CCO → bitácora.
+  const origen = String(input.origen ?? '');
+  const esImportCco =
+    /HISTORICO_TABLA|cco_v4|cco_editor|cco_distribucion|cco_/i.test(origen) ||
+    esNotaImportacionGenericaCco(notas);
+  const rifVacio = esRifVacioOPlaceholder(input.supplier_rif);
+  const montoUsd = Number(input.monto_usd);
+  const totalBs = Number(input.total_amount);
+  const montoCero =
+    (!Number.isFinite(montoUsd) || Math.abs(montoUsd) < 0.005) &&
+    (!Number.isFinite(totalBs) || Math.abs(totalBs) < 0.005);
+
+  if (inv.startsWith('SIN-') && rifVacio && esImportCco && (lineasDesc.length === 0 || montoCero)) {
     return true;
   }
 

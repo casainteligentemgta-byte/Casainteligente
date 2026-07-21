@@ -863,12 +863,78 @@ export default function ComprasPage() {
             filas = await enriquecerComprasConDestino(supabase, filas);
             filas = await enriquecerComprasEstadoLogistica(supabase, filas);
 
+            // Si el embed de líneas vino vacío (PRODUCTOS se carga al expandir),
+            // hidratar candidatos SIN-*/HISTORICO antes de filtrar bitácora CCO.
+            {
+                const idsFaltanLineas = filas
+                    .filter((c) => {
+                        if (c.id.startsWith('canal-')) return false;
+                        if (lineasDetalle(c).length > 0) return false;
+                        const inv = String(c.invoice_number ?? '')
+                            .trim()
+                            .toUpperCase();
+                        const origen = String(c.origen ?? '');
+                        return (
+                            inv.startsWith('SIN-') ||
+                            /HISTORICO_TABLA|cco_/i.test(origen) ||
+                            lineCount(c) > 0
+                        );
+                    })
+                    .map((c) => c.id);
+                if (idsFaltanLineas.length > 0) {
+                    const porCompra = new Map<string, LineaDetalle[]>();
+                    for (let i = 0; i < idsFaltanLineas.length; i += 80) {
+                        const chunk = idsFaltanLineas.slice(i, i + 80);
+                        const { data: lineasExtra } = await supabase
+                            .from('contabilidad_compra_lineas')
+                            .select(
+                                'compra_id,id,descripcion,item_code,subtotal,cantidad,precio_unitario',
+                            )
+                            .in('compra_id', chunk);
+                        for (const raw of lineasExtra ?? []) {
+                            const row = raw as {
+                                compra_id: string;
+                                id?: string;
+                                descripcion?: string | null;
+                                item_code?: string | null;
+                                subtotal?: number | null;
+                                cantidad?: number | null;
+                                precio_unitario?: number | null;
+                            };
+                            const cid = String(row.compra_id);
+                            const lista = porCompra.get(cid) ?? [];
+                            lista.push({
+                                id: row.id,
+                                descripcion: String(row.descripcion ?? ''),
+                                item_code: row.item_code != null ? String(row.item_code) : null,
+                                subtotal: Number(row.subtotal) || 0,
+                                cantidad: Number(row.cantidad) || 0,
+                                precio_unitario:
+                                    row.precio_unitario != null ? Number(row.precio_unitario) : null,
+                            });
+                            porCompra.set(cid, lista);
+                        }
+                    }
+                    if (porCompra.size > 0) {
+                        filas = filas.map((c) => {
+                            const extra = porCompra.get(c.id);
+                            if (!extra?.length) return c;
+                            return { ...c, contabilidad_compra_lineas: extra };
+                        });
+                    }
+                }
+            }
+
             // Excluir siempre logs de auditoría CCO (artículos/sesión/PDF/respaldo, no compras).
             filas = filas.filter(
                 (c) =>
                     !esCompraSoloAuditoriaCco({
                         supplier_name: c.supplier_name,
+                        supplier_rif: c.supplier_rif,
                         invoice_number: c.invoice_number,
+                        origen: c.origen,
+                        monto_usd: c.monto_usd ?? c.total_amount_usd,
+                        total_amount: c.total_amount,
                         notas: (c as { notas?: string | null }).notas ?? null,
                         lineas: lineasDetalle(c),
                     }),

@@ -11,6 +11,7 @@ import {
   formatearPrecioUnitarioLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
 import { formatearBs, formatearUsd } from '@/lib/contabilidad/comprasMontos';
+import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
 export type LineaProductoCompra = {
@@ -120,13 +121,19 @@ export default function CompraProductosToggle({
   const esUsd = moneda === 'USD';
 
   useEffect(() => {
-    setLineas(lineasIniciales ?? []);
+    setLineas(
+      (lineasIniciales ?? []).filter((l) => !esDescripcionAuditoriaCco(l.descripcion)),
+    );
     setAbierto(false);
     setError(null);
   }, [compraId, moneda, lineasIniciales]);
 
   useEffect(() => {
-    if (!abierto) setLineas(lineasIniciales ?? []);
+    if (!abierto) {
+      setLineas(
+        (lineasIniciales ?? []).filter((l) => !esDescripcionAuditoriaCco(l.descripcion)),
+      );
+    }
   }, [lineasIniciales, abierto]);
 
   const totalLineas = lineas.length || lineCountHint || (lineasIniciales?.length ?? 0);
@@ -139,14 +146,18 @@ export default function CompraProductosToggle({
     [montoBsFactura, montoUsdFactura],
   );
 
-  const lineasVista = useMemo(
-    () => lineasConMontosCoherentes(lineas.length > 0 ? lineas : (lineasIniciales ?? []), filaMoneda, tasaBcv),
-    [lineas, lineasIniciales, filaMoneda, tasaBcv],
-  );
+  const lineasVista = useMemo(() => {
+    const src = (lineas.length > 0 ? lineas : (lineasIniciales ?? [])).filter(
+      (l) => !esDescripcionAuditoriaCco(l.descripcion),
+    );
+    return lineasConMontosCoherentes(src, filaMoneda, tasaBcv);
+  }, [lineas, lineasIniciales, filaMoneda, tasaBcv]);
 
   const cargarLineas = useCallback(async () => {
     if (lineas.length > 0) return;
-    const iniciales = lineasIniciales ?? [];
+    const iniciales = (lineasIniciales ?? []).filter(
+      (l) => !esDescripcionAuditoriaCco(l.descripcion),
+    );
     if (iniciales.length > 0) {
       setLineas(iniciales);
       return;
@@ -166,7 +177,11 @@ export default function CompraProductosToggle({
         setError(qErr.message);
         return;
       }
-      setLineas((data ?? []).map((r) => mapLinea(r as Record<string, unknown>)));
+      setLineas(
+        (data ?? [])
+          .map((r) => mapLinea(r as Record<string, unknown>))
+          .filter((l) => !esDescripcionAuditoriaCco(l.descripcion)),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar los productos');
     } finally {
