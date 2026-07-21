@@ -136,6 +136,41 @@ export function esRifVacioOPlaceholder(rif: string | null | undefined): boolean 
   return !r || r === '---' || r === '--' || r === '-' || r === 'SR' || r === 'N/A' || r === 'NA' || r === 'S/R';
 }
 
+/**
+ * Nombre tipo persona/usuario de sesión CCO (no razón social).
+ * p. ej. «CARLO DI MATTEO», «CARLA DI MATTEO».
+ */
+export function esProveedorNombrePersonaSinEmpresa(
+  supplierName: string | null | undefined,
+): boolean {
+  const n = normalizarAuditTexto(String(supplierName ?? ''));
+  if (!n || /\d/.test(n)) return false;
+  if (
+    /\b(C\.?\s*A\.?|S\.?\s*A\.?|S\.?\s*R\.?\s*L\.?|LLC|INC|COMPANY|FERRETER|DISTRIBUID|INVERS|COMERCIAL|MATERIALES|CONSTRUCT|SERVICIOS|SUMINISTROS|GROUP|CORP|CA)\b/.test(
+      n,
+    )
+  ) {
+    return false;
+  }
+  const words = n.split(' ').filter(Boolean);
+  return words.length >= 2 && words.length <= 5;
+}
+
+/**
+ * Factura sintética SIN-* + RIF vacío + nombre de persona → bitácora CCO
+ * (PROVEEDOR = usuario de sesión en el CSV), no proveedor comercial.
+ */
+export function esProveedorActorBitacoraCco(input: {
+  supplier_name?: string | null;
+  supplier_rif?: string | null;
+  invoice_number?: string | null;
+}): boolean {
+  const inv = String(input.invoice_number ?? '').trim().toUpperCase();
+  if (!inv.startsWith('SIN-')) return false;
+  if (!esRifVacioOPlaceholder(input.supplier_rif)) return false;
+  return esProveedorNombrePersonaSinEmpresa(input.supplier_name);
+}
+
 export function esClaseAuditoriaCco(clase: string | null | undefined): boolean {
   const u = normalizarAuditTexto(String(clase ?? ''));
   return u === 'AUDITORIA' || u.startsWith('AUDIT');
@@ -226,20 +261,26 @@ export function esCompraSoloAuditoriaCco(input: {
     return true;
   }
 
-  // Heurística cuando el embed de líneas viene vacío (el toggle carga después):
-  // factura sintética SIN-* + RIF vacío + import histórico/CCO → bitácora.
+  // Heurística bitácora: factura sintética SIN-* + RIF vacío + import histórico/CCO
+  // (aunque traiga montos basura o líneas no detectadas como log).
   const origen = String(input.origen ?? '');
   const esImportCco =
     /HISTORICO_TABLA|cco_v4|cco_editor|cco_distribucion|cco_/i.test(origen) ||
     esNotaImportacionGenericaCco(notas);
   const rifVacio = esRifVacioOPlaceholder(input.supplier_rif);
-  const montoUsd = Number(input.monto_usd);
-  const totalBs = Number(input.total_amount);
-  const montoCero =
-    (!Number.isFinite(montoUsd) || Math.abs(montoUsd) < 0.005) &&
-    (!Number.isFinite(totalBs) || Math.abs(totalBs) < 0.005);
 
-  if (inv.startsWith('SIN-') && rifVacio && esImportCco && (lineasDesc.length === 0 || montoCero)) {
+  if (inv.startsWith('SIN-') && rifVacio && esImportCco) {
+    return true;
+  }
+
+  // Carlo/Carla Di Matteo, etc.: usuario de sesión como «proveedor» en SIN-* sin RIF.
+  if (
+    esProveedorActorBitacoraCco({
+      supplier_name: input.supplier_name,
+      supplier_rif: input.supplier_rif,
+      invoice_number: input.invoice_number,
+    })
+  ) {
     return true;
   }
 

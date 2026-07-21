@@ -5,6 +5,7 @@ import {
   esCompraSoloAuditoriaCco,
   esDescripcionAuditoriaCco,
   esNotaImportacionGenericaCco,
+  esProveedorActorBitacoraCco,
 } from '../lib/contabilidad/compraEsAuditoriaCco';
 
 function assert(cond: boolean, msg: string) {
@@ -65,4 +66,38 @@ function assert(cond: boolean, msg: string) {
   assert(!real, 'compra real no es auditoria');
 }
 
+{
+  // Vista por línea: Carlo/Carla sin RIF en SIN-* debe ocultarse aunque haya montos.
+  const carlo = esCompraSoloAuditoriaCco({
+    supplier_name: 'CARLO DI MATTEO',
+    supplier_rif: '---',
+    invoice_number: 'SIN-2267',
+    origen: 'HISTORICO_TABLA',
+    monto_usd: 120,
+    total_amount: 88000,
+    notas: 'Importación desde CSV/tabla histórica (solo contabilidad, sin stock).',
+    lineas: [{ descripcion: 'Ítem' }],
+  });
+  assert(carlo, 'Carlo con monto e Ítem debe ocultarse');
+}
+
+{
+  const carla = esProveedorActorBitacoraCco({
+    supplier_name: 'CARLA DI MATTEO',
+    supplier_rif: '',
+    invoice_number: 'SIN-2748',
+  });
+  assert(carla, 'Carla actor bitacora');
+}
+
+{
+  const ferreteria = esProveedorActorBitacoraCco({
+    supplier_name: 'FERRETERIA EL TORNILLO C.A.',
+    supplier_rif: '---',
+    invoice_number: 'SIN-1',
+  });
+  assert(!ferreteria, 'razon social no es actor');
+}
+
 console.log('OK test-compra-auditoria-cco');
+
