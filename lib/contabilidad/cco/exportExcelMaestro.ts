@@ -102,15 +102,25 @@ export function generarExcelMaestroXml(opts: {
     ),
     sheet(
       'Presupuestos',
-      ['CAPITULO', 'SUBCAPITULO', 'DESCRIPCION', 'ESTIMADO_USD', 'EJECUTADO_USD', 'SALDO', 'PCT'],
+      [
+        'CAPITULO',
+        'SUBCAPITULO',
+        'DESCRIPCION',
+        'ESTIMADO_USD',
+        'EJECUTADO_USD',
+        'SALDO',
+        'PCT',
+        'AREA_M2',
+      ],
       opts.presupuestos.map((p) => [
         p.capitulo,
         p.subcapitulo ?? '',
         p.descripcion ?? '',
-        p.estimado_usd,
+        p.estimado_proyectado_usd ?? p.estimado_usd,
         p.ejecutado_usd,
         p.saldo_usd,
         p.pct_ejecutado,
+        p.area_m2 ?? 0,
       ]),
     ),
   ];
