@@ -27,7 +27,9 @@ const ACCIONES_AUDITORIA = [
   'LOGOUT',
   'BACKUP',
   'CAMBIO DE OBRA',
+  'CAMBIO OBRA',
   'CAMBIO DE PROYECTO',
+  'CAMBIO PROYECTO',
   'APERTURA DE ARCHIVO',
   'GUARDADO AUTOMATICO',
   'GUARDADO AUTOMÁTICO',
@@ -80,6 +82,8 @@ const DETALLES_AUDITORIA = [
   'EDITÓ GASTO',
   'RESOLUTOR',
   'BORRADO SUB-REGISTROS',
+  'CAMBIO AL PROYECTO MAESTRO',
+  'AL PROYECTO MAESTRO',
 ];
 
 /** Prefijos de log tipo «MÓDULO: verbo …» que no son conceptos de gasto. */
@@ -89,6 +93,10 @@ const PREFIJOS_LOG_AUDITORIA = [
   'EDICION EGRESOS',
   'DISTRIBUCION MASIVA',
   'AUDITORIA',
+  'CAMBIO PROYECTO',
+  'CAMBIO DE PROYECTO',
+  'CAMBIO OBRA',
+  'CAMBIO DE OBRA',
 ];
 
 /** Patrones de acciones de bitácora CCO en Concepto/descripción. */
@@ -100,6 +108,10 @@ const PATRONES_LOG_AUDITORIA = [
   /\b(ELIMINO|MODIFICO|ANADIO|CREO|ACTUALIZO|DIVIDIO)\b.+\b(REGISTRO|REGISTROS|GRUPO|GRUPOS|FRACCION|FRACCIONES)\b/,
   /^GASTO\s*:\s*(ELIMINO|MODIFICO|ANADIO|CREO|ACTUALIZO|DIVIDIO)\b/,
   /^(INGRESO|CONTRATO|PRESUPUESTO)\s*:\s*(ELIMINO|MODIFICO|ANADIO|CREO|ACTUALIZO)\b/,
+  // «cambio proyecto: cambio al proyecto maestro…» (sin «DE» en el CSV)
+  /^CAMBIO\s+(DE\s+)?(PROYECTO|OBRA)\b/,
+  /\bCAMBIO\s+(DE\s+)?(PROYECTO|OBRA)\s*[:·\-]/,
+  /\bCAMBIO\s+AL\s+PROYECTO\s+MAESTRO\b/,
 ];
 
 function normalizarAuditTexto(raw: string): string {
@@ -109,6 +121,54 @@ function normalizarAuditTexto(raw: string): string {
     .toUpperCase()
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Notas genéricas del import CSV/tabla (no son concepto de gasto ni de log). */
+export function esNotaImportacionGenericaCco(notas: string | null | undefined): boolean {
+  return /importaci[oó]n desde (csv|tabla)/i.test(String(notas ?? ''));
+}
+
+export function esRifVacioOPlaceholder(rif: string | null | undefined): boolean {
+  const r = String(rif ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+  return !r || r === '---' || r === '--' || r === '-' || r === 'SR' || r === 'N/A' || r === 'NA' || r === 'S/R';
+}
+
+/**
+ * Nombre tipo persona/usuario de sesión CCO (no razón social).
+ * p. ej. «CARLO DI MATTEO», «CARLA DI MATTEO».
+ */
+export function esProveedorNombrePersonaSinEmpresa(
+  supplierName: string | null | undefined,
+): boolean {
+  const n = normalizarAuditTexto(String(supplierName ?? ''));
+  if (!n || /\d/.test(n)) return false;
+  if (
+    /\b(C\.?\s*A\.?|S\.?\s*A\.?|S\.?\s*R\.?\s*L\.?|LLC|INC|COMPANY|FERRETER|DISTRIBUID|INVERS|COMERCIAL|MATERIALES|CONSTRUCT|SERVICIOS|SUMINISTROS|GROUP|CORP|CA)\b/.test(
+      n,
+    )
+  ) {
+    return false;
+  }
+  const words = n.split(' ').filter(Boolean);
+  return words.length >= 2 && words.length <= 5;
+}
+
+/**
+ * Factura sintética SIN-* + RIF vacío + nombre de persona → bitácora CCO
+ * (PROVEEDOR = usuario de sesión en el CSV), no proveedor comercial.
+ */
+export function esProveedorActorBitacoraCco(input: {
+  supplier_name?: string | null;
+  supplier_rif?: string | null;
+  invoice_number?: string | null;
+}): boolean {
+  const inv = String(input.invoice_number ?? '').trim().toUpperCase();
+  if (!inv.startsWith('SIN-')) return false;
+  if (!esRifVacioOPlaceholder(input.supplier_rif)) return false;
+  return esProveedorNombrePersonaSinEmpresa(input.supplier_name);
 }
 
 export function esClaseAuditoriaCco(clase: string | null | undefined): boolean {
@@ -135,13 +195,14 @@ export function esClaseNoCompraCco(clase: string | null | undefined): boolean {
 export function esDescripcionAuditoriaCco(descripcion: string | null | undefined): boolean {
   const s = normalizarAuditTexto(String(descripcion ?? ''));
   if (!s) return false;
+  if (esNotaImportacionGenericaCco(descripcion)) return false;
 
   for (const a of ACCIONES_AUDITORIA) {
     const n = normalizarAuditTexto(a);
     if (s === n || s.startsWith(`${n}:`) || s.startsWith(`${n} ·`) || s.startsWith(`${n} -`)) {
       return true;
     }
-    if (s.includes(n) && (s.includes(':') || s.includes('SISTEMA') || s.includes('REPORTE') || s.includes('CSV'))) {
+    if (s.includes(n) && (s.includes(':') || s.includes('SISTEMA') || s.includes('REPORTE') || s.includes('CSV') || s.includes('·'))) {
       return true;
     }
   }
@@ -150,7 +211,9 @@ export function esDescripcionAuditoriaCco(descripcion: string | null | undefined
   }
   for (const p of PREFIJOS_LOG_AUDITORIA) {
     const n = normalizarAuditTexto(p);
-    if (s === n || s.startsWith(`${n}:`) || s.startsWith(`${n} `)) return true;
+    if (s === n || s.startsWith(`${n}:`) || s.startsWith(`${n} `) || s.startsWith(`${n} ·`)) {
+      return true;
+    }
   }
   for (const re of PATRONES_LOG_AUDITORIA) {
     if (re.test(s)) return true;
@@ -161,27 +224,63 @@ export function esDescripcionAuditoriaCco(descripcion: string | null | undefined
 /**
  * ¿Esta compra es solo auditoría CCO mal importada?
  * No exige monto 0: esos logs a veces traen basura numérica del CSV.
+ * Ignora notas genéricas «Importación desde CSV/tabla…» (HISTORICO_TABLA).
+ *
+ * Importante: si las líneas aún no llegaron en el embed (PRODUCTOS se carga
+ * al expandir), usa heurística SIN-* + RIF vacío + origen histórico/CCO.
  */
 export function esCompraSoloAuditoriaCco(input: {
   supplier_name?: string | null;
+  supplier_rif?: string | null;
   notas?: string | null;
   invoice_number?: string | null;
+  origen?: string | null;
+  monto_usd?: number | null;
+  total_amount?: number | null;
   lineas?: Array<{ descripcion?: string | null }>;
 }): boolean {
-  const lineas = input.lineas ?? [];
-  const textos = [
-    ...lineas.map((l) => String(l.descripcion ?? '')),
-    String(input.notas ?? ''),
-  ].filter((t) => t.trim());
+  const lineasDesc = (input.lineas ?? [])
+    .map((l) => String(l.descripcion ?? '').trim())
+    .filter(Boolean);
+  const notas = String(input.notas ?? '').trim();
+  const notasUtil = notas && !esNotaImportacionGenericaCco(notas) ? notas : '';
 
-  if (textos.length === 0) return false;
+  // Preferir líneas de artículo; la nota genérica de import no cuenta como “concepto”.
+  const textos = [...lineasDesc, ...(notasUtil ? [notasUtil] : [])];
 
-  // Todas las descripciones/notas parecen log de auditoría.
-  if (textos.every((t) => esDescripcionAuditoriaCco(t))) return true;
+  if (textos.length > 0) {
+    if (textos.every((t) => esDescripcionAuditoriaCco(t))) return true;
+  }
 
-  // Factura SIN-* + al menos un artículo de auditoría → basura de import.
   const inv = String(input.invoice_number ?? '').trim().toUpperCase();
   if (inv.startsWith('SIN-') && textos.some((t) => esDescripcionAuditoriaCco(t))) {
+    return true;
+  }
+
+  if (lineasDesc.length > 0 && lineasDesc.every((t) => esDescripcionAuditoriaCco(t))) {
+    return true;
+  }
+
+  // Heurística bitácora: factura sintética SIN-* + RIF vacío + import histórico/CCO
+  // (aunque traiga montos basura o líneas no detectadas como log).
+  const origen = String(input.origen ?? '');
+  const esImportCco =
+    /HISTORICO_TABLA|cco_v4|cco_editor|cco_distribucion|cco_/i.test(origen) ||
+    esNotaImportacionGenericaCco(notas);
+  const rifVacio = esRifVacioOPlaceholder(input.supplier_rif);
+
+  if (inv.startsWith('SIN-') && rifVacio && esImportCco) {
+    return true;
+  }
+
+  // Carlo/Carla Di Matteo, etc.: usuario de sesión como «proveedor» en SIN-* sin RIF.
+  if (
+    esProveedorActorBitacoraCco({
+      supplier_name: input.supplier_name,
+      supplier_rif: input.supplier_rif,
+      invoice_number: input.invoice_number,
+    })
+  ) {
     return true;
   }
 

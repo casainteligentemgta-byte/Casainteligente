@@ -342,15 +342,31 @@ export async function cargarCcoDashboard(
     honorariosPctGlobal: honorariosPct,
   });
 
-  // Override manual > config (normalizada si quedó brecha cruda +) > brechas V4 > 0
-  const devaluacionPromedio =
+  // Siempre forma V4 (−): override/config con brecha + (p. ej. 34,45) → ≈ −25,62.
+  const devaluacionPromedio = normalizarDevaluacionConfig(
     devaluacionOverride != null
       ? devaluacionOverride
       : devaluacionDesdeConfig != null
-        ? normalizarDevaluacionConfig(devaluacionDesdeConfig)
+        ? devaluacionDesdeConfig
         : kpisCalc.devaluacionPromedioBrechas !== 0
           ? kpisCalc.devaluacionPromedioBrechas
-          : 0;
+          : 0,
+  );
+
+  // Autocorregir config en BD si todavía tiene la brecha cruda positiva.
+  if (
+    proyectoId &&
+    devaluacionDesdeConfig != null &&
+    Math.abs(normalizarDevaluacionConfig(devaluacionDesdeConfig) - devaluacionDesdeConfig) > 0.00001
+  ) {
+    void supabase
+      .from('cco_proyecto_config')
+      .update({
+        devaluacion_pct: normalizarDevaluacionConfig(devaluacionDesdeConfig),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('proyecto_id', proyectoId);
+  }
 
   const {
     ingresos,

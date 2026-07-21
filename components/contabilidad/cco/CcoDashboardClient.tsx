@@ -16,6 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { CcoDashboard, CcoKpiBloque } from '@/lib/contabilidad/cargarCcoDashboard';
+import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
 import CcoAnalisisJerarquico from '@/components/contabilidad/cco/CcoAnalisisJerarquico';
 import CcoImportarCsvPanel from '@/components/contabilidad/cco/CcoImportarCsvPanel';
 import CcoExportBar from '@/components/contabilidad/cco/CcoExportBar';
@@ -432,13 +433,18 @@ export default function CcoDashboardClient() {
       const qs = new URLSearchParams();
       if (proyectoId) qs.set('proyecto', proyectoId);
       // Solo forzar devaluación si el usuario la editó; si no, usa config de obra.
-      if (devalManual) qs.set('devaluacion', String(devaluacionRef.current));
+      // Siempre enviar forma V4 (−): +34,45 (brecha) → ≈ −25,62.
+      if (devalManual) {
+        const devalNorm = normalizarDevaluacionConfig(devaluacionRef.current);
+        if (devalNorm !== devaluacionRef.current) setDevaluacion(devalNorm);
+        qs.set('devaluacion', String(devalNorm));
+      }
       const res = await fetch(`/api/contabilidad/cco-dashboard?${qs}`, { cache: 'no-store' });
       const json = (await res.json()) as CcoDashboard & { ok?: boolean; error?: string };
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error al cargar');
       setData(json);
-      if (!devalManual && json.devaluacionPromedio != null) {
-        const d = Number(json.devaluacionPromedio) || 0;
+      if (json.devaluacionPromedio != null) {
+        const d = normalizarDevaluacionConfig(Number(json.devaluacionPromedio) || 0);
         setDevaluacion((prev) => (prev === d ? prev : d));
       }
     } catch (e) {
@@ -968,7 +974,7 @@ export default function CcoDashboardClient() {
             </select>
           </label>
           <label style={{ flex: '0 1 180px' }}>
-            <span style={labelStyle}>Devaluación promedio (%)</span>
+            <span style={labelStyle}>Devaluación V4 (%)</span>
             <input
               type="number"
               step="0.01"
@@ -977,6 +983,14 @@ export default function CcoDashboardClient() {
                 setDevalManual(true);
                 setDevaluacion(Number(e.target.value) || 0);
               }}
+              onBlur={() => {
+                const norm = normalizarDevaluacionConfig(devaluacion);
+                if (norm !== devaluacion) {
+                  setDevalManual(true);
+                  setDevaluacion(norm);
+                }
+              }}
+              title="Forma V4 (poder adquisitivo). Si pegas la brecha Binance/BCV (+34,45), se convierte a ≈ −25,62."
               style={selectStyle}
             />
           </label>
@@ -1010,7 +1024,10 @@ export default function CcoDashboardClient() {
             <p style={{ fontSize: 15, fontWeight: 700, color: '#1E293B', margin: '0 0 10px' }}>
               Contabilidad Real{' '}
               <span style={{ fontWeight: 600, color: '#475569' }}>
-                (Devaluación Promedio: {devaluacion.toFixed(5)}%)
+                (Devaluación V4: {normalizarDevaluacionConfig(
+                  data.devaluacionPromedio ?? devaluacion,
+                ).toFixed(5)}
+                %)
               </span>
             </p>
             <KpiRow bloque={data.real} honorariosPct={data.honorariosPct} real />

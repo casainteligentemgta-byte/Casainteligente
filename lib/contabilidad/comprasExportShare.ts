@@ -40,6 +40,7 @@ export type CompraCuadroInput = {
   monto_usd?: number | null;
   origen?: string | null;
   estado?: string | null;
+  notas?: string | null;
   entidad_nombre?: string | null;
   proyecto_nombre?: string | null;
   ubicacion_nombre?: string | null;
@@ -98,6 +99,7 @@ export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
     monto_usd: c.monto_usd,
     origen: String(c.origen ?? ''),
     estado: String(c.estado ?? 'REGISTRADA'),
+    notas: c.notas ?? null,
     entidadNombre: c.entidad_nombre ?? undefined,
     proyectoNombre: proyectoNombreCompra(c) || undefined,
     almacenNombre: c.ubicacion_nombre ?? undefined,

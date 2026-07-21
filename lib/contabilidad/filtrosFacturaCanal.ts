@@ -1,6 +1,7 @@
 import {
   esCompraSoloAuditoriaCco,
   esDescripcionAuditoriaCco,
+  esProveedorActorBitacoraCco,
 } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { parseMontoFiltro } from '@/lib/contabilidad/comprasQueryFiltros';
 import { montoUsdCompra, tasaBcvCompra, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
@@ -225,6 +226,7 @@ export type CompraConfirmadaParaLineas = {
   monto_usd?: number | null;
   origen: string;
   estado: string;
+  notas?: string | null;
   proyectoNombre?: string;
   entidadNombre?: string;
   almacenNombre?: string;
@@ -249,7 +251,12 @@ export type CompraConfirmadaParaLineas = {
 export function compraEsAuditoriaImportada(c: CompraConfirmadaParaLineas): boolean {
   return esCompraSoloAuditoriaCco({
     supplier_name: c.supplier_name,
+    supplier_rif: c.supplier_rif,
     invoice_number: c.invoice_number,
+    origen: c.origen,
+    monto_usd: c.monto_usd,
+    total_amount: c.total_amount,
+    notas: c.notas,
     lineas: c.lineas,
   });
 }
@@ -350,6 +357,15 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
   for (const c of compras) {
     // Oculta filas de auditoría CCO mal importadas (artículo = log, proveedor = usuario).
     if (compraEsAuditoriaImportada(c)) continue;
+    if (
+      esProveedorActorBitacoraCco({
+        supplier_name: c.supplier_name,
+        supplier_rif: c.supplier_rif,
+        invoice_number: c.invoice_number,
+      })
+    ) {
+      continue;
+    }
 
     const tasa = c.tasa_bcv_ves_por_usd ?? tasaBcvCompra(c);
     const montos = montosBimonetariosLista(c, tasa);

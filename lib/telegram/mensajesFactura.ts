@@ -37,6 +37,11 @@ export function resumenFacturaCompradorHtml(
   extracted: Record<string, unknown>,
   opts?: { sinMoneda?: boolean },
 ): string {
+  const esc = (v: unknown) =>
+    String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   const nItems = Array.isArray(extracted.items) ? extracted.items.length : 0;
   const total = formatTotalExtracted(
     {
@@ -47,10 +52,10 @@ export function resumenFacturaCompradorHtml(
     { sinMoneda: opts?.sinMoneda },
   );
   return (
-    `📄 Nº: <code>${extracted.invoice_number ?? '—'}</code>\n` +
-    `🏢 ${extracted.supplier_name ?? 'Proveedor'}\n` +
-    `🆔 RIF: ${extracted.supplier_rif ?? '—'}\n` +
-    `💰 Total: ${total}\n` +
+    `📄 Nº: <code>${esc(extracted.invoice_number ?? '—')}</code>\n` +
+    `🏢 ${esc(extracted.supplier_name ?? 'Proveedor')}\n` +
+    `🆔 RIF: ${esc(extracted.supplier_rif ?? '—')}\n` +
+    `💰 Total: ${esc(total)}\n` +
     `📦 Líneas: ${nItems}`
   );
 }

@@ -143,7 +143,7 @@ export async function enviarPickerEntidadesFacturaTelegram(
   );
 }
 
-async function enviarPickerDestinoFacturaTelegram(
+export async function enviarPickerDestinoFacturaTelegram(
   supabase: SupabaseClient,
   chatId: string,
   entidadId: string,

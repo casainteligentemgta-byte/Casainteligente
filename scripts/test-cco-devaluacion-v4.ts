@@ -35,4 +35,16 @@ function approx(a: number, b: number, eps = 0.001) {
   assert(brechaCsvADevaluacionV4(0) === 0, 'zero');
 }
 
+{
+  // Idempotente: ya en forma V4 no se vuelve a convertir.
+  const d = normalizarDevaluacionConfig(normalizarDevaluacionConfig(34.45));
+  assert(approx(d, -25.62216), `idempotent ${d}`);
+}
+
+{
+  // Factor Real: 1 + (−25.62216)/100 ≈ 0.743778
+  const factor = 1 + normalizarDevaluacionConfig(34.45) / 100;
+  assert(approx(factor, 0.743778, 0.00001), `factor ${factor}`);
+}
+
 console.log('OK test-cco-devaluacion-v4');
