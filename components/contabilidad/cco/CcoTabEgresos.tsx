@@ -8,6 +8,7 @@ import {
   Pencil,
   RefreshCw,
 } from 'lucide-react';
+import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { CCO_TIPOS_GASTO } from '@/lib/contabilidad/ccoClasificarGasto';
 import { FORMAS_PAGO_CCO } from '@/lib/contabilidad/cco/egresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
@@ -157,7 +158,9 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
       const gJson = await gRes.json();
       const iJson = await iRes.json();
       if (!gRes.ok || gJson.ok === false) throw new Error(gJson.error ?? 'Error al cargar egresos');
-      const rows = (gJson.filas ?? []) as CcoLibroFila[];
+      const rows = ((gJson.filas ?? []) as CcoLibroFila[]).filter(
+        (r) => !esDescripcionAuditoriaCco(r.descripcion),
+      );
       setFilas(rows);
       const nextDrafts: Record<string, DraftLite> = {};
       for (const r of rows) nextDrafts[r.id] = toDraft(r);
