@@ -294,7 +294,34 @@ async function processInvoiceFromCanalCore(
     `Indique moneda (Bs o USD), contado/crédito y confirme en: ${link}`;
 
   if (prog) {
-    await prog.ok('');
+    // No pedir moneda/pago en texto plano: los InlineKeyboard salen justo después.
+    await prog.ok('Análisis listo. Use los botones que aparecen a continuación.');
+    if (params.canal === 'telegram' && !fastTrackMsg) {
+      try {
+        const { avanzarFlujoFacturaCompradorTelegram } = await import(
+          '@/lib/telegram/flujoFacturaCompradorTelegram'
+        );
+        const paso = await avanzarFlujoFacturaCompradorTelegram(
+          supabase,
+          params.chatId,
+          params.pendingId,
+        );
+        if (paso === 'completo') {
+          await params.sendReply(
+            '✅ Factura leída. Si faltan pasos (moneda, pago o almacén), reenvíe la foto con <code>/facturas</code>.',
+            true,
+          );
+        }
+      } catch (e) {
+        console.error('[processInvoiceFromCanal] flujo comprador post-OCR:', e);
+        await params.sendReply(
+          '✅ Factura leída. Si no ve los botones de <b>moneda</b>, <b>contado/crédito</b> o <b>almacén</b>, reenvíe la foto con <code>/facturas</code>.',
+          true,
+        );
+      }
+    }
+  } else {
+    await params.sendReply(plain, false);
     if (params.canal === 'telegram' && !fastTrackMsg) {
       try {
         const { avanzarFlujoFacturaCompradorTelegram } = await import(
@@ -306,14 +333,8 @@ async function processInvoiceFromCanalCore(
           params.pendingId,
         );
       } catch (e) {
-        console.error('[processInvoiceFromCanal] flujo comprador post-OCR:', e);
-        await params.sendReply(
-          '✅ Factura leída. Si no ve los botones de <b>moneda</b> y <b>forma de pago</b>, reenvíe la foto con <code>/facturas</code>.',
-          true,
-        );
+        console.error('[processInvoiceFromCanal] flujo comprador (sin prog):', e);
       }
     }
-  } else {
-    await params.sendReply(plain, false);
   }
 }
