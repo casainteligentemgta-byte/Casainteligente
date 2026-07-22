@@ -125,7 +125,7 @@ const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
 }
 
 const MIN_ZOOM = 0.5
-const MAX_ZOOM = 4
+const MAX_ZOOM = 6
 const ZOOM_STEP = 1.2
 const PINCH_TAP_SUPPRESS_MS = 350
 
