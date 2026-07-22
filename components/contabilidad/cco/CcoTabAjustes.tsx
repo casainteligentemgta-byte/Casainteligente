@@ -4,15 +4,40 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { CcoProyectoConfig } from '@/lib/contabilidad/cco/proyectoConfig';
 
+type GemeloPar = {
+  fecha: string;
+  monto_usd: number;
+  conservar: { id: string; origen_fondo: string };
+  eliminar: Array<{ id: string; origen_fondo: string }>;
+};
+
+type PreviewGemelos = {
+  cantidad: number;
+  montoUsd: number;
+  pares: GemeloPar[];
+};
+
 type Props = {
   proyectoId: string;
   onSaved?: (config: CcoProyectoConfig) => void;
 };
 
+function fmtUsd(n: number): string {
+  return n.toLocaleString('es-VE', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reparando, setReparando] = useState(false);
+  const [revisandoGemelos, setRevisandoGemelos] = useState(false);
+  const [resolviendoGemelos, setResolviendoGemelos] = useState(false);
+  const [previewGemelos, setPreviewGemelos] = useState<PreviewGemelos | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [honorariosAd, setHonorariosAd] = useState<number | null>(null);
@@ -57,6 +82,7 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
 
   useEffect(() => {
     void cargar();
+    setPreviewGemelos(null);
   }, [cargar]);
 
   async function guardar(e: React.FormEvent) {
@@ -134,6 +160,7 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
           ? `Reparación OK: ${partes.join(' · ')}. Recarga el dashboard.`
           : 'Sin cambios: libro ya limpio.',
       );
+      setPreviewGemelos(null);
       if (json.devaluacionDespues != null) {
         setForm((f) => ({ ...f, devaluacion_pct: String(json.devaluacionDespues) }));
       }
@@ -152,6 +179,86 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
       setReparando(false);
     }
   }
+
+  async function revisarIngresosGemelos() {
+    if (!proyectoId) return;
+    setRevisandoGemelos(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const res = await fetch('/api/contabilidad/cco/higiene', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proyecto_id: proyectoId,
+          dry_run: true,
+          modo: 'ingresos_gemelos',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo revisar');
+      const pares = (Array.isArray(json.ingresosGemelosPares)
+        ? json.ingresosGemelosPares
+        : []) as GemeloPar[];
+      const cantidad = Number(json.ingresosGemelosEliminados ?? 0);
+      const montoUsd = Number(json.ingresosGemelosMontoUsd ?? 0);
+      setPreviewGemelos({ cantidad, montoUsd, pares });
+      setOkMsg(
+        cantidad > 0
+          ? `Encontrados ${cantidad} ingreso(s) gemelo(s) (~${fmtUsd(montoUsd)} de doble conteo). Revisa y confirma para eliminar.`
+          : 'No hay ingresos gemelos (LUIS · ABONO + ABONO) en esta obra.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+      setPreviewGemelos(null);
+    } finally {
+      setRevisandoGemelos(false);
+    }
+  }
+
+  async function resolverIngresosGemelos() {
+    if (!proyectoId || !previewGemelos || previewGemelos.cantidad <= 0) return;
+    if (
+      !window.confirm(
+        `¿Eliminar ${previewGemelos.cantidad} ingreso(s) gemelo(s)?\n\n` +
+          `Se quita la copia con operador (p. ej. «· LUIS ·») y se conserva el ABONO limpio.\n` +
+          `Monto de doble conteo a liberar: ~${fmtUsd(previewGemelos.montoUsd)}.\n\n` +
+          `No toca ADELANTOs manuales ni ingresos sin gemelo.`,
+      )
+    ) {
+      return;
+    }
+    setResolviendoGemelos(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const res = await fetch('/api/contabilidad/cco/higiene', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proyecto_id: proyectoId,
+          dry_run: false,
+          modo: 'ingresos_gemelos',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo resolver');
+      const n = Number(json.ingresosGemelosEliminados ?? 0);
+      const monto = Number(json.ingresosGemelosMontoUsd ?? 0);
+      setPreviewGemelos(null);
+      setOkMsg(
+        n > 0
+          ? `Eliminados ${n} ingreso(s) gemelo(s) (~${fmtUsd(monto)}). Recarga el dashboard para ver el KPI.`
+          : 'Sin cambios: no quedaban gemelos.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setResolviendoGemelos(false);
+    }
+  }
+
+  const busy = saving || reparando || revisandoGemelos || resolviendoGemelos;
 
   if (!proyectoId) {
     return (
@@ -175,7 +282,7 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
           <Loader2 className="animate-spin" size={16} /> Cargando…
         </div>
       ) : (
-        <form onSubmit={guardar} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
+        <form onSubmit={guardar} style={{ display: 'grid', gap: 12, maxWidth: 560 }}>
           <label style={label}>
             % Admin global (honorarios CCO)
             <input
@@ -247,20 +354,84 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
           {okMsg ? <p style={{ color: '#15803D', fontSize: 13, margin: 0 }}>{okMsg}</p> : null}
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="submit" disabled={saving || reparando} style={btnPrimary}>
+            <button type="submit" disabled={busy} style={btnPrimary}>
               {saving ? 'Guardando…' : 'Guardar ajustes'}
             </button>
-            <button type="button" onClick={() => void cargar()} disabled={reparando} style={btnGhost}>
+            <button type="button" onClick={() => void cargar()} disabled={busy} style={btnGhost}>
               Recargar
             </button>
             <button
               type="button"
               onClick={() => void repararDescuadre()}
-              disabled={saving || reparando}
+              disabled={busy}
               style={btnWarn}
             >
               {reparando ? 'Reparando…' : 'Reparar oficial / real'}
             </button>
+          </div>
+
+          <div style={gemelosBox}>
+            <h4 style={h4}>Ingresos gemelos (doble conteo CSV)</h4>
+            <p style={{ ...muted, marginBottom: 10 }}>
+              El CSV a veces trae el mismo ABONO dos veces: una con operador de sesión
+              («· LUIS ·») y otra limpia. Ambas suman al KPI. Aquí puedes revisar y borrar
+              solo la copia con operador. No toca ADELANTOs manuales.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              <button
+                type="button"
+                onClick={() => void revisarIngresosGemelos()}
+                disabled={busy}
+                style={btnGhost}
+              >
+                {revisandoGemelos ? 'Revisando…' : 'Revisar gemelos'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void resolverIngresosGemelos()}
+                disabled={busy || !previewGemelos || previewGemelos.cantidad <= 0}
+                style={btnDanger}
+              >
+                {resolviendoGemelos
+                  ? 'Eliminando…'
+                  : previewGemelos && previewGemelos.cantidad > 0
+                    ? `Eliminar ${previewGemelos.cantidad} gemelo(s)`
+                    : 'Eliminar gemelos'}
+              </button>
+            </div>
+            {previewGemelos ? (
+              <div style={{ fontSize: 13, color: '#334155' }}>
+                <p style={{ margin: '0 0 8px', fontWeight: 700 }}>
+                  {previewGemelos.cantidad > 0
+                    ? `${previewGemelos.cantidad} a eliminar · ~${fmtUsd(previewGemelos.montoUsd)} de doble conteo`
+                    : 'Sin gemelos detectados'}
+                </p>
+                {previewGemelos.pares.length > 0 ? (
+                  <div style={paresList}>
+                    {previewGemelos.pares.slice(0, 12).map((p) => (
+                      <div key={`${p.fecha}-${p.monto_usd}-${p.conservar.id}`} style={parRow}>
+                        <div style={{ fontWeight: 700 }}>
+                          {p.fecha} · {fmtUsd(p.monto_usd)}
+                        </div>
+                        <div style={{ color: '#15803D', fontSize: 12 }}>
+                          Conservar: {p.conservar.origen_fondo || '(sin origen)'}
+                        </div>
+                        {p.eliminar.map((e) => (
+                          <div key={e.id} style={{ color: '#B91C1C', fontSize: 12 }}>
+                            Borrar: {e.origen_fondo || e.id.slice(0, 8)}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    {previewGemelos.pares.length > 12 ? (
+                      <p style={{ margin: 0, color: '#64748B', fontSize: 12 }}>
+                        …y {previewGemelos.pares.length - 12} par(es) más
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </form>
       )}
@@ -275,6 +446,7 @@ const box: React.CSSProperties = {
   padding: 24,
 };
 const h3: React.CSSProperties = { margin: '0 0 8px', fontSize: 18, fontWeight: 800 };
+const h4: React.CSSProperties = { margin: '0 0 6px', fontSize: 14, fontWeight: 800, color: '#0F172A' };
 const muted: React.CSSProperties = { color: '#64748B', fontSize: 13, margin: '0 0 16px', lineHeight: 1.5 };
 const label: React.CSSProperties = {
   display: 'flex',
@@ -321,4 +493,33 @@ const btnWarn: React.CSSProperties = {
   fontWeight: 700,
   cursor: 'pointer',
   fontSize: 13,
+};
+const btnDanger: React.CSSProperties = {
+  background: '#FEF2F2',
+  color: '#991B1B',
+  border: '1px solid #FECACA',
+  borderRadius: 8,
+  padding: '10px 14px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontSize: 13,
+};
+const gemelosBox: React.CSSProperties = {
+  marginTop: 8,
+  padding: 14,
+  borderRadius: 10,
+  border: '1px solid #FDE68A',
+  background: '#FFFBEB',
+};
+const paresList: React.CSSProperties = {
+  display: 'grid',
+  gap: 8,
+  maxHeight: 280,
+  overflow: 'auto',
+};
+const parRow: React.CSSProperties = {
+  padding: '8px 10px',
+  borderRadius: 8,
+  background: '#fff',
+  border: '1px solid #E2E8F0',
 };
