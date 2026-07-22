@@ -17,9 +17,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { CcoProveedorContratos, CcoPagoVinculado } from '@/lib/contabilidad/cco/types';
+import type { CcoProveedorContratos, CcoPagoVinculado, CcoContratoConSaldo } from '@/lib/contabilidad/cco/types';
 import {
   conciliarContratosPorProveedor,
+  sugeridoPagarPorAvance,
   type CcoConciliacionFila,
 } from '@/lib/contabilidad/cco/conciliacionContratos';
 
@@ -67,6 +68,9 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
   const [selectedHuerfanos, setSelectedHuerfanos] = useState<Set<string>>(new Set());
   const [targetContrato, setTargetContrato] = useState('');
+  const [repartoCompraId, setRepartoCompraId] = useState('');
+  const [montosReparto, setMontosReparto] = useState<Record<string, string>>({});
+  const [avanceDraft, setAvanceDraft] = useState<Record<string, string>>({});
 
   const cargar = useCallback(async () => {
     if (!proyectoId) {
@@ -88,6 +92,13 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
       }
       setPorProveedor(json.porProveedor ?? []);
       setHuerfanos(json.huerfanos ?? []);
+      const drafts: Record<string, string> = {};
+      for (const p of (json.porProveedor ?? []) as CcoProveedorContratos[]) {
+        for (const c of p.contratos) {
+          drafts[c.id] = String(c.pct_avance ?? 0);
+        }
+      }
+      setAvanceDraft(drafts);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
       setPorProveedor([]);
@@ -112,11 +123,33 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
         .map((f) => ({
           proveedor: trunc(f.proveedor, 18),
           proveedorFull: f.proveedor,
-          ejecutado: Math.min(f.montoPagado, f.montoAcordado),
-          pendiente: Math.max(0, f.montoAcordado - f.montoPagado),
+          ejecutado: Math.min(f.montoEjecutado, f.montoAcordado),
+          pendiente: Math.max(0, f.montoAcordado - f.montoEjecutado),
         }))
         .sort((a, b) => b.ejecutado + b.pendiente - (a.ejecutado + a.pendiente)),
     [filas],
+  );
+
+  const allContratosSaldo = useMemo(
+    () => porProveedor.flatMap((p) => p.contratos),
+    [porProveedor],
+  );
+
+  const huerfanoReparto = useMemo(
+    () => huerfanos.find((h) => h.id === repartoCompraId) ?? null,
+    [huerfanos, repartoCompraId],
+  );
+
+  const contratosReparto = useMemo(() => {
+    if (!huerfanoReparto) return [] as CcoContratoConSaldo[];
+    const prov = huerfanoReparto.proveedor.toUpperCase();
+    const mismos = allContratosSaldo.filter((c) => c.proveedor.toUpperCase() === prov);
+    return mismos.length ? mismos : allContratosSaldo;
+  }, [huerfanoReparto, allContratosSaldo]);
+
+  const sumaReparto = useMemo(
+    () => Object.values(montosReparto).reduce((a, v) => a + (Number(v) || 0), 0),
+    [montosReparto],
   );
 
   const egresosFiltrados = useMemo(() => {
@@ -208,6 +241,92 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
       await cargar();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error en backfill');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function guardarAvance(contratoId: string, pctRaw: string) {
+    const pct = Number(pctRaw);
+    if (!Number.isFinite(pct)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/contabilidad/cco/contratos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'patch_avance',
+          contrato_id: contratoId,
+          pct_avance: pct,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        setHint(json.hint ?? null);
+        throw new Error(json.error ?? 'No se pudo guardar el avance');
+      }
+      await cargar();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al guardar avance');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function iniciarReparto(compraId: string) {
+    setRepartoCompraId(compraId);
+    const h = huerfanos.find((x) => x.id === compraId);
+    const prov = (h?.proveedor ?? '').toUpperCase();
+    const contratos =
+      allContratosSaldo.filter((c) => c.proveedor.toUpperCase() === prov).length > 0
+        ? allContratosSaldo.filter((c) => c.proveedor.toUpperCase() === prov)
+        : allContratosSaldo;
+    const next: Record<string, string> = {};
+    for (const c of contratos) {
+      const sug = sugeridoPagarPorAvance(c.costo_total_usd, c.pct_avance, c.monto_pagado_usd);
+      next[c.id] = sug > 0 ? String(sug) : '';
+    }
+    setMontosReparto(next);
+  }
+
+  async function confirmarReparto() {
+    if (!repartoCompraId || !huerfanoReparto) return;
+    const asignaciones = Object.entries(montosReparto)
+      .map(([contrato_id, monto]) => ({
+        contrato_id,
+        monto_usd: Number(monto) || 0,
+      }))
+      .filter((a) => a.monto_usd > 0);
+    if (!asignaciones.length) {
+      setError('Indica al menos un monto a repartir.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/contabilidad/cco/contratos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'repartir',
+          compra_id: repartoCompraId,
+          asignaciones,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        setHint(json.hint ?? null);
+        throw new Error(json.error ?? 'No se pudo repartir el saco');
+      }
+      setBackfillMsg(
+        `Reparto: ${json.vinculados ?? 0} vínculo(s) · resto en saco $${Number(json.resto_usd ?? 0).toFixed(2)}`,
+      );
+      setRepartoCompraId('');
+      setMontosReparto({});
+      await cargar();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al repartir');
     } finally {
       setSaving(false);
     }
@@ -375,6 +494,12 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
                         fila={f}
                         open={openProv.has(f.proveedor)}
                         onToggle={() => toggleProv(f.proveedor)}
+                        avanceDraft={avanceDraft}
+                        onAvanceChange={(id, v) =>
+                          setAvanceDraft((prev) => ({ ...prev, [id]: v }))
+                        }
+                        onAvanceSave={(id) => void guardarAvance(id, avanceDraft[id] ?? '0')}
+                        saving={saving}
                       />
                     ))}
                     <tr style={{ background: '#F1F5F9', fontWeight: 800, borderTop: '2px solid #CBD5E1' }}>
@@ -435,7 +560,7 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
                   }}
                   formatter={(v, name) => [
                     fmtUsd(Number(v)),
-                    name === 'ejecutado' ? 'Ejecutado (Pagado)' : 'Pendiente',
+                    name === 'ejecutado' ? 'Ejecutado (avance)' : 'Pendiente por ejecutar',
                   ]}
                 />
                 <Bar dataKey="ejecutado" stackId="a" fill="#22C55E" name="ejecutado" />
@@ -446,7 +571,7 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
           <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, fontWeight: 700 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 12, height: 12, background: '#22C55E', borderRadius: 2 }} />
-              Ejecutado (Pagado)
+              Ejecutado (avance operador)
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 12, height: 12, background: '#EF4444', borderRadius: 2 }} />
@@ -604,7 +729,7 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
             alignItems: 'center',
           }}
         >
-          <h3 style={{ ...h3, margin: 0 }}>Pagos huérfanos (CONTRATISTA sin vínculo)</h3>
+          <h3 style={{ ...h3, margin: 0 }}>Saco / pagos huérfanos (CONTRATISTA sin vínculo)</h3>
           <button
             type="button"
             disabled={saving || !huerfanos.length}
@@ -615,7 +740,8 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
           </button>
         </div>
         <p style={muted}>
-          En V4 muchos pagos existían sin CONTRATO_VINCULADO. Usa auto-vínculo o asigna a mano.
+          Pagas al contratista en un saco (sin contrato). Luego repartes montos a cada contrato según
+          el % de avance que fija el operador. Los vínculos previos no se sobrescriben.
         </p>
         {huerfanos.length === 0 ? (
           <p style={muted}>No hay pagos huérfanos tipados como CONTRATISTA.</p>
@@ -627,7 +753,7 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
                 onChange={(e) => setTargetContrato(e.target.value)}
                 style={input}
               >
-                <option value="">Contrato destino…</option>
+                <option value="">Vínculo 1:1 — contrato destino…</option>
                 {allContratos.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -647,8 +773,8 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
-                    {['', 'Fecha', 'Proveedor', 'Descripción', 'Monto'].map((h) => (
-                      <th key={h || 'sel'} style={{ padding: '6px' }}>
+                    {['', 'Fecha', 'Proveedor', 'Descripción', 'Monto', ''].map((h, i) => (
+                      <th key={h || `col-${i}`} style={{ padding: '6px' }}>
                         {h}
                       </th>
                     ))}
@@ -675,11 +801,150 @@ export default function CcoTabContratos({ proyectoId, onNeedProyecto }: Props) {
                       <td style={td}>{h.proveedor}</td>
                       <td style={{ ...td, whiteSpace: 'normal' }}>{h.descripcion}</td>
                       <td style={numTd}>{fmtUsd(h.monto_usd)}</td>
+                      <td style={td}>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => iniciarReparto(h.id)}
+                          style={{ ...btnGhost, padding: '6px 10px', fontSize: 11 }}
+                        >
+                          Repartir
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {huerfanoReparto ? (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 14,
+                  borderRadius: 12,
+                  border: '1px solid #BFDBFE',
+                  background: '#EFF6FF',
+                }}
+              >
+                <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 800, color: '#1E3A8A' }}>
+                  Repartir saco · {fmtUsd(huerfanoReparto.monto_usd)}
+                </h4>
+                <p style={{ ...muted, margin: '0 0 10px' }}>
+                  {huerfanoReparto.proveedor} · {huerfanoReparto.descripcion}. Sugerido = avance% ×
+                  costo − ya pagado. Suma asignada: {fmtUsd(sumaReparto)}
+                  {sumaReparto - huerfanoReparto.monto_usd > 0.009 ? (
+                    <span style={{ color: '#B91C1C', fontWeight: 800 }}>
+                      {' '}
+                      (excede el saco)
+                    </span>
+                  ) : null}
+                </p>
+                {contratosReparto.length === 0 ? (
+                  <p style={muted}>No hay contratos para este proveedor. Crea uno arriba.</p>
+                ) : (
+                  <div style={{ overflow: 'auto', maxHeight: 360 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: '#DBEAFE', textAlign: 'left' }}>
+                          {[
+                            'Contrato',
+                            'Costo',
+                            '% Avance',
+                            'Ya pagado',
+                            'Sugerido',
+                            'Asignar USD',
+                          ].map((h) => (
+                            <th key={h} style={{ padding: '8px 6px' }}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contratosReparto.map((c) => {
+                          const sug = sugeridoPagarPorAvance(
+                            c.costo_total_usd,
+                            Number(avanceDraft[c.id] ?? c.pct_avance) || 0,
+                            c.monto_pagado_usd,
+                          );
+                          return (
+                            <tr key={c.id} style={{ borderTop: '1px solid #BFDBFE' }}>
+                              <td style={{ ...td, whiteSpace: 'normal', fontWeight: 700 }}>
+                                {c.descripcion}
+                              </td>
+                              <td style={numTd}>{fmtUsd(c.costo_total_usd)}</td>
+                              <td style={td}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step="0.1"
+                                  value={avanceDraft[c.id] ?? String(c.pct_avance)}
+                                  onChange={(e) =>
+                                    setAvanceDraft((prev) => ({
+                                      ...prev,
+                                      [c.id]: e.target.value,
+                                    }))
+                                  }
+                                  onBlur={() => void guardarAvance(c.id, avanceDraft[c.id] ?? '0')}
+                                  style={{ ...input, width: 72, padding: '4px 6px' }}
+                                  disabled={saving}
+                                />
+                              </td>
+                              <td style={numTd}>{fmtUsd(c.monto_pagado_usd)}</td>
+                              <td style={numTd}>{fmtUsd(sug)}</td>
+                              <td style={td}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={montosReparto[c.id] ?? ''}
+                                  onChange={(e) =>
+                                    setMontosReparto((prev) => ({
+                                      ...prev,
+                                      [c.id]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="0"
+                                  style={{ ...input, width: 100, padding: '4px 6px' }}
+                                  disabled={saving}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                  <button
+                    type="button"
+                    disabled={
+                      saving ||
+                      sumaReparto <= 0 ||
+                      sumaReparto - huerfanoReparto.monto_usd > 0.009
+                    }
+                    onClick={() => void confirmarReparto()}
+                    style={btnPrimary}
+                  >
+                    Confirmar reparto
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setRepartoCompraId('');
+                      setMontosReparto({});
+                    }}
+                    style={btnGhost}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </>
         )}
       </div>
@@ -714,10 +979,18 @@ function FilaProveedor({
   fila,
   open,
   onToggle,
+  avanceDraft,
+  onAvanceChange,
+  onAvanceSave,
+  saving,
 }: {
   fila: CcoConciliacionFila;
   open: boolean;
   onToggle: () => void;
+  avanceDraft: Record<string, string>;
+  onAvanceChange: (id: string, v: string) => void;
+  onAvanceSave: (id: string) => void;
+  saving: boolean;
 }) {
   return (
     <>
@@ -752,14 +1025,17 @@ function FilaProveedor({
               montoEjecutado: c.ejecutado,
               montoPagado: c.pagado,
               montoPorEjecutar: Math.max(0, c.acordado - c.ejecutado),
-              montoNoEjecutadoPagado: Math.max(0, Math.min(c.pagado - c.ejecutado, c.acordado - c.ejecutado)),
+              montoNoEjecutadoPagado: Math.max(
+                0,
+                Math.min(Math.max(0, c.pagado - c.ejecutado), Math.max(0, c.acordado - c.ejecutado)),
+              ),
               montoPagadoDeMas: Math.max(0, c.pagado - c.acordado),
               totalAnticipado: 0,
               ejecutadoSinPagar: Math.max(0, c.ejecutado - c.pagado),
               montoNoEjecutadoPorPagar: 0,
-              avancePct: c.acordado > 0 ? Math.min(100, (c.ejecutado / c.acordado) * 100) : 0,
+              avancePct: c.pctAvance,
               estado:
-                c.acordado > 0 && c.ejecutado / c.acordado >= 0.995
+                c.pctAvance >= 99.5 && Math.max(0, c.ejecutado - c.pagado) < 0.01
                   ? ('Terminado' as const)
                   : ('En Ejecución' as const),
             };
@@ -773,7 +1049,63 @@ function FilaProveedor({
                 <td style={{ ...td, paddingLeft: 28, fontWeight: 600, color: '#475569' }}>
                   {c.descripcion}
                 </td>
-                <CeldasMetricas f={m} />
+                <td style={numTd}>{fmtUsd(m.montoAcordado)}</td>
+                <td style={numTd}>{fmtUsd(m.montoEjecutado)}</td>
+                <td style={numTd}>{fmtUsd(m.montoPagado)}</td>
+                <td style={{ ...numTd, color: m.montoPorEjecutar > 0 ? '#B91C1C' : undefined }}>
+                  {fmtUsd(m.montoPorEjecutar)}
+                </td>
+                <td style={{ ...numTd, color: m.montoNoEjecutadoPagado > 0 ? '#B91C1C' : undefined }}>
+                  {fmtUsd(m.montoNoEjecutadoPagado)}
+                </td>
+                <td style={{ ...numTd, color: m.montoPagadoDeMas > 0 ? '#B91C1C' : undefined }}>
+                  {fmtUsd(m.montoPagadoDeMas)}
+                </td>
+                <td style={{ ...numTd, color: m.totalAnticipado > 0 ? '#B91C1C' : undefined }}>
+                  {fmtUsd(m.totalAnticipado)}
+                </td>
+                <td style={{ ...numTd, color: m.ejecutadoSinPagar > 0 ? '#15803D' : undefined }}>
+                  {fmtUsd(m.ejecutadoSinPagar)}
+                </td>
+                <td
+                  style={{
+                    ...numTd,
+                    color: m.montoNoEjecutadoPorPagar > 0 ? '#1D4ED8' : undefined,
+                  }}
+                >
+                  {fmtUsd(m.montoNoEjecutadoPorPagar)}
+                </td>
+                <td style={td}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.1"
+                    value={avanceDraft[c.id] ?? String(c.pctAvance)}
+                    onChange={(e) => onAvanceChange(c.id, e.target.value)}
+                    onBlur={() => onAvanceSave(c.id)}
+                    disabled={saving}
+                    title="Avance del operador (0–100). Enter o salir del campo guarda."
+                    style={{
+                      width: 64,
+                      padding: '4px 6px',
+                      borderRadius: 6,
+                      border: '1px solid #CBD5E1',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      textAlign: 'right',
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                  <span style={{ marginLeft: 2, fontWeight: 700, color: '#64748B' }}>%</span>
+                </td>
+                <td style={td}>
+                  <EstadoBadge estado={m.estado} />
+                </td>
               </tr>
             );
           })

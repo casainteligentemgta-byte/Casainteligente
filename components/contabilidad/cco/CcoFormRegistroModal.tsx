@@ -276,7 +276,7 @@ export default function CcoFormRegistroModal({
                   </label>
                   {(form.tipo_gasto_cco === 'CONTRATISTA') && contratos.length ? (
                     <label style={label}>
-                      Contrato vinculado
+                      Contrato vinculado (opcional)
                       <select
                         value={form.contrato_obra_id}
                         onChange={(e) =>
@@ -284,7 +284,7 @@ export default function CcoFormRegistroModal({
                         }
                         style={input}
                       >
-                        <option value="">Sin vínculo</option>
+                        <option value="">Sin vínculo → va al saco (huérfanos)</option>
                         {contratos.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.label}
@@ -292,6 +292,19 @@ export default function CcoFormRegistroModal({
                         ))}
                       </select>
                     </label>
+                  ) : form.tipo_gasto_cco === 'CONTRATISTA' ? (
+                    <p
+                      style={{
+                        gridColumn: '1 / -1',
+                        margin: 0,
+                        fontSize: 12,
+                        color: '#64748B',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Sin contratos en la obra: el pago queda en el saco de huérfanos para repartir
+                      después.
+                    </p>
                   ) : null}
                 </>
               ) : null}

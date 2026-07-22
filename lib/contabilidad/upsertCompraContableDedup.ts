@@ -111,6 +111,7 @@ export async function upsertCompraContableDedup(
   });
 
   let existenteId: string | null = null;
+  let existenteContratoObraId: string | null | undefined = undefined;
   let sinColumnaHash = false;
   let sinColumnaOrigenV4 = false;
 
@@ -122,35 +123,71 @@ export async function upsertCompraContableDedup(
   if (origenV4 != null && proyectoId) {
     const { data: byV4, error: v4Err } = await supabase
       .from('contabilidad_compras')
-      .select('id')
+      .select('id,contrato_obra_id')
       .eq('proyecto_id', proyectoId)
       .eq('origen_v4_id', origenV4)
       .maybeSingle();
     if (v4Err && /origen_v4_id|42703|PGRST204|schema cache/i.test(v4Err.message)) {
       sinColumnaOrigenV4 = true;
+    } else if (v4Err && /contrato_obra_id/i.test(v4Err.message)) {
+      const { data: byV4b, error: v4Err2 } = await supabase
+        .from('contabilidad_compras')
+        .select('id')
+        .eq('proyecto_id', proyectoId)
+        .eq('origen_v4_id', origenV4)
+        .maybeSingle();
+      if (v4Err2 && /origen_v4_id|42703|PGRST204|schema cache/i.test(v4Err2.message)) {
+        sinColumnaOrigenV4 = true;
+      } else if (v4Err2) {
+        return { ok: false, status: 500, error: v4Err2.message };
+      } else if (byV4b?.id) {
+        existenteId = String(byV4b.id);
+      }
     } else if (v4Err) {
       return { ok: false, status: 500, error: v4Err.message };
     } else if (byV4?.id) {
       existenteId = String(byV4.id);
+      existenteContratoObraId =
+        (byV4 as { contrato_obra_id?: string | null }).contrato_obra_id != null
+          ? String((byV4 as { contrato_obra_id: string }).contrato_obra_id)
+          : null;
     }
   }
 
   if (!existenteId) {
     const { data: existente, error: findErr } = await supabase
       .from('contabilidad_compras')
-      .select('id')
+      .select('id,contrato_obra_id')
       .eq('dedup_hash', dedup_hash)
       .maybeSingle();
 
-    if (findErr && !/dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message)) {
+    if (findErr && /contrato_obra_id/i.test(findErr.message)) {
+      const { data: existenteB, error: findErr2 } = await supabase
+        .from('contabilidad_compras')
+        .select('id')
+        .eq('dedup_hash', dedup_hash)
+        .maybeSingle();
+      if (findErr2 && !/dedup_hash|42703|PGRST204|schema cache/i.test(findErr2.message)) {
+        return { ok: false, status: 500, error: findErr2.message };
+      }
+      sinColumnaHash = Boolean(
+        findErr2 && /dedup_hash|42703|PGRST204|schema cache/i.test(findErr2.message),
+      );
+      if (existenteB?.id) existenteId = String(existenteB.id);
+    } else if (findErr && !/dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message)) {
       return { ok: false, status: 500, error: findErr.message };
+    } else {
+      sinColumnaHash = Boolean(
+        findErr && /dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message),
+      );
+      if (existente?.id) {
+        existenteId = String(existente.id);
+        existenteContratoObraId =
+          (existente as { contrato_obra_id?: string | null }).contrato_obra_id != null
+            ? String((existente as { contrato_obra_id: string }).contrato_obra_id)
+            : null;
+      }
     }
-
-    sinColumnaHash = Boolean(
-      findErr && /dedup_hash|42703|PGRST204|schema cache/i.test(findErr.message),
-    );
-
-    if (existente?.id) existenteId = String(existente.id);
   }
 
   const rowBase: Record<string, unknown> = {
@@ -184,7 +221,19 @@ export async function upsertCompraContableDedup(
   if (input.cco) {
     const c = input.cco;
     if (c.tipo_gasto_cco != null) rowBase.tipo_gasto_cco = c.tipo_gasto_cco;
-    if (c.contrato_obra_id !== undefined) rowBase.contrato_obra_id = c.contrato_obra_id;
+    if (c.contrato_obra_id !== undefined) {
+      // En update: no pisar vínculo manual existente con null ni con otro contrato.
+      if (
+        existenteId &&
+        existenteContratoObraId &&
+        (c.contrato_obra_id == null ||
+          String(c.contrato_obra_id) !== String(existenteContratoObraId))
+      ) {
+        // Conservar vínculo actual (no incluir contrato_obra_id en el update).
+      } else {
+        rowBase.contrato_obra_id = c.contrato_obra_id;
+      }
+    }
     if (c.admin_pct_override !== undefined) rowBase.admin_pct_override = c.admin_pct_override;
     if (c.honorarios_usd !== undefined) rowBase.honorarios_usd = c.honorarios_usd;
     if (c.capitulo_cco != null) rowBase.capitulo_cco = c.capitulo_cco;
@@ -267,6 +316,23 @@ export async function upsertCompraContableDedup(
         if (race?.id) raceId = String(race.id);
       }
       if (raceId) {
+        // Conservar vínculo manual si la carrera no cargó contrato_obra_id existente.
+        if (rowBase.contrato_obra_id !== undefined) {
+          const { data: raceRow } = await supabase
+            .from('contabilidad_compras')
+            .select('contrato_obra_id')
+            .eq('id', raceId)
+            .maybeSingle();
+          const link =
+            (raceRow as { contrato_obra_id?: string | null } | null)?.contrato_obra_id ?? null;
+          if (
+            link &&
+            (rowBase.contrato_obra_id == null ||
+              String(rowBase.contrato_obra_id) !== String(link))
+          ) {
+            delete rowBase.contrato_obra_id;
+          }
+        }
         await supabase.from('contabilidad_compras').update(rowBase).eq('id', raceId);
         await reemplazarLineas(supabase, raceId, input.lineas ?? []);
         return { ok: true, id: raceId, action: 'updated', dedup_hash };
