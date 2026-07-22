@@ -50,11 +50,25 @@ export type ResultadoComparacionFactura = {
   invoice_number_factura: string | null;
   /** True si hace falta pedirlo a mano (OCR vacío o solo correlativo CCO). */
   requiere_numero_factura: boolean;
+  /** RIF leído en la factura (normalizado). */
+  supplier_rif_factura: string | null;
+  /** True si el OCR no trajo RIF válido y hay que cargarlo a mano. */
+  requiere_rif: boolean;
 };
 
 /** Correlativo sintético del import CSV (`CCO-V4-123`), no es nº fiscal real. */
 export function esNumeroFacturaSinteticoCco(raw: string | null | undefined): boolean {
   return /^CCO-V4-\d+$/i.test(String(raw ?? '').trim());
+}
+
+/** Placeholder del import CCO (`SIN-RIF`, `S/R`, vacío), no es RIF fiscal. */
+export function esRifPlaceholderCco(raw: string | null | undefined): boolean {
+  const s = String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+  if (!s) return true;
+  return /^(SIN-?RIF|S\/R|S\.R\.|N\/A|NA|NONE|-)$/i.test(s);
 }
 
 /**
@@ -74,6 +88,28 @@ export function resolverNumeroFacturaAdjunta(input: {
 
   const compra = String(input.invoiceNumberCompra ?? '').trim();
   if (compra && !esNumeroFacturaSinteticoCco(compra)) return compra.slice(0, 80);
+
+  return null;
+}
+
+/**
+ * RIF real: manual > OCR > compra solo si ya es RIF válido (no SIN-RIF).
+ */
+export function resolverRifFacturaAdjunta(input: {
+  rifOcr?: string | null;
+  rifManual?: string | null;
+  rifCompra?: string | null;
+}): string | null {
+  const manual = normalizarRifVenezolano(input.rifManual);
+  if (manual) return manual;
+
+  const ocr = normalizarRifVenezolano(input.rifOcr);
+  if (ocr) return ocr;
+
+  if (!esRifPlaceholderCco(input.rifCompra)) {
+    const compra = normalizarRifVenezolano(input.rifCompra);
+    if (compra) return compra;
+  }
 
   return null;
 }
@@ -180,8 +216,10 @@ export async function compararCabeceraConFacturaOcr(
     });
   }
 
-  // RIF (solo si ambos existen)
-  const rifCco = normalizarRifVenezolano(compra.supplier_rif);
+  // RIF: si ambos son reales y difieren, marcar disparidad (el valor final será OCR/manual).
+  const rifCco = !esRifPlaceholderCco(compra.supplier_rif)
+    ? normalizarRifVenezolano(compra.supplier_rif)
+    : '';
   const rifOcr = normalizarRifVenezolano(extracted.supplier_rif);
   if (rifCco && rifOcr && rifCco !== rifOcr) {
     disparidades.push({
@@ -259,6 +297,8 @@ export async function compararCabeceraConFacturaOcr(
   const invoiceReal =
     invoiceOcr && !esNumeroFacturaSinteticoCco(invoiceOcr) ? invoiceOcr : null;
   const requiereNumero = !invoiceReal;
+  const rifReal = rifOcr || null;
+  const requiereRif = !rifReal;
 
   return {
     coincide: disparidades.length === 0,
@@ -268,6 +308,8 @@ export async function compararCabeceraConFacturaOcr(
     tasa_comparacion: tasaNum > 0 ? tasaNum : null,
     invoice_number_factura: invoiceReal,
     requiere_numero_factura: requiereNumero,
+    supplier_rif_factura: rifReal,
+    requiere_rif: requiereRif,
   };
 }
 
@@ -366,7 +408,7 @@ export function convertirExtractedBsAUsd(
 /**
  * Aplica la decisión de certificación: ítems siempre desde OCR;
  * cabecera/monto según `mantener_cco` o `usar_factura`.
- * El nº de factura siempre viene del OCR o de carga manual (nunca CCO-V4).
+ * Nº de factura y RIF siempre vienen del OCR o carga manual (nunca CCO-V4 / SIN-RIF).
  */
 export async function aplicarCertificacionFacturaAdjunta(
   supabase: SupabaseClient,
@@ -377,12 +419,15 @@ export async function aplicarCertificacionFacturaAdjunta(
     confirmarFechaAnomala?: boolean;
     /** Nº fiscal indicado a mano si el OCR no lo trajo. */
     invoiceNumberManual?: string | null;
+    /** RIF indicado a mano si el OCR no lo trajo. */
+    supplierRifManual?: string | null;
   },
 ): Promise<{
   compraId: string;
   decision: DecisionCertificarFactura;
   items: number;
   invoice_number: string;
+  supplier_rif: string;
 }> {
   const { compra, extracted, decision } = input;
   const itemsCount = (extracted.items ?? []).filter((it) => String(it.description ?? '').trim())
@@ -399,6 +444,17 @@ export async function aplicarCertificacionFacturaAdjunta(
   if (!invoiceNumber) {
     throw new Error(
       'Indique el número de factura (el OCR no lo leyó y el CCO solo tiene correlativo interno).',
+    );
+  }
+
+  const supplierRif = resolverRifFacturaAdjunta({
+    rifOcr: extracted.supplier_rif,
+    rifManual: input.supplierRifManual,
+    rifCompra: compra.supplier_rif,
+  });
+  if (!supplierRif) {
+    throw new Error(
+      'Indique el RIF del proveedor (el OCR no lo leyó y el CCO no tiene un RIF válido).',
     );
   }
 
@@ -420,14 +476,12 @@ export async function aplicarCertificacionFacturaAdjunta(
       }
       payload = convertirExtractedBsAUsd(extracted, tasaNum, montoUsdCompra(compra));
       payload.supplier_name = compra.supplier_name ?? payload.supplier_name;
-      payload.supplier_rif = compra.supplier_rif ?? payload.supplier_rif;
       payload.date = String(compra.fecha ?? payload.date ?? '').slice(0, 10);
       payload.total_amount = montoUsdCompra(compra) || payload.total_amount;
       payload.moneda = 'USD';
     } else {
       payload = extractedCanalDesdeOcr(extracted, 'VES');
       payload.supplier_name = compra.supplier_name ?? payload.supplier_name;
-      payload.supplier_rif = compra.supplier_rif ?? payload.supplier_rif;
       payload.date = String(compra.fecha ?? payload.date ?? '').slice(0, 10);
       payload.total_amount =
         montoNominalMonedaOriginal(compra) || payload.total_amount;
@@ -435,8 +489,9 @@ export async function aplicarCertificacionFacturaAdjunta(
     }
   }
 
-  // Siempre nº real de factura (OCR o manual), nunca correlativo CCO-V4.
+  // Siempre nº y RIF reales (OCR o manual), nunca correlativo/placeholder CCO.
   payload.invoice_number = invoiceNumber;
+  payload.supplier_rif = supplierRif;
 
   await actualizarCompraContableDesdeExtracted(supabase, {
     compraId: compra.id,
@@ -449,5 +504,6 @@ export async function aplicarCertificacionFacturaAdjunta(
     decision,
     items: itemsCount,
     invoice_number: invoiceNumber,
+    supplier_rif: supplierRif,
   };
 }

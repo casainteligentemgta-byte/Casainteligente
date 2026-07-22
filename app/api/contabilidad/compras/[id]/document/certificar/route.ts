@@ -20,6 +20,8 @@ type Body = {
   confirmar_fecha_anomala?: boolean;
   /** Nº fiscal manual si el OCR no lo extrajo. */
   invoice_number?: string | null;
+  /** RIF manual si el OCR no lo extrajo. */
+  supplier_rif?: string | null;
 };
 
 /**
@@ -94,6 +96,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       decision,
       confirmarFechaAnomala: Boolean(body.confirmar_fecha_anomala),
       invoiceNumberManual: body.invoice_number,
+      supplierRifManual: body.supplier_rif,
     });
 
     const { data: updated } = await db

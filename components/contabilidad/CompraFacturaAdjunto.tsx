@@ -53,9 +53,14 @@ export default function CompraFacturaAdjunto({
       if (esOcrAdjuntarOk(data.ocr)) {
         if (data.ocr.requiere_confirmacion) {
           setOcrPendiente(data.ocr);
+          const faltaFiscal =
+            data.ocr.requiere_numero_factura ||
+            data.ocr.certificacion.requiere_numero_factura ||
+            data.ocr.requiere_rif ||
+            data.ocr.certificacion.requiere_rif;
           toast.message(
-            data.ocr.requiere_numero_factura || data.ocr.certificacion.requiere_numero_factura
-              ? 'Indique el número de factura (OCR no lo leyó)'
+            faltaFiscal
+              ? 'Confirme nº de factura y RIF'
               : 'Factura adjuntada: hay disparidades con el CCO',
           );
           onAdjuntado?.(compraId);
@@ -63,8 +68,11 @@ export default function CompraFacturaAdjunto({
           const nro = data.ocr.aplicado.invoice_number
             ? ` · Nº ${data.ocr.aplicado.invoice_number}`
             : '';
+          const rif = data.ocr.aplicado.supplier_rif
+            ? ` · RIF ${data.ocr.aplicado.supplier_rif}`
+            : '';
           toast.success(
-            `Factura certificada · ${data.ocr.aplicado.items} ítem(s)${nro}`,
+            `Factura certificada · ${data.ocr.aplicado.items} ítem(s)${nro}${rif}`,
           );
           onAdjuntado?.(compraId);
         } else {
@@ -176,13 +184,14 @@ export default function CompraFacturaAdjunto({
             setOcrPendiente(null);
             onAdjuntado?.(compraId);
           }}
-          onAplicado={({ items, decision, invoice_number }) => {
+          onAplicado={({ items, decision, invoice_number, supplier_rif }) => {
             setOcrPendiente(null);
             const nro = invoice_number ? ` · Nº ${invoice_number}` : '';
+            const rif = supplier_rif ? ` · RIF ${supplier_rif}` : '';
             toast.success(
               decision === 'usar_factura'
-                ? `Datos de factura aplicados · ${items} ítem(s)${nro}`
-                : `CCO conservado · ${items} ítem(s)${nro}`,
+                ? `Datos de factura aplicados · ${items} ítem(s)${nro}${rif}`
+                : `CCO conservado · ${items} ítem(s)${nro}${rif}`,
             );
             onAdjuntado?.(compraId);
           }}

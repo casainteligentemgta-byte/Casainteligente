@@ -237,12 +237,17 @@ export async function POST(req: Request, ctx: RouteCtx) {
       String(it.description ?? '').trim(),
     ).length;
 
-    let aplicado: { items: number; decision: 'mantener_cco'; invoice_number: string } | null =
-      null;
+    let aplicado: {
+      items: number;
+      decision: 'mantener_cco';
+      invoice_number: string;
+      supplier_rif: string;
+    } | null = null;
     const puedeAutoAplicar =
       certificacion.coincide &&
       itemsCount > 0 &&
-      !certificacion.requiere_numero_factura;
+      !certificacion.requiere_numero_factura &&
+      !certificacion.requiere_rif;
 
     if (puedeAutoAplicar) {
       try {
@@ -257,6 +262,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
           items: r.items,
           decision: 'mantener_cco',
           invoice_number: r.invoice_number,
+          supplier_rif: r.supplier_rif,
         };
       } catch (applyErr) {
         console.warn('[POST compra document auto-certificar]', applyErr);
@@ -274,8 +280,10 @@ export async function POST(req: Request, ctx: RouteCtx) {
           !aplicado &&
           (!certificacion.coincide ||
             certificacion.requiere_numero_factura ||
+            certificacion.requiere_rif ||
             itemsCount > 0),
         requiere_numero_factura: certificacion.requiere_numero_factura,
+        requiere_rif: certificacion.requiere_rif,
         aplicado,
       },
     });

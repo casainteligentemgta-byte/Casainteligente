@@ -24,7 +24,13 @@ export type OcrAdjuntarResult = {
   certificacion: ResultadoComparacionFactura;
   requiere_confirmacion: boolean;
   requiere_numero_factura?: boolean;
-  aplicado?: { items: number; decision: 'mantener_cco'; invoice_number?: string } | null;
+  requiere_rif?: boolean;
+  aplicado?: {
+    items: number;
+    decision: 'mantener_cco';
+    invoice_number?: string;
+    supplier_rif?: string;
+  } | null;
 };
 
 type Props = {
@@ -37,6 +43,7 @@ type Props = {
     decision: DecisionCertificarFactura;
     items: number;
     invoice_number?: string;
+    supplier_rif?: string;
   }) => void;
 };
 
@@ -51,24 +58,38 @@ export default function CertificarFacturaAdjuntaModal({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [supplierRif, setSupplierRif] = useState('');
 
   const disparidades = ocr.certificacion.disparidades ?? [];
   const itemsCount = ocr.items_count ?? 0;
-  const soloNumero =
-    disparidades.length === 0 && Boolean(ocr.requiere_numero_factura || ocr.certificacion.requiere_numero_factura);
+  const faltaNumero =
+    Boolean(ocr.requiere_numero_factura || ocr.certificacion.requiere_numero_factura);
+  const faltaRif = Boolean(ocr.requiere_rif || ocr.certificacion.requiere_rif);
+  const soloDatosFiscales = disparidades.length === 0 && (faltaNumero || faltaRif);
   const ocrTrajoNumero = Boolean(ocr.certificacion.invoice_number_factura?.trim());
+  const ocrTrajoRif = Boolean(ocr.certificacion.supplier_rif_factura?.trim());
 
   useEffect(() => {
     if (!open) return;
-    setInvoiceNumber(String(ocr.certificacion.invoice_number_factura ?? ocr.extracted.invoice_number ?? '').trim());
+    setInvoiceNumber(
+      String(ocr.certificacion.invoice_number_factura ?? ocr.extracted.invoice_number ?? '').trim(),
+    );
+    setSupplierRif(
+      String(ocr.certificacion.supplier_rif_factura ?? ocr.extracted.supplier_rif ?? '').trim(),
+    );
     setError(null);
     setGuardando(false);
   }, [open, ocr]);
 
   const aplicar = async (decision: DecisionCertificarFactura) => {
     const nro = invoiceNumber.trim();
+    const rif = supplierRif.trim();
     if (!nro) {
       setError('Indique el número de factura (leído de la factura o cargado a mano).');
+      return;
+    }
+    if (!rif) {
+      setError('Indique el RIF del proveedor (leído de la factura o cargado a mano).');
       return;
     }
     setGuardando(true);
@@ -84,8 +105,10 @@ export default function CertificarFacturaAdjuntaModal({
             extracted: {
               ...ocr.extracted,
               invoice_number: nro,
+              supplier_rif: rif,
             },
             invoice_number: nro,
+            supplier_rif: rif,
             confirmar_fecha_anomala: true,
           }),
         },
@@ -96,6 +119,7 @@ export default function CertificarFacturaAdjuntaModal({
         items?: number;
         decision?: DecisionCertificarFactura;
         invoice_number?: string;
+        supplier_rif?: string;
       };
       if (!res.ok || !data.ok) {
         throw new Error(data.error || 'No se pudo aplicar la certificación');
@@ -104,6 +128,7 @@ export default function CertificarFacturaAdjuntaModal({
         decision: data.decision || decision,
         items: data.items ?? itemsCount,
         invoice_number: data.invoice_number || nro,
+        supplier_rif: data.supplier_rif || rif,
       });
       onClose();
     } catch (e) {
@@ -113,17 +138,19 @@ export default function CertificarFacturaAdjuntaModal({
     }
   };
 
+  const puedeAplicar = itemsCount > 0 && Boolean(invoiceNumber.trim()) && Boolean(supplierRif.trim());
+
   return (
     <Dialog open={open} onOpenChange={(v) => (!v && !guardando ? onClose() : undefined)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto border-amber-800/60 bg-zinc-950 sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-amber-100">
             <AlertTriangle className="h-5 w-5 text-amber-400" />
-            {soloNumero ? 'Número de factura' : 'Disparidad factura vs CCO'}
+            {soloDatosFiscales ? 'Datos fiscales de la factura' : 'Disparidad factura vs CCO'}
           </DialogTitle>
           <DialogDescription className="text-zinc-400">
-            {soloNumero
-              ? 'El OCR no pudo leer el número de la factura. Indíquelo a mano para certificar el egreso (el correlativo CCO-V4 del CSV no se usa como nº fiscal).'
+            {soloDatosFiscales
+              ? 'Complete el número de factura y/o el RIF si el OCR no los leyó. No se usan el correlativo CCO-V4 ni el placeholder SIN-RIF del CSV.'
               : `La factura adjunta${fileName ? ` («${fileName}»)` : ''} no coincide con la cabecera o el monto del egreso importado desde el CSV. Elija cómo certificar.`}
           </DialogDescription>
         </DialogHeader>
@@ -141,8 +168,22 @@ export default function CertificarFacturaAdjuntaModal({
               disabled={guardando}
               className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-100 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
             />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              RIF {ocrTrajoRif ? '(OCR — editable)' : '(cargar a mano)'}
+            </span>
+            <input
+              type="text"
+              value={supplierRif}
+              onChange={(e) => setSupplierRif(e.target.value)}
+              placeholder="Ej. J-12345678-9"
+              disabled={guardando}
+              className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-100 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+            />
             <span className="block text-[11px] text-zinc-500">
-              Debe salir de la factura o escribirse manualmente. No se conserva el CCO-V4 del CSV.
+              Nº y RIF deben salir de la factura o escribirse a mano (no CCO-V4 / SIN-RIF del CSV).
             </span>
           </label>
 
@@ -196,10 +237,10 @@ export default function CertificarFacturaAdjuntaModal({
             Solo adjuntar
           </button>
           <div className="flex flex-col gap-2 sm:flex-row">
-            {soloNumero || disparidades.length === 0 ? (
+            {soloDatosFiscales || disparidades.length === 0 ? (
               <button
                 type="button"
-                disabled={guardando || itemsCount === 0 || !invoiceNumber.trim()}
+                disabled={guardando || !puedeAplicar}
                 onClick={() => void aplicar('mantener_cco')}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-sm font-bold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
               >
@@ -210,7 +251,7 @@ export default function CertificarFacturaAdjuntaModal({
               <>
                 <button
                   type="button"
-                  disabled={guardando || itemsCount === 0 || !invoiceNumber.trim()}
+                  disabled={guardando || !puedeAplicar}
                   onClick={() => void aplicar('mantener_cco')}
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm font-bold text-zinc-100 hover:bg-zinc-800 disabled:opacity-50"
                 >
@@ -219,7 +260,7 @@ export default function CertificarFacturaAdjuntaModal({
                 </button>
                 <button
                   type="button"
-                  disabled={guardando || itemsCount === 0 || !invoiceNumber.trim()}
+                  disabled={guardando || !puedeAplicar}
                   onClick={() => void aplicar('usar_factura')}
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-sm font-bold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
                 >

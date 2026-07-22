@@ -74,16 +74,24 @@ export default function EgresoFacturaCell({
       if (esOcrAdjuntarOk(data.ocr)) {
         if (data.ocr.requiere_confirmacion) {
           setOcrPendiente(data.ocr);
+          const faltaFiscal =
+            data.ocr.requiere_numero_factura ||
+            data.ocr.certificacion.requiere_numero_factura ||
+            data.ocr.requiere_rif ||
+            data.ocr.certificacion.requiere_rif;
           setInfo(
-            data.ocr.requiere_numero_factura || data.ocr.certificacion.requiere_numero_factura
-              ? 'Factura adjuntada. Indique o confirme el nº de factura.'
+            faltaFiscal
+              ? 'Factura adjuntada. Confirme nº de factura y RIF.'
               : 'Factura adjuntada. Revise las disparidades con el CCO.',
           );
         } else if (data.ocr.aplicado) {
           const nro = data.ocr.aplicado.invoice_number
             ? ` · Nº ${data.ocr.aplicado.invoice_number}`
             : '';
-          setInfo(`Certificada: ${data.ocr.aplicado.items} ítem(s)${nro}.`);
+          const rif = data.ocr.aplicado.supplier_rif
+            ? ` · RIF ${data.ocr.aplicado.supplier_rif}`
+            : '';
+          setInfo(`Certificada: ${data.ocr.aplicado.items} ítem(s)${nro}${rif}.`);
         } else if (data.ocr.items_count === 0) {
           setInfo('Factura adjuntada. OCR sin ítems legibles.');
         } else {
@@ -165,13 +173,14 @@ export default function EgresoFacturaCell({
           fileName={localName || fileName}
           ocr={ocrPendiente}
           onClose={() => setOcrPendiente(null)}
-          onAplicado={({ items, decision, invoice_number }) => {
+          onAplicado={({ items, decision, invoice_number, supplier_rif }) => {
             setOcrPendiente(null);
             const nro = invoice_number ? ` · Nº ${invoice_number}` : '';
+            const rif = supplier_rif ? ` · RIF ${supplier_rif}` : '';
             setInfo(
               decision === 'usar_factura'
-                ? `Actualizado con factura: ${items} ítem(s)${nro}.`
-                : `CCO conservado + ${items} ítem(s)${nro}.`,
+                ? `Actualizado con factura: ${items} ítem(s)${nro}${rif}.`
+                : `CCO conservado + ${items} ítem(s)${nro}${rif}.`,
             );
             onAdjuntado?.(compraId, localName || fileName || 'factura');
           }}

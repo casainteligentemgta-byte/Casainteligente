@@ -61,17 +61,25 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
       if (esOcrAdjuntarOk(data.ocr)) {
         if (data.ocr.requiere_confirmacion) {
           setOcrPendiente(data.ocr);
+          const faltaFiscal =
+            data.ocr.requiere_numero_factura ||
+            data.ocr.certificacion.requiere_numero_factura ||
+            data.ocr.requiere_rif ||
+            data.ocr.certificacion.requiere_rif;
           setMsg(
-            data.ocr.requiere_numero_factura || data.ocr.certificacion.requiere_numero_factura
-              ? `Soporte enlazado (${name}). Indique el nº de factura.`
+            faltaFiscal
+              ? `Soporte enlazado (${name}). Confirme nº de factura y RIF.`
               : `Soporte enlazado (${name}). Revise disparidades CCO vs factura.`,
           );
         } else if (data.ocr.aplicado) {
           const nro = data.ocr.aplicado.invoice_number
             ? ` · Nº ${data.ocr.aplicado.invoice_number}`
             : '';
+          const rif = data.ocr.aplicado.supplier_rif
+            ? ` · RIF ${data.ocr.aplicado.supplier_rif}`
+            : '';
           setMsg(
-            `Soporte enlazado y certificado (${name}) · ${data.ocr.aplicado.items} ítem(s)${nro}.`,
+            `Soporte enlazado y certificado (${name}) · ${data.ocr.aplicado.items} ítem(s)${nro}${rif}.`,
           );
         } else {
           setMsg(`Soporte enlazado (${name}).`);
@@ -218,13 +226,14 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
           fileName={ocrFileName}
           ocr={ocrPendiente}
           onClose={() => setOcrPendiente(null)}
-          onAplicado={({ items, decision, invoice_number }) => {
+          onAplicado={({ items, decision, invoice_number, supplier_rif }) => {
             setOcrPendiente(null);
             const nro = invoice_number ? ` · Nº ${invoice_number}` : '';
+            const rif = supplier_rif ? ` · RIF ${supplier_rif}` : '';
             setMsg(
               decision === 'usar_factura'
-                ? `Datos de factura aplicados · ${items} ítem(s)${nro}.`
-                : `CCO conservado · ${items} ítem(s)${nro}.`,
+                ? `Datos de factura aplicados · ${items} ítem(s)${nro}${rif}.`
+                : `CCO conservado · ${items} ítem(s)${nro}${rif}.`,
             );
             if (ocrFileName) onAdjuntado(compraId, ocrFileName);
           }}
