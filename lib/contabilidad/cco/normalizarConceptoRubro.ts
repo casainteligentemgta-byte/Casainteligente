@@ -15,8 +15,12 @@ function limpia(raw: string): string {
 
 const REGLAS: { re: RegExp; concepto: string }[] = [
   { re: /CONCRETO\s*PREMEZCL|PREMEZCLADO|HORMIGON\s*PREMEZ/i, concepto: 'CONCRETO PREMEZCLADO' },
-  { re: /\bCEMENTO\b/i, concepto: 'CEMENTO' },
-  { re: /\b(ACERO|CABILLA|CABILLAS|VARILLA)/i, concepto: 'ACERO Y CABILLAS' },
+  // Unifica variantes de proveedores/OCR: CEMENTO, CEMNTO, CMT, PORTLAND, CEM…
+  {
+    re: /\b(CEMENTOS?|CIMENTOS?|CEMNTOS?|CEMTOS?|CEMENTS?|PORTLAND|CMT\.?|CEM\.?)\b/i,
+    concepto: 'CEMENTO',
+  },
+  { re: /\b(ACERO|CABILLA|CABILLAS|VARILLA|KABILLA|CAVIYA)\b/i, concepto: 'ACERO Y CABILLAS' },
   { re: /HORCON|VIGA\s*DE\s*MADERA|VIGAS\s*DE\s*MADERA/i, concepto: 'HORCONES Y VIGAS DE MADERA' },
   { re: /PIEDRA\s*NEGRA/i, concepto: 'PIEDRA NEGRA' },
   { re: /ENCOFRAD|MADERA\s*ESTRUCTURAL/i, concepto: 'MADERA ESTRUCTURAL / ENCOFRADOS (VARIOS)' },
@@ -45,6 +49,23 @@ const REGLAS: { re: RegExp; concepto: string }[] = [
   { re: /INSUMO|CONSUMIBLE|GUANTE/i, concepto: 'INSUMOS GENERALES / CONSUMIBLES' },
 ];
 
+/** Alias explícitos proveedor/OCR → concepto canónico (unificación). */
+const ALIAS_CONCEPTO: Record<string, string> = {
+  CEMENTO: 'CEMENTO',
+  CEMENTOS: 'CEMENTO',
+  CIMENTO: 'CEMENTO',
+  CIMENTOS: 'CEMENTO',
+  CEMNTO: 'CEMENTO',
+  CEMTO: 'CEMENTO',
+  CEMENT: 'CEMENTO',
+  PORTLAND: 'CEMENTO',
+  'CEMENTO PORTLAND': 'CEMENTO',
+  'CEMENTO GRIS': 'CEMENTO',
+  'CEMENTO BLANCO': 'CEMENTO',
+  CMT: 'CEMENTO',
+  CEM: 'CEMENTO',
+};
+
 export function normalizarConceptoRubro(
   descripcion: string,
   opts?: { tipo?: CcoTipoGasto | string; proveedor?: string },
@@ -61,6 +82,14 @@ export function normalizarConceptoRubro(
   if (tipo === 'ADMINISTRACIÓN DELEGADA' || tipo === 'ADMINISTRACION DELEGADA') {
     return 'ADMINISTRACIÓN DELEGADA';
   }
+
+  const dKey = d
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (ALIAS_CONCEPTO[dKey]) return ALIAS_CONCEPTO[dKey];
 
   for (const r of REGLAS) {
     if (r.re.test(d) || r.re.test(proveedor)) return r.concepto;
