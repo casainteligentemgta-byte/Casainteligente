@@ -61,10 +61,17 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
       if (esOcrAdjuntarOk(data.ocr)) {
         if (data.ocr.requiere_confirmacion) {
           setOcrPendiente(data.ocr);
-          setMsg(`Soporte enlazado (${name}). Revise disparidades CCO vs factura.`);
-        } else if (data.ocr.aplicado) {
           setMsg(
-            `Soporte enlazado y certificado (${name}) · ${data.ocr.aplicado.items} ítem(s).`,
+            data.ocr.requiere_numero_factura || data.ocr.certificacion.requiere_numero_factura
+              ? `Soporte enlazado (${name}). Indique el nº de factura.`
+              : `Soporte enlazado (${name}). Revise disparidades CCO vs factura.`,
+          );
+        } else if (data.ocr.aplicado) {
+          const nro = data.ocr.aplicado.invoice_number
+            ? ` · Nº ${data.ocr.aplicado.invoice_number}`
+            : '';
+          setMsg(
+            `Soporte enlazado y certificado (${name}) · ${data.ocr.aplicado.items} ítem(s)${nro}.`,
           );
         } else {
           setMsg(`Soporte enlazado (${name}).`);
@@ -211,12 +218,13 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
           fileName={ocrFileName}
           ocr={ocrPendiente}
           onClose={() => setOcrPendiente(null)}
-          onAplicado={({ items, decision }) => {
+          onAplicado={({ items, decision, invoice_number }) => {
             setOcrPendiente(null);
+            const nro = invoice_number ? ` · Nº ${invoice_number}` : '';
             setMsg(
               decision === 'usar_factura'
-                ? `Datos de factura aplicados · ${items} ítem(s).`
-                : `CCO conservado · ${items} ítem(s) cargados.`,
+                ? `Datos de factura aplicados · ${items} ítem(s)${nro}.`
+                : `CCO conservado · ${items} ítem(s)${nro}.`,
             );
             if (ocrFileName) onAdjuntado(compraId, ocrFileName);
           }}

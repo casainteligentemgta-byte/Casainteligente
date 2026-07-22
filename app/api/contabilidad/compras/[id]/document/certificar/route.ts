@@ -18,6 +18,8 @@ type Body = {
   decision?: DecisionCertificarFactura;
   extracted?: ExtractedPurchaseInvoice;
   confirmar_fecha_anomala?: boolean;
+  /** Nº fiscal manual si el OCR no lo extrajo. */
+  invoice_number?: string | null;
 };
 
 /**
@@ -91,6 +93,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       extracted,
       decision,
       confirmarFechaAnomala: Boolean(body.confirmar_fecha_anomala),
+      invoiceNumberManual: body.invoice_number,
     });
 
     const { data: updated } = await db

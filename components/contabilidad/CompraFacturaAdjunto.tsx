@@ -53,11 +53,18 @@ export default function CompraFacturaAdjunto({
       if (esOcrAdjuntarOk(data.ocr)) {
         if (data.ocr.requiere_confirmacion) {
           setOcrPendiente(data.ocr);
-          toast.message('Factura adjuntada: hay disparidades con el CCO');
+          toast.message(
+            data.ocr.requiere_numero_factura || data.ocr.certificacion.requiere_numero_factura
+              ? 'Indique el número de factura (OCR no lo leyó)'
+              : 'Factura adjuntada: hay disparidades con el CCO',
+          );
           onAdjuntado?.(compraId);
         } else if (data.ocr.aplicado) {
+          const nro = data.ocr.aplicado.invoice_number
+            ? ` · Nº ${data.ocr.aplicado.invoice_number}`
+            : '';
           toast.success(
-            `Factura certificada · ${data.ocr.aplicado.items} ítem(s) cargados`,
+            `Factura certificada · ${data.ocr.aplicado.items} ítem(s)${nro}`,
           );
           onAdjuntado?.(compraId);
         } else {
@@ -169,12 +176,13 @@ export default function CompraFacturaAdjunto({
             setOcrPendiente(null);
             onAdjuntado?.(compraId);
           }}
-          onAplicado={({ items, decision }) => {
+          onAplicado={({ items, decision, invoice_number }) => {
             setOcrPendiente(null);
+            const nro = invoice_number ? ` · Nº ${invoice_number}` : '';
             toast.success(
               decision === 'usar_factura'
-                ? `Datos de factura aplicados · ${items} ítem(s)`
-                : `CCO conservado · ${items} ítem(s) cargados`,
+                ? `Datos de factura aplicados · ${items} ítem(s)${nro}`
+                : `CCO conservado · ${items} ítem(s)${nro}`,
             );
             onAdjuntado?.(compraId);
           }}

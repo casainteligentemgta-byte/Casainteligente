@@ -46,7 +46,37 @@ export type ResultadoComparacionFactura = {
   /** Monto OCR en Bs. */
   monto_factura_ves: number | null;
   tasa_comparacion: number | null;
+  /** Nº leído en la factura (vacío si el OCR no lo trajo). */
+  invoice_number_factura: string | null;
+  /** True si hace falta pedirlo a mano (OCR vacío o solo correlativo CCO). */
+  requiere_numero_factura: boolean;
 };
+
+/** Correlativo sintético del import CSV (`CCO-V4-123`), no es nº fiscal real. */
+export function esNumeroFacturaSinteticoCco(raw: string | null | undefined): boolean {
+  return /^CCO-V4-\d+$/i.test(String(raw ?? '').trim());
+}
+
+/**
+ * Nº de factura real: manual > OCR > null.
+ * Nunca reutiliza el correlativo CCO-V4 del CSV.
+ */
+export function resolverNumeroFacturaAdjunta(input: {
+  invoiceNumberOcr?: string | null;
+  invoiceNumberManual?: string | null;
+  invoiceNumberCompra?: string | null;
+}): string | null {
+  const manual = String(input.invoiceNumberManual ?? '').trim();
+  if (manual && !esNumeroFacturaSinteticoCco(manual)) return manual.slice(0, 80);
+
+  const ocr = String(input.invoiceNumberOcr ?? '').trim();
+  if (ocr && !esNumeroFacturaSinteticoCco(ocr)) return ocr.slice(0, 80);
+
+  const compra = String(input.invoiceNumberCompra ?? '').trim();
+  if (compra && !esNumeroFacturaSinteticoCco(compra)) return compra.slice(0, 80);
+
+  return null;
+}
 
 function stripAccents(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -113,7 +143,7 @@ export async function compararCabeceraConFacturaOcr(
   compra: CompraParaCertificar,
   extracted: Pick<
     ExtractedPurchaseInvoice,
-    'supplier_name' | 'supplier_rif' | 'date' | 'total_amount'
+    'supplier_name' | 'supplier_rif' | 'date' | 'total_amount' | 'invoice_number'
   >,
 ): Promise<ResultadoComparacionFactura> {
   const disparidades: DisparidadFacturaAdjunta[] = [];
@@ -225,12 +255,19 @@ export async function compararCabeceraConFacturaOcr(
     });
   }
 
+  const invoiceOcr = String(extracted.invoice_number ?? '').trim() || null;
+  const invoiceReal =
+    invoiceOcr && !esNumeroFacturaSinteticoCco(invoiceOcr) ? invoiceOcr : null;
+  const requiereNumero = !invoiceReal;
+
   return {
     coincide: disparidades.length === 0,
     disparidades,
     monto_factura_usd: montoFacturaUsd,
     monto_factura_ves: montoFacturaVes,
     tasa_comparacion: tasaNum > 0 ? tasaNum : null,
+    invoice_number_factura: invoiceReal,
+    requiere_numero_factura: requiereNumero,
   };
 }
 
@@ -329,6 +366,7 @@ export function convertirExtractedBsAUsd(
 /**
  * Aplica la decisión de certificación: ítems siempre desde OCR;
  * cabecera/monto según `mantener_cco` o `usar_factura`.
+ * El nº de factura siempre viene del OCR o de carga manual (nunca CCO-V4).
  */
 export async function aplicarCertificacionFacturaAdjunta(
   supabase: SupabaseClient,
@@ -337,13 +375,31 @@ export async function aplicarCertificacionFacturaAdjunta(
     extracted: ExtractedPurchaseInvoice;
     decision: DecisionCertificarFactura;
     confirmarFechaAnomala?: boolean;
+    /** Nº fiscal indicado a mano si el OCR no lo trajo. */
+    invoiceNumberManual?: string | null;
   },
-): Promise<{ compraId: string; decision: DecisionCertificarFactura; items: number }> {
+): Promise<{
+  compraId: string;
+  decision: DecisionCertificarFactura;
+  items: number;
+  invoice_number: string;
+}> {
   const { compra, extracted, decision } = input;
   const itemsCount = (extracted.items ?? []).filter((it) => String(it.description ?? '').trim())
     .length;
   if (itemsCount === 0) {
     throw new Error('La factura no tiene ítems legibles para cargar.');
+  }
+
+  const invoiceNumber = resolverNumeroFacturaAdjunta({
+    invoiceNumberOcr: extracted.invoice_number,
+    invoiceNumberManual: input.invoiceNumberManual,
+    invoiceNumberCompra: compra.invoice_number,
+  });
+  if (!invoiceNumber) {
+    throw new Error(
+      'Indique el número de factura (el OCR no lo leyó y el CCO solo tiene correlativo interno).',
+    );
   }
 
   const monedaCco = monedaOriginalCompra(compra);
@@ -366,7 +422,6 @@ export async function aplicarCertificacionFacturaAdjunta(
       payload.supplier_name = compra.supplier_name ?? payload.supplier_name;
       payload.supplier_rif = compra.supplier_rif ?? payload.supplier_rif;
       payload.date = String(compra.fecha ?? payload.date ?? '').slice(0, 10);
-      payload.invoice_number = compra.invoice_number ?? payload.invoice_number;
       payload.total_amount = montoUsdCompra(compra) || payload.total_amount;
       payload.moneda = 'USD';
     } else {
@@ -374,12 +429,14 @@ export async function aplicarCertificacionFacturaAdjunta(
       payload.supplier_name = compra.supplier_name ?? payload.supplier_name;
       payload.supplier_rif = compra.supplier_rif ?? payload.supplier_rif;
       payload.date = String(compra.fecha ?? payload.date ?? '').slice(0, 10);
-      payload.invoice_number = compra.invoice_number ?? payload.invoice_number;
       payload.total_amount =
         montoNominalMonedaOriginal(compra) || payload.total_amount;
       payload.moneda = 'VES';
     }
   }
+
+  // Siempre nº real de factura (OCR o manual), nunca correlativo CCO-V4.
+  payload.invoice_number = invoiceNumber;
 
   await actualizarCompraContableDesdeExtracted(supabase, {
     compraId: compra.id,
@@ -387,5 +444,10 @@ export async function aplicarCertificacionFacturaAdjunta(
     confirmarFechaAnomala: Boolean(input.confirmarFechaAnomala),
   });
 
-  return { compraId: compra.id, decision, items: itemsCount };
+  return {
+    compraId: compra.id,
+    decision,
+    items: itemsCount,
+    invoice_number: invoiceNumber,
+  };
 }

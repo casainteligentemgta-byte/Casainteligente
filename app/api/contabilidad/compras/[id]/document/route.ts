@@ -237,8 +237,14 @@ export async function POST(req: Request, ctx: RouteCtx) {
       String(it.description ?? '').trim(),
     ).length;
 
-    let aplicado: { items: number; decision: 'mantener_cco' } | null = null;
-    if (certificacion.coincide && itemsCount > 0) {
+    let aplicado: { items: number; decision: 'mantener_cco'; invoice_number: string } | null =
+      null;
+    const puedeAutoAplicar =
+      certificacion.coincide &&
+      itemsCount > 0 &&
+      !certificacion.requiere_numero_factura;
+
+    if (puedeAutoAplicar) {
       try {
         const db = admin.ok ? admin.client : supabase;
         const r = await aplicarCertificacionFacturaAdjunta(db, {
@@ -247,7 +253,11 @@ export async function POST(req: Request, ctx: RouteCtx) {
           decision: 'mantener_cco',
           confirmarFechaAnomala: true,
         });
-        aplicado = { items: r.items, decision: 'mantener_cco' };
+        aplicado = {
+          items: r.items,
+          decision: 'mantener_cco',
+          invoice_number: r.invoice_number,
+        };
       } catch (applyErr) {
         console.warn('[POST compra document auto-certificar]', applyErr);
       }
@@ -260,7 +270,12 @@ export async function POST(req: Request, ctx: RouteCtx) {
         extracted,
         items_count: itemsCount,
         certificacion,
-        requiere_confirmacion: !certificacion.coincide,
+        requiere_confirmacion:
+          !aplicado &&
+          (!certificacion.coincide ||
+            certificacion.requiere_numero_factura ||
+            itemsCount > 0),
+        requiere_numero_factura: certificacion.requiere_numero_factura,
         aplicado,
       },
     });
