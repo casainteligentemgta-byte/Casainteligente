@@ -1,6 +1,6 @@
-# Manual de usuario: NetVision Pro
+# Cómo manejar NetVision
 
-Cómo manejar la plataforma paso a paso.
+Guía práctica paso a paso para usar NetVision Pro.
 
 > Complementa el [manual explicativo](./NETVISION-PRO-MANUAL.md) y la [guía de instaladores](./NETVISION-PRO-INSTALLER-GUIDE.md).  
 > En la app: [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario).  

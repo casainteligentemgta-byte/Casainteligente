@@ -1025,78 +1025,321 @@ export default function NexusVisionArchitectClient() {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
-            <Link href="/nexus/vision/manual">
-              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-              Manual
-            </Link>
-          </Button>
-          <div className="shrink-0">
-            <NetVisionProjectsPanel
-              activeId={project.id}
-              projectName={project.name}
-              onOpen={switchToProject}
-              onNameChange={(name) =>
-                setProject((p) => ({ ...p, name: name.slice(0, 120) }))
-              }
-              triggerSize="sm"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="glass"
-            size="sm"
-            className="shrink-0"
-            onClick={() => fileRef.current?.click()}
-            disabled={loading}
-          >
-            <Upload className="mr-1.5 h-3.5 w-3.5" />
-            {loading ? 'Cargando…' : 'Cargar'}
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,application/pdf,.pdf"
-            className="hidden"
-            onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
+    <div className="mt-[2cm] space-y-3">
+      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <Button
+          type="button"
+          variant="glass"
+          size="sm"
+          className="shrink-0"
+          onClick={limpiarPlano}
+          disabled={!project.planoUrl}
+        >
+          <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+          Nuevo plano
+        </Button>
+        <Button
+          type="button"
+          variant="glass"
+          size="sm"
+          className="shrink-0"
+          onClick={() => fileRef.current?.click()}
+          disabled={loading}
+        >
+          <Upload className="mr-1.5 h-3.5 w-3.5" />
+          {loading ? 'Cargando…' : 'Cargar'}
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,application/pdf,.pdf"
+          className="hidden"
+          onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
+        />
+        <div className="shrink-0">
+          <NetVisionProjectsPanel
+            activeId={project.id}
+            projectName={project.name}
+            onOpen={switchToProject}
+            onNameChange={(name) =>
+              setProject((p) => ({ ...p, name: name.slice(0, 120) }))
+            }
+            triggerSize="sm"
           />
-          <Button
-            type="button"
-            variant="glass"
-            size="sm"
-            className="shrink-0"
-            onClick={exportPng}
-            disabled={!project.planoUrl}
-          >
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            PNG
-          </Button>
-          <Button
-            type="button"
-            variant="glass"
-            size="sm"
-            className="shrink-0"
-            onClick={() => void exportPdf()}
-            disabled={!project.planoUrl || exportingPdf}
-          >
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            {exportingPdf ? 'PDF…' : 'PDF'}
-          </Button>
-          <Button
-            type="button"
-            variant="glass"
-            size="sm"
-            className="shrink-0"
-            onClick={limpiarPlano}
-            disabled={!project.planoUrl}
-          >
-            <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-            Nuevo plano
-          </Button>
         </div>
+        <Button
+          type="button"
+          variant="glass"
+          size="sm"
+          className="shrink-0"
+          onClick={exportPng}
+          disabled={!project.planoUrl}
+        >
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          PNG
+        </Button>
+        <Button
+          type="button"
+          variant="glass"
+          size="sm"
+          className="shrink-0"
+          onClick={() => void exportPdf()}
+          disabled={!project.planoUrl || exportingPdf}
+        >
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          {exportingPdf ? 'PDF…' : 'PDF'}
+        </Button>
+        <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
+          <Link href="/nexus/vision/manual/usuario">
+            <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+            Manual
+          </Link>
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
+          <button
+            type="button"
+            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+              viewMode === 'plano'
+                ? 'bg-[var(--nexus-cyan)] text-black'
+                : 'text-[var(--nexus-text-muted)]'
+            }`}
+            onClick={() => setViewMode('plano')}
+          >
+            Plano
+          </button>
+          <button
+            type="button"
+            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+              viewMode === 'diagrama'
+                ? 'bg-[var(--nexus-cyan)] text-black'
+                : 'text-[var(--nexus-text-muted)]'
+            }`}
+            onClick={() => setViewMode('diagrama')}
+          >
+            Diagrama
+          </button>
+        </div>
+        {project.planoUrl ? (
+          <p className="truncate text-xs text-[var(--nexus-text-muted)]">
+            <Mono>{project.planoNombre || 'Plano'}</Mono>
+            {' · '}
+            {project.cameras.length} cam · {project.networkNodes.length} red
+            {' · '}
+            {project.scale.calibrated ? (
+              <span className="text-[var(--nexus-green)]">escala OK</span>
+            ) : (
+              <span className="text-amber-300">
+                escala ~{formatLength(40, project.unitSystem ?? 'metric', 0)}
+              </span>
+            )}
+          </p>
+        ) : null}
+        {viewMode === 'plano' ? (
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            onClick={addCameraFromButton}
+            className="inline-flex items-center gap-1 rounded-lg bg-[var(--nexus-cyan)] px-2.5 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
+          >
+            <Camera className="h-3.5 w-3.5" />
+            + Cámara
+          </button>
+        ) : null}
+        {viewMode === 'plano' ? (
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading || project.cameras.length === 0}
+            title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
+            onClick={() => {
+              setShowFov(true)
+              setViewMode('plano')
+              setSideTab('cctv')
+              setError(null)
+            }}
+            className="inline-flex items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
+          >
+            Calcular cobertura
+          </button>
+        ) : null}
+        {viewMode === 'plano' && project.planoUrl ? (
+          <>
+            <NetVisionLayerHelp />
+            <label
+              title={layerHelpTitle('fov')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={showFov}
+                onChange={(e) => setShowFov(e.target.checked)}
+              />
+              Visión
+            </label>
+            <label
+              title={layerHelpTitle('wifi')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={showWifi}
+                onChange={(e) => setShowWifi(e.target.checked)}
+              />
+              WiFi
+            </label>
+            <label
+              title={layerHelpTitle('sound')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={showSound}
+                onChange={(e) => setShowSound(e.target.checked)}
+              />
+              Sonido
+            </label>
+            <label
+              title={layerHelpTitle('links')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={showLinks}
+                onChange={(e) => setShowLinks(e.target.checked)}
+              />
+              Enlaces
+            </label>
+            <label
+              title={layerHelpTitle('routes')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={showCableRoutes}
+                onChange={(e) => setShowCableRoutes(e.target.checked)}
+              />
+              Rutas
+            </label>
+            <label
+              title={layerHelpTitle('structures')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={showStructures}
+                onChange={(e) => setShowStructures(e.target.checked)}
+              />
+              Estructuras
+            </label>
+            <label
+              title={layerHelpTitle('sub')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={showUnderground}
+                onChange={(e) => setShowUnderground(e.target.checked)}
+              />
+              Sub
+            </label>
+            <label
+              title={layerHelpTitle('night')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={nightMode}
+                onChange={(e) => setNightMode(e.target.checked)}
+              />
+              Noche
+            </label>
+            <button
+              type="button"
+              title={layerHelpTitle('calibrate')}
+              className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                calibrateMode
+                  ? 'bg-[var(--nexus-cyan)] text-black'
+                  : 'text-[var(--nexus-cyan)]'
+              }`}
+              onClick={() => {
+                setCalibrateMode((v) => !v)
+                setCalibPoints([])
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setDrawUnderground(false)
+                setUndergroundDraft(null)
+                setDrawCable(false)
+                setCableDraft(null)
+              }}
+            >
+              Calibrar
+            </button>
+            {calibrateMode ? (
+              <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
+                {lengthUnitLabel(project.unitSystem ?? 'metric')}
+                <input
+                  value={calibMeters}
+                  onChange={(e) => setCalibMeters(e.target.value)}
+                  className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
+                />
+                ({calibPoints.length}/2)
+              </label>
+            ) : null}
+            <select
+              value={defaultModelId}
+              onChange={(e) => setDefaultModelId(e.target.value)}
+              className="max-w-[200px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+              title="Modelo de cámara al agregar"
+            >
+              {cameraCatalogGrouped().map((g) => (
+                <optgroup key={g.brand} label={g.brand}>
+                  {g.models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <div
+              className="flex overflow-hidden rounded-md border border-white/15 bg-black/40"
+              title="Zoom del plano"
+            >
+              <button
+                type="button"
+                title="Acercar"
+                aria-label="Acercar"
+                disabled={!project.planoUrl}
+                className="min-h-8 min-w-8 touch-manipulation px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
+                onClick={() => zoomControlsRef.current?.zoomIn()}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                title="Alejar"
+                aria-label="Alejar"
+                disabled={!project.planoUrl}
+                className="min-h-8 min-w-8 touch-manipulation border-l border-white/15 px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
+                onClick={() => zoomControlsRef.current?.zoomOut()}
+              >
+                −
+              </button>
+              <button
+                type="button"
+                title="Restablecer zoom"
+                aria-label="Restablecer zoom"
+                disabled={!project.planoUrl}
+                className="min-h-8 min-w-[3rem] touch-manipulation border-l border-white/15 px-2 py-1 text-[11px] font-medium tabular-nums text-[var(--nexus-text-muted)] hover:bg-white/10 disabled:opacity-40"
+                onClick={() => zoomControlsRef.current?.reset()}
+              >
+                {zoomPercent}%
+              </button>
+            </div>
+          </>
+        ) : null}
       </div>
 
       {error ? (
@@ -1128,248 +1371,6 @@ export default function NexusVisionArchitectClient() {
             </button>
           ) : (
             <>
-              <div className="mb-3 flex flex-wrap items-center gap-3">
-                <div className="flex gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
-                  <button
-                    type="button"
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-                      viewMode === 'plano'
-                        ? 'bg-[var(--nexus-cyan)] text-black'
-                        : 'text-[var(--nexus-text-muted)]'
-                    }`}
-                    onClick={() => setViewMode('plano')}
-                  >
-                    Plano
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-                      viewMode === 'diagrama'
-                        ? 'bg-[var(--nexus-cyan)] text-black'
-                        : 'text-[var(--nexus-text-muted)]'
-                    }`}
-                    onClick={() => setViewMode('diagrama')}
-                  >
-                    Diagrama
-                  </button>
-                </div>
-                <p className="truncate text-xs text-[var(--nexus-text-muted)]">
-                  <Mono>{project.planoNombre || 'Plano'}</Mono>
-                  {' · '}
-                  {project.cameras.length} cam · {project.networkNodes.length} red
-                  {' · '}
-                  {project.scale.calibrated ? (
-                    <span className="text-[var(--nexus-green)]">escala OK</span>
-                  ) : (
-                    <span className="text-amber-300">
-                      escala ~{formatLength(40, project.unitSystem ?? 'metric', 0)}
-                    </span>
-                  )}
-                </p>
-                {viewMode === 'plano' ? (
-                  <button
-                    type="button"
-                    disabled={!project.planoUrl || loading}
-                    onClick={addCameraFromButton}
-                    className="inline-flex items-center gap-1 rounded-lg bg-[var(--nexus-cyan)] px-2.5 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
-                  >
-                    <Camera className="h-3.5 w-3.5" />
-                    + Cámara
-                  </button>
-                ) : null}
-                {viewMode === 'plano' ? (
-                  <button
-                    type="button"
-                    disabled={!project.planoUrl || loading || project.cameras.length === 0}
-                    title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
-                    onClick={() => {
-                      setShowFov(true)
-                      setViewMode('plano')
-                      setSideTab('cctv')
-                      setError(null)
-                    }}
-                    className="inline-flex items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
-                  >
-                    Calcular cobertura
-                  </button>
-                ) : null}
-                {viewMode === 'plano' ? (
-                  <>
-                    <NetVisionLayerHelp />
-                    <label
-                      title={layerHelpTitle('fov')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showFov}
-                        onChange={(e) => setShowFov(e.target.checked)}
-                      />
-                      Visión
-                    </label>
-                    <label
-                      title={layerHelpTitle('wifi')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showWifi}
-                        onChange={(e) => setShowWifi(e.target.checked)}
-                      />
-                      WiFi
-                    </label>
-                    <label
-                      title={layerHelpTitle('sound')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showSound}
-                        onChange={(e) => setShowSound(e.target.checked)}
-                      />
-                      Sonido
-                    </label>
-                    <label
-                      title={layerHelpTitle('links')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showLinks}
-                        onChange={(e) => setShowLinks(e.target.checked)}
-                      />
-                      Enlaces
-                    </label>
-                    <label
-                      title={layerHelpTitle('routes')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showCableRoutes}
-                        onChange={(e) => setShowCableRoutes(e.target.checked)}
-                      />
-                      Rutas
-                    </label>
-                    <label
-                      title={layerHelpTitle('structures')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showStructures}
-                        onChange={(e) => setShowStructures(e.target.checked)}
-                      />
-                      Estructuras
-                    </label>
-                    <label
-                      title={layerHelpTitle('sub')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showUnderground}
-                        onChange={(e) => setShowUnderground(e.target.checked)}
-                      />
-                      Sub
-                    </label>
-                    <label
-                      title={layerHelpTitle('night')}
-                      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={nightMode}
-                        onChange={(e) => setNightMode(e.target.checked)}
-                      />
-                      Noche
-                    </label>
-                    <button
-                      type="button"
-                      title={layerHelpTitle('calibrate')}
-                      className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                        calibrateMode
-                          ? 'bg-[var(--nexus-cyan)] text-black'
-                          : 'text-[var(--nexus-cyan)]'
-                      }`}
-                      onClick={() => {
-                        setCalibrateMode((v) => !v)
-                        setCalibPoints([])
-                        setDrawStructureMaterial(null)
-                        setStructureDraft(null)
-                        setDrawUnderground(false)
-                        setUndergroundDraft(null)
-                        setDrawCable(false)
-                        setCableDraft(null)
-                      }}
-                    >
-                      Calibrar
-                    </button>
-                    {calibrateMode ? (
-                      <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
-                        {lengthUnitLabel(project.unitSystem ?? 'metric')}
-                        <input
-                          value={calibMeters}
-                          onChange={(e) => setCalibMeters(e.target.value)}
-                          className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
-                        />
-                        ({calibPoints.length}/2)
-                      </label>
-                    ) : null}
-                    <select
-                      value={defaultModelId}
-                      onChange={(e) => setDefaultModelId(e.target.value)}
-                      className="max-w-[200px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
-                      title="Modelo de cámara al agregar"
-                    >
-                      {cameraCatalogGrouped().map((g) => (
-                        <optgroup key={g.brand} label={g.brand}>
-                          {g.models.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <div
-                      className="flex overflow-hidden rounded-md border border-white/15 bg-black/40"
-                      title="Zoom del plano"
-                    >
-                      <button
-                        type="button"
-                        title="Acercar"
-                        aria-label="Acercar"
-                        disabled={!project.planoUrl}
-                        className="min-h-8 min-w-8 touch-manipulation px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
-                        onClick={() => zoomControlsRef.current?.zoomIn()}
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        title="Alejar"
-                        aria-label="Alejar"
-                        disabled={!project.planoUrl}
-                        className="min-h-8 min-w-8 touch-manipulation border-l border-white/15 px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
-                        onClick={() => zoomControlsRef.current?.zoomOut()}
-                      >
-                        −
-                      </button>
-                      <button
-                        type="button"
-                        title="Restablecer zoom"
-                        aria-label="Restablecer zoom"
-                        disabled={!project.planoUrl}
-                        className="min-h-8 min-w-[3rem] touch-manipulation border-l border-white/15 px-2 py-1 text-[11px] font-medium tabular-nums text-[var(--nexus-text-muted)] hover:bg-white/10 disabled:opacity-40"
-                        onClick={() => zoomControlsRef.current?.reset()}
-                      >
-                        {zoomPercent}%
-                      </button>
-                    </div>
-                  </>
-                ) : null}
-              </div>
               {viewMode === 'diagrama' ? (
                 <DiagramGenerator
                   cameras={project.cameras}

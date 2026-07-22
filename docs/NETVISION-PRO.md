@@ -4,7 +4,8 @@ Diseño CCTV / redes / cableado / subterráneo / normativas / BIM en Nexus (`/ne
 
 **Manuales:**
 
-- Explicativo (visión de producto): [`NETVISION-PRO-MANUAL.md`](./NETVISION-PRO-MANUAL.md) → [`/nexus/vision/manual`](/nexus/vision/manual)
+- Cómo manejar NetVision: [`NETVISION-PRO-USER-MANUAL.md`](./NETVISION-PRO-USER-MANUAL.md) → [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario)
+- Explicativo (visión de producto): [`NETVISION-PRO-MANUAL.md`](./NETVISION-PRO-MANUAL.md) → [`/nexus/vision/manual/explicativo`](/nexus/vision/manual/explicativo)
 - Usuario (paso a paso): [`NETVISION-PRO-USER-MANUAL.md`](./NETVISION-PRO-USER-MANUAL.md) → [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario)
 - Guía rápida instaladores: [`NETVISION-PRO-INSTALLER-GUIDE.md`](./NETVISION-PRO-INSTALLER-GUIDE.md) → [`/nexus/vision/manual/instaladores`](/nexus/vision/manual/instaladores)
 

@@ -4,8 +4,16 @@ import { ArrowLeft } from 'lucide-react'
 type ManualTab = 'explicativo' | 'usuario' | 'instaladores'
 
 const tabs: { id: ManualTab; href: string; label: string }[] = [
-  { id: 'explicativo', href: '/nexus/vision/manual', label: 'Explicativo' },
-  { id: 'usuario', href: '/nexus/vision/manual/usuario', label: 'Usuario' },
+  {
+    id: 'usuario',
+    href: '/nexus/vision/manual/usuario',
+    label: 'Cómo manejar NetVision',
+  },
+  {
+    id: 'explicativo',
+    href: '/nexus/vision/manual/explicativo',
+    label: 'Explicativo',
+  },
   {
     id: 'instaladores',
     href: '/nexus/vision/manual/instaladores',

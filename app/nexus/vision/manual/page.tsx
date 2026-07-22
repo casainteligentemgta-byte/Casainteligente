@@ -1,25 +1,6 @@
-import fs from 'fs'
-import path from 'path'
-import type { Metadata } from 'next'
-import NetVisionManualNav from '@/components/netvision/NetVisionManualNav'
-import NetVisionManualView from '@/components/netvision/NetVisionManualView'
+import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Manual · NetVision Pro',
-  description:
-    'Manual explicativo de NetVision Pro: CCTV, redes, cableado, canalizaciones, normativas y BIM.',
-}
-
+/** El botón Manual lleva a la guía de uso; el explicativo queda en /manual vía nav. */
 export default function NetVisionManualPage() {
-  const markdown = fs.readFileSync(
-    path.join(process.cwd(), 'docs/NETVISION-PRO-MANUAL.md'),
-    'utf8',
-  )
-
-  return (
-    <div className="space-y-4">
-      <NetVisionManualNav active="explicativo" />
-      <NetVisionManualView markdown={markdown} />
-    </div>
-  )
+  redirect('/nexus/vision/manual/usuario')
 }
