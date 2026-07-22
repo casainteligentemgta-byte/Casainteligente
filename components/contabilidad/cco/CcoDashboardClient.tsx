@@ -31,6 +31,7 @@ import CcoTabDistribucion from '@/components/contabilidad/cco/CcoTabDistribucion
 import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos';
 import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
 import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
+import CcoTabConceptos from '@/components/contabilidad/cco/CcoTabConceptos';
 
 type NavId =
   | 'dashboard'
@@ -58,6 +59,7 @@ type TabId =
   | 'graficos'
   | 'datos'
   | 'rubros'
+  | 'conceptos'
   | 'egresos'
   | 'distribucion'
   | 'ingresos'
@@ -72,6 +74,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'graficos', label: 'GRÁFICOS', icon: '📊' },
   { id: 'datos', label: 'DATOS GRÁFICOS', icon: '⚡' },
   { id: 'rubros', label: 'LISTA DE RUBROS', icon: '📁' },
+  { id: 'conceptos', label: 'CONCEPTOS', icon: '🧱' },
   { id: 'egresos', label: 'EGRESOS', icon: '🔴' },
   { id: 'distribucion', label: 'DISTRIBUCIÓN MASIVA', icon: '📂' },
   { id: 'ingresos', label: 'INGRESOS', icon: '🟢' },
@@ -1039,6 +1042,7 @@ export default function CcoDashboardClient() {
             {tab === 'deudas' ? <CcoTabDeudas proyectoId={proyectoId} /> : null}
             {tab === 'datos' ? <CcoTabDatosGraficos data={data} modo={modo} /> : null}
             {tab === 'rubros' ? <CcoTabRubros proyectoId={proyectoId} /> : null}
+            {tab === 'conceptos' ? <CcoTabConceptos proyectoId={proyectoId} /> : null}
             {tab === 'distribucion' ? (
               <CcoTabDistribucion proyectoId={proyectoId} onDone={() => void cargar()} />
             ) : null}
