@@ -8,10 +8,12 @@ import {
   esDescripcionAuditoriaCco,
 } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
+import { idsIngresosGemelosAEliminar } from '@/lib/contabilidad/cco/dedupeIngresosGemelos';
 
 export type LimpiezaDescuadreResult = {
   auditoriaEliminada: number;
   duplicadosEliminados: number;
+  ingresosGemelosEliminados: number;
   devaluacionAntes: number | null;
   devaluacionDespues: number | null;
   devaluacionCorregida: boolean;
@@ -105,6 +107,7 @@ export async function limpiarDescuadreCco(
   const result: LimpiezaDescuadreResult = {
     auditoriaEliminada: 0,
     duplicadosEliminados: 0,
+    ingresosGemelosEliminados: 0,
     devaluacionAntes: null,
     devaluacionDespues: null,
     devaluacionCorregida: false,
@@ -221,6 +224,51 @@ export async function limpiarDescuadreCco(
         if (error) result.errores.push(`devaluacion: ${error.message}`);
       }
     }
+  }
+
+  // Ingresos gemelos (mismo abono/fecha/monto; uno con operador LUIS y otro limpio)
+  try {
+    const pageSize = 1000;
+    const inyecciones: Array<{
+      id: string;
+      fecha_ingreso?: string | null;
+      monto_usd?: number | null;
+      origen_fondo?: string | null;
+      creado_al?: string | null;
+    }> = [];
+    let from = 0;
+    for (let guard = 0; guard < 40; guard += 1) {
+      const { data, error } = await supabase
+        .from('ci_inyecciones_capital')
+        .select('id,fecha_ingreso,monto_usd,origen_fondo,creado_al')
+        .eq('proyecto_id', proyectoId)
+        .eq('creado_por', 'cco_v4_import')
+        .order('fecha_ingreso', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      const batch = data ?? [];
+      inyecciones.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+    const idsIngresos = idsIngresosGemelosAEliminar(inyecciones);
+    if (dryRun) {
+      result.ingresosGemelosEliminados = idsIngresos.length;
+      result.idsEliminados.push(...idsIngresos);
+    } else {
+      for (const id of idsIngresos) {
+        const { error } = await supabase.from('ci_inyecciones_capital').delete().eq('id', id);
+        if (error) result.errores.push(`ingreso gemelo ${id}: ${error.message}`);
+        else {
+          result.ingresosGemelosEliminados += 1;
+          result.idsEliminados.push(id);
+        }
+      }
+    }
+  } catch (e) {
+    result.errores.push(
+      `ingresos gemelos: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   return result;

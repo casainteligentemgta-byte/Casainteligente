@@ -8,6 +8,7 @@ import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
 import { normalizarTipoGastoCco } from '@/lib/contabilidad/cco/normalizarTipoGasto';
 import { resolverContratoVinculado } from '@/lib/contabilidad/cco/vincularContrato';
 import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
+import { filtrarIngresosGemelosCsv, idsIngresosGemelosAEliminar } from '@/lib/contabilidad/cco/dedupeIngresosGemelos';
 
 export type CcoV4EstructuraRow = {
   origen_v4_id: number;
@@ -58,6 +59,8 @@ export type CcoV4ImportResult = {
   contratos: number;
   presupuestos: number;
   ingresos: number;
+  ingresosGemelosOmitidos: number;
+  ingresosGemelosEliminados: number;
   auditoria: number;
   estructura: number;
   vinculados: number;
@@ -101,6 +104,8 @@ export async function importarMaestroV4(
     contratos: 0,
     presupuestos: 0,
     ingresos: 0,
+    ingresosGemelosOmitidos: 0,
+    ingresosGemelosEliminados: 0,
     auditoria: 0,
     estructura: 0,
     vinculados: 0,
@@ -191,11 +196,14 @@ export async function importarMaestroV4(
   }
 
   const txs = payload.transacciones ?? [];
-  const contratosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'CONTRATO');
-  const gastosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'GASTO');
-  const ingresosTx = txs.filter((t) => String(t.clase).toUpperCase() === 'INGRESO');
-  const presupTx = txs.filter((t) => String(t.clase).toUpperCase() === 'PRESUPUESTO');
-  const auditTx = txs.filter((t) => String(t.clase).toUpperCase() === 'AUDITORIA');
+  const { kept: txsDedup, discarded: ingresosGemelosDescartados } = filtrarIngresosGemelosCsv(txs);
+  result.ingresosGemelosOmitidos = ingresosGemelosDescartados.length;
+
+  const contratosTx = txsDedup.filter((t) => String(t.clase).toUpperCase() === 'CONTRATO');
+  const gastosTx = txsDedup.filter((t) => String(t.clase).toUpperCase() === 'GASTO');
+  const ingresosTx = txsDedup.filter((t) => String(t.clase).toUpperCase() === 'INGRESO');
+  const presupTx = txsDedup.filter((t) => String(t.clase).toUpperCase() === 'PRESUPUESTO');
+  const auditTx = txsDedup.filter((t) => String(t.clase).toUpperCase() === 'AUDITORIA');
 
   const contratoUuidByV4 = new Map<number, string>();
   const contratoCandidatos: { id: string; proveedor: string; descripcion: string }[] = [];
@@ -420,6 +428,44 @@ export async function importarMaestroV4(
     }
     doneWork += 1;
     await report(`Ingresos ${result.ingresos}/${ingresosTx.length || 1}`);
+  }
+
+  // Higiene: quita gemelos operador (LUIS · …) que hayan quedado de imports previos.
+  try {
+    await report('Limpiando ingresos gemelos…', true);
+    const pageSize = 1000;
+    const inyecciones: Array<{
+      id: string;
+      fecha_ingreso?: string | null;
+      monto_usd?: number | null;
+      origen_fondo?: string | null;
+      creado_al?: string | null;
+    }> = [];
+    let from = 0;
+    for (let guard = 0; guard < 40; guard += 1) {
+      const { data, error } = await supabase
+        .from('ci_inyecciones_capital')
+        .select('id,fecha_ingreso,monto_usd,origen_fondo,creado_al')
+        .eq('proyecto_id', proyectoId)
+        .eq('creado_por', 'cco_v4_import')
+        .order('fecha_ingreso', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      const batch = data ?? [];
+      inyecciones.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+    const idsKill = idsIngresosGemelosAEliminar(inyecciones);
+    for (const id of idsKill) {
+      const { error } = await supabase.from('ci_inyecciones_capital').delete().eq('id', id);
+      if (error) errores.push(`gemelo ingreso ${id.slice(0, 8)}: ${error.message}`);
+      else result.ingresosGemelosEliminados += 1;
+    }
+  } catch (e) {
+    errores.push(
+      `higiene ingresos gemelos: ${e instanceof Error ? e.message : 'error'}`,
+    );
   }
 
   let gastosDone = 0;
