@@ -30,7 +30,13 @@ export function NexusRightPanelProvider({
 }) {
   const [panel, setPanel] = useState<NexusRightPanelApi | null>(null)
   const register = useCallback((api: NexusRightPanelApi | null) => {
-    setPanel(api)
+    setPanel((prev) => {
+      if (api === null) return null
+      if (prev && prev.open === api.open && prev.toggle === api.toggle) {
+        return prev
+      }
+      return api
+    })
   }, [])
   const value = useMemo(() => ({ panel, register }), [panel, register])
   return (
@@ -49,18 +55,18 @@ export function useRegisterNexusRightPanel(
   open: boolean,
   setOpen: (v: boolean | ((prev: boolean) => boolean)) => void,
 ) {
-  const ctx = useContext(NexusRightPanelContext)
+  const register = useContext(NexusRightPanelContext)?.register
   const toggle = useCallback(() => {
     setOpen((prev) => !prev)
   }, [setOpen])
 
   useEffect(() => {
-    if (!ctx) return
-    ctx.register({ open, toggle })
-  }, [ctx, open, toggle])
+    if (!register) return
+    register({ open, toggle })
+  }, [register, open, toggle])
 
   useEffect(() => {
-    if (!ctx) return
-    return () => ctx.register(null)
-  }, [ctx])
+    if (!register) return
+    return () => register(null)
+  }, [register])
 }
