@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import type Konva from 'konva'
 import Link from 'next/link'
@@ -17,6 +18,9 @@ import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
 import { useRegisterNexusRightPanel } from '@/components/nexus/NexusRightPanelContext'
 import BOMGenerator from '@/components/netvision/BOMGenerator'
+import NetVisionBranchNav, {
+  type NetVisionBranchId,
+} from '@/components/netvision/NetVisionBranchNav'
 import NetVisionCollapsible from '@/components/netvision/NetVisionCollapsible'
 import NetVisionPrefsPanel from '@/components/netvision/NetVisionPrefsPanel'
 import NetVisionProjectsPanel from '@/components/netvision/NetVisionProjectsPanel'
@@ -68,7 +72,7 @@ import {
   buildWifiSpectrum,
 } from '@/lib/netvision/services/wifiPredictor'
 import { buildSoundSpectrum } from '@/lib/netvision/services/soundPredictor'
-import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
+import { getStructureMaterialOrDefault, STRUCTURE_MATERIALS } from '@/lib/netvision/catalog/materials'
 import {
   buildCableRoutes,
   cableRouteKey,
@@ -81,6 +85,10 @@ import {
   type NormPoint,
 } from '@/lib/netvision/services/cableRoutingEngine'
 import {
+  DRAWABLE_CABLE_TYPES,
+  cableTypeLabel,
+} from '@/lib/netvision/services/cableCalculator'
+import {
   planConduits,
   validateConduits,
 } from '@/lib/netvision/services/conduitCalculator'
@@ -88,6 +96,7 @@ import {
   buildUndergroundPlan,
   validateUnderground,
   withManualUndergroundSegments,
+  zoneLabel,
   type ChamberMaterial,
   type TerrainType,
   type ZoneType,
@@ -95,6 +104,7 @@ import {
 import {
   complianceValidator,
   designFromRoutes,
+  listCountries,
   profilesForCountry,
 } from '@/lib/netvision/services/complianceValidator'
 import { cloudUpsertProject } from '@/lib/netvision/cloud'
@@ -200,9 +210,9 @@ export default function NexusVisionArchitectClient() {
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibMeters, setCalibMeters] = useState('10')
-  const [sideTab, setSideTab] = useState<
-    'cctv' | 'red' | 'muros' | 'cable' | 'sub' | 'norm' | 'prefs'
-  >('cctv')
+  const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
+  const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
+  const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
   /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
   const [inspectorOpen, setInspectorOpen] = useState(true)
   useRegisterNexusRightPanel(inspectorOpen, setInspectorOpen)
@@ -212,6 +222,10 @@ export default function NexusVisionArchitectClient() {
   const stageRef = useRef<Konva.Stage | null>(null)
   const zoomControlsRef = useRef<NetVisionZoomControls | null>(null)
   const [zoomPercent, setZoomPercent] = useState(100)
+
+  useEffect(() => {
+    setHeaderNavEl(document.getElementById('netvision-header-nav'))
+  }, [])
 
   useEffect(() => {
     const p = loadProject()
@@ -614,6 +628,47 @@ export default function NexusVisionArchitectClient() {
     addCameraAt(pos.x, pos.y)
   }
 
+  const selectSideTab = useCallback(
+    (id: NetVisionBranchId) => {
+      setSideTab(id)
+      setInspectorOpen(true)
+      if (id === 'sub') {
+        setShowUnderground(true)
+        setViewMode('plano')
+        setCalibrateMode(false)
+        setDrawStructureMaterial(null)
+        setStructureDraft(null)
+        setDrawCable(false)
+        setCableDraft(null)
+      } else if (id === 'cable') {
+        setShowCableRoutes(true)
+        setShowUnderground(false)
+        setViewMode('plano')
+        setCalibrateMode(false)
+        setDrawStructureMaterial(null)
+        setStructureDraft(null)
+        setDrawUnderground(false)
+        setUndergroundDraft(null)
+      } else if (id === 'muros') {
+        setViewMode('plano')
+        setCalibrateMode(false)
+        setShowStructures(true)
+        setDrawUnderground(false)
+        setUndergroundDraft(null)
+        setDrawCable(false)
+        setCableDraft(null)
+      } else {
+        setDrawStructureMaterial(null)
+        setStructureDraft(null)
+        setDrawUnderground(false)
+        setUndergroundDraft(null)
+        setDrawCable(false)
+        setCableDraft(null)
+      }
+    },
+    [],
+  )
+
   const addNetworkAt = (kind: NetworkNodeKind, normX: number, normY: number) => {
     if (!project.planoUrl) return
     const count = project.networkNodes.filter((n) => n.kind === kind).length + 1
@@ -985,6 +1040,270 @@ export default function NexusVisionArchitectClient() {
         ? '#fb923c'
         : '#22d3ee'
 
+  const chipClass = (active: boolean) =>
+    `rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-40 ${
+      active
+        ? 'bg-[var(--nexus-cyan)] text-black'
+        : 'border border-white/15 text-[var(--nexus-text-muted)]'
+    }`
+
+  const branchSubmenu = (() => {
+    if (sideTab === 'cctv') {
+      const modelValue = selectedCam?.modelId ?? defaultModelId
+      return (
+        <>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+            {selectedCam ? 'Modelo seleccionado' : 'Tipo de cámara'}
+          </span>
+          <select
+            value={modelValue}
+            onChange={(e) => {
+              const id = e.target.value
+              if (selectedCam) {
+                updateSelectedCam({
+                  modelId: id,
+                  fovDeg: undefined,
+                  rangeM: undefined,
+                })
+              } else {
+                setDefaultModelId(id)
+              }
+            }}
+            className="max-w-[min(100%,280px)] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+            title="Tipo / modelo de cámara"
+          >
+            {cameraCatalogGrouped().map((g) => (
+              <optgroup key={g.brand} label={g.brand}>
+                {g.models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {!selectedCam ? (
+            <span className="text-[10px] text-[var(--nexus-text-dim)]">
+              Modelo al agregar · {CAMERA_BRANDS.slice(0, 3).join(', ')}…
+            </span>
+          ) : null}
+        </>
+      )
+    }
+    if (sideTab === 'red') {
+      const kinds: { kind: NetworkNodeKind; label: string }[] = [
+        { kind: 'switch', label: 'Switch' },
+        { kind: 'ap', label: 'AP' },
+        { kind: 'nvr', label: 'NVR' },
+        { kind: 'injector', label: 'Injector' },
+      ]
+      return (
+        <>
+          {kinds.map((k) => (
+            <button
+              key={k.kind}
+              type="button"
+              disabled={!project.planoUrl || loading}
+              className={chipClass(redFocusKind === k.kind)}
+              onClick={() => {
+                setRedFocusKind(k.kind)
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setCalibrateMode(false)
+                addNetworkFromButton(k.kind)
+              }}
+            >
+              + {k.label}
+            </button>
+          ))}
+          <select
+            value={defaultNetModels[redFocusKind]}
+            onChange={(e) =>
+              setDefaultNetModels((m) => ({ ...m, [redFocusKind]: e.target.value }))
+            }
+            className="max-w-[min(100%,240px)] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+            title={`Modelo ${redFocusKind}`}
+          >
+            {networkCatalogByKind(redFocusKind).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.brand} · {m.name}
+              </option>
+            ))}
+          </select>
+        </>
+      )
+    }
+    if (sideTab === 'muros') {
+      return (
+        <>
+          {STRUCTURE_MATERIALS.map((m) => {
+            const active = drawStructureMaterial === m.id
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={!project.planoUrl || loading}
+                className={chipClass(active)}
+                style={!active ? { borderColor: `${m.color}66`, color: m.color } : undefined}
+                onClick={() => {
+                  const next = active ? null : m.id
+                  setDrawStructureMaterial(next)
+                  setStructureDraft(null)
+                  setDrawUnderground(false)
+                  setUndergroundDraft(null)
+                  setDrawCable(false)
+                  setCableDraft(null)
+                  if (next) {
+                    setCalibrateMode(false)
+                    setViewMode('plano')
+                    setShowFov(true)
+                    setShowStructures(true)
+                  }
+                }}
+              >
+                + {m.label}
+              </button>
+            )
+          })}
+        </>
+      )
+    }
+    if (sideTab === 'cable') {
+      return (
+        <>
+          {DRAWABLE_CABLE_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              disabled={!project.planoUrl || loading}
+              className={chipClass(drawCable && drawCableType === t)}
+              onClick={() => {
+                const activate = !(drawCable && drawCableType === t)
+                setDrawCableType(t)
+                setDrawCable(activate)
+                setCableDraft(null)
+                if (activate) {
+                  setCalibrateMode(false)
+                  setDrawStructureMaterial(null)
+                  setStructureDraft(null)
+                  setDrawUnderground(false)
+                  setUndergroundDraft(null)
+                  setShowCableRoutes(true)
+                  setShowUnderground(false)
+                  setViewMode('plano')
+                }
+              }}
+            >
+              {cableTypeLabel(t)}
+            </button>
+          ))}
+        </>
+      )
+    }
+    if (sideTab === 'sub') {
+      const zones: ZoneType[] = ['pedestrian', 'vehicle', 'road_crossing', 'railway']
+      return (
+        <>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(drawUnderground)}
+            onClick={() => {
+              const active = !drawUnderground
+              setDrawUnderground(active)
+              setUndergroundDraft(null)
+              if (active) {
+                setCalibrateMode(false)
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setDrawCable(false)
+                setCableDraft(null)
+                setShowUnderground(true)
+                setViewMode('plano')
+              }
+            }}
+          >
+            {drawUnderground ? 'Dibujando…' : '+ Trazar'}
+          </button>
+          {zones.map((z) => (
+            <button
+              key={z}
+              type="button"
+              className={chipClass(ugZone === z)}
+              onClick={() => setUgZone(z)}
+            >
+              {zoneLabel(z)}
+            </button>
+          ))}
+        </>
+      )
+    }
+    if (sideTab === 'norm') {
+      return (
+        <>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+            País / norma
+          </span>
+          <select
+            value={complianceCountry}
+            onChange={(e) => {
+              const code = e.target.value
+              setComplianceCountry(code)
+              setProject((p) => ({ ...p, complianceProfileId: code }))
+            }}
+            className="max-w-[min(100%,220px)] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+          >
+            {listCountries().map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )
+    }
+    // ajustes
+    return (
+      <>
+        <button
+          type="button"
+          className={chipClass((project.unitSystem ?? 'metric') === 'metric')}
+          onClick={() => setProject((p) => ({ ...p, unitSystem: 'metric' }))}
+        >
+          Métrico
+        </button>
+        <button
+          type="button"
+          className={chipClass(project.unitSystem === 'imperial')}
+          onClick={() => setProject((p) => ({ ...p, unitSystem: 'imperial' }))}
+        >
+          Imperial
+        </button>
+        {(['USD', 'VES', 'EUR'] as const).map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={chipClass((project.currency ?? 'USD') === c)}
+            onClick={() => setProject((p) => ({ ...p, currency: c }))}
+          >
+            {c}
+          </button>
+        ))}
+      </>
+    )
+  })()
+
+  const headerNav =
+    headerNavEl &&
+    createPortal(
+      <NetVisionBranchNav
+        active={sideTab}
+        onSelect={selectSideTab}
+        submenu={branchSubmenu}
+      />,
+      headerNavEl,
+    )
+
   const inspectorFooter = (
     <>
       <div className="border-t border-white/10 pt-3">
@@ -1026,6 +1345,7 @@ export default function NexusVisionArchitectClient() {
 
   return (
     <div className="mt-[2cm] space-y-3">
+      {headerNav}
       <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Button
           type="button"
@@ -1287,22 +1607,6 @@ export default function NexusVisionArchitectClient() {
                 ({calibPoints.length}/2)
               </label>
             ) : null}
-            <select
-              value={defaultModelId}
-              onChange={(e) => setDefaultModelId(e.target.value)}
-              className="max-w-[200px] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
-              title="Modelo de cámara al agregar"
-            >
-              {cameraCatalogGrouped().map((g) => (
-                <optgroup key={g.brand} label={g.brand}>
-                  {g.models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
             <div
               className="flex overflow-hidden rounded-md border border-white/15 bg-black/40"
               title="Zoom del plano"
@@ -1481,68 +1785,6 @@ export default function NexusVisionArchitectClient() {
 
         {inspectorOpen ? (
         <GlassCardMotion delay={0.04} className="space-y-3 p-4">
-          <div className="flex flex-wrap gap-1 rounded-lg border border-white/10 bg-black/30 p-0.5">
-            {(
-              [
-                ['cctv', 'CCTV'],
-                ['red', 'Red'],
-                ['muros', 'Muros'],
-                ['cable', 'Cable'],
-                ['sub', 'Sub'],
-                ['norm', 'Norm'],
-                ['prefs', 'Prefs'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${
-                  sideTab === id
-                    ? 'bg-[var(--nexus-cyan)] text-black'
-                    : 'text-[var(--nexus-text-muted)]'
-                }`}
-                onClick={() => {
-                  setSideTab(id)
-                  if (id === 'sub') {
-                    setShowUnderground(true)
-                    setViewMode('plano')
-                    setCalibrateMode(false)
-                    setDrawStructureMaterial(null)
-                    setStructureDraft(null)
-                    setDrawCable(false)
-                    setCableDraft(null)
-                  } else if (id === 'cable') {
-                    setShowCableRoutes(true)
-                    setShowUnderground(false)
-                    setViewMode('plano')
-                    setCalibrateMode(false)
-                    setDrawStructureMaterial(null)
-                    setStructureDraft(null)
-                    setDrawUnderground(false)
-                    setUndergroundDraft(null)
-                  } else if (id === 'muros') {
-                    setViewMode('plano')
-                    setCalibrateMode(false)
-                    setShowStructures(true)
-                    setDrawUnderground(false)
-                    setUndergroundDraft(null)
-                    setDrawCable(false)
-                    setCableDraft(null)
-                  } else {
-                    setDrawStructureMaterial(null)
-                    setStructureDraft(null)
-                    setDrawUnderground(false)
-                    setUndergroundDraft(null)
-                    setDrawCable(false)
-                    setCableDraft(null)
-                  }
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           {sideTab === 'muros' ? (
             <StructureDesigner
               structures={structures}
@@ -1581,7 +1823,7 @@ export default function NexusVisionArchitectClient() {
               conduitPlans={conduitPlans}
               onSelect={setSelectedId}
             />
-          ) : sideTab === 'prefs' ? (
+          ) : sideTab === 'ajustes' ? (
             <NetVisionPrefsPanel
               unitSystem={project.unitSystem ?? 'metric'}
               currency={project.currency ?? 'USD'}
@@ -1728,8 +1970,8 @@ export default function NexusVisionArchitectClient() {
                 + Agregar cámara
               </button>
               <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                La cámara se agrega al plano; arrástrala para ubicarla. Modelo por defecto del
-                selector de la barra.
+                La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
+                submenú CCTV bajo NetVision.
               </p>
               {selectedCam ? (
                 <div className="space-y-2 text-xs">

@@ -24,48 +24,53 @@ function NexusShellHeader({
   const rightPanel = useNexusRightPanelSlot()?.panel ?? null;
 
   return (
-    <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.85)] px-4 py-3 backdrop-blur-[20px] lg:px-8">
-      <button
-        type="button"
-        className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
-        onClick={() => setMenuOpen((v) => !v)}
-        aria-expanded={menuOpen}
-        aria-label={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
-        title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
-      >
-        {menuOpen ? (
-          <PanelLeftClose className="h-6 w-6 stroke-[2]" />
-        ) : (
-          <Menu className="h-6 w-6 stroke-[2]" />
-        )}
-      </button>
-      <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            'truncate text-sm',
-            isNetVision
-              ? 'font-semibold tracking-wide text-white'
-              : 'text-[var(--nexus-text-dim)]',
-          )}
-        >
-          {isNetVision ? 'NetVision Pro' : 'Escritorio optimizado · Campo en tablet'}
-        </p>
-      </div>
-      {isNetVision && rightPanel ? (
+    <header className="sticky top-0 z-40 border-b border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.85)] px-4 py-3 backdrop-blur-[20px] lg:px-8">
+      <div className="flex items-center gap-3">
         <button
           type="button"
           className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
-          onClick={rightPanel.toggle}
-          aria-expanded={rightPanel.open}
-          aria-label={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
-          title={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+          title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
         >
-          {rightPanel.open ? (
-            <PanelRightClose className="h-6 w-6 stroke-[2]" />
+          {menuOpen ? (
+            <PanelLeftClose className="h-6 w-6 stroke-[2]" />
           ) : (
-            <PanelRightOpen className="h-6 w-6 stroke-[2]" />
+            <Menu className="h-6 w-6 stroke-[2]" />
           )}
         </button>
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              'truncate text-sm',
+              isNetVision
+                ? 'font-semibold tracking-wide text-white'
+                : 'text-[var(--nexus-text-dim)]',
+            )}
+          >
+            {isNetVision ? 'NetVision Pro' : 'Escritorio optimizado · Campo en tablet'}
+          </p>
+        </div>
+        {isNetVision && rightPanel ? (
+          <button
+            type="button"
+            className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
+            onClick={rightPanel.toggle}
+            aria-expanded={rightPanel.open}
+            aria-label={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
+            title={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
+          >
+            {rightPanel.open ? (
+              <PanelRightClose className="h-6 w-6 stroke-[2]" />
+            ) : (
+              <PanelRightOpen className="h-6 w-6 stroke-[2]" />
+            )}
+          </button>
+        ) : null}
+      </div>
+      {isNetVision ? (
+        <div id="netvision-header-nav" className="mt-2 min-w-0 pl-12" />
       ) : null}
     </header>
   );
