@@ -70,7 +70,7 @@ function NexusShellHeader({
         ) : null}
       </div>
       {isNetVision ? (
-        <div id="netvision-header-nav" className="mt-2 min-w-0 pl-12" />
+        <div id="netvision-header-nav" className="mt-2 min-w-0 pl-12 sm:pl-[3.25rem]" />
       ) : null}
     </header>
   );
