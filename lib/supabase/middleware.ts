@@ -15,6 +15,7 @@ const RUTAS_PROTEGIDAS = [
   '/configuracion',
   '/admin',
   '/proyectos',
+  '/prueba-camara',
   '/rrhh',
   '/procura',
   '/legal',

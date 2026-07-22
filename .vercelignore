@@ -2,12 +2,6 @@
 mi-asistente-ai/node_modules
 mi-asistente-ai/.env
 
-# WIP local (no commiteado) que rompe el build de producción
+# Artefactos locales (no van al deploy)
 .tmp-fotos-analisis
 build-output.log
-app/prueba-camara
-components/proyectos/EspectroCamaraCanvas.tsx
-components/proyectos/EspectroCamaraPanel.tsx
-lib/proyectos/cameraCatalog.ts
-lib/proyectos/espectroCamara.ts
-lib/proyectos/pdfPlanoAImagen.ts
