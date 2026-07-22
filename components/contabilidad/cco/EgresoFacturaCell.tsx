@@ -2,6 +2,13 @@
 
 import { useRef, useState, type CSSProperties } from 'react';
 import { FileUp, Eye, Loader2 } from 'lucide-react';
+import CertificarFacturaAdjuntaModal, {
+  type OcrAdjuntarResult,
+} from '@/components/contabilidad/CertificarFacturaAdjuntaModal';
+import {
+  adjuntarFacturaConOcr,
+  esOcrAdjuntarOk,
+} from '@/lib/contabilidad/adjuntarFacturaConOcrClient';
 
 type Props = {
   compraId: string;
@@ -25,6 +32,9 @@ export default function EgresoFacturaCell({
   const [abriendo, setAbriendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [localDoc, setLocalDoc] = useState(false);
+  const [localName, setLocalName] = useState<string | null>(null);
+  const [ocrPendiente, setOcrPendiente] = useState<OcrAdjuntarResult | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const conDocumento = tieneDocumento || localDoc;
 
@@ -51,19 +61,45 @@ export default function EgresoFacturaCell({
   const subir = async (file: File) => {
     setSubiendo(true);
     setError(null);
+    setInfo(null);
     try {
-      const form = new FormData();
-      form.append('documento', file, file.name);
-      const res = await fetch(
-        `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`,
-        { method: 'POST', body: form },
-      );
-      const data = (await res.json()) as { ok?: boolean; error?: string; fileName?: string };
-      if (!res.ok || !data.ok) {
+      const data = await adjuntarFacturaConOcr(compraId, file);
+      if (!data.ok) {
         throw new Error(data.error || 'No se pudo adjuntar la factura');
       }
       setLocalDoc(true);
+      setLocalName(data.fileName || file.name);
       onAdjuntado?.(compraId, data.fileName || file.name);
+
+      if (esOcrAdjuntarOk(data.ocr)) {
+        if (data.ocr.requiere_confirmacion) {
+          setOcrPendiente(data.ocr);
+          const faltaFiscal =
+            data.ocr.requiere_numero_factura ||
+            data.ocr.certificacion.requiere_numero_factura ||
+            data.ocr.requiere_rif ||
+            data.ocr.certificacion.requiere_rif;
+          setInfo(
+            faltaFiscal
+              ? 'Factura adjuntada. Confirme nº de factura y RIF.'
+              : 'Factura adjuntada. Revise las disparidades con el CCO.',
+          );
+        } else if (data.ocr.aplicado) {
+          const nro = data.ocr.aplicado.invoice_number
+            ? ` · Nº ${data.ocr.aplicado.invoice_number}`
+            : '';
+          const rif = data.ocr.aplicado.supplier_rif
+            ? ` · RIF ${data.ocr.aplicado.supplier_rif}`
+            : '';
+          setInfo(`Certificada: ${data.ocr.aplicado.items} ítem(s)${nro}${rif}.`);
+        } else if (data.ocr.items_count === 0) {
+          setInfo('Factura adjuntada. OCR sin ítems legibles.');
+        } else {
+          setInfo('Factura adjuntada y cabecera CCO certificada.');
+        }
+      } else if (data.ocr && 'error' in data.ocr) {
+        setInfo(`Factura adjuntada. OCR: ${data.ocr.error}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al adjuntar');
     } finally {
@@ -80,7 +116,7 @@ export default function EgresoFacturaCell({
             type="button"
             onClick={() => void verDocumento()}
             disabled={abriendo}
-            title={fileName ? `Abrir ${fileName}` : 'Abrir factura'}
+            title={localName || fileName ? `Abrir ${localName || fileName}` : 'Abrir factura'}
             style={btnVer}
           >
             {abriendo ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />}
@@ -108,21 +144,47 @@ export default function EgresoFacturaCell({
               onClick={() => inputRef.current?.click()}
               title={
                 conDocumento
-                  ? 'Reemplazar factura enlazada a este egreso'
-                  : 'Cargar factura y enlazarla a este egreso'
+                  ? 'Reemplazar factura, certificar cabecera CCO e importar ítems'
+                  : 'Cargar factura, certificar cabecera CCO e importar ítems'
               }
               style={btnAdj}
             >
               {subiendo ? <Loader2 size={12} className="animate-spin" /> : <FileUp size={12} />}
-              {conDocumento ? 'Cambiar' : 'Adjuntar'}
+              {subiendo ? 'Leyendo…' : conDocumento ? 'Cambiar' : 'Adjuntar'}
             </button>
           </>
         ) : null}
       </div>
       {error ? (
-        <span style={{ color: '#B91C1C', fontSize: 10, whiteSpace: 'normal', maxWidth: 160 }}>
+        <span style={{ color: '#B91C1C', fontSize: 10, whiteSpace: 'normal', maxWidth: 180 }}>
           {error}
         </span>
+      ) : null}
+      {info && !error ? (
+        <span style={{ color: '#0369A1', fontSize: 10, whiteSpace: 'normal', maxWidth: 180 }}>
+          {info}
+        </span>
+      ) : null}
+
+      {ocrPendiente ? (
+        <CertificarFacturaAdjuntaModal
+          open
+          compraId={compraId}
+          fileName={localName || fileName}
+          ocr={ocrPendiente}
+          onClose={() => setOcrPendiente(null)}
+          onAplicado={({ items, decision, invoice_number, supplier_rif }) => {
+            setOcrPendiente(null);
+            const nro = invoice_number ? ` · Nº ${invoice_number}` : '';
+            const rif = supplier_rif ? ` · RIF ${supplier_rif}` : '';
+            setInfo(
+              decision === 'usar_factura'
+                ? `Actualizado con factura: ${items} ítem(s)${nro}${rif}.`
+                : `CCO conservado + ${items} ítem(s)${nro}${rif}.`,
+            );
+            onAdjuntado?.(compraId, localName || fileName || 'factura');
+          }}
+        />
       ) : null}
     </div>
   );

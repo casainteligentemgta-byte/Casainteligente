@@ -6,12 +6,23 @@ import {
   validateProcurementDocument,
 } from '@/lib/almacen/procurementDocumentStorage';
 import {
+  extractPurchaseInvoiceFromFile,
+  mimeFromFile,
+  type ExtractedPurchaseInvoice,
+} from '@/lib/almacen/extractPurchaseInvoiceGemini';
+import {
+  aplicarCertificacionFacturaAdjunta,
+  compararCabeceraConFacturaOcr,
+  type CompraParaCertificar,
+} from '@/lib/contabilidad/certificarFacturaAdjunta';
+import {
   resolverDocumentoCompra,
   sincronizarDocumentoEnCompra,
 } from '@/lib/contabilidad/syncDocumentoCompraRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
+export const maxDuration = 180;
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -100,13 +111,20 @@ export async function GET(_req: Request, ctx: RouteCtx) {
   }
 }
 
-/** POST multipart/form-data — adjunta imagen o PDF a una compra ya registrada. */
+/**
+ * POST multipart/form-data — adjunta imagen o PDF a una compra ya registrada.
+ * Por defecto corre OCR (Gemini): certifica cabecera/monto CCO y propone ítems.
+ * Query `ocr=0` salta la extracción.
+ */
 export async function POST(req: Request, ctx: RouteCtx) {
   try {
     const { id } = await ctx.params;
     if (!id?.trim()) {
       return NextResponse.json({ error: 'ID de compra requerido.' }, { status: 400 });
     }
+
+    const urlReq = new URL(req.url);
+    const ocrEnabled = urlReq.searchParams.get('ocr') !== '0';
 
     const form = await req.formData();
     const file = form.get('documento');
@@ -126,7 +144,9 @@ export async function POST(req: Request, ctx: RouteCtx) {
     const compraId = id.trim();
     const { data: compra, error: compraErr } = await supabase
       .from('contabilidad_compras')
-      .select('id, purchase_invoice_id, document_storage_path')
+      .select(
+        'id, purchase_invoice_id, document_storage_path, fecha, supplier_name, supplier_rif, invoice_number, origen, total_amount, total_amount_usd, tasa_bcv_ves_por_usd, moneda, moneda_original, monto_ves, monto_usd',
+      )
       .eq('id', compraId)
       .maybeSingle();
 
@@ -155,12 +175,117 @@ export async function POST(req: Request, ctx: RouteCtx) {
     const storageClient = admin.ok ? admin.client : supabase;
     const url = await createProcurementDocumentSignedUrl(storageClient, uploaded.path);
 
-    return NextResponse.json({
-      ok: true,
+    const base = {
+      ok: true as const,
       url,
       fileName: uploaded.fileName,
       mimeType: uploaded.mimeType,
       storagePath: uploaded.path,
+    };
+
+    if (!ocrEnabled) {
+      return NextResponse.json({ ...base, ocr: { skipped: true } });
+    }
+
+    const mimeType = mimeFromFile(file) ?? uploaded.mimeType;
+    if (!mimeType) {
+      return NextResponse.json({
+        ...base,
+        ocr: {
+          ok: false,
+          error: 'Formato no soportado para OCR. Use PDF, JPG o PNG.',
+        },
+      });
+    }
+
+    let extracted: ExtractedPurchaseInvoice;
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const result = await extractPurchaseInvoiceFromFile({
+        buffer,
+        mimeType,
+        fileName: file.name,
+      });
+      extracted = result.data;
+    } catch (ocrErr) {
+      const message = ocrErr instanceof Error ? ocrErr.message : 'Error al leer la factura.';
+      console.error('[POST compra document OCR]', ocrErr);
+      return NextResponse.json({
+        ...base,
+        ocr: { ok: false, error: message },
+      });
+    }
+
+    const compraCert: CompraParaCertificar = {
+      id: compra.id,
+      fecha: compra.fecha,
+      supplier_name: compra.supplier_name,
+      supplier_rif: compra.supplier_rif,
+      invoice_number: compra.invoice_number,
+      origen: compra.origen,
+      total_amount: Number(compra.total_amount) || 0,
+      total_amount_usd: compra.total_amount_usd,
+      tasa_bcv_ves_por_usd: compra.tasa_bcv_ves_por_usd,
+      moneda: compra.moneda,
+      moneda_original: compra.moneda_original,
+      monto_ves: compra.monto_ves,
+      monto_usd: compra.monto_usd,
+    };
+
+    const certificacion = await compararCabeceraConFacturaOcr(compraCert, extracted);
+    const itemsCount = (extracted.items ?? []).filter((it) =>
+      String(it.description ?? '').trim(),
+    ).length;
+
+    let aplicado: {
+      items: number;
+      decision: 'mantener_cco';
+      invoice_number: string;
+      supplier_rif: string;
+    } | null = null;
+    const puedeAutoAplicar =
+      certificacion.coincide &&
+      itemsCount > 0 &&
+      !certificacion.requiere_numero_factura &&
+      !certificacion.requiere_rif;
+
+    if (puedeAutoAplicar) {
+      try {
+        const db = admin.ok ? admin.client : supabase;
+        const r = await aplicarCertificacionFacturaAdjunta(db, {
+          compra: compraCert,
+          extracted,
+          decision: 'mantener_cco',
+          confirmarFechaAnomala: true,
+        });
+        aplicado = {
+          items: r.items,
+          decision: 'mantener_cco',
+          invoice_number: r.invoice_number,
+          supplier_rif: r.supplier_rif,
+        };
+      } catch (applyErr) {
+        console.warn('[POST compra document auto-certificar]', applyErr);
+      }
+    }
+
+    return NextResponse.json({
+      ...base,
+      ocr: {
+        ok: true,
+        extracted,
+        items_count: itemsCount,
+        certificacion,
+        requiere_confirmacion:
+          !aplicado &&
+          (!certificacion.coincide ||
+            certificacion.requiere_numero_factura ||
+            certificacion.requiere_rif ||
+            itemsCount > 0),
+        requiere_numero_factura: certificacion.requiere_numero_factura,
+        requiere_rif: certificacion.requiere_rif,
+        aplicado,
+      },
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Error al adjuntar el documento.';
