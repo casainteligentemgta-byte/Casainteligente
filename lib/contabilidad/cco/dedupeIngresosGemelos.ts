@@ -147,18 +147,30 @@ export function filtrarIngresosGemelosCsv<
   return { kept: [...otras, ...keptIngresos], discarded }
 }
 
-/**
- * Filas de ci_inyecciones_capital a eliminar (gemelos con operador).
- */
-export function idsIngresosGemelosAEliminar(
-  rows: Array<{
-    id: string
-    fecha_ingreso?: string | null
-    monto_usd?: number | null
-    origen_fondo?: string | null
-    creado_al?: string | null
-  }>,
-): string[] {
+export type IngresoGemeloParPreview = {
+  clave: string
+  fecha: string
+  monto_usd: number
+  conservar: { id: string; origen_fondo: string }
+  eliminar: Array<{ id: string; origen_fondo: string }>
+}
+
+export type PreviewIngresosGemelos = {
+  pares: IngresoGemeloParPreview[]
+  idsEliminar: string[]
+  montoUsdALiberar: number
+  cantidadEliminar: number
+}
+
+type InyeccionGemeloRow = {
+  id: string
+  fecha_ingreso?: string | null
+  monto_usd?: number | null
+  origen_fondo?: string | null
+  creado_al?: string | null
+}
+
+function agruparIngresosGemelos(rows: InyeccionGemeloRow[]): Map<string, IngresoGemeloLike[]> {
   const grupos = new Map<string, IngresoGemeloLike[]>()
   for (const r of rows) {
     const monto = num(r.monto_usd)
@@ -176,18 +188,63 @@ export function idsIngresosGemelosAEliminar(
     if (!grupos.has(k)) grupos.set(k, [])
     grupos.get(k)!.push(like)
   }
+  return grupos
+}
 
-  const eliminar: string[] = []
-  for (const group of Array.from(grupos.values())) {
+/**
+ * Preview de pares gemelos (operador + limpio) para UI / dry_run.
+ * Conserva el abono sin operador; marca para borrar los que llevan LUIS / sesión.
+ */
+export function previewIngresosGemelos(rows: InyeccionGemeloRow[]): PreviewIngresosGemelos {
+  const grupos = agruparIngresosGemelos(rows)
+  const pares: IngresoGemeloParPreview[] = []
+  const idsEliminar: string[] = []
+  let montoUsdALiberar = 0
+
+  for (const [clave, group] of Array.from(grupos.entries())) {
     if (group.length < 2) continue
-    // Solo actuar si hay al menos un gemelo «operador» y uno «limpio»
     const conOp = group.filter((g) => origenFondoTieneOperador(String(g.origen_fondo ?? '')))
     const sinOp = group.filter((g) => !origenFondoTieneOperador(String(g.origen_fondo ?? '')))
     if (conOp.length === 0 || sinOp.length === 0) continue
+
     const keep = elegirIngresoGemeloAConservar(group)
-    for (const g of group) {
-      if (g.id && g.id !== keep.id) eliminar.push(String(g.id))
+    const eliminar = group.filter((g) => g.id && g.id !== keep.id)
+    if (!keep.id || eliminar.length === 0) continue
+
+    const monto = num(keep.monto_base_usd)
+    for (const g of eliminar) {
+      idsEliminar.push(String(g.id))
+      montoUsdALiberar += num(g.monto_base_usd)
     }
+
+    pares.push({
+      clave,
+      fecha: fechaKey(keep.fecha),
+      monto_usd: monto,
+      conservar: {
+        id: String(keep.id),
+        origen_fondo: String(keep.origen_fondo ?? ''),
+      },
+      eliminar: eliminar.map((g) => ({
+        id: String(g.id),
+        origen_fondo: String(g.origen_fondo ?? ''),
+      })),
+    })
   }
-  return eliminar
+
+  pares.sort((a, b) => a.fecha.localeCompare(b.fecha) || b.monto_usd - a.monto_usd)
+
+  return {
+    pares,
+    idsEliminar,
+    montoUsdALiberar: Math.round(montoUsdALiberar * 100) / 100,
+    cantidadEliminar: idsEliminar.length,
+  }
+}
+
+/**
+ * Filas de ci_inyecciones_capital a eliminar (gemelos con operador).
+ */
+export function idsIngresosGemelosAEliminar(rows: InyeccionGemeloRow[]): string[] {
+  return previewIngresosGemelos(rows).idsEliminar
 }
