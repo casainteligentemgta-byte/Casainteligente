@@ -24,6 +24,8 @@ export type CcoContratoObra = {
   estado: string;
   tipo_gasto_cco: string | null;
   origen_v4_id: number | null;
+  /** Avance físico/acuerdo (0–100). Lo fija el operador; no se deriva de pagos. */
+  pct_avance: number;
 };
 
 export type CcoPagoVinculado = {

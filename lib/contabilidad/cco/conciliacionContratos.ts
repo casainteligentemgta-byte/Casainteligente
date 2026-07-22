@@ -2,8 +2,8 @@
  * Conciliación de contratos por subcontratista (Control de Obra V4).
  *
  * Acordado  = Σ monto_base_usd de contratos
- * Ejecutado = Σ pagos vinculados (no ANULADO) — valorización / avance financiero
- * Pagado    = Σ pagos con estado PAGADO (o sin estado = pagado)
+ * Ejecutado = acordado × pct_avance/100 (avance del operador; no se deriva de pagos)
+ * Pagado    = Σ pagos vinculados (no ANULADO) con estado PAGADO/REGISTRADO
  */
 
 import type { CcoProveedorContratos } from '@/lib/contabilidad/cco/types';
@@ -17,6 +17,7 @@ export type CcoConciliacionFila = {
     acordado: number;
     ejecutado: number;
     pagado: number;
+    pctAvance: number;
   }[];
   montoAcordado: number;
   montoEjecutado: number;
@@ -44,6 +45,17 @@ export type CcoConciliacionResumen = {
   avancePct: number;
   estado: 'Terminado' | 'En Ejecución';
 };
+
+/** Sugerido a pagar desde el saco según avance del operador. */
+export function sugeridoPagarPorAvance(
+  costoTotalUsd: number,
+  pctAvance: number,
+  montoPagadoUsd: number,
+): number {
+  const pct = Math.min(100, Math.max(0, Number(pctAvance) || 0));
+  const meta = round2((Math.max(0, costoTotalUsd) * pct) / 100);
+  return Math.max(0, round2(meta - Math.max(0, montoPagadoUsd)));
+}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -88,32 +100,30 @@ export function conciliarContratosPorProveedor(
   const filas: CcoConciliacionFila[] = porProveedor.map((p) => {
     const contratos = p.contratos.map((c) => {
       const acordado = c.monto_base_usd > 0 ? c.monto_base_usd : c.costo_total_usd;
-      // Ejecutado = todos los pagos no anulados; Pagado = solo PAGADO.
-      let ejecutado = 0;
+      const pctAvance = Math.min(100, Math.max(0, Number(c.pct_avance) || 0));
+      // Ejecutado = avance del operador × acordado (no suma de pagos).
+      const ejecutado = round2((acordado * pctAvance) / 100);
       let pagado = 0;
       for (const pago of c.pagos) {
         const est = String(pago.estado ?? 'PAGADO').toUpperCase();
         if (est === 'ANULADO') continue;
-        ejecutado += pago.monto_usd;
-        if (est === 'PAGADO' || est === '' || est === 'REGISTRADO') {
+        if (est === 'PAGADO' || est === '' || est === 'REGISTRADO' || est === 'PARCIAL') {
           pagado += pago.monto_usd;
         }
       }
-      // Sin desglose de estado: si todo venía como pagado en enriquecerContratoConPagos
-      if (c.pagos.length === 0) {
-        ejecutado = 0;
-        pagado = 0;
-      } else if (pagado === 0 && c.monto_pagado_usd > 0) {
-        // Fallback: jerarquía antigua sin estado → pagado = ejecutado = total vinculado
-        ejecutado = c.monto_pagado_usd;
+      if (c.pagos.length > 0 && pagado === 0 && c.monto_pagado_usd > 0) {
+        // Fallback: jerarquía sin estado usable → pagado = total vinculado
         pagado = c.monto_pagado_usd;
+      } else if (c.pagos.length === 0) {
+        pagado = 0;
       }
       return {
         id: c.id,
         descripcion: c.descripcion,
         acordado,
         ejecutado,
-        pagado,
+        pagado: round2(pagado),
+        pctAvance,
       };
     });
 
