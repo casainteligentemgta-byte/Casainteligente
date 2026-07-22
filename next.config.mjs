@@ -1,4 +1,9 @@
 /** @type {import('next').NextConfig} */
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const nextConfig = {
   reactStrictMode: true,
 
@@ -71,7 +76,7 @@ const nextConfig = {
     ];
   },
 
-  // ─── Webpack (solo ajustes de desarrollo) ───────────────────────────────────────
+  // ─── Webpack ────────────────────────────────────────────────────────────────────
   webpack: (config, { dev, isServer }) => {
     // En dev: aumentar timeout de carga de chunks y desactivar caché filesystem
     // (evita "Cannot find module './1682.js'" tras hot-reload agresivo)
@@ -79,6 +84,14 @@ const nextConfig = {
       if (config.output) config.output.chunkLoadTimeout = 300_000;
       config.cache = false;
     }
+
+    // NetVision (react-konva): forzar build browser de konva y stub de canvas.
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      canvas: false,
+      konva: path.join(__dirname, 'node_modules/konva/lib/index.js'),
+    };
 
     if (isServer) {
       // No bundlear mdb-reader: Node resuelve la entrada "node" del paquete en runtime
@@ -103,9 +116,8 @@ const nextConfig = {
       }
     }
 
-    // Excluir canvas del bundle del cliente (solo lo necesita el servidor para react-pdf)
+    // Excluir canvas/fs del bundle del cliente
     if (!isServer) {
-      config.resolve = config.resolve ?? {};
       config.resolve.fallback = {
         ...(config.resolve.fallback ?? {}),
         canvas: false,
