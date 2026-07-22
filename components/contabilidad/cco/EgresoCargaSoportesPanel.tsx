@@ -2,6 +2,13 @@
 
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { CloudUpload, FileUp, Loader2, Plus } from 'lucide-react';
+import CertificarFacturaAdjuntaModal, {
+  type OcrAdjuntarResult,
+} from '@/components/contabilidad/CertificarFacturaAdjuntaModal';
+import {
+  adjuntarFacturaConOcr,
+  esOcrAdjuntarOk,
+} from '@/lib/contabilidad/adjuntarFacturaConOcrClient';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 
 type FilaSoporte = CcoLibroFila & { _agrupada?: boolean };
@@ -13,7 +20,7 @@ type Props = {
 
 /**
  * Carga Manual de Soportes (estilo referencia):
- * 1) Seleccione el egreso  2) Elegir archivo imagen/PDF  3) Enlazar
+ * 1) Seleccione el egreso  2) Elegir archivo imagen/PDF  3) Enlazar + OCR
  */
 export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +38,8 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
   const [subiendo, setSubiendo] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [ocrPendiente, setOcrPendiente] = useState<OcrAdjuntarResult | null>(null);
+  const [ocrFileName, setOcrFileName] = useState<string | null>(null);
 
   const opciones = sinDoc.length > 0 ? sinDoc : todas;
 
@@ -43,16 +52,28 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
     setErr(null);
     setMsg(null);
     try {
-      const form = new FormData();
-      form.append('documento', file, file.name);
-      const res = await fetch(
-        `/api/contabilidad/compras/${encodeURIComponent(compraId)}/document`,
-        { method: 'POST', body: form },
-      );
-      const data = (await res.json()) as { ok?: boolean; error?: string; fileName?: string };
-      if (!res.ok || !data.ok) throw new Error(data.error || 'No se pudo cargar el soporte');
-      onAdjuntado(compraId, data.fileName || file.name);
-      setMsg(`Soporte enlazado (${data.fileName || file.name}).`);
+      const data = await adjuntarFacturaConOcr(compraId, file);
+      if (!data.ok) throw new Error(data.error || 'No se pudo cargar el soporte');
+      const name = data.fileName || file.name;
+      onAdjuntado(compraId, name);
+      setOcrFileName(name);
+
+      if (esOcrAdjuntarOk(data.ocr)) {
+        if (data.ocr.requiere_confirmacion) {
+          setOcrPendiente(data.ocr);
+          setMsg(`Soporte enlazado (${name}). Revise disparidades CCO vs factura.`);
+        } else if (data.ocr.aplicado) {
+          setMsg(
+            `Soporte enlazado y certificado (${name}) · ${data.ocr.aplicado.items} ítem(s).`,
+          );
+        } else {
+          setMsg(`Soporte enlazado (${name}).`);
+        }
+      } else if (data.ocr && 'error' in data.ocr) {
+        setMsg(`Soporte enlazado (${name}). OCR: ${data.ocr.error}`);
+      } else {
+        setMsg(`Soporte enlazado (${name}).`);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Error al subir');
     } finally {
@@ -165,7 +186,7 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
                 }}
               >
                 {subiendo ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
-                {subiendo ? 'Subiendo…' : 'Elegir'}
+                {subiendo ? 'Leyendo…' : 'Elegir'}
               </button>
             </div>
           ) : null}
@@ -182,6 +203,25 @@ export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) 
 
       {err ? <p style={{ color: '#B91C1C', fontSize: 13, margin: '10px 0 0' }}>{err}</p> : null}
       {msg ? <p style={{ color: '#15803D', fontSize: 13, margin: '10px 0 0' }}>{msg}</p> : null}
+
+      {ocrPendiente && compraId ? (
+        <CertificarFacturaAdjuntaModal
+          open
+          compraId={compraId}
+          fileName={ocrFileName}
+          ocr={ocrPendiente}
+          onClose={() => setOcrPendiente(null)}
+          onAplicado={({ items, decision }) => {
+            setOcrPendiente(null);
+            setMsg(
+              decision === 'usar_factura'
+                ? `Datos de factura aplicados · ${items} ítem(s).`
+                : `CCO conservado · ${items} ítem(s) cargados.`,
+            );
+            if (ocrFileName) onAdjuntado(compraId, ocrFileName);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
