@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST { proyecto_id, dry_run? }
- * Quita auditoría mal importada, deduplica gemelos y corrige devaluación brecha→V4.
+ * Quita auditoría mal importada, deduplica gastos gemelos, limpia ingresos gemelos
+ * (operador LUIS + ABONO) y corrige devaluación brecha→V4.
  */
 export async function POST(req: Request) {
   try {

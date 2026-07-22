@@ -28,6 +28,8 @@ type DoneJson = {
   gastos?: { created?: number; updated?: number };
   contratos?: number;
   ingresos?: number;
+  ingresosGemelosOmitidos?: number;
+  ingresosGemelosEliminados?: number;
   presupuestos?: number;
   estructura?: number;
   vinculados?: number;
@@ -221,6 +223,12 @@ export default function CcoImportarCsvPanel({
           `Gastos: +${doneJson.gastos?.created ?? 0} creados / ${doneJson.gastos?.updated ?? 0} actualizados`,
           `Contratos: ${doneJson.contratos}`,
           `Ingresos: ${doneJson.ingresos}`,
+          doneJson.ingresosGemelosOmitidos
+            ? `Gemelos omitidos del CSV: ${doneJson.ingresosGemelosOmitidos}`
+            : null,
+          doneJson.ingresosGemelosEliminados
+            ? `Gemelos borrados en BD: ${doneJson.ingresosGemelosEliminados}`
+            : null,
           `Presupuestos: ${doneJson.presupuestos}`,
           `Estructura: ${doneJson.estructura}`,
           `Vinculados auto: ${doneJson.vinculados}`,

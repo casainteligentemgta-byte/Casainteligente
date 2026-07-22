@@ -99,7 +99,7 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
     if (!proyectoId) return;
     if (
       !window.confirm(
-        '¿Reparar descuadre CCO?\n\n• Elimina logs de auditoría importados como gasto\n• Quita gastos gemelos duplicados\n• Corrige devaluación brecha→V4 (p. ej. +34,45% → −25,62%)\n\nNo toca facturas Telegram con purchase_invoice.',
+        '¿Reparar descuadre CCO?\n\n• Elimina logs de auditoría importados como gasto\n• Quita gastos gemelos duplicados\n• Quita ingresos gemelos (p. ej. LUIS · ABONO + ABONO)\n• Corrige devaluación brecha→V4 (p. ej. +34,45% → −25,62%)\n\nNo toca facturas Telegram con purchase_invoice.',
       )
     ) {
       return;
@@ -120,7 +120,10 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
           ? `${json.auditoriaEliminada} auditoría(s) eliminada(s)`
           : null,
         json.duplicadosEliminados
-          ? `${json.duplicadosEliminados} duplicado(s) eliminado(s)`
+          ? `${json.duplicadosEliminados} gasto(s) gemelo(s) eliminado(s)`
+          : null,
+        json.ingresosGemelosEliminados
+          ? `${json.ingresosGemelosEliminados} ingreso(s) gemelo(s) eliminado(s)`
           : null,
         json.devaluacionCorregida
           ? `devaluación ${json.devaluacionAntes} → ${json.devaluacionDespues}`
