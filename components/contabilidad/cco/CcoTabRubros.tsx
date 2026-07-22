@@ -49,6 +49,96 @@ function downloadText(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Umbral: debajo de esto solo aparece en la leyenda (evita solapes y líneas huérfanas). */
+const PIE_LABEL_MIN_PCT = 0.04;
+
+type PieLabelProps = {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  outerRadius?: number;
+  percent?: number;
+  name?: string;
+  fill?: string;
+};
+
+function RubroPieLabel({
+  cx = 0,
+  cy = 0,
+  midAngle = 0,
+  outerRadius = 0,
+  percent = 0,
+  name = '',
+  fill = '#334155',
+}: PieLabelProps) {
+  if (percent < PIE_LABEL_MIN_PCT) return null;
+
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 22;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  const pct = (percent * 100).toFixed(1);
+  const label = String(name).length > 13 ? `${String(name).slice(0, 12)}…` : String(name);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill={fill}
+      textAnchor={x >= cx ? 'start' : 'end'}
+      dominantBaseline="central"
+      style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.01em' }}
+    >
+      {label} {pct}%
+    </text>
+  );
+}
+
+type PieLabelLineProps = {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  outerRadius?: number;
+  percent?: number;
+  stroke?: string;
+  points?: Array<{ x: number; y: number }>;
+};
+
+function RubroPieLabelLine({
+  percent = 0,
+  stroke = '#94A3B8',
+  points,
+  cx = 0,
+  cy = 0,
+  midAngle = 0,
+  outerRadius = 0,
+}: PieLabelLineProps) {
+  if (percent < PIE_LABEL_MIN_PCT) return null;
+
+  const RADIAN = Math.PI / 180;
+  const start =
+    points?.[0] ??
+    ({
+      x: cx + outerRadius * Math.cos(-midAngle * RADIAN),
+      y: cy + outerRadius * Math.sin(-midAngle * RADIAN),
+    } as const);
+  const end =
+    points?.[1] ??
+    ({
+      x: cx + (outerRadius + 16) * Math.cos(-midAngle * RADIAN),
+      y: cy + (outerRadius + 16) * Math.sin(-midAngle * RADIAN),
+    } as const);
+
+  return (
+    <polyline
+      points={`${start.x},${start.y} ${end.x},${end.y}`}
+      stroke={stroke}
+      strokeWidth={1}
+      fill="none"
+    />
+  );
+}
+
 function csvEscape(v: string | number): string {
   const s = String(v ?? '');
   if (/[",\n;]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -452,26 +542,23 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
               <p style={muted}>Sin datos para el filtro actual.</p>
             ) : (
               <>
-                <div style={{ width: '100%', height: 280 }}>
+                <div style={{ width: '100%', height: 340 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart margin={{ top: 16, right: 28, bottom: 16, left: 28 }}>
                       <Pie
                         data={pieFiltrado}
                         dataKey="value"
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        innerRadius={70}
-                        outerRadius={110}
-                        paddingAngle={1}
-                        label={(props) => {
-                          const name = String(props.name ?? '');
-                          const pct = Number(props.percent ?? 0) * 100;
-                          return `${name.slice(0, 14)} ${pct.toFixed(1)}%`;
-                        }}
+                        innerRadius={68}
+                        outerRadius={100}
+                        paddingAngle={1.5}
+                        label={RubroPieLabel}
+                        labelLine={RubroPieLabelLine}
                       >
                         {pieFiltrado.map((t) => (
-                          <Cell key={t.name} fill={t.color} />
+                          <Cell key={t.name} fill={t.color} stroke="#fff" strokeWidth={1} />
                         ))}
                       </Pie>
                       <Tooltip
@@ -483,6 +570,11 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+                {pieFiltrado.some((t) => t.value / pieTotal < PIE_LABEL_MIN_PCT) ? (
+                  <p style={{ margin: '0 0 8px', fontSize: 11, color: '#94A3B8' }}>
+                    Rubros bajo 4% se muestran solo en la leyenda (evita solapes).
+                  </p>
+                ) : null}
                 <ul
                   style={{
                     listStyle: 'none',
