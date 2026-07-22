@@ -23,6 +23,7 @@ import {
   normalizarConceptoRubro,
   RUBRO_SECCIONES,
 } from '@/lib/contabilidad/cco/normalizarConceptoRubro';
+import { inferirCantidadEmpaque } from '@/lib/contabilidad/cco/inferirCantidadEmpaque';
 import { TIPO_CONTRATO_AD, ESTADO_CONTRATO_EXITOSO } from '@/lib/proyectos/contratoAdministracionDelegada';
 
 export type CcoRubroConcepto = {
@@ -273,14 +274,29 @@ export async function cargarRubrosCco(
       const scale = sumSub > 0 ? baseUsd / sumSub : 0;
 
       for (const ln of usableLineas) {
-        const cant = num(ln.cantidad) > 0 ? num(ln.cantidad) : 1;
-        const und = String(ln.unidad ?? 'UND').trim().toUpperCase() || 'UND';
+        let cant = num(ln.cantidad) > 0 ? num(ln.cantidad) : 1;
+        let und = String(ln.unidad ?? 'UND').trim().toUpperCase() || 'UND';
         let sub = num(ln.subtotal);
         if (sub <= 0) sub = cant * num(ln.precio_unitario);
         const gastoNeto = scale > 0 ? sub * scale : baseUsd / usableLineas.length;
-        const pu = cant > 0 ? gastoNeto / cant : gastoNeto;
         const desc = String(ln.descripcion ?? '').trim() || descHeader;
         const concepto = normalizarConceptoRubro(desc, { tipo, proveedor });
+
+        // Híbrido: sin factura fina, bolsas → o pallets × 48 (cemento) y unificar unidad.
+        const inferida = inferirCantidadEmpaque({
+          descripcion: desc,
+          concepto,
+          unidad: und,
+          cantidad: cant,
+          montoUsd: gastoNeto,
+        });
+        if (inferida.fuente === 'bolsas' || inferida.fuente === 'pallets') {
+          cant = inferida.cantidad;
+          und = inferida.unidad;
+        } else if (inferida.conceptoCanonico && inferida.unidad === 'SAC' && cant > 0) {
+          und = inferida.unidad;
+        }
+        const pu = cant > 0 ? gastoNeto / cant : gastoNeto;
 
         transacciones.push({
           id: compraId,
@@ -309,8 +325,22 @@ export async function cargarRubrosCco(
       }
     } else {
       const concepto = normalizarConceptoRubro(descHeader, { tipo, proveedor });
-      const und = 'UND';
-      const cant = 1;
+      const inferida = inferirCantidadEmpaque({
+        descripcion: descHeader,
+        concepto,
+        unidad: 'UND',
+        cantidad: 1,
+        montoUsd: baseUsd,
+      });
+      const und =
+        inferida.fuente === 'bolsas' || inferida.fuente === 'pallets'
+          ? inferida.unidad
+          : 'UND';
+      const cant =
+        inferida.fuente === 'bolsas' || inferida.fuente === 'pallets'
+          ? inferida.cantidad
+          : 1;
+      const pu = cant > 0 ? baseUsd / cant : baseUsd;
       transacciones.push({
         id: compraId,
         fecha,
@@ -320,7 +350,7 @@ export async function cargarRubrosCco(
         tipo,
         cantidad: cant,
         unidad: und,
-        precioUnitario: baseUsd,
+        precioUnitario: pu,
         gastoNeto: baseUsd,
         costoTotal: baseUsd + honorarios,
         lineaId: null,

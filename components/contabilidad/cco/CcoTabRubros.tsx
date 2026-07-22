@@ -543,9 +543,13 @@ export default function CcoTabRubros({ proyectoId }: { proyectoId: string }) {
           </div>
 
           <div style={box}>
-            <h4 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>
+            <h4 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800 }}>
               Resumen Consolidado de Conceptos por Rubro
             </h4>
+            <p style={{ margin: '0 0 14px', fontSize: 12, color: '#64748B', lineHeight: 1.45 }}>
+              Híbrido sin factura fina: unifica nombres (p. ej. cemento/cemnto/CMT → CEMENTO). En
+              cemento, si no hay bolsas, convierte paletas × 48 y divide el precio entre sacos.
+            </p>
             {seccionesFiltradas.length === 0 ? (
               <p style={muted}>Sin conceptos consolidados en el filtro actual.</p>
             ) : (
