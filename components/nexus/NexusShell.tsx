@@ -1,13 +1,77 @@
 'use client';
 
 import { NexusSidebar } from '@/components/nexus/NexusSidebar';
-import { Menu, PanelLeftClose } from 'lucide-react';
+import {
+  NexusRightPanelProvider,
+  useNexusRightPanelSlot,
+} from '@/components/nexus/NexusRightPanelContext';
+import { Menu, PanelLeftClose, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import { NEXUS_MODULES } from '@/lib/nexus/modules';
 import { cn } from '@/lib/utils';
 
-export function NexusShell({ children }: { children: React.ReactNode }) {
+function NexusShellHeader({
+  menuOpen,
+  setMenuOpen,
+}: {
+  menuOpen: boolean;
+  setMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const pathname = usePathname();
+  const isNetVision = pathname === '/nexus/vision' || pathname.startsWith('/nexus/vision/');
+  const rightPanel = useNexusRightPanelSlot()?.panel ?? null;
+
+  return (
+    <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.85)] px-4 py-3 backdrop-blur-[20px] lg:px-8">
+      <button
+        type="button"
+        className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-expanded={menuOpen}
+        aria-label={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+        title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+      >
+        {menuOpen ? (
+          <PanelLeftClose className="h-6 w-6 stroke-[2]" />
+        ) : (
+          <Menu className="h-6 w-6 stroke-[2]" />
+        )}
+      </button>
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            'truncate text-sm',
+            isNetVision
+              ? 'font-semibold tracking-wide text-white'
+              : 'text-[var(--nexus-text-dim)]',
+          )}
+        >
+          {isNetVision ? 'NetVision Pro' : 'Escritorio optimizado · Campo en tablet'}
+        </p>
+      </div>
+      {isNetVision && rightPanel ? (
+        <button
+          type="button"
+          className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
+          onClick={rightPanel.toggle}
+          aria-expanded={rightPanel.open}
+          aria-label={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
+          title={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
+        >
+          {rightPanel.open ? (
+            <PanelRightClose className="h-6 w-6 stroke-[2]" />
+          ) : (
+            <PanelRightOpen className="h-6 w-6 stroke-[2]" />
+          )}
+        </button>
+      ) : null}
+    </header>
+  );
+}
+
+function NexusShellInner({ children }: { children: React.ReactNode }) {
   /** Menú izquierdo: cerrado en móvil; abierto en desktop por defecto. */
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -100,29 +164,17 @@ export function NexusShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.85)] px-4 py-3 backdrop-blur-[20px] lg:px-8">
-          <button
-            type="button"
-            className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-expanded={menuOpen}
-            aria-label={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
-            title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
-          >
-            {menuOpen ? (
-              <PanelLeftClose className="h-6 w-6 stroke-[2]" />
-            ) : (
-              <Menu className="h-6 w-6 stroke-[2]" />
-            )}
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-[var(--nexus-text-dim)]">
-              Escritorio optimizado · Campo en tablet
-            </p>
-          </div>
-        </header>
+        <NexusShellHeader menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
         <main className="flex-1 p-4 lg:p-8">{children}</main>
       </div>
     </div>
+  );
+}
+
+export function NexusShell({ children }: { children: React.ReactNode }) {
+  return (
+    <NexusRightPanelProvider>
+      <NexusShellInner>{children}</NexusShellInner>
+    </NexusRightPanelProvider>
   );
 }

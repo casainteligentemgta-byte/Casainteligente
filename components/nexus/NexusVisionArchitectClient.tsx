@@ -8,8 +8,6 @@ import {
   BookOpen,
   Camera,
   Download,
-  PanelRightClose,
-  PanelRightOpen,
   Trash2,
   Upload,
   Undo2,
@@ -17,6 +15,7 @@ import {
 import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
 import { Mono } from '@/components/nexus/Mono'
+import { useRegisterNexusRightPanel } from '@/components/nexus/NexusRightPanelContext'
 import BOMGenerator from '@/components/netvision/BOMGenerator'
 import NetVisionCollapsible from '@/components/netvision/NetVisionCollapsible'
 import NetVisionPrefsPanel from '@/components/netvision/NetVisionPrefsPanel'
@@ -206,6 +205,7 @@ export default function NexusVisionArchitectClient() {
   >('cctv')
   /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
   const [inspectorOpen, setInspectorOpen] = useState(true)
+  useRegisterNexusRightPanel(inspectorOpen, setInspectorOpen)
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const [complianceCountry, setComplianceCountry] = useState('VE')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -1027,26 +1027,6 @@ export default function NexusVisionArchitectClient() {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-bold text-white">NetVision Pro</h1>
-          <Button
-            type="button"
-            variant="glass"
-            size="sm"
-            className="shrink-0"
-            onClick={() => setInspectorOpen((v) => !v)}
-            aria-expanded={inspectorOpen}
-            aria-label={inspectorOpen ? 'Ocultar panel derecho' : 'Mostrar panel derecho'}
-            title={inspectorOpen ? 'Ocultar panel' : 'Mostrar panel'}
-          >
-            {inspectorOpen ? (
-              <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />
-            ) : (
-              <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            {inspectorOpen ? 'Ocultar panel' : 'Mostrar panel'}
-          </Button>
-        </div>
         <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
             <Link href="/nexus/vision/manual">
