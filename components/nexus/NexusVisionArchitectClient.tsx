@@ -1293,12 +1293,86 @@ export default function NexusVisionArchitectClient() {
     )
   })()
 
+  const projectActions = (
+    <>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="shrink-0"
+        onClick={limpiarPlano}
+        disabled={!project.planoUrl}
+      >
+        <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+        Nuevo plano
+      </Button>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="shrink-0"
+        onClick={() => fileRef.current?.click()}
+        disabled={loading}
+      >
+        <Upload className="mr-1.5 h-3.5 w-3.5" />
+        {loading ? 'Cargando…' : 'Cargar'}
+      </Button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,application/pdf,.pdf"
+        className="hidden"
+        onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
+      />
+      <div className="shrink-0">
+        <NetVisionProjectsPanel
+          activeId={project.id}
+          projectName={project.name}
+          onOpen={switchToProject}
+          onNameChange={(name) =>
+            setProject((p) => ({ ...p, name: name.slice(0, 120) }))
+          }
+          triggerSize="sm"
+        />
+      </div>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="shrink-0"
+        onClick={exportPng}
+        disabled={!project.planoUrl}
+      >
+        <Download className="mr-1.5 h-3.5 w-3.5" />
+        PNG
+      </Button>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="shrink-0"
+        onClick={() => void exportPdf()}
+        disabled={!project.planoUrl || exportingPdf}
+      >
+        <Download className="mr-1.5 h-3.5 w-3.5" />
+        {exportingPdf ? 'PDF…' : 'PDF'}
+      </Button>
+      <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
+        <Link href="/nexus/vision/manual/usuario">
+          <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+          Manual
+        </Link>
+      </Button>
+    </>
+  )
+
   const headerNav =
     headerNavEl &&
     createPortal(
       <NetVisionBranchNav
         active={sideTab}
         onSelect={selectSideTab}
+        projectActions={projectActions}
         submenu={branchSubmenu}
       />,
       headerNavEl,
@@ -1344,78 +1418,8 @@ export default function NexusVisionArchitectClient() {
   )
 
   return (
-    <div className="mt-[2cm] space-y-3">
+    <div className="space-y-3">
       {headerNav}
-      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <Button
-          type="button"
-          variant="glass"
-          size="sm"
-          className="shrink-0"
-          onClick={limpiarPlano}
-          disabled={!project.planoUrl}
-        >
-          <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-          Nuevo plano
-        </Button>
-        <Button
-          type="button"
-          variant="glass"
-          size="sm"
-          className="shrink-0"
-          onClick={() => fileRef.current?.click()}
-          disabled={loading}
-        >
-          <Upload className="mr-1.5 h-3.5 w-3.5" />
-          {loading ? 'Cargando…' : 'Cargar'}
-        </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*,application/pdf,.pdf"
-          className="hidden"
-          onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
-        />
-        <div className="shrink-0">
-          <NetVisionProjectsPanel
-            activeId={project.id}
-            projectName={project.name}
-            onOpen={switchToProject}
-            onNameChange={(name) =>
-              setProject((p) => ({ ...p, name: name.slice(0, 120) }))
-            }
-            triggerSize="sm"
-          />
-        </div>
-        <Button
-          type="button"
-          variant="glass"
-          size="sm"
-          className="shrink-0"
-          onClick={exportPng}
-          disabled={!project.planoUrl}
-        >
-          <Download className="mr-1.5 h-3.5 w-3.5" />
-          PNG
-        </Button>
-        <Button
-          type="button"
-          variant="glass"
-          size="sm"
-          className="shrink-0"
-          onClick={() => void exportPdf()}
-          disabled={!project.planoUrl || exportingPdf}
-        >
-          <Download className="mr-1.5 h-3.5 w-3.5" />
-          {exportingPdf ? 'PDF…' : 'PDF'}
-        </Button>
-        <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
-          <Link href="/nexus/vision/manual/usuario">
-            <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-            Manual
-          </Link>
-        </Button>
-      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
