@@ -6,6 +6,8 @@ import {
   LEGAL_PLANTILLAS_BUCKET,
 } from '@/lib/legal/plantillasFormatos';
 import type { LegalPlantillaVariable } from '@/lib/legal/documentosCatalogo';
+import { markdownLegalToHtml } from '@/lib/legal/renderDocumentoMarkdown';
+import { documentoPreviewHtml } from '@/lib/legal/documentoLegalShare';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,7 +22,12 @@ async function resolveId(ctx: Ctx): Promise<string> {
   return String(params.id ?? '').trim();
 }
 
-export async function GET(_req: Request, ctx: Ctx) {
+/**
+ * GET — detalle de formato.
+ * ?format=preview → HTML de previsualización (markdown).
+ * ?format=archivo → URL firmada del archivo original subido (si existe).
+ */
+export async function GET(req: Request, ctx: Ctx) {
   const gate = await requireAccesoLegal();
   if (!gate.ok) return gate.response;
 
@@ -43,7 +50,59 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: 'Sin acceso a esta plantilla' }, { status: 403 });
   }
 
-  return NextResponse.json({ ok: true, plantilla: data });
+  const format = new URL(req.url).searchParams.get('format');
+
+  if (format === 'preview' || format === 'html') {
+    const titulo = String(data.titulo ?? 'Formato');
+    const md = String(data.cuerpo_markdown ?? '').trim();
+    if (!md) {
+      return NextResponse.json(
+        {
+          error: 'Este formato no tiene cuerpo de texto para previsualizar.',
+          hint: data.archivo_nombre
+            ? 'Hay un archivo original; descárguelo con ?format=archivo.'
+            : undefined,
+        },
+        { status: 422 },
+      );
+    }
+    const html = documentoPreviewHtml(titulo, markdownLegalToHtml(md));
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
+
+  if (format === 'archivo' || format === 'file') {
+    const path = String(data.archivo_storage_path ?? '').trim();
+    if (!path) {
+      return NextResponse.json(
+        { error: 'Este formato no tiene archivo original subido.' },
+        { status: 404 },
+      );
+    }
+    const { data: signed, error: sErr } = await gate.admin.storage
+      .from(LEGAL_PLANTILLAS_BUCKET)
+      .createSignedUrl(path, 3600);
+    if (sErr || !signed?.signedUrl) {
+      return NextResponse.json(
+        { error: sErr?.message || 'No se pudo firmar la URL del archivo', hint: HINT },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      url: signed.signedUrl,
+      nombre: data.archivo_nombre ?? null,
+      mime: data.archivo_mime ?? null,
+      expires_in: 3600,
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    plantilla: data,
+    tiene_archivo: Boolean(String(data.archivo_storage_path ?? '').trim()),
+  });
 }
 
 /** PATCH — actualizar formato del org (no globales seed). */

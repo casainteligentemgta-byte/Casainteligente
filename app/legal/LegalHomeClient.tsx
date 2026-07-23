@@ -2,7 +2,16 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { Camera, FileText, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
+import {
+  Camera,
+  CheckCircle2,
+  FileText,
+  FolderOpen,
+  Loader2,
+  MessageSquareText,
+  Plus,
+  Scale,
+} from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { etiquetaDe, LEGAL_ESTADOS } from '@/lib/legal/casosCatalogo';
 
@@ -16,27 +25,73 @@ type Caso = {
   updated_at: string;
 };
 
+type PlantillaResumen = {
+  id: string;
+  org_id: string | null;
+  tipo: string;
+  activo: boolean;
+  archivo_nombre?: string | null;
+  archivo_storage_path?: string | null;
+};
+
 export default function LegalHomeClient() {
   const [casos, setCasos] = useState<Caso[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [formatosContrato, setFormatosContrato] = useState(0);
+  const [formatosConArchivo, setFormatosConArchivo] = useState(0);
+  const [docsCount, setDocsCount] = useState(0);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(apiUrl('/api/legal/casos'), { credentials: 'include', cache: 'no-store' });
-      const data = (await res.json()) as { casos?: Caso[]; error?: string; hint?: string };
-      if (res.status === 403) {
+      const [casosRes, plantillasRes, docsRes] = await Promise.all([
+        fetch(apiUrl('/api/legal/casos'), { credentials: 'include', cache: 'no-store' }),
+        fetch(apiUrl('/api/legal/plantillas?solo_org=1'), {
+          credentials: 'include',
+          cache: 'no-store',
+        }),
+        fetch(apiUrl('/api/legal/documentos?plantillas=0'), {
+          credentials: 'include',
+          cache: 'no-store',
+        }),
+      ]);
+
+      const data = (await casosRes.json()) as {
+        casos?: Caso[];
+        error?: string;
+        hint?: string;
+      };
+      if (casosRes.status === 403) {
         setError('Sin acceso al Departamento Legal.');
         setCasos([]);
         return;
       }
-      if (!res.ok) {
+      if (!casosRes.ok) {
         setError([data.error, data.hint].filter(Boolean).join(' — ') || 'Error al cargar');
         return;
       }
       setCasos(data.casos ?? []);
+
+      if (plantillasRes.ok) {
+        const pData = (await plantillasRes.json()) as { plantillas?: PlantillaResumen[] };
+        const propias = (pData.plantillas ?? []).filter((p) => p.org_id != null && p.activo);
+        const contratos = propias.filter((p) => p.tipo === 'contrato');
+        setFormatosContrato(contratos.length);
+        setFormatosConArchivo(
+          contratos.filter(
+            (p) =>
+              Boolean(String(p.archivo_storage_path ?? '').trim()) ||
+              Boolean(String(p.archivo_nombre ?? '').trim()),
+          ).length,
+        );
+      }
+
+      if (docsRes.ok) {
+        const dData = (await docsRes.json()) as { documentos?: unknown[] };
+        setDocsCount((dData.documentos ?? []).length);
+      }
     } catch {
       setError('Error de red');
     } finally {
@@ -104,7 +159,7 @@ export default function LegalHomeClient() {
             </Link>
           </div>
         </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Abiertos</p>
             <p className="mt-1 text-2xl font-bold text-white">{loading ? '—' : abiertos.length}</p>
@@ -114,8 +169,32 @@ export default function LegalHomeClient() {
             <p className="mt-1 text-2xl font-bold text-amber-200">{loading ? '—' : urgentes.length}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Total</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Total casos</p>
             <p className="mt-1 text-2xl font-bold text-zinc-200">{loading ? '—' : casos.length}</p>
+          </div>
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/70">
+              Formatos contrato
+            </p>
+            <p className="mt-1 text-2xl font-bold text-amber-100">
+              {loading ? '—' : formatosContrato}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-300/90">
+              <CheckCircle2 className="h-3 w-3" />
+              {loading ? '…' : `${formatosConArchivo} con archivo subido`}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Documentos
+            </p>
+            <p className="mt-1 text-2xl font-bold text-zinc-200">{loading ? '—' : docsCount}</p>
+            <Link
+              href="/legal/documentos"
+              className="mt-0.5 inline-block text-[11px] font-semibold text-amber-300 hover:underline"
+            >
+              Previsualizar / enviar →
+            </Link>
           </div>
         </div>
       </section>

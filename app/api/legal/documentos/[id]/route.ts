@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { requireAccesoLegal } from '@/lib/legal/requireAccesoLegal';
-import { documentoPrintHtml } from '@/lib/legal/renderDocumentoMarkdown';
+import {
+  documentoPrintHtml,
+  markdownLegalToHtml,
+} from '@/lib/legal/renderDocumentoMarkdown';
 import {
   documentoEstructuradoPrintHtml,
   estructuradoToMarkdown,
   parseDocumentoEstructurado,
 } from '@/lib/legal/documentoEstructurado';
+import { documentoPreviewHtml } from '@/lib/legal/documentoLegalShare';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,7 +24,24 @@ async function paramsId(
   return String(p.id ?? '').trim();
 }
 
-/** GET — detalle; ?format=print → HTML imprimible */
+function cuerpoHtmlDocumento(data: {
+  titulo?: unknown;
+  cuerpo_markdown?: unknown;
+  cuerpo_estructurado?: unknown;
+}): string {
+  const estructurado = parseDocumentoEstructurado(data.cuerpo_estructurado);
+  if (estructurado) {
+    // documentoEstructuradoPrintHtml ya envuelve documento completo; para preview
+    // reutilizamos el mismo HTML de impresión sin auto-print vía format=preview abajo.
+    return documentoEstructuradoPrintHtml(estructurado);
+  }
+  return documentoPrintHtml(
+    String(data.titulo ?? 'Documento'),
+    String(data.cuerpo_markdown ?? ''),
+  );
+}
+
+/** GET — detalle; ?format=print|preview → HTML; ?format=share → metadatos de envío */
 export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> | { id: string } },
@@ -45,15 +66,53 @@ export async function GET(
     return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 });
   }
 
-  const format = new URL(req.url).searchParams.get('format');
-  if (format === 'print' || format === 'html') {
+  const url = new URL(req.url);
+  const format = url.searchParams.get('format');
+
+  if (format === 'share') {
+    const previewPath = `/api/legal/documentos/${id}?format=preview`;
+    const printPath = `/api/legal/documentos/${id}?format=print`;
+    return NextResponse.json({
+      ok: true,
+      titulo: String(data.titulo ?? 'Documento'),
+      tipo: data.tipo ?? null,
+      estado: data.estado ?? null,
+      contraparte: data.contraparte ?? null,
+      resumen: data.contraparte
+        ? `Contraparte: ${String(data.contraparte)}`
+        : undefined,
+      preview_path: previewPath,
+      print_path: printPath,
+      preview_url: `${url.origin}${previewPath}`,
+      print_url: `${url.origin}${printPath}`,
+    });
+  }
+
+  if (format === 'preview') {
     const estructurado = parseDocumentoEstructurado(data.cuerpo_estructurado);
-    const html = estructurado
-      ? documentoEstructuradoPrintHtml(estructurado)
-      : documentoPrintHtml(
-          String(data.titulo ?? 'Documento'),
-          String(data.cuerpo_markdown ?? ''),
-        );
+    if (estructurado) {
+      // Quitar auto-print del HTML de impresión estructurado si lo hubiera:
+      // generamos preview limpio desde markdown derivado.
+      const md = estructuradoToMarkdown(estructurado);
+      const html = documentoPreviewHtml(
+        estructurado.document_title || String(data.titulo ?? 'Documento'),
+        markdownLegalToHtml(md),
+      );
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+      });
+    }
+    const html = documentoPreviewHtml(
+      String(data.titulo ?? 'Documento'),
+      markdownLegalToHtml(String(data.cuerpo_markdown ?? '')),
+    );
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
+
+  if (format === 'print' || format === 'html') {
+    const html = cuerpoHtmlDocumento(data);
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
