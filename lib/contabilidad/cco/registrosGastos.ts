@@ -91,6 +91,20 @@ export function gastoRegistroALibroFila(r: GastoRegistro): CcoLibroFila {
     estado: r.estado?.trim() || '—',
     contrato_obra_id: null,
     fuente,
+    contrato_vinculado: r.contrato_vinculado,
+    tasa: r.tasa,
+    monto_orig: r.monto_orig,
+    monto_pagado: r.monto_pagado,
+    forma_pago: r.forma_pago,
+    link_factura: r.link_factura,
+    link_comprobante: r.link_comprobante,
+    porcentaje_admin: r.porcentaje_admin,
+    tasa_binance: r.tasa_binance,
+    tasa_usada: r.tasa_usada,
+    porcentaje_brecha_real: r.porcentaje_brecha_real,
+    pool_asignado: r.pool_asignado,
+    avance_fisico: r.avance_fisico,
+    editable: true,
   };
 }
 
@@ -184,6 +198,8 @@ export async function getMetricasCCO(supabase: SupabaseClient): Promise<Metricas
   let sumaMontoBaseUsd = 0;
   let sumAvance = 0;
   let nAvance = 0;
+  let sumBrecha = 0;
+  let nBrecha = 0;
   let countGastos = 0;
   let countIngresos = 0;
 
@@ -197,6 +213,10 @@ export async function getMetricasCCO(supabase: SupabaseClient): Promise<Metricas
       sumAvance += Number(r.avance_fisico);
       nAvance += 1;
     }
+    if (r.porcentaje_brecha_real != null && Number.isFinite(Number(r.porcentaje_brecha_real))) {
+      sumBrecha += Number(r.porcentaje_brecha_real);
+      nBrecha += 1;
+    }
     if (clase === 'GASTO') countGastos += 1;
     if (clase === 'INGRESO') countIngresos += 1;
   }
@@ -209,6 +229,7 @@ export async function getMetricasCCO(supabase: SupabaseClient): Promise<Metricas
     sumaMontoPagado: r2(sumaMontoPagado),
     sumaHonorarios: r2(sumaHonorarios),
     promedioAvanceFisico: nAvance > 0 ? r2(sumAvance / nAvance) : null,
+    promedioBrechaReal: nBrecha > 0 ? r2(sumBrecha / nBrecha) : null,
     sumaMontoBaseUsd: r2(sumaMontoBaseUsd),
     countGastos,
     countIngresos,
@@ -279,6 +300,95 @@ export async function createGastoCCO(
 
   if (error) throw new Error(error.message);
   return mapRowToGastoRegistro(inserted as Record<string, unknown>);
+}
+
+function buildPatchRow(data: CreateGastoCcoInput): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  const setStr = (key: string, v: unknown) => {
+    if (v !== undefined) patch[key] = strOrNull(v);
+  };
+  const setNum = (key: string, v: unknown) => {
+    if (v !== undefined) patch[key] = numOrNull(v);
+  };
+
+  if (data.clase !== undefined) patch.clase = String(data.clase ?? 'GASTO').trim().toUpperCase() || 'GASTO';
+  if (data.fecha !== undefined) {
+    const fechaRaw = data.fecha ? String(data.fecha).trim() : null;
+    patch.fecha =
+      fechaRaw && /^\d{4}-\d{2}-\d{2}$/.test(fechaRaw) ? `${fechaRaw}T00:00:00Z` : fechaRaw;
+  }
+  setStr('proveedor', data.proveedor);
+  setStr('tipo', data.tipo);
+  setStr('capitulo', data.capitulo);
+  setStr('subcapitulo', data.subcapitulo);
+  setStr('descripcion', data.descripcion);
+  setStr('contrato_vinculado', data.contrato_vinculado);
+  setStr('moneda', data.moneda);
+  setNum('tasa', data.tasa);
+  setNum('monto_orig', data.monto_orig);
+  setNum('monto_base_usd', data.monto_base_usd);
+  setNum('monto_pagado', data.monto_pagado);
+  setStr('forma_pago', data.forma_pago);
+  setStr('link_factura', data.link_factura);
+  setStr('link_comprobante', data.link_comprobante);
+  setStr('estado', data.estado);
+  setNum('honorarios', data.honorarios);
+  setNum('costo_total', data.costo_total);
+  setNum('porcentaje_admin', data.porcentaje_admin);
+  setNum('tasa_binance', data.tasa_binance);
+  setStr('tasa_usada', data.tasa_usada);
+  setNum('porcentaje_brecha_real', data.porcentaje_brecha_real);
+  setNum('pool_asignado', data.pool_asignado);
+  setNum('avance_fisico', data.avance_fisico);
+
+  // Recalc honorarios/costo si cambió base o % admin y no se forzaron.
+  const base = patch.monto_base_usd != null ? num(patch.monto_base_usd) : null;
+  const pct =
+    patch.porcentaje_admin != null
+      ? num(patch.porcentaje_admin)
+      : data.porcentaje_admin != null
+        ? num(data.porcentaje_admin)
+        : null;
+  if (base != null && data.honorarios === undefined && pct != null) {
+    patch.honorarios = Math.round(base * (pct / 100) * 10000) / 10000;
+  }
+  if (
+    base != null &&
+    data.costo_total === undefined &&
+    (patch.honorarios != null || data.honorarios != null)
+  ) {
+    const hon = patch.honorarios != null ? num(patch.honorarios) : num(data.honorarios);
+    patch.costo_total = Math.round((base + hon) * 100) / 100;
+  }
+
+  return patch;
+}
+
+export async function updateGastoCCO(
+  supabase: SupabaseClient,
+  id: string | number,
+  data: CreateGastoCcoInput,
+): Promise<GastoRegistro> {
+  const patch = buildPatchRow(data);
+  if (!Object.keys(patch).length) {
+    throw new Error('Sin campos para actualizar.');
+  }
+  const { data: updated, error } = await supabase
+    .from(TABLA_REGISTROS_GASTOS)
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return mapRowToGastoRegistro(updated as Record<string, unknown>);
+}
+
+export async function deleteGastoCCO(
+  supabase: SupabaseClient,
+  id: string | number,
+): Promise<void> {
+  const { error } = await supabase.from(TABLA_REGISTROS_GASTOS).delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 /** True si la tabla tiene al menos un registro (histórico importado). */

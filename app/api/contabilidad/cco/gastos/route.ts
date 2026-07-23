@@ -108,6 +108,12 @@ export async function POST(req: Request) {
             : 15,
       tasa_usada: body.tasa_usada != null ? String(body.tasa_usada) : 'BCV',
       avance_fisico: body.avance_fisico != null ? Number(body.avance_fisico) : undefined,
+      link_factura: body.link_factura != null ? String(body.link_factura) : undefined,
+      link_comprobante: body.link_comprobante != null ? String(body.link_comprobante) : undefined,
+      tasa_binance: body.tasa_binance != null ? Number(body.tasa_binance) : undefined,
+      porcentaje_brecha_real:
+        body.porcentaje_brecha_real != null ? Number(body.porcentaje_brecha_real) : undefined,
+      pool_asignado: body.pool_asignado != null ? Number(body.pool_asignado) : undefined,
     });
 
     return NextResponse.json({ ok: true, id: created.id, row: created });

@@ -68,4 +68,20 @@ export type CcoLibroFila = {
   estado: string;
   contrato_obra_id: string | null;
   fuente: 'compra' | 'inyeccion' | 'contrato' | 'presupuesto' | 'auditoria';
+  /** Campos extendidos (registros_gastos / CSV RANCHO). */
+  contrato_vinculado?: string | null;
+  tasa?: number | null;
+  monto_orig?: number | null;
+  monto_pagado?: number | null;
+  forma_pago?: string | null;
+  link_factura?: string | null;
+  link_comprobante?: string | null;
+  porcentaje_admin?: number | null;
+  tasa_binance?: number | null;
+  tasa_usada?: string | null;
+  porcentaje_brecha_real?: number | null;
+  pool_asignado?: number | null;
+  avance_fisico?: number | null;
+  /** True cuando la fila proviene de registros_gastos (editable/borrable). */
+  editable?: boolean;
 };

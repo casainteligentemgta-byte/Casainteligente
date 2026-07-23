@@ -20,6 +20,8 @@ const empty = {
   admin_pct: '15',
   contrato_obra_id: '',
   forma_pago: 'TRANSFERENCIA BANCARIA',
+  link_factura: '',
+  link_comprobante: '',
 };
 
 export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
@@ -29,6 +31,7 @@ export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [contratos, setContratos] = useState<{ id: string; label: string }[]>([]);
+  const [uploading, setUploading] = useState<'factura' | 'comprobante' | null>(null);
 
   useEffect(() => {
     if (!open || !proyectoId || form.clase !== 'GASTO') return;
@@ -78,6 +81,8 @@ export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
           forma_pago: form.forma_pago,
           moneda: 'USD',
           estado: 'PAGADO',
+          link_factura: form.link_factura || undefined,
+          link_comprobante: form.link_comprobante || undefined,
         }),
       });
       const json = await res.json();
@@ -284,6 +289,91 @@ export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
                   style={input}
                 />
               </label>
+
+              <div style={{ display: 'grid', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Soportes</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <label style={{ ...btnGhost, cursor: 'pointer', margin: 0 }}>
+                    {uploading === 'factura' ? 'Subiendo…' : 'Subir factura'}
+                    <input
+                      type="file"
+                      accept=".pdf,image/*"
+                      style={{ display: 'none' }}
+                      disabled={!!uploading}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploading('factura');
+                        setError(null);
+                        try {
+                          const fd = new FormData();
+                          fd.set('file', file);
+                          fd.set('tipo', 'factura');
+                          const res = await fetch('/api/contabilidad/cco/gastos/upload', {
+                            method: 'POST',
+                            body: fd,
+                          });
+                          const json = await res.json();
+                          if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error');
+                          setForm((f) => ({ ...f, link_factura: String(json.url) }));
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Error al subir');
+                        } finally {
+                          setUploading(null);
+                        }
+                      }}
+                    />
+                  </label>
+                  {form.link_factura ? (
+                    <a href={form.link_factura} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700 }}>
+                      Ver factura
+                    </a>
+                  ) : null}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <label style={{ ...btnGhost, cursor: 'pointer', margin: 0 }}>
+                    {uploading === 'comprobante' ? 'Subiendo…' : 'Subir comprobante'}
+                    <input
+                      type="file"
+                      accept=".pdf,image/*"
+                      style={{ display: 'none' }}
+                      disabled={!!uploading}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploading('comprobante');
+                        setError(null);
+                        try {
+                          const fd = new FormData();
+                          fd.set('file', file);
+                          fd.set('tipo', 'comprobante');
+                          const res = await fetch('/api/contabilidad/cco/gastos/upload', {
+                            method: 'POST',
+                            body: fd,
+                          });
+                          const json = await res.json();
+                          if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error');
+                          setForm((f) => ({ ...f, link_comprobante: String(json.url) }));
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Error al subir');
+                        } finally {
+                          setUploading(null);
+                        }
+                      }}
+                    />
+                  </label>
+                  {form.link_comprobante ? (
+                    <a
+                      href={form.link_comprobante}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 12, fontWeight: 700 }}
+                    >
+                      Ver comprobante
+                    </a>
+                  ) : null}
+                </div>
+              </div>
             </div>
 
             {error ? <p style={{ color: '#B91C1C', fontSize: 13, marginTop: 12 }}>{error}</p> : null}

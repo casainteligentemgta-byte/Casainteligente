@@ -837,7 +837,13 @@ export default function CcoDashboardClient() {
             <p style={{ fontSize: 15, fontWeight: 700, color: '#1E293B', margin: '0 0 10px' }}>
               Contabilidad Real{' '}
               <span style={{ fontWeight: 600, color: '#475569' }}>
-                (Devaluación Promedio: {devaluacion.toFixed(5)}%)
+                (Brecha promedio: {devaluacion.toFixed(5)}%
+                {data.brechaFuente === 'filas_registros_gastos'
+                  ? ' · % BRECHA REAL por fila'
+                  : data.brechaFuente === 'manual'
+                    ? ' · ajuste manual'
+                    : ''}
+                )
               </span>
             </p>
             <KpiRow bloque={data.real} honorariosPct={data.honorariosPct} real />

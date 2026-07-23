@@ -86,6 +86,8 @@ export type CcoDashboard = {
   totalRegistros: number;
   honorariosPct: number;
   devaluacionPromedio: number;
+  /** Origen del % de devaluación/brecha aplicado a Contabilidad Real. */
+  brechaFuente?: 'filas_registros_gastos' | 'config' | 'manual';
   oficial: CcoKpiBloque;
   real: CcoKpiBloque;
   flujoAcumulado: CcoSeriePunto[];
@@ -203,6 +205,8 @@ export async function cargarCcoDashboard(
       proyectos,
       honorariosPct,
       devaluacionPromedio,
+      /** Si el usuario forzó ?devaluacion=, no sobrescribir con promedio de filas. */
+      forzarDevaluacionManual: devaluacionOverride != null,
     });
   }
 

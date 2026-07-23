@@ -68,6 +68,8 @@ export type MetricasCco = {
   sumaMontoPagado: number;
   sumaHonorarios: number;
   promedioAvanceFisico: number | null;
+  /** Promedio de porcentaje_brecha_real por fila (excluye null). */
+  promedioBrechaReal: number | null;
   sumaMontoBaseUsd: number;
   countGastos: number;
   countIngresos: number;

@@ -6,8 +6,10 @@
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import {
   createGastoCCO,
+  deleteGastoCCO as deleteGastoCcoDb,
   getGastosCCO,
   getMetricasCCO,
+  updateGastoCCO as updateGastoCcoDb,
   type GetGastosCcoOpts,
 } from '@/lib/contabilidad/cco/registrosGastos';
 import {
@@ -36,6 +38,18 @@ export async function actionGetMetricasCCO(): Promise<MetricasCco> {
 
 export async function actionCreateGastoCCO(data: CreateGastoCcoInput): Promise<GastoRegistro> {
   return createGastoCCO(clientOrThrow(), data);
+}
+
+export async function updateGastoCCO(
+  id: string | number,
+  data: CreateGastoCcoInput,
+): Promise<GastoRegistro> {
+  return updateGastoCcoDb(clientOrThrow(), id, data);
+}
+
+export async function deleteGastoCCO(id: string | number): Promise<{ ok: true }> {
+  await deleteGastoCcoDb(clientOrThrow(), id);
+  return { ok: true };
 }
 
 /**

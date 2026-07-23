@@ -82,6 +82,8 @@ export async function cargarDashboardDesdeRegistrosGastos(
     proyectos: CcoProyectoOpcion[];
     honorariosPct: number;
     devaluacionPromedio: number;
+    /** Si true, no reemplazar devaluacion con promedio de filas. */
+    forzarDevaluacionManual?: boolean;
   },
 ): Promise<CcoDashboard> {
   const { rows, total } = await getGastosCCO(supabase, { limit: 10_000 });
@@ -98,6 +100,8 @@ export async function cargarDashboardDesdeRegistrosGastos(
   let costoTotalSum = 0;
   let countIngresos = 0;
   let countGastos = 0;
+  let sumBrecha = 0;
+  let nBrecha = 0;
 
   for (const r of rows) {
     const clase = String(r.clase ?? '').toUpperCase();
@@ -105,6 +109,11 @@ export async function cargarDashboardDesdeRegistrosGastos(
     const base = num(r.monto_base_usd);
     const hon = num(r.honorarios);
     const costo = num(r.costo_total) || base + hon;
+
+    if (r.porcentaje_brecha_real != null && Number.isFinite(Number(r.porcentaje_brecha_real))) {
+      sumBrecha += Number(r.porcentaje_brecha_real);
+      nBrecha += 1;
+    }
 
     if (clase === 'INGRESO') {
       ingresos += base || costo;
@@ -138,6 +147,16 @@ export async function cargarDashboardDesdeRegistrosGastos(
     const m = porCapTipo.get(cap)!;
     m.set(tipo, (m.get(tipo) ?? 0) + base);
     porTipoTotal.set(tipo, (porTipoTotal.get(tipo) ?? 0) + base);
+  }
+
+  const brechaFilas = nBrecha > 0 ? Math.round((sumBrecha / nBrecha) * 10000) / 10000 : null;
+  let devaluacionPromedio = params.devaluacionPromedio;
+  let brechaFuente: CcoDashboard['brechaFuente'] = 'config';
+  if (params.forzarDevaluacionManual) {
+    brechaFuente = 'manual';
+  } else if (brechaFilas != null) {
+    devaluacionPromedio = brechaFilas;
+    brechaFuente = 'filas_registros_gastos';
   }
 
   const adminDelegada =
@@ -284,9 +303,10 @@ export async function cargarDashboardDesdeRegistrosGastos(
     proyectoNombre: params.proyectoNombre,
     totalRegistros: total,
     honorariosPct: params.honorariosPct,
-    devaluacionPromedio: params.devaluacionPromedio,
+    devaluacionPromedio,
+    brechaFuente,
     oficial,
-    real: aplicarDevaluacion(oficial, params.devaluacionPromedio),
+    real: aplicarDevaluacion(oficial, devaluacionPromedio),
     flujoAcumulado,
     flujoPeriodo,
     gastosMensual,
