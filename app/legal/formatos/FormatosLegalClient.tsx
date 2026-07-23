@@ -237,14 +237,6 @@ export default function FormatosLegalClient() {
           Formatos · plantillas
         </p>
         <h2 className="mt-2 text-2xl font-bold text-white">Formatos de documentos</h2>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Sube plantillas (MD, TXT, PDF, DOCX) o pega Markdown con variables{' '}
-          <code className="text-amber-200/90">{'{{nombre}}'}</code>. Luego úsalas en{' '}
-          <Link href="/legal/documentos/nuevo" className="text-amber-300 underline-offset-2 hover:underline">
-            Nuevo documento
-          </Link>
-          .
-        </p>
       </header>
 
       <form

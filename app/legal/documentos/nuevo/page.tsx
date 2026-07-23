@@ -51,6 +51,7 @@ function DocumentoNuevoForm() {
   const [plantillas, setPlantillas] = useState<Plantilla[]>([]);
   const [clientes, setClientes] = useState<any[]>([]);
   const [entidades, setEntidades] = useState<any[]>([]);
+  const [empleados, setEmpleados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [plantillaId, setPlantillaId] = useState('');
@@ -61,6 +62,7 @@ function DocumentoNuevoForm() {
   const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState('');
   
   const [entidadSeleccionadaId, setEntidadSeleccionadaId] = useState('');
+  const [empleadoSeleccionadoId, setEmpleadoSeleccionadoId] = useState('');
   const [nuevaEntidad, setNuevaEntidad] = useState({
     nombre: '',
     rif: '',
@@ -80,17 +82,19 @@ function DocumentoNuevoForm() {
       setLoading(true);
       try {
         const supabase = createClient();
-        const [resDoc, { data: resCli }, { data: resEnt }] = await Promise.all([
+        const [resDoc, { data: resCli }, { data: resEnt }, { data: resEmp }] = await Promise.all([
           fetch(apiUrl('/api/legal/documentos'), {
             credentials: 'include',
             cache: 'no-store',
           }),
           supabase.from('customers').select('*').order('created_at', { ascending: false }),
           supabase.from('ci_entidades').select('*').order('nombre', { ascending: true }),
+          supabase.from('ci_empleados').select('id, nombre_completo, cedula, documento, cargo_convencion, rol_examen, fecha_ingreso').order('nombre_completo', { ascending: true }),
         ]);
 
         if (resCli) setClientes(resCli);
         if (resEnt) setEntidades(resEnt);
+        if (resEmp) setEmpleados(resEmp);
 
         const data = (await resDoc.json()) as {
           plantillas?: Plantilla[];
@@ -212,6 +216,37 @@ function DocumentoNuevoForm() {
         }
         if (key.includes('contratista_rep_profesion') || key.includes('entidad_rep_profesion')) {
           if (!next[v.key]) next[v.key] = entidad.representante_profesion || '';
+        }
+      });
+      return next;
+    });
+  }
+
+  function handleSeleccionarEmpleado(id: string) {
+    setEmpleadoSeleccionadoId(id);
+    if (id === '') return;
+
+    const emp = empleados.find((e) => String(e.id) === id);
+    if (!emp) return;
+
+    setValores((prev) => {
+      const next = { ...prev };
+      variables.forEach((v) => {
+        const key = v.key.toLowerCase();
+        
+        if (key.includes('trabajador') || key.includes('empleado')) {
+          if (key.includes('nombre')) {
+            if (!next[v.key]) next[v.key] = emp.nombre_completo || '';
+          }
+          if (key.includes('cedula') || key.includes('c_i') || key.includes('ci_')) {
+            if (!next[v.key]) next[v.key] = emp.cedula || emp.documento || '';
+          }
+          if (key.includes('cargo') || key.includes('puesto')) {
+            if (!next[v.key]) next[v.key] = emp.cargo_convencion || emp.rol_examen || '';
+          }
+          if (key.includes('fecha_ingreso')) {
+            if (!next[v.key]) next[v.key] = emp.fecha_ingreso ? emp.fecha_ingreso.split('T')[0] : '';
+          }
         }
       });
       return next;
@@ -473,6 +508,22 @@ function DocumentoNuevoForm() {
         )}
 
         <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Trabajador (Nómina)
+          <select
+            className={campo}
+            value={empleadoSeleccionadoId}
+            onChange={(e) => handleSeleccionarEmpleado(e.target.value)}
+          >
+            <option value="">-- Seleccionar o escribir manualmente abajo --</option>
+            {empleados.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.nombre_completo} {emp.cedula || emp.documento ? `(${emp.cedula || emp.documento})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
           Contraparte (Cliente CRM)
           <select
             className={campo}
@@ -506,10 +557,31 @@ function DocumentoNuevoForm() {
             {variables.map((v) => {
               const isCombo = v.key === 'descuento_fase1' || v.key === 'porcentaje_inicial_fase1' || v.key === 'porcentaje_entrega_fase1' || v.key === 'fee_administracion_fase2';
               const isDatePart = v.key === 'fecha_firma_dia' || v.key === 'fecha_firma_mes' || v.key === 'fecha_firma_anio';
+              const isDateFull = v.key === 'fecha_ingreso' || v.key === 'fecha_ultimo_dia' || v.key === 'fecha_emision';
 
               if (isDatePart) {
                 // Ocultar los inputs individuales de la fecha, ya que mostraremos un solo calendario unificado al final de este bloque
                 return null;
+              }
+
+              if (isDateFull) {
+                return (
+                  <label
+                    key={v.key}
+                    className="block text-xs font-semibold uppercase tracking-wide text-zinc-500"
+                  >
+                    {v.label}
+                    <input
+                      type="date"
+                      className={campo}
+                      style={{ colorScheme: 'dark' }}
+                      value={valores[v.key] ?? ''}
+                      onChange={(e) =>
+                        setValores((prev) => ({ ...prev, [v.key]: e.target.value }))
+                      }
+                    />
+                  </label>
+                );
               }
 
               if (isCombo) {
