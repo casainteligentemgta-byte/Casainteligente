@@ -5,6 +5,7 @@ import {
   esPlanLegalStandalone,
   type LegalPlan,
 } from '@/lib/legal/accesoLegal';
+import { buscarUsuarioIdPorEmail } from '@/lib/auth/buscarUsuarioIdPorEmail';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -13,9 +14,6 @@ export const runtime = 'nodejs';
  * POST /api/legal/orgs/provision
  * Solo dueño Casa Inteligente: crea org Legal standalone + asiento para un email.
  * Body: { nombre, email, plan?: trial|solo|equipo|estudio, valido_hasta?, user_id? }
- *
- * Si no hay user_id, deja el entitlement pendiente de vincular cuando el usuario
- * exista en Auth (email guardado). Recomendado: pasar user_id de Supabase Auth.
  */
 export async function POST(req: Request) {
   const gate = await requireAccesoLegal();
@@ -49,20 +47,12 @@ export async function POST(req: Request) {
     );
   }
   const plan = planRaw as Exclude<LegalPlan, 'owner'>;
-  const validoHasta = body.valido_hasta
-    ? String(body.valido_hasta)
-    : null;
+  const validoHasta = body.valido_hasta ? String(body.valido_hasta) : null;
   let userId = body.user_id ? String(body.user_id).trim() : '';
 
   if (!userId) {
-    const { data: listed } = await gate.admin.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-    });
-    const found = listed?.users?.find(
-      (u) => (u.email ?? '').trim().toLowerCase() === email,
-    );
-    if (found?.id) userId = found.id;
+    const found = await buscarUsuarioIdPorEmail(gate.admin, email);
+    if ('userId' in found) userId = found.userId;
   }
 
   if (!userId) {
