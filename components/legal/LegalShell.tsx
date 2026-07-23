@@ -53,7 +53,7 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
             CRM
           </Link>
         </div>
-        <nav className="mx-auto flex max-w-5xl gap-1 px-4 pb-2">
+        <nav className="mx-auto flex max-w-5xl flex-wrap gap-1.5 px-4 pb-3">
           {NAV.map((item) => {
             const active = item.exact
               ? pathname === item.href
@@ -64,13 +64,13 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition',
+                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition sm:px-3 sm:py-2 sm:text-sm',
                   active
                     ? 'bg-amber-500/15 text-amber-200'
                     : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300',
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {item.label}
               </Link>
             );
