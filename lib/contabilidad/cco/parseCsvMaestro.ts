@@ -139,7 +139,7 @@ export function applyDerivedCsvMontos(
   const moneda = String(input.moneda ?? 'USD').trim().toUpperCase();
   const montoOrig = Number(input.monto_orig) || 0;
   const tasa = Number(input.tasa) || 0;
-  let base = montoOrig;
+  let base: number | null = montoOrig;
   if (moneda && moneda !== 'USD' && montoOrig > 0 && tasa > 0) {
     base = montoOrig / tasa;
   } else if (!base) {
