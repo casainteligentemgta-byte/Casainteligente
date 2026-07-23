@@ -8,7 +8,7 @@ Equivalente al flujo LangChain + OpenAI, sin dependencia de LangChain:
 
 Metadata canónica:
 {
-  "categoria": "laboral",       # laboral | civil | internacional | mercantil
+  "categoria": "laboral",       # laboral | civil | mercantil | tributario | corporativo | internacional
   "tipo": "doctrina",           # ley | jurisprudencia | doctrina | contrato_modelo
   "jurisdiccion": "venezuela",  # venezuela | internacional | extranjera
   "fecha_vigencia": "2026-07-16",
@@ -54,7 +54,7 @@ try:
 except ImportError as e:
     raise SystemExit("Instale supabase: pip install supabase") from e
 
-CATEGORIAS = {"laboral", "civil", "internacional", "mercantil"}
+CATEGORIAS = {"laboral", "civil", "mercantil", "tributario", "corporativo", "internacional"}
 TIPOS = {"ley", "jurisprudencia", "doctrina", "contrato_modelo"}
 JURISDICCIONES = {"venezuela", "internacional", "extranjera"}
 

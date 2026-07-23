@@ -20,6 +20,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const estado = url.searchParams.get('estado')?.trim() || null;
   const tipo = url.searchParams.get('tipo')?.trim() || null;
+  const casoId = url.searchParams.get('caso_id')?.trim() || null;
+  const sinCaso = url.searchParams.get('sin_caso') === '1';
   const includePlantillas = url.searchParams.get('plantillas') !== '0';
 
   let q = gate.admin
@@ -31,6 +33,8 @@ export async function GET(req: Request) {
 
   if (estado) q = q.eq('estado', estado);
   if (tipo) q = q.eq('tipo', tipo);
+  if (casoId) q = q.eq('caso_id', casoId);
+  if (sinCaso) q = q.is('caso_id', null);
 
   const { data, error } = await q;
   if (error) {

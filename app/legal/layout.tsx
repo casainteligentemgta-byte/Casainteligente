@@ -6,7 +6,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Módulo Abogado | Legal',
   description:
-    'Casos, contratos y documentos legales para Casa Inteligente o despachos externos.',
+    'Expedientes, asesoría multi-rama, contratos y documentos legales para Casa Inteligente o despachos externos.',
 };
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {

@@ -18,7 +18,10 @@ import {
   moduloPorCategoria,
   submoduloLabel,
 } from '@/lib/legal/asesorCasoCatalogo';
-import { LEGAL_CATEGORIAS } from '@/lib/legal/legalKnowledgeMetadata';
+import {
+  LEGAL_CATEGORIAS,
+  LEGAL_CATEGORIA_LABELS,
+} from '@/lib/legal/legalKnowledgeMetadata';
 import { useSpeechDictation } from '@/lib/legal/useSpeechDictation';
 
 type Fuente = {
@@ -258,13 +261,14 @@ export default function AsesorLegalClient() {
       <header>
         <p className="flex items-center gap-2 text-sm text-amber-200/80">
           <Scale className="h-4 w-4" />
-          Abogado Senior · Derecho Venezolano
+          Abogado Senior · Laboral · Civil · Mercantil · Tributario · Corporativo
         </p>
-        <h2 className="mt-2 text-2xl font-bold text-white">Asesor legal</h2>
+        <h2 className="mt-2 text-2xl font-bold text-white">Asesoría legal</h2>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Exponga el caso por texto o micrófono. El asesor hace hasta{' '}
-          {ASESOR_MAX_PREGUNTAS} preguntas clave y emite un dictamen con normativa,
-          jurisprudencia recuperada y la vista del abogado contrario.
+          Atiende cualquier rama del derecho venezolano. Exponga el caso por texto o
+          micrófono: el asesor hace hasta {ASESOR_MAX_PREGUNTAS} preguntas clave y
+          emite un dictamen con normativa, jurisprudencia recuperada y la vista del
+          abogado contrario.
         </p>
       </header>
 
@@ -518,10 +522,10 @@ export default function AsesorLegalClient() {
               onChange={(e) => setCategoria(e.target.value)}
               className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
             >
-              <option value="">Todas</option>
+              <option value="">Todas las ramas</option>
               {LEGAL_CATEGORIAS.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {LEGAL_CATEGORIA_LABELS[c]}
                 </option>
               ))}
             </select>

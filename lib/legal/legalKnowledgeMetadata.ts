@@ -14,9 +14,20 @@
 export const LEGAL_CATEGORIAS = [
   'laboral',
   'civil',
-  'internacional',
   'mercantil',
+  'tributario',
+  'corporativo',
+  'internacional',
 ] as const;
+
+export const LEGAL_CATEGORIA_LABELS: Record<(typeof LEGAL_CATEGORIAS)[number], string> = {
+  laboral: 'Laboral',
+  civil: 'Civil',
+  mercantil: 'Mercantil',
+  tributario: 'Tributario',
+  corporativo: 'Corporativo',
+  internacional: 'Internacional',
+};
 
 export const LEGAL_TIPOS = [
   'ley',
@@ -75,6 +86,12 @@ export function esLegalTipo(v: unknown): v is LegalTipo {
 
 export function esLegalJurisdiccion(v: unknown): v is LegalJurisdiccion {
   return typeof v === 'string' && (LEGAL_JURISDICCIONES as readonly string[]).includes(v);
+}
+
+export function etiquetaCategoriaLegal(categoria: string | null | undefined): string {
+  if (!categoria) return 'Sin categoría';
+  if (esLegalCategoria(categoria)) return LEGAL_CATEGORIA_LABELS[categoria];
+  return categoria;
 }
 
 export function normalizarLegalKnowledgeMetadata(

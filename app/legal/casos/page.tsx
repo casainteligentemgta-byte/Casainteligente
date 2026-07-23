@@ -9,10 +9,12 @@ import {
   LEGAL_AMBITOS,
   LEGAL_ESTADOS,
   LEGAL_PRIORIDADES,
+  LEGAL_TIPOS_CASO,
 } from '@/lib/legal/casosCatalogo';
 
 type Caso = {
   id: string;
+  codigo: string | null;
   titulo: string;
   tipo: string;
   ambito: string;
@@ -30,6 +32,7 @@ export default function LegalCasosListClient() {
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroAmbito, setFiltroAmbito] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -38,6 +41,7 @@ export default function LegalCasosListClient() {
       const qs = new URLSearchParams();
       if (filtroEstado) qs.set('estado', filtroEstado);
       if (filtroAmbito) qs.set('ambito', filtroAmbito);
+      if (filtroTipo) qs.set('tipo', filtroTipo);
       const res = await fetch(apiUrl(`/api/legal/casos?${qs}`), {
         credentials: 'include',
         cache: 'no-store',
@@ -54,7 +58,7 @@ export default function LegalCasosListClient() {
     } finally {
       setLoading(false);
     }
-  }, [filtroEstado, filtroAmbito]);
+  }, [filtroEstado, filtroAmbito, filtroTipo]);
 
   useEffect(() => {
     void cargar();
@@ -63,13 +67,18 @@ export default function LegalCasosListClient() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-white">Casos</h2>
+        <div>
+          <h2 className="text-xl font-bold text-white">Gestión de expedientes</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Casos con código único EXP-YYYY-XXX, documentos asociados y bitácora.
+          </p>
+        </div>
         <Link
           href="/legal/casos/nuevo"
           className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-3 py-2 text-sm font-bold text-black"
         >
           <Plus className="h-4 w-4" />
-          Nuevo
+          Nuevo expediente
         </Link>
       </div>
 
@@ -98,6 +107,18 @@ export default function LegalCasosListClient() {
             </option>
           ))}
         </select>
+        <select
+          value={filtroTipo}
+          onChange={(e) => setFiltroTipo(e.target.value)}
+          className="rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-200"
+        >
+          <option value="">Todas las ramas / tipos</option>
+          {LEGAL_TIPOS_CASO.map((e) => (
+            <option key={e.value} value={e.value}>
+              {e.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error ? (
@@ -113,7 +134,9 @@ export default function LegalCasosListClient() {
       ) : (
         <ul className="divide-y divide-white/5 overflow-hidden rounded-2xl border border-white/10">
           {casos.length === 0 ? (
-            <li className="px-4 py-8 text-center text-sm text-zinc-500">No hay casos con ese filtro.</li>
+            <li className="px-4 py-8 text-center text-sm text-zinc-500">
+              No hay expedientes con ese filtro.
+            </li>
           ) : (
             casos.map((c) => (
               <li key={c.id}>
@@ -123,8 +146,12 @@ export default function LegalCasosListClient() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-zinc-100">{c.titulo}</p>
+                      <p className="font-mono text-[11px] font-semibold tracking-wide text-amber-300/90">
+                        {c.codigo || 'SIN-CÓDIGO'}
+                      </p>
+                      <p className="mt-0.5 font-semibold text-zinc-100">{c.titulo}</p>
                       <p className="mt-0.5 text-xs text-zinc-500">
+                        {etiquetaDe(LEGAL_TIPOS_CASO, c.tipo)} ·{' '}
                         {etiquetaDe(LEGAL_AMBITOS, c.ambito)}
                         {c.cliente_nombre ? ` · ${c.cliente_nombre}` : ''}
                         {c.contraparte ? ` · vs ${c.contraparte}` : ''}
