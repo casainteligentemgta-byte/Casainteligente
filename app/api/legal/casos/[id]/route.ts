@@ -65,6 +65,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (k in body) patch[k] = body[k];
   }
 
+  if (patch.estado === 'resuelto' && patch.fecha_cierre == null) {
+    patch.fecha_cierre = new Date().toISOString().slice(0, 10);
+  }
+
   const { data, error } = await gate.admin
     .from('ci_legal_casos')
     .update(patch)
