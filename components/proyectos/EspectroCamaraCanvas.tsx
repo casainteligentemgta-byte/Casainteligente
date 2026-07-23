@@ -7,10 +7,19 @@ import type Konva from 'konva';
 import {
   type CamaraPlano,
   type EscalaPlano,
+  type LadoEspectro,
   type Punto2D,
+  alcanceMaxPx,
+  alcanceMinPx,
+  anguloDesdePuntos,
+  deltaAnguloDeg,
   escalaIconoCamara,
   formatDistancia,
+  fovDesdeLados,
+  ladosFov,
   puntoAsaRotacion,
+  puntoLadoEspectro,
+  wedgeAngle,
   wedgeRotation,
 } from '@/lib/proyectos/espectroCamara';
 
@@ -225,7 +234,11 @@ function CamaraNode({
   onSelect: () => void;
   onChange: (patch: Partial<CamaraPlano>) => void;
 }) {
+  const { left, right } = ladosFov(camara);
+  const totalFov = left + right;
   const asa = puntoAsaRotacion(camara);
+  const tipLeft = puntoLadoEspectro(camara, 'left');
+  const tipRight = puntoLadoEspectro(camara, 'right');
   const fill = selected ? 'rgba(34, 197, 94, 0.18)' : 'rgba(34, 197, 94, 0.1)';
   const stroke = selected ? '#22c55e' : 'rgba(74, 222, 128, 0.4)';
   const distanciaCanvas = Math.hypot(asa.x - camara.x, asa.y - camara.y) || camara.radius;
@@ -245,11 +258,29 @@ function CamaraNode({
   const fovLabelX = camara.x + Math.cos(fovRad) * fovAlong;
   const fovLabelY = camara.y + Math.sin(fovRad) * fovAlong;
   const distLabel = formatDistancia(distanciaCanvas, escala);
-  const fovLabel = formatFovLabel(camara.angle);
+  const fovLabel = formatFovLabel(totalFov);
   const hitR = Math.max(7, 5.5 * iconScale);
+  const minR = alcanceMinPx(escala);
+  const maxR = alcanceMaxPx(escala);
 
   const onDragBody = (e: KonvaEventObject<DragEvent>) => {
     onChange({ x: e.target.x(), y: e.target.y() });
+  };
+
+  const onDragLado = (lado: LadoEspectro) => (e: KonvaEventObject<DragEvent>) => {
+    const node = e.target;
+    const pointerAngle = anguloDesdePuntos(camara.x, camara.y, node.x(), node.y());
+    const d = deltaAnguloDeg(camara.rotation, pointerAngle);
+    let radius = Math.hypot(node.x() - camara.x, node.y() - camara.y);
+    if (e.evt.shiftKey) radius = Math.round(radius);
+    radius = Math.max(minR, Math.min(maxR, radius));
+
+    const nextLados =
+      lado === 'left'
+        ? fovDesdeLados(-d, right)
+        : fovDesdeLados(left, d);
+    onChange({ ...nextLados, radius });
+    node.position(puntoLadoEspectro({ ...camara, ...nextLados, radius }, lado));
   };
 
   return (
@@ -259,7 +290,7 @@ function CamaraNode({
         x={camara.x}
         y={camara.y}
         radius={camara.radius}
-        angle={camara.angle}
+        angle={wedgeAngle(camara)}
         rotation={wedgeRotation(camara)}
         fill={fill}
         stroke={stroke}
@@ -268,9 +299,22 @@ function CamaraNode({
       />
 
       <Line
+        points={[camara.x, camara.y, tipLeft.x, tipLeft.y]}
+        stroke={selected ? 'rgba(52, 211, 153, 0.75)' : 'rgba(74,222,128,0.35)'}
+        strokeWidth={(selected ? 1 : 0.7) * uiScale}
+        listening={false}
+      />
+      <Line
+        points={[camara.x, camara.y, tipRight.x, tipRight.y]}
+        stroke={selected ? 'rgba(52, 211, 153, 0.75)' : 'rgba(74,222,128,0.35)'}
+        strokeWidth={(selected ? 1 : 0.7) * uiScale}
+        listening={false}
+      />
+
+      <Line
         points={[camara.x, camara.y, asa.x, asa.y]}
-        stroke={selected ? 'rgba(34,197,94,0.55)' : 'rgba(74,222,128,0.28)'}
-        strokeWidth={(selected ? 0.9 : 0.65) * uiScale}
+        stroke={selected ? 'rgba(34,197,94,0.45)' : 'rgba(74,222,128,0.22)'}
+        strokeWidth={(selected ? 0.85 : 0.55) * uiScale}
         dash={[4 * uiScale, 3 * uiScale]}
         listening={false}
       />
@@ -285,12 +329,12 @@ function CamaraNode({
         />
       </Group>
 
-      {/* Marca del ángulo FOV sobre el espectro */}
+      {/* Marca del ángulo FOV total sobre el espectro */}
       <Group x={fovLabelX} y={fovLabelY} scaleX={uiScale} scaleY={uiScale} listening={false}>
         <Text
-          x={-14}
+          x={-18}
           y={-7}
-          width={28}
+          width={36}
           align="center"
           text={fovLabel}
           fontSize={selected ? 11 : 10}
@@ -302,6 +346,79 @@ function CamaraNode({
           listening={false}
         />
       </Group>
+
+      {selected ? (
+        <>
+          <Group
+            x={tipLeft.x}
+            y={tipLeft.y}
+            scaleX={uiScale}
+            scaleY={uiScale}
+            draggable
+            onDragStart={(e) => {
+              e.cancelBubble = true;
+              onSelect();
+            }}
+            onDragMove={onDragLado('left')}
+            onDragEnd={onDragLado('left')}
+          >
+            <Circle x={0} y={0} radius={12} fill="transparent" />
+            <Circle
+              x={0}
+              y={0}
+              radius={3.2}
+              fill="#34d399"
+              stroke="#ecfdf5"
+              strokeWidth={1}
+              listening={false}
+            />
+            <Text
+              x={-10}
+              y={6}
+              width={20}
+              align="center"
+              text={formatFovLabel(left)}
+              fontSize={8}
+              fill="#a7f3d0"
+              listening={false}
+            />
+          </Group>
+          <Group
+            x={tipRight.x}
+            y={tipRight.y}
+            scaleX={uiScale}
+            scaleY={uiScale}
+            draggable
+            onDragStart={(e) => {
+              e.cancelBubble = true;
+              onSelect();
+            }}
+            onDragMove={onDragLado('right')}
+            onDragEnd={onDragLado('right')}
+          >
+            <Circle x={0} y={0} radius={12} fill="transparent" />
+            <Circle
+              x={0}
+              y={0}
+              radius={3.2}
+              fill="#34d399"
+              stroke="#ecfdf5"
+              strokeWidth={1}
+              listening={false}
+            />
+            <Text
+              x={-10}
+              y={6}
+              width={20}
+              align="center"
+              text={formatFovLabel(right)}
+              fontSize={8}
+              fill="#a7f3d0"
+              listening={false}
+            />
+          </Group>
+        </>
+      ) : null}
 
       <Group
         x={camara.x}
@@ -505,7 +622,7 @@ export default function EspectroCamaraCanvas({
         </button>
       </div>
       <p className="pointer-events-none absolute bottom-2 left-2 z-10 rounded bg-black/50 px-2 py-1 text-[10px] text-zinc-400">
-        Rueda: zoom · Alt+arrastrar: pan · Arrastra el icono para mover
+        Rueda: zoom · Alt+arrastrar: pan · Arrastra cada borde del espectro para abrir/cerrar
       </p>
 
       <Stage

@@ -15,8 +15,18 @@ export type CamaraPlano = {
   y: number;
   /** Alcance del cono en píxeles del lienzo. */
   radius: number;
-  /** Apertura FOV en grados (del catálogo o ajuste manual). */
+  /** Apertura FOV total en grados (angleLeft + angleRight). */
   angle: number;
+  /**
+   * Grados del eje de apuntado hacia el borde izquierdo del espectro
+   * (inicio del Wedge = rotation − angleLeft).
+   */
+  angleLeft: number;
+  /**
+   * Grados del eje de apuntado hacia el borde derecho del espectro
+   * (fin del Wedge = rotation + angleRight).
+   */
+  angleRight: number;
   /** Dirección de apuntado en grados (0 = este, sentido horario en Konva). */
   rotation: number;
   label?: string;
@@ -46,6 +56,9 @@ export const ALCANCE_MAX_PX = 800;
 export const FOV_PRESETS_DEG = [90, 103] as const;
 export const FOV_MIN_DEG = 20;
 export const FOV_MAX_DEG = 160;
+/** Apertura mínima/máxima de un solo lado del espectro. */
+export const FOV_LADO_MIN_DEG = 5;
+export const FOV_LADO_MAX_DEG = 150;
 
 /** Tamaño físico del icono de cámara sobre el plano (~18 cm). */
 export const ICONO_CAMARA_TAMANO_M = 0.18;
@@ -55,6 +68,61 @@ export const ICONO_CAMARA_DISENO_W = 10;
 export function clampFov(deg: number): number {
   if (!Number.isFinite(deg)) return FOV_PRESETS_DEG[1];
   return Math.min(FOV_MAX_DEG, Math.max(FOV_MIN_DEG, deg));
+}
+
+export function clampFovLado(deg: number): number {
+  if (!Number.isFinite(deg)) return FOV_LADO_MIN_DEG;
+  return Math.min(FOV_LADO_MAX_DEG, Math.max(FOV_LADO_MIN_DEG, deg));
+}
+
+/** Normaliza diferencia angular a (−180, 180]. */
+export function deltaAnguloDeg(desde: number, hasta: number): number {
+  let d = hasta - desde;
+  while (d > 180) d -= 360;
+  while (d <= -180) d += 360;
+  return d;
+}
+
+export function ladosFov(
+  camara: Pick<CamaraPlano, 'angle' | 'angleLeft' | 'angleRight'>,
+): { left: number; right: number } {
+  const half = (typeof camara.angle === 'number' && Number.isFinite(camara.angle)
+    ? camara.angle
+    : FOV_PRESETS_DEG[1]) / 2;
+  const left =
+    typeof camara.angleLeft === 'number' && Number.isFinite(camara.angleLeft)
+      ? camara.angleLeft
+      : half;
+  const right =
+    typeof camara.angleRight === 'number' && Number.isFinite(camara.angleRight)
+      ? camara.angleRight
+      : half;
+  return { left: clampFovLado(left), right: clampFovLado(right) };
+}
+
+/** FOV simétrico: reparte el total a partes iguales. */
+export function fovSimetrico(totalDeg: number): Pick<CamaraPlano, 'angle' | 'angleLeft' | 'angleRight'> {
+  const angle = clampFov(totalDeg);
+  const half = angle / 2;
+  return { angle, angleLeft: half, angleRight: half };
+}
+
+export function fovDesdeLados(
+  leftDeg: number,
+  rightDeg: number,
+): Pick<CamaraPlano, 'angle' | 'angleLeft' | 'angleRight'> {
+  const angleLeft = clampFovLado(leftDeg);
+  const angleRight = clampFovLado(rightDeg);
+  const sum = angleLeft + angleRight;
+  if (sum > FOV_MAX_DEG) {
+    const scale = FOV_MAX_DEG / sum;
+    return {
+      angle: FOV_MAX_DEG,
+      angleLeft: clampFovLado(angleLeft * scale),
+      angleRight: clampFovLado(angleRight * scale),
+    };
+  }
+  return { angle: sum, angleLeft, angleRight };
 }
 
 /** Escala del icono en espacio del lienzo según metros/píxel del plano. */
@@ -67,10 +135,13 @@ export function escalaIconoCamara(escala: EscalaPlano | null | undefined): numbe
 const defaultModel = findCameraModel(DEFAULT_CAMERA_CATALOG_ID);
 const defaultFov =
   fovFromCatalog(DEFAULT_CAMERA_CATALOG_ID, DEFAULT_LENS_KEY) ?? FOV_PRESETS_DEG[1];
+const defaultLados = fovSimetrico(defaultFov);
 
 export const CAMARA_DEFAULT: Omit<CamaraPlano, 'id' | 'x' | 'y'> = {
   radius: 80,
-  angle: defaultFov,
+  angle: defaultLados.angle,
+  angleLeft: defaultLados.angleLeft,
+  angleRight: defaultLados.angleRight,
   rotation: -40,
   catalogId: DEFAULT_CAMERA_CATALOG_ID,
   lensKey: DEFAULT_LENS_KEY,
@@ -78,14 +149,37 @@ export const CAMARA_DEFAULT: Omit<CamaraPlano, 'id' | 'x' | 'y'> = {
   modelName: defaultModel?.model,
 };
 
-/** Konva Wedge dibuja desde `rotation` con barrido `angle`; centramos el FOV en la dirección de apuntado. */
-export function wedgeRotation(camara: Pick<CamaraPlano, 'rotation' | 'angle'>): number {
-  return camara.rotation - camara.angle / 2;
+/** Konva Wedge: inicio en borde izquierdo; barrido = left + right. */
+export function wedgeRotation(
+  camara: Pick<CamaraPlano, 'rotation' | 'angle' | 'angleLeft' | 'angleRight'>,
+): number {
+  const { left } = ladosFov(camara);
+  return camara.rotation - left;
 }
 
-/** Punto en el borde del arco (centro del FOV) para el asa de rotación. */
+export function wedgeAngle(
+  camara: Pick<CamaraPlano, 'angle' | 'angleLeft' | 'angleRight'>,
+): number {
+  const { left, right } = ladosFov(camara);
+  return left + right;
+}
+
+/** Punto en el borde del arco (eje de apuntado) para distancia/etiqueta. */
 export function puntoAsaRotacion(camara: CamaraPlano): { x: number; y: number } {
   const rad = (camara.rotation * Math.PI) / 180;
+  return {
+    x: camara.x + Math.cos(rad) * camara.radius,
+    y: camara.y + Math.sin(rad) * camara.radius,
+  };
+}
+
+export type LadoEspectro = 'left' | 'right';
+
+/** Extremo del rayo izquierdo o derecho del espectro. */
+export function puntoLadoEspectro(camara: CamaraPlano, lado: LadoEspectro): Punto2D {
+  const { left, right } = ladosFov(camara);
+  const deg = lado === 'left' ? camara.rotation - left : camara.rotation + right;
+  const rad = (deg * Math.PI) / 180;
   return {
     x: camara.x + Math.cos(rad) * camara.radius,
     y: camara.y + Math.sin(rad) * camara.radius,
@@ -147,12 +241,27 @@ export function alcanceMinPx(escala: EscalaPlano | null | undefined): number {
 }
 
 export function nuevaCamara(partial?: Partial<CamaraPlano>): CamaraPlano {
+  const base = { ...CAMARA_DEFAULT, ...partial };
+  const lados =
+    typeof partial?.angleLeft === 'number' || typeof partial?.angleRight === 'number'
+      ? fovDesdeLados(
+          partial?.angleLeft ?? base.angleLeft,
+          partial?.angleRight ?? base.angleRight,
+        )
+      : typeof partial?.angle === 'number'
+        ? fovSimetrico(partial.angle)
+        : {
+            angle: base.angle,
+            angleLeft: base.angleLeft,
+            angleRight: base.angleRight,
+          };
   return {
     id: crypto.randomUUID(),
     x: 200,
     y: 200,
     ...CAMARA_DEFAULT,
     ...partial,
+    ...lados,
   };
 }
 
@@ -162,16 +271,25 @@ export function normalizarCamara(c: CamaraPlano): CamaraPlano {
   const lensKey = c.lensKey ?? CAMARA_DEFAULT.lensKey!;
   const model = findCameraModel(catalogId);
   const fromCat = fovFromCatalog(catalogId, lensKey);
+  const angle =
+    typeof c.angle === 'number' && Number.isFinite(c.angle) && c.catalogId
+      ? c.angle
+      : (fromCat ?? c.angle ?? CAMARA_DEFAULT.angle);
+  const hasLados =
+    typeof c.angleLeft === 'number' &&
+    Number.isFinite(c.angleLeft) &&
+    typeof c.angleRight === 'number' &&
+    Number.isFinite(c.angleRight);
+  const lados = hasLados
+    ? fovDesdeLados(c.angleLeft, c.angleRight)
+    : fovSimetrico(angle);
   return {
     ...c,
     catalogId,
     lensKey,
     brand: c.brand ?? model?.brand ?? CAMARA_DEFAULT.brand,
     modelName: c.modelName ?? model?.model ?? CAMARA_DEFAULT.modelName,
-    angle:
-      typeof c.angle === 'number' && Number.isFinite(c.angle) && c.catalogId
-        ? c.angle
-        : (fromCat ?? c.angle ?? CAMARA_DEFAULT.angle),
+    ...lados,
   };
 }
 

@@ -9,6 +9,8 @@ import {
   type Punto2D,
   ALCANCE_MAX_M,
   ALCANCE_MIN_M,
+  FOV_LADO_MAX_DEG,
+  FOV_LADO_MIN_DEG,
   FOV_MAX_DEG,
   FOV_MIN_DEG,
   FOV_PRESETS_DEG,
@@ -20,8 +22,11 @@ import {
   clampFov,
   espectroStorageIds,
   formatDistancia,
+  fovDesdeLados,
+  fovSimetrico,
   guardarCamarasLocal,
   guardarEscalaLocal,
+  ladosFov,
   metrosAPx,
   normalizarCamara,
   nuevaCamara,
@@ -204,9 +209,28 @@ export default function EspectroCamaraPanel({
   );
 
   const patchCamara = (id: string, patch: Partial<CamaraPlano>) => {
-    const next = { ...patch };
-    if (typeof next.angle === 'number') next.angle = clampFov(next.angle);
-    setCamaras((prev) => prev.map((c) => (c.id === id ? { ...c, ...next } : c)));
+    setCamaras((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const merged = { ...c, ...patch };
+        if (
+          typeof patch.angleLeft === 'number' ||
+          typeof patch.angleRight === 'number'
+        ) {
+          return {
+            ...merged,
+            ...fovDesdeLados(
+              patch.angleLeft ?? merged.angleLeft,
+              patch.angleRight ?? merged.angleRight,
+            ),
+          };
+        }
+        if (typeof patch.angle === 'number') {
+          return { ...merged, ...fovSimetrico(clampFov(patch.angle)) };
+        }
+        return merged;
+      }),
+    );
   };
 
   const handleLensChange = (camaraId: string, selectedLens: string) => {
@@ -217,7 +241,7 @@ export default function EspectroCamaraPanel({
     if (typeof angle !== 'number') return;
     patchCamara(camaraId, {
       lensKey: selectedLens,
-      angle,
+      ...fovSimetrico(angle),
       brand: model.brand,
       modelName: model.model,
     });
@@ -232,7 +256,7 @@ export default function EspectroCamaraPanel({
     patchCamara(camaraId, {
       catalogId,
       lensKey: lens,
-      angle,
+      ...fovSimetrico(angle),
       brand: model.brand,
       modelName: model.model,
     });
@@ -331,6 +355,7 @@ export default function EspectroCamaraPanel({
   const alcanceM = selected && escala ? pxAMetros(selected.radius, escala) : null;
   const minPx = alcanceMinPx(escala);
   const maxPx = alcanceMaxPx(escala);
+  const ladosSelected = selected ? ladosFov(selected) : null;
 
   return (
     <div className={`space-y-3 ${className}`.trim()}>
@@ -505,16 +530,24 @@ export default function EspectroCamaraPanel({
 
           <div className="sm:col-span-3 space-y-2">
             <p className="text-[10px] font-bold uppercase text-zinc-500">
-              Espectro / FOV horizontal: {selected.angle.toFixed(1)}°
+              Espectro / FOV total:{' '}
+              {(ladosSelected ? ladosSelected.left + ladosSelected.right : selected.angle).toFixed(1)}
+              °
             </p>
             <div className="flex flex-wrap items-center gap-1.5">
               {FOV_PRESETS_DEG.map((deg) => {
-                const active = Math.abs(selected.angle - deg) < 0.05;
+                const total = ladosSelected
+                  ? ladosSelected.left + ladosSelected.right
+                  : selected.angle;
+                const active =
+                  Math.abs(total - deg) < 0.05 &&
+                  ladosSelected != null &&
+                  Math.abs(ladosSelected.left - ladosSelected.right) < 0.05;
                 return (
                   <button
                     key={deg}
                     type="button"
-                    onClick={() => patchCamara(selected.id, { angle: deg })}
+                    onClick={() => patchCamara(selected.id, fovSimetrico(deg))}
                     className={`rounded-lg border px-2.5 py-1.5 text-[11px] tabular-nums transition-colors ${
                       active
                         ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
@@ -526,31 +559,67 @@ export default function EspectroCamaraPanel({
                 );
               })}
               <label className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-400">
-                Personalizado
+                Total
                 <input
                   type="number"
                   min={FOV_MIN_DEG}
                   max={FOV_MAX_DEG}
                   step={0.1}
-                  value={Number(selected.angle.toFixed(1))}
+                  value={Number(
+                    (
+                      ladosSelected
+                        ? ladosSelected.left + ladosSelected.right
+                        : selected.angle
+                    ).toFixed(1),
+                  )}
                   onChange={(e) =>
-                    patchCamara(selected.id, { angle: clampFov(Number(e.target.value)) })
+                    patchCamara(selected.id, fovSimetrico(clampFov(Number(e.target.value))))
                   }
                   className="w-16 rounded border border-white/10 bg-transparent px-1.5 py-0.5 text-xs tabular-nums text-white outline-none"
                 />
                 °
               </label>
             </div>
-            <input
-              type="range"
-              min={FOV_MIN_DEG}
-              max={FOV_MAX_DEG}
-              step={0.1}
-              value={selected.angle}
-              onChange={(e) => patchCamara(selected.id, { angle: Number(e.target.value) })}
-              className="w-full accent-emerald-500"
-              aria-label="FOV personalizado"
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-[10px] font-bold uppercase text-zinc-500">
+                Lado izquierdo: {ladosSelected?.left.toFixed(1) ?? '—'}°
+                <input
+                  type="range"
+                  min={FOV_LADO_MIN_DEG}
+                  max={FOV_LADO_MAX_DEG}
+                  step={0.1}
+                  value={ladosSelected?.left ?? 45}
+                  onChange={(e) =>
+                    patchCamara(selected.id, {
+                      angleLeft: Number(e.target.value),
+                      angleRight: ladosSelected?.right ?? selected.angleRight,
+                    })
+                  }
+                  className="mt-1 w-full accent-emerald-500"
+                />
+              </label>
+              <label className="block text-[10px] font-bold uppercase text-zinc-500">
+                Lado derecho: {ladosSelected?.right.toFixed(1) ?? '—'}°
+                <input
+                  type="range"
+                  min={FOV_LADO_MIN_DEG}
+                  max={FOV_LADO_MAX_DEG}
+                  step={0.1}
+                  value={ladosSelected?.right ?? 45}
+                  onChange={(e) =>
+                    patchCamara(selected.id, {
+                      angleLeft: ladosSelected?.left ?? selected.angleLeft,
+                      angleRight: Number(e.target.value),
+                    })
+                  }
+                  className="mt-1 w-full accent-emerald-500"
+                />
+              </label>
+            </div>
+            <p className="text-[10px] normal-case font-normal text-zinc-600">
+              Arrastra cada borde del cono en el plano, o usa los sliders. Los presets 90°/103°
+              dejan ambos lados iguales.
+            </p>
           </div>
           <label className="block text-[10px] font-bold uppercase text-zinc-500">
             {escala && alcanceM != null
@@ -604,7 +673,8 @@ export default function EspectroCamaraPanel({
         </div>
       ) : mounted && !calibrando ? (
         <p className="text-[11px] text-zinc-500">
-          Selecciona una cámara en el lienzo para elegir modelo, lente y FOV (90° / 103° / personalizado).
+          Selecciona una cámara para ajustar cada lado del espectro (izq./der.) o usar presets 90° /
+          103°.
         </p>
       ) : null}
     </div>
