@@ -16,15 +16,27 @@ export function usdDesdeVes(montoVes: number, tasa: number): number {
 
 /**
  * Contabilidad Real V4: convierte USD a tasa oficial (BCV) hacia poder de compra
- * a tasa paralela (Binance). Con devaluación d% → real = oficial / (1 + d/100).
- * Ejemplo: 34,45% → factor ≈ 0,7438 (ingresos BCV 625 265 → reales 465 057).
+ * a tasa paralela (Binance).
+ *
+ * Dos convenciones de `devaluacionPct` (equivalentes en magnitud):
+ * - Positiva (UI / import TS): p.ej. 34.45 → real = oficial / (1 + 0.3445)
+ * - Negativa (KPIs Python / factor-1): p.ej. -25.622 → real = oficial * (1 - 0.25622)
+ *   (= oficial * factor, con factor = ingresos_real / ingresos_bcv)
  */
 export function aplicarFactorDevaluacion(montoUsd: number, devaluacionPct: number): number {
   const m = Number(montoUsd) || 0;
   const d = Number(devaluacionPct) || 0;
   if (!Number.isFinite(m)) return 0;
-  if (!Number.isFinite(d) || d <= 0) return m;
-  return m / (1 + d / 100);
+  if (!Number.isFinite(d) || d === 0) return m;
+
+  if (d > 0) {
+    return m / (1 + d / 100);
+  }
+
+  // d < 0 → factor Python (1 + d/100) ∈ (0, 1)
+  const factor = 1 + d / 100;
+  if (factor <= 0) return m;
+  return m * factor;
 }
 
 /** % devaluación implícito dado oficial (BCV) vs real (Binance). */

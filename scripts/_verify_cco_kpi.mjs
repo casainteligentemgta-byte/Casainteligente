@@ -77,7 +77,9 @@ const deval = Number(cfg?.devaluacion_pct) || 0;
 const admin = gastos * (pct / 100);
 const costo = gastos + admin;
 const saldo = ingresos - costo;
-const f = deval > 0 ? 1 / (1 + deval / 100) : 1;
+const f =
+  deval > 0 ? 1 / (1 + deval / 100) : deval < 0 ? 1 + deval / 100 : 1;
+const fSafe = f > 0 ? f : 1;
 const round = (n) => Math.round(n * 100) / 100;
 
 console.log({
@@ -93,11 +95,11 @@ console.log({
     saldo: round(saldo),
   },
   real: {
-    ingresos: round(ingresos * f),
-    gastos: round(gastos * f),
-    admin: round(admin * f),
-    costo: round(costo * f),
-    saldo: round(saldo * f),
+    ingresos: round(ingresos * fSafe),
+    gastos: round(gastos * fSafe),
+    admin: round(admin * fSafe),
+    costo: round(costo * fSafe),
+    saldo: round(saldo * fSafe),
   },
   expected: {
     ingresos: 465057.15,

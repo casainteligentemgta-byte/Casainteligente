@@ -164,8 +164,12 @@ function round2(n) {
 function aplicarDevaluacion(monto, devalPct) {
   const m = num(monto);
   const d = num(devalPct);
-  if (d <= 0) return m;
-  return m / (1 + d / 100);
+  if (!Number.isFinite(m)) return 0;
+  if (!Number.isFinite(d) || d === 0) return m;
+  if (d > 0) return m / (1 + d / 100);
+  const factor = 1 + d / 100;
+  if (factor <= 0) return m;
+  return m * factor;
 }
 
 function esIngresoLibroCcoV4(row) {

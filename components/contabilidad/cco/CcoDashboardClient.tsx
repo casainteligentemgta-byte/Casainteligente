@@ -799,12 +799,15 @@ export default function CcoDashboardClient() {
             <input
               type="number"
               step="0.01"
+              min={-99.99}
+              max={500}
               value={devaluacion}
               onChange={(e) => {
                 setDevalManual(true);
                 setDevaluacion(Number(e.target.value) || 0);
               }}
               style={selectStyle}
+              title="Positivo: Real=Oficial/(1+%/100). Negativo (Python): Real=Oficial×(1+%/100)."
             />
           </label>
           <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1131,7 +1134,15 @@ export default function CcoDashboardClient() {
                     {
                       t: 'Total ingresos',
                       v: fmtUsd(data.oficial.ingresos),
-                      f: 'Inyecciones de capital',
+                      f: 'Oficial (BCV) · inyecciones',
+                    },
+                    {
+                      t: 'Ingresos reales',
+                      v: fmtUsd(data.real.ingresos),
+                      f:
+                        data.brechaFuente === 'filas_registros_gastos'
+                          ? 'Con brecha por fila'
+                          : `Con devaluación ${devaluacion.toFixed(2)}%`,
                     },
                     {
                       t: 'Registros',

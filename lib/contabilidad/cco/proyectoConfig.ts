@@ -83,7 +83,9 @@ export async function guardarConfigCco(
   },
 ): Promise<CcoProyectoConfig> {
   const honorarios = Math.min(100, Math.max(0, num(input.honorarios_admin_pct, 15)));
-  const devaluacion = Math.max(0, num(input.devaluacion_pct, 0));
+  // Acepta +% (UI: real = oficial/(1+d/100)) y −% (Python: real = oficial*(1+d/100)).
+  const devaluacionRaw = num(input.devaluacion_pct, 0);
+  const devaluacion = Math.min(500, Math.max(-99.99, devaluacionRaw));
 
   const { error } = await supabase.from('cco_proyecto_config').upsert(
     {

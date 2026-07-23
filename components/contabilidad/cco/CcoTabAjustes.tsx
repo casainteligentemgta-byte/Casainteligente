@@ -132,7 +132,8 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
             Devaluación promedio (%)
             <input
               type="number"
-              min={0}
+              min={-99.99}
+              max={500}
               step="0.0001"
               required
               value={form.devaluacion_pct}
@@ -140,7 +141,8 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
               style={input}
             />
             <span style={{ fontWeight: 600, color: '#94A3B8', fontSize: 11 }}>
-              Contabilidad Real = Oficial ÷ (1 + %/100). Ej. 34,45% → factor ≈ 0,74 (BCV→Binance).
+              Positivo (UI): Real = Oficial ÷ (1 + %/100). Ej. 34,45%. Negativo (Python factor−1):
+              Real = Oficial × (1 + %/100). Ej. −25,62%. Ambos equivalen a BCV→Binance.
             </span>
           </label>
 
