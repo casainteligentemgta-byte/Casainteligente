@@ -15,6 +15,7 @@ const RUTAS_PROTEGIDAS = [
   '/configuracion',
   '/admin',
   '/proyectos',
+  '/nexus/vision',
   '/netvision',
   '/prueba-camara',
   '/rrhh',
@@ -23,6 +24,10 @@ const RUTAS_PROTEGIDAS = [
 ];
 
 function esRutaPublica(pathname: string): boolean {
+  // NetVision Pro vive bajo /nexus/vision pero requiere sesión (y rol admin en el dock).
+  if (pathname === '/nexus/vision' || pathname.startsWith('/nexus/vision/')) {
+    return false;
+  }
   return RUTAS_PUBLICAS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 

@@ -31,7 +31,7 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'ventas', href: '/ventas', label: 'Ventas' },
   { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
-  { id: 'netvision', href: '/netvision', label: 'NetVision' },
+  { id: 'netvision', href: '/nexus/vision', label: 'NetVision' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   { id: 'equipo', href: '/configuracion/equipo', label: 'Equipo' },
   { id: 'legal', href: '/legal', label: 'Legal' },
@@ -152,6 +152,8 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
   {
     modulo: 'netvision',
     match: (p) =>
+      p === '/nexus/vision' ||
+      p.startsWith('/nexus/vision/') ||
       p === '/netvision' ||
       p.startsWith('/netvision/') ||
       p === '/prueba-camara' ||
@@ -168,9 +170,13 @@ export function hrefPermitidoPorModulos(pathname: string, modulos: Set<ModuloNav
     pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/auth') ||
-    pathname.startsWith('/nexus') ||
     pathname.startsWith('/registro')
   ) {
+    return true;
+  }
+
+  // Nexus (excepto NetVision, que tiene gate propio abajo).
+  if (pathname.startsWith('/nexus') && !pathname.startsWith('/nexus/vision')) {
     return true;
   }
 
