@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { FileSpreadsheet, ShieldCheck } from 'lucide-react';
-import CargarFacturaCuadroModal from '@/components/contabilidad/CargarFacturaCuadroModal';
+import React, { useCallback, useRef, useState } from 'react';
+import { FileSpreadsheet, Loader2, UploadCloud } from 'lucide-react';
 import type { ProyectoCatalogo } from '@/lib/proyectos/proyectosUnificados';
 
 type Props = {
@@ -11,18 +10,87 @@ type Props = {
   onImportado?: (proyectoId: string) => void;
 };
 
+type ImportResult = {
+  parsed: number;
+  inserted: number;
+  skipped: number;
+  batches: number;
+  replaced: boolean;
+  totalEnTabla?: number;
+  mode?: string;
+};
+
 export default function CcoImportarCsvPanel({
   proyectos,
   proyectoIdInicial,
   onImportado,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
 
-  const obraHint = useMemo(() => {
-    if (!proyectoIdInicial) return 'Seleccione la obra en el diálogo de importación.';
+  const obraHint = (() => {
+    if (!proyectoIdInicial) return 'Obra activa del dashboard (opcional para este import).';
     const p = proyectos.find((x) => x.id === proyectoIdInicial);
-    return p ? `Obra sugerida: ${p.nombre}` : 'Seleccione la obra en el diálogo.';
-  }, [proyectoIdInicial, proyectos]);
+    return p ? `Obra activa: ${p.nombre}` : 'Obra activa seleccionada.';
+  })();
+
+  const runImport = useCallback(
+    async (file: File) => {
+      setBusy(true);
+      setError(null);
+      setResult(null);
+      setFileName(file.name);
+      setProgress('Leyendo CSV…');
+      try {
+        const csvText = await file.text();
+        if (!csvText.trim()) throw new Error('El archivo está vacío.');
+        setProgress('Reemplazando registros_gastos (sin duplicar)…');
+
+        const res = await fetch('/api/contabilidad/cco/gastos/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ csvText }),
+        });
+        const json = await res.json();
+        if (!res.ok || json.ok === false) {
+          throw new Error(json.error ?? 'No se pudo importar el CSV.');
+        }
+
+        const out: ImportResult = {
+          parsed: Number(json.parsed) || 0,
+          inserted: Number(json.inserted) || 0,
+          skipped: Number(json.skipped) || 0,
+          batches: Number(json.batches) || 0,
+          replaced: true,
+          totalEnTabla: Number(json.totalEnTabla) || undefined,
+          mode: typeof json.mode === 'string' ? json.mode : undefined,
+        };
+        setResult(out);
+        setProgress(null);
+        onImportado?.(proyectoIdInicial || '');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Error al importar');
+        setProgress(null);
+      } finally {
+        setBusy(false);
+        if (inputRef.current) inputRef.current.value = '';
+      }
+    },
+    [onImportado, proyectoIdInicial],
+  );
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (busy) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) void runImport(file);
+  };
 
   return (
     <div
@@ -35,89 +103,150 @@ export default function CcoImportarCsvPanel({
       }}
     >
       <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A' }}>
-        Importar CSV de compras
+        Cargar CSV Diario
       </h2>
       <p style={{ margin: '8px 0 0', fontSize: 14, color: '#64748B', lineHeight: 1.5 }}>
-        Carga histórica al libro contable <strong>sin afectar stock</strong>. El sistema usa anti-duplicados
-        (llave natural + hash) para que <strong>no se vuelva a cargar data vieja</strong>: filas iguales en el
-        CSV se omiten y las ya existentes en BD se actualizan en lugar de duplicarse.
+        Importa el export Antigravity / RANCHO (ej. <code style={code}>RANCHO 20072026.csv</code>)
+        directamente a <strong>registros_gastos</strong>. El CSV es un acumulado: cada carga{' '}
+        <strong>reemplaza</strong> el libro completo (no duplica). KPIs y libro se refrescan al terminar.
       </p>
 
-      <ul
-        style={{
-          margin: '18px 0',
-          paddingLeft: 18,
-          color: '#334155',
-          fontSize: 13,
-          lineHeight: 1.7,
-        }}
-      >
-        <li>
-          <strong>Nivel 1:</strong> dedupe dentro del propio CSV (fecha + factura + proveedor + monto + obra).
-        </li>
-        <li>
-          <strong>Nivel 2:</strong> índice único <code>dedup_hash</code> en Supabase (migración 268).
-        </li>
-        <li>
-          <strong>Nivel 3:</strong> upsert al guardar — si ya existe, actualiza; si no, crea.
-        </li>
-      </ul>
-
-      <p style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>{obraHint}</p>
-
-      <button
-        type="button"
-        disabled={proyectos.length === 0}
-        onClick={() => setOpen(true)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 10,
-          background: proyectos.length === 0 ? '#94A3B8' : '#2563EB',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 12,
-          padding: '12px 18px',
-          fontWeight: 800,
-          fontSize: 14,
-          cursor: proyectos.length === 0 ? 'wait' : 'pointer',
-        }}
-      >
-        <FileSpreadsheet size={18} />
-        {proyectos.length === 0 ? 'Cargando obras…' : 'Abrir importador CSV / tabla'}
-      </button>
+      <p style={{ fontSize: 12, color: '#64748B', margin: '12px 0 16px' }}>{obraHint}</p>
 
       <div
+        onDragEnter={(e) => {
+          e.preventDefault();
+          if (!busy) setDragOver(true);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!busy) setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        onClick={() => !busy && inputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!busy) inputRef.current?.click();
+          }
+        }}
         style={{
-          marginTop: 20,
-          display: 'flex',
-          gap: 8,
-          alignItems: 'flex-start',
-          padding: '12px 14px',
-          borderRadius: 10,
-          background: '#ECFDF5',
-          border: '1px solid #A7F3D0',
-          fontSize: 12,
-          color: '#065F46',
+          border: `2px dashed ${dragOver ? '#2563EB' : '#94A3B8'}`,
+          background: dragOver ? '#EFF6FF' : '#F8FAFC',
+          borderRadius: 14,
+          padding: '36px 20px',
+          textAlign: 'center',
+          cursor: busy ? 'wait' : 'pointer',
+          transition: 'background 0.15s, border-color 0.15s',
         }}
       >
-        <ShieldCheck size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>
-          Si ya importaste el mismo CSV, no se crearán facturas nuevas duplicadas. Verás el resumen de
-          nuevas vs actualizadas al terminar.
-        </span>
+        {busy ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <Loader2 className="animate-spin" size={32} color="#2563EB" />
+            <div style={{ fontWeight: 800, color: '#0F172A', fontSize: 15 }}>
+              {progress ?? 'Importando…'}
+            </div>
+            {fileName ? (
+              <div style={{ fontSize: 12, color: '#64748B' }}>{fileName}</div>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <UploadCloud size={36} color="#2563EB" style={{ marginBottom: 10 }} />
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#0F172A' }}>
+              Arrastra el CSV aquí o haz clic para elegir
+            </div>
+            <div style={{ marginTop: 6, fontSize: 13, color: '#64748B' }}>
+              Columnas: CLASE, FECHA, PROVEEDOR, MONTO BASE USD, COSTO TOTAL, …
+            </div>
+            <div
+              style={{
+                marginTop: 16,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                background: '#2563EB',
+                color: '#fff',
+                borderRadius: 10,
+                padding: '10px 16px',
+                fontWeight: 800,
+                fontSize: 13,
+              }}
+            >
+              <FileSpreadsheet size={16} />
+              Cargar CSV Diario
+            </div>
+          </>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          disabled={busy}
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void runImport(f);
+          }}
+        />
       </div>
 
-      <CargarFacturaCuadroModal
-        open={open}
-        onClose={() => setOpen(false)}
-        proyectos={proyectos}
-        proyectoIdInicial={proyectoIdInicial}
-        onGuardado={(pid) => {
-          setOpen(false);
-          onImportado?.(pid);
-        }}
-      />
+      {error ? (
+        <pre
+          style={{
+            marginTop: 16,
+            color: '#B91C1C',
+            fontSize: 13,
+            whiteSpace: 'pre-wrap',
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: 10,
+            padding: 12,
+          }}
+        >
+          {error}
+        </pre>
+      ) : null}
+
+      {result ? (
+        <div
+          style={{
+            marginTop: 16,
+            background: '#F0FDF4',
+            border: '1px solid #BBF7D0',
+            borderRadius: 10,
+            padding: 14,
+            color: '#14532D',
+            fontSize: 13,
+            lineHeight: 1.55,
+          }}
+        >
+          <strong style={{ fontSize: 14 }}>Importación completada</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+            <li>
+              Procesadas: <strong>{result.parsed.toLocaleString('es-VE')}</strong> filas
+            </li>
+            <li>
+              En tabla ahora: <strong>
+                {(result.totalEnTabla ?? result.inserted).toLocaleString('es-VE')}
+              </strong>{' '}
+              (reemplazo limpio, sin duplicar)
+            </li>
+            {result.skipped > 0 ? <li>Omitidas (vacías): {result.skipped}</li> : null}
+            <li>Lotes: {result.batches}{result.mode ? ` · modo ${result.mode}` : ''}</li>
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
+
+const code: React.CSSProperties = {
+  background: '#F1F5F9',
+  padding: '1px 6px',
+  borderRadius: 4,
+  fontSize: 12,
+};

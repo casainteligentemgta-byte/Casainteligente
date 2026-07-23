@@ -59,16 +59,17 @@ export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
     setError(null);
     setOkMsg(null);
     try {
-      const res = await fetch('/api/contabilidad/cco/registros', {
+      // Alta directa en registros_gastos (libro histórico CCO).
+      const res = await fetch('/api/contabilidad/cco/gastos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clase: form.clase,
-          proyecto_id: proyectoId,
           fecha: form.fecha,
           proveedor: form.proveedor || undefined,
           descripcion: form.descripcion,
           monto_usd: Number(form.monto_usd),
+          monto_base_usd: Number(form.monto_usd),
           tipo_gasto_cco: form.tipo_gasto_cco,
           capitulo_cco: form.capitulo_cco || undefined,
           subcapitulo_cco: form.subcapitulo_cco || undefined,
@@ -76,11 +77,12 @@ export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
           contrato_obra_id: form.contrato_obra_id || null,
           forma_pago: form.forma_pago,
           moneda: 'USD',
+          estado: 'PAGADO',
         }),
       });
       const json = await res.json();
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo guardar');
-      setOkMsg(`${form.clase} registrado · id ${String(json.id).slice(0, 8)}…`);
+      setOkMsg(`${form.clase} registrado · id ${String(json.id)}`);
       setForm({ ...empty, clase: form.clase, fecha: form.fecha });
       onSaved?.();
     } catch (err) {

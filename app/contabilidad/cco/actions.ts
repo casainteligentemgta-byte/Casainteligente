@@ -1,0 +1,69 @@
+'use server';
+
+/**
+ * Server Actions CCO → tabla `registros_gastos`.
+ */
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import {
+  createGastoCCO,
+  getGastosCCO,
+  getMetricasCCO,
+  type GetGastosCcoOpts,
+} from '@/lib/contabilidad/cco/registrosGastos';
+import {
+  importCsvToRegistrosGastos,
+  type ImportCsvToSupabaseResult,
+} from '@/lib/contabilidad/cco/importCsvToRegistrosGastos';
+import type { CreateGastoCcoInput, GastoRegistro, MetricasCco } from '@/types/gastos';
+
+function clientOrThrow() {
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) {
+    throw new Error('Supabase admin no configurado (SUPABASE_SERVICE_ROLE_KEY).');
+  }
+  return admin.client;
+}
+
+export async function actionGetGastosCCO(
+  opts?: GetGastosCcoOpts,
+): Promise<{ rows: GastoRegistro[]; total: number }> {
+  return getGastosCCO(clientOrThrow(), opts);
+}
+
+export async function actionGetMetricasCCO(): Promise<MetricasCco> {
+  return getMetricasCCO(clientOrThrow());
+}
+
+export async function actionCreateGastoCCO(data: CreateGastoCcoInput): Promise<GastoRegistro> {
+  return createGastoCCO(clientOrThrow(), data);
+}
+
+/**
+ * Importa CSV diario (texto o FormData con `file`) → `registros_gastos`.
+ * Siempre reemplazo limpio (no duplica al reimportar el acumulado).
+ */
+export async function importCSVToSupabase(
+  input: string | FormData | { csvText: string },
+): Promise<ImportCsvToSupabaseResult> {
+  let csvText = '';
+
+  if (typeof input === 'string') {
+    csvText = input;
+  } else if (typeof FormData !== 'undefined' && input instanceof FormData) {
+    const file = input.get('file');
+    if (file instanceof File) {
+      csvText = await file.text();
+    } else if (typeof input.get('csvText') === 'string') {
+      csvText = String(input.get('csvText'));
+    }
+  } else {
+    csvText = String((input as { csvText: string }).csvText ?? '');
+  }
+
+  if (!csvText.trim()) {
+    throw new Error('Falta el contenido CSV.');
+  }
+
+  return importCsvToRegistrosGastos(clientOrThrow(), csvText);
+}
+

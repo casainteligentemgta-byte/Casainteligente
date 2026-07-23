@@ -28,6 +28,7 @@ export default function CcoLibroMaestro({
   const [clase, setClase] = useState(claseFija ?? '');
   const [filas, setFilas] = useState<CcoLibroFila[]>([]);
   const [total, setTotal] = useState(0);
+  const [fuente, setFuente] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +41,7 @@ export default function CcoLibroMaestro({
     setLoading(true);
     setError(null);
     try {
-      const qs = new URLSearchParams({ proyecto: proyectoId, limit: '1500' });
+      const qs = new URLSearchParams({ proyecto: proyectoId, limit: '5000' });
       const claseActiva = claseFija ?? clase;
       if (claseActiva) qs.set('clase', claseActiva);
       const res = await fetch(`/api/contabilidad/cco/libro?${qs}`, { cache: 'no-store' });
@@ -48,9 +49,11 @@ export default function CcoLibroMaestro({
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error');
       setFilas(json.filas ?? []);
       setTotal(json.total ?? 0);
+      setFuente(typeof json.fuente === 'string' ? json.fuente : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
       setFilas([]);
+      setFuente(null);
     } finally {
       setLoading(false);
     }
@@ -93,6 +96,7 @@ export default function CcoLibroMaestro({
         {claseFija
           ? `Movimientos clase ${claseFija} · ${total} filas`
           : `Vista unificada V4: gastos + ingresos + contratos + presupuestos · ${total} filas`}
+        {fuente === 'registros_gastos' ? ' · fuente registros_gastos' : null}
       </p>
       {error ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{error}</p> : null}
       {loading ? (

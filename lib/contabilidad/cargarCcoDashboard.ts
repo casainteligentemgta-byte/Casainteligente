@@ -14,6 +14,8 @@ import {
   esIngresoLibroCcoV4,
   fetchAllRows,
 } from '@/lib/contabilidad/cco/fetchAllRows';
+import { tieneRegistrosGastos } from '@/lib/contabilidad/cco/registrosGastos';
+import { cargarDashboardDesdeRegistrosGastos } from '@/lib/contabilidad/cco/cargarDashboardDesdeRegistrosGastos';
 
 export type CcoSeriePunto = {
   periodo: string;
@@ -176,6 +178,33 @@ export async function cargarCcoDashboard(
   const proyectoNombre = proyectoId
     ? proyectos.find((p) => p.id === proyectoId)?.nombre ?? 'Obra seleccionada'
     : 'Todas las obras';
+
+  // Preferir histórico en registros_gastos (~2462 filas RANCHO) cuando exista.
+  if (await tieneRegistrosGastos(supabase)) {
+    let honorariosPct = 15;
+    let devaluacionDesdeConfig: number | null = null;
+    if (proyectoId) {
+      const { data: cfg } = await supabase
+        .from('cco_proyecto_config')
+        .select('honorarios_admin_pct,devaluacion_pct')
+        .eq('proyecto_id', proyectoId)
+        .maybeSingle();
+      if (cfg && (cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct != null) {
+        honorariosPct = num((cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct);
+      }
+      if (cfg && (cfg as { devaluacion_pct?: number }).devaluacion_pct != null) {
+        devaluacionDesdeConfig = num((cfg as { devaluacion_pct?: number }).devaluacion_pct);
+      }
+    }
+    const devaluacionPromedio = devaluacionOverride ?? devaluacionDesdeConfig ?? 0;
+    return cargarDashboardDesdeRegistrosGastos(supabase, {
+      proyectoId,
+      proyectoNombre,
+      proyectos,
+      honorariosPct,
+      devaluacionPromedio,
+    });
+  }
 
   const selectComprasBase =
     'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name,origen,origen_v4_id';

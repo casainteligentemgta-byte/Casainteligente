@@ -46,9 +46,9 @@ type NavId =
 /** Menú lateral CCO V4. */
 const NAV_ITEMS: { id: NavId; label: string; ready: boolean; hint?: string }[] = [
   { id: 'dashboard', label: 'Dashboard', ready: true },
-  { id: 'importar-csv', label: 'Importar CSV', ready: true, hint: 'Anti-duplicados' },
+  { id: 'importar-csv', label: 'CSV Diario', ready: true, hint: 'registros_gastos' },
   { id: 'importar-pdf', label: 'Importar PDF', ready: true, hint: 'OCR / tabla' },
-  { id: 'importar-v4', label: 'Importar V4 SQLite', ready: true, hint: 'JSON ETL' },
+  { id: 'importar-v4', label: 'Importar V4', ready: true, hint: 'CSV / JSON' },
   { id: 'libro', label: 'Libro maestro', ready: true },
   { id: 'presupuestos', label: 'Presupuestos', ready: true },
   { id: 'auditoria', label: 'Auditoría', ready: true },
@@ -726,7 +726,13 @@ export default function CcoDashboardClient() {
       ) : null}
 
       {nav === 'importar-v4' ? (
-        <CcoImportarV4Panel proyectoId={proyectoId} onDone={() => void cargar()} />
+        <CcoImportarV4Panel
+          proyectoId={proyectoId}
+          onDone={() => {
+            void cargar();
+            setNav('dashboard');
+          }}
+        />
       ) : null}
 
       {nav === 'libro' ? <CcoLibroMaestro proyectoId={proyectoId} /> : null}

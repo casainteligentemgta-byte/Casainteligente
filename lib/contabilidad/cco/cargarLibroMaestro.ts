@@ -9,6 +9,11 @@ import {
   esIngresoLibroCcoV4,
   fetchAllRows,
 } from '@/lib/contabilidad/cco/fetchAllRows';
+import {
+  gastoRegistroALibroFila,
+  getGastosCCO,
+  tieneRegistrosGastos,
+} from '@/lib/contabilidad/cco/registrosGastos';
 
 function num(v: unknown): number {
   const n = Number(v);
@@ -17,11 +22,33 @@ function num(v: unknown): number {
 
 export async function cargarLibroMaestro(
   supabase: SupabaseClient,
-  params: { proyectoId: string; clase?: string | null; limit?: number },
-): Promise<{ filas: CcoLibroFila[]; total: number }> {
+  params: {
+    proyectoId: string;
+    clase?: string | null;
+    limit?: number;
+    proveedor?: string | null;
+    capitulo?: string | null;
+  },
+): Promise<{ filas: CcoLibroFila[]; total: number; fuente?: 'registros_gastos' | 'cco_fusion' }> {
   const proyectoId = params.proyectoId;
   const limit = params.limit ?? 50_000;
   const claseFiltro = params.clase?.trim().toUpperCase() || null;
+
+  // Preferir histórico importado en registros_gastos (CSV RANCHO / ~2462 filas).
+  if (await tieneRegistrosGastos(supabase)) {
+    const { rows, total } = await getGastosCCO(supabase, {
+      clase: claseFiltro,
+      limit,
+      proveedor: params.proveedor,
+      capitulo: params.capitulo,
+    });
+    return {
+      filas: rows.map(gastoRegistroALibroFila),
+      total,
+      fuente: 'registros_gastos',
+    };
+  }
+
   const filas: CcoLibroFila[] = [];
 
   const { data: cfg } = await supabase
@@ -215,5 +242,5 @@ export async function cargarLibroMaestro(
     return a.clase.localeCompare(b.clase);
   });
 
-  return { filas: filas.slice(0, limit), total: filas.length };
+  return { filas: filas.slice(0, limit), total: filas.length, fuente: 'cco_fusion' };
 }

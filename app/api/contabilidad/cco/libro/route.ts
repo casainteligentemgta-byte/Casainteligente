@@ -17,10 +17,18 @@ export async function GET(req: Request) {
     }
 
     const clase = searchParams.get('clase')?.trim() || null;
+    const proveedor = searchParams.get('proveedor')?.trim() || null;
+    const capitulo = searchParams.get('capitulo')?.trim() || null;
     const limitRaw = Number(searchParams.get('limit'));
-    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 5000) : 2000;
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 10_000) : 5000;
 
-    const data = await cargarLibroMaestro(admin.client, { proyectoId, clase, limit });
+    const data = await cargarLibroMaestro(admin.client, {
+      proyectoId,
+      clase,
+      limit,
+      proveedor,
+      capitulo,
+    });
     return NextResponse.json({ ok: true, ...data });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al cargar libro CCO.';
