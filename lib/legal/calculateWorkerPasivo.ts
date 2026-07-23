@@ -5,7 +5,11 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { LaborCalculator } from '@/lib/legal/calcularPrestacionAntiguedad';
+import {
+  LaborCalculator,
+  type AdvertenciaCalculo,
+  type PasoAuditoriaCalculo,
+} from '@/lib/legal/calcularPrestacionAntiguedad';
 
 export type WorkerPasivoResult = {
   worker: string | null;
@@ -22,6 +26,12 @@ export type WorkerPasivoResult = {
   /** Art. 142 LOTTT — provisionar el monto mayor */
   monto_a_provisionar: number;
   criterio_provision: 'garantia_trimestral' | 'retroactivo' | 'empatados';
+  anios_servicio?: number;
+  fraccion_superior_seis_meses?: boolean;
+  auditoria: PasoAuditoriaCalculo[];
+  advertencias: AdvertenciaCalculo[];
+  metodo: 'deterministico_lott_142';
+  version_formula: string;
   referencias: {
     utilidades: string;
     bono_vacacional: string;
@@ -100,36 +110,47 @@ export async function calculateWorkerPasivo(
   }
 
   const fechaFin = (options?.fechaFin || todayIso()).slice(0, 10);
-  const calc = new LaborCalculator(
-    Number(latestSalary.base_salary),
-    diasUtilidades,
-    diasBono,
-  );
 
-  const todo = calc.calcularTodo(joinDate, fechaFin);
-  const trimestral = todo.garantia_trimestral;
-  const retroactivo = todo.retroactivo?.retroactivo ?? 0;
+  try {
+    const calc = new LaborCalculator(
+      Number(latestSalary.base_salary),
+      diasUtilidades,
+      diasBono,
+    );
+    const todo = calc.calcularTodo(joinDate, fechaFin);
+    const trimestral = todo.garantia_trimestral;
+    const retroactivo = todo.retroactivo?.retroactivo ?? 0;
 
-  return {
-    worker: worker.full_name ?? null,
-    worker_id: id,
-    salario_base_mensual: Number(latestSalary.base_salary),
-    salario_effective_date: latestSalary.effective_date
-      ? String(latestSalary.effective_date).slice(0, 10)
-      : null,
-    dias_utilidades: diasUtilidades,
-    dias_bono_vacacional: diasBono,
-    fecha_inicio: joinDate,
-    fecha_fin: fechaFin,
-    salario_integral_diario: todo.salario_integral_diario,
-    garantia_trimestral: trimestral,
-    retroactivo_acumulado: round2(retroactivo),
-    monto_a_provisionar: todo.monto_a_provisionar,
-    criterio_provision: todo.criterio_provision,
-    referencias: {
-      utilidades: 'Art. 131 LOTTT',
-      bono_vacacional: 'Art. 190 LOTTT',
-      garantia_y_retroactivo: 'Art. 142 LOTTT',
-    },
-  };
+    return {
+      worker: worker.full_name ?? null,
+      worker_id: id,
+      salario_base_mensual: Number(latestSalary.base_salary),
+      salario_effective_date: latestSalary.effective_date
+        ? String(latestSalary.effective_date).slice(0, 10)
+        : null,
+      dias_utilidades: diasUtilidades,
+      dias_bono_vacacional: diasBono,
+      fecha_inicio: joinDate,
+      fecha_fin: fechaFin,
+      salario_integral_diario: todo.salario_integral_diario,
+      garantia_trimestral: trimestral,
+      retroactivo_acumulado: round2(retroactivo),
+      monto_a_provisionar: todo.monto_a_provisionar,
+      criterio_provision: todo.criterio_provision,
+      anios_servicio: todo.retroactivo?.anios_servicio,
+      fraccion_superior_seis_meses: todo.retroactivo?.fraccion_superior_seis_meses,
+      auditoria: todo.auditoria,
+      advertencias: todo.advertencias,
+      metodo: todo.metodo,
+      version_formula: todo.version_formula,
+      referencias: {
+        utilidades: 'Art. 131 LOTTT',
+        bono_vacacional: 'Art. 190 LOTTT',
+        garantia_y_retroactivo: 'Art. 142 LOTTT',
+      },
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg };
+  }
 }
