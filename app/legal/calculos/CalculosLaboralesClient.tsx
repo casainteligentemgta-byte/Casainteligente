@@ -1,13 +1,27 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Calculator, CheckCircle2, Loader2, ShieldCheck, UserRound } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calculator,
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
   LaborCalculator,
   type ResultadoLaborCalculator,
 } from '@/lib/legal/calcularPrestacionAntiguedad';
 import type { WorkerPasivoResult } from '@/lib/legal/calculateWorkerPasivo';
+import {
+  REGIMEN_CCT_CONSTRUCCION,
+  REGIMEN_LOTT,
+  REGIMENES_PRESTACIONES,
+  type RegimenPrestacionesId,
+} from '@/lib/legal/regimenesPrestaciones';
+import CargarColectivoLegalPanel from '@/components/legal/CargarColectivoLegalPanel';
 
 function money(n: number) {
   return n.toLocaleString('es-VE', {
@@ -99,9 +113,10 @@ function AuditoriaPanel({
 }
 
 export default function CalculosLaboralesClient() {
+  const [regimenId, setRegimenId] = useState<RegimenPrestacionesId>('lott');
   const [salario, setSalario] = useState('500');
-  const [utilidades, setUtilidades] = useState('30');
-  const [bono, setBono] = useState('15');
+  const [utilidades, setUtilidades] = useState(String(REGIMEN_LOTT.dias_utilidades));
+  const [bono, setBono] = useState(String(REGIMEN_LOTT.dias_bono_vacacional));
   const [inicio, setInicio] = useState('2020-01-15');
   const [fin, setFin] = useState('2026-07-16');
   const [loading, setLoading] = useState(false);
@@ -114,6 +129,16 @@ export default function CalculosLaboralesClient() {
   const [pasivoError, setPasivoError] = useState<string | null>(null);
   const [pasivoHint, setPasivoHint] = useState<string | null>(null);
   const [pasivo, setPasivo] = useState<WorkerPasivoResult | null>(null);
+
+  function aplicarRegimen(id: RegimenPrestacionesId) {
+    setRegimenId(id);
+    if (id === 'personalizado') return;
+    const r = REGIMENES_PRESTACIONES.find((x) => x.id === id);
+    if (!r) return;
+    setUtilidades(String(r.dias_utilidades));
+    setBono(String(r.dias_bono_vacacional));
+    setRemoto(null);
+  }
 
   const local = useMemo(() => {
     const s = Number(salario);
@@ -220,14 +245,58 @@ export default function CalculosLaboralesClient() {
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
           No requiere Excel ni entrenamiento. Aplica fórmulas fijas: salario integral, garantía
           trimestral (literal a) y retroactivo de 60 días por año o fracción superior a 6 meses
-          (literal f). Se provisiona el monto mayor, con desglose paso a paso.
+          (literal f). Puede cargar la convención colectiva y la contratación colectiva obrera;
+          elija el régimen de días (LOTTT o CCT) y se provisiona el monto mayor con desglose
+          auditable.
         </p>
       </header>
+
+      <CargarColectivoLegalPanel
+        onRegimenCctSugerido={() => aplicarRegimen('cct_construccion')}
+      />
 
       <section className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
           Simulación manual
         </h3>
+
+        <div className="flex flex-wrap gap-2">
+          {REGIMENES_PRESTACIONES.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => aplicarRegimen(r.id)}
+              className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+                regimenId === r.id
+                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                  : 'border-white/10 text-zinc-400 hover:bg-white/5'
+              }`}
+            >
+              <span className="block font-semibold">{r.label}</span>
+              <span className="mt-0.5 block text-[10px] opacity-80">{r.descripcion}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => aplicarRegimen('personalizado')}
+            className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+              regimenId === 'personalizado'
+                ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                : 'border-white/10 text-zinc-400 hover:bg-white/5'
+            }`}
+          >
+            <span className="block font-semibold">Personalizado</span>
+            <span className="mt-0.5 block text-[10px] opacity-80">
+              Edite días a mano según su convenio
+            </span>
+          </button>
+        </div>
+        {regimenId === 'cct_construccion' ? (
+          <p className="text-[11px] text-zinc-500">
+            {REGIMEN_CCT_CONSTRUCCION.referencia}. Confirme que coincida con la CCT que cargó.
+          </p>
+        ) : null}
+
         <form
           onSubmit={calcularApi}
           className="grid gap-3 rounded-2xl border border-amber-500/20 bg-[#0c1018] p-4 sm:grid-cols-3"
@@ -244,22 +313,28 @@ export default function CalculosLaboralesClient() {
             />
           </label>
           <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Días utilidades (mín. 30)
+            Días utilidades {regimenId === 'lott' ? '(mín. 30)' : ''}
             <input
               type="number"
               min={0}
               value={utilidades}
-              onChange={(e) => setUtilidades(e.target.value)}
+              onChange={(e) => {
+                setUtilidades(e.target.value);
+                setRegimenId('personalizado');
+              }}
               className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
           <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Días bono vacacional (mín. 15)
+            Días bono vacacional {regimenId === 'lott' ? '(mín. 15)' : ''}
             <input
               type="number"
               min={0}
               value={bono}
-              onChange={(e) => setBono(e.target.value)}
+              onChange={(e) => {
+                setBono(e.target.value);
+                setRegimenId('personalizado');
+              }}
               className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
