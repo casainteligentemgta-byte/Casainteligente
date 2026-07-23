@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Printer, Save } from 'lucide-react';
+import { Eye, Loader2, Printer, Save, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
@@ -18,6 +18,8 @@ import {
 } from '@/lib/legal/documentoEstructurado';
 import DocumentBlocksView from '@/components/legal/DocumentBlocksView';
 import GenerarPDFButton from '@/components/legal/GenerarPDFButton';
+import PrevisualizarDocumentoLegalModal from '@/components/legal/PrevisualizarDocumentoLegalModal';
+import EnviarDocumentoLegalModal from '@/components/legal/EnviarDocumentoLegalModal';
 
 const campo =
   'mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-500/40';
@@ -50,6 +52,8 @@ export default function DocumentoDetallePage() {
   const [modo, setModo] = useState<Modo>('vista');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [enviarOpen, setEnviarOpen] = useState(false);
 
   const cargar = useCallback(async () => {
     if (!id) return;
@@ -205,6 +209,22 @@ export default function DocumentoDetallePage() {
           ← Documentos
         </Link>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20"
+          >
+            <Eye className="h-4 w-4" />
+            Previsualizar
+          </button>
+          <button
+            type="button"
+            onClick={() => setEnviarOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-900/40"
+          >
+            <Send className="h-4 w-4" />
+            Enviar
+          </button>
           <a
             href={apiUrl(`/api/legal/documentos/${id}?format=print`)}
             target="_blank"
@@ -329,6 +349,20 @@ export default function DocumentoDetallePage() {
         <code className="text-zinc-400">paragraph</code> → párrafo,{' '}
         <code className="text-zinc-400">clause</code> → cláusula editable.
       </p>
+
+      <PrevisualizarDocumentoLegalModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        kind="documento"
+        id={id}
+        titulo={titulo}
+      />
+      <EnviarDocumentoLegalModal
+        open={enviarOpen}
+        onOpenChange={setEnviarOpen}
+        documentId={id}
+        titulo={titulo}
+      />
     </div>
   );
 }

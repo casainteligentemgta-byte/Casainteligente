@@ -1,13 +1,27 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Calculator, Loader2, UserRound } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calculator,
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
   LaborCalculator,
   type ResultadoLaborCalculator,
 } from '@/lib/legal/calcularPrestacionAntiguedad';
 import type { WorkerPasivoResult } from '@/lib/legal/calculateWorkerPasivo';
+import {
+  REGIMEN_CCT_CONSTRUCCION,
+  REGIMEN_LOTT,
+  REGIMENES_PRESTACIONES,
+  type RegimenPrestacionesId,
+} from '@/lib/legal/regimenesPrestaciones';
+import CargarColectivoLegalPanel from '@/components/legal/CargarColectivoLegalPanel';
 
 function money(n: number) {
   return n.toLocaleString('es-VE', {
@@ -20,14 +34,89 @@ function labelCriterio(
   c: WorkerPasivoResult['criterio_provision'] | ResultadoLaborCalculator['criterio_provision'],
 ) {
   if (c === 'retroactivo') return 'Retroactivo (lit. f)';
-  if (c === 'empatados') return 'Empate garantia / retroactivo';
-  return 'Garantia trimestral (lit. a)';
+  if (c === 'empatados') return 'Empate garantía / retroactivo';
+  return 'Garantía trimestral (lit. a)';
+}
+
+function AuditoriaPanel({
+  auditoria,
+  advertencias,
+  version,
+}: {
+  auditoria?: ResultadoLaborCalculator['auditoria'] | WorkerPasivoResult['auditoria'];
+  advertencias?: ResultadoLaborCalculator['advertencias'] | WorkerPasivoResult['advertencias'];
+  version?: string;
+}) {
+  if (!auditoria?.length && !advertencias?.length) return null;
+  return (
+    <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+          <ShieldCheck className="h-4 w-4 text-emerald-300" />
+          Desglose auditable (fórmulas LOTTT)
+        </p>
+        {version ? (
+          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+            fórmula v{version}
+          </span>
+        ) : null}
+      </div>
+      {advertencias && advertencias.length > 0 ? (
+        <ul className="space-y-1.5">
+          {advertencias.map((a) => (
+            <li
+              key={a.codigo}
+              className="flex gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100"
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{a.mensaje}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {auditoria && auditoria.length > 0 ? (
+        <ol className="space-y-2">
+          {auditoria.map((p) => (
+            <li
+              key={`${p.paso}-${p.titulo}`}
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold text-zinc-200">
+                  <span className="mr-1.5 text-amber-300/90">{p.paso}.</span>
+                  {p.titulo}
+                </p>
+                <p className="font-mono text-sm font-bold text-white">
+                  {p.unidad === 'años' ? p.valor : money(p.valor)}
+                  {p.unidad === 'años' ? ' año(s)' : ''}
+                </p>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-zinc-500">{p.formula}</p>
+              {p.detalle ? (
+                <p className="mt-0.5 text-[11px] text-zinc-400">{p.detalle}</p>
+              ) : null}
+              {p.referencia ? (
+                <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-600">
+                  {p.referencia}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      <p className="text-[11px] leading-relaxed text-zinc-600">
+        Cálculo determinístico según Art. 142 LOTTT (no usa IA ni Excel). Verifique salario,
+        fechas y días de utilidades/bono antes de provisionar.
+      </p>
+    </div>
+  );
 }
 
 export default function CalculosLaboralesClient() {
+  const [regimenId, setRegimenId] = useState<RegimenPrestacionesId>('lott');
   const [salario, setSalario] = useState('500');
-  const [utilidades, setUtilidades] = useState('30');
-  const [bono, setBono] = useState('15');
+  const [utilidades, setUtilidades] = useState(String(REGIMEN_LOTT.dias_utilidades));
+  const [bono, setBono] = useState(String(REGIMEN_LOTT.dias_bono_vacacional));
   const [inicio, setInicio] = useState('2020-01-15');
   const [fin, setFin] = useState('2026-07-16');
   const [loading, setLoading] = useState(false);
@@ -41,6 +130,16 @@ export default function CalculosLaboralesClient() {
   const [pasivoHint, setPasivoHint] = useState<string | null>(null);
   const [pasivo, setPasivo] = useState<WorkerPasivoResult | null>(null);
 
+  function aplicarRegimen(id: RegimenPrestacionesId) {
+    setRegimenId(id);
+    if (id === 'personalizado') return;
+    const r = REGIMENES_PRESTACIONES.find((x) => x.id === id);
+    if (!r) return;
+    setUtilidades(String(r.dias_utilidades));
+    setBono(String(r.dias_bono_vacacional));
+    setRemoto(null);
+  }
+
   const local = useMemo(() => {
     const s = Number(salario);
     if (!Number.isFinite(s) || s < 0) return null;
@@ -51,10 +150,13 @@ export default function CalculosLaboralesClient() {
         Number(bono) || 15,
       );
       return calc.calcularTodo(inicio || null, fin || null);
-    } catch {
-      return null;
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Error de cálculo' } as const;
     }
   }, [salario, utilidades, bono, inicio, fin]);
+
+  const localOk = local && !('error' in local) ? local : null;
+  const localErr = local && 'error' in local ? local.error : null;
 
   async function calcularApi(e: React.FormEvent) {
     e.preventDefault();
@@ -125,27 +227,76 @@ export default function CalculosLaboralesClient() {
     }
   }
 
-  const r = remoto ?? local;
+  const r = remoto ?? localOk;
   const retro = r?.retroactivo;
+  const coherente =
+    remoto && localOk
+      ? Math.abs(remoto.monto_a_provisionar - localOk.monto_a_provisionar) < 0.015
+      : null;
 
   return (
     <div className="space-y-8">
       <header>
         <p className="flex items-center gap-2 text-sm text-amber-200/80">
           <Calculator className="h-4 w-4" />
-          LaborCalculator - Art. 142 LOTTT
+          LaborCalculator · Art. 142 LOTTT · fiable y auditable
         </p>
         <h2 className="mt-2 text-2xl font-bold text-white">Prestaciones sociales</h2>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Salario integral, garantia trimestral (literal a) y retroactivo de 60 dias por ano o
-          fraccion &gt; 6 meses (literal f). Se provisiona el monto mayor.
+          No requiere Excel ni entrenamiento. Aplica fórmulas fijas: salario integral, garantía
+          trimestral (literal a) y retroactivo de 60 días por año o fracción superior a 6 meses
+          (literal f). Puede cargar la convención colectiva y la contratación colectiva obrera;
+          elija el régimen de días (LOTTT o CCT) y se provisiona el monto mayor con desglose
+          auditable.
         </p>
       </header>
 
+      <CargarColectivoLegalPanel
+        onRegimenCctSugerido={() => aplicarRegimen('cct_construccion')}
+      />
+
       <section className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
-          Simulacion manual
+          Simulación manual
         </h3>
+
+        <div className="flex flex-wrap gap-2">
+          {REGIMENES_PRESTACIONES.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => aplicarRegimen(r.id)}
+              className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+                regimenId === r.id
+                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                  : 'border-white/10 text-zinc-400 hover:bg-white/5'
+              }`}
+            >
+              <span className="block font-semibold">{r.label}</span>
+              <span className="mt-0.5 block text-[10px] opacity-80">{r.descripcion}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => aplicarRegimen('personalizado')}
+            className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+              regimenId === 'personalizado'
+                ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                : 'border-white/10 text-zinc-400 hover:bg-white/5'
+            }`}
+          >
+            <span className="block font-semibold">Personalizado</span>
+            <span className="mt-0.5 block text-[10px] opacity-80">
+              Edite días a mano según su convenio
+            </span>
+          </button>
+        </div>
+        {regimenId === 'cct_construccion' ? (
+          <p className="text-[11px] text-zinc-500">
+            {REGIMEN_CCT_CONSTRUCCION.referencia}. Confirme que coincida con la CCT que cargó.
+          </p>
+        ) : null}
+
         <form
           onSubmit={calcularApi}
           className="grid gap-3 rounded-2xl border border-amber-500/20 bg-[#0c1018] p-4 sm:grid-cols-3"
@@ -162,22 +313,28 @@ export default function CalculosLaboralesClient() {
             />
           </label>
           <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Dias utilidades
+            Días utilidades {regimenId === 'lott' ? '(mín. 30)' : ''}
             <input
               type="number"
               min={0}
               value={utilidades}
-              onChange={(e) => setUtilidades(e.target.value)}
+              onChange={(e) => {
+                setUtilidades(e.target.value);
+                setRegimenId('personalizado');
+              }}
               className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
           <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Dias bono vacacional
+            Días bono vacacional {regimenId === 'lott' ? '(mín. 15)' : ''}
             <input
               type="number"
               min={0}
               value={bono}
-              onChange={(e) => setBono(e.target.value)}
+              onChange={(e) => {
+                setBono(e.target.value);
+                setRegimenId('personalizado');
+              }}
               className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
@@ -210,16 +367,29 @@ export default function CalculosLaboralesClient() {
               ) : (
                 <Calculator className="h-4 w-4" />
               )}
-              Calcular
+              Calcular y auditar
             </button>
           </div>
         </form>
 
-        {error && (
+        {(error || localErr) && (
           <p className="rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">
-            {error}
+            {error || localErr}
           </p>
         )}
+
+        {coherente === true ? (
+          <p className="flex items-center gap-2 text-xs text-emerald-300/90">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Resultado del servidor coincide con el cálculo local (mismo Art. 142).
+          </p>
+        ) : null}
+        {coherente === false ? (
+          <p className="flex items-center gap-2 text-xs text-amber-200">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Diferencia entre cálculo local y servidor — revise e intente de nuevo.
+          </p>
+        ) : null}
 
         {r && (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -237,32 +407,40 @@ export default function CalculosLaboralesClient() {
             </div>
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
-                Garantia trimestral - lit. a)
+                Garantía trimestral · lit. a)
               </p>
               <p className="mt-1 text-2xl font-bold text-amber-100">
                 {money(r.garantia_trimestral)}
               </p>
               <p className="mt-1 text-xs text-zinc-500">
-                4 trimestres ? {money(r.estimacion_anual_garantias)}
+                4 trimestres ≈ {money(r.estimacion_anual_garantias)}
               </p>
             </div>
             {retro && (
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:col-span-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                  Retroactivo - {retro.referencia_retroactivo}
+                  Retroactivo · {retro.referencia_retroactivo}
                 </p>
                 <p className="mt-1 text-3xl font-bold text-white">{money(retro.retroactivo)}</p>
                 <p className="mt-2 text-xs text-zinc-500">
-                  {retro.fecha_inicio} ? {retro.fecha_fin}: {retro.anios_completos} anos +{' '}
-                  {retro.meses_fraccion} meses ?{' '}
-                  <strong className="text-zinc-300">{retro.anios_servicio}</strong> ano(s)
-                  computables - {retro.dias_retroactivo_por_anio} dias
+                  {retro.fecha_inicio} → {retro.fecha_fin}: {retro.anios_completos} años +{' '}
+                  {retro.meses_fraccion} meses
+                  {'dias_fraccion' in retro && retro.dias_fraccion != null
+                    ? ` + ${retro.dias_fraccion} días`
+                    : ''}{' '}
+                  → <strong className="text-zinc-300">{retro.anios_servicio}</strong> año(s)
+                  computables · {retro.dias_retroactivo_por_anio} días
+                  {'fraccion_superior_seis_meses' in retro
+                    ? retro.fraccion_superior_seis_meses
+                      ? ' · fracción > 6 meses aplicada'
+                      : ' · sin fracción > 6 meses'
+                    : ''}
                 </p>
               </div>
             )}
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-4 sm:col-span-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
-                Monto a provisionar - Art. 142 (mayor)
+                Monto a provisionar · Art. 142 (mayor)
               </p>
               <p className="mt-1 text-3xl font-bold text-emerald-100">
                 {money(r.monto_a_provisionar)}
@@ -271,6 +449,13 @@ export default function CalculosLaboralesClient() {
                 Criterio: {labelCriterio(r.criterio_provision)}
               </p>
             </div>
+            <div className="sm:col-span-2">
+              <AuditoriaPanel
+                auditoria={r.auditoria}
+                advertencias={r.advertencias}
+                version={r.version_formula}
+              />
+            </div>
           </div>
         )}
       </section>
@@ -278,7 +463,7 @@ export default function CalculosLaboralesClient() {
       <section className="space-y-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
           <UserRound className="h-4 w-4" />
-          Pasivo por trabajador (workers - benefit_configs - salary_history)
+          Pasivo por trabajador (workers · benefit_configs · salary_history)
         </h3>
         <form
           onSubmit={calcularPasivo}
@@ -331,13 +516,17 @@ export default function CalculosLaboralesClient() {
             <div className="sm:col-span-2">
               <p className="text-lg font-bold text-white">{pasivo.worker ?? pasivo.worker_id}</p>
               <p className="text-xs text-zinc-500">
-                {pasivo.fecha_inicio} ? {pasivo.fecha_fin} - salario {money(pasivo.salario_base_mensual)}{' '}
-                (desde {pasivo.salario_effective_date ?? '?'}) - util. {pasivo.dias_utilidades}d -
-                bono {pasivo.dias_bono_vacacional}d
+                {pasivo.fecha_inicio} → {pasivo.fecha_fin} · salario{' '}
+                {money(pasivo.salario_base_mensual)} (desde{' '}
+                {pasivo.salario_effective_date ?? '?'}) · util. {pasivo.dias_utilidades}d · bono{' '}
+                {pasivo.dias_bono_vacacional}d
+                {pasivo.anios_servicio != null
+                  ? ` · ${pasivo.anios_servicio} año(s) computables`
+                  : ''}
               </p>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-              <p className="text-[10px] uppercase text-zinc-500">Garantia trimestral</p>
+              <p className="text-[10px] uppercase text-zinc-500">Garantía trimestral</p>
               <p className="mt-1 text-xl font-bold text-white">
                 {money(pasivo.garantia_trimestral)}
               </p>
@@ -350,15 +539,22 @@ export default function CalculosLaboralesClient() {
             </div>
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-4 sm:col-span-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
-                Monto a provisionar - {pasivo.referencias.garantia_y_retroactivo}
+                Monto a provisionar · {pasivo.referencias.garantia_y_retroactivo}
               </p>
               <p className="mt-1 text-3xl font-bold text-emerald-100">
                 {money(pasivo.monto_a_provisionar)}
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                Criterio: {labelCriterio(pasivo.criterio_provision)} - integral diario{' '}
+                Criterio: {labelCriterio(pasivo.criterio_provision)} · integral diario{' '}
                 {money(pasivo.salario_integral_diario)}
               </p>
+            </div>
+            <div className="sm:col-span-2">
+              <AuditoriaPanel
+                auditoria={pasivo.auditoria}
+                advertencias={pasivo.advertencias}
+                version={pasivo.version_formula}
+              />
             </div>
           </div>
         )}

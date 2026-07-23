@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, Loader2, Plus } from 'lucide-react';
+import { Eye, FileText, Loader2, Plus, Send } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
   LEGAL_ESTADOS_DOCUMENTO,
   LEGAL_TIPOS_DOCUMENTO,
 } from '@/lib/legal/documentosCatalogo';
 import { etiquetaDe } from '@/lib/legal/casosCatalogo';
+import PrevisualizarDocumentoLegalModal from '@/components/legal/PrevisualizarDocumentoLegalModal';
+import EnviarDocumentoLegalModal from '@/components/legal/EnviarDocumentoLegalModal';
 
 type Doc = {
   id: string;
@@ -23,6 +25,10 @@ export default function DocumentosLegalClient() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewTitulo, setPreviewTitulo] = useState('');
+  const [enviarId, setEnviarId] = useState<string | null>(null);
+  const [enviarTitulo, setEnviarTitulo] = useState('');
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -65,7 +71,7 @@ export default function DocumentosLegalClient() {
           <h2 className="mt-2 text-2xl font-bold text-white">Documentos legales</h2>
           <p className="mt-1 max-w-xl text-sm text-zinc-500">
             Redacta contratos, finiquitos, poderes y cartas desde plantillas
-            venezolanas. Revisa, aprueba e imprime.
+            venezolanas. Previsualiza, aprueba y envía.
           </p>
         </div>
         <Link
@@ -100,26 +106,68 @@ export default function DocumentosLegalClient() {
       ) : (
         <ul className="divide-y divide-white/5 rounded-2xl border border-white/10">
           {docs.map((d) => (
-            <li key={d.id}>
-              <Link
-                href={`/legal/documentos/${d.id}`}
-                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 transition hover:bg-white/[0.03]"
-              >
-                <div>
-                  <p className="font-medium text-zinc-100">{d.titulo}</p>
-                  <p className="text-xs text-zinc-500">
-                    {etiquetaDe(LEGAL_TIPOS_DOCUMENTO, d.tipo)}
-                    {d.contraparte ? ` · ${d.contraparte}` : ''}
-                  </p>
-                </div>
+            <li
+              key={d.id}
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-white/[0.03]"
+            >
+              <Link href={`/legal/documentos/${d.id}`} className="min-w-0 flex-1">
+                <p className="font-medium text-zinc-100">{d.titulo}</p>
+                <p className="text-xs text-zinc-500">
+                  {etiquetaDe(LEGAL_TIPOS_DOCUMENTO, d.tipo)}
+                  {d.contraparte ? ` · ${d.contraparte}` : ''}
+                </p>
+              </Link>
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400">
                   {etiquetaDe(LEGAL_ESTADOS_DOCUMENTO, d.estado)}
                 </span>
-              </Link>
+                <button
+                  type="button"
+                  title="Previsualizar"
+                  onClick={() => {
+                    setPreviewId(d.id);
+                    setPreviewTitulo(d.titulo);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-500/20"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  Ver
+                </button>
+                <button
+                  type="button"
+                  title="Enviar"
+                  onClick={() => {
+                    setEnviarId(d.id);
+                    setEnviarTitulo(d.titulo);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/35 bg-emerald-950/30 px-2.5 py-1.5 text-xs font-medium text-emerald-100 hover:bg-emerald-900/40"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Enviar
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       )}
+
+      <PrevisualizarDocumentoLegalModal
+        open={Boolean(previewId)}
+        onOpenChange={(o) => {
+          if (!o) setPreviewId(null);
+        }}
+        kind="documento"
+        id={previewId}
+        titulo={previewTitulo}
+      />
+      <EnviarDocumentoLegalModal
+        open={Boolean(enviarId)}
+        onOpenChange={(o) => {
+          if (!o) setEnviarId(null);
+        }}
+        documentId={enviarId}
+        titulo={enviarTitulo}
+      />
     </div>
   );
 }
