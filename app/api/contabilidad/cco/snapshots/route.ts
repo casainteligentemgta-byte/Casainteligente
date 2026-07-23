@@ -6,6 +6,7 @@ import {
   type CcoSnapshotMotivo,
 } from '@/lib/contabilidad/cco/snapshots';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -13,6 +14,9 @@ export const maxDuration = 120;
 /** GET ?proyecto= — lista puntos de restauración (sin payload). */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
@@ -38,6 +42,9 @@ export async function GET(req: Request) {
 /** POST — crea snapshot manual (o con motivo). */
 export async function POST(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

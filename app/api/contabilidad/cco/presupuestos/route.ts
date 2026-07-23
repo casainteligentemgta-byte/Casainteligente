@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cargarPresupuestosCco } from '@/lib/contabilidad/cco/cargarPresupuestos';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
@@ -45,6 +49,9 @@ function isMissingAreaColumn(msg: string): boolean {
 /** PATCH: actualiza estimado/área; crea fila si viene de `exec-*`. */
 export async function PATCH(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

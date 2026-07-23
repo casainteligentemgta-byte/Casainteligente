@@ -7,6 +7,7 @@ import {
 } from '@/lib/contabilidad/cco/CcoRubrosPdf';
 import { cargarJerarquiaContratos } from '@/lib/contabilidad/cco/contratosJerarquia';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -14,6 +15,9 @@ export const runtime = 'nodejs';
 /** GET ?proyecto= — PDF rubros acordado vs pagado por subcontratista. */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

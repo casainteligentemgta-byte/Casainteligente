@@ -7,6 +7,7 @@ import {
 } from '@/lib/contabilidad/cco/importarMaestroV4';
 import { crearSnapshotCco } from '@/lib/contabilidad/cco/snapshots';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -32,6 +33,9 @@ type StreamEvent =
  */
 export async function POST(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

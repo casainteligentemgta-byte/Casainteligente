@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cargarCcoDashboard } from '@/lib/contabilidad/cargarCcoDashboard';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +8,9 @@ export const dynamic = 'force-dynamic';
 /** GET dashboard CCO V4: KPIs oficiales/real + series para gráficos (datos CI). */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

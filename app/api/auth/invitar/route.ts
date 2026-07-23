@@ -23,6 +23,11 @@ type Body = {
   entidad_id?: string;
   /** Si true (default), envía invite de Supabase Auth cuando el usuario aún no existe. */
   invitar_web?: boolean;
+  /**
+   * Si se envía (≥ 8 chars) y el usuario no existe, crea cuenta con esa clave
+   * (sin correo de invitación). Útil p. ej. acceso CCO solo lectura.
+   */
+  password?: string | null;
   /** Chat ID numérico de Telegram (whitelist del bot). */
   telegram_chat_id?: string | number | null;
   cargo?: string | null;
@@ -62,11 +67,19 @@ export async function POST(req: Request) {
   const rolRaw = (body.rol ?? '').trim();
   const entidadId = (body.entidadId ?? body.entidad_id ?? '').trim();
   const invitarWeb = body.invitar_web !== false;
+  const password = typeof body.password === 'string' ? body.password : '';
+  const crearConPassword = password.length > 0;
   const chatIdRaw = body.telegram_chat_id;
   const cargo = body.cargo?.trim() || null;
 
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'email inválido' }, { status: 400 });
+  }
+  if (crearConPassword && password.length < 8) {
+    return NextResponse.json(
+      { error: 'La contraseña debe tener al menos 8 caracteres' },
+      { status: 400 },
+    );
   }
   const rolNorm = normalizarRolEmpresa(rolRaw);
   if (!rolNorm) {
@@ -95,13 +108,47 @@ export async function POST(req: Request) {
   let userId: string | null = null;
   let inviteEnviado = false;
   let yaExistia = false;
+  let creadoConPassword = false;
 
   const lookup = await buscarUsuarioIdPorEmail(admin, email);
   if ('userId' in lookup) {
     userId = lookup.userId;
     yaExistia = true;
+    if (crearConPassword) {
+      const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
+        password,
+        email_confirm: true,
+        user_metadata: { nombre, entidad_id: entidadId, rol: rolNorm },
+      });
+      if (updErr) {
+        return NextResponse.json(
+          { error: updErr.message || 'No se pudo actualizar la contraseña' },
+          { status: 502 },
+        );
+      }
+      creadoConPassword = true;
+    }
+  } else if (crearConPassword) {
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { nombre, entidad_id: entidadId, rol: rolNorm },
+    });
+    if (createErr) {
+      return NextResponse.json(
+        { error: createErr.message || 'No se pudo crear el usuario' },
+        { status: 502 },
+      );
+    }
+    userId = created.user?.id ?? null;
+    creadoConPassword = Boolean(userId);
   } else if (invitarWeb) {
-    const redirectTo = `${baseUrlApp(req)}/auth/callback?next=${encodeURIComponent('/')}`;
+    const home =
+      rolNorm === 'cco_lectura'
+        ? '/contabilidad/cco'
+        : '/';
+    const redirectTo = `${baseUrlApp(req)}/auth/callback?next=${encodeURIComponent(home)}`;
     const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo,
       data: { nombre, entidad_id: entidadId, rol: rolNorm },
@@ -129,7 +176,7 @@ export async function POST(req: Request) {
   } else {
     return NextResponse.json(
       {
-        error: 'Usuario no encontrado en Auth. Active invitar_web o créelo antes.',
+        error: 'Usuario no encontrado en Auth. Active invitar_web, envíe password o créelo antes.',
       },
       { status: 404 },
     );
@@ -195,20 +242,35 @@ export async function POST(req: Request) {
     }
   }
 
+  let mensaje: string;
+  if (creadoConPassword && !yaExistia) {
+    mensaje =
+      rolNorm === 'cco_lectura'
+        ? 'Usuario CCO (solo visualización) creado con contraseña. Puede entrar en /login.'
+        : 'Usuario creado con contraseña. Puede entrar en /login.';
+  } else if (creadoConPassword && yaExistia) {
+    mensaje = 'Usuario ya existía; se actualizó el rol y la contraseña.';
+  } else if (inviteEnviado) {
+    mensaje = 'Invitación enviada por correo. El usuario definirá su clave al aceptar.';
+  } else if (yaExistia) {
+    mensaje = 'Usuario ya existía en Auth; se actualizó el rol.';
+  } else {
+    mensaje = 'Acceso configurado.';
+  }
+
   return NextResponse.json(
     {
       ok: true,
       usuario_id: userId,
       email,
       invite_enviado: inviteEnviado,
+      creado_con_password: creadoConPassword,
       ya_existia: yaExistia,
       registro: rolRow,
       telegram,
-      mensaje: inviteEnviado
-        ? 'Invitación enviada por correo. El usuario definirá su clave al aceptar.'
-        : yaExistia
-          ? 'Usuario ya existía en Auth; se actualizó el rol.'
-          : 'Acceso configurado.',
+      home:
+        rolNorm === 'cco_lectura' ? '/contabilidad/cco' : '/',
+      mensaje,
     },
     { status: 201 },
   );
