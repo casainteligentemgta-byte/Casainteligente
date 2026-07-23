@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PanelLeft, PanelLeftClose } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -250,6 +250,7 @@ const SECUNDARIOS = [
 ];
 
 const CCO_OBRA_LS_KEY = 'ci-cco-obra-v1';
+const CCO_MENU_LS_KEY = 'ci-cco-menu-izq-v1';
 
 /** Secciones del menú lateral que exigen obra concreta (no «todas»). */
 const NAV_REQUIERE_OBRA: NavId[] = [
@@ -282,6 +283,25 @@ function leerObraGuardada(): string {
   }
 }
 
+function leerMenuVisible(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const v = localStorage.getItem(CCO_MENU_LS_KEY);
+    if (v === null) return true;
+    return v !== '0';
+  } catch {
+    return true;
+  }
+}
+
+function guardarMenuVisible(visible: boolean) {
+  try {
+    localStorage.setItem(CCO_MENU_LS_KEY, visible ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
 function guardarObra(id: string) {
   try {
     if (id) localStorage.setItem(CCO_OBRA_LS_KEY, id);
@@ -308,6 +328,7 @@ export default function CcoDashboardClient() {
   const [tab, setTab] = useState<TabId>('graficos');
   const [proyectoId, setProyectoId] = useState('');
   const [obraHydrated, setObraHydrated] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(true);
   const [devaluacion, setDevaluacion] = useState(0);
   const [devalManual, setDevalManual] = useState(false);
   const devaluacionRef = React.useRef(devaluacion);
@@ -340,7 +361,16 @@ export default function CcoDashboardClient() {
   useEffect(() => {
     const saved = leerObraGuardada();
     if (saved) setProyectoId(saved);
+    setMenuVisible(leerMenuVisible());
     setObraHydrated(true);
+  }, []);
+
+  const toggleMenu = useCallback(() => {
+    setMenuVisible((prev) => {
+      const next = !prev;
+      guardarMenuVisible(next);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -477,9 +507,33 @@ export default function CcoDashboardClient() {
           fontSize: 12,
         }}
       >
-        <Link href="/contabilidad" style={{ color: '#2563EB', fontWeight: 700, textDecoration: 'none' }}>
-          ← Hub módulos
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            onClick={toggleMenu}
+            title={menuVisible ? 'Ocultar menú' : 'Mostrar menú'}
+            aria-label={menuVisible ? 'Ocultar menú izquierdo' : 'Mostrar menú izquierdo'}
+            aria-pressed={menuVisible}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              border: '1px solid #CBD5E1',
+              background: '#fff',
+              borderRadius: 8,
+              padding: '4px 10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              color: '#334155',
+            }}
+          >
+            {menuVisible ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
+            {menuVisible ? 'Ocultar menú' : 'Menú'}
+          </button>
+          <Link href="/contabilidad" style={{ color: '#2563EB', fontWeight: 700, textDecoration: 'none' }}>
+            ← Hub módulos
+          </Link>
+        </div>
         <button
           type="button"
           onClick={() => void cargar()}
@@ -502,82 +556,147 @@ export default function CcoDashboardClient() {
           display: 'flex',
           alignItems: 'stretch',
           minHeight: 'calc(100vh - 42px)',
-          maxWidth: 1400,
+          maxWidth: menuVisible ? 1400 : 1600,
           margin: '0 auto',
         }}
       >
-        {/* Menú izquierdo — se enriquecerá después */}
-        <aside
-          style={{
-            width: 220,
-            flexShrink: 0,
-            background: '#0F172A',
-            color: '#E2E8F0',
-            padding: '18px 12px',
-            borderRight: '1px solid #1E293B',
-          }}
-        >
-          <p
+        {menuVisible ? (
+          <aside
             style={{
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: '#64748B',
-              margin: '0 8px 12px',
+              width: 220,
+              flexShrink: 0,
+              background: '#0F172A',
+              color: '#E2E8F0',
+              padding: '18px 12px',
+              borderRight: '1px solid #1E293B',
             }}
           >
-            Menú CCO
-          </p>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {NAV_ITEMS.map((item) => {
-              const active = nav === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={!item.ready}
-                  title={item.ready ? undefined : 'Próximamente'}
-                  onClick={() => {
-                    if (item.ready) setNav(item.id);
-                  }}
-                  style={{
-                    textAlign: 'left',
-                    border: 'none',
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    cursor: item.ready ? 'pointer' : 'not-allowed',
-                    background: active ? '#2563EB' : 'transparent',
-                    color: item.ready ? (active ? '#fff' : '#CBD5E1') : '#475569',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    opacity: item.ready ? 1 : 0.55,
-                  }}
-                >
-                  <span style={{ display: 'block' }}>{item.label}</span>
-                  {item.hint ? (
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: 10,
-                        fontWeight: 600,
-                        marginTop: 2,
-                        color: active ? 'rgba(255,255,255,0.75)' : '#64748B',
-                      }}
-                    >
-                      {item.hint}
-                    </span>
-                  ) : null}
-                  {!item.ready ? (
-                    <span style={{ display: 'block', fontSize: 10, marginTop: 2, color: '#64748B' }}>
-                      Próximamente
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                margin: '0 4px 12px',
+                gap: 8,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#64748B',
+                  margin: 0,
+                }}
+              >
+                Menú CCO
+              </p>
+              <button
+                type="button"
+                onClick={toggleMenu}
+                title="Ocultar menú"
+                aria-label="Ocultar menú izquierdo"
+                style={{
+                  border: 'none',
+                  background: 'rgba(148,163,184,0.15)',
+                  color: '#94A3B8',
+                  borderRadius: 8,
+                  width: 28,
+                  height: 28,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <PanelLeftClose size={14} />
+              </button>
+            </div>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {NAV_ITEMS.map((item) => {
+                const active = nav === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={!item.ready}
+                    title={item.ready ? undefined : 'Próximamente'}
+                    onClick={() => {
+                      if (item.ready) setNav(item.id);
+                    }}
+                    style={{
+                      textAlign: 'left',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                      cursor: item.ready ? 'pointer' : 'not-allowed',
+                      background: active ? '#2563EB' : 'transparent',
+                      color: item.ready ? (active ? '#fff' : '#CBD5E1') : '#475569',
+                      fontWeight: 700,
+                      fontSize: 13,
+                      opacity: item.ready ? 1 : 0.55,
+                    }}
+                  >
+                    <span style={{ display: 'block' }}>{item.label}</span>
+                    {item.hint ? (
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 10,
+                          fontWeight: 600,
+                          marginTop: 2,
+                          color: active ? 'rgba(255,255,255,0.75)' : '#64748B',
+                        }}
+                      >
+                        {item.hint}
+                      </span>
+                    ) : null}
+                    {!item.ready ? (
+                      <span style={{ display: 'block', fontSize: 10, marginTop: 2, color: '#64748B' }}>
+                        Próximamente
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
+        ) : (
+          <aside
+            style={{
+              width: 44,
+              flexShrink: 0,
+              background: '#0F172A',
+              borderRight: '1px solid #1E293B',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              paddingTop: 14,
+            }}
+          >
+            <button
+              type="button"
+              onClick={toggleMenu}
+              title="Mostrar menú"
+              aria-label="Mostrar menú izquierdo"
+              style={{
+                border: 'none',
+                background: 'rgba(37,99,235,0.25)',
+                color: '#93C5FD',
+                borderRadius: 8,
+                width: 32,
+                height: 32,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <PanelLeft size={16} />
+            </button>
+          </aside>
+        )}
 
         <div style={{ flex: 1, minWidth: 0, padding: '16px 20px 24px' }}>
       {obraBar}
