@@ -14,7 +14,8 @@ export type ModuloNavId =
   | 'almacen'
   | 'contabilidad'
   | 'equipo'
-  | 'legal';
+  | 'legal'
+  | 'netvision';
 
 export type ModuloNavDef = {
   id: ModuloNavId;
@@ -30,6 +31,7 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'ventas', href: '/ventas', label: 'Ventas' },
   { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
+  { id: 'netvision', href: '/netvision', label: 'NetVision' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   { id: 'equipo', href: '/configuracion/equipo', label: 'Equipo' },
   { id: 'legal', href: '/legal', label: 'Legal' },
@@ -46,6 +48,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa | 'solo_lectura', ModuloNavId[]> = {
     'ventas',
     'productos',
     'proyectos',
+    'netvision',
     'entidades',
     'equipo',
     'rrhh',
@@ -146,6 +149,14 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
     match: (p) => p === '/contabilidad' || p.startsWith('/contabilidad/') || p.startsWith('/procura'),
   },
   { modulo: 'legal', match: (p) => p === '/legal' || p.startsWith('/legal/') },
+  {
+    modulo: 'netvision',
+    match: (p) =>
+      p === '/netvision' ||
+      p.startsWith('/netvision/') ||
+      p === '/prueba-camara' ||
+      p.startsWith('/prueba-camara/'),
+  },
 ];
 
 /**

@@ -143,6 +143,32 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'netvision',
+    href: '/netvision',
+    label: 'NetVision',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+          stroke={active ? '#34D399' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(52,211,153,0.12)' : 'none'}
+        />
+        <circle
+          cx="12"
+          cy="13"
+          r="4"
+          stroke={active ? '#34D399' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: 'entidades',
     href: '/configuracion/entidades',
     label: 'Entidades',
@@ -257,6 +283,14 @@ function navItemActive(pathname: string, href: string): boolean {
   if (href === '/legal') {
     return pathname === '/legal' || pathname.startsWith('/legal/');
   }
+  if (href === '/netvision') {
+    return (
+      pathname === '/netvision' ||
+      pathname.startsWith('/netvision/') ||
+      pathname === '/prueba-camara' ||
+      pathname.startsWith('/prueba-camara/')
+    );
+  }
   return pathname.startsWith(href);
 }
 
@@ -265,6 +299,7 @@ function colorActivo(label: string): string {
   if (label === 'Almacenes') return '#FF2D55';
   if (label === 'Productos') return '#FF9500';
   if (label === 'Proyectos') return '#F59E0B';
+  if (label === 'NetVision') return '#34D399';
   if (label === 'Entidades') return '#A78BFA';
   if (label === 'Equipo') return '#38BDF8';
   if (label === 'Legal') return '#FBBF24';
@@ -310,8 +345,8 @@ export default function IOSNavBar() {
   } else if (acceso.status === 'anon') {
     items = navItems.filter((i) => i.id === 'inicio');
   } else {
-    // loading: barra casi completa, sin Legal (solo dueño / entitlement)
-    items = navItems.filter((i) => i.id !== 'legal');
+    // loading: barra casi completa, sin Legal ni NetVision (solo admin / entitlement)
+    items = navItems.filter((i) => i.id !== 'legal' && i.id !== 'netvision');
   }
 
   return (
@@ -341,13 +376,13 @@ export default function IOSNavBar() {
           }
         }}
         style={{
-          background: 'rgba(22, 22, 24, 0.82)',
+          background: 'var(--dock-bg)',
           backdropFilter: 'blur(28px) saturate(180%)',
           WebkitBackdropFilter: 'blur(28px) saturate(180%)',
           borderRadius: '18px 18px 0 0',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          border: '1px solid var(--dock-border)',
           borderBottom: 'none',
-          boxShadow: visible ? '0 -8px 32px rgba(0, 0, 0, 0.35)' : 'none',
+          boxShadow: visible ? 'var(--dock-shadow)' : 'none',
           paddingBottom: 'env(safe-area-inset-bottom)',
           transform: visible ? 'translateY(0)' : 'translateY(calc(100% - 5px))',
           transition: 'transform 0.28s ease, box-shadow 0.28s ease',
@@ -359,7 +394,7 @@ export default function IOSNavBar() {
           <div
             aria-hidden
             className="pointer-events-none mx-auto mb-0 h-1 w-10 rounded-full"
-            style={{ background: 'rgba(255,255,255,0.28)' }}
+            style={{ background: 'var(--dock-handle)' }}
           />
         ) : null}
         <div className="overflow-x-auto scrollbar-hide">
