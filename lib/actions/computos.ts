@@ -10,7 +10,7 @@ import {
   type ComputoMetricoInput,
 } from '@/types/computos';
 
-export const TABLA_COMPUTOS_METRICOS = 'computos_metricos';
+const TABLA_COMPUTOS_METRICOS = 'computos_metricos';
 
 function clientOrThrow() {
   const admin = supabaseAdminForRoute();
@@ -37,7 +37,7 @@ function strOrNull(v: unknown): string | null {
   return s || null;
 }
 
-export function mapRowToComputoMetrico(row: Record<string, unknown>): ComputoMetrico {
+function mapRowToComputoMetrico(row: Record<string, unknown>): ComputoMetrico {
   return {
     id: num(row.id),
     gasto_id: numOrNull(row.gasto_id),
