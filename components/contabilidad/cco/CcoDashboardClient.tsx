@@ -363,6 +363,23 @@ export default function CcoDashboardClient() {
   /** Submenú Importar: CSV / PDF / V4 SQLite. */
   const [importarOpen, setImportarOpen] = useState(false);
 
+  /** Deep-link: ?proyecto=&nav=auditoria (p. ej. aviso Telegram del auditor continuo). */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const proy = sp.get('proyecto')?.trim();
+      const navQ = sp.get('nav')?.trim() as NavId | null;
+      if (proy) setProyectoId(proy);
+      if (navQ && (NAV_ITEMS.some((e) => ('children' in e ? e.children.some((c) => c.id === navQ) : e.id === navQ)) || navQ === 'dashboard')) {
+        setNav(navQ);
+        if (navQ === 'auditoria') setTab('auditoria');
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const setMenuOpenPersisted = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
     setMenuOpen((prev) => {
       const open = typeof next === 'function' ? next(prev) : next;
