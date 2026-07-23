@@ -8,6 +8,7 @@ const RUTAS_PUBLICAS = [
   '/rrhh/registro',
   '/reclutamiento',
   '/nexus',
+  '/abogado',
 ];
 
 const RUTAS_PROTEGIDAS = [

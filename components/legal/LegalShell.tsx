@@ -13,11 +13,12 @@ import {
   Camera,
   FileText,
   FileUp,
+  Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAccesoLegal } from '@/lib/legal/AccesoLegalContext';
 
-const NAV = [
+const NAV_BASE = [
   { href: '/legal', label: 'Resumen', icon: LayoutDashboard, exact: true },
   { href: '/legal/casos', label: 'Casos', icon: FolderOpen, exact: false },
   { href: '/legal/documentos', label: 'Documentos', icon: FileText, exact: false },
@@ -31,6 +32,11 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
   const pathname = usePathname() ?? '';
   const acceso = useAccesoLegal();
   const standalone = acceso.standalone;
+  const esDuenio = acceso.plan === 'owner' || acceso.motivo === 'owner';
+
+  const NAV = esDuenio
+    ? [...NAV_BASE, { href: '/legal/admin', label: 'Solicitudes', icon: Inbox, exact: false }]
+    : NAV_BASE;
 
   useEffect(() => {
     if (acceso.unauthorized) {
