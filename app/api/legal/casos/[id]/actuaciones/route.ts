@@ -19,7 +19,7 @@ export async function POST(req: Request, ctx: Ctx) {
     .eq('org_id', gate.acceso.orgId!)
     .maybeSingle();
 
-  if (!caso) return NextResponse.json({ error: 'Caso no encontrado' }, { status: 404 });
+  if (!caso) return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 });
 
   let body: Record<string, unknown>;
   try {

@@ -1,6 +1,7 @@
 /**
  * Catálogo de módulos / submódulos del Asesor de casos (entrevista dinámica).
  * La categoría alinea con LEGAL_CATEGORIAS (filtro RAG).
+ * Ramas principales: Laboral, Civil, Mercantil, Tributario, Corporativo (+ Internacional).
  */
 
 import { LEGAL_CATEGORIAS, type LegalCategoria } from '@/lib/legal/legalKnowledgeMetadata';
@@ -101,6 +102,68 @@ export const ASESOR_MODULOS: AsesorModulo[] = [
         id: 'otro_mercantil',
         label: 'Otro mercantil',
         descripcion: 'Otros asuntos mercantiles',
+      },
+    ],
+  },
+  {
+    id: 'tributario',
+    label: 'Tributario',
+    submodulos: [
+      {
+        id: 'islr',
+        label: 'ISLR / retención',
+        descripcion: 'Impuesto sobre la renta, retenciones, anticipos',
+      },
+      {
+        id: 'iva',
+        label: 'IVA',
+        descripcion: 'Impuesto al valor agregado, créditos y débitos fiscales',
+      },
+      {
+        id: 'fiscalizacion',
+        label: 'Fiscalización / SENIAT',
+        descripcion: 'Actas, reparos, recursos administrativos',
+      },
+      {
+        id: 'municipales',
+        label: 'Tributos municipales',
+        descripcion: 'Patente, aseo, inmuebles urbanos',
+      },
+      {
+        id: 'otro_tributario',
+        label: 'Otro tributario',
+        descripcion: 'Otros asuntos fiscales o aduaneros',
+      },
+    ],
+  },
+  {
+    id: 'corporativo',
+    label: 'Corporativo',
+    submodulos: [
+      {
+        id: 'gobierno_corporativo',
+        label: 'Gobierno corporativo',
+        descripcion: 'Asambleas, juntas directivas, actas, poderes',
+      },
+      {
+        id: 'fusiones_reestructuracion',
+        label: 'Fusiones / reestructuración',
+        descripcion: 'Transformación, fusión, escisión, liquidación',
+      },
+      {
+        id: 'compliance',
+        label: 'Compliance / due diligence',
+        descripcion: 'Políticas internas, riesgos, revisión documental',
+      },
+      {
+        id: 'contratos_corporativos',
+        label: 'Contratos corporativos',
+        descripcion: 'Acuerdos de socios, NDAs, JV, prestación de servicios',
+      },
+      {
+        id: 'otro_corporativo',
+        label: 'Otro corporativo',
+        descripcion: 'Otros asuntos societarios o de empresa',
       },
     ],
   },

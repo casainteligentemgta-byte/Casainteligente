@@ -20,7 +20,7 @@ import { useAccesoLegal } from '@/lib/legal/AccesoLegalContext';
 
 const NAV_BASE = [
   { href: '/legal', label: 'Resumen', icon: LayoutDashboard, exact: true },
-  { href: '/legal/casos', label: 'Casos', icon: FolderOpen, exact: false },
+  { href: '/legal/casos', label: 'Expedientes', icon: FolderOpen, exact: false },
   { href: '/legal/documentos', label: 'Documentos', icon: FileText, exact: false },
   { href: '/legal/formatos', label: 'Formatos', icon: FileUp, exact: false },
   { href: '/legal/asesor', label: 'Asesor', icon: MessageSquareText, exact: false },

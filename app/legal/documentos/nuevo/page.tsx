@@ -46,6 +46,7 @@ function DocumentoNuevoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const plantillaQuery = searchParams.get('plantilla')?.trim() || '';
+  const casoQuery = searchParams.get('caso')?.trim() || '';
   const [plantillas, setPlantillas] = useState<Plantilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -136,6 +137,7 @@ function DocumentoNuevoForm() {
           tipo,
           contraparte: contraparte.trim() || null,
           plantilla_id: plantillaId || null,
+          caso_id: casoQuery || null,
           variables_valores: valores,
           cuerpo_markdown: cuerpo,
           ...(cuerpo_estructurado ? { cuerpo_estructurado } : {}),
@@ -174,6 +176,13 @@ function DocumentoNuevoForm() {
         <p className="mt-1 text-sm text-zinc-500">
           Elige una plantilla (contrato, finiquito, poder, carta) y completa las
           variables. Luego podrás editar el texto completo.
+          {casoQuery ? (
+            <>
+              {' '}
+              Se asociará al expediente{' '}
+              <span className="font-mono text-amber-200/90">{casoQuery.slice(0, 8)}…</span>.
+            </>
+          ) : null}
         </p>
       </header>
 

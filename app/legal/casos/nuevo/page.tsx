@@ -35,7 +35,7 @@ export default function LegalCasoNuevoPage() {
 
   const [enviando, setEnviando] = useState(false);
   const [titulo, setTitulo] = useState('');
-  const [tipo, setTipo] = useState('externo');
+  const [tipo, setTipo] = useState('laboral');
   const [ambito, setAmbito] = useState('despacho');
   const [prioridad, setPrioridad] = useState('media');
   const [contraparte, setContraparte] = useState('');
@@ -46,7 +46,7 @@ export default function LegalCasoNuevoPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!titulo.trim()) {
-      toast.error('Indica el título del caso');
+      toast.error('Indica el título del expediente');
       return;
     }
     setEnviando(true);
@@ -66,12 +66,20 @@ export default function LegalCasoNuevoPage() {
           fecha_limite: fechaLimite || null,
         }),
       });
-      const data = (await res.json()) as { error?: string; caso?: { id: string } };
+      const data = (await res.json()) as {
+        error?: string;
+        hint?: string;
+        caso?: { id: string; codigo?: string | null };
+      };
       if (!res.ok) {
-        toast.error(data.error || 'No se pudo crear');
+        toast.error([data.error, data.hint].filter(Boolean).join(' — ') || 'No se pudo crear');
         return;
       }
-      toast.success('Caso creado');
+      toast.success(
+        data.caso?.codigo
+          ? `Expediente ${data.caso.codigo} creado`
+          : 'Expediente creado',
+      );
       router.push(`/legal/casos/${data.caso!.id}`);
     } catch {
       toast.error('Error de red');
@@ -82,12 +90,16 @@ export default function LegalCasoNuevoPage() {
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
-      <h2 className="text-xl font-bold text-white">Nuevo caso</h2>
-      <p className="text-sm text-zinc-500">
-        {acceso.standalone
-          ? 'Casos de despacho o asuntos externos (producto solo abogado).'
-          : 'Obra Casa Inteligente, despacho general o resolución de caso externo.'}
-      </p>
+      <div>
+        <h2 className="text-xl font-bold text-white">Nuevo expediente</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Se asignará automáticamente un código único{' '}
+          <span className="font-mono text-amber-200/90">EXP-YYYY-XXX</span>.
+          {acceso.standalone
+            ? ' Casos de despacho o asuntos externos.'
+            : ' Obra Casa Inteligente, despacho general o resolución externa.'}
+        </p>
+      </div>
       <form
         onSubmit={(ev) => void onSubmit(ev)}
         className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5"
@@ -98,7 +110,7 @@ export default function LegalCasoNuevoPage() {
             className={campo}
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
-            placeholder="Ej. Reclamo laboral / carta documento"
+            placeholder="Ej. Reclamo laboral / fiscalización SENIAT"
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -113,7 +125,9 @@ export default function LegalCasoNuevoPage() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase text-zinc-500">Tipo</label>
+            <label className="text-xs font-semibold uppercase text-zinc-500">
+              Rama / tipo
+            </label>
             <select className={campo} value={tipo} onChange={(e) => setTipo(e.target.value)}>
               {tipos.map((a) => (
                 <option key={a.value} value={a.value}>
@@ -174,7 +188,7 @@ export default function LegalCasoNuevoPage() {
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50"
         >
           {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Crear caso
+          Crear expediente
         </button>
       </form>
     </div>
