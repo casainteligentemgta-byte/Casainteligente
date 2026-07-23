@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { Loader2, Menu, PanelLeftClose, X } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -517,18 +517,17 @@ export default function CcoDashboardClient() {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
+              justifyContent: 'center',
               border: '1px solid #CBD5E1',
               background: '#fff',
               borderRadius: 8,
-              padding: '4px 10px',
-              fontWeight: 700,
+              width: 34,
+              height: 34,
               cursor: 'pointer',
               color: '#334155',
             }}
           >
-            {menuVisible ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
-            {menuVisible ? 'Ocultar menú' : 'Menú'}
+            {menuVisible ? <X size={18} /> : <Menu size={18} />}
           </button>
           <Link href="/contabilidad" style={{ color: '#2563EB', fontWeight: 700, textDecoration: 'none' }}>
             ← Hub módulos
@@ -558,6 +557,7 @@ export default function CcoDashboardClient() {
           minHeight: 'calc(100vh - 42px)',
           maxWidth: menuVisible ? 1400 : 1600,
           margin: '0 auto',
+          position: 'relative',
         }}
       >
         {menuVisible ? (
@@ -663,42 +663,40 @@ export default function CcoDashboardClient() {
             </nav>
           </aside>
         ) : (
-          <aside
+          <button
+            type="button"
+            onClick={toggleMenu}
+            title="Mostrar menú"
+            aria-label="Mostrar menú izquierdo"
             style={{
-              width: 44,
-              flexShrink: 0,
-              background: '#0F172A',
-              borderRight: '1px solid #1E293B',
-              display: 'flex',
-              flexDirection: 'column',
+              position: 'absolute',
+              top: 12,
+              left: 12,
+              zIndex: 20,
+              border: '1px solid #CBD5E1',
+              background: '#fff',
+              color: '#0F172A',
+              borderRadius: 10,
+              width: 40,
+              height: 40,
+              display: 'inline-flex',
               alignItems: 'center',
-              paddingTop: 14,
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(15,23,42,0.12)',
             }}
           >
-            <button
-              type="button"
-              onClick={toggleMenu}
-              title="Mostrar menú"
-              aria-label="Mostrar menú izquierdo"
-              style={{
-                border: 'none',
-                background: 'rgba(37,99,235,0.25)',
-                color: '#93C5FD',
-                borderRadius: 8,
-                width: 32,
-                height: 32,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
-            >
-              <PanelLeft size={16} />
-            </button>
-          </aside>
+            <Menu size={20} />
+          </button>
         )}
 
-        <div style={{ flex: 1, minWidth: 0, padding: '16px 20px 24px' }}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: menuVisible ? '16px 20px 24px' : '16px 20px 24px 60px',
+          }}
+        >
       {obraBar}
 
       {nav === 'importar-csv' ? (
