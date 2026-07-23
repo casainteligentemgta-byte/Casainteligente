@@ -99,13 +99,12 @@ export async function cargarDashboardDesdeRegistrosGastos(
   const porTipoTotal = new Map<CcoTipoGasto, number>();
 
   let ingresos = 0;
+  let ingresosReales = 0;
   let gastosNetos = 0;
   let honorariosSum = 0;
   let costoTotalSum = 0;
   let countIngresos = 0;
   let countGastos = 0;
-  let sumBrecha = 0;
-  let nBrecha = 0;
 
   for (const r of rows) {
     const clase = String(r.clase ?? '').toUpperCase();
@@ -127,14 +126,21 @@ export async function cargarDashboardDesdeRegistrosGastos(
     const hon = num(derived.honorarios);
     const costo = num(derived.costo_total) || base + hon;
 
-    if (r.porcentaje_brecha_real != null && Number.isFinite(Number(r.porcentaje_brecha_real))) {
-      sumBrecha += Number(r.porcentaje_brecha_real);
-      nBrecha += 1;
-    }
-
     if (clase === 'INGRESO') {
       ingresos += base || costo;
       countIngresos += 1;
+      
+      const moneda = String(r.moneda ?? '').trim().toUpperCase();
+      const montoOrig = Number(r.monto_orig) || 0;
+      let ingresoReal = montoOrig;
+      if (moneda !== 'USD' && moneda !== '') {
+        const tasaBin = Number(r.tasa_binance) || 0;
+        const tasa = Number(r.tasa) || 0;
+        const tasaReal = tasaBin > 0 ? tasaBin : tasa;
+        if (tasaReal > 0) ingresoReal = montoOrig / tasaReal;
+      }
+      ingresosReales += ingresoReal;
+
       if (periodo) {
         porMesIngresos.set(periodo, (porMesIngresos.get(periodo) ?? 0) + (base || costo));
       }
@@ -166,13 +172,13 @@ export async function cargarDashboardDesdeRegistrosGastos(
     porTipoTotal.set(tipo, (porTipoTotal.get(tipo) ?? 0) + base);
   }
 
-  const brechaFilas = nBrecha > 0 ? Math.round((sumBrecha / nBrecha) * 10000) / 10000 : null;
   let devaluacionPromedio = params.devaluacionPromedio;
   let brechaFuente: CcoDashboard['brechaFuente'] = 'config';
   if (params.forzarDevaluacionManual) {
     brechaFuente = 'manual';
-  } else if (brechaFilas != null) {
-    devaluacionPromedio = brechaFilas;
+  } else if (ingresos > 0 && ingresosReales > 0) {
+    const factor = ingresosReales / ingresos;
+    devaluacionPromedio = (factor - 1) * 100;
     brechaFuente = 'filas_registros_gastos';
   }
 
