@@ -28,6 +28,7 @@ function strOrNull(v: unknown): string | null {
 export function mapRowToGastoRegistro(row: Record<string, unknown>): GastoRegistro {
   return {
     id: (row.id as number | string) ?? '',
+    proyecto_id: strOrNull(row.proyecto_id),
     clase: strOrNull(row.clase),
     fecha: row.fecha != null ? String(row.fecha) : null,
     proveedor: strOrNull(row.proveedor),
@@ -58,9 +59,15 @@ export function mapRowToGastoRegistro(row: Record<string, unknown>): GastoRegist
 
 export function gastoRegistroALibroFila(r: GastoRegistro): CcoLibroFila {
   const claseRaw = String(r.clase ?? 'GASTO').toUpperCase();
+  const claseNorm =
+    claseRaw === 'PRESUPUESTO_METADATA' ? 'PRESUPUESTO' : claseRaw;
   const clase = (
-    ['GASTO', 'INGRESO', 'CONTRATO', 'PRESUPUESTO', 'AUDITORIA'].includes(claseRaw)
-      ? claseRaw
+    ['GASTO', 'INGRESO', 'CONTRATO', 'PRESUPUESTO', 'PRESUPUESTO_METADATA', 'AUDITORIA'].includes(
+      claseRaw,
+    )
+      ? (claseNorm === 'PRESUPUESTO' || claseRaw === 'PRESUPUESTO_METADATA'
+          ? 'PRESUPUESTO'
+          : claseRaw)
       : 'GASTO'
   ) as CcoClase;
 
@@ -69,7 +76,7 @@ export function gastoRegistroALibroFila(r: GastoRegistro): CcoLibroFila {
       ? 'inyeccion'
       : clase === 'CONTRATO'
         ? 'contrato'
-        : clase === 'PRESUPUESTO'
+        : clase === 'PRESUPUESTO' || claseRaw === 'PRESUPUESTO_METADATA'
           ? 'presupuesto'
           : clase === 'AUDITORIA'
             ? 'auditoria'
@@ -109,6 +116,8 @@ export function gastoRegistroALibroFila(r: GastoRegistro): CcoLibroFila {
 }
 
 export type GetGastosCcoOpts = {
+  /** Filtra por obra (recomendado tras migración 278). */
+  proyectoId?: string | null;
   /** Filtro opcional por clase (GASTO, INGRESO, …). */
   clase?: string | null;
   /** Límite de filas (default 5000). */
@@ -121,14 +130,15 @@ export type GetGastosCcoOpts = {
 
 /**
  * Consulta `registros_gastos` ordenada por fecha descendente.
- * Sin proyecto_id en la tabla: el histórico RANCHO es global a la obra importada.
+ * Con `proyectoId`: solo filas de esa obra.
  */
 export async function getGastosCCO(
   supabase: SupabaseClient,
   opts?: GetGastosCcoOpts,
 ): Promise<{ rows: GastoRegistro[]; total: number }> {
-  const limit = Math.min(Math.max(opts?.limit ?? 5000, 1), 10_000);
+  const limit = Math.min(Math.max(opts?.limit ?? 5000, 1), 50_000);
   const offset = Math.max(opts?.offset ?? 0, 0);
+  const proyectoId = opts?.proyectoId?.trim() || null;
   const clase = opts?.clase?.trim().toUpperCase() || null;
   const proveedor = opts?.proveedor?.trim() || null;
   const capitulo = opts?.capitulo?.trim() || null;
@@ -136,11 +146,20 @@ export async function getGastosCCO(
   let countQ = supabase
     .from(TABLA_REGISTROS_GASTOS)
     .select('id', { count: 'exact', head: true });
-  if (clase) countQ = countQ.eq('clase', clase);
+  if (proyectoId) countQ = countQ.eq('proyecto_id', proyectoId);
+  if (clase === 'PRESUPUESTO') {
+    countQ = countQ.in('clase', ['PRESUPUESTO', 'PRESUPUESTO_METADATA']);
+  } else if (clase) {
+    countQ = countQ.eq('clase', clase);
+  }
   if (proveedor) countQ = countQ.ilike('proveedor', `%${proveedor}%`);
   if (capitulo) countQ = countQ.ilike('capitulo', `%${capitulo}%`);
   const { count, error: countErr } = await countQ;
   if (countErr) {
+    if (/proyecto_id|42703/i.test(countErr.message) && proyectoId) {
+      // Migración 278 aún no aplicada: leer sin filtro de obra.
+      return getGastosCCO(supabase, { ...opts, proyectoId: null });
+    }
     if (/schema cache|does not exist|42P01/i.test(countErr.message)) {
       return { rows: [], total: 0 };
     }
@@ -153,7 +172,12 @@ export async function getGastosCCO(
       .select('*')
       .order('fecha', { ascending: false, nullsFirst: false })
       .order('id', { ascending: false });
-    if (clase) q = q.eq('clase', clase);
+    if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+    if (clase === 'PRESUPUESTO') {
+      q = q.in('clase', ['PRESUPUESTO', 'PRESUPUESTO_METADATA']);
+    } else if (clase) {
+      q = q.eq('clase', clase);
+    }
     if (proveedor) q = q.ilike('proveedor', `%${proveedor}%`);
     if (capitulo) q = q.ilike('capitulo', `%${capitulo}%`);
     return q;
@@ -189,8 +213,14 @@ export async function getGastosCCO(
 }
 
 /** Agregaciones KPI sobre `registros_gastos`. */
-export async function getMetricasCCO(supabase: SupabaseClient): Promise<MetricasCco> {
-  const { rows, total } = await getGastosCCO(supabase, { limit: 10_000 });
+export async function getMetricasCCO(
+  supabase: SupabaseClient,
+  proyectoId?: string | null,
+): Promise<MetricasCco> {
+  const { rows, total } = await getGastosCCO(supabase, {
+    limit: 50_000,
+    proyectoId: proyectoId ?? null,
+  });
 
   let sumaCostoTotal = 0;
   let sumaMontoPagado = 0;
@@ -265,6 +295,7 @@ export async function createGastoCCO(
     : fechaRaw;
 
   const row = {
+    proyecto_id: strOrNull(data.proyecto_id),
     clase,
     fecha,
     proveedor: strOrNull(data.proveedor),
@@ -298,7 +329,16 @@ export async function createGastoCCO(
     .select('*')
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Sin columna proyecto_id aún: reintentar sin el campo.
+    if (/proyecto_id|42703/i.test(error.message) && row.proyecto_id) {
+      const { proyecto_id: _omit, ...rest } = row;
+      const retry = await supabase.from(TABLA_REGISTROS_GASTOS).insert(rest).select('*').single();
+      if (retry.error) throw new Error(retry.error.message);
+      return mapRowToGastoRegistro(retry.data as Record<string, unknown>);
+    }
+    throw new Error(error.message);
+  }
   return mapRowToGastoRegistro(inserted as Record<string, unknown>);
 }
 
@@ -312,6 +352,7 @@ function buildPatchRow(data: CreateGastoCcoInput): Record<string, unknown> {
   };
 
   if (data.clase !== undefined) patch.clase = String(data.clase ?? 'GASTO').trim().toUpperCase() || 'GASTO';
+  if (data.proyecto_id !== undefined) patch.proyecto_id = strOrNull(data.proyecto_id);
   if (data.fecha !== undefined) {
     const fechaRaw = data.fecha ? String(data.fecha).trim() : null;
     patch.fecha =
@@ -391,11 +432,21 @@ export async function deleteGastoCCO(
   if (error) throw new Error(error.message);
 }
 
-/** True si la tabla tiene al menos un registro (histórico importado). */
-export async function tieneRegistrosGastos(supabase: SupabaseClient): Promise<boolean> {
-  const { count, error } = await supabase
-    .from(TABLA_REGISTROS_GASTOS)
-    .select('id', { count: 'exact', head: true });
-  if (error) return false;
+/** True si la tabla tiene al menos un registro (opcionalmente de una obra). */
+export async function tieneRegistrosGastos(
+  supabase: SupabaseClient,
+  proyectoId?: string | null,
+): Promise<boolean> {
+  let q = supabase.from(TABLA_REGISTROS_GASTOS).select('id', { count: 'exact', head: true });
+  const pid = proyectoId?.trim() || null;
+  if (pid) q = q.eq('proyecto_id', pid);
+  const { count, error } = await q;
+  if (error) {
+    if (pid && /proyecto_id|42703/i.test(error.message)) {
+      // Sin columna: cualquier fila cuenta (comportamiento legacy).
+      return tieneRegistrosGastos(supabase, null);
+    }
+    return false;
+  }
   return (count ?? 0) > 0;
 }

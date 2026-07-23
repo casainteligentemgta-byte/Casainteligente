@@ -5,6 +5,8 @@
 
 export type GastoRegistro = {
   id: number | string;
+  /** Obra dueña del libro CSV (multi-obra). */
+  proyecto_id?: string | null;
   clase: string | null;
   fecha: string | null;
   proveedor: string | null;
@@ -35,6 +37,7 @@ export type GastoRegistro = {
 
 /** Payload de alta desde el formulario CCO. */
 export type CreateGastoCcoInput = {
+  proyecto_id?: string | null;
   clase?: string | null;
   fecha?: string | null;
   proveedor?: string | null;

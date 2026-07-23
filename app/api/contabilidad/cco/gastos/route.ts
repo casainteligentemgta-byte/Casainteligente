@@ -16,20 +16,25 @@ export async function GET(req: Request) {
     if (!admin.ok) return admin.response;
 
     const { searchParams } = new URL(req.url);
-    if (searchParams.get('metricas') === '1') {
-      const metricas = await getMetricasCCO(admin.client);
-      return NextResponse.json({ ok: true, metricas });
-    }
-
     const clase = searchParams.get('clase')?.trim() || null;
     const proveedor = searchParams.get('proveedor')?.trim() || null;
     const capitulo = searchParams.get('capitulo')?.trim() || null;
+    const proyectoId =
+      searchParams.get('proyecto')?.trim() ||
+      searchParams.get('proyectoId')?.trim() ||
+      null;
     const limitRaw = Number(searchParams.get('limit'));
     const offsetRaw = Number(searchParams.get('offset'));
-    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 10_000) : 5000;
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50_000) : 5000;
     const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
 
+    if (searchParams.get('metricas') === '1') {
+      const metricas = await getMetricasCCO(admin.client, proyectoId);
+      return NextResponse.json({ ok: true, metricas });
+    }
+
     const { rows, total } = await getGastosCCO(admin.client, {
+      proyectoId,
       clase,
       proveedor,
       capitulo,
@@ -58,6 +63,12 @@ export async function POST(req: Request) {
 
     const body = (await req.json()) as Record<string, unknown>;
     const created = await createGastoCCO(admin.client, {
+      proyecto_id:
+        body.proyecto_id != null
+          ? String(body.proyecto_id)
+          : body.proyectoId != null
+            ? String(body.proyectoId)
+            : null,
       clase: body.clase != null ? String(body.clase) : body.clase === null ? null : 'GASTO',
       fecha: body.fecha != null ? String(body.fecha) : null,
       proveedor: body.proveedor != null ? String(body.proveedor) : body.proveedor === null ? null : undefined,

@@ -53,13 +53,15 @@ export async function deleteGastoCCO(id: string | number): Promise<{ ok: true }>
 }
 
 /**
- * Importa CSV diario (texto o FormData con `file`) → `registros_gastos`.
- * Siempre reemplazo limpio (no duplica al reimportar el acumulado).
+ * Importa CSV diario (texto o FormData con `file`) → `registros_gastos` de una obra.
+ * Siempre reemplazo limpio por proyecto (no duplica al reimportar el acumulado).
  */
 export async function importCSVToSupabase(
-  input: string | FormData | { csvText: string },
+  input: string | FormData | { csvText: string; proyectoId: string },
+  proyectoIdArg?: string,
 ): Promise<ImportCsvToSupabaseResult> {
   let csvText = '';
+  let proyectoId = String(proyectoIdArg ?? '').trim();
 
   if (typeof input === 'string') {
     csvText = input;
@@ -70,14 +72,22 @@ export async function importCSVToSupabase(
     } else if (typeof input.get('csvText') === 'string') {
       csvText = String(input.get('csvText'));
     }
+    if (!proyectoId) {
+      proyectoId = String(input.get('proyectoId') ?? input.get('proyecto_id') ?? '').trim();
+    }
   } else {
-    csvText = String((input as { csvText: string }).csvText ?? '');
+    const obj = input as { csvText: string; proyectoId?: string };
+    csvText = String(obj.csvText ?? '');
+    if (!proyectoId) proyectoId = String(obj.proyectoId ?? '').trim();
   }
 
+  if (!proyectoId) {
+    throw new Error('proyectoId requerido para importar CSV.');
+  }
   if (!csvText.trim()) {
     throw new Error('Falta el contenido CSV.');
   }
 
-  return importCsvToRegistrosGastos(clientOrThrow(), csvText);
+  return importCsvToRegistrosGastos(clientOrThrow(), csvText, { proyectoId });
 }
 

@@ -7,8 +7,8 @@ export const maxDuration = 120;
 
 /**
  * POST /api/contabilidad/cco/gastos/import
- * Body JSON: { csvText } o multipart file.
- * Siempre reemplazo limpio (CSV diario acumulado → sin duplicar).
+ * Body JSON: { csvText, proyectoId } o multipart file + proyectoId.
+ * Reemplazo limpio por obra (CSV diario acumulado → sin duplicar).
  */
 export async function POST(req: Request) {
   try {
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
 
     const contentType = req.headers.get('content-type') ?? '';
     let csvText = '';
+    let proyectoId = '';
 
     if (contentType.includes('multipart/form-data')) {
       const form = await req.formData();
@@ -26,9 +27,18 @@ export async function POST(req: Request) {
       } else if (typeof form.get('csvText') === 'string') {
         csvText = String(form.get('csvText'));
       }
+      proyectoId = String(form.get('proyectoId') ?? form.get('proyecto_id') ?? '').trim();
     } else {
-      const body = (await req.json()) as { csvText?: string };
+      const body = (await req.json()) as { csvText?: string; proyectoId?: string; proyecto_id?: string };
       csvText = String(body.csvText ?? '');
+      proyectoId = String(body.proyectoId ?? body.proyecto_id ?? '').trim();
+    }
+
+    if (!proyectoId) {
+      return NextResponse.json(
+        { ok: false, error: 'Falta proyectoId (obra). Selecciónala en el dashboard antes de importar.' },
+        { status: 400 },
+      );
     }
 
     if (!csvText.trim()) {
@@ -38,7 +48,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await importCsvToRegistrosGastos(admin.client, csvText);
+    const result = await importCsvToRegistrosGastos(admin.client, csvText, { proyectoId });
 
     return NextResponse.json({ ok: true, ...result });
   } catch (err: unknown) {

@@ -34,13 +34,19 @@ export default function CcoImportarCsvPanel({
   const [fileName, setFileName] = useState<string | null>(null);
 
   const obraHint = (() => {
-    if (!proyectoIdInicial) return 'Obra activa del dashboard (opcional para este import).';
+    if (!proyectoIdInicial) return 'Selecciona una obra en el dashboard antes de importar.';
     const p = proyectos.find((x) => x.id === proyectoIdInicial);
-    return p ? `Obra activa: ${p.nombre}` : 'Obra activa seleccionada.';
+    return p
+      ? `Reemplaza el libro CSV de: ${p.nombre}`
+      : 'Reemplaza el libro CSV de la obra activa.';
   })();
 
   const runImport = useCallback(
     async (file: File) => {
+      if (!proyectoIdInicial) {
+        setError('Selecciona una obra en el dashboard antes de importar el CSV diario.');
+        return;
+      }
       setBusy(true);
       setError(null);
       setResult(null);
@@ -49,12 +55,12 @@ export default function CcoImportarCsvPanel({
       try {
         const csvText = await file.text();
         if (!csvText.trim()) throw new Error('El archivo está vacío.');
-        setProgress('Reemplazando registros_gastos (sin duplicar)…');
+        setProgress('Reemplazando libro de la obra (sin duplicar)…');
 
         const res = await fetch('/api/contabilidad/cco/gastos/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ csvText }),
+          body: JSON.stringify({ csvText, proyectoId: proyectoIdInicial }),
         });
         const json = await res.json();
         if (!res.ok || json.ok === false) {
@@ -72,7 +78,7 @@ export default function CcoImportarCsvPanel({
         };
         setResult(out);
         setProgress(null);
-        onImportado?.(proyectoIdInicial || '');
+        onImportado?.(proyectoIdInicial);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al importar');
         setProgress(null);

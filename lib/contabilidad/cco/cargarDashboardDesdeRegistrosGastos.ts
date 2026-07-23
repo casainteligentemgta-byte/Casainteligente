@@ -86,7 +86,10 @@ export async function cargarDashboardDesdeRegistrosGastos(
     forzarDevaluacionManual?: boolean;
   },
 ): Promise<CcoDashboard> {
-  const { rows, total } = await getGastosCCO(supabase, { limit: 10_000 });
+  const { rows, total } = await getGastosCCO(supabase, {
+    limit: 50_000,
+    proyectoId: params.proyectoId,
+  });
 
   const porMesIngresos = new Map<string, number>();
   const porMesEgresos = new Map<string, number>();
@@ -124,7 +127,7 @@ export async function cargarDashboardDesdeRegistrosGastos(
       continue;
     }
 
-    if (clase === 'CONTRATO' || clase === 'PRESUPUESTO' || clase === 'AUDITORIA') {
+    if (clase === 'CONTRATO' || clase === 'PRESUPUESTO' || clase === 'PRESUPUESTO_METADATA' || clase === 'AUDITORIA') {
       continue;
     }
 

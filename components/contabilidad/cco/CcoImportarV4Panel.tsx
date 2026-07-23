@@ -32,12 +32,13 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
   const [progress, setProgress] = useState<string | null>(null);
 
   async function importDiarioCsv(file: File) {
-    setProgress('Reemplazando registros_gastos (sin duplicar)…');
+    if (!proyectoId) throw new Error('Selecciona una obra antes de importar.');
+    setProgress('Reemplazando libro CSV de la obra (sin duplicar)…');
     const csvText = await file.text();
     const res = await fetch('/api/contabilidad/cco/gastos/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csvText }),
+      body: JSON.stringify({ csvText, proyectoId }),
     });
     const json = (await res.json()) as DiarioResult & {
       ok?: boolean;
@@ -50,13 +51,13 @@ export default function CcoImportarV4Panel({ proyectoId, onDone }: Props) {
     }
     setLog(
       [
-        `Fuente: CSV diario → registros_gastos (reemplazo limpio)`,
+        `Fuente: CSV diario → registros_gastos (obra ${proyectoId.slice(0, 8)}…)`,
         `Archivo: ${file.name}`,
         `Procesadas: ${json.parsed}`,
-        `Total en tabla: ${json.totalEnTabla ?? json.inserted}`,
+        `Total en obra: ${json.totalEnTabla ?? json.inserted}`,
         json.skipped ? `Omitidas: ${json.skipped}` : null,
         `Lotes: ${json.batches}${json.mode ? ` · ${json.mode}` : ''}`,
-        'Reimportar el mismo CSV deja el mismo conteo (no duplica).',
+        'Reimportar el mismo CSV deja el mismo conteo de esta obra (no duplica).',
       ]
         .filter(Boolean)
         .join('\n'),

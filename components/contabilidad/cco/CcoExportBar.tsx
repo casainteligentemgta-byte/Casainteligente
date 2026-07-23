@@ -8,10 +8,10 @@ type Props = {
 };
 
 export default function CcoExportBar({ proyectoId, disabled }: Props) {
-  const [busy, setBusy] = useState<'excel' | 'pdf' | null>(null);
+  const [busy, setBusy] = useState<'excel' | 'pdf' | 'csv' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function descargar(kind: 'excel' | 'pdf') {
+  async function descargar(kind: 'excel' | 'pdf' | 'csv') {
     if (!proyectoId || disabled) return;
     setBusy(kind);
     setError(null);
@@ -19,7 +19,9 @@ export default function CcoExportBar({ proyectoId, disabled }: Props) {
       const path =
         kind === 'excel'
           ? `/api/contabilidad/cco/export/excel?proyecto=${encodeURIComponent(proyectoId)}`
-          : `/api/contabilidad/cco/export/pdf-rubros?proyecto=${encodeURIComponent(proyectoId)}`;
+          : kind === 'pdf'
+            ? `/api/contabilidad/cco/export/pdf-rubros?proyecto=${encodeURIComponent(proyectoId)}`
+            : `/api/contabilidad/cco/gastos/export?proyecto=${encodeURIComponent(proyectoId)}`;
       const res = await fetch(path, { cache: 'no-store' });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -29,7 +31,12 @@ export default function CcoExportBar({ proyectoId, disabled }: Props) {
       const cd = res.headers.get('Content-Disposition') ?? '';
       const m = /filename="?([^"]+)"?/.exec(cd);
       const filename =
-        m?.[1] ?? (kind === 'excel' ? 'CCO_maestro.xls' : 'CCO_rubros.pdf');
+        m?.[1] ??
+        (kind === 'excel'
+          ? 'CCO_maestro.xls'
+          : kind === 'pdf'
+            ? 'CCO_rubros.pdf'
+            : 'CCO_maestro.csv');
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -45,6 +52,15 @@ export default function CcoExportBar({ proyectoId, disabled }: Props) {
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+      <button
+        type="button"
+        disabled={!proyectoId || disabled || busy !== null}
+        onClick={() => void descargar('csv')}
+        style={btn('#0F766E')}
+        title={!proyectoId ? 'Selecciona una obra' : 'CSV maestro 25 cols (compatible Streamlit)'}
+      >
+        {busy === 'csv' ? 'CSV…' : '⬇ CSV maestro'}
+      </button>
       <button
         type="button"
         disabled={!proyectoId || disabled || busy !== null}
@@ -78,6 +94,5 @@ function btn(bg: string): React.CSSProperties {
     fontWeight: 700,
     fontSize: 12,
     cursor: 'pointer',
-    opacity: 1,
   };
 }

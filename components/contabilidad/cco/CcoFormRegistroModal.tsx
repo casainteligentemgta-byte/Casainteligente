@@ -67,6 +67,7 @@ export default function CcoFormRegistroModal({ proyectoId, onSaved }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          proyecto_id: proyectoId,
           clase: form.clase,
           fecha: form.fecha,
           proveedor: form.proveedor || undefined,

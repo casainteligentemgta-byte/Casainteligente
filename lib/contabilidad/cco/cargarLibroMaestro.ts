@@ -34,9 +34,10 @@ export async function cargarLibroMaestro(
   const limit = params.limit ?? 50_000;
   const claseFiltro = params.clase?.trim().toUpperCase() || null;
 
-  // Preferir histórico importado en registros_gastos (CSV RANCHO / ~2462 filas).
-  if (await tieneRegistrosGastos(supabase)) {
+  // Preferir histórico importado en registros_gastos (CSV RANCHO) de esta obra.
+  if (await tieneRegistrosGastos(supabase, proyectoId)) {
     const { rows, total } = await getGastosCCO(supabase, {
+      proyectoId,
       clase: claseFiltro,
       limit,
       proveedor: params.proveedor,

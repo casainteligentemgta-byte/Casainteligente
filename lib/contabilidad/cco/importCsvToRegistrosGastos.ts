@@ -1,10 +1,11 @@
 /**
  * Importación CSV diario (Antigravity / RANCHO) → `registros_gastos`.
  *
- * Estrategia: Reemplazo limpio transaccional (staging → TRUNCATE+INSERT en una TX).
- * Reimportar el mismo CSV deja el mismo número de filas (no duplica).
+ * Estrategia: Reemplazo limpio por obra (staging → DELETE obra + INSERT en una TX).
+ * Reimportar el mismo CSV deja el mismo número de filas de esa obra (no duplica).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { normalizarClaseImport } from '@/lib/contabilidad/cco/csvMaestroColumns';
 import { TABLA_REGISTROS_GASTOS } from '@/lib/contabilidad/cco/registrosGastos';
 import type { CreateGastoCcoInput } from '@/types/gastos';
 
@@ -16,11 +17,12 @@ export type ImportCsvToSupabaseResult = {
   inserted: number;
   skipped: number;
   batches: number;
-  /** Siempre true: el CSV diario reemplaza el libro completo. */
+  /** Siempre true: el CSV diario reemplaza el libro de la obra. */
   replaced: boolean;
-  /** total exacto en tabla tras el import (post-verificación). */
+  /** total exacto en tabla tras el import (post-verificación, de esa obra). */
   totalEnTabla: number;
   mode: 'staging_commit' | 'direct_replace';
+  proyectoId: string;
 };
 
 function parseCsvRows(text: string): Record<string, string>[] {
@@ -108,12 +110,24 @@ function strClean(v: unknown): string | null {
   return s;
 }
 
-/** Normaliza fechas a YYYY-MM-DD (ISO date). */
+/**
+ * Normaliza fecha CSV → ISO para timestamptz.
+ * Conserva hora/microsegundos cuando vienen en el CSV Streamlit.
+ */
 export function formatFechaCsv(v: unknown): string | null {
   const raw = strClean(v);
   if (!raw) return null;
 
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  // Streamlit: 2026-02-13 00:00:00.000000
+  const mStreamlit = raw.match(
+    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/,
+  );
+  if (mStreamlit) {
+    const micro = (mStreamlit[5] ?? '000000').padEnd(6, '0').slice(0, 6);
+    return `${mStreamlit[1]}T${mStreamlit[2]}:${mStreamlit[3]}:${mStreamlit[4]}.${micro}Z`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00:00.000000Z`;
 
   const m1 = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
   if (m1) {
@@ -121,7 +135,7 @@ export function formatFechaCsv(v: unknown): string | null {
     const mo = Number(m1[2]);
     const y = Number(m1[3]);
     if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
-      return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}T00:00:00.000000Z`;
     }
   }
 
@@ -130,24 +144,32 @@ export function formatFechaCsv(v: unknown): string | null {
     const epoch = Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000;
     const dt = new Date(epoch);
     if (!Number.isNaN(dt.getTime())) {
-      return dt.toISOString().slice(0, 10);
+      return `${dt.toISOString().slice(0, 10)}T00:00:00.000000Z`;
     }
   }
 
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
+    // toISOString → ...sssZ ; ampliamos a microsegundos
+    return parsed.toISOString().replace(/\.(\d{3})Z$/, '.$1000Z');
   }
 
   return null;
+}
+
+/** Solo fecha YYYY-MM-DD (helpers UI). */
+export function formatFechaCsvYmd(v: unknown): string | null {
+  const iso = formatFechaCsv(v);
+  return iso ? iso.slice(0, 10) : null;
 }
 
 /** Mapea una fila CSV (headers Antigravity) → fila snake_case de registros_gastos. */
 export function mapCsvRowToRegistrosGastos(
   row: Record<string, string>,
 ): CreateGastoCcoInput | null {
-  const clase = (strClean(pick(row, 'CLASE')) ?? 'GASTO').toUpperCase();
-  const fecha = formatFechaCsv(pick(row, 'FECHA'));
+  const clase = normalizarClaseImport(strClean(pick(row, 'CLASE')) ?? 'GASTO');
+  const fecha = formatFechaCsvYmd(pick(row, 'FECHA'));
+  const fechaFull = formatFechaCsv(pick(row, 'FECHA'));
   const descripcion = strClean(pick(row, 'DESCRIPCION', 'DESCRIPCIÓN'));
   const montoBase = numClean(pick(row, 'MONTO BASE USD', 'MONTO_BASE_USD', 'MONTO BASE'));
   const montoOrig = numClean(pick(row, 'MONTO ORIG', 'MONTO_ORIG', 'MONTO ORIGINAL'));
@@ -164,7 +186,7 @@ export function mapCsvRowToRegistrosGastos(
 
   return {
     clase,
-    fecha,
+    fecha: fechaFull ?? fecha,
     proveedor: strClean(pick(row, 'PROVEEDOR')),
     tipo: strClean(pick(row, 'TIPO')),
     capitulo: strClean(pick(row, 'CAPITULO', 'CAPÍTULO')),
@@ -198,8 +220,11 @@ export function mapCsvRowToRegistrosGastos(
   };
 }
 
-function toInsertRow(data: CreateGastoCcoInput): Record<string, unknown> {
-  const clase = String(data.clase ?? 'GASTO').trim().toUpperCase() || 'GASTO';
+function toInsertRow(
+  data: CreateGastoCcoInput,
+  proyectoId: string,
+): Record<string, unknown> {
+  const clase = normalizarClaseImport(String(data.clase ?? 'GASTO'));
   const montoBase = data.monto_base_usd ?? data.monto_orig ?? null;
   const pctAdmin = data.porcentaje_admin ?? 15;
   let honorarios = data.honorarios;
@@ -214,10 +239,15 @@ function toInsertRow(data: CreateGastoCcoInput): Record<string, unknown> {
         : Number(montoBase);
   }
 
-  const fechaYmd = data.fecha ? formatFechaCsv(data.fecha) : null;
-  const fecha = fechaYmd ? `${fechaYmd}T00:00:00Z` : null;
+  const fecha =
+    data.fecha && String(data.fecha).includes('T')
+      ? String(data.fecha)
+      : data.fecha
+        ? formatFechaCsv(data.fecha)
+        : null;
 
   return {
+    proyecto_id: proyectoId,
     clase,
     fecha,
     proveedor: data.proveedor ?? null,
@@ -247,7 +277,10 @@ function toInsertRow(data: CreateGastoCcoInput): Record<string, unknown> {
 }
 
 /** Parsea texto CSV → filas listas para insert. */
-export function parseRegistrosGastosCsv(csvText: string): {
+export function parseRegistrosGastosCsv(
+  csvText: string,
+  proyectoId: string,
+): {
   rows: Record<string, unknown>[];
   skipped: number;
 } {
@@ -255,6 +288,9 @@ export function parseRegistrosGastosCsv(csvText: string): {
   if (!raw.length) {
     throw new Error('CSV vacío o sin filas de datos (¿falta encabezado?).');
   }
+
+  const pid = String(proyectoId || '').trim();
+  if (!pid) throw new Error('proyecto_id requerido para importar CSV.');
 
   const rows: Record<string, unknown>[] = [];
   let skipped = 0;
@@ -264,25 +300,34 @@ export function parseRegistrosGastosCsv(csvText: string): {
       skipped += 1;
       continue;
     }
-    rows.push(toInsertRow(mapped));
+    rows.push(toInsertRow(mapped, pid));
   }
   return { rows, skipped };
 }
 
 export type ImportCsvOpts = {
+  /** Obra dueña del libro (obligatorio). */
+  proyectoId: string;
   /**
-   * @deprecated El CSV diario siempre hace reemplazo limpio (no append).
-   * Se ignora para evitar duplicados al reimportar el acumulado.
+   * @deprecated El CSV diario siempre hace reemplazo limpio por obra (no append).
    */
   replaceExisting?: boolean;
   batchSize?: number;
 };
 
-async function countRegistros(supabase: SupabaseClient): Promise<number> {
-  const { count, error } = await supabase
-    .from(TABLA_REGISTROS_GASTOS)
-    .select('id', { count: 'exact', head: true });
-  if (error) throw new Error(`No se pudo contar registros_gastos: ${error.message}`);
+async function countRegistros(
+  supabase: SupabaseClient,
+  proyectoId?: string | null,
+): Promise<number> {
+  let q = supabase.from(TABLA_REGISTROS_GASTOS).select('id', { count: 'exact', head: true });
+  if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+  const { count, error } = await q;
+  if (error) {
+    if (proyectoId && /proyecto_id|42703/i.test(error.message)) {
+      return countRegistros(supabase, null);
+    }
+    throw new Error(`No se pudo contar registros_gastos: ${error.message}`);
+  }
   return count ?? 0;
 }
 
@@ -297,9 +342,20 @@ async function insertBatches(
     const chunk = rows.slice(i, i + batchSize);
     const { error } = await supabase.from(table).insert(chunk);
     if (error) {
-      throw new Error(
-        `Error en lote ${batches + 1} → ${table} (filas ${i + 1}–${i + chunk.length}): ${error.message}`,
-      );
+      // Fallback: staging sin columna proyecto_id aún
+      if (/proyecto_id|42703/i.test(error.message)) {
+        const stripped = chunk.map(({ proyecto_id: _p, ...rest }) => rest);
+        const { error: e2 } = await supabase.from(table).insert(stripped);
+        if (e2) {
+          throw new Error(
+            `Error en lote ${batches + 1} → ${table} (filas ${i + 1}–${i + chunk.length}): ${e2.message}`,
+          );
+        }
+      } else {
+        throw new Error(
+          `Error en lote ${batches + 1} → ${table} (filas ${i + 1}–${i + chunk.length}): ${error.message}`,
+        );
+      }
     }
     batches += 1;
   }
@@ -310,18 +366,22 @@ async function replaceViaStaging(
   supabase: SupabaseClient,
   rows: Record<string, unknown>[],
   batchSize: number,
+  proyectoId: string,
 ): Promise<{ batches: number; inserted: number; totalEnTabla: number }> {
   const { error: clearErr } = await supabase.rpc('ci_clear_registros_gastos_staging');
   if (clearErr) throw new Error(clearErr.message);
 
   const batches = await insertBatches(supabase, STAGING_TABLE, rows, batchSize);
 
-  const { data, error: commitErr } = await supabase.rpc('ci_commit_registros_gastos_from_staging');
+  const { data, error: commitErr } = await supabase.rpc(
+    'ci_commit_registros_gastos_from_staging',
+    { p_proyecto_id: proyectoId },
+  );
   if (commitErr) throw new Error(commitErr.message);
 
   const payload = (data ?? {}) as { inserted?: number; total?: number };
   const inserted = Number(payload.inserted) || rows.length;
-  const totalEnTabla = await countRegistros(supabase);
+  const totalEnTabla = await countRegistros(supabase, proyectoId);
 
   if (totalEnTabla !== rows.length) {
     throw new Error(
@@ -337,7 +397,7 @@ async function replaceViaStaging(
 }
 
 function shouldFallbackToDirectReplace(message: string): boolean {
-  return /schema cache|does not exist|PGRST202|42P01|ci_clear_registros|ci_commit_registros|registros_gastos_staging|Could not find the function|staging|is of type numeric|is of type text|datatype mismatch/i.test(
+  return /schema cache|does not exist|PGRST202|42P01|ci_clear_registros|ci_commit_registros|registros_gastos_staging|Could not find the function|staging|is of type numeric|is of type text|datatype mismatch|proyecto_id requerido|replace global/i.test(
     message,
   );
 }
@@ -346,26 +406,40 @@ async function replaceDirect(
   supabase: SupabaseClient,
   rows: Record<string, unknown>[],
   batchSize: number,
+  proyectoId: string,
 ): Promise<{ batches: number; inserted: number; totalEnTabla: number }> {
-  // Fallback si aún no aplicaron migración 275: vaciar destino e insertar.
-  const { error: delErr } = await supabase.from(TABLA_REGISTROS_GASTOS).delete().gte('id', 0);
-  if (delErr) {
-    const { error: del2 } = await supabase
+  // Preferir borrar solo la obra; si no hay columna, vaciar todo (legacy).
+  let delErrMsg: string | null = null;
+  {
+    const { error: delErr } = await supabase
       .from(TABLA_REGISTROS_GASTOS)
       .delete()
-      .not('id', 'is', null);
-    if (del2) throw new Error(`No se pudo vaciar registros_gastos: ${del2.message}`);
+      .eq('proyecto_id', proyectoId);
+    if (delErr) delErrMsg = delErr.message;
   }
 
-  const afterDelete = await countRegistros(supabase);
-  if (afterDelete !== 0) {
+  if (delErrMsg && /proyecto_id|42703/i.test(delErrMsg)) {
+    const { error: delErr } = await supabase.from(TABLA_REGISTROS_GASTOS).delete().gte('id', 0);
+    if (delErr) {
+      const { error: del2 } = await supabase
+        .from(TABLA_REGISTROS_GASTOS)
+        .delete()
+        .not('id', 'is', null);
+      if (del2) throw new Error(`No se pudo vaciar registros_gastos: ${del2.message}`);
+    }
+  } else if (delErrMsg) {
+    throw new Error(`No se pudo vaciar registros_gastos de la obra: ${delErrMsg}`);
+  }
+
+  const stillMine = await countRegistros(supabase, proyectoId);
+  if (stillMine !== 0) {
     throw new Error(
-      `No se vació registros_gastos (quedan ${afterDelete} filas). Aplique migración 275 o revise RLS.`,
+      `No se vació registros_gastos de la obra (quedan ${stillMine} filas). Aplique migración 278 o revise RLS.`,
     );
   }
 
   const batches = await insertBatches(supabase, TABLA_REGISTROS_GASTOS, rows, batchSize);
-  const totalEnTabla = await countRegistros(supabase);
+  const totalEnTabla = await countRegistros(supabase, proyectoId);
 
   if (totalEnTabla !== rows.length) {
     throw new Error(
@@ -377,15 +451,20 @@ async function replaceDirect(
 }
 
 /**
- * Reemplaza el contenido de `registros_gastos` con el CSV diario (acumulado).
- * Nunca hace append: subir el mismo archivo dos veces deja el mismo conteo.
+ * Reemplaza el libro CSV de una obra en `registros_gastos`.
+ * Nunca hace append: subir el mismo archivo dos veces deja el mismo conteo de esa obra.
  */
 export async function importCsvToRegistrosGastos(
   supabase: SupabaseClient,
   csvText: string,
-  opts?: ImportCsvOpts,
+  opts: ImportCsvOpts,
 ): Promise<ImportCsvToSupabaseResult> {
-  const { rows, skipped } = parseRegistrosGastosCsv(csvText);
+  const proyectoId = String(opts?.proyectoId ?? '').trim();
+  if (!proyectoId) {
+    throw new Error('proyecto_id requerido: selecciona la obra antes de importar el CSV diario.');
+  }
+
+  const { rows, skipped } = parseRegistrosGastosCsv(csvText, proyectoId);
   if (!rows.length) {
     throw new Error('No hay filas válidas para importar.');
   }
@@ -393,7 +472,7 @@ export async function importCsvToRegistrosGastos(
   const batchSize = Math.min(Math.max(opts?.batchSize ?? BATCH_SIZE, 50), 500);
 
   try {
-    const via = await replaceViaStaging(supabase, rows, batchSize);
+    const via = await replaceViaStaging(supabase, rows, batchSize, proyectoId);
     return {
       parsed: rows.length,
       inserted: via.inserted,
@@ -402,6 +481,7 @@ export async function importCsvToRegistrosGastos(
       replaced: true,
       totalEnTabla: via.totalEnTabla,
       mode: 'staging_commit',
+      proyectoId,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -412,7 +492,7 @@ export async function importCsvToRegistrosGastos(
     await supabase.rpc('ci_clear_registros_gastos_staging').then(() => undefined, () => undefined);
   }
 
-  const direct = await replaceDirect(supabase, rows, batchSize);
+  const direct = await replaceDirect(supabase, rows, batchSize, proyectoId);
   return {
     parsed: rows.length,
     inserted: direct.inserted,
@@ -421,5 +501,6 @@ export async function importCsvToRegistrosGastos(
     replaced: true,
     totalEnTabla: direct.totalEnTabla,
     mode: 'direct_replace',
+    proyectoId,
   };
 }

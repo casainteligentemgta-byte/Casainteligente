@@ -5,6 +5,7 @@ export const CCO_CLASES = [
   'INGRESO',
   'CONTRATO',
   'PRESUPUESTO',
+  'PRESUPUESTO_METADATA',
   'AUDITORIA',
 ] as const;
 

@@ -181,22 +181,20 @@ export async function cargarCcoDashboard(
     ? proyectos.find((p) => p.id === proyectoId)?.nombre ?? 'Obra seleccionada'
     : 'Todas las obras';
 
-  // Preferir histórico en registros_gastos (~2462 filas RANCHO) cuando exista.
-  if (await tieneRegistrosGastos(supabase)) {
+  // Preferir histórico en registros_gastos de la obra seleccionada.
+  if (proyectoId && (await tieneRegistrosGastos(supabase, proyectoId))) {
     let honorariosPct = 15;
     let devaluacionDesdeConfig: number | null = null;
-    if (proyectoId) {
-      const { data: cfg } = await supabase
-        .from('cco_proyecto_config')
-        .select('honorarios_admin_pct,devaluacion_pct')
-        .eq('proyecto_id', proyectoId)
-        .maybeSingle();
-      if (cfg && (cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct != null) {
-        honorariosPct = num((cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct);
-      }
-      if (cfg && (cfg as { devaluacion_pct?: number }).devaluacion_pct != null) {
-        devaluacionDesdeConfig = num((cfg as { devaluacion_pct?: number }).devaluacion_pct);
-      }
+    const { data: cfg } = await supabase
+      .from('cco_proyecto_config')
+      .select('honorarios_admin_pct,devaluacion_pct')
+      .eq('proyecto_id', proyectoId)
+      .maybeSingle();
+    if (cfg && (cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct != null) {
+      honorariosPct = num((cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct);
+    }
+    if (cfg && (cfg as { devaluacion_pct?: number }).devaluacion_pct != null) {
+      devaluacionDesdeConfig = num((cfg as { devaluacion_pct?: number }).devaluacion_pct);
     }
     const devaluacionPromedio = devaluacionOverride ?? devaluacionDesdeConfig ?? 0;
     return cargarDashboardDesdeRegistrosGastos(supabase, {
