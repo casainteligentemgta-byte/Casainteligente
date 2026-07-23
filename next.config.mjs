@@ -3,6 +3,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const konvaBrowser = path.join(__dirname, 'node_modules/konva/lib/index.js');
+const konvaNode = path.join(__dirname, 'node_modules/konva/lib/index-node.js');
+const emptyStub = path.join(__dirname, 'lib/webpack-empty-stub.js');
 
 const nextConfig = {
   reactStrictMode: true,
@@ -85,12 +88,12 @@ const nextConfig = {
       config.cache = false;
     }
 
-    // NetVision (react-konva): forzar build browser de konva y stub de canvas.
+    // NetVision: konva main = index-node (pide canvas nativo). Redirigir a browser + stub.
     config.resolve = config.resolve ?? {};
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),
-      canvas: false,
-      konva: path.join(__dirname, 'node_modules/konva/lib/index.js'),
+      canvas: emptyStub,
+      [konvaNode]: konvaBrowser,
     };
 
     if (isServer) {

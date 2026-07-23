@@ -31,11 +31,8 @@ export async function pdfSourceToDataUrl(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('No se pudo crear canvas para el PDF');
 
-  await page.render({
-    canvasContext: ctx,
-    canvas,
-    viewport,
-  }).promise;
+  // pdfjs-dist tipa RenderParameters sin `canvas` en esta versión; el runtime lo acepta vía canvasContext.
+  await page.render({ canvasContext: ctx, viewport } as Parameters<typeof page.render>[0]).promise;
 
   return canvas.toDataURL('image/png');
 }
