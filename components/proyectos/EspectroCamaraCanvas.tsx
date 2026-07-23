@@ -14,7 +14,6 @@ import {
   anguloDesdePuntos,
   deltaAnguloDeg,
   escalaIconoCamara,
-  formatDistancia,
   fovDesdeLados,
   ladosFov,
   puntoAsaRotacion,
@@ -143,35 +142,6 @@ function useHtmlImage(
   return image;
 }
 
-function LabelDistancia({
-  x,
-  y,
-  text,
-  fill,
-  compact,
-}: {
-  x: number;
-  y: number;
-  text: string;
-  fill: string;
-  compact?: boolean;
-}) {
-  return (
-    <Text
-      x={x}
-      y={y}
-      text={text}
-      fontSize={compact ? 10 : 11}
-      fontStyle="bold"
-      fill={fill}
-      stroke="#0a0a0f"
-      strokeWidth={compact ? 2.5 : 3}
-      fillAfterStrokeEnabled
-      listening={false}
-    />
-  );
-}
-
 /** Icono discreto en el vértice; se escala con el plano (metros/píxel). */
 function IconoCamara({ selected }: { selected: boolean }) {
   const body = selected ? 'rgba(39, 39, 42, 0.92)' : 'rgba(24, 24, 27, 0.78)';
@@ -241,23 +211,13 @@ function CamaraNode({
   const tipRight = puntoLadoEspectro(camara, 'right');
   const fill = selected ? 'rgba(34, 197, 94, 0.18)' : 'rgba(34, 197, 94, 0.1)';
   const stroke = selected ? '#22c55e' : 'rgba(74, 222, 128, 0.4)';
-  const distanciaCanvas = Math.hypot(asa.x - camara.x, asa.y - camara.y) || camara.radius;
-  const midX = (camara.x + asa.x) / 2;
-  const midY = (camara.y + asa.y) / 2;
-  const dx = asa.x - camara.x;
-  const dy = asa.y - camara.y;
-  const len = Math.hypot(dx, dy) || 1;
   /** Texto legible al zoom; el icono sí sigue la escala del plano. */
   const uiScale = 1 / Math.max(viewScale, 0.01);
   const iconScale = escalaIconoCamara(escala);
-  const labelOffset = 10 * uiScale;
-  const labelX = midX + (-dy / len) * labelOffset;
-  const labelY = midY + (dx / len) * labelOffset - 4 * uiScale;
   const fovAlong = Math.max(18, camara.radius * 0.68);
   const fovRad = (camara.rotation * Math.PI) / 180;
   const fovLabelX = camara.x + Math.cos(fovRad) * fovAlong;
   const fovLabelY = camara.y + Math.sin(fovRad) * fovAlong;
-  const distLabel = formatDistancia(distanciaCanvas, escala);
   const fovLabel = formatFovLabel(totalFov);
   const hitR = Math.max(7, 5.5 * iconScale);
   const minR = alcanceMinPx(escala);
@@ -319,17 +279,7 @@ function CamaraNode({
         listening={false}
       />
 
-      <Group x={labelX} y={labelY} scaleX={uiScale} scaleY={uiScale} listening={false}>
-        <LabelDistancia
-          x={0}
-          y={0}
-          text={distLabel}
-          fill={selected ? '#bbf7d0' : '#a7f3d0'}
-          compact={!selected}
-        />
-      </Group>
-
-      {/* Marca del ángulo FOV total sobre el espectro */}
+      {/* Solo grados sobre el espectro (sin etiqueta px/m); el cono es el semáforo visual */}
       <Group x={fovLabelX} y={fovLabelY} scaleX={uiScale} scaleY={uiScale} listening={false}>
         <Text
           x={-18}

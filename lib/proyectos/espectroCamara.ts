@@ -225,7 +225,8 @@ export function metrosAPx(metros: number, escala: EscalaPlano): number {
 
 export function formatDistancia(px: number, escala: EscalaPlano | null | undefined): string {
   const m = pxAMetros(px, escala);
-  if (m == null) return `${Math.round(px)} px`;
+  // Sin escala calibrada no mostramos px (el espectro en plano solo usa grados).
+  if (m == null) return '—';
   if (m >= 10) return `${m.toFixed(1)} m`;
   return `${m.toFixed(2)} m`;
 }

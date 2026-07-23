@@ -1,0 +1,9 @@
+{
+  "boxes": [
+    { "id": "box-16", "label": "Cajetín 16mm", "maxCat6": 4, "usd": 1.2 },
+    { "id": "box-20", "label": "Cajetín 20mm", "maxCat6": 8, "usd": 1.8 },
+    { "id": "box-25", "label": "Cajetín 25mm", "maxCat6": 12, "usd": 2.4 },
+    { "id": "duct-40", "label": "Ducto 40x40mm", "maxCat6": 20, "usd": 4.5 }
+  ],
+  "maxOccupancy": 0.4
+}

@@ -144,7 +144,7 @@ const navItems: NavItem[] = [
   },
   {
     id: 'netvision',
-    href: '/netvision',
+    href: '/nexus/vision',
     label: 'NetVision',
     icon: (active: boolean) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -283,8 +283,10 @@ function navItemActive(pathname: string, href: string): boolean {
   if (href === '/legal') {
     return pathname === '/legal' || pathname.startsWith('/legal/');
   }
-  if (href === '/netvision') {
+  if (href === '/nexus/vision' || href === '/netvision') {
     return (
+      pathname === '/nexus/vision' ||
+      pathname.startsWith('/nexus/vision/') ||
       pathname === '/netvision' ||
       pathname.startsWith('/netvision/') ||
       pathname === '/prueba-camara' ||

@@ -624,7 +624,7 @@ export default function EspectroCamaraPanel({
           <label className="block text-[10px] font-bold uppercase text-zinc-500">
             {escala && alcanceM != null
               ? `Alcance: ${formatDistancia(selected.radius, escala)}`
-              : `Alcance (px): ${Math.round(selected.radius)}`}
+              : 'Alcance (calibra la escala para ver metros)'}
             <input
               type="range"
               min={minPx}
@@ -638,7 +638,11 @@ export default function EspectroCamaraPanel({
               <span className="mt-1 block normal-case font-normal text-[10px] text-zinc-600">
                 Rango {ALCANCE_MIN_M}–{ALCANCE_MAX_M} m (útil en rincones / pasillos)
               </span>
-            ) : null}
+            ) : (
+              <span className="mt-1 block normal-case font-normal text-[10px] text-zinc-600">
+                En el plano solo se muestran grados y el cono (sin px).
+              </span>
+            )}
           </label>
           <label className="block text-[10px] font-bold uppercase text-zinc-500">
             Orientación (°): {Math.round(selected.rotation)}

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-/** Alias legacy → NetVision PRO en el menú inferior. */
+/** Alias legacy → NetVision Pro completo. */
 export default function PruebaCamaraPage() {
-  redirect('/netvision');
+  redirect('/nexus/vision');
 }
