@@ -14,6 +14,10 @@ const naturalSchema = z.object({
   apellido: z.string().min(2, 'El apellido es obligatorio.'),
   email: z.string().email('Email inválido.').optional().or(z.literal('')),
   telefono: z.string().min(7, 'El teléfono es obligatorio.'),
+  nacionalidad: z.string().optional(),
+  estado_civil: z.string().optional(),
+  profesion: z.string().optional(),
+  direccion: z.string().optional(),
 });
 
 const juridicoSchema = z.object({
@@ -23,6 +27,7 @@ const juridicoSchema = z.object({
   representante_legal: z.string().min(2, 'El representante legal es obligatorio.'),
   email: z.string().email('Email inválido.').optional().or(z.literal('')),
   telefono: z.string().min(7, 'El teléfono es obligatorio.'),
+  direccion: z.string().optional(),
 });
 
 const customerSchema = z.discriminatedUnion('customerType', [naturalSchema, juridicoSchema]);
@@ -81,6 +86,11 @@ function payloadSinColumnaCustomers(
 ): Record<string, unknown> {
   const next: Record<string, unknown> = { ...data };
   delete next[columna];
+
+  if (columna === 'nacionalidad' || columna === 'estado_civil' || columna === 'profesion') {
+    // Estas columnas no son cruciales para el fallback, simplemente se ignoran si fallan
+    return next;
+  }
 
   if (validated.customerType === 'natural') {
     if (columna === 'apellido') {
@@ -152,6 +162,10 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
   const [representanteLegal, setRepresentanteLegal] = useState(initialData?.representante_legal ?? '');
   const [email, setEmail] = useState(initialData?.email ?? '');
   const [telefono, setTelefono] = useState(initialData?.telefono ?? initialData?.movil ?? '');
+  const [nacionalidad, setNacionalidad] = useState(initialData?.nacionalidad ?? '');
+  const [estadoCivil, setEstadoCivil] = useState(initialData?.estado_civil ?? '');
+  const [profesion, setProfesion] = useState(initialData?.profesion ?? '');
+  const [direccion, setDireccion] = useState(initialData?.direccion ?? '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -165,6 +179,10 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
             apellido: apellido.trim(),
             email: email.trim(),
             telefono: telefono.trim(),
+            nacionalidad: nacionalidad.trim(),
+            estado_civil: estadoCivil.trim(),
+            profesion: profesion.trim(),
+            direccion: direccion.trim(),
           }
         : {
             customerType,
@@ -173,6 +191,7 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
             representante_legal: representanteLegal.trim(),
             email: email.trim(),
             telefono: telefono.trim(),
+            direccion: direccion.trim(),
           };
 
     const parsed = customerSchema.safeParse(payload);
@@ -205,6 +224,10 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
               email: validated.email || null,
               telefono: validated.telefono,
               movil: validated.telefono,
+              nacionalidad: validated.nacionalidad || null,
+              estado_civil: validated.estado_civil || null,
+              profesion: validated.profesion || null,
+              direccion: validated.direccion || null,
             }
           : {
               customer_type: 'juridico',
@@ -218,6 +241,10 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
               email: validated.email || null,
               telefono: validated.telefono,
               movil: validated.telefono,
+              nacionalidad: null,
+              estado_civil: null,
+              profesion: null,
+              direccion: validated.direccion || null,
             };
 
       const runSave = async (payload: Record<string, unknown>) =>
@@ -326,6 +353,24 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
               <Input placeholder="+58 412..." value={telefono} onChange={(e) => setTelefono(e.target.value)} />
             </Field>
           </div>
+
+          {customerType === 'natural' && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Nacionalidad" error={errors.nacionalidad}>
+                <Input placeholder="Ej: Venezolano" value={nacionalidad} onChange={(e) => setNacionalidad(e.target.value)} />
+              </Field>
+              <Field label="Estado Civil" error={errors.estado_civil}>
+                <Input placeholder="Ej: Soltero" value={estadoCivil} onChange={(e) => setEstadoCivil(e.target.value)} />
+              </Field>
+              <Field label="Profesión" error={errors.profesion}>
+                <Input placeholder="Ej: Ingeniero" value={profesion} onChange={(e) => setProfesion(e.target.value)} />
+              </Field>
+            </div>
+          )}
+
+          <Field label="Dirección / Domicilio Fiscal" error={errors.direccion}>
+            <Input placeholder="Dirección completa" value={direccion} onChange={(e) => setDireccion(e.target.value)} />
+          </Field>
         </div>
 
         <button

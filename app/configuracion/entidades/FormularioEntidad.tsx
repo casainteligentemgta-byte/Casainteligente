@@ -314,6 +314,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             notas: null,
             logo_url: logoUrl.trim() || null,
             sello_url: selloUrl.trim() || null,
+            domicilio: rmDomicilioEmpresa.trim() || direccionFiscal.trim() || null,
+            registro_mercantil: rmCirc.trim() || null,
+            representante_legal: repLegalNombre,
+            representante_cedula: repLegalCedula,
+            representante_estado_civil: primera?.estado_civil?.trim() || null,
+            representante_profesion: primera?.profesion?.trim() || null,
           })
           .select('id')
           .single();
@@ -337,6 +343,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             ...basePayload,
             logo_url: logoUrl.trim() || null,
             sello_url: selloUrl.trim() || null,
+            domicilio: rmDomicilioEmpresa.trim() || direccionFiscal.trim() || null,
+            registro_mercantil: rmCirc.trim() || null,
+            representante_legal: repLegalNombre,
+            representante_cedula: repLegalCedula,
+            representante_estado_civil: primera?.estado_civil?.trim() || null,
+            representante_profesion: primera?.profesion?.trim() || null,
           })
           .eq('id', id);
         if (up0) {
