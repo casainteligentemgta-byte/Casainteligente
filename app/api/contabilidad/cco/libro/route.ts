@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import { cargarLibroMaestro } from '@/lib/contabilidad/cco/cargarLibroMaestro';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 
 /** GET libro maestro unificado (gastos + ingresos + contratos + presupuestos). */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

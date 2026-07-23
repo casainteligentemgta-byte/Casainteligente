@@ -6,6 +6,7 @@ import {
 } from '@/lib/contabilidad/cco/proyectoConfig';
 import { TIPO_CONTRATO_AD, ESTADO_CONTRATO_EXITOSO } from '@/lib/proyectos/contratoAdministracionDelegada';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,9 @@ async function honorariosAd(
 /** GET ?proyecto= — config CCO de la obra. */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
@@ -51,6 +55,9 @@ export async function GET(req: Request) {
 /** PUT body — guarda % admin, devaluación, alias. */
 export async function PUT(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

@@ -14,6 +14,7 @@ export type ModuloNavId =
   | 'rrhh'
   | 'almacen'
   | 'contabilidad'
+  | 'cco'
   | 'equipo'
   | 'legal';
 
@@ -38,9 +39,10 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'rrhh', href: '/rrhh/hojas-vida', label: 'RRHH' },
   { id: 'almacen', href: '/almacen', label: 'Almacenes' },
   { id: 'contabilidad', href: '/contabilidad', label: 'Conta' },
+  { id: 'cco', href: '/contabilidad/cco', label: 'CCO' },
 ];
 
-const MODULOS_POR_ROL: Record<RolEmpresa | 'solo_lectura', ModuloNavId[]> = {
+const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
   admin: [
     'inicio',
     'clientes',
@@ -69,6 +71,8 @@ const MODULOS_POR_ROL: Record<RolEmpresa | 'solo_lectura', ModuloNavId[]> = {
   almacen_central: ['inicio', 'almacen', 'contabilidad'],
   rrhh: ['inicio', 'rrhh', 'proyectos', 'equipo'],
   solo_lectura: ['inicio', 'proyectos', 'domotica', 'contabilidad', 'almacen'],
+  /** Suegro / invitado: solo Control Contable de Obra (lectura). */
+  cco_lectura: ['inicio', 'cco'],
 };
 
 /** Si no hay rol: solo inicio (evita menú completo a invitados sin asignar). */
@@ -114,7 +118,19 @@ export function ampliarModulosPorPermisos(
     set.add('contabilidad');
     set.add('proyectos');
   }
+  if (ps.has('cco.ver') || ps.has('cco.editar')) {
+    if (!set.has('contabilidad')) set.add('cco');
+  }
   return set;
+}
+
+function esRutaCco(pathname: string): boolean {
+  return (
+    pathname === '/contabilidad/cco' ||
+    pathname.startsWith('/contabilidad/cco/') ||
+    pathname === '/contabilidad/vista-previa-cco' ||
+    pathname.startsWith('/contabilidad/vista-previa-cco/')
+  );
 }
 
 /** Prefijos de app cuyo acceso exige el módulo indicado (resto de rutas no se bloquea). */
@@ -147,8 +163,11 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
   { modulo: 'almacen', match: (p) => p === '/almacen' || p.startsWith('/almacen/') },
   {
     modulo: 'contabilidad',
-    match: (p) => p === '/contabilidad' || p.startsWith('/contabilidad/') || p.startsWith('/procura'),
+    match: (p) =>
+      !esRutaCco(p) &&
+      (p === '/contabilidad' || p.startsWith('/contabilidad/') || p.startsWith('/procura')),
   },
+  { modulo: 'cco', match: (p) => esRutaCco(p) },
   { modulo: 'legal', match: (p) => p === '/legal' || p.startsWith('/legal/') },
 ];
 
@@ -165,6 +184,11 @@ export function hrefPermitidoPorModulos(pathname: string, modulos: Set<ModuloNav
     pathname.startsWith('/registro')
   ) {
     return true;
+  }
+
+  // CCO: módulo dedicado o contabilidad completa.
+  if (esRutaCco(pathname)) {
+    return modulos.has('cco') || modulos.has('contabilidad');
   }
 
   for (const gate of GATES_POR_RUTA) {

@@ -36,6 +36,8 @@ import CcoTabIngresos from '@/components/contabilidad/cco/CcoTabIngresos';
 import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos';
 import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
 import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
+import { useModulosNavPermitidos } from '@/hooks/useModulosNavPermitidos';
+import { actorEsSoloVistaEmpresa } from '@/lib/auth/permisosCatalogo';
 
 type NavId =
   | 'dashboard'
@@ -92,6 +94,16 @@ const NAV_ITEMS: NavEntry[] = [
 ];
 
 const IMPORTAR_NAV_IDS: NavId[] = ['importar-csv', 'importar-pdf', 'importar-v4'];
+
+/** Módulos de escritura / configuración ocultos en modo solo visualización. */
+const NAV_SOLO_ESCRITURA: NavId[] = [
+  'importar-csv',
+  'importar-pdf',
+  'importar-v4',
+  'editor',
+  'distribucion',
+  'ajustes',
+];
 
 /** Módulos que necesitan selector de obra fuera del dashboard. */
 const MODULOS_CON_OBRA: NavId[] = [
@@ -341,6 +353,18 @@ function guardarMenuOpen(open: boolean): void {
 }
 
 export default function CcoDashboardClient() {
+  const accesoNav = useModulosNavPermitidos();
+  const soloLectura =
+    accesoNav.status === 'ready' && actorEsSoloVistaEmpresa(accesoNav.roles);
+
+  const navItems = useMemo(() => {
+    if (!soloLectura) return NAV_ITEMS;
+    return NAV_ITEMS.filter((entry) => {
+      if (entry.kind === 'group') return false;
+      return !NAV_SOLO_ESCRITURA.includes(entry.id);
+    });
+  }, [soloLectura]);
+
   const [nav, setNav] = useState<NavId>('dashboard');
   const [tab, setTab] = useState<TabId>('graficos');
   const [proyectoId, setProyectoId] = useState('');
@@ -362,6 +386,11 @@ export default function CcoDashboardClient() {
   const menuInicializadoRef = React.useRef(false);
   /** Submenú Importar: CSV / PDF / V4 SQLite. */
   const [importarOpen, setImportarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!soloLectura) return;
+    if (NAV_SOLO_ESCRITURA.includes(nav)) setNav('dashboard');
+  }, [soloLectura, nav]);
 
   const setMenuOpenPersisted = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
     setMenuOpen((prev) => {
@@ -541,7 +570,7 @@ export default function CcoDashboardClient() {
             <span style={{ fontSize: 12 }}>{menuOpen ? 'Ocultar' : 'Menú'}</span>
           </button>
           <Link
-            href="/contabilidad"
+            href={soloLectura ? '/' : '/contabilidad'}
             style={{
               color: '#2563EB',
               fontWeight: 700,
@@ -551,7 +580,7 @@ export default function CcoDashboardClient() {
               textOverflow: 'ellipsis',
             }}
           >
-            ← Hub
+            {soloLectura ? '← Inicio' : '← Hub'}
           </Link>
         </div>
         <button
@@ -669,7 +698,7 @@ export default function CcoDashboardClient() {
             </button>
           </div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 260 }}>
-            {NAV_ITEMS.map((entry) => {
+            {navItems.map((entry) => {
               if (entry.kind === 'group') {
                 const groupActive = IMPORTAR_NAV_IDS.includes(nav);
                 return (
@@ -802,7 +831,11 @@ export default function CcoDashboardClient() {
               );
             })}
           </nav>
-          <CcoSidebarResumen proyectoId={proyectoId} onChanged={() => void cargar()} />
+          <CcoSidebarResumen
+            proyectoId={proyectoId}
+            soloLectura={soloLectura}
+            onChanged={() => void cargar()}
+          />
         </aside>
 
         <div
@@ -977,13 +1010,32 @@ export default function CcoDashboardClient() {
             />
           </label>
           <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={labelStyle}>Exportar / registrar</span>
+            <span style={labelStyle}>{soloLectura ? 'Exportar' : 'Exportar / registrar'}</span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <CcoExportBar proyectoId={proyectoId} />
-              <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
+              {!soloLectura ? (
+                <CcoFormRegistroModal proyectoId={proyectoId} onSaved={() => void cargar()} />
+              ) : null}
             </div>
           </div>
         </div>
+
+        {soloLectura ? (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: '10px 14px',
+              borderRadius: 10,
+              background: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              color: '#1E40AF',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            Modo solo visualización: puede consultar el CCO; no puede importar, editar ni registrar.
+          </div>
+        ) : null}
 
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 40, color: '#64748B' }}>

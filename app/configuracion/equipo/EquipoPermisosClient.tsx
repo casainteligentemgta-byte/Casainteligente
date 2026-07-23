@@ -193,7 +193,9 @@ export default function EquipoPermisosClient() {
               </ul>
               <p className="mt-4 text-[11px] text-zinc-600">
                 Roles de obra (ingeniero, depositario, supervisor…) se configuran en Control de obra →
-                Nómina del proyecto. Permisos disponibles: {PERMISOS.join(', ')}.
+                Nómina del proyecto. «CCO (solo visualización)» sirve para invitados (p. ej. suegro) con
+                login/contraseña que solo ven el Control Contable de Obra. Permisos disponibles:{' '}
+                {PERMISOS.join(', ')}.
               </p>
             </section>
           </div>

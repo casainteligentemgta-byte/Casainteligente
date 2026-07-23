@@ -4,6 +4,8 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/nexus/GlassCard';
+import { apiUrl } from '@/lib/http/apiUrl';
+import { homeHrefParaRolesEmpresa } from '@/lib/auth/permisosCatalogo';
 
 function LoginForm() {
   const router = useRouter();
@@ -42,7 +44,24 @@ function LoginForm() {
         setError(msg);
         return;
       }
-      router.push(next);
+
+      let dest = next;
+      if (dest === '/') {
+        try {
+          const res = await fetch(apiUrl('/api/auth/permisos'), {
+            cache: 'no-store',
+            credentials: 'include',
+          });
+          if (res.ok) {
+            const data = (await res.json()) as { roles_empresa?: string[] };
+            dest = homeHrefParaRolesEmpresa(data.roles_empresa ?? []);
+          }
+        } catch {
+          /* usa next */
+        }
+      }
+
+      router.push(dest);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');

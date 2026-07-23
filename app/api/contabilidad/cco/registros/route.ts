@@ -8,6 +8,7 @@ import { normalizarTipoGastoCco } from '@/lib/contabilidad/cco/normalizarTipoGas
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
 import { upsertContratoObra } from '@/lib/contabilidad/cco/contratosJerarquia';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,9 @@ type Body = {
  */
 export async function POST(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
@@ -219,6 +223,9 @@ type PatchBody = {
  */
 export async function PATCH(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
