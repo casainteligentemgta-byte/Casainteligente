@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { restaurarSnapshotCco } from '@/lib/contabilidad/cco/snapshots';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -17,6 +18,9 @@ async function resolveParams(
 /** POST — restablece el libro CCO de la obra a este snapshot. */
 export async function POST(req: Request, ctx: RouteCtx) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

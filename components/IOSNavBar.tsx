@@ -282,6 +282,29 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
+  {
+    id: 'cco',
+    href: '/contabilidad/cco',
+    label: 'CCO',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M4 19V5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z"
+          stroke={active ? '#5856D6' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(88,86,214,0.12)' : 'none'}
+        />
+        <path
+          d="M14 3v4h4M8 13h8M8 17h5"
+          stroke={active ? '#5856D6' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
 ];
 
 function navItemActive(pathname: string, href: string): boolean {
@@ -300,11 +323,14 @@ function navItemActive(pathname: string, href: string): boolean {
   if (href === '/nexus/vision') {
     return pathname.startsWith('/nexus/vision');
   }
+  if (href === '/contabilidad/cco') {
+    return pathname === '/contabilidad/cco' || pathname.startsWith('/contabilidad/cco/');
+  }
   return pathname.startsWith(href);
 }
 
 function colorActivo(label: string): string {
-  if (label === 'Conta') return '#5856D6';
+  if (label === 'Conta' || label === 'CCO') return '#5856D6';
   if (label === 'Almacenes') return '#FF2D55';
   if (label === 'Productos') return '#FF9500';
   if (label === 'Proyectos') return '#F59E0B';

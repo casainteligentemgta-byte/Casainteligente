@@ -29,6 +29,7 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
   const [email, setEmail] = useState('');
   const [nombre, setNombre] = useState('');
   const [rol, setRol] = useState<string>('comprador');
+  const [password, setPassword] = useState('');
   const [entidadId, setEntidadId] = useState(entidadIdInicial ?? '');
   const [entidades, setEntidades] = useState<EntidadOpcion[]>([]);
   const [cargandoEntidades, setCargandoEntidades] = useState(true);
@@ -37,6 +38,8 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
   const [conTelegram, setConTelegram] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [ultimoOk, setUltimoOk] = useState<string | null>(null);
+
+  const esCcoLectura = rol === 'cco_lectura';
 
   const cargarEntidades = useCallback(async () => {
     setCargandoEntidades(true);
@@ -80,6 +83,14 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
       toast.error('Indica el Chat ID de Telegram o desactive acceso bot');
       return;
     }
+    if (password && password.length < 8) {
+      toast.error('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    if (esCcoLectura && !password.trim()) {
+      toast.error('Para CCO solo visualización indica una contraseña (el suegro entra con login/clave)');
+      return;
+    }
 
     setEnviando(true);
     setUltimoOk(null);
@@ -93,7 +104,8 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
           nombre: nombre.trim() || undefined,
           rol,
           entidadId,
-          invitar_web: true,
+          invitar_web: !password.trim(),
+          password: password.trim() || undefined,
           telegram_chat_id: conTelegram ? telegramChatId.trim() : null,
           cargo: cargo.trim() || null,
         }),
@@ -117,6 +129,7 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
       setUltimoOk(data.mensaje || `Listo: ${emailTrim}`);
       setEmail('');
       setNombre('');
+      setPassword('');
       setTelegramChatId('');
       setCargo('');
       onListo?.();
@@ -144,8 +157,8 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
               Invitar usuario (web + bot)
             </CardTitle>
             <CardDescription className="mt-1 text-zinc-500">
-              Envía invitación por correo (Supabase Auth), asigna rol por entidad y opcionalmente agrega
-              el Chat ID a la whitelist de Telegram.
+              Invita por correo o crea login/contraseña (p. ej. rol «CCO solo visualización»), asigna
+              entidad y opcionalmente Telegram.
             </CardDescription>
           </div>
         </div>
@@ -199,6 +212,29 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label
+                htmlFor="invitar-password"
+                className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
+              >
+                Contraseña {esCcoLectura ? '*' : '(opcional)'}
+              </Label>
+              <Input
+                id="invitar-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder={esCcoLectura ? 'Clave para entrar en /login' : 'Si la dejas vacía, se envía invitación por correo'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={enviando}
+                className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
+              />
+              <p className="text-[10px] text-zinc-600">
+                {esCcoLectura
+                  ? 'Crea cuenta lista para usar: solo verá CCO (sin editar ni otros módulos).'
+                  : 'Con contraseña se crea el usuario al momento; sin ella se manda invitación por correo.'}
+              </p>
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="invitar-entidad" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">

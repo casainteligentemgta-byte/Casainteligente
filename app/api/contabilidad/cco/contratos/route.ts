@@ -9,6 +9,7 @@ import {
   vincularPagosAContrato,
 } from '@/lib/contabilidad/cco/contratosJerarquia';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,9 @@ function schemaHint(message: string): string | undefined {
 /** GET jerarquía Subcontratista → contratos → pagos + huérfanos. */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
@@ -47,6 +51,9 @@ export async function GET(req: Request) {
 /** POST crear/actualizar contrato, vincular, repartir saco, patch avance o backfill. */
 export async function POST(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

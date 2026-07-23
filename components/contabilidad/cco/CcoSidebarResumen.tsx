@@ -179,9 +179,11 @@ function MiniTable({
 export default function CcoSidebarResumen({
   proyectoId,
   onChanged,
+  soloLectura = false,
 }: {
   proyectoId: string;
   onChanged?: () => void;
+  soloLectura?: boolean;
 }) {
   const [egresos, setEgresos] = useState<CcoLibroFila[]>([]);
   const [ingresos, setIngresos] = useState<CcoLibroFila[]>([]);
@@ -242,7 +244,7 @@ export default function CcoSidebarResumen({
 
   return (
     <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #1E293B' }}>
-      {proyectoId ? (
+      {proyectoId && !soloLectura ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <CcoFormRegistroModal
             proyectoId={proyectoId}
@@ -265,6 +267,10 @@ export default function CcoSidebarResumen({
             }}
           />
         </div>
+      ) : soloLectura ? (
+        <p style={{ margin: '0 0 8px', fontSize: 11, color: '#64748B' }}>
+          Solo visualización — sin registro de movimientos.
+        </p>
       ) : (
         <p style={{ margin: 0, fontSize: 11, color: '#64748B' }}>
           Selecciona una obra para registrar ingresos.
