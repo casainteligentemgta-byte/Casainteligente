@@ -213,5 +213,5 @@ export async function ingestLegalDocumentText(
     inserted += rows.length;
   }
 
-  return { chunks: inserted, source: meta.source };
+  return { chunks: inserted, source: meta.source ?? null };
 }
