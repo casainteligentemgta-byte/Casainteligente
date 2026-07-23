@@ -26,6 +26,14 @@ const PATTERNS: Array<{ re: RegExp; unidad: string; confianza: 'alta' | 'media' 
   { re: new RegExp(`${NUM}\\s*(?:UND|UNID(?:ADES?)?|U\\.?|PZAS?|PIEZAS?)\\b`, 'i'), unidad: 'UND', confianza: 'media' },
   { re: new RegExp(`${NUM}\\s*(?:VIAJES?)\\b`, 'i'), unidad: 'VIA', confianza: 'alta' },
   { re: new RegExp(`${NUM}\\s*(?:LTS?|LITROS?)\\b`, 'i'), unidad: 'LT', confianza: 'alta' },
+  { re: new RegExp(`${NUM}\\s*(?:PALETAS?|PAL)\\b`, 'i'), unidad: 'PAL', confianza: 'alta' },
+  { re: new RegExp(`${NUM}\\s*(?:ROLLOS?|ROL)\\b`, 'i'), unidad: 'ROL', confianza: 'alta' },
+  { re: new RegExp(`${NUM}\\s*(?:GALONES?|GAL)\\b`, 'i'), unidad: 'GAL', confianza: 'alta' },
+  { re: new RegExp(`${NUM}\\s*(?:PARES?)\\b`, 'i'), unidad: 'PAR', confianza: 'alta' },
+  { re: new RegExp(`${NUM}\\s*(?:CUÑETES?)\\b`, 'i'), unidad: 'CUÑ', confianza: 'alta' },
+  { re: new RegExp(`${NUM}\\s*(?:LAMINAS?|LAM)\\b`, 'i'), unidad: 'LAM', confianza: 'alta' },
+  { re: new RegExp(`${NUM}\\s*(?:HORCONES?)\\b`, 'i'), unidad: 'HORC', confianza: 'alta' },
+  { re: new RegExp(`(?:CABILLAS?|VARILLAS?|VAR)\\s*${NUM}\\b`, 'i'), unidad: 'VAR', confianza: 'alta' },
   /** "ATADO DE 3/8 (300 CABILLAS)" — cantidad entre paréntesis + unidad. */
   {
     re: new RegExp(`\\(\\s*${NUM}\\s*(?:CABILLAS?|VARILLAS?|SACOS?|M[³3]|M3)\\s*\\)`, 'i'),
