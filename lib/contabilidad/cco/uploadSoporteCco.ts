@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const CCO_COMPROBANTES_BUCKET = 'comprobantes';
 
-export type CcoSoporteTipo = 'factura' | 'comprobante';
+export type CcoSoporteTipo = 'factura' | 'comprobante' | 'computo';
 
 function safeName(name: string): string {
   return name
@@ -30,7 +30,8 @@ export async function uploadSoporteCco(
     : '';
   const base = safeName(opts.fileName.replace(/\.[^.]+$/, '') || opts.tipo);
   const idPart = opts.gastoId != null ? String(opts.gastoId) : 'nuevo';
-  const path = `cco/${opts.tipo}/${idPart}/${Date.now()}_${base}${ext}`;
+  const folder = opts.tipo === 'computo' ? 'computos' : opts.tipo;
+  const path = `cco/${folder}/${idPart}/${Date.now()}_${base}${ext}`;
   const contentType = opts.contentType || 'application/octet-stream';
 
   const { error } = await supabase.storage.from(CCO_COMPROBANTES_BUCKET).upload(path, opts.file, {

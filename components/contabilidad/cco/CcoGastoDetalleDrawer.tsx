@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, Loader2, Trash2, Upload } from 'lucide-react';
+import { ExternalLink, Loader2, Ruler, Trash2, Upload } from 'lucide-react';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
+import TablaComputos from '@/components/computos/TablaComputos';
 
 type Props = {
   fila: CcoLibroFila | null;
@@ -82,14 +83,17 @@ export default function CcoGastoDetalleDrawer({ fila, open, onClose, onSaved }: 
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState<'factura' | 'comprobante' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [panelComputos, setPanelComputos] = useState(false);
   const editable = Boolean(fila?.editable);
 
   useEffect(() => {
     if (open && fila) {
       setForm(fromFila(fila));
       setError(null);
+      setPanelComputos(false);
     } else {
       setForm(null);
+      setPanelComputos(false);
     }
   }, [open, fila]);
 
@@ -246,12 +250,13 @@ export default function CcoGastoDetalleDrawer({ fila, open, onClose, onSaved }: 
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(520px, 100%)',
+          width: panelComputos ? 'min(920px, 100%)' : 'min(520px, 100%)',
           height: '100%',
           background: '#fff',
           boxShadow: '-12px 0 40px rgba(15,23,42,0.2)',
           display: 'flex',
           flexDirection: 'column',
+          transition: 'width 0.2s ease',
         }}
       >
         <div
@@ -271,12 +276,39 @@ export default function CcoGastoDetalleDrawer({ fila, open, onClose, onSaved }: 
               {!editable ? ' · solo lectura (fuente fusionada)' : ' · 25 campos · editable'}
             </p>
           </div>
-          <button type="button" onClick={onClose} style={btnGhost}>
-            Cerrar
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setPanelComputos((v) => !v)}
+              style={{
+                ...btnGhost,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: panelComputos ? '#ECFDF5' : '#fff',
+                borderColor: panelComputos ? '#99F6E4' : '#CBD5E1',
+                color: panelComputos ? '#0F766E' : '#334155',
+              }}
+            >
+              <Ruler size={14} />
+              Cómputos
+            </button>
+            <button type="button" onClick={onClose} style={btnGhost}>
+              Cerrar
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          {panelComputos ? (
+            <TablaComputos
+              titulo="Cómputos del gasto"
+              capitulo={form.capitulo || undefined}
+              subcapitulo={form.subcapitulo || null}
+              gastoId={Number.isFinite(Number(fila.id)) ? Number(fila.id) : null}
+              capituloFijo={Boolean(form.capitulo)}
+            />
+          ) : (
           <div style={{ display: 'grid', gap: 10 }}>
             <label style={lab}>
               Clase
@@ -364,10 +396,11 @@ export default function CcoGastoDetalleDrawer({ fila, open, onClose, onSaved }: 
               </div>
             </div>
           </div>
-          {error ? <p style={{ color: '#B91C1C', fontSize: 13, marginTop: 12 }}>{error}</p> : null}
+          )}
+          {error && !panelComputos ? <p style={{ color: '#B91C1C', fontSize: 13, marginTop: 12 }}>{error}</p> : null}
         </div>
 
-        {editable ? (
+        {editable && !panelComputos ? (
           <div
             style={{
               padding: 14,

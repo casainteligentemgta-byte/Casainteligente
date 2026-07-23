@@ -5,7 +5,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-/** POST multipart: file + tipo=factura|comprobante + gastoId? */
+/** POST multipart: file + tipo=factura|comprobante|computo + gastoId? */
 export async function POST(req: Request) {
   try {
     const admin = supabaseAdminForRoute();
@@ -17,7 +17,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Campo file requerido.' }, { status: 400 });
     }
     const tipoRaw = String(form.get('tipo') ?? 'factura').toLowerCase();
-    const tipo: CcoSoporteTipo = tipoRaw === 'comprobante' ? 'comprobante' : 'factura';
+    const tipo: CcoSoporteTipo =
+      tipoRaw === 'comprobante'
+        ? 'comprobante'
+        : tipoRaw === 'computo'
+          ? 'computo'
+          : 'factura';
     const gastoId = form.get('gastoId') != null ? String(form.get('gastoId')) : null;
 
     const maxMb = 12;
@@ -36,12 +41,15 @@ export async function POST(req: Request) {
       gastoId,
     });
 
+    const campo =
+      tipo === 'factura' ? 'link_factura' : tipo === 'comprobante' ? 'link_comprobante' : 'soporte_url';
+
     return NextResponse.json({
       ok: true,
       path,
       url: publicUrl,
       tipo,
-      campo: tipo === 'factura' ? 'link_factura' : 'link_comprobante',
+      campo,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al subir soporte.';

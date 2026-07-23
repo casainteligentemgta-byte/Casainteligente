@@ -32,6 +32,7 @@ import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos
 import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
 import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
 import CcoTabConceptos from '@/components/contabilidad/cco/CcoTabConceptos';
+import TablaComputos from '@/components/computos/TablaComputos';
 
 type NavId =
   | 'dashboard'
@@ -39,6 +40,7 @@ type NavId =
   | 'importar-pdf'
   | 'importar-v4'
   | 'libro'
+  | 'computos'
   | 'presupuestos'
   | 'auditoria'
   | 'ajustes';
@@ -50,6 +52,7 @@ const NAV_ITEMS: { id: NavId; label: string; ready: boolean; hint?: string }[] =
   { id: 'importar-pdf', label: 'Importar PDF', ready: true, hint: 'OCR / tabla' },
   { id: 'importar-v4', label: 'Importar V4', ready: true, hint: 'CSV / JSON' },
   { id: 'libro', label: 'Libro maestro', ready: true },
+  { id: 'computos', label: 'Cómputos Métricos', ready: true, hint: 'cantidades' },
   { id: 'presupuestos', label: 'Presupuestos', ready: true },
   { id: 'auditoria', label: 'Auditoría', ready: true },
   { id: 'ajustes', label: 'Ajustes CCO', ready: true },
@@ -734,6 +737,20 @@ export default function CcoDashboardClient() {
       ) : null}
 
       {nav === 'libro' ? <CcoLibroMaestro proyectoId={proyectoId} /> : null}
+
+      {nav === 'computos' ? (
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 14,
+            border: '1px solid #E2E8F0',
+            padding: 18,
+            boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
+          }}
+        >
+          <TablaComputos titulo="Cómputos métricos" />
+        </div>
+      ) : null}
 
       {nav === 'presupuestos' ? <CcoTabPresupuestos proyectoId={proyectoId} /> : null}
 
