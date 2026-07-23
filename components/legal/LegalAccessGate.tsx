@@ -25,12 +25,17 @@ export default function LegalAccessGate({ children }: { children: React.ReactNod
           Acceso restringido. Si contrataste el plan Legal (despacho o estudio), inicia sesión con
           la cuenta autorizada. Casa Inteligente usa el Departamento Legal integrado al CRM.
         </p>
-        <Link
-          href="/login?next=/legal"
-          className="mt-6 inline-block text-sm font-semibold text-amber-400 hover:text-amber-300"
-        >
-          Iniciar sesión
-        </Link>
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <Link
+            href="/login?next=/legal"
+            className="text-sm font-semibold text-amber-400 hover:text-amber-300"
+          >
+            Iniciar sesión
+          </Link>
+          <Link href="/abogado" className="text-xs text-zinc-500 hover:text-zinc-300">
+            Conocer el Módulo Abogado →
+          </Link>
+        </div>
       </div>
     );
   }

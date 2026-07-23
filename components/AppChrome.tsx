@@ -23,6 +23,8 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
 
   const isNexus = path.startsWith('/nexus');
   const isLegal = path === '/legal' || path.startsWith('/legal/');
+  /** Landing / registro comercial del Módulo Abogado (público, sin dock CRM). */
+  const isAbogado = path === '/abogado' || path.startsWith('/abogado/');
   /** Vista previa del presupuesto: pantalla completa sin dock ni distracciones (y sin caché de miniaturas en otros módulos). */
   const isPresupuestoPreview = path === '/ventas/preview';
   /** Entrevista candidato u onboarding: pantalla completa sin dock (anti-distracción). */
@@ -34,7 +36,13 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const isLogin = path === '/login' || path.startsWith('/auth');
 
   const chromeMinimal =
-    isNexus || isLegal || isPresupuestoPreview || isRecruitment || isPublicRegistro || isLogin;
+    isNexus ||
+    isLegal ||
+    isAbogado ||
+    isPresupuestoPreview ||
+    isRecruitment ||
+    isPublicRegistro ||
+    isLogin;
 
   return (
     <>
