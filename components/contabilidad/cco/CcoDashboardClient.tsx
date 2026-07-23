@@ -33,10 +33,12 @@ import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
 import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
 import CcoTabConceptos from '@/components/contabilidad/cco/CcoTabConceptos';
 import TablaComputos from '@/components/computos/TablaComputos';
+import CcoSincronizarBdPanel from '@/components/contabilidad/cco/CcoSincronizarBdPanel';
 
 type NavId =
   | 'dashboard'
   | 'importar-csv'
+  | 'sincronizar-bd'
   | 'importar-pdf'
   | 'importar-v4'
   | 'libro'
@@ -48,6 +50,7 @@ type NavId =
 /** Menú lateral CCO V4. */
 const NAV_ITEMS: { id: NavId; label: string; ready: boolean; hint?: string }[] = [
   { id: 'dashboard', label: 'Dashboard', ready: true },
+  { id: 'sincronizar-bd', label: 'Sincronizar BD', ready: true, hint: 'Base de Datos Principal' },
   { id: 'importar-csv', label: 'CSV Diario', ready: true, hint: 'registros_gastos' },
   { id: 'importar-pdf', label: 'Importar PDF', ready: true, hint: 'OCR / tabla' },
   { id: 'importar-v4', label: 'Importar V4', ready: true, hint: 'CSV / JSON' },
@@ -752,6 +755,16 @@ export default function CcoDashboardClient() {
           proyectoIdInicial={proyectoId || null}
           onImportado={(pid) => {
             if (pid) elegirObra(pid);
+            void cargar();
+            setNav('dashboard');
+          }}
+        />
+      ) : null}
+
+      {nav === 'sincronizar-bd' ? (
+        <CcoSincronizarBdPanel
+          proyectoId={proyectoId}
+          onDone={() => {
             void cargar();
             setNav('dashboard');
           }}
