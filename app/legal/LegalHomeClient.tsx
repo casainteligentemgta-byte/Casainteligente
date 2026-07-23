@@ -22,6 +22,7 @@ import {
   LEGAL_PRIORIDADES,
   LEGAL_TIPOS_CASO,
 } from '@/lib/legal/casosCatalogo';
+import { useAccesoLegal } from '@/lib/legal/AccesoLegalContext';
 
 type Caso = {
   id: string;
@@ -82,6 +83,7 @@ function badgeEstado(estado: string): string {
 }
 
 export default function LegalHomeClient() {
+  const acceso = useAccesoLegal();
   const [casos, setCasos] = useState<Caso[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -212,12 +214,17 @@ export default function LegalHomeClient() {
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-sm text-amber-200/80">
               <Scale className="h-4 w-4" />
-              Resumen · resolver casos
+              {acceso.standalone
+                ? 'Resumen · módulo abogado'
+                : 'Resumen · resolver casos'}
             </p>
-            <h2 className="mt-2 text-2xl font-bold text-white">Panel legal</h2>
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              {acceso.standalone ? 'Tu despacho' : 'Panel legal'}
+            </h2>
             <p className="mt-1 max-w-xl text-sm text-zinc-500">
-              Prioriza lo abierto, gestiona actuaciones y cierra casos. El resumen muestra la
-              cola de trabajo lista para resolver.
+              {acceso.standalone
+                ? 'Producto Legal independiente: gestiona casos, documentos y cálculos sin el CRM de obras.'
+                : 'Prioriza lo abierto, gestiona actuaciones y cierra casos. El resumen muestra la cola de trabajo lista para resolver.'}
             </p>
           </div>
           <Link
