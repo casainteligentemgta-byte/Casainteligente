@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import AeropuertoRelojPizarra from '@/components/home/AeropuertoRelojPizarra';
+import ThemeQuickToggle from '@/components/theme/ThemeQuickToggle';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/nexus/GlassCard';
 import { cn } from '@/lib/utils';
@@ -121,11 +122,25 @@ export default function DashboardPage() {
           >
             {dayLabel || '\u00A0'}
           </p>
-          <h1 className="text-2xl sm:text-3xl landscape:text-xl font-bold tracking-tight text-white truncate">
+          <h1
+            className="truncate text-2xl font-bold tracking-tight sm:text-3xl landscape:text-xl"
+            style={{ color: 'var(--label-primary)' }}
+          >
             CASA INTELIGENTE
           </h1>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <ThemeQuickToggle />
+          <Link
+            href="/ajustes"
+            className="rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-tighter transition-all landscape:px-2.5 landscape:py-1"
+            style={{
+              color: 'var(--label-secondary)',
+              boxShadow: 'inset 0 0 0 1px var(--separator)',
+            }}
+          >
+            Ajustes
+          </Link>
           <Link
             href="/nexus"
             className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-cyan)] ring-1 ring-[rgba(0,242,254,0.3)] hover:bg-[rgba(0,242,254,0.1)] transition-all"

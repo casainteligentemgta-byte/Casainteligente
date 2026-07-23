@@ -96,6 +96,71 @@
     --muted: var(--label-secondary);
     --surface: var(--bg-secondary);
     --accent: var(--ios-blue);
+
+    /* Dock inferior + opción de tema */
+    --dock-bg: rgba(22, 22, 24, 0.82);
+    --dock-border: rgba(255, 255, 255, 0.08);
+    --dock-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+    --dock-handle: rgba(255, 255, 255, 0.28);
+    --theme-option-active-bg: rgba(0, 122, 255, 0.12);
+  }
+
+  /*
+   * Tema claro (estilo CCO): fondo slate suave, cards blancas, texto slate-900.
+   * Se activa con data-theme="light" en <html> (ThemeProvider + script anti-FOUC).
+   */
+  html[data-theme='light'] {
+    color-scheme: light;
+
+    --bg-primary: #f1f5f9;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e2e8f0;
+    --bg-grouped: #f8fafc;
+
+    --label-primary: #0f172a;
+    --label-secondary: #475569;
+    --label-tertiary: #64748b;
+    --label-quaternary: #94a3b8;
+
+    --separator: rgba(15, 23, 42, 0.12);
+    --separator-opaque: #cbd5e1;
+
+    --glass-bg: rgba(255, 255, 255, 0.78);
+    --glass-border: rgba(15, 23, 42, 0.08);
+    --glass-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 8px 32px rgba(15, 23, 42, 0.1), 0 4px 8px rgba(15, 23, 42, 0.05);
+    --shadow-xl: 0 20px 60px rgba(15, 23, 42, 0.12), 0 8px 16px rgba(15, 23, 42, 0.06);
+
+    --background: 210 40% 96%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 211 100% 50%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 215 16% 47%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 211 100% 50%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 211 100% 50%;
+
+    --surface: var(--bg-secondary);
+
+    --dock-bg: rgba(255, 255, 255, 0.92);
+    --dock-border: rgba(15, 23, 42, 0.1);
+    --dock-shadow: 0 -8px 28px rgba(15, 23, 42, 0.1);
+    --dock-handle: rgba(15, 23, 42, 0.22);
+    --theme-option-active-bg: rgba(37, 99, 235, 0.1);
   }
 }
 
@@ -109,6 +174,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    color-scheme: dark;
+  }
+
+  html[data-theme='light'] {
+    color-scheme: light;
   }
 
   body {
@@ -123,13 +193,21 @@
   /* Fondo principal: evita negro plano y da profundidad coherente con el dock iOS */
   .app-root-bg {
     background-color: #050508;
-    background-image: 
+    background-image:
       radial-gradient(circle at 0% 0%, rgba(0, 122, 255, 0.15) 0%, transparent 40%),
       radial-gradient(circle at 100% 0%, rgba(88, 86, 214, 0.12) 0%, transparent 40%),
       radial-gradient(circle at 50% 100%, rgba(0, 242, 254, 0.08) 0%, transparent 50%),
       radial-gradient(circle at 100% 100%, rgba(52, 199, 89, 0.05) 0%, transparent 30%);
     background-repeat: no-repeat;
     background-attachment: fixed;
+  }
+
+  html[data-theme='light'] .app-root-bg {
+    background-color: #f1f5f9;
+    background-image:
+      radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.08) 0%, transparent 42%),
+      radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.06) 0%, transparent 40%),
+      radial-gradient(circle at 50% 100%, rgba(148, 163, 184, 0.12) 0%, transparent 50%);
   }
 }
 
@@ -144,6 +222,18 @@
   select.ci-select-tabulador option {
     background-color: #09090b;
     color: #fafafa;
+  }
+
+  html[data-theme='light'] select.ci-select-tabulador {
+    color-scheme: light;
+    background-color: #ffffff;
+    color: #0f172a;
+    border-color: #cbd5e1;
+  }
+
+  html[data-theme='light'] select.ci-select-tabulador option {
+    background-color: #ffffff;
+    color: #0f172a;
   }
 }
 
@@ -164,6 +254,18 @@
     -webkit-backdrop-filter: blur(40px) saturate(200%);
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 12px 48px 0 rgba(0, 0, 0, 0.5);
+  }
+
+  html[data-theme='light'] .glass {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+  }
+
+  html[data-theme='light'] .glass-strong {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.1);
   }
 
   /* iOS card */

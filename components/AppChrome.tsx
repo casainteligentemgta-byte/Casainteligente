@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import ModulosRutaGuard from '@/components/auth/ModulosRutaGuard';
 import IOSNavBar from '@/components/IOSNavBar';
+import { useTheme } from '@/components/providers/ThemeProvider';
 import { usePathname } from 'next/navigation';
 
 /** Sonner rompe el SSR en dev si se renderiza en servidor (componente interno undefined). */
@@ -13,6 +14,29 @@ const Toaster = dynamic(() => import('sonner').then((m) => ({ default: m.Toaster
 function useResolvedPathname(): string {
   const pathname = usePathname();
   return typeof pathname === 'string' ? pathname : '';
+}
+
+function AppToaster() {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+
+  return (
+    <Toaster
+      theme={theme}
+      position="top-center"
+      richColors
+      closeButton
+      toastOptions={{
+        classNames: {
+          toast: isLight
+            ? 'border border-slate-200 bg-white/95 text-slate-900 backdrop-blur-md shadow-xl shadow-slate-900/10'
+            : 'border border-white/10 bg-[#0A0A0F]/95 text-zinc-100 backdrop-blur-md shadow-xl shadow-black/40',
+          title: isLight ? 'text-slate-900' : 'text-zinc-100',
+          description: isLight ? 'text-slate-500' : 'text-zinc-400',
+        },
+      }}
+    />
+  );
 }
 
 /**
@@ -42,20 +66,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
         <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-8'}>{children}</div>
       </ReactQueryProvider>
       {!chromeMinimal ? <IOSNavBar /> : null}
-      <Toaster
-        theme="dark"
-        position="top-center"
-        richColors
-        closeButton
-        toastOptions={{
-          classNames: {
-            toast:
-              'border border-white/10 bg-[#0A0A0F]/95 text-zinc-100 backdrop-blur-md shadow-xl shadow-black/40',
-            title: 'text-zinc-100',
-            description: 'text-zinc-400',
-          },
-        }}
-      />
+      <AppToaster />
     </>
   );
 }
