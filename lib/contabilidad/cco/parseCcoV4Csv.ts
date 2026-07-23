@@ -3,11 +3,10 @@
  * Sin columna id: genera origen_v4_id estable (SHA-256 → int) para anti-duplicados.
  */
 import type { CcoV4ImportPayload, CcoV4EstructuraRow, CcoV4TransaccionRow } from '@/lib/contabilidad/cco/importarMaestroV4';
+import { parseCsvMaestroRows, parseNumeroCsv } from '@/lib/contabilidad/cco/parseCsvMaestro';
 
 function num(v: unknown): number | null {
-  if (v == null || v === '') return null;
-  const n = Number(String(v).replace(/,/g, '').trim());
-  return Number.isFinite(n) ? n : null;
+  return parseNumeroCsv(v);
 }
 
 function fecha10(v: unknown): string | null {
@@ -40,63 +39,7 @@ async function stableOrigenId(parts: string[]): Promise<number> {
 }
 
 function parseCsvRows(text: string): Record<string, string>[] {
-  const lines: string[] = [];
-  let cur = '';
-  let inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"') {
-      if (inQ && text[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else inQ = !inQ;
-      continue;
-    }
-    if ((c === '\n' || c === '\r') && !inQ) {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      lines.push(cur);
-      cur = '';
-      continue;
-    }
-    cur += c;
-  }
-  if (cur.length) lines.push(cur);
-
-  const split = (line: string): string[] => {
-    const out: string[] = [];
-    let cell = '';
-    let q = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        if (q && line[i + 1] === '"') {
-          cell += '"';
-          i++;
-        } else q = !q;
-        continue;
-      }
-      if (c === ',' && !q) {
-        out.push(cell);
-        cell = '';
-        continue;
-      }
-      cell += c;
-    }
-    out.push(cell);
-    return out;
-  };
-
-  const nonEmpty = lines.filter((l) => l.trim().length > 0);
-  if (nonEmpty.length < 2) return [];
-  const headers = split(nonEmpty[0]).map((h) => h.replace(/^\uFEFF/, '').trim());
-  return nonEmpty.slice(1).map((line) => {
-    const cells = split(line);
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => {
-      row[h] = (cells[i] ?? '').trim();
-    });
-    return row;
-  });
+  return parseCsvMaestroRows(text);
 }
 
 function pick(row: Record<string, string>, ...names: string[]): string {

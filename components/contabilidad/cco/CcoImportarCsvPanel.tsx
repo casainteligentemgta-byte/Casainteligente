@@ -60,7 +60,11 @@ export default function CcoImportarCsvPanel({
         const res = await fetch('/api/contabilidad/cco/gastos/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ csvText, proyectoId: proyectoIdInicial }),
+          body: JSON.stringify({
+            csvText,
+            proyectoId: proyectoIdInicial,
+            fileName: file.name,
+          }),
         });
         const json = await res.json();
         if (!res.ok || json.ok === false) {
@@ -232,6 +236,11 @@ export default function CcoImportarCsvPanel({
         >
           <strong style={{ fontSize: 14 }}>Importación completada</strong>
           <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+            {fileName ? (
+              <li>
+                Archivo: <strong>{fileName}</strong>
+              </li>
+            ) : null}
             <li>
               Procesadas: <strong>{result.parsed.toLocaleString('es-VE')}</strong> filas
             </li>

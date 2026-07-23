@@ -9,6 +9,7 @@ import {
   type CcoTipoGasto,
 } from '@/lib/contabilidad/ccoClasificarGasto';
 import { aplicarFactorDevaluacion } from '@/lib/contabilidad/cco/tasas';
+import { applyDerivedCsvMontos, round2HalfUp } from '@/lib/contabilidad/cco/parseCsvMaestro';
 import { getGastosCCO } from '@/lib/contabilidad/cco/registrosGastos';
 import type {
   CcoCapituloFila,
@@ -109,9 +110,22 @@ export async function cargarDashboardDesdeRegistrosGastos(
   for (const r of rows) {
     const clase = String(r.clase ?? '').toUpperCase();
     const periodo = ym(r.fecha);
-    const base = num(r.monto_base_usd);
-    const hon = num(r.honorarios);
-    const costo = num(r.costo_total) || base + hon;
+    const derived = applyDerivedCsvMontos(
+      {
+        clase,
+        moneda: r.moneda,
+        monto_orig: r.monto_orig,
+        monto_base_usd: r.monto_base_usd,
+        honorarios: r.honorarios,
+        costo_total: r.costo_total,
+        porcentaje_admin: r.porcentaje_admin,
+        tasa: r.tasa,
+      },
+      params.honorariosPct,
+    );
+    const base = num(derived.monto_base_usd);
+    const hon = num(derived.honorarios);
+    const costo = num(derived.costo_total) || base + hon;
 
     if (r.porcentaje_brecha_real != null && Number.isFinite(Number(r.porcentaje_brecha_real))) {
       sumBrecha += Number(r.porcentaje_brecha_real);
@@ -162,10 +176,9 @@ export async function cargarDashboardDesdeRegistrosGastos(
     brechaFuente = 'filas_registros_gastos';
   }
 
-  const adminDelegada =
-    honorariosSum > 0 ? honorariosSum : gastosNetos * (params.honorariosPct / 100);
-  const costoTotal = costoTotalSum > 0 ? costoTotalSum : gastosNetos + adminDelegada;
-  const saldoCaja = ingresos - costoTotal;
+  const adminDelegada = honorariosSum;
+  const costoTotal = costoTotalSum;
+  const saldoCaja = round2HalfUp(ingresos - costoTotal);
 
   const totalGastos = gastosNetos || 1;
   for (const [, tipos] of Array.from(porCapTipo.entries())) {

@@ -18,20 +18,32 @@ export async function POST(req: Request) {
     const contentType = req.headers.get('content-type') ?? '';
     let csvText = '';
     let proyectoId = '';
+    let csvFileName = '';
 
     if (contentType.includes('multipart/form-data')) {
       const form = await req.formData();
       const file = form.get('file');
       if (file instanceof File) {
         csvText = await file.text();
+        csvFileName = file.name || '';
       } else if (typeof form.get('csvText') === 'string') {
         csvText = String(form.get('csvText'));
       }
       proyectoId = String(form.get('proyectoId') ?? form.get('proyecto_id') ?? '').trim();
+      if (!csvFileName) {
+        csvFileName = String(form.get('fileName') ?? form.get('csvFileName') ?? '').trim();
+      }
     } else {
-      const body = (await req.json()) as { csvText?: string; proyectoId?: string; proyecto_id?: string };
+      const body = (await req.json()) as {
+        csvText?: string;
+        proyectoId?: string;
+        proyecto_id?: string;
+        fileName?: string;
+        csvFileName?: string;
+      };
       csvText = String(body.csvText ?? '');
       proyectoId = String(body.proyectoId ?? body.proyecto_id ?? '').trim();
+      csvFileName = String(body.fileName ?? body.csvFileName ?? '').trim();
     }
 
     if (!proyectoId) {
@@ -48,7 +60,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await importCsvToRegistrosGastos(admin.client, csvText, { proyectoId });
+    const result = await importCsvToRegistrosGastos(admin.client, csvText, {
+      proyectoId,
+      csvFileName: csvFileName || null,
+    });
 
     return NextResponse.json({ ok: true, ...result });
   } catch (err: unknown) {

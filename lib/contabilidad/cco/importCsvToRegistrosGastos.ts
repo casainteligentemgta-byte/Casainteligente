@@ -6,6 +6,11 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizarClaseImport } from '@/lib/contabilidad/cco/csvMaestroColumns';
+import {
+  applyDerivedCsvMontos,
+  parseCsvMaestroRows,
+  parseNumeroCsv,
+} from '@/lib/contabilidad/cco/parseCsvMaestro';
 import { TABLA_REGISTROS_GASTOS } from '@/lib/contabilidad/cco/registrosGastos';
 import type { CreateGastoCcoInput } from '@/types/gastos';
 
@@ -23,66 +28,12 @@ export type ImportCsvToSupabaseResult = {
   totalEnTabla: number;
   mode: 'staging_commit' | 'direct_replace';
   proyectoId: string;
+  csvNombre?: string | null;
+  csvImportadoAt?: string | null;
 };
 
 function parseCsvRows(text: string): Record<string, string>[] {
-  const lines: string[] = [];
-  let cur = '';
-  let inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"') {
-      if (inQ && text[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else inQ = !inQ;
-      continue;
-    }
-    if ((c === '\n' || c === '\r') && !inQ) {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      lines.push(cur);
-      cur = '';
-      continue;
-    }
-    cur += c;
-  }
-  if (cur.length) lines.push(cur);
-
-  const split = (line: string): string[] => {
-    const out: string[] = [];
-    let cell = '';
-    let q = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (q && line[i + 1] === '"') {
-          cell += '"';
-          i++;
-        } else q = !q;
-        continue;
-      }
-      if (ch === ',' && !q) {
-        out.push(cell);
-        cell = '';
-        continue;
-      }
-      cell += ch;
-    }
-    out.push(cell);
-    return out;
-  };
-
-  const nonEmpty = lines.filter((l) => l.trim().length > 0);
-  if (nonEmpty.length < 2) return [];
-  const headers = split(nonEmpty[0]).map((h) => h.replace(/^\uFEFF/, '').trim());
-  return nonEmpty.slice(1).map((line) => {
-    const cells = split(line);
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => {
-      row[h] = (cells[i] ?? '').trim();
-    });
-    return row;
-  });
+  return parseCsvMaestroRows(text);
 }
 
 function pick(row: Record<string, string>, ...names: string[]): string {
@@ -94,13 +45,9 @@ function pick(row: Record<string, string>, ...names: string[]): string {
   return '';
 }
 
-/** Limpia NaN / vacíos → null. */
+/** Limpia NaN / vacíos → null (soporta 647.265,00 y 647,265.00). */
 function numClean(v: unknown): number | null {
-  if (v == null || v === '') return null;
-  const s = String(v).trim().replace(/,/g, '');
-  if (!s || /^nan$/i.test(s) || s === 'None' || s === 'null') return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  return parseNumeroCsv(v);
 }
 
 function strClean(v: unknown): string | null {
@@ -225,19 +172,26 @@ function toInsertRow(
   proyectoId: string,
 ): Record<string, unknown> {
   const clase = normalizarClaseImport(String(data.clase ?? 'GASTO'));
-  const montoBase = data.monto_base_usd ?? data.monto_orig ?? null;
-  const pctAdmin = data.porcentaje_admin ?? 15;
-  let honorarios = data.honorarios;
-  if (honorarios == null && montoBase != null && clase === 'GASTO') {
-    honorarios = Math.round(Number(montoBase) * (Number(pctAdmin) / 100) * 10000) / 10000;
-  }
-  let costoTotal = data.costo_total;
-  if (costoTotal == null && montoBase != null) {
-    costoTotal =
-      clase === 'GASTO'
-        ? Math.round((Number(montoBase) + Number(honorarios ?? 0)) * 100) / 100
-        : Number(montoBase);
-  }
+  const derived = applyDerivedCsvMontos(
+    {
+      clase,
+      moneda: data.moneda,
+      monto_orig: data.monto_orig,
+      monto_base_usd: data.monto_base_usd,
+      honorarios: data.honorarios,
+      costo_total: data.costo_total,
+      porcentaje_admin: data.porcentaje_admin,
+      tasa: data.tasa,
+    },
+    Number(data.porcentaje_admin) > 0 && Number(data.porcentaje_admin) <= 100
+      ? Number(data.porcentaje_admin)
+      : 15,
+  );
+
+  const montoBase = derived.monto_base_usd;
+  const honorarios = derived.honorarios;
+  const costoTotal = derived.costo_total;
+  const pctAdmin = derived.porcentaje_admin;
 
   const fecha =
     data.fecha && String(data.fecha).includes('T')
@@ -308,6 +262,8 @@ export function parseRegistrosGastosCsv(
 export type ImportCsvOpts = {
   /** Obra dueña del libro (obligatorio). */
   proyectoId: string;
+  /** Nombre del archivo CSV (se guarda en cco_proyecto_config.metadata). */
+  csvFileName?: string | null;
   /**
    * @deprecated El CSV diario siempre hace reemplazo limpio por obra (no append).
    */
@@ -471,9 +427,10 @@ export async function importCsvToRegistrosGastos(
 
   const batchSize = Math.min(Math.max(opts?.batchSize ?? BATCH_SIZE, 50), 500);
 
+  let base: Omit<ImportCsvToSupabaseResult, 'csvNombre' | 'csvImportadoAt'>;
   try {
     const via = await replaceViaStaging(supabase, rows, batchSize, proyectoId);
-    return {
+    base = {
       parsed: rows.length,
       inserted: via.inserted,
       skipped,
@@ -490,17 +447,33 @@ export async function importCsvToRegistrosGastos(
     }
     // Limpia staging residual si el commit falló a mitad.
     await supabase.rpc('ci_clear_registros_gastos_staging').then(() => undefined, () => undefined);
+    const direct = await replaceDirect(supabase, rows, batchSize, proyectoId);
+    base = {
+      parsed: rows.length,
+      inserted: direct.inserted,
+      skipped,
+      batches: direct.batches,
+      replaced: true,
+      totalEnTabla: direct.totalEnTabla,
+      mode: 'direct_replace',
+      proyectoId,
+    };
   }
 
-  const direct = await replaceDirect(supabase, rows, batchSize, proyectoId);
-  return {
-    parsed: rows.length,
-    inserted: direct.inserted,
-    skipped,
-    batches: direct.batches,
-    replaced: true,
-    totalEnTabla: direct.totalEnTabla,
-    mode: 'direct_replace',
-    proyectoId,
-  };
+  const csvFileName = String(opts.csvFileName ?? '').trim();
+  if (csvFileName) {
+    try {
+      const { guardarCsvFuenteCco } = await import('@/lib/contabilidad/cco/proyectoConfig');
+      const saved = await guardarCsvFuenteCco(supabase, proyectoId, csvFileName);
+      return {
+        ...base,
+        csvNombre: saved.csv_nombre,
+        csvImportadoAt: saved.csv_importado_at,
+      };
+    } catch {
+      return { ...base, csvNombre: csvFileName, csvImportadoAt: null };
+    }
+  }
+
+  return base;
 }

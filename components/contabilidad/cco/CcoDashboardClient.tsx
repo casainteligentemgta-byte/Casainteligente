@@ -341,6 +341,8 @@ export default function CcoDashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [periodicidad, setPeriodicidad] = useState('Mensual');
   const [modo, setModo] = useState<'acumulado' | 'periodo'>('acumulado');
+  const [csvNombre, setCsvNombre] = useState<string | null>(null);
+  const [csvImportadoAt, setCsvImportadoAt] = useState<string | null>(null);
 
   const proyectosCatalogo = useMemo(
     () => (data?.proyectos ?? []).map((p) => ({ id: p.id, nombre: p.nombre })),
@@ -426,6 +428,36 @@ export default function CcoDashboardClient() {
   }, [proyectoId]);
 
   useEffect(() => {
+    if (!proyectoId) {
+      setCsvNombre(null);
+      setCsvImportadoAt(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/contabilidad/cco/config?proyecto=${encodeURIComponent(proyectoId)}`,
+          { cache: 'no-store' },
+        );
+        const json = await res.json();
+        if (cancelled || !res.ok || json.ok === false) return;
+        const c = json.config as { csv_nombre?: string | null; csv_importado_at?: string | null };
+        setCsvNombre(c.csv_nombre?.trim() || null);
+        setCsvImportadoAt(c.csv_importado_at?.trim() || null);
+      } catch {
+        if (!cancelled) {
+          setCsvNombre(null);
+          setCsvImportadoAt(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [proyectoId, data?.totalRegistros]);
+
+  useEffect(() => {
     void cargar();
   }, [cargar]);
 
@@ -474,11 +506,23 @@ export default function CcoDashboardClient() {
           ))}
         </select>
       </label>
-      <div style={{ flex: '1 1 180px', paddingBottom: 4 }}>
+      <div style={{ flex: '1 1 220px', paddingBottom: 4 }}>
         <p style={{ margin: 0, fontSize: 12, color: '#64748B' }}>
           Contexto actual:{' '}
           <strong style={{ color: '#0F172A' }}>{proyectoNombre}</strong>
         </p>
+        {csvNombre ? (
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#0F172A' }}>
+            CSV activo:{' '}
+            <strong style={{ color: '#1D4ED8' }} title={csvImportadoAt ?? undefined}>
+              {csvNombre}
+            </strong>
+          </p>
+        ) : (
+          <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94A3B8' }}>
+            Sin CSV registrado para esta obra (importa en CSV Diario).
+          </p>
+        )}
         <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94A3B8' }}>
           Libro, rubros, egresos e importaciones usan esta obra.
         </p>
@@ -795,6 +839,20 @@ export default function CcoDashboardClient() {
             >
               Proyecto: {proyectoNombre}
             </p>
+            {csvNombre ? (
+              <p style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
+                Visualizando CSV: {csvNombre}
+                {csvImportadoAt ? (
+                  <span style={{ fontWeight: 500, opacity: 0.85 }}>
+                    {' · '}
+                    {new Date(csvImportadoAt).toLocaleString('es-VE', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             <span style={pill}>{data?.totalRegistros ?? 0} Registros en Total</span>
