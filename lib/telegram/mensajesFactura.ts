@@ -19,11 +19,16 @@ export function baseUrlAppTelegram(): string {
 /** Mensaje al activar modo recepción de facturas por Telegram (/facturas → foto). */
 export function mensajeModoFacturasActivado(opts?: { ticket?: string | null }): string {
   const ticket = opts?.ticket?.trim();
-  const procuraHint = ticket ? `\n🎫 Procura vinculada: <b>${ticket}</b>` : '';
+  const procuraHint = ticket ? `\n🎫 Procura vinculada: <b>${ticket}</b>\n` : '';
   return (
-    '✅ <b>Comprador: cargar factura.</b>' +
+    '✅ <b>COMPRADOR: cargar factura.</b>\n' +
     procuraHint +
-    '\n\nEnvía una <b>foto</b> de la factura de compra.'
+    '\nEnvía una <b>foto</b> de la factura de compra.\n' +
+    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, si es <b>contado</b> o <b>crédito</b>.\n\n' +
+    'Luego elija destino:\n' +
+    '• <b>Obra (AD)</b> → obra + almacén → Contabilidad y precarga para ingreso físico.\n' +
+    '• <b>Gasto de entidad (OpEx)</b> → solo entidad y clasificación → Contabilidad (sin almacén).\n\n' +
+    '<code>/cancelar</code> para salir de este modo.'
   );
 }
 
@@ -32,6 +37,11 @@ export function resumenFacturaCompradorHtml(
   extracted: Record<string, unknown>,
   opts?: { sinMoneda?: boolean },
 ): string {
+  const esc = (v: unknown) =>
+    String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   const nItems = Array.isArray(extracted.items) ? extracted.items.length : 0;
   const total = formatTotalExtracted(
     {
@@ -42,10 +52,10 @@ export function resumenFacturaCompradorHtml(
     { sinMoneda: opts?.sinMoneda },
   );
   return (
-    `📄 Nº: <code>${extracted.invoice_number ?? '—'}</code>\n` +
-    `🏢 ${extracted.supplier_name ?? 'Proveedor'}\n` +
-    `🆔 RIF: ${extracted.supplier_rif ?? '—'}\n` +
-    `💰 Total: ${total}\n` +
+    `📄 Nº: <code>${esc(extracted.invoice_number ?? '—')}</code>\n` +
+    `🏢 ${esc(extracted.supplier_name ?? 'Proveedor')}\n` +
+    `🆔 RIF: ${esc(extracted.supplier_rif ?? '—')}\n` +
+    `💰 Total: ${esc(total)}\n` +
     `📦 Líneas: ${nItems}`
   );
 }
@@ -122,7 +132,6 @@ export async function iniciarModoCargaFacturasTelegram(
   if (opts?.ticket?.trim()) meta.procura_ticket = opts.ticket.trim();
   await setTelegramContexto(supabase, chatId, {
     contexto: 'factura',
-    pending_factura_id: null,
     ...(Object.keys(meta).length ? { metadata: meta } : {}),
   });
 }

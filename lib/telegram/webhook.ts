@@ -404,10 +404,6 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
-    await setTelegramContexto(supabase, chatId, {
-      contexto: 'factura',
-      pending_factura_id: null,
-    });
     await enviarMenuFacturasCompradorTelegram(supabase, chatId);
   } catch (err) {
     console.error('[telegram /facturas menu]', err);
@@ -1107,6 +1103,10 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           contexto: intent.contexto,
           ...(intent.proyecto_id !== undefined ? { proyecto_id: intent.proyecto_id } : {}),
         });
+        if (intent.contexto === 'agenda') {
+          await manejarAgendaTelegram(chatId, texto);
+          return NextResponse.json({ ok: true, agenda: true, gemini_intent: 'agenda' });
+        }
         const reply =
           intent.reply ??
           `Modo <b>${etiquetaContexto(intent.contexto)}</b> activado (Gemini).`;

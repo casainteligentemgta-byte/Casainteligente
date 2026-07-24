@@ -1,0 +1,24 @@
+{
+  "document_title": "Contrato de Prestación de Servicios",
+  "blocks": [
+    {
+      "type": "title",
+      "content": "CLÁUSULA PRIMERA: OBJETO DEL CONTRATO"
+    },
+    {
+      "type": "paragraph",
+      "content": "LA EMPRESA XX se compromete a realizar..."
+    },
+    {
+      "type": "clause",
+      "content": "El pago será de Bs. XXX pagadero mensualmente..."
+    },
+    {
+      "type": "table",
+      "content": [
+        { "col1": "Concepto", "col2": "Monto" },
+        { "col1": "Servicio A", "col2": "100" }
+      ]
+    }
+  ]
+}

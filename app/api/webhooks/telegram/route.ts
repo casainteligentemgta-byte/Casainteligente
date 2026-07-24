@@ -1,3 +1,7 @@
+/**
+ * Webhook del bot oficial Casa Inteligente.
+ * Incluye conciliación PR-XXXX (ver lib/telegram/procuraConciliacionWebhook.ts vía webhookRoute).
+ */
 import {
   handleTelegramWebhookGet,
   handleTelegramWebhookRoutePost,

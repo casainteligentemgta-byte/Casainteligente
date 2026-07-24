@@ -9,6 +9,8 @@ import {
   subtotalBsLineaCompra,
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
+import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 import { descargarTextoComoArchivo } from '@/lib/almacen/inventarioExportShare';
 import type { EstadoLogisticaCompra } from '@/lib/contabilidad/estadoLogisticaCompra';
 
@@ -38,6 +40,7 @@ export type CompraCuadroInput = {
   monto_usd?: number | null;
   origen?: string | null;
   estado?: string | null;
+  notas?: string | null;
   entidad_nombre?: string | null;
   proyecto_nombre?: string | null;
   ubicacion_nombre?: string | null;
@@ -53,22 +56,7 @@ export type CompraCuadroInput = {
   created_at?: string | null;
 };
 
-const CSV_HEADERS = [
-  'Fecha',
-  'Factura',
-  'Proveedor',
-  'RIF',
-  'Entidad',
-  'Obra / Proyecto',
-  'Almacén',
-  'Artículo',
-  'Código',
-  'Cant.',
-  'P.U.',
-  'Subtotal (Bs)',
-  'USD',
-  'Tasa BCV',
-] as const;
+const CSV_HEADERS = COMPRAS_CUADRO_HEADERS;
 
 function escapeCsvCell(value: string | number): string {
   const s = String(value ?? '');
@@ -111,6 +99,7 @@ export function buildLineasCuadroDesdeCompras<T extends CompraCuadroInput>(
     monto_usd: c.monto_usd,
     origen: String(c.origen ?? ''),
     estado: String(c.estado ?? 'REGISTRADA'),
+    notas: c.notas ?? null,
     entidadNombre: c.entidad_nombre ?? undefined,
     proyectoNombre: proyectoNombreCompra(c) || undefined,
     almacenNombre: c.ubicacion_nombre ?? undefined,
@@ -158,9 +147,7 @@ function filaComprasAValores(row: FilaFacturaCanal): (string | number)[] {
     row.fecha,
     row.factura,
     row.proveedor,
-    row.rif,
-    row.entidad ?? '',
-    row.proyecto ?? '',
+    etiquetaRifCompra(row.rif) === '—' ? '' : etiquetaRifCompra(row.rif),
     row.almacen ?? '',
     row.esLinea ? row.articulo : '(cabecera)',
     row.esLinea ? row.codigo : '',
@@ -169,6 +156,8 @@ function filaComprasAValores(row: FilaFacturaCanal): (string | number)[] {
     bs,
     usd ?? '',
     row.tasaBcv ?? '',
+    row.entidad ?? '',
+    row.proyecto ?? '',
   ];
 }
 

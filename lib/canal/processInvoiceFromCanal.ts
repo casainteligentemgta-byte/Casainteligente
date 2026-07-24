@@ -184,14 +184,10 @@ async function processInvoiceFromCanalCore(
     moneda: null,
     condicion_pago: null,
     dias_credito: null,
-    comprador_confirmo_moneda: false,
-    comprador_confirmo_pago: false,
   } as DatosOcrFastTrack & {
     moneda: null;
     condicion_pago: null;
     dias_credito: null;
-    comprador_confirmo_moneda: false;
-    comprador_confirmo_pago: false;
   };
 
   await supabase
@@ -298,51 +294,47 @@ async function processInvoiceFromCanalCore(
     `Indique moneda (Bs o USD), contado/crédito y confirme en: ${link}`;
 
   if (prog) {
+    // No pedir moneda/pago en texto plano: los InlineKeyboard salen justo después.
+    await prog.ok('Análisis listo. Use los botones que aparecen a continuación.');
     if (params.canal === 'telegram' && !fastTrackMsg) {
       try {
-        const { setTelegramContexto } = await import('@/lib/telegram/estados');
-        await setTelegramContexto(supabase, params.chatId, {
-          contexto: 'factura',
-          pending_factura_id: params.pendingId,
-        });
-        const {
-          avanzarFlujoFacturaCompradorTelegram,
-          flujoFacturaCompradorIncompleto,
-        } = await import('@/lib/telegram/flujoFacturaCompradorTelegram');
-        let paso = await avanzarFlujoFacturaCompradorTelegram(
+        const { avanzarFlujoFacturaCompradorTelegram } = await import(
+          '@/lib/telegram/flujoFacturaCompradorTelegram'
+        );
+        const paso = await avanzarFlujoFacturaCompradorTelegram(
           supabase,
           params.chatId,
           params.pendingId,
         );
         if (paso === 'completo') {
-          const { data: rowCheck } = await supabase
-            .from('ci_facturas_canal_pendientes')
-            .select('extracted, proyecto_id, entidad_id, ubicacion_destino_id, estado')
-            .eq('id', params.pendingId)
-            .maybeSingle();
-          const estadoCheck = String(rowCheck?.estado ?? '').toLowerCase();
-          if (
-            rowCheck?.extracted &&
-            (estadoCheck === 'extraido' || estadoCheck === 'error') &&
-            flujoFacturaCompradorIncompleto(rowCheck.extracted as never, rowCheck)
-          ) {
-            paso = await avanzarFlujoFacturaCompradorTelegram(
-              supabase,
-              params.chatId,
-              params.pendingId,
-            );
-          }
+          await params.sendReply(
+            '✅ Factura leída. Si faltan pasos (moneda, pago o almacén), reenvíe la foto con <code>/facturas</code>.',
+            true,
+          );
         }
       } catch (e) {
         console.error('[processInvoiceFromCanal] flujo comprador post-OCR:', e);
         await params.sendReply(
-          '✅ Factura leída. Si no ve los botones de <b>moneda</b> y <b>forma de pago</b>, reenvíe la foto con <code>/facturas</code>.',
+          '✅ Factura leída. Si no ve los botones de <b>moneda</b>, <b>contado/crédito</b> o <b>almacén</b>, reenvíe la foto con <code>/facturas</code>.',
           true,
         );
       }
     }
-    await prog.ok('');
   } else {
     await params.sendReply(plain, false);
+    if (params.canal === 'telegram' && !fastTrackMsg) {
+      try {
+        const { avanzarFlujoFacturaCompradorTelegram } = await import(
+          '@/lib/telegram/flujoFacturaCompradorTelegram'
+        );
+        await avanzarFlujoFacturaCompradorTelegram(
+          supabase,
+          params.chatId,
+          params.pendingId,
+        );
+      } catch (e) {
+        console.error('[processInvoiceFromCanal] flujo comprador (sin prog):', e);
+      }
+    }
   }
 }

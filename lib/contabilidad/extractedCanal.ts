@@ -17,12 +17,7 @@ export function normalizarMonedaExtracted(moneda?: string | null): MonedaOrigen 
 }
 
 /** true si el comprador ya indicó Bs o USD (no usar el default VES implícito). */
-export function monedaExtractedConfirmada(
-  moneda?: string | null,
-  compradorConfirmo?: boolean | null,
-): boolean {
-  if (compradorConfirmo === true) return true;
-  if (compradorConfirmo === false) return false;
+export function monedaExtractedConfirmada(moneda?: string | null): boolean {
   const m = String(moneda ?? '')
     .trim()
     .toUpperCase();
@@ -34,12 +29,7 @@ export function parseCondicionPagoExtracted(v: unknown): CompraCondicionPago {
 }
 
 /** true si el comprador ya indicó contado o crédito. */
-export function condicionPagoExtractedConfirmada(
-  v: unknown,
-  compradorConfirmo?: boolean | null,
-): boolean {
-  if (compradorConfirmo === true) return true;
-  if (compradorConfirmo === false) return false;
+export function condicionPagoExtractedConfirmada(v: unknown): boolean {
   const m = String(v ?? '').trim().toLowerCase();
   return m === 'contado' || m === 'credito';
 }
@@ -66,12 +56,8 @@ export function diasCreditoExtractedValido(row: {
 export function formaPagoExtractedCompleta(row: {
   condicion_pago?: unknown;
   dias_credito?: number | null;
-  comprador_confirmo_pago?: boolean | null;
 }): boolean {
-  return (
-    condicionPagoExtractedConfirmada(row.condicion_pago, row.comprador_confirmo_pago) &&
-    diasCreditoExtractedValido(row)
-  );
+  return condicionPagoExtractedConfirmada(row.condicion_pago) && diasCreditoExtractedValido(row);
 }
 
 export function simboloMonedaExtracted(moneda?: string | null): string {
@@ -111,10 +97,6 @@ export type ExtractedCanalHeader = {
   factura_pendiente?: boolean;
   /** Comprador confirmó fecha sospechosa en Telegram o contabilidad. */
   fecha_auditoria_confirmada?: boolean;
-  /** El comprador eligió moneda en Telegram o en la app. */
-  comprador_confirmo_moneda?: boolean;
-  /** El comprador eligió contado/crédito en Telegram o en la app. */
-  comprador_confirmo_pago?: boolean;
 };
 
 export type LineaFacturaCanalForm = {

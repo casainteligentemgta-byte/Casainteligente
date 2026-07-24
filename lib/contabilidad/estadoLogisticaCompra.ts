@@ -385,7 +385,7 @@ export async function enriquecerComprasEstadoLogistica(
 
     );
 
-    const estado_logistica = resolverEstadoLogistica({
+    let estado_logistica = resolverEstadoLogistica({
 
       invId,
 
@@ -398,6 +398,15 @@ export async function enriquecerComprasEstadoLogistica(
       rechazoTotalDb: Boolean(invId && rechazoTotalSet.has(invId)),
 
     });
+
+    // Importación histórica CSV/tabla: solo cuadro contable, sin documento de recepción.
+    // Debe verse como «Registrada» en Contabilidad (no como pendiente logística).
+    if (
+      estado_logistica === 'sin_documento' &&
+      (c.origen === 'HISTORICO_TABLA' || Boolean(c.document_storage_path?.trim()))
+    ) {
+      estado_logistica = 'registrada';
+    }
 
 
 

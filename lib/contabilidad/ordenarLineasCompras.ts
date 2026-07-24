@@ -4,6 +4,8 @@ import {
   subtotalBsLineaCompra,
   subtotalUsdLineaCompra,
 } from '@/lib/contabilidad/monedaCompra';
+import { COMPRAS_CUADRO_HEADERS } from '@/lib/contabilidad/comprasCuadroColumnas';
+import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 
 export type ColumnaOrdenCompras =
   | 'fecha'
@@ -103,22 +105,7 @@ export function ordenarLineasCompras(
   });
 }
 
-const TSV_HEADERS = [
-  'Fecha',
-  'Factura',
-  'Proveedor',
-  'RIF',
-  'Entidad',
-  'Obra / Proyecto',
-  'Almacén',
-  'Artículo',
-  'Código',
-  'Cant.',
-  'P.U.',
-  'Subtotal (Bs)',
-  'USD',
-  'Tasa BCV',
-] as const;
+const TSV_HEADERS = COMPRAS_CUADRO_HEADERS;
 
 function filaComprasATsv(row: FilaFacturaCanal): string {
   const bs = subtotalBsFila(row);
@@ -127,9 +114,7 @@ function filaComprasATsv(row: FilaFacturaCanal): string {
     row.fecha,
     row.factura,
     row.proveedor,
-    row.rif,
-    row.entidad ?? '',
-    row.proyecto ?? '',
+    etiquetaRifCompra(row.rif) === '—' ? '' : etiquetaRifCompra(row.rif),
     row.almacen ?? '',
     row.esLinea ? row.articulo : '(cabecera)',
     row.esLinea ? row.codigo : '',
@@ -138,6 +123,8 @@ function filaComprasATsv(row: FilaFacturaCanal): string {
     String(bs),
     usd != null ? String(usd) : '',
     row.tasaBcv != null ? String(row.tasaBcv) : '',
+    row.entidad ?? '',
+    row.proyecto ?? '',
   ].join('\t');
 }
 

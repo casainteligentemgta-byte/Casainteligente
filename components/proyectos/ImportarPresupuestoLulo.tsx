@@ -1,0 +1,719 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { Upload, FileSpreadsheet, Database, Table2, Search, Settings } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  isValidProyectoUuid,
+  mensajeProyectoIdInvalido,
+  resolveProyectoId,
+} from '@/lib/proyectos/validarProyectoUuid';
+import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
+import { parseFetchJson } from '@/lib/utils/parseFetchJson';
+import { LuloMapeoColumnasElite } from '@/components/proyectos/LuloMapeoColumnasElite';
+import { LuloSeleccionTablaElite } from '@/components/proyectos/LuloSeleccionTablaElite';
+import type { LuloCustomPartidaMapping } from '@/lib/proyectos/luloStandardColumns';
+
+function EngranajeProcesando({ texto, grande = false }: { texto: string; grande?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-center gap-2 ${grande ? 'flex-col py-4' : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-label={texto}
+    >
+      <Settings
+        className={`animate-spin shrink-0 text-sky-400 ${grande ? 'h-9 w-9' : 'h-3.5 w-3.5'}`}
+        aria-hidden
+      />
+      <span className={`text-zinc-400 ${grande ? 'text-xs text-center' : 'text-xs'}`}>{texto}</span>
+    </div>
+  );
+}
+
+type ImportarProps = {
+  proyectoId: string;
+  onSuccess?: () => void;
+  className?: string;
+  /** Sin borde/fondo propio (dentro de PresupuestosLuloPanel). */
+  embedded?: boolean;
+  /** Marcar «reemplazar» por defecto (recomendado en control de obra). */
+  defaultReemplazar?: boolean;
+  /** Campo CodObr opcional al cargar MDB en cascada. */
+  showCodigoObra?: boolean;
+};
+
+type TablaInspeccion = {
+  name: string;
+  rowCount: number;
+  columns: string[];
+  partidaScore?: number;
+  gastoScore?: number;
+};
+
+type CatalogoTabla = { name: string; rowCount: number; columns: string[] };
+
+type ImportResponse = {
+  success?: boolean;
+  extraccionCompleta?: boolean;
+  requireMapping?: boolean;
+  requireTableSelection?: boolean;
+  availableTables?: string[];
+  detectedColumns?: string[];
+  suggestedTable?: string | null;
+  hint?: string;
+  error?: unknown;
+  message?: string;
+  capitulos?: number;
+  partidas?: number;
+  insumos?: number;
+  apu?: number;
+  gastos?: number;
+  presupuestoTotalUsd?: number;
+  snapshotId?: string | null;
+  catalogoTablas?: CatalogoTabla[];
+  filasTotales?: number;
+  tablasConDatos?: number;
+  resumen?: { tablas?: number; filasTotales?: number };
+  meta?: {
+    partidasTable?: string | null;
+    gastosTable?: string | null;
+    tableNames?: string[];
+    diagnosticoResumen?: string;
+    tablasDiagnostico?: TablaInspeccion[];
+  };
+  tables?: TablaInspeccion[];
+  diagnosticoResumen?: string;
+};
+
+type MappingPending = {
+  detectedColumns: string[];
+  suggestedTable: string | null;
+  hint?: string;
+};
+
+type TableSelectionPending = {
+  availableTables: string[];
+  hint?: string;
+};
+
+export default function ImportarPresupuestoLulo({
+  proyectoId,
+  onSuccess,
+  className = '',
+  embedded = false,
+  defaultReemplazar = false,
+  showCodigoObra = false,
+}: ImportarProps) {
+  const router = useRouter();
+  const params = useParams();
+  const pid = useMemo(
+    () => resolveProyectoId(proyectoId, (params?.id ?? params?.proyectoId) as string | string[]),
+    [proyectoId, params],
+  );
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [reemplazar, setReemplazar] = useState(defaultReemplazar);
+  const [codigoObra, setCodigoObra] = useState('');
+  const [importarGastos, setImportarGastos] = useState(true);
+  const [ultimoResumen, setUltimoResumen] = useState<string | null>(null);
+  const [inspeccionando, setInspeccionando] = useState(false);
+  const [inspeccion, setInspeccion] = useState<string | null>(null);
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
+  const [mappingPending, setMappingPending] = useState<MappingPending | null>(null);
+  const [tableSelectionPending, setTableSelectionPending] = useState<TableSelectionPending | null>(
+    null,
+  );
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [extrayendo, setExtrayendo] = useState(false);
+  const [cuadroLuloActivo, setCuadroLuloActivo] = useState(false);
+
+  const moduloLuloHref = isValidProyectoUuid(pid)
+    ? `/proyectos/modulo/${encodeURIComponent(pid)}/lulo`
+    : '/proyectos/modulo';
+
+  useEffect(() => {
+    if (!isValidProyectoUuid(pid)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/proyectos/${encodeURIComponent(pid)}/lulo`);
+        const data = (await res.json()) as {
+          snapshots?: unknown[];
+          partidas?: unknown[];
+          gastos?: unknown[];
+        };
+        if (cancelled || !res.ok) return;
+        const tiene =
+          (data.snapshots?.length ?? 0) > 0 ||
+          (data.partidas?.length ?? 0) > 0 ||
+          (data.gastos?.length ?? 0) > 0;
+        if (tiene) setCuadroLuloActivo(true);
+      } catch {
+        /* sin datos aún */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pid]);
+
+  const esMdb = file?.name.toLowerCase().endsWith('.mdb') || file?.name.toLowerCase().endsWith('.accdb');
+  const procesando = uploading || inspeccionando || extrayendo;
+
+  const handleInspeccionar = async () => {
+    if (!file || !esMdb) {
+      toast.error('Selecciona un archivo .mdb o .accdb');
+      return;
+    }
+    setInspeccionando(true);
+    setInspeccion(null);
+    setErrorDetalle(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/api/proyectos/presupuesto/inspeccionar-mdb', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await parseFetchJson<ImportResponse>(res);
+      if (!res.ok) throw new Error(formatApiErrorBody(data, 'No se pudo inspeccionar el MDB'));
+      const lineas: string[] = [];
+      if (data.diagnosticoResumen) lineas.push(data.diagnosticoResumen);
+      for (const t of data.tables ?? []) {
+        lineas.push(
+          `• ${t.name}: ${t.rowCount} filas, columnas [${t.columns.slice(0, 8).join(', ')}${t.columns.length > 8 ? '…' : ''}]`,
+        );
+      }
+      setInspeccion(lineas.join('\n') || 'MDB leído; no hay tablas con datos.');
+      toast.success('Vista previa del MDB lista');
+    } catch (err: unknown) {
+      toast.error(formatErrorMessage(err));
+    } finally {
+      setInspeccionando(false);
+    }
+  };
+
+  const runExtraerCompleto = async () => {
+    if (!file) {
+      toast.error('Selecciona un archivo primero');
+      return;
+    }
+    if (!isValidProyectoUuid(pid)) {
+      toast.error(mensajeProyectoIdInvalido(pid));
+      return;
+    }
+
+    setExtrayendo(true);
+    setUltimoResumen(null);
+    setErrorDetalle(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    if (reemplazar) formData.append('reemplazar', '1');
+
+    try {
+      const res = await fetch(
+        `/api/proyectos/${encodeURIComponent(pid)}/presupuesto/extraer-mdb`,
+        { method: 'POST', body: formData },
+      );
+      const data = await parseFetchJson<ImportResponse>(res);
+      if (!res.ok) throw new Error(formatApiErrorBody(data, 'Error al extraer'));
+
+      const tablas = data.catalogoTablas?.length ?? data.resumen?.tablas ?? 0;
+      const filas = data.filasTotales ?? data.resumen?.filasTotales ?? 0;
+      const resumen = `${tablas} tablas · ${filas} filas · volcado en Supabase`;
+      setUltimoResumen(resumen);
+      setCuadroLuloActivo(true);
+      toast.success(data.message || 'MDB extraído por completo.');
+      onSuccess?.();
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error(formatErrorMessage(err));
+    } finally {
+      setExtrayendo(false);
+    }
+  };
+
+  const runImport = async (
+    customMapping?: LuloCustomPartidaMapping,
+    tableOverride?: string,
+  ) => {
+    if (!file) {
+      toast.error('Selecciona un archivo primero');
+      return;
+    }
+    if (!isValidProyectoUuid(pid)) {
+      toast.error(mensajeProyectoIdInvalido(pid));
+      return;
+    }
+
+    setUploading(true);
+    setUltimoResumen(null);
+    setErrorDetalle(null);
+
+    const esMdbFile =
+      file.name.toLowerCase().endsWith('.mdb') || file.name.toLowerCase().endsWith('.accdb');
+    if (esMdbFile && reemplazar) {
+      if (
+        !window.confirm(
+          'Se reemplazará el presupuesto Lulo anterior del proyecto (capítulos, partidas y APU). ¿Continuar?',
+        )
+      ) {
+        setUploading(false);
+        return;
+      }
+      try {
+        const formCascada = new FormData();
+        formCascada.append('file', file);
+        if (codigoObra.trim()) formCascada.append('codigo_obr', codigoObra.trim());
+        const resCascada = await fetch(
+          `/api/proyectos/${encodeURIComponent(pid)}/presupuestos-lulo/cargar`,
+          { method: 'POST', body: formCascada },
+        );
+        const dataCascada = await parseFetchJson<ImportResponse>(resCascada);
+        if (resCascada.ok && dataCascada.success) {
+          const lineas: string[] = [];
+          if (dataCascada.capitulos != null) lineas.push(`${dataCascada.capitulos} capítulos`);
+          if (dataCascada.partidas != null) lineas.push(`${dataCascada.partidas} partidas`);
+          if (dataCascada.apu != null) lineas.push(`${dataCascada.apu} APU`);
+          setUltimoResumen(lineas.join(' · ') || dataCascada.message || 'Importación cascada');
+          toast.success(dataCascada.message ?? 'Presupuesto Lulo reemplazado.');
+          setFile(null);
+          onSuccess?.();
+          router.refresh();
+          setUploading(false);
+          return;
+        }
+        if (resCascada.status !== 422) {
+          throw new Error(
+            formatApiErrorBody(dataCascada, 'No se pudo importar el MDB en modo cascada'),
+          );
+        }
+        toast.message('MDB sin tablas Lulo estándar', {
+          description: 'Se intentará importación genérica…',
+        });
+      } catch (err) {
+        if (!(err instanceof Error) || !err.message.includes('tablas Lulo')) {
+          const msg = formatErrorMessage(err);
+          if (!/INSUMOS|PARTIDAS|422/i.test(msg)) {
+            setErrorDetalle(msg);
+            toast.error(msg);
+            setUploading(false);
+            return;
+          }
+        }
+      }
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (reemplazar) formData.append('reemplazar', '1');
+    if (!importarGastos) formData.append('importarGastos', '0');
+    const tabla = tableOverride ?? selectedTable ?? customMapping?.tableName;
+    if (tabla) formData.append('tableName', tabla);
+    if (customMapping) {
+      formData.append('customMapping', JSON.stringify(customMapping));
+    }
+
+    try {
+      const res = await fetch(
+        `/api/proyectos/${encodeURIComponent(pid)}/presupuesto/importar-lulo`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      );
+
+      const data = await parseFetchJson<ImportResponse>(res);
+
+      if (res.status === 422 && data.requireTableSelection) {
+        const tables =
+          data.availableTables?.length
+            ? data.availableTables
+            : data.meta?.tableNames ?? [];
+        setTableSelectionPending({ availableTables: tables, hint: data.hint });
+        setMappingPending(null);
+        toast.message('Selecciona la tabla del presupuesto', {
+          description: data.hint ?? 'El MDB no tiene tabla Partidas ni Presupuesto.',
+        });
+        return;
+      }
+
+      if (res.status === 422 && data.requireMapping) {
+        const cols =
+          data.detectedColumns?.length
+            ? data.detectedColumns
+            : data.meta?.tablasDiagnostico?.[0]?.columns ?? [];
+        setMappingPending({
+          detectedColumns: cols,
+          suggestedTable:
+            data.suggestedTable ?? data.meta?.partidasTable ?? selectedTable ?? null,
+          hint: data.hint,
+        });
+        setTableSelectionPending(null);
+        toast.message('Mapeo de columnas requerido', {
+          description: data.hint ?? 'Empareja las columnas del MDB antes de importar.',
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        const detalle =
+          data.meta?.diagnosticoResumen ||
+          data.meta?.tablasDiagnostico
+            ?.slice(0, 4)
+            .map((t) => `${t.name} (${t.rowCount} filas, score ${t.partidaScore})`)
+            .join(' · ');
+        if (detalle) setErrorDetalle(detalle);
+        if (data.snapshotId && data.catalogoTablas?.length) {
+          const filas = data.catalogoTablas.reduce((s, t) => s + t.rowCount, 0);
+          setUltimoResumen(
+            `Volcado guardado: ${data.catalogoTablas.length} tablas, ${filas} filas (sin partidas importadas)`,
+          );
+          setCuadroLuloActivo(true);
+          toast.message('Datos del MDB guardados', {
+            description: 'Abre Presupuesto · Lulo para ver el cuadro extraído.',
+          });
+        }
+        throw new Error(formatApiErrorBody(data, 'Error en la carga'));
+      }
+
+      setMappingPending(null);
+      setTableSelectionPending(null);
+
+      const lineas: string[] = [];
+      if (data.partidas != null) lineas.push(`${data.partidas} partidas`);
+      if (data.insumos != null && data.insumos > 0) lineas.push(`${data.insumos} insumos`);
+      if (data.apu != null && data.apu > 0) lineas.push(`${data.apu} APU`);
+      if (data.gastos != null && data.gastos > 0) lineas.push(`${data.gastos} gastos`);
+      if (data.presupuestoTotalUsd != null) {
+        lineas.push(
+          `Presupuesto total ~${data.presupuestoTotalUsd.toLocaleString('en-US', {
+            style: 'currency',
+            currency: 'USD',
+          })}`,
+        );
+      }
+      if (data.meta?.partidasTable) lineas.push(`Tabla partidas: ${data.meta.partidasTable}`);
+      if (data.meta?.gastosTable) lineas.push(`Tabla gastos: ${data.meta.gastosTable}`);
+
+      const resumen = lineas.join(' · ');
+      setUltimoResumen(resumen);
+      setCuadroLuloActivo(true);
+      toast.success(data.message || 'Importación completada.', {
+        description: 'Abriendo reporte Lulo…',
+      });
+      setFile(null);
+      onSuccess?.();
+      if ((data.partidas ?? 0) > 0) {
+        router.push(`${moduloLuloHref}?tab=presupuesto`);
+      } else {
+        router.push(moduloLuloHref);
+      }
+      router.refresh();
+    } catch (err: unknown) {
+      const message = formatErrorMessage(err);
+      setErrorDetalle(message);
+      toast.error(`Error de importación: ${message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUpload = () => void runImport();
+
+  const handleImportWithMapping = (mapping: LuloCustomPartidaMapping) => {
+    void runImport({
+      ...mapping,
+      tableName: mapping.tableName ?? selectedTable ?? undefined,
+    });
+  };
+
+  const handleTableSelected = (tableName: string) => {
+    setSelectedTable(tableName);
+    setTableSelectionPending(null);
+    void runImport(undefined, tableName);
+  };
+
+  if (tableSelectionPending) {
+    return (
+      <div
+        className={`w-full max-w-xl mx-auto text-white ${className}`.trim()}
+        data-lulo-step="table-selection"
+      >
+        <LuloSeleccionTablaElite
+          availableTables={tableSelectionPending.availableTables}
+          hint={tableSelectionPending.hint}
+          fileName={file?.name ?? null}
+          importing={uploading}
+          onCancel={() => {
+            setTableSelectionPending(null);
+            setSelectedTable(null);
+          }}
+          onConfirm={handleTableSelected}
+        />
+      </div>
+    );
+  }
+
+  if (mappingPending) {
+    return (
+      <div className={`text-white w-full max-w-lg mx-auto ${className}`.trim()}>
+        <LuloMapeoColumnasElite
+          detectedColumns={mappingPending.detectedColumns}
+          suggestedTable={mappingPending.suggestedTable}
+          hint={mappingPending.hint}
+          fileName={file?.name ?? null}
+          importing={uploading}
+          onCancel={() => {
+            setMappingPending(null);
+            setSelectedTable(null);
+          }}
+          onConfirm={handleImportWithMapping}
+        />
+      </div>
+    );
+  }
+
+  const shellClass = embedded
+    ? `text-white w-full ${className}`.trim()
+    : `bg-[#0A0A0F] border border-white/10 p-5 rounded-xl text-white max-w-md ${className}`.trim();
+
+  return (
+    <div className={shellClass}>
+      <div className="flex items-center gap-2 mb-3">
+        {esMdb ? (
+          <Database className="text-sky-400 h-5 w-5 shrink-0" />
+        ) : (
+          <FileSpreadsheet className="text-[#34C759] h-5 w-5 shrink-0" />
+        )}
+        <h4 className="text-sm font-semibold">
+          {embedded ? 'Cargar archivo LuloWin (.mdb) o exportación' : 'Importar desde Lulo Software'}
+        </h4>
+      </div>
+
+      {!isValidProyectoUuid(pid) ? (
+        <p className="text-xs text-red-400 mb-3 leading-relaxed rounded-lg border border-red-500/25 bg-red-500/5 p-3">
+          {mensajeProyectoIdInvalido(pid)}{' '}
+          <Link href="/proyectos/modulo" className="text-amber-400 underline hover:text-amber-300">
+            Ir a proyectos
+          </Link>
+        </p>
+      ) : null}
+
+      <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+        Un solo flujo: elige el archivo y pulsa{' '}
+        <strong className="text-emerald-400">Importar presupuesto</strong>. En MDB con{' '}
+        <strong className="text-zinc-300">reemplazar</strong> se importan capítulos, partidas y APU (vista
+        APU). También puedes{' '}
+        <span className="text-violet-400">extraer todas las tablas</span> o importar{' '}
+        <strong className="text-zinc-300">.csv</strong>
+        {importarGastos ? <> y <span className="text-sky-400">gastos</span></> : null}.
+      </p>
+
+      <div className="space-y-3">
+        <input
+          type="file"
+          accept=".csv,text/csv,.mdb,.accdb"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setInspeccion(null);
+            setErrorDetalle(null);
+            setMappingPending(null);
+            setTableSelectionPending(null);
+            setSelectedTable(null);
+          }}
+          className="w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white/5 file:text-white hover:file:bg-white/10"
+        />
+
+        {procesando ? (
+          <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-3">
+            <EngranajeProcesando
+              grande
+              texto={
+                inspeccionando
+                  ? 'Leyendo tablas del Access…'
+                  : extrayendo
+                    ? 'Extrayendo todas las tablas a Supabase…'
+                    : esMdb
+                      ? 'Analizando e importando el MDB…'
+                      : 'Procesando el presupuesto CSV…'
+              }
+            />
+          </div>
+        ) : null}
+
+        {showCodigoObra && esMdb ? (
+          <label className="flex flex-col gap-1 text-[10px] uppercase text-zinc-500">
+            CodObr (opcional)
+            <input
+              value={codigoObra}
+              onChange={(e) => setCodigoObra(e.target.value)}
+              placeholder="Auto desde MDB (ej. FLAMBO1E)"
+              className="rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white w-full max-w-xs font-mono"
+            />
+          </label>
+        ) : null}
+
+        {esMdb ? (
+          <p className="text-[11px] text-sky-400/90">
+            MDB detectado: primero cascada ObraCapi (capítulos → partidas → APU); si no aplica, importación
+            genérica.
+          </p>
+        ) : null}
+
+        {esMdb ? (
+          embedded ? (
+            <details className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+              <summary className="cursor-pointer text-[11px] font-medium text-zinc-400 hover:text-zinc-200">
+                Opciones avanzadas (inspeccionar, volcado completo)
+              </summary>
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleInspeccionar}
+                  disabled={inspeccionando || !file || !isValidProyectoUuid(pid)}
+                  className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {inspeccionando ? (
+                    <EngranajeProcesando texto="Inspeccionando…" />
+                  ) : (
+                    <>
+                      <Search className="h-3.5 w-3.5" />
+                      Inspeccionar MDB (sin importar)
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void runExtraerCompleto()}
+                  disabled={extrayendo || !file || !isValidProyectoUuid(pid)}
+                  className="w-full rounded-lg border border-violet-500/35 bg-violet-500/10 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {extrayendo ? (
+                    <EngranajeProcesando texto="Extrayendo todas las tablas…" />
+                  ) : (
+                    <>
+                      <Database className="h-3.5 w-3.5" />
+                      Extraer todo el MDB (volcado completo)
+                    </>
+                  )}
+                </button>
+              </div>
+            </details>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleInspeccionar}
+                disabled={inspeccionando || !file || !isValidProyectoUuid(pid)}
+                className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {inspeccionando ? (
+                  <EngranajeProcesando texto="Inspeccionando…" />
+                ) : (
+                  <>
+                    <Search className="h-3.5 w-3.5" />
+                    Inspeccionar MDB (sin importar)
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => void runExtraerCompleto()}
+                disabled={extrayendo || !file || !isValidProyectoUuid(pid)}
+                className="w-full rounded-lg border border-violet-500/35 bg-violet-500/10 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {extrayendo ? (
+                  <EngranajeProcesando texto="Extrayendo todas las tablas…" />
+                ) : (
+                  <>
+                    <Database className="h-3.5 w-3.5" />
+                    Extraer todo el MDB (volcado completo)
+                  </>
+                )}
+              </button>
+            </>
+          )
+        ) : null}
+
+        {inspeccion ? (
+          <pre className="text-[10px] leading-relaxed text-zinc-500 whitespace-pre-wrap max-h-32 overflow-y-auto rounded-lg border border-white/10 bg-black/30 p-2">
+            {inspeccion}
+          </pre>
+        ) : null}
+
+        {errorDetalle ? (
+          <p className="text-[10px] leading-relaxed text-amber-400/90 border border-amber-500/20 rounded-lg p-2 bg-amber-500/5">
+            {errorDetalle}
+          </p>
+        ) : null}
+
+        <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={reemplazar}
+            onChange={(e) => setReemplazar(e.target.checked)}
+            title="En MDB: borra el presupuesto Lulo anterior e importa capítulos/partidas/APU"
+            className="rounded border-white/20 bg-white/5"
+          />
+          Reemplazar presupuesto Lulo anterior (capítulos, partidas y APU)
+        </label>
+
+        <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={importarGastos}
+            onChange={(e) => setImportarGastos(e.target.checked)}
+            className="rounded border-white/20 bg-white/5"
+          />
+          Importar gastos de obra (si el MDB los incluye)
+        </label>
+
+        <button
+          type="button"
+          onClick={handleUpload}
+          disabled={uploading || !file}
+          className="w-full bg-[#34C759] hover:bg-[#2eb04f] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-medium py-2.5 px-4 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+        >
+          {uploading ? (
+            <EngranajeProcesando texto={esMdb ? 'Importando presupuesto…' : 'Procesando…'} />
+          ) : (
+            <>
+              <Upload className="h-4 w-4" />
+              {esMdb ? 'Importar presupuesto' : 'Procesar presupuesto CSV'}
+            </>
+          )}
+        </button>
+
+        {ultimoResumen ? (
+          <p className="text-[11px] leading-relaxed text-zinc-500 border-t border-white/10 pt-3">
+            Última importación: {ultimoResumen}
+          </p>
+        ) : null}
+
+        {!embedded ? (
+          cuadroLuloActivo ? (
+            <Link
+              href={`${moduloLuloHref}?tab=presupuesto`}
+              className="flex items-center justify-center gap-2 w-full rounded-xl border border-amber-400/50 bg-gradient-to-r from-amber-950/80 to-amber-900/40 py-3 text-sm font-semibold text-amber-100 shadow-lg shadow-amber-900/20 hover:from-amber-900/90 hover:border-amber-300/60 transition-colors"
+            >
+              <Table2 className="h-4 w-4 shrink-0" aria-hidden />
+              Reporte Lulo — presupuesto por capítulos y detalle
+            </Link>
+          ) : (
+            <Link
+              href={moduloLuloHref}
+              className="flex items-center justify-center gap-2 w-full rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 hover:bg-white/10"
+            >
+              <Table2 className="h-3.5 w-3.5" aria-hidden />
+              Control de obra (sin datos Lulo aún)
+            </Link>
+          )
+        ) : null}
+      </div>
+    </div>
+  );
+}

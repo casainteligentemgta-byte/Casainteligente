@@ -75,7 +75,7 @@ export async function manejarFacturaTelegram(params: {
   const debeReprocesar = async (): Promise<boolean> => {
     const { data: prev } = await params.supabase
       .from('ci_facturas_canal_pendientes')
-      .select('estado, extracted, proyecto_id, entidad_id')
+      .select('estado, extracted, proyecto_id, entidad_id, ubicacion_destino_id')
       .eq('id', reserva.pendingId)
       .maybeSingle();
     const estado = String(prev?.estado ?? '');

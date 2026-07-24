@@ -1,14 +1,36 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
-import ClientSearch, { Customer } from '@/components/ventas/ClientSearch';
 
-// Opt out of static prerendering — page uses useSearchParams()
-export const dynamic = 'force-dynamic';
+/** Miniatura en líneas del presupuesto (solo UI; al guardar en BD se omite `imagen` en `product_data`). */
+function LineItemProductThumb({ imagen }: { imagen?: string | null }) {
+    const [failed, setFailed] = useState(false);
+    const url = typeof imagen === 'string' ? imagen.trim() : '';
+    if (!url || failed) return null;
+    return (
+        <img
+            src={url}
+            alt=""
+            width={44}
+            height={44}
+            onError={() => setFailed(true)}
+            style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                objectFit: 'cover',
+                flexShrink: 0,
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(0,0,0,0.35)',
+            }}
+        />
+    );
+}
 
 interface LineItem {
     id: string;
@@ -16,6 +38,45 @@ interface LineItem {
     qty: number;
     unitPrice: number;
     discount: number;
+    // Asignación interna (uso empresa / garantía): qué artículo del inventario y serial reservó esta línea.
+    inventoryItemIds?: (string | null)[];
+    serialNumbers?: (string | null)[];
+}
+
+/** Fila mínima de `customers` para el selector de presupuesto */
+interface CustomerPickerRow {
+    id: string;
+    nombre: string | null;
+    rif: string | null;
+    movil: string | null;
+    email: string | null;
+    direccion: string | null;
+}
+
+const VENTAS_CUSTOMERS_CACHE_KEY = 'ventas_customers_picker_v1';
+const VENTAS_CUSTOMERS_CACHE_MAX_MS = 1000 * 60 * 60 * 24 * 14; // 14 días
+
+function loadVentasCustomersFromCache(): CustomerPickerRow[] | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(VENTAS_CUSTOMERS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { at?: number; rows?: CustomerPickerRow[] };
+        if (!Array.isArray(parsed.rows)) return null;
+        if (typeof parsed.at === 'number' && Date.now() - parsed.at > VENTAS_CUSTOMERS_CACHE_MAX_MS) return null;
+        return parsed.rows;
+    } catch {
+        return null;
+    }
+}
+
+function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(VENTAS_CUSTOMERS_CACHE_KEY, JSON.stringify({ at: Date.now(), rows }));
+    } catch {
+        /* quota u otro */
+    }
 }
 
 const MARGIN_PRESETS = [0, 10, 15, 20, 25, 30];
@@ -51,31 +112,151 @@ function CategoryBadge({ cat }: { cat: string | null }) {
 function VentasContent() {
     const searchParams = useSearchParams();
     const [items, setItems] = useState<LineItem[]>([]);
-    const [globalMargin, setGlobalMargin] = useState(0);
+    const [globalMargin, setGlobalMargin] = useState(20);
     const [clientName, setClientName] = useState('');
     const [clientRif, setClientRif] = useState('');
     const [clientPhone, setClientPhone] = useState('');
     const [clientEmail, setClientEmail] = useState('');
+    const [clientDireccion, setClientDireccion] = useState('');
     const [customerId, setCustomerId] = useState<string | null>(null);
+    const [customers, setCustomers] = useState<CustomerPickerRow[]>([]);
+    const [customersLoading, setCustomersLoading] = useState(true);
+    const [customerQuery, setCustomerQuery] = useState('');
+    /** Lista desplegable abierta con ↓ (aunque el buscador esté vacío) o con el botón ▼. */
+    const [pickerForceOpen, setPickerForceOpen] = useState(false);
+    const customerInputRef = useRef<HTMLInputElement>(null);
+    const legacyParamsResolved = useRef(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [budgetNumber, setBudgetNumber] = useState('500');
-    const [status, setStatus] = useState('pendiente');
+
+    type InventoryCandidate = {
+        id: string;
+        name: string;
+        serial_number: string | null;
+        location: string | null;
+        sap_code: string | null;
+    };
+
+    // Modal para asignar seriales (uso interno).
+    const [serialModalOpen, setSerialModalOpen] = useState(false);
+    const [serialModalLineId, setSerialModalLineId] = useState<string | null>(null);
+    const [serialModalLoading, setSerialModalLoading] = useState(false);
+    const [serialCandidates, setSerialCandidates] = useState<InventoryCandidate[]>([]);
+    const [serialSelectedIds, setSerialSelectedIds] = useState<string[]>([]);
+
+    const applyCustomer = useCallback((c: CustomerPickerRow) => {
+        setCustomerId(c.id);
+        setClientName((c.nombre || '').trim() || 'Sin nombre');
+        setClientRif((c.rif || '').trim());
+        setClientPhone((c.movil || '').trim());
+        setClientEmail((c.email || '').trim());
+        setClientDireccion((c.direccion || '').trim());
+    }, []);
+
+    const clearCustomer = useCallback(() => {
+        setCustomerId(null);
+        setClientName('');
+        setClientRif('');
+        setClientPhone('');
+        setClientEmail('');
+        setClientDireccion('');
+        setCustomerQuery('');
+        setPickerForceOpen(false);
+    }, []);
+
+    const applyCustomerAndClosePicker = useCallback(
+        (c: CustomerPickerRow) => {
+            setPickerForceOpen(false);
+            applyCustomer(c);
+        },
+        [applyCustomer],
+    );
+
+    useEffect(() => {
+        let cancelled = false;
+        const cached = typeof window !== 'undefined' ? loadVentasCustomersFromCache() : null;
+        if (cached?.length) {
+            setCustomers(cached);
+            setCustomersLoading(false);
+        } else {
+            setCustomersLoading(true);
+        }
+        (async () => {
+            try {
+                let supabase: ReturnType<typeof createClient>;
+                try {
+                    supabase = createClient();
+                } catch {
+                    if (!cancelled) setCustomersLoading(false);
+                    return;
+                }
+                const { data, error } = await withTimeout(
+                    Promise.resolve(
+                        supabase
+                            .from('customers')
+                            .select('id,nombre,rif,movil,email,direccion')
+                            .order('nombre', { ascending: true, nullsFirst: false }),
+                    ),
+                    22_000,
+                    'Clientes (ventas)',
+                );
+                if (cancelled) return;
+                if (!error && data) {
+                    const rows = data as CustomerPickerRow[];
+                    setCustomers(rows);
+                    saveVentasCustomersToCache(rows);
+                } else if (!cached?.length) {
+                    setCustomers([]);
+                }
+            } catch {
+                if (!cancelled && !cached?.length) setCustomers([]);
+            } finally {
+                if (!cancelled) setCustomersLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    /** Enlaces antiguos ?cliente=&rif= → fila en `customers` */
+    useEffect(() => {
+        if (legacyParamsResolved.current) return;
+        const budgetId = searchParams.get('id');
+        const cId = searchParams.get('customerId');
+        if (budgetId || cId) {
+            legacyParamsResolved.current = true;
+            return;
+        }
+        if (customers.length === 0) return;
+
+        const nombre = searchParams.get('cliente');
+        const rif = searchParams.get('rif');
+        if (!nombre?.trim() && !rif?.trim()) {
+            legacyParamsResolved.current = true;
+            return;
+        }
+
+        const norm = (s: string | null) => (s || '').trim().toLowerCase();
+        const matched =
+            (rif?.trim() && customers.find((c) => norm(c.rif) === norm(rif))) ||
+            (nombre?.trim() && customers.find((c) => norm(c.nombre) === norm(nombre))) ||
+            null;
+
+        if (matched) applyCustomer(matched);
+        legacyParamsResolved.current = true;
+    }, [customers, searchParams, applyCustomer]);
 
     // Pre-cargar datos desde query params
     useEffect(() => {
         const id = searchParams.get('id');
         const cId = searchParams.get('customerId');
-        const nombre = searchParams.get('cliente');
-        const rif = searchParams.get('rif');
 
         if (id) setBudgetId(id);
         if (cId) setCustomerId(cId);
-        if (nombre) setClientName(nombre);
-        if (rif) setClientRif(rif);
 
         const supabase = createClient();
 
@@ -91,49 +272,65 @@ function VentasContent() {
                         setClientRif(data.customer_rif || '');
                         setCustomerId(data.customer_id);
                         setNotes(data.notes || '');
-                        setShowZelle(data.show_zelle !== false);
-                        if (data.budget_number) setBudgetNumber(String(data.budget_number));
-                        if (data.status) setStatus(data.status);
+                        setShowZelle(data.show_zelle !== false); // Default to true if undefined
 
                         if (data.customer_id) {
-                            supabase.from('customers').select('movil, email').eq('id', data.customer_id).single().then(({ data: c }) => {
-                                if (c) {
-                                    setClientPhone(c.movil || '');
-                                    setClientEmail(c.email || '');
-                                }
-                            });
+                            supabase
+                                .from('customers')
+                                .select('movil, email, direccion, nombre, rif')
+                                .eq('id', data.customer_id)
+                                .single()
+                                .then(({ data: c }) => {
+                                    if (c) {
+                                        setClientPhone((c.movil as string) || '');
+                                        setClientEmail((c.email as string) || '');
+                                        setClientDireccion((c.direccion as string) || '');
+                                        if (c.nombre) setClientName(String(c.nombre));
+                                        if (c.rif) setClientRif(String(c.rif));
+                                    }
+                                });
+                        } else {
+                            setClientPhone('');
+                            setClientEmail('');
+                            setClientDireccion('');
                         }
 
-                        const loadedItems = (data.items as any[]).map(item => ({
-                            id: `${item.product_id}-${Math.random()}`,
-                            product: item.product_data,
-                            qty: item.qty,
-                            unitPrice: item.unit_price,
-                            discount: item.discount || 0
-                        }));
+                        // Mapear items de la DB al estado local (sin foto: presupuesto solo usa título y datos de precio)
+                        const loadedItems = (data.items as any[]).map((item) => {
+                            const pd =
+                                item.product_data && typeof item.product_data === 'object'
+                                    ? item.product_data
+                                    : {};
+                            const { imagen: _omitImg, ...productSinImagen } = pd as Record<string, unknown> & { imagen?: unknown };
+                            return {
+                                id: `${item.product_id}-${Math.random()}`,
+                                product: productSinImagen as unknown as Product,
+                                qty: item.qty,
+                                unitPrice: item.unit_price,
+                                discount: item.discount || 0,
+                                inventoryItemIds: Array.isArray(item.inventory_item_ids)
+                                    ? (item.inventory_item_ids as unknown[]).map((x) => (x == null ? null : String(x)))
+                                    : [],
+                                serialNumbers: Array.isArray(item.serial_numbers)
+                                    ? (item.serial_numbers as unknown[]).map((x) => (x == null ? null : String(x)))
+                                    : [],
+                            };
+                        });
                         setItems(loadedItems);
                     }
-                });
-        } else {
-            // Auto-numerar desde 500 + cantidad de presupuestos existentes
-            supabase
-                .from('budgets')
-                .select('id', { count: 'exact', head: true })
-                .then(({ count }) => {
-                    setBudgetNumber(String(500 + (count || 0) + 1));
                 });
         }
 
         // Si tenemos ID de cliente pero no datos cargados, buscarlos
         if (cId) {
-            supabase.from('customers').select('*').eq('id', cId).single().then(({ data }) => {
-                if (data) {
-                    setClientName(data.nombre || '');
-                    setClientRif(data.rif || '');
-                    setClientPhone(data.movil || '');
-                    setClientEmail(data.email || '');
-                }
-            });
+            supabase
+                .from('customers')
+                .select('id,nombre,rif,movil,email,direccion')
+                .eq('id', cId)
+                .single()
+                .then(({ data }) => {
+                    if (data) applyCustomer(data as CustomerPickerRow);
+                });
         }
 
         const prodIds = searchParams.get('productos');
@@ -152,6 +349,8 @@ function VentasContent() {
                                 qty: 1,
                                 unitPrice: parseFloat(((p.precio ?? 0) * (1 + globalMargin / 100)).toFixed(2)),
                                 discount: 0,
+                                inventoryItemIds: [],
+                                serialNumbers: [],
                             }));
                             setItems(prev => {
                                 const existingIds = prev.map(i => i.product.id);
@@ -162,43 +361,65 @@ function VentasContent() {
                     });
             }
         }
-    }, [searchParams, globalMargin]);
+    }, [searchParams, globalMargin, applyCustomer]);
+
+    const filteredCustomers = useMemo(() => {
+        const q = customerQuery.trim().toLowerCase();
+        if (!q) return customers;
+        return customers.filter(
+            (c) =>
+                (c.nombre || '').toLowerCase().includes(q) ||
+                (c.rif || '').toLowerCase().includes(q) ||
+                (c.movil || '').includes(q) ||
+                (c.email || '').toLowerCase().includes(q) ||
+                (c.direccion || '').toLowerCase().includes(q),
+        );
+    }, [customers, customerQuery]);
+
+    const customerDropdownOpen = useMemo(() => {
+        if (customerId || customersLoading || customers.length === 0) return false;
+        return customerQuery.trim().length >= 1 || pickerForceOpen;
+    }, [customerId, customersLoading, customers.length, customerQuery, pickerForceOpen]);
 
     const handleSaveBudget = async () => {
-        if (!clientName) return alert('Por favor, ingresa el nombre del cliente');
+        if (!customerId) return alert('Selecciona un cliente de la lista (Clientes).');
         if (items.length === 0) return alert('El presupuesto está vacío');
 
         setSaving(true);
         const supabase = createClient();
 
-        const budgetData = {
+        const budgetDataBase = {
             customer_name: clientName,
             customer_rif: clientRif,
             customer_id: customerId || null,
-            items: items.map(i => ({
-                product_id: i.product.id,
-                product_data: i.product,
-                qty: i.qty,
-                unit_price: i.unitPrice,
-                discount: i.discount
-            })),
+            items: items.map((i) => {
+                const { imagen: _omitImg, ...productSinImagen } = i.product;
+                return {
+                    product_id: i.product.id,
+                    product_data: productSinImagen,
+                    qty: i.qty,
+                    unit_price: i.unitPrice,
+                    discount: i.discount,
+                    inventory_item_ids: i.inventoryItemIds ?? [],
+                    serial_numbers: i.serialNumbers ?? [],
+                };
+            }),
             subtotal: subtotal,
             total_cost: totalCost,
             total_profit: totalProfit,
             margin_pct: marginPct,
             notes: notes,
             show_zelle: showZelle,
-            status: status,
-            budget_number: budgetNumber
         };
 
         let res;
         if (budgetId) {
             res = await supabase
                 .from('budgets')
-                .update(budgetData)
+                .update(budgetDataBase)
                 .eq('id', budgetId);
         } else {
+            const budgetData = { ...budgetDataBase, status: 'no_enviado' };
             res = await supabase
                 .from('budgets')
                 .insert([budgetData])
@@ -220,8 +441,27 @@ function VentasContent() {
     const addProduct = (product: Product) => {
         const existing = items.find(i => i.product.id === product.id);
         if (existing) {
+            const newQty = existing.qty + 1;
             setItems(prev => prev.map(i =>
-                i.product.id === product.id ? { ...i, qty: i.qty + 1 } : i
+                i.product.id === product.id
+                    ? {
+                        ...i,
+                        qty: newQty,
+                        product,
+                        inventoryItemIds: (() => {
+                            const cur = i.inventoryItemIds ?? [];
+                            const next = cur.slice(0, newQty);
+                            while (next.length < newQty) next.push(null);
+                            return next;
+                        })(),
+                        serialNumbers: (() => {
+                            const cur = i.serialNumbers ?? [];
+                            const next = cur.slice(0, newQty);
+                            while (next.length < newQty) next.push(null);
+                            return next;
+                        })(),
+                    }
+                    : i
             ));
             return;
         }
@@ -233,12 +473,25 @@ function VentasContent() {
             qty: 1,
             unitPrice: parseFloat(withMargin.toFixed(2)),
             discount: 0,
+            inventoryItemIds: [],
+            serialNumbers: [],
         }]);
     };
 
     const updateQty = (id: string, qty: number) => {
         if (qty < 1) return;
-        setItems(prev => prev.map(i => i.id === id ? { ...i, qty } : i));
+        setItems(prev =>
+            prev.map((i) => {
+                if (i.id !== id) return i;
+                const invCur = i.inventoryItemIds ?? [];
+                const snCur = i.serialNumbers ?? [];
+                const invNext = invCur.slice(0, qty);
+                const snNext = snCur.slice(0, qty);
+                while (invNext.length < qty) invNext.push(null);
+                while (snNext.length < qty) snNext.push(null);
+                return { ...i, qty, inventoryItemIds: invNext, serialNumbers: snNext };
+            })
+        );
     };
 
     const updatePrice = (id: string, price: number) => {
@@ -251,6 +504,70 @@ function VentasContent() {
 
     const removeItem = (id: string) => {
         setItems(prev => prev.filter(i => i.id !== id));
+    };
+
+    const openSerialModalForLine = async (line: LineItem) => {
+        setSerialModalLineId(line.id);
+        setSerialModalOpen(true);
+        setSerialModalLoading(true);
+        setSerialCandidates([]);
+        setSerialSelectedIds((line.inventoryItemIds ?? []).filter((x): x is string => Boolean(x)));
+
+        try {
+            const supabase = createClient();
+            const productName = line.product.nombre;
+            const { data, error } = await supabase
+                .from('global_inventory')
+                .select('id,name,serial_number,location,sap_code')
+                .ilike('name', `%${productName}%`)
+                .limit(250);
+
+            if (error) throw error;
+
+            const candidates = (data ?? [])
+                .filter((r: any) => typeof r?.serial_number === 'string' && r.serial_number.trim() !== '')
+                .map((r: any) => ({
+                    id: String(r.id),
+                    name: String(r.name ?? ''),
+                    serial_number: String(r.serial_number),
+                    location: (r.location ?? null) as string | null,
+                    sap_code: (r.sap_code ?? null) as string | null,
+                }));
+
+            setSerialCandidates(candidates);
+            setSerialModalLoading(false);
+        } catch (err: any) {
+            setSerialModalLoading(false);
+            alert(err?.message ?? 'Error al cargar seriales del inventario');
+        }
+    };
+
+    const toggleSerialSelection = (inventoryId: string) => {
+        setSerialSelectedIds((prev) => {
+            if (prev.includes(inventoryId)) return prev.filter((id) => id !== inventoryId);
+            return [...prev, inventoryId];
+        });
+    };
+
+    const applySerialSelection = () => {
+        if (!serialModalLineId) return;
+        const byId = new Map(serialCandidates.map((c) => [c.id, c.serial_number]));
+        const nextSerials = serialSelectedIds.map((id) => byId.get(id) ?? null);
+        setItems((prev) =>
+            prev.map((li) => {
+                if (li.id !== serialModalLineId) return li;
+                const nextQty = serialSelectedIds.length;
+                const qtySafe = nextQty >= 1 ? nextQty : 1;
+                return {
+                    ...li,
+                    qty: qtySafe,
+                    inventoryItemIds: serialSelectedIds.slice(0, qtySafe),
+                    serialNumbers: nextSerials.slice(0, qtySafe),
+                };
+            })
+        );
+        setSerialModalOpen(false);
+        setSerialModalLineId(null);
     };
 
     const applyGlobalMargin = (margin: number) => {
@@ -362,20 +679,28 @@ function VentasContent() {
 
             <div style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
 
-                {/* ── Client Name ── */}
+                {/* ── Cliente (solo desde tabla `customers`) ── */}
                 <div style={{ ...glass, padding: '16px', marginBottom: '16px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-                        Cliente
-                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                            Cliente
+                        </label>
+                        <Link
+                            href="/clientes"
+                            style={{ fontSize: '11px', fontWeight: 600, color: '#007AFF', textDecoration: 'none' }}
+                        >
+                            Gestionar cliente
+                        </Link>
+                    </div>
 
-                    {/* Badge si viene pre-cargado */}
-                    {clientRif && (
+                    {customerId ? (
                         <div style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                            gap: '12px',
                             background: 'rgba(52,199,89,0.08)', border: '1px solid rgba(52,199,89,0.2)',
-                            borderRadius: '12px', padding: '10px 14px', marginBottom: '10px',
+                            borderRadius: '12px', padding: '12px 14px',
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', minWidth: 0 }}>
                                 <div style={{
                                     width: '32px', height: '32px', borderRadius: '8px',
                                     background: 'rgba(52,199,89,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -385,43 +710,166 @@ function VentasContent() {
                                         <circle cx="12" cy="7" r="4" stroke="#34C759" strokeWidth="2" />
                                     </svg>
                                 </div>
-                                <div>
-                                    <p style={{ color: '#34C759', fontSize: '13px', fontWeight: 700 }}>{clientName}</p>
-                                    <p style={{ color: 'rgba(52,199,89,0.6)', fontSize: '11px', marginTop: '1px' }}>{clientRif}</p>
+                                <div style={{ minWidth: 0 }}>
+                                    <p style={{ color: '#34C759', fontSize: '14px', fontWeight: 700 }}>{clientName}</p>
+                                    {clientRif ? (
+                                        <p style={{ color: 'rgba(52,199,89,0.75)', fontSize: '11px', marginTop: '4px' }}>RIF {clientRif}</p>
+                                    ) : null}
+                                    {clientPhone ? (
+                                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>{clientPhone}</p>
+                                    ) : null}
+                                    {clientEmail ? (
+                                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px', wordBreak: 'break-all' }}>{clientEmail}</p>
+                                    ) : null}
+                                    {clientDireccion ? (
+                                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', marginTop: '4px', lineHeight: 1.35 }}>{clientDireccion}</p>
+                                    ) : null}
                                 </div>
                             </div>
                             <button
-                                onClick={() => { setClientName(''); setClientRif(''); }}
+                                type="button"
+                                onClick={clearCustomer}
                                 style={{
                                     background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)',
-                                    borderRadius: '8px', padding: '4px 10px',
+                                    borderRadius: '8px', padding: '6px 10px',
                                     color: '#FF3B30', fontSize: '11px', fontWeight: 600,
-                                    cursor: 'pointer', fontFamily: 'inherit',
+                                    cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
                                 }}
                             >
                                 Cambiar
                             </button>
                         </div>
+                    ) : (
+                        <>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.4px', textTransform: 'uppercase', marginBottom: '8px' }}>
+                                Selección del cliente
+                            </p>
+                            <div style={{ position: 'relative', marginBottom: customerDropdownOpen ? '6px' : 0 }}>
+                                <input
+                                    ref={customerInputRef}
+                                    type="search"
+                                    autoComplete="off"
+                                    value={customerQuery}
+                                    onChange={(e) => {
+                                        setCustomerQuery(e.target.value);
+                                    }}
+                                    onFocus={() => setPickerForceOpen(true)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            setPickerForceOpen(true);
+                                        }
+                                        if (e.key === 'Escape') {
+                                            setPickerForceOpen(false);
+                                            (e.target as HTMLInputElement).blur();
+                                        }
+                                    }}
+                                    placeholder="Buscar por nombre, RIF, teléfono o correo…"
+                                    disabled={customersLoading}
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        padding: '10px 40px 10px 12px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        color: 'var(--label-primary)',
+                                        fontSize: '14px',
+                                        fontFamily: 'inherit',
+                                        outline: 'none',
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    title="Abrir o cerrar listado de clientes"
+                                    aria-expanded={customerDropdownOpen}
+                                    aria-label="Abrir listado de clientes"
+                                    disabled={customersLoading || customers.length === 0}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        customerInputRef.current?.focus();
+                                        if (!customerQuery.trim()) {
+                                            setPickerForceOpen((o) => !o);
+                                        } else {
+                                            setPickerForceOpen(true);
+                                        }
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '4px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: '34px',
+                                        height: '34px',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: 'rgba(255,255,255,0.08)',
+                                        color: 'rgba(255,255,255,0.75)',
+                                        cursor: customersLoading || customers.length === 0 ? 'not-allowed' : 'pointer',
+                                        fontSize: '12px',
+                                        lineHeight: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    ▼
+                                </button>
+                            </div>
+                            {customersLoading ? (
+                                <p style={{ fontSize: '13px', color: 'var(--label-secondary)' }}>Cargando clientes…</p>
+                            ) : customers.length === 0 ? (
+                                <p style={{ fontSize: '13px', color: 'var(--label-secondary)' }}>
+                                    No hay clientes.{' '}
+                                    <Link href="/clientes" style={{ color: '#34C759', fontWeight: 600 }}>Crear uno en Clientes</Link>
+                                </p>
+                            ) : customerDropdownOpen ? (
+                                <div
+                                    role="listbox"
+                                    aria-label="Clientes coincidentes"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    style={{
+                                        maxHeight: '220px',
+                                        overflowY: 'auto',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        marginBottom: '10px',
+                                    }}
+                                >
+                                    {filteredCustomers.length === 0 ? (
+                                        <p style={{ padding: '14px', fontSize: '13px', color: 'var(--label-secondary)' }}>Sin coincidencias.</p>
+                                    ) : (
+                                        filteredCustomers.map((c) => (
+                                            <button
+                                                key={c.id}
+                                                type="button"
+                                                role="option"
+                                                onClick={() => applyCustomerAndClosePicker(c)}
+                                                style={{
+                                                    display: 'block',
+                                                    width: '100%',
+                                                    textAlign: 'left',
+                                                    padding: '10px 12px',
+                                                    border: 'none',
+                                                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                                    background: 'transparent',
+                                                    cursor: 'pointer',
+                                                    fontFamily: 'inherit',
+                                                }}
+                                            >
+                                                <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '14px', fontWeight: 600 }}>
+                                                    {(c.nombre || '').trim() || 'Sin nombre'}
+                                                </span>
+                                                <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '2px' }}>
+                                                    {[c.rif, c.movil, c.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
+                                                </span>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            ) : null}
+                        </>
                     )}
-
-                    <ClientSearch
-                        value={clientName}
-                        onChange={(val) => {
-                            setClientName(val);
-                            if (val === '') {
-                                setClientRif('');
-                                setCustomerId(null);
-                            }
-                        }}
-                        onSelect={(customer) => {
-                            setClientName(customer.nombre);
-                            setClientRif(customer.rif || '');
-                            setClientPhone(customer.movil || '');
-                            setClientEmail(customer.email || '');
-                            setCustomerId(customer.id);
-                        }}
-                        placeholder={clientRif ? 'Editar nombre...' : 'Nombre del cliente o empresa...'}
-                    />
                 </div>
 
                 {/* ── Product Search ── */}
@@ -518,13 +966,7 @@ function VentasContent() {
                                         }}>
                                             {idx + 1}
                                         </div>
-                                        {item.product.image_url && (
-                                            <img 
-                                                src={item.product.image_url} 
-                                                alt={item.product.nombre} 
-                                                style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
-                                            />
-                                        )}
+                                        <LineItemProductThumb imagen={item.product.imagen} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                                                 <CategoryBadge cat={item.product.categoria} />
@@ -600,6 +1042,30 @@ function VentasContent() {
                                             <span style={{ color: '#FF9500', fontSize: '13px' }}>%</span>
                                         </div>
 
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => openSerialModalForLine(item)}
+                                                style={{
+                                                    background: 'rgba(142,142,147,0.12)',
+                                                    border: '1px solid rgba(142,142,147,0.25)',
+                                                    color: 'rgba(255,255,255,0.85)',
+                                                    borderRadius: '10px',
+                                                    height: '34px',
+                                                    padding: '0 12px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '12px',
+                                                    fontWeight: 700,
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                Seriales
+                                            </button>
+                                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                                                {(item.inventoryItemIds ?? []).filter((x): x is string => Boolean(x)).length}/{item.qty}
+                                            </span>
+                                        </div>
+
                                         {/* Line total */}
                                         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                                             <div style={{ color: '#34C759', fontSize: '16px', fontWeight: 700 }}>${formatUSD(total)}</div>
@@ -614,58 +1080,167 @@ function VentasContent() {
                     </div>
                 )}
 
-                {/* ── Estado del Presupuesto ── */}
-                {items.length > 0 && (
-                    <div style={{ ...glass, padding: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                            Estado
-                        </label>
-                        <select
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
+                {/* ── Seriales Modal (uso interno) ── */}
+                {serialModalOpen && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            background: 'rgba(0,0,0,0.6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 2000,
+                            padding: '18px',
+                        }}
+                        onMouseDown={(e) => {
+                            if (e.currentTarget === e.target) {
+                                setSerialModalOpen(false);
+                                setSerialModalLineId(null);
+                            }
+                        }}
+                    >
+                        <div
                             style={{
-                                background: 'rgba(255,255,255,0.06)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: '10px',
-                                padding: '8px 12px',
-                                color: 'white',
-                                fontSize: '14px',
-                                outline: 'none',
-                                fontFamily: 'inherit',
-                                flex: 1,
-                                cursor: 'pointer'
+                                width: 'min(720px, 100%)',
+                                background: 'rgba(10,10,10,0.95)',
+                                border: '1px solid rgba(255,255,255,0.10)',
+                                borderRadius: '18px',
+                                boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                                overflow: 'hidden',
                             }}
                         >
-                            <option value="pendiente" style={{ color: 'black' }}>Pendiente</option>
-                            <option value="enviado" style={{ color: 'black' }}>Enviado</option>
-                            <option value="aprobado" style={{ color: 'black' }}>Aprobado</option>
-                            <option value="no_aprobado" style={{ color: 'black' }}>No Aprobado</option>
-                            <option value="cobrado" style={{ color: 'black' }}>Cobrado</option>
-                            <option value="pagado" style={{ color: 'black' }}>Pagado</option>
-                            <option value="rechazado" style={{ color: 'black' }}>Rechazado</option>
-                            <option value="archivado" style={{ color: 'black' }}>Archivado</option>
-                        </select>
-                    </div>
-                )}
-
-                {/* ── Número de Presupuesto ── */}
-                {items.length > 0 && (
-                    <div style={{ ...glass, padding: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                            Nº Presupuesto
-                        </label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', padding: '6px 12px', flex: 1 }}>
-                            <span style={{ color: 'var(--label-secondary)', fontSize: '14px', fontWeight: 600 }}>PR-</span>
-                            <input
-                                type="text"
-                                value={budgetNumber}
-                                onChange={e => setBudgetNumber(e.target.value.replace(/\D/g, ''))}
+                            <div
                                 style={{
-                                    background: 'transparent', border: 'none', outline: 'none',
-                                    color: '#00AEEF', fontSize: '16px', fontWeight: 700,
-                                    fontFamily: 'inherit', width: '80px',
+                                    padding: '14px 16px',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '10px',
                                 }}
-                            />
+                            >
+                                <div>
+                                    <div style={{ fontSize: '14px', fontWeight: 900, color: 'white' }}>Asignar seriales</div>
+                                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
+                                        Solo seriales con valor en inventario
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSerialModalOpen(false);
+                                        setSerialModalLineId(null);
+                                    }}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'rgba(255,255,255,0.8)',
+                                        cursor: 'pointer',
+                                        fontSize: '18px',
+                                        lineHeight: 1,
+                                    }}
+                                    aria-label="Cerrar"
+                                >
+                                    ×
+                                </button>
+                            </div>
+
+                            <div style={{ padding: '14px 16px', maxHeight: '55vh', overflow: 'auto' }}>
+                                {serialModalLoading ? (
+                                    <div style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>Cargando seriales…</div>
+                                ) : serialCandidates.length === 0 ? (
+                                    <div style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
+                                        No se encontraron seriales para este producto en `global_inventory`.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        {serialCandidates.map((c) => {
+                                            const checked = serialSelectedIds.includes(c.id);
+                                            return (
+                                                <label
+                                                    key={c.id}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'flex-start',
+                                                        gap: '10px',
+                                                        padding: '12px',
+                                                        borderRadius: '14px',
+                                                        border: '1px solid rgba(255,255,255,0.08)',
+                                                        background: checked ? 'rgba(0,122,255,0.12)' : 'transparent',
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleSerialSelection(c.id)}
+                                                        style={{ marginTop: '4px' }}
+                                                    />
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ color: 'white', fontWeight: 900, fontSize: '13px' }}>{c.serial_number}</div>
+                                                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>
+                                                            {c.sap_code ? `SAP: ${c.sap_code} · ` : ''}
+                                                            {c.location ? `Ubicación: ${c.location}` : 'Sin ubicación'}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div
+                                style={{
+                                    padding: '14px 16px',
+                                    borderTop: '1px solid rgba(255,255,255,0.08)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '10px',
+                                }}
+                            >
+                                <div style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 800, fontSize: '12px' }}>
+                                    Seleccionados: {serialSelectedIds.length}
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSerialModalOpen(false);
+                                            setSerialModalLineId(null);
+                                        }}
+                                        style={{
+                                            padding: '10px 14px',
+                                            borderRadius: '12px',
+                                            background: 'rgba(255,255,255,0.06)',
+                                            border: '1px solid rgba(255,255,255,0.10)',
+                                            color: 'rgba(255,255,255,0.85)',
+                                            cursor: 'pointer',
+                                            fontWeight: 900,
+                                        }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={applySerialSelection}
+                                        disabled={serialSelectedIds.length === 0}
+                                        style={{
+                                            padding: '10px 14px',
+                                            borderRadius: '12px',
+                                            background: serialSelectedIds.length === 0 ? 'rgba(52,199,89,0.2)' : '#34C759',
+                                            border: 'none',
+                                            color: 'black',
+                                            cursor: serialSelectedIds.length === 0 ? 'not-allowed' : 'pointer',
+                                            fontWeight: 1000,
+                                        }}
+                                    >
+                                        Aplicar
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -673,13 +1248,16 @@ function VentasContent() {
                 {/* ── Notes ── */}
                 {items.length > 0 && (
                     <div style={{ ...glass, padding: '16px', marginBottom: '20px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
                             Notas / Condiciones
                         </label>
+                        <p style={{ fontSize: '11px', color: 'var(--label-secondary)', opacity: 0.85, marginBottom: '8px', lineHeight: 1.4 }}>
+                            Se envían a la vista previa e impresión. También puedes completar o corregir el texto en la pantalla de <strong>Vista previa</strong> antes de imprimir o compartir.
+                        </p>
                         <textarea
                             value={notes}
                             onChange={e => setNotes(e.target.value)}
-                            placeholder="Condiciones de pago, tiempo de entrega, garantía..."
+                            placeholder="Condiciones de pago, tiempo de entrega, garantía, detalles del sitio…"
                             rows={3}
                             style={{
                                 width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none',
@@ -818,21 +1396,26 @@ function VentasContent() {
                             </button>
                             <button
                                 onClick={() => {
+                                    if (!customerId) {
+                                        alert('Selecciona un cliente de la lista antes de abrir la vista previa.');
+                                        return;
+                                    }
                                     // Guardar datos en localStorage y navegar a preview
                                     const presupuesto = {
                                         cliente: clientName,
                                         rif: clientRif,
                                         telefono: clientPhone,
                                         email: clientEmail,
+                                        direccion: clientDireccion,
                                         notas: notes,
-                                        items: items.map(i => ({
+                                        items: items.map((i) => ({
                                             nombre: i.product.nombre,
-                                            categoria: i.product.categoria,
+                                            categoria: null,
+                                            descripcion: null,
                                             qty: i.qty,
                                             unitPrice: i.unitPrice,
                                             discount: i.discount,
                                             costo: i.product.costo,
-                                            image_url: i.product.image_url,
                                         })),
                                         subtotal,
                                         totalCost,
@@ -840,10 +1423,13 @@ function VentasContent() {
                                         marginPct,
                                         showZelle,
                                         fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-                                        numero: budgetNumber,
+                                        numero: budgetId ? `P-${budgetId.slice(0, 4)}` : `P-${Math.floor(Math.random() * 900) + 100}`,
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
-                                    window.open('/ventas/preview', '_blank');
+                                    const previewPath = budgetId
+                                        ? `/ventas/preview?id=${encodeURIComponent(budgetId)}`
+                                        : '/ventas/preview';
+                                    window.open(previewPath, '_blank', 'noopener,noreferrer');
                                 }}
                                 style={{
                                     flex: 1,
@@ -891,66 +1477,6 @@ function VentasContent() {
                             Limpiar presupuesto
                         </button>
                     </div>
-                )}
-
-                {/* ── FAB Vista Previa (Flotante) ── */}
-                {items.length > 0 && (
-                    <button
-                        onClick={() => {
-                            // Guardar datos en localStorage y navegar
-                            const presupuesto = {
-                                cliente: clientName,
-                                rif: clientRif,
-                                telefono: clientPhone,
-                                email: clientEmail,
-                                notas: notes,
-                                items: items.map(i => ({
-                                    nombre: i.product.nombre,
-                                    categoria: i.product.categoria,
-                                    qty: i.qty,
-                                    unitPrice: i.unitPrice,
-                                    discount: i.discount,
-                                    costo: i.product.costo,
-                                    image_url: i.product.image_url,
-                                })),
-                                subtotal,
-                                totalCost,
-                                totalProfit,
-                                marginPct,
-                                showZelle,
-                                fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
-                                numero: budgetNumber,
-                            };
-                            localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
-                            window.open('/ventas/preview', '_blank');
-                        }}
-                        style={{
-                            position: 'fixed',
-                            bottom: '30px',
-                            right: '30px',
-                            zIndex: 100,
-                            width: '64px',
-                            height: '64px',
-                            borderRadius: '32px',
-                            background: 'linear-gradient(135deg, #00AEEF, #0077D4)',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: 'none',
-                            boxShadow: '0 8px 32px rgba(0, 174, 239, 0.4)',
-                            cursor: 'pointer',
-                            transition: 'transform 0.2s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05) translateY(-4px)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1) translateY(0)'}
-                        title="Ver Vista Previa"
-                    >
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                            <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
                 )}
             </div>
 

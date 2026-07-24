@@ -1,0 +1,473 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import { ChevronDown, ExternalLink, MessageSquare, Trash2, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
+import { createClient } from '@/lib/supabase/client';
+import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
+import { emptyHojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
+import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
+
+const HojaVidaObreroVista = dynamic(() => import('@/components/talento/HojaVidaObreroVista'), {
+  ssr: false,
+  loading: () => <p className="mt-2 text-xs text-zinc-500">Cargando vista de campos…</p>,
+});
+
+export type GestionRRHHLocalProps = {
+  /** UUID de `ci_proyectos` (módulo integral). */
+  proyectoModuloId: string;
+  /** Incrementar desde el padre para volver a cargar `recruitment_needs` (p. ej. tras nueva vacante). */
+  listaRefresco?: number;
+  /** Nombre de la obra / proyecto (mensaje WhatsApp captación automática). */
+  nombreProyecto?: string | null;
+  /** Datos del patrono en cabecera de la planilla (vista previa). */
+  planillaPatrono?: PlanillaPatronoCampos | null;
+  /** Si es true (p. ej. `?tab=rrhh`), la planilla de empleo inicia visible; el usuario puede ocultarla con el mismo control. */
+  vistaHojaVidaDestacada?: boolean;
+};
+
+type NeedRow = {
+  id: string;
+  title: string;
+  cargo_nombre: string | null;
+  cargo_codigo: string | null;
+  protocol_active: boolean;
+  created_at: string;
+  cantidad_requerida?: number | null;
+  conteo_clics?: number | null;
+  captacion_token?: string | null;
+};
+
+function etiquetaCargo(row: NeedRow): string {
+  const n = (row.cargo_nombre ?? '').trim();
+  if (n) return n;
+  const t = (row.title ?? '').trim();
+  return t || 'Vacante';
+}
+
+function urlRegistroConToken(row: NeedRow): string | null {
+  const t = (row.captacion_token ?? '').trim();
+  if (!t) return null;
+  const base = publicRegistroOrigin().replace(/\/$/, '');
+  return `${base}/registro/${encodeURIComponent(t)}`;
+}
+
+function mensajeCaptacionWhatsApp(cargo: string, nombreObra: string, link: string): string {
+  const obra = nombreObra.trim() || 'la obra vinculada al proyecto';
+  return `Hola, Casa Inteligente te invita a postularte para ${cargo} en la obra ${obra}. Completa tu planilla aquí: ${link}`;
+}
+
+function cantidadMostrada(row: NeedRow): number {
+  const raw = row.cantidad_requerida;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 1) return Math.floor(raw);
+  return 1;
+}
+
+function clicsMostrados(row: NeedRow): number {
+  const raw = row.conteo_clics;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
+  return 0;
+}
+
+function mergeNeedsPorId<T extends { id: string; created_at: string }>(principal: T[], extra: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const r of principal) byId.set(r.id, r);
+  for (const r of extra) {
+    if (!byId.has(r.id)) byId.set(r.id, r);
+  }
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+}
+
+export default function GestionRRHHLocal({
+  proyectoModuloId,
+  listaRefresco = 0,
+  nombreProyecto = null,
+  planillaPatrono = null,
+  vistaHojaVidaDestacada = false,
+}: GestionRRHHLocalProps) {
+  const supabase = useMemo(() => createClient(), []);
+  const [mostrarPlanillaEmpleo, setMostrarPlanillaEmpleo] = useState(vistaHojaVidaDestacada);
+  const [needs, setNeeds] = useState<NeedRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** Al volver a esta pestaña tras registrar vacantes en otra ruta, se vuelve a leer `recruitment_needs`. */
+  const [viewportTick, setViewportTick] = useState(0);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      setToast(null);
+      toastTimer.current = null;
+    }, 3200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') setViewportTick((t) => t + 1);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
+  useEffect(() => {
+    setMostrarPlanillaEmpleo(vistaHojaVidaDestacada);
+  }, [vistaHojaVidaDestacada]);
+
+  useEffect(() => {
+    const id = proyectoModuloId.trim();
+    if (!id) {
+      setLoading(false);
+      setNeeds([]);
+      setError('Proyecto no válido.');
+      return;
+    }
+
+    /** Misma fila `ci_proyectos` puede quedar en `proyecto_modulo_id` o, por flujos antiguos, en `proyecto_id`. */
+    const filtroProyectoModulo = `proyecto_modulo_id.eq.${id},proyecto_id.eq.${id}`;
+
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      setError(null);
+
+      const obraHijaIds = await idsObrasHijasDesdeModuloIntegral(supabase, id);
+      if (!alive) return;
+
+      async function anexarPorObraHija<S extends string>(
+        selectStr: S,
+        base: { id: string; created_at: string }[] | null,
+      ): Promise<{ id: string; created_at: string }[]> {
+        const b = base ?? [];
+        if (obraHijaIds.length === 0) return b;
+        const ex = await supabase
+          .from('recruitment_needs')
+          .select(selectStr)
+          .in('proyecto_id', obraHijaIds)
+          .order('created_at', { ascending: false });
+        if (!alive) return b;
+        if (ex.error || !ex.data?.length) return b;
+        return mergeNeedsPorId(b as { id: string; created_at: string }[], ex.data as { id: string; created_at: string }[]);
+      }
+
+      const selFull =
+        'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,conteo_clics,captacion_token' as const;
+      const full = await supabase.from('recruitment_needs').select(selFull).or(filtroProyectoModulo).order('created_at', { ascending: false });
+
+      if (!alive) return;
+
+      if (!full.error) {
+        const merged = await anexarPorObraHija(selFull, (full.data ?? []) as NeedRow[]);
+        setNeeds(merged as NeedRow[]);
+        setLoading(false);
+        return;
+      }
+
+      const msg = full.error.message || 'No se pudieron cargar las necesidades.';
+      const selMid =
+        'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,captacion_token' as const;
+      const mid = await supabase.from('recruitment_needs').select(selMid).or(filtroProyectoModulo).order('created_at', { ascending: false });
+
+      if (!alive) return;
+
+      if (!mid.error) {
+        const merged = await anexarPorObraHija(selMid, mid.data ?? []);
+        setNeeds(
+          (merged as Omit<NeedRow, 'conteo_clics'>[]).map((r) => ({ ...r, conteo_clics: null })),
+        );
+        setLoading(false);
+        return;
+      }
+
+      const selBare = 'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,captacion_token' as const;
+      const bare = await supabase.from('recruitment_needs').select(selBare).or(filtroProyectoModulo).order('created_at', { ascending: false });
+
+      if (!alive) return;
+      setLoading(false);
+
+      if (!bare.error) {
+        const merged = await anexarPorObraHija(selBare, (bare.data ?? []) as { id: string; created_at: string }[]);
+        setNeeds(
+          (merged as Omit<NeedRow, 'cantidad_requerida' | 'conteo_clics'>[]).map((r) => ({
+            ...r,
+            cantidad_requerida: null,
+            conteo_clics: null,
+            captacion_token: null,
+          })),
+        );
+        return;
+      }
+
+      setNeeds([]);
+      setError(bare.error.message ?? msg);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [proyectoModuloId, supabase, listaRefresco, viewportTick]);
+
+  async function emitirCaptacionToken(row: NeedRow): Promise<{ url?: string; token?: string; error?: string }> {
+    const res = await fetch('/api/reclutamiento/captacion-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recruitment_need_id: row.id,
+        public_base_url: typeof window !== 'undefined' ? window.location.origin : '',
+      }),
+    });
+    const j = (await res.json()) as { error?: string; url?: string; token?: string; hint?: string };
+    if (!res.ok) {
+      return { error: j.hint ?? j.error ?? 'No se pudo generar el enlace de captación.' };
+    }
+    return { url: j.url, token: j.token };
+  }
+
+  const abrirWhatsApp = useCallback(
+    async (row: NeedRow) => {
+      let url = urlRegistroConToken(row);
+      let nuevoToken: string | undefined;
+      if (!url) {
+        const r = await emitirCaptacionToken(row);
+        if (r.error || !r.url) {
+          setError(r.error ?? 'No se pudo obtener el enlace.');
+          showToast(r.error ?? 'Error al generar enlace');
+          return;
+        }
+        url = r.url;
+        nuevoToken = r.token;
+        if (nuevoToken) {
+          setNeeds((prev) => prev.map((n) => (n.id === row.id ? { ...n, captacion_token: nuevoToken } : n)));
+        }
+      }
+      const cargo = etiquetaCargo(row);
+      const obra = (nombreProyecto ?? '').trim();
+      const text = encodeURIComponent(mensajeCaptacionWhatsApp(cargo, obra, url));
+      window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
+    },
+    [nombreProyecto, showToast],
+  );
+
+  const copiarLink = useCallback(
+    async (row: NeedRow) => {
+      let url = urlRegistroConToken(row);
+      if (!url) {
+        const r = await emitirCaptacionToken(row);
+        if (r.error || !r.url) {
+          showToast(r.error ?? 'No se pudo generar el enlace.');
+          return;
+        }
+        url = r.url;
+        if (r.token) {
+          setNeeds((prev) => prev.map((n) => (n.id === row.id ? { ...n, captacion_token: r.token } : n)));
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('Enlace de planilla copiado al portapapeles.');
+      } catch {
+        showToast('No se pudo copiar. Copia manualmente el enlace.');
+      }
+    },
+    [showToast],
+  );
+
+  const borrarSolicitud = useCallback(
+    async (row: NeedRow) => {
+      if (!window.confirm('¿Eliminar esta solicitud de personal? No se puede deshacer.')) return;
+      setDeletingId(row.id);
+      setError(null);
+      try {
+        const { error: delErr } = await supabase.from('recruitment_needs').delete().eq('id', row.id);
+        if (delErr) {
+          setError(delErr.message ?? 'No se pudo eliminar la solicitud.');
+          return;
+        }
+        setNeeds((prev) => prev.filter((n) => n.id !== row.id));
+        showToast('Solicitud eliminada.');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [showToast, supabase],
+  );
+
+  return (
+    <section
+      className="mt-6 rounded-2xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] backdrop-blur-xl"
+      aria-labelledby="rrhh-proyecto-titulo"
+    >
+      <div className="flex flex-wrap items-center gap-3 border-b border-white/10 pb-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10">
+          <Users className="h-5 w-5 text-[#FF9500]" aria-hidden />
+        </div>
+        <div>
+          <h2 id="rrhh-proyecto-titulo" className="text-base font-bold tracking-tight text-white">
+            RRHH — Personal solicitado
+          </h2>
+          <p className="text-[11px] text-zinc-500">
+            Lista de vacantes del proyecto · Enlace de registro por WhatsApp o copiar al portapapeles
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={
+          vistaHojaVidaDestacada
+            ? 'mt-4 rounded-xl border border-[#FF9500]/30 bg-[rgba(255,149,0,0.07)] p-3 backdrop-blur-xl sm:p-4'
+            : 'mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-xl sm:p-4'
+        }
+      >
+        <button
+          type="button"
+          onClick={() => setMostrarPlanillaEmpleo((v) => !v)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg py-1.5 text-left transition-colors hover:bg-white/[0.04]"
+          aria-expanded={mostrarPlanillaEmpleo}
+        >
+          <div>
+            <h3
+              className={
+                vistaHojaVidaDestacada ? 'text-sm font-bold text-[#FFD60A]' : 'text-sm font-bold text-zinc-200'
+              }
+            >
+              Planilla de empleo del obrero (vista previa)
+            </h3>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              {mostrarPlanillaEmpleo ? 'Pulsa para ocultar' : 'Pulsa para visualizar'} · patrono, obra y trabajador
+            </p>
+          </div>
+          <ChevronDown
+            className={`h-5 w-5 shrink-0 text-zinc-400 transition-transform ${mostrarPlanillaEmpleo ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
+        </button>
+        {mostrarPlanillaEmpleo ? (
+          <>
+            <p
+              className={
+                vistaHojaVidaDestacada
+                  ? 'mt-2 text-[11px] leading-relaxed text-zinc-400'
+                  : 'mt-2 text-[11px] leading-relaxed text-zinc-500'
+              }
+            >
+              {vistaHojaVidaDestacada
+                ? 'Mismo esquema que completará el postulante por el enlace de registro: identificación, contratación, salud, familiares, experiencia y datos del patrono. Los campos en blanco se llenan al enviar la planilla.'
+                : 'Formato legal I. Identificación del trabajador (datos personales, contratación, antecedentes penales, instrucción, gremial, médicos, peso/medidas, dependientes y trabajos previos), alineado al PDF y al onboarding.'}
+            </p>
+            <div className="mt-3 max-h-[min(78vh,1200px)] overflow-y-auto overflow-x-auto rounded-xl border border-white/10 bg-black/20 p-2 sm:p-3">
+              <HojaVidaObreroVista
+                hojaVidaLegal={emptyHojaVidaObreroCompleta()}
+                planillaPatrono={planillaPatrono ?? undefined}
+              />
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-zinc-500">Cargando requerimientos…</p>
+      ) : error ? (
+        <p className="mt-4 text-sm text-red-400">{error}</p>
+      ) : needs.length === 0 ? (
+        <p className="mt-4 text-sm text-zinc-500">
+          No hay solicitudes vinculadas. Usa «Nueva vacante» o el flujo de Reclutamiento.
+        </p>
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                <th className="px-3 py-2.5">Cargo</th>
+                <th className="px-3 py-2.5">Plazas</th>
+                <th className="px-3 py-2.5">Interesados</th>
+                <th className="px-3 py-2.5">Estado</th>
+                <th className="px-3 py-2.5 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {needs.map((row) => {
+                const activa = row.protocol_active !== false;
+                const sol = cantidadMostrada(row);
+                const clics = clicsMostrados(row);
+                return (
+                  <tr
+                    key={row.id}
+                    className="border-b border-white/[0.06] transition-colors hover:bg-white/5"
+                  >
+                    <td className="px-3 py-3 font-medium text-zinc-100">{etiquetaCargo(row)}</td>
+                    <td className="px-3 py-3 tabular-nums text-zinc-200">{sol}</td>
+                    <td className="px-3 py-3 tabular-nums text-zinc-400">{clics}</td>
+                    <td className="px-3 py-3">
+                      {activa ? (
+                        <span className="inline-flex rounded-full border border-[#FF9500]/50 bg-[#FF9500]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#FF9500]">
+                          Activa
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-zinc-500">
+                          Cerrada
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void borrarSolicitud(row)}
+                          disabled={deletingId === row.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-950/35 px-2.5 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-950/55 disabled:opacity-50"
+                          title="Eliminar solicitud"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          {deletingId === row.id ? '…' : 'Eliminar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => abrirWhatsApp(row)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/45 bg-emerald-500/15 px-2.5 py-1.5 text-xs font-semibold text-emerald-200 shadow-sm transition duration-200 hover:scale-105 hover:bg-emerald-500/25"
+                          title="WhatsApp"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                          WhatsApp
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void copiarLink(row)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/45 bg-amber-500/15 px-2.5 py-1.5 text-xs font-semibold text-amber-100 shadow-sm transition duration-200 hover:scale-105 hover:bg-amber-500/25"
+                          title="Copiar enlace de registro"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                          Copiar link
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {toast ? (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[#FF9500]/40 bg-[#0A0A0F]/95 px-4 py-2.5 text-sm font-medium text-[#FF9500] shadow-lg shadow-black/50 backdrop-blur-xl"
+        >
+          {toast}
+        </div>
+      ) : null}
+    </section>
+  );
+}

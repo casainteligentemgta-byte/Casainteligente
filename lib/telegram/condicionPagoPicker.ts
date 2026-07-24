@@ -40,7 +40,8 @@ export async function enviarPickerCondicionPagoTelegram(
   await setTelegramContexto(supabase, chatId, {
     contexto: 'factura',
     pending_factura_id: pendingId,
-    metadata: {},
+    // Limpia solo el paso; conserva procura_id y demás metadata.
+    metadata: { paso: 'condicion_pago' },
   });
 
   const { data: row } = await supabase
@@ -99,15 +100,20 @@ async function enviarPreguntaDiasCreditoTelegram(
 async function continuarTrasFormaPagoTelegram(
   supabase: SupabaseClient,
   chatId: string,
+  pendingId: string,
 ): Promise<void> {
+  const estado = await getTelegramEstado(supabase, chatId);
+  const { paso: _paso, ...restMeta } = (estado.metadata ?? {}) as Record<string, unknown>;
   await setTelegramContexto(supabase, chatId, {
     contexto: 'factura',
-    metadata: {},
+    pending_factura_id: pendingId,
+    reemplazarMetadata: true,
+    metadata: restMeta,
   });
-  const { enviarPickerEntidadesFacturaTelegram } = await import(
-    '@/lib/telegram/facturaEntidadDestinoPicker'
+  const { avanzarFlujoFacturaCompradorTelegram } = await import(
+    '@/lib/telegram/flujoFacturaCompradorTelegram'
   );
-  await enviarPickerEntidadesFacturaTelegram(supabase, chatId);
+  await avanzarFlujoFacturaCompradorTelegram(supabase, chatId, pendingId);
 }
 
 async function guardarDiasCreditoYContinuar(
@@ -135,7 +141,6 @@ async function guardarDiasCreditoYContinuar(
     ...prev,
     condicion_pago: 'credito',
     dias_credito: parsed,
-    comprador_confirmo_pago: true,
   };
 
   const { error } = await supabase
@@ -153,7 +158,7 @@ async function guardarDiasCreditoYContinuar(
     `✅ Crédito: <b>${parsed} días</b>`,
     { parse_mode: 'HTML' },
   );
-  await continuarTrasFormaPagoTelegram(supabase, chatId);
+  await continuarTrasFormaPagoTelegram(supabase, chatId, pendingId);
   return null;
 }
 
@@ -193,7 +198,6 @@ export async function manejarCallbackCondicionPagoFacturaTelegram(
     ...prev,
     condicion_pago: condicion,
     dias_credito: condicion === 'credito' ? null : null,
-    comprador_confirmo_pago: true,
   };
 
   const { error } = await supabase
@@ -221,7 +225,7 @@ export async function manejarCallbackCondicionPagoFacturaTelegram(
   if (condicion === 'credito') {
     await enviarPreguntaDiasCreditoTelegram(supabase, params.chatId, pendingId);
   } else {
-    await continuarTrasFormaPagoTelegram(supabase, params.chatId);
+    await continuarTrasFormaPagoTelegram(supabase, params.chatId, pendingId);
   }
   return true;
 }

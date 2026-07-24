@@ -75,7 +75,6 @@ export async function manejarCallbackMonedaFacturaTelegram(
   const nextExtracted: ExtractedCanalHeader = {
     ...prev,
     moneda: normalizarMonedaExtracted(moneda),
-    comprador_confirmo_moneda: true,
   };
 
   const { error } = await supabase
@@ -103,8 +102,10 @@ export async function manejarCallbackMonedaFacturaTelegram(
     { parse_mode: 'HTML' },
   );
 
-  const { enviarPickerCondicionPagoTelegram } = await import('@/lib/telegram/condicionPagoPicker');
-  await enviarPickerCondicionPagoTelegram(supabase, params.chatId, pendingId);
+  const { avanzarFlujoFacturaCompradorTelegram } = await import(
+    '@/lib/telegram/flujoFacturaCompradorTelegram'
+  );
+  await avanzarFlujoFacturaCompradorTelegram(supabase, params.chatId, pendingId);
   return true;
 }
 

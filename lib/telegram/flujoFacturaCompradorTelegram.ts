@@ -47,21 +47,14 @@ export function siguientePasoFlujoFacturaComprador(
   ) {
     return 'fecha';
   }
-  if (!monedaExtractedConfirmada(extracted.moneda, extracted.comprador_confirmo_moneda)) {
-    return 'moneda';
-  }
-  if (
-    !condicionPagoExtractedConfirmada(
-      extracted.condicion_pago,
-      extracted.comprador_confirmo_pago,
-    )
-  ) {
-    return 'condicion';
-  }
+  // OCR guarda moneda/pago en null → el comprador debe elegir con botones.
+  if (!monedaExtractedConfirmada(extracted.moneda)) return 'moneda';
+  if (!condicionPagoExtractedConfirmada(extracted.condicion_pago)) return 'condicion';
   if (!diasCreditoExtractedValido(extracted)) return 'dias_credito';
 
   const proyectoId = row?.proyecto_id?.trim() || '';
   const ubicacionId = row?.ubicacion_destino_id?.trim() || '';
+  // Destino incompleto: falta obra o (si ya hay obra) almacén.
   if (!proyectoId || !ubicacionId) return 'destino';
 
   return 'completo';
@@ -116,7 +109,11 @@ async function enviarPasoDestinoFacturaComprador(
   await enviarPickerEntidadesFacturaTelegram(supabase, chatId);
 }
 
-/** Avanza al siguiente paso obligatorio del comprador (moneda, pago, entidad, obra, almacén…). */
+/**
+ * Avanza al siguiente paso obligatorio del comprador (moneda, pago, entidad, obra, almacén…).
+ * No consultar columnas inexistentes (p. ej. imputacion_entidad): PostgREST falla y se
+ * omiten los InlineKeyboard de Bs/USD, contado/crédito y almacén.
+ */
 export async function avanzarFlujoFacturaCompradorTelegram(
   supabase: SupabaseClient,
   chatId: string,

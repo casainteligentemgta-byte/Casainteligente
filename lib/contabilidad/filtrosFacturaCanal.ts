@@ -1,3 +1,8 @@
+import {
+  esCompraSoloAuditoriaCco,
+  esDescripcionAuditoriaCco,
+  esProveedorActorBitacoraCco,
+} from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { parseMontoFiltro } from '@/lib/contabilidad/comprasQueryFiltros';
 import { montoUsdCompra, tasaBcvCompra, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 import {
@@ -221,6 +226,7 @@ export type CompraConfirmadaParaLineas = {
   monto_usd?: number | null;
   origen: string;
   estado: string;
+  notas?: string | null;
   proyectoNombre?: string;
   entidadNombre?: string;
   almacenNombre?: string;
@@ -240,6 +246,20 @@ export type CompraConfirmadaParaLineas = {
     subtotal: number;
   }>;
 };
+
+/** Compra que solo trae logs de auditoría CCO (no es proveedor ni artículo real). */
+export function compraEsAuditoriaImportada(c: CompraConfirmadaParaLineas): boolean {
+  return esCompraSoloAuditoriaCco({
+    supplier_name: c.supplier_name,
+    supplier_rif: c.supplier_rif,
+    invoice_number: c.invoice_number,
+    origen: c.origen,
+    monto_usd: c.monto_usd,
+    total_amount: c.total_amount,
+    notas: c.notas,
+    lineas: c.lineas,
+  });
+}
 
 export function repartirMontosFacturaEnLineas(
   montos: { bs: number; usd: number | null },
@@ -335,6 +355,18 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
   const filas: FilaFacturaCanal[] = [];
 
   for (const c of compras) {
+    // Oculta filas de auditoría CCO mal importadas (artículo = log, proveedor = usuario).
+    if (compraEsAuditoriaImportada(c)) continue;
+    if (
+      esProveedorActorBitacoraCco({
+        supplier_name: c.supplier_name,
+        supplier_rif: c.supplier_rif,
+        invoice_number: c.invoice_number,
+      })
+    ) {
+      continue;
+    }
+
     const tasa = c.tasa_bcv_ves_por_usd ?? tasaBcvCompra(c);
     const montos = montosBimonetariosLista(c, tasa);
     const moneda = monedaOriginalCompra(c);
@@ -377,7 +409,11 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
       continue;
     }
 
-    const lineasParsed = c.lineas.map((l) => {
+    // Nunca mostrar líneas sueltas de auditoría aunque la cabecera tenga otros ítems.
+    const lineasOperativas = c.lineas.filter((l) => !esDescripcionAuditoriaCco(l.descripcion));
+    if (!lineasOperativas.length) continue;
+
+    const lineasParsed = lineasOperativas.map((l) => {
       const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : 0;
       const precio =
         Number(l.precio_unitario) >= 0

@@ -1,0 +1,1069 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowUpRight,
+  Box,
+  ChevronDown,
+  Download,
+  FileText,
+  Filter,
+  Loader2,
+  Package,
+  Pencil,
+  Printer,
+  RefreshCw,
+  Search,
+  Share2,
+  Trash2,
+} from 'lucide-react';
+import { abrirMovimientosCuadroVentana } from '@/lib/almacen/movimientosCuadroPrintHtml';
+import {
+  buildMovimientosCuadroShareUrl,
+  copiarTextoMovimientosCuadro,
+  hasMovimientosCuadroShareParams,
+  movimientosCuadroPathFromState,
+  parseMovimientosCuadroShareParams,
+  type MovimientosCuadroShareState,
+} from '@/lib/almacen/movimientosCuadroShare';
+import {
+  exportarMovimientosCuadroExcel,
+  movimientosFilasATsv,
+  type MovimientosExportScope,
+} from '@/lib/almacen/movimientosExportShare';
+import type {
+  FilaMovimientoInventario,
+  VistaMovimientoInventario,
+} from '@/lib/almacen/listarMovimientosInventario';
+import { useAlmacenFiltrosOptional } from '@/components/almacen/AlmacenFiltrosProvider';
+
+const PAGE_SIZE = 50;
+
+const inputClass =
+  'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
+
+const VISTAS: { id: VistaMovimientoInventario; label: string; icon: typeof Box }[] = [
+  { id: 'ingresado', label: 'Ingresos', icon: ArrowDownRight },
+  { id: 'despachado', label: 'Salidas', icon: ArrowUpRight },
+  { id: 'almacenado', label: 'Stock', icon: Package },
+  { id: 'todos', label: 'Movimientos', icon: Box },
+];
+
+function clasesBotonVista(id: VistaMovimientoInventario, active: boolean): string {
+  const base =
+    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors';
+  if (!active) {
+    if (id === 'despachado') {
+      return `${base} border-red-500/25 text-red-400/80 hover:border-red-500/45 hover:text-red-300`;
+    }
+    return `${base} border-white/10 text-zinc-400 hover:text-zinc-200`;
+  }
+  switch (id) {
+    case 'ingresado':
+      return `${base} border-emerald-500/50 bg-emerald-500/15 text-emerald-100`;
+    case 'almacenado':
+      return `${base} border-sky-500/50 bg-sky-500/15 text-sky-100`;
+    case 'despachado':
+      return `${base} border-red-500/55 bg-red-500/15 text-red-100`;
+    default:
+      return `${base} border-sky-500/50 bg-sky-500/15 text-sky-100`;
+  }
+}
+
+function badgeTipo(tipo: FilaMovimientoInventario['tipo']) {
+  switch (tipo) {
+    case 'ingreso':
+      return 'bg-emerald-500/15 text-emerald-300';
+    case 'despacho':
+      return 'bg-red-500/15 text-red-300';
+    default:
+      return 'bg-sky-500/15 text-sky-200';
+  }
+}
+
+function abrevTipo(tipo: FilaMovimientoInventario['tipo']) {
+  switch (tipo) {
+    case 'ingreso':
+      return 'ING';
+    case 'despacho':
+      return 'SAL';
+    default:
+      return 'STOCK';
+  }
+}
+
+function labelTipo(tipo: FilaMovimientoInventario['tipo']) {
+  switch (tipo) {
+    case 'ingreso':
+      return 'Ingreso';
+    case 'despacho':
+      return 'Salida';
+    default:
+      return 'Stock';
+  }
+}
+
+function etiquetaAlmacen(f: FilaMovimientoInventario): string | null {
+  if (f.tipo === 'despacho') return f.origen ?? f.destino;
+  return f.destino ?? f.origen;
+}
+
+function etiquetaOrigenDestino(f: FilaMovimientoInventario): string {
+  if (f.origen && f.destino) return `${f.origen} → ${f.destino}`;
+  return f.destino ?? f.origen ?? '—';
+}
+
+function parseVistaInicial(
+  raw: string | null,
+  legacyMovVista: string | null = null,
+): VistaMovimientoInventario {
+  const v = raw ?? legacyMovVista;
+  if (v === 'ingresado' || v === 'despachado' || v === 'almacenado' || v === 'todos') {
+    return v;
+  }
+  return 'todos';
+}
+
+const VISTA_LABEL: Record<VistaMovimientoInventario, string> = {
+  ingresado: 'Ingresos',
+  almacenado: 'Stock',
+  despachado: 'Salidas',
+  todos: 'Movimientos',
+};
+
+export type MovimientosInventarioEmbedProps = {
+  /** Embebido en /almacen (sin cabecera de página completa). */
+  embedded?: boolean;
+  skipUrlSync?: boolean;
+  proyectoId?: string;
+  proyectoIdsEntidad?: string[];
+  materialIdsCategoria?: string[];
+  ubicacionIds?: string[];
+  busquedaVinculada?: string;
+  vistaExterna?: VistaMovimientoInventario;
+  onVistaExternaChange?: (v: VistaMovimientoInventario) => void;
+};
+
+export default function MovimientosCuadro({
+  embedded = false,
+  skipUrlSync = false,
+  proyectoId: proyectoIdBloqueado,
+  proyectoIdsEntidad,
+  materialIdsCategoria,
+  ubicacionIds,
+  busquedaVinculada,
+  vistaExterna,
+  onVistaExternaChange,
+}: MovimientosInventarioEmbedProps = {}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const almacenFiltros = useAlmacenFiltrosOptional();
+  const ubicacionIdsEfectivos =
+    ubicacionIds ?? (almacenFiltros?.ubicacionIdsFiltro.length ? almacenFiltros.ubicacionIdsFiltro : undefined);
+  const proyectoIdEfectivo = proyectoIdBloqueado?.trim() || almacenFiltros?.filterProyectoId || undefined;
+  const proyectoIdsEntidadEfectivos =
+    proyectoIdsEntidad ?? almacenFiltros?.proyectoIdsEntidadArr;
+  const esperandoUbicaciones =
+    Boolean(almacenFiltros?.filtroStockEntidadActivo && almacenFiltros.cargandoUbicaciones);
+
+  const [hydrated, setHydrated] = useState(false);
+  const [vistaLocal, setVistaLocal] = useState<VistaMovimientoInventario>(() =>
+    vistaExterna ??
+    parseVistaInicial(searchParams.get('vista'), searchParams.get('movVista')),
+  );
+  const vista = vistaExterna ?? vistaLocal;
+  const setVista = useCallback(
+    (next: VistaMovimientoInventario) => {
+      if (onVistaExternaChange) onVistaExternaChange(next);
+      else setVistaLocal(next);
+    },
+    [onVistaExternaChange],
+  );
+  const [proveedorInput, setProveedorInput] = useState('');
+  const [destinoInput, setDestinoInput] = useState('');
+  const [materialInput, setMaterialInput] = useState('');
+  const [proveedor, setProveedor] = useState('');
+  const [destino, setDestino] = useState('');
+  const [material, setMaterial] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [filas, setFilas] = useState<FilaMovimientoInventario[]>([]);
+  const [resumen, setResumen] = useState({ ingresado: 0, despachado: 0, almacenado: 0 });
+  const [totalFilas, setTotalFilas] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [eliminandoBulk, setEliminandoBulk] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const [exportScope, setExportScope] = useState<MovimientosExportScope>('filtrado');
+  const [compartidoOk, setCompartidoOk] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const scrollSentinelRef = useRef<HTMLDivElement>(null);
+  const fetchGenRef = useRef(0);
+
+  useEffect(() => {
+    if (embedded || skipUrlSync) {
+      setHydrated(true);
+      return;
+    }
+    if (!hasMovimientosCuadroShareParams(searchParams)) {
+      setHydrated(true);
+      return;
+    }
+    const fromUrl = parseMovimientosCuadroShareParams(searchParams);
+    if (fromUrl.vista) setVista(fromUrl.vista);
+    if (fromUrl.proveedor != null) {
+      setProveedorInput(fromUrl.proveedor);
+      setProveedor(fromUrl.proveedor);
+    }
+    if (fromUrl.destino != null) {
+      setDestinoInput(fromUrl.destino);
+      setDestino(fromUrl.destino);
+    }
+    if (fromUrl.material != null) {
+      setMaterialInput(fromUrl.material);
+      setMaterial(fromUrl.material);
+    }
+    if (fromUrl.fechaDesde != null) setFechaDesde(fromUrl.fechaDesde);
+    if (fromUrl.fechaHasta != null) setFechaHasta(fromUrl.fechaHasta);
+    setHydrated(true);
+  }, [embedded, skipUrlSync, searchParams]);
+
+  useEffect(() => {
+    if (vistaExterna) setVistaLocal(vistaExterna);
+  }, [vistaExterna]);
+
+  const filtrosActivos = useMemo(() => {
+    const activos: string[] = [];
+    if (proveedorInput.trim()) activos.push('proveedor');
+    if (destinoInput.trim()) activos.push('destino');
+    if (materialInput.trim()) activos.push('material');
+    if (fechaDesde) activos.push('desde');
+    if (fechaHasta) activos.push('hasta');
+    return activos;
+  }, [proveedorInput, destinoInput, materialInput, fechaDesde, fechaHasta]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setProveedor(proveedorInput.trim());
+      setDestino(destinoInput.trim());
+      setMaterial(materialInput.trim());
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [proveedorInput, destinoInput, materialInput]);
+
+  const limpiarFiltros = useCallback(() => {
+    setProveedorInput('');
+    setDestinoInput('');
+    setMaterialInput('');
+    setProveedor('');
+    setDestino('');
+    setMaterial('');
+    setFechaDesde('');
+    setFechaHasta('');
+  }, []);
+
+  const queryBase = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set('vista', vista);
+    if (proyectoIdEfectivo) {
+      p.set('proyecto_id', proyectoIdEfectivo);
+    } else if (proyectoIdsEntidadEfectivos?.length) {
+      p.set('proyecto_ids', proyectoIdsEntidadEfectivos.join(','));
+    }
+    if (materialIdsCategoria?.length) {
+      p.set('material_ids', materialIdsCategoria.join(','));
+    }
+    if (ubicacionIdsEfectivos?.length) {
+      p.set('ubicacion_ids', ubicacionIdsEfectivos.join(','));
+    }
+    if (proveedor.trim()) p.set('proveedor', proveedor.trim());
+    if (destino.trim()) p.set('destino', destino.trim());
+    const materialEfectivo = material.trim() || busquedaVinculada?.trim() || '';
+    if (materialEfectivo) p.set('material', materialEfectivo);
+    if (fechaDesde) p.set('fecha_desde', fechaDesde);
+    if (fechaHasta) p.set('fecha_hasta', fechaHasta);
+    p.set('page_size', String(PAGE_SIZE));
+    return p.toString();
+  }, [
+    vista,
+    proyectoIdEfectivo,
+    proyectoIdsEntidadEfectivos,
+    materialIdsCategoria,
+    ubicacionIdsEfectivos,
+    proveedor,
+    destino,
+    material,
+    busquedaVinculada,
+    fechaDesde,
+    fechaHasta,
+  ]);
+
+  const cargarPagina = useCallback(
+    async (nextOffset: number, append: boolean) => {
+      if (esperandoUbicaciones) return;
+      const gen = ++fetchGenRef.current;
+      if (append) setLoadingMore(true);
+      else {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const p = new URLSearchParams(queryBase);
+        p.set('offset', String(nextOffset));
+        const res = await fetch(`/api/almacen/movimientos?${p.toString()}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (gen !== fetchGenRef.current) return;
+        if (!res.ok) throw new Error(json.error ?? 'Error al cargar');
+        const nuevas = (json.filas ?? []) as FilaMovimientoInventario[];
+        setFilas((prev) => (append ? [...prev, ...nuevas] : nuevas));
+        setResumen(json.resumen ?? { ingresado: 0, despachado: 0, almacenado: 0 });
+        setTotalFilas(Number(json.total ?? nuevas.length));
+        setHasMore(Boolean(json.hasMore));
+        setOffset(Number(json.nextOffset ?? nextOffset + nuevas.length));
+      } catch (e) {
+        if (gen !== fetchGenRef.current) return;
+        setError(e instanceof Error ? e.message : 'Error');
+        if (!append) setFilas([]);
+      } finally {
+        if (gen === fetchGenRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [queryBase, esperandoUbicaciones],
+  );
+
+  const cargar = useCallback(async () => {
+    setOffset(0);
+    await cargarPagina(0, false);
+  }, [cargarPagina]);
+
+  const cargarMas = useCallback(() => {
+    if (!hasMore || loading || loadingMore || esperandoUbicaciones) return;
+    void cargarPagina(offset, true);
+  }, [hasMore, loading, loadingMore, esperandoUbicaciones, cargarPagina, offset]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void cargar();
+  }, [hydrated, cargar]);
+
+  useEffect(() => {
+    const el = scrollSentinelRef.current;
+    if (!el || !hasMore) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) cargarMas();
+      },
+      { rootMargin: '240px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, cargarMas, filas.length]);
+
+  const todasSeleccionadas = useMemo(
+    () => filas.length > 0 && filas.every((f) => selectedIds.has(f.id)),
+    [filas, selectedIds],
+  );
+  const algunaSeleccionada = selectedIds.size > 0;
+  const seleccionIndeterminada = algunaSeleccionada && !todasSeleccionadas;
+
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (el) el.indeterminate = seleccionIndeterminada;
+  }, [seleccionIndeterminada]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const visible = new Set(filas.map((f) => f.id));
+      const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filas]);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (filas.length > 0 && filas.every((f) => prev.has(f.id))) {
+        return new Set();
+      }
+      return new Set(filas.map((f) => f.id));
+    });
+  }, [filas]);
+
+  const toggleSelectFila = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const eliminarMovimientoPorId = async (id: string): Promise<boolean> => {
+    const res = await fetch('/api/almacen/movimientos', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+      cache: 'no-store',
+    });
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
+    return true;
+  };
+
+  const eliminarMovimiento = async (f: FilaMovimientoInventario) => {
+    if (!f.eliminable) return;
+    const etiqueta = `${labelTipo(f.tipo)} · ${f.material_nombre}`.slice(0, 80);
+    const ok = window.confirm(
+      `¿Eliminar este movimiento?\n\n${etiqueta}\n\nSe ajustará el inventario si el registro ya impactó stock.`,
+    );
+    if (!ok) return;
+
+    setEliminandoId(f.id);
+    setError(null);
+    try {
+      await eliminarMovimientoPorId(f.id);
+      setFilas((prev) => prev.filter((row) => row.id !== f.id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(f.id);
+        return next;
+      });
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setEliminandoId(null);
+    }
+  };
+
+  const eliminarSeleccionados = async () => {
+    const items = filas.filter((f) => selectedIds.has(f.id));
+    if (!items.length) return;
+    const eliminables = items.filter((f) => f.eliminable);
+    if (!eliminables.length) {
+      setError('Ninguno de los movimientos seleccionados se puede eliminar.');
+      return;
+    }
+    const ok = window.confirm(
+      `¿Eliminar ${eliminables.length} movimiento(s)?\n\nSe ajustará el inventario según corresponda.`,
+    );
+    if (!ok) return;
+
+    setEliminandoBulk(true);
+    setError(null);
+    let okCount = 0;
+    let failCount = 0;
+    try {
+      for (const f of eliminables) {
+        setEliminandoId(f.id);
+        try {
+          await eliminarMovimientoPorId(f.id);
+          okCount += 1;
+        } catch {
+          failCount += 1;
+        }
+      }
+      setSelectedIds(new Set());
+      await cargar();
+      if (failCount > 0) {
+        setError(`${okCount} eliminado(s). ${failCount} no se pudieron borrar.`);
+      } else if (items.length > eliminables.length) {
+        setError(
+          `${okCount} eliminado(s). ${items.length - eliminables.length} no eran eliminables.`,
+        );
+      }
+    } finally {
+      setEliminandoId(null);
+      setEliminandoBulk(false);
+    }
+  };
+
+  const filaSeleccionada = useMemo(() => {
+    if (selectedIds.size !== 1) return null;
+    const id = Array.from(selectedIds)[0];
+    return filas.find((f) => f.id === id) ?? null;
+  }, [selectedIds, filas]);
+
+  const filasSeleccionadas = useMemo(
+    () => filas.filter((f) => selectedIds.has(f.id)),
+    [filas, selectedIds],
+  );
+
+  const estadoCompartir = useMemo(
+    (): MovimientosCuadroShareState => ({
+      vista,
+      proveedor,
+      destino,
+      material,
+      fechaDesde,
+      fechaHasta,
+    }),
+    [vista, proveedor, destino, material, fechaDesde, fechaHasta],
+  );
+
+  useEffect(() => {
+    if (!hydrated || embedded || skipUrlSync) return;
+    const path = movimientosCuadroPathFromState(estadoCompartir);
+    router.replace(path, { scroll: false });
+  }, [hydrated, embedded, skipUrlSync, estadoCompartir, router]);
+
+  useEffect(() => {
+    if (exportScope === 'seleccionado' && filasSeleccionadas.length === 0) {
+      setExportScope('filtrado');
+    }
+  }, [exportScope, filasSeleccionadas.length]);
+
+  const construirFilasExport = useCallback(
+    (scope: MovimientosExportScope) =>
+      scope === 'seleccionado' ? filasSeleccionadas : filas,
+    [filas, filasSeleccionadas],
+  );
+
+  const subtituloCuadro = useMemo(() => {
+    const partes = [`Vista: ${VISTA_LABEL[vista]}`];
+    if (proveedor.trim()) partes.push(`Proveedor: ${proveedor.trim()}`);
+    if (destino.trim()) partes.push(`Destino: ${destino.trim()}`);
+    if (material.trim()) partes.push(`Material: ${material.trim()}`);
+    if (fechaDesde) partes.push(`Desde: ${fechaDesde}`);
+    if (fechaHasta) partes.push(`Hasta: ${fechaHasta}`);
+    return partes.join(' · ');
+  }, [vista, proveedor, destino, material, fechaDesde, fechaHasta]);
+
+  const etiquetaScopeExport = useCallback(
+    (scope: MovimientosExportScope) =>
+      scope === 'filtrado'
+        ? `Filtrado (${filas.length} movimiento(s))`
+        : `Seleccionado (${filasSeleccionadas.length} movimiento(s))`,
+    [filas.length, filasSeleccionadas.length],
+  );
+
+  const exportarCuadroExcel = useCallback(
+    (scope: MovimientosExportScope) => {
+      const exportFilas = construirFilasExport(scope);
+      if (!exportarMovimientosCuadroExcel(exportFilas, scope)) {
+        setError(
+          scope === 'seleccionado'
+            ? 'Seleccione al menos un movimiento para exportar.'
+            : 'No hay movimientos para exportar.',
+        );
+      }
+    },
+    [construirFilasExport],
+  );
+
+  const verPdfCuadro = useCallback(
+    (scope: MovimientosExportScope = exportScope) => {
+      const exportFilas = construirFilasExport(scope);
+      if (!exportFilas.length) {
+        setError('No hay movimientos para ver en PDF.');
+        return;
+      }
+      try {
+        abrirMovimientosCuadroVentana({
+          subtitulo: `${etiquetaScopeExport(scope)} · ${subtituloCuadro}`,
+          filas: exportFilas,
+          resumen,
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo abrir la vista PDF');
+      }
+    },
+    [construirFilasExport, exportScope, etiquetaScopeExport, subtituloCuadro, resumen],
+  );
+
+  const imprimirCuadro = useCallback(
+    (scope: MovimientosExportScope = exportScope) => {
+      const exportFilas = construirFilasExport(scope);
+      if (!exportFilas.length) {
+        setError('No hay movimientos para imprimir.');
+        return;
+      }
+      try {
+        abrirMovimientosCuadroVentana({
+          subtitulo: `${etiquetaScopeExport(scope)} · ${subtituloCuadro}`,
+          filas: exportFilas,
+          resumen,
+          autoPrint: true,
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo abrir la vista de impresión');
+      }
+    },
+    [construirFilasExport, exportScope, etiquetaScopeExport, subtituloCuadro, resumen],
+  );
+
+  const compartirCuadro = useCallback(
+    async (scope: MovimientosExportScope = exportScope) => {
+      if (typeof window === 'undefined') return;
+      const exportFilas = construirFilasExport(scope);
+      if (!exportFilas.length && !filas.length) return;
+      const url = buildMovimientosCuadroShareUrl(window.location.origin, estadoCompartir);
+      const resumenTexto = `${etiquetaScopeExport(scope)} · ${subtituloCuadro}`;
+      const titulo = 'Entradas y salidas — Casa Inteligente';
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ title: titulo, text: resumenTexto, url });
+          return;
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+        }
+      }
+      const tsv = exportFilas.length > 0 ? `\n\n${movimientosFilasATsv(exportFilas)}` : '';
+      const ok = await copiarTextoMovimientosCuadro(`${titulo}\n${resumenTexto}\n${url}${tsv}`);
+      if (ok) {
+        setCompartidoOk(true);
+        window.setTimeout(() => setCompartidoOk(false), 2000);
+      }
+    },
+    [
+      construirFilasExport,
+      exportScope,
+      filas.length,
+      estadoCompartir,
+      etiquetaScopeExport,
+      subtituloCuadro,
+    ],
+  );
+
+  const shellClass = embedded
+    ? 'text-white space-y-4'
+    : 'min-h-screen bg-[#050508] text-white p-4 md:p-6 pb-24';
+
+  return (
+    <div className={shellClass}>
+      <div className={embedded ? 'space-y-4' : 'max-w-6xl mx-auto space-y-6'}>
+        {!embedded ? (
+        <div className="flex flex-wrap items-center gap-4">
+          <Link
+            href="/almacen"
+            className="p-2.5 rounded-xl border border-white/10 bg-zinc-900/80 hover:bg-zinc-800 transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight">Entradas y salidas</h1>
+            <p className="text-xs text-zinc-500 mt-1">
+              Ingresos: compras, cuarentena y recepción. Salidas: egresos. Stock: saldo físico. Movimientos: historial completo.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFiltrosAbiertos((v) => !v)}
+              aria-expanded={filtrosAbiertos}
+              aria-controls="panel-filtros-movimientos"
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                filtrosAbiertos
+                  ? 'border-sky-500/50 bg-sky-500/15 text-sky-100'
+                  : 'border-white/10 text-zinc-300 hover:bg-white/5'
+              }`}
+            >
+              <Filter className="h-4 w-4" />
+              Filtros
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${filtrosAbiertos ? 'rotate-180' : ''}`}
+              />
+              {filtrosActivos.length > 0 && !filtrosAbiertos ? (
+                <span className="min-w-4 h-4 px-1 rounded-full bg-sky-500 text-[9px] font-black leading-4 text-white">
+                  {filtrosActivos.length}
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => void cargar()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
+        </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/80">Ingresos</p>
+            <p className="text-2xl font-black text-emerald-200">{resumen.ingresado}</p>
+            <p className="text-[11px] text-zinc-500">
+              {resumen.ingresado === 1 ? 'movimiento' : 'movimientos'} · compras, cuarentena y recepción
+            </p>
+          </div>
+          <div className="rounded-xl border border-sky-500/25 bg-sky-950/20 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/80">Stock</p>
+            <p className="text-2xl font-black text-sky-100">{resumen.almacenado}</p>
+            <p className="text-[11px] text-zinc-500">
+              {resumen.almacenado === 1 ? 'material con saldo' : 'materiales con saldo'} · inventario físico
+            </p>
+          </div>
+          <div className="rounded-xl border border-red-500/30 bg-red-950/25 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/90">Salidas</p>
+            <p className="text-2xl font-black text-red-100">{resumen.despachado}</p>
+            <p className="text-[11px] text-zinc-500">
+              {resumen.despachado === 1 ? 'egreso' : 'egresos'} · transferencias y Telegram
+            </p>
+          </div>
+        </div>
+
+        {embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => void cargar()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          {VISTAS.map((v) => {
+            const Icon = v.icon;
+            const active = vista === v.id;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setVista(v.id)}
+                className={clasesBotonVista(v.id, active)}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {filtrosAbiertos && !embedded ? (
+          <div
+            id="panel-filtros-movimientos"
+            className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                <Search className="h-3.5 w-3.5" />
+                Filtros
+              </div>
+              {filtrosActivos.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+                >
+                  Limpiar filtros
+                </button>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Proveedor</label>
+                <input
+                  type="search"
+                  value={proveedorInput}
+                  onChange={(e) => setProveedorInput(e.target.value)}
+                  placeholder="Nombre proveedor"
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Destino / obra</label>
+                <input
+                  type="search"
+                  value={destinoInput}
+                  onChange={(e) => setDestinoInput(e.target.value)}
+                  placeholder="Almacén, obra u origen"
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Material</label>
+                <input
+                  type="search"
+                  value={materialInput}
+                  onChange={(e) => setMaterialInput(e.target.value)}
+                  placeholder="Nombre, SAP o N° factura"
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Desde</label>
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Hasta</label>
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {error ? (
+          <p className="text-sm text-red-300 rounded-lg border border-red-500/30 bg-red-950/30 p-3">{error}</p>
+        ) : null}
+
+        {!loading && filas.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 m-0">
+              Cuadro ({filas.length}{totalFilas > filas.length ? ` de ${totalFilas}` : ''} movimiento
+              {totalFilas === 1 ? '' : 's'})
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={exportScope}
+                onChange={(e) => setExportScope(e.target.value as MovimientosExportScope)}
+                className="rounded-lg border border-white/15 bg-black/45 px-2.5 py-2 text-[10px] font-bold text-white"
+                aria-label="Alcance de exportación"
+              >
+                <option value="filtrado">Filtrado ({filas.length})</option>
+                <option value="seleccionado" disabled={filasSeleccionadas.length === 0}>
+                  Seleccionado ({filasSeleccionadas.length})
+                </option>
+              </select>
+              <button
+                type="button"
+                onClick={() => exportarCuadroExcel(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/45 bg-emerald-500/15 px-3 py-2 text-[11px] font-bold text-emerald-100 hover:bg-emerald-500/25"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => void compartirCuadro(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/45 bg-violet-500/15 px-3 py-2 text-[11px] font-bold text-violet-100 hover:bg-violet-500/25"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                {compartidoOk ? 'Copiado' : 'Compartir'}
+              </button>
+              <button
+                type="button"
+                onClick={() => verPdfCuadro(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/45 bg-sky-500/15 px-3 py-2 text-[11px] font-bold text-sky-100 hover:bg-sky-500/25"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Ver PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => imprimirCuadro(exportScope)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/8 px-3 py-2 text-[11px] font-bold text-zinc-200 hover:bg-white/12"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Imprimir
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && filas.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-300">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={todasSeleccionadas}
+                onChange={toggleSelectAll}
+                className="h-4 w-4 rounded border-zinc-600 accent-sky-500"
+              />
+              {todasSeleccionadas ? 'Quitar selección' : `Seleccionar todos (${filas.length})`}
+            </label>
+            {algunaSeleccionada ? (
+              <>
+                <span className="text-xs font-black text-sky-400">{selectedIds.size} seleccionado(s)</span>
+                <button
+                  type="button"
+                  disabled={eliminandoBulk || eliminandoId !== null}
+                  onClick={() => void eliminarSeleccionados()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-950/30 px-3 py-1.5 text-[10px] font-black uppercase text-red-300 hover:bg-red-950/50 disabled:opacity-40"
+                >
+                  {eliminandoBulk ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  Borrar seleccionados
+                </button>
+                {filaSeleccionada?.material_id ? (
+                  <Link
+                    href={`/almacen/editar/${filaSeleccionada.material_id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-1.5 text-[10px] font-black uppercase text-sky-300 hover:bg-sky-500/20"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Editar material
+                  </Link>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="rounded-xl border border-white/10 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead>
+                <tr className="bg-zinc-900/80 border-b border-white/10 text-left text-[10px] uppercase tracking-widest text-zinc-500">
+                  <th className="p-3 w-10">
+                    <span className="sr-only">Seleccionar</span>
+                  </th>
+                  <th className="p-3 w-14">Tipo</th>
+                  <th className="p-3">Fecha</th>
+                  <th className="p-3 min-w-[120px] max-w-[220px]">Proveedor</th>
+                  <th className="p-3">Material</th>
+                  <th className="p-3 text-right">Cant.</th>
+                  <th className="p-3">Origen / Destino</th>
+                  <th className="p-3">Capítulo</th>
+                  <th className="p-3">Ref.</th>
+                  <th className="p-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {loading ? (
+                  <tr>
+                    <td colSpan={10} className="p-10 text-center text-zinc-500">
+                      <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
+                      Cargando movimientos…
+                    </td>
+                  </tr>
+                ) : filas.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="p-12 text-center text-zinc-600">
+                      Sin registros con estos filtros.
+                    </td>
+                  </tr>
+                ) : (
+                  filas.map((f) => (
+                    <tr
+                      key={f.id}
+                      className={
+                        selectedIds.has(f.id) ? 'bg-sky-500/10 hover:bg-sky-500/15' : 'hover:bg-white/[0.02]'
+                      }
+                    >
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(f.id)}
+                          onChange={() => toggleSelectFila(f.id)}
+                          className="h-4 w-4 rounded border-zinc-600 accent-sky-500"
+                          aria-label={`Seleccionar ${f.material_nombre}`}
+                        />
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-flex min-w-[2.5rem] justify-center rounded px-1.5 py-0.5 text-[10px] font-black tracking-wide ${badgeTipo(f.tipo)}`}
+                          title={labelTipo(f.tipo)}
+                        >
+                          {abrevTipo(f.tipo)}
+                        </span>
+                      </td>
+                      <td className="p-3 text-zinc-300 whitespace-nowrap">
+                        <p className="font-medium">{f.fecha || '—'}</p>
+                        {f.hora ? (
+                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{f.hora}</p>
+                        ) : null}
+                      </td>
+                      <td className="p-3 text-zinc-400 min-w-[120px] max-w-[220px] align-top">
+                        <p
+                          className="line-clamp-2 leading-snug break-words text-[13px]"
+                          title={f.proveedor?.trim() || undefined}
+                        >
+                          {f.proveedor ?? '—'}
+                        </p>
+                      </td>
+                      <td className="p-3 min-w-[160px]">
+                        <p className="font-medium text-zinc-100 leading-snug">{f.material_nombre}</p>
+                        {f.material_codigo ? (
+                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{f.material_codigo}</p>
+                        ) : null}
+                        {etiquetaAlmacen(f) ? (
+                          <p className="text-[10px] text-sky-300/90 mt-0.5">{etiquetaAlmacen(f)}</p>
+                        ) : null}
+                      </td>
+                      <td className="p-3 text-right font-mono text-zinc-200 whitespace-nowrap">
+                        {f.cantidad > 0 ? `${f.cantidad} ${f.unidad}` : '—'}
+                      </td>
+                      <td className="p-3 text-zinc-400 text-xs max-w-[180px] leading-snug">
+                        {etiquetaOrigenDestino(f)}
+                      </td>
+                      <td className="p-3 text-amber-200/90 text-xs max-w-[120px] truncate">
+                        {f.capitulo ?? '—'}
+                      </td>
+                      <td className="p-3 text-zinc-500 text-xs max-w-[100px] truncate">{f.referencia ?? '—'}</td>
+                      <td className="p-3 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          {f.material_id ? (
+                            <Link
+                              href={`/almacen/editar/${f.material_id}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-950/30 px-2 py-1 text-[10px] font-bold uppercase text-sky-300 hover:bg-sky-950/50"
+                              title="Editar material"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Link>
+                          ) : null}
+                          {f.eliminable ? (
+                            <button
+                              type="button"
+                              disabled={eliminandoId === f.id || eliminandoBulk}
+                              onClick={() => void eliminarMovimiento(f)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-950/30 px-2 py-1 text-[10px] font-bold uppercase text-red-300 hover:bg-red-950/50 disabled:opacity-40"
+                              title="Eliminar movimiento"
+                            >
+                              {eliminandoId === f.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          ) : (
+                            <span className="text-zinc-600 text-xs px-1">—</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div ref={scrollSentinelRef} className="h-4 shrink-0" aria-hidden />
+          {loadingMore ? (
+            <div className="flex items-center justify-center gap-2 py-4 text-zinc-500 text-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-400" />
+              Cargando más movimientos…
+            </div>
+          ) : hasMore ? (
+            <p className="text-center text-[11px] text-zinc-600 py-3">
+              Desplácese para cargar más ({filas.length} de {totalFilas})
+            </p>
+          ) : totalFilas > 0 && filas.length >= totalFilas ? (
+            <p className="text-center text-[11px] text-zinc-600 py-3">
+              Historial completo · {totalFilas} movimiento{totalFilas === 1 ? '' : 's'}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
