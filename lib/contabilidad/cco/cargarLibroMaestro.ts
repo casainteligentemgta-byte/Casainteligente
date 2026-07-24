@@ -9,6 +9,11 @@ import {
 } from '@/lib/contabilidad/cco/egresosVista';
 import { parseOrigenIngreso } from '@/lib/contabilidad/cco/ingresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
+import {
+  gastoRegistroALibroFila,
+  getGastosCCO,
+  tieneRegistrosGastos,
+} from '@/lib/contabilidad/cco/registrosGastos';
 
 function num(v: unknown): number {
   const n = Number(v);
@@ -230,11 +235,15 @@ async function cargarContratoLabels(
 export async function cargarLibroMaestro(
   supabase: SupabaseClient,
   params: { proyectoId: string; clase?: string | null; limit?: number },
-): Promise<{ filas: CcoLibroFila[]; total: number; honorarios_admin_pct: number }> {
+): Promise<{
+  filas: CcoLibroFila[];
+  total: number;
+  honorarios_admin_pct: number;
+  fuente?: 'registros_gastos' | 'cco_fusion';
+}> {
   const proyectoId = params.proyectoId;
   const limit = params.limit ?? 2000;
   const claseFiltro = params.clase?.trim().toUpperCase() || null;
-  const filas: CcoLibroFila[] = [];
 
   const { data: cfg } = await supabase
     .from('cco_proyecto_config')
@@ -242,6 +251,23 @@ export async function cargarLibroMaestro(
     .eq('proyecto_id', proyectoId)
     .maybeSingle();
   const pctGlobal = num(cfg?.honorarios_admin_pct) || 15;
+
+  // Preferir histórico sincronizado/importado (FDW suegro / CSV) en registros_gastos.
+  if (await tieneRegistrosGastos(supabase, proyectoId)) {
+    const { rows, total } = await getGastosCCO(supabase, {
+      proyectoId,
+      clase: claseFiltro,
+      limit,
+    });
+    return {
+      filas: rows.map(gastoRegistroALibroFila),
+      total,
+      honorarios_admin_pct: pctGlobal,
+      fuente: 'registros_gastos',
+    };
+  }
+
+  const filas: CcoLibroFila[] = [];
 
   if (!claseFiltro || claseFiltro === 'GASTO') {
     let compras: unknown[] | null = null;

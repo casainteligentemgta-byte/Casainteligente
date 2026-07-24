@@ -18,6 +18,8 @@ import {
   esCompraSoloAuditoriaCco,
   esDescripcionAuditoriaCco,
 } from '@/lib/contabilidad/compraEsAuditoriaCco';
+import { tieneRegistrosGastos } from '@/lib/contabilidad/cco/registrosGastos';
+import { cargarDashboardDesdeRegistrosGastos } from '@/lib/contabilidad/cco/cargarDashboardDesdeRegistrosGastos';
 
 export type CcoSeriePunto = {
   periodo: string;
@@ -98,6 +100,8 @@ export type CcoDashboard = {
   totalRegistros: number;
   honorariosPct: number;
   devaluacionPromedio: number;
+  /** Origen de la brecha/devaluación cuando el libro viene de registros_gastos. */
+  brechaFuente?: 'filas_registros_gastos' | 'config' | 'manual';
   oficial: CcoKpiBloque;
   real: CcoKpiBloque;
   flujoAcumulado: CcoSeriePunto[];
@@ -193,6 +197,32 @@ export async function cargarCcoDashboard(
   const proyectoNombre = proyectoId
     ? proyectos.find((p) => p.id === proyectoId)?.nombre ?? 'Obra seleccionada'
     : 'Todas las obras';
+
+  // Preferir histórico sincronizado/importado en registros_gastos de la obra.
+  if (proyectoId && (await tieneRegistrosGastos(supabase, proyectoId))) {
+    let honorariosPct = 15;
+    let devaluacionDesdeConfig: number | null = null;
+    const { data: cfg } = await supabase
+      .from('cco_proyecto_config')
+      .select('honorarios_admin_pct,devaluacion_pct')
+      .eq('proyecto_id', proyectoId)
+      .maybeSingle();
+    if (cfg && (cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct != null) {
+      honorariosPct = num((cfg as { honorarios_admin_pct?: number }).honorarios_admin_pct);
+    }
+    if (cfg && (cfg as { devaluacion_pct?: number }).devaluacion_pct != null) {
+      devaluacionDesdeConfig = num((cfg as { devaluacion_pct?: number }).devaluacion_pct);
+    }
+    const devaluacionPromedio = devaluacionOverride ?? devaluacionDesdeConfig ?? 0;
+    return cargarDashboardDesdeRegistrosGastos(supabase, {
+      proyectoId,
+      proyectoNombre,
+      proyectos,
+      honorariosPct,
+      devaluacionPromedio,
+      forzarDevaluacionManual: devaluacionOverride != null,
+    });
+  }
 
   const selectComprasBase =
     'id,fecha,proyecto_id,monto_usd,monto_ves,total_amount,imputacion,supplier_name,notas,invoice_number,tasa_bcv_ves_por_usd,moneda_original';
