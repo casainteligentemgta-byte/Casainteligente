@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
+import ClienteLegalSelect from '@/components/legal/ClienteLegalSelect';
 import {
   esAmbitoCasoExterno,
   LEGAL_AMBITOS,
@@ -44,7 +45,8 @@ export default function LegalCasoNuevoPage() {
   );
   const [prioridad, setPrioridad] = useState('media');
   const [contraparte, setContraparte] = useState('');
-  const [cliente, setCliente] = useState('');
+  const [clienteId, setClienteId] = useState('');
+  const [clienteNombre, setClienteNombre] = useState('');
   const [despachoAbogado, setDespachoAbogado] = useState('');
   const [resumen, setResumen] = useState('');
   const [fechaLimite, setFechaLimite] = useState('');
@@ -80,7 +82,8 @@ export default function LegalCasoNuevoPage() {
           ambito: ambitoFinal,
           prioridad,
           contraparte: contraparte.trim() || null,
-          cliente_nombre: cliente.trim() || null,
+          cliente_id: clienteId || null,
+          cliente_nombre: clienteNombre.trim() || null,
           despacho_abogado: casoExterno ? despachoAbogado.trim() || null : null,
           resumen: resumen.trim() || null,
           fecha_limite: fechaLimite || null,
@@ -228,12 +231,14 @@ export default function LegalCasoNuevoPage() {
             />
           </div>
         </div>
-        <div>
-          <label className="text-xs font-semibold uppercase text-zinc-500">
-            Cliente / mandante
-          </label>
-          <input className={campo} value={cliente} onChange={(e) => setCliente(e.target.value)} />
-        </div>
+        <ClienteLegalSelect
+          valueId={clienteId}
+          className={campo}
+          onChange={({ id, label }) => {
+            setClienteId(id);
+            setClienteNombre(label);
+          }}
+        />
         <div>
           <label className="text-xs font-semibold uppercase text-zinc-500">Contraparte</label>
           <input
