@@ -12,11 +12,23 @@ export const LEGAL_TIPOS_CASO = [
   { value: 'otro', label: 'Otro' },
 ] as const;
 
+/** Entidad / ámbito del expediente (filtro y alta). */
 export const LEGAL_AMBITOS = [
-  { value: 'obra', label: 'Obra (Casa Inteligente)' },
-  { value: 'despacho', label: 'Despacho general' },
+  { value: 'casa_inteligente', label: 'Casa Inteligente' },
+  { value: 'dimaquinas', label: 'Dimaquinas' },
   { value: 'externo', label: 'Caso externo' },
+  { value: 'despacho', label: 'Despacho general' },
 ] as const;
+
+/** Valores de entidad Casa Inteligente / Dimaquinas (CRM integrado). */
+export const LEGAL_AMBITOS_ENTIDAD = new Set<string>([
+  'casa_inteligente',
+  'dimaquinas',
+]);
+
+const AMBITO_LEGACY: Record<string, string> = {
+  obra: 'casa_inteligente',
+};
 
 export const LEGAL_ESTADOS = [
   { value: 'abierto', label: 'Abierto' },
@@ -57,9 +69,24 @@ export const LEGAL_TIPOS_LAPSO = [
   { value: 'Otro', label: 'Otro' },
 ] as const;
 
+export function normalizarAmbitoLegal(ambito: string): string {
+  const v = String(ambito ?? '').trim();
+  return AMBITO_LEGACY[v] ?? v;
+}
+
+export function esAmbitoCasoExterno(ambito: string): boolean {
+  return normalizarAmbitoLegal(ambito) === 'externo';
+}
+
 export function etiquetaDe<T extends { value: string; label: string }>(
   lista: readonly T[],
   value: string,
 ): string {
-  return lista.find((x) => x.value === value)?.label ?? value;
+  const direct = lista.find((x) => x.value === value);
+  if (direct) return direct.label;
+  const legacy = AMBITO_LEGACY[value];
+  if (legacy) {
+    return lista.find((x) => x.value === legacy)?.label ?? value;
+  }
+  return value;
 }

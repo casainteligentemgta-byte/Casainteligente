@@ -6,9 +6,12 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
+  esAmbitoCasoExterno,
   LEGAL_AMBITOS,
+  LEGAL_AMBITOS_ENTIDAD,
   LEGAL_PRIORIDADES,
   LEGAL_TIPOS_CASO,
+  normalizarAmbitoLegal,
 } from '@/lib/legal/casosCatalogo';
 import { useAccesoLegal } from '@/lib/legal/AccesoLegalContext';
 
@@ -21,7 +24,7 @@ export default function LegalCasoNuevoPage() {
   const ambitos = useMemo(
     () =>
       acceso.standalone
-        ? LEGAL_AMBITOS.filter((a) => a.value !== 'obra')
+        ? LEGAL_AMBITOS.filter((a) => !LEGAL_AMBITOS_ENTIDAD.has(a.value))
         : LEGAL_AMBITOS,
     [acceso.standalone],
   );
@@ -36,15 +39,20 @@ export default function LegalCasoNuevoPage() {
   const [enviando, setEnviando] = useState(false);
   const [titulo, setTitulo] = useState('');
   const [tipo, setTipo] = useState('laboral');
-  const [ambito, setAmbito] = useState('despacho');
+  const [ambito, setAmbito] = useState(
+    acceso.standalone ? 'despacho' : 'casa_inteligente',
+  );
   const [prioridad, setPrioridad] = useState('media');
   const [contraparte, setContraparte] = useState('');
   const [cliente, setCliente] = useState('');
+  const [despachoAbogado, setDespachoAbogado] = useState('');
   const [resumen, setResumen] = useState('');
   const [fechaLimite, setFechaLimite] = useState('');
   const [numeroExpediente, setNumeroExpediente] = useState('');
   const [organoTribunal, setOrganoTribunal] = useState('');
   const [faseActual, setFaseActual] = useState('');
+
+  const casoExterno = esAmbitoCasoExterno(ambito);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,8 +60,16 @@ export default function LegalCasoNuevoPage() {
       toast.error('Indica el título del expediente');
       return;
     }
+    if (casoExterno && !despachoAbogado.trim()) {
+      toast.error('Indica el despacho o el abogado del caso externo');
+      return;
+    }
     setEnviando(true);
     try {
+      let ambitoFinal = normalizarAmbitoLegal(ambito);
+      if (acceso.standalone && LEGAL_AMBITOS_ENTIDAD.has(ambitoFinal)) {
+        ambitoFinal = 'despacho';
+      }
       const res = await fetch(apiUrl('/api/legal/casos'), {
         method: 'POST',
         credentials: 'include',
@@ -61,10 +77,11 @@ export default function LegalCasoNuevoPage() {
         body: JSON.stringify({
           titulo: titulo.trim(),
           tipo,
-          ambito: acceso.standalone && ambito === 'obra' ? 'despacho' : ambito,
+          ambito: ambitoFinal,
           prioridad,
           contraparte: contraparte.trim() || null,
           cliente_nombre: cliente.trim() || null,
+          despacho_abogado: casoExterno ? despachoAbogado.trim() || null : null,
           resumen: resumen.trim() || null,
           fecha_limite: fechaLimite || null,
           numero_expediente: numeroExpediente.trim() || null,
@@ -103,7 +120,7 @@ export default function LegalCasoNuevoPage() {
           <span className="font-mono text-amber-200/90">EXP-YYYY-XXX</span>.
           {acceso.standalone
             ? ' Casos de despacho o asuntos externos.'
-            : ' Obra Casa Inteligente, despacho general o resolución externa.'}
+            : ' Entidad Casa Inteligente / Dimaquinas, despacho general o caso externo.'}
         </p>
       </div>
       <form
@@ -121,7 +138,7 @@ export default function LegalCasoNuevoPage() {
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="text-xs font-semibold uppercase text-zinc-500">Ámbito</label>
+            <label className="text-xs font-semibold uppercase text-zinc-500">Entidad</label>
             <select className={campo} value={ambito} onChange={(e) => setAmbito(e.target.value)}>
               {ambitos.map((a) => (
                 <option key={a.value} value={a.value}>
@@ -142,6 +159,19 @@ export default function LegalCasoNuevoPage() {
               ))}
             </select>
           </div>
+          {casoExterno ? (
+            <div className="sm:col-span-2">
+              <label className="text-xs font-semibold uppercase text-zinc-500">
+                Despacho o abogado *
+              </label>
+              <input
+                className={campo}
+                value={despachoAbogado}
+                onChange={(e) => setDespachoAbogado(e.target.value)}
+                placeholder="Nombre del despacho o del abogado externo"
+              />
+            </div>
+          ) : null}
           <div>
             <label className="text-xs font-semibold uppercase text-zinc-500">Prioridad</label>
             <select

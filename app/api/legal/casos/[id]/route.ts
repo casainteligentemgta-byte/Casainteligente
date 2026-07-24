@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAccesoLegal } from '@/lib/legal/requireAccesoLegal';
+import {
+  esAmbitoCasoExterno,
+  normalizarAmbitoLegal,
+} from '@/lib/legal/casosCatalogo';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -75,6 +79,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     'contraparte',
     'contraparte_rif',
     'cliente_nombre',
+    'despacho_abogado',
     'proyecto_id',
     'entidad_id',
     'fecha_limite',
@@ -90,6 +95,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const k of allowed) {
     if (k in body) patch[k] = body[k];
+  }
+
+  if (typeof patch.ambito === 'string') {
+    patch.ambito = normalizarAmbitoLegal(patch.ambito);
+  }
+  if ('despacho_abogado' in patch) {
+    const v = patch.despacho_abogado;
+    patch.despacho_abogado =
+      v == null ? null : String(v).trim() || null;
+  }
+  if (
+    typeof patch.ambito === 'string' &&
+    !esAmbitoCasoExterno(patch.ambito) &&
+    !('despacho_abogado' in body)
+  ) {
+    patch.despacho_abogado = null;
   }
 
   if (patch.estado === 'resuelto' && patch.fecha_cierre == null) {
