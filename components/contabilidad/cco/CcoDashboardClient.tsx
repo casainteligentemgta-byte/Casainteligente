@@ -36,6 +36,7 @@ import CcoTabIngresos from '@/components/contabilidad/cco/CcoTabIngresos';
 import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos';
 import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
 import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
+import CcoSincronizarBdPanel from '@/components/contabilidad/cco/CcoSincronizarBdPanel';
 
 type NavId =
   | 'dashboard'
@@ -49,6 +50,7 @@ type NavId =
   | 'importar-csv'
   | 'importar-pdf'
   | 'importar-v4'
+  | 'sincronizar-bd'
   | 'libro'
   | 'editor'
   | 'presupuestos'
@@ -82,6 +84,7 @@ const NAV_ITEMS: NavEntry[] = [
     id: 'importar',
     label: 'Importar',
     children: [
+      { id: 'sincronizar-bd', label: 'Sincronizar BD', ready: true, hint: 'FDW · BD suegro' },
       { id: 'importar-csv', label: 'CSV', ready: true, hint: 'OneDrive / maestro' },
       { id: 'importar-pdf', label: 'PDF', ready: true, hint: 'OCR / tabla' },
       { id: 'importar-v4', label: 'V4 SQLite', ready: true, hint: 'JSON ETL' },
@@ -91,7 +94,7 @@ const NAV_ITEMS: NavEntry[] = [
   { id: 'ajustes', label: 'Ajustes CCO', ready: true },
 ];
 
-const IMPORTAR_NAV_IDS: NavId[] = ['importar-csv', 'importar-pdf', 'importar-v4'];
+const IMPORTAR_NAV_IDS: NavId[] = ['sincronizar-bd', 'importar-csv', 'importar-pdf', 'importar-v4'];
 
 /** Módulos que necesitan selector de obra fuera del dashboard. */
 const MODULOS_CON_OBRA: NavId[] = [
@@ -105,6 +108,7 @@ const MODULOS_CON_OBRA: NavId[] = [
   'presupuestos',
   'libro',
   'editor',
+  'sincronizar-bd',
   'importar-v4',
   'auditoria',
   'ajustes',
@@ -837,6 +841,16 @@ export default function CcoDashboardClient() {
           proyectoIdInicial={proyectoId || null}
           onImportado={(pid) => {
             if (pid) setProyectoId(pid);
+            void cargar();
+            setNav('dashboard');
+          }}
+        />
+      ) : null}
+
+      {nav === 'sincronizar-bd' ? (
+        <CcoSincronizarBdPanel
+          proyectoId={proyectoId}
+          onDone={() => {
             void cargar();
             setNav('dashboard');
           }}
