@@ -5,6 +5,10 @@ import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
+import ClienteLegalSelect from '@/components/legal/ClienteLegalSelect';
+import ContraparteLegalSelect, {
+  contraparteLegalVacia,
+} from '@/components/legal/ContraparteLegalSelect';
 import {
   esAmbitoCasoExterno,
   LEGAL_AMBITOS,
@@ -43,8 +47,9 @@ export default function LegalCasoNuevoPage() {
     acceso.standalone ? 'despacho' : 'casa_inteligente',
   );
   const [prioridad, setPrioridad] = useState('media');
-  const [contraparte, setContraparte] = useState('');
-  const [cliente, setCliente] = useState('');
+  const [contraparte, setContraparte] = useState(contraparteLegalVacia);
+  const [clienteId, setClienteId] = useState('');
+  const [clienteNombre, setClienteNombre] = useState('');
   const [despachoAbogado, setDespachoAbogado] = useState('');
   const [resumen, setResumen] = useState('');
   const [fechaLimite, setFechaLimite] = useState('');
@@ -79,14 +84,21 @@ export default function LegalCasoNuevoPage() {
           tipo,
           ambito: ambitoFinal,
           prioridad,
-          contraparte: contraparte.trim() || null,
-          cliente_nombre: cliente.trim() || null,
+          contraparte: contraparte.nombre.trim() || null,
+          contraparte_rif: contraparte.cedula?.trim() || null,
+          proyecto_id: contraparte.proyectoId || null,
+          entidad_id: contraparte.entidadId || null,
+          cliente_id: clienteId || null,
+          cliente_nombre: clienteNombre.trim() || null,
           despacho_abogado: casoExterno ? despachoAbogado.trim() || null : null,
           resumen: resumen.trim() || null,
           fecha_limite: fechaLimite || null,
           numero_expediente: numeroExpediente.trim() || null,
           organo_tribunal: organoTribunal.trim() || null,
           fase_actual: faseActual.trim() || null,
+          metadata: contraparte.empleadoId
+            ? { contraparte_empleado_id: contraparte.empleadoId }
+            : undefined,
         }),
       });
       const data = (await res.json()) as {
@@ -228,20 +240,20 @@ export default function LegalCasoNuevoPage() {
             />
           </div>
         </div>
-        <div>
-          <label className="text-xs font-semibold uppercase text-zinc-500">
-            Cliente / mandante
-          </label>
-          <input className={campo} value={cliente} onChange={(e) => setCliente(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold uppercase text-zinc-500">Contraparte</label>
-          <input
-            className={campo}
-            value={contraparte}
-            onChange={(e) => setContraparte(e.target.value)}
-          />
-        </div>
+        <ClienteLegalSelect
+          valueId={clienteId}
+          className={campo}
+          onChange={({ id, label }) => {
+            setClienteId(id);
+            setClienteNombre(label);
+          }}
+        />
+        <ContraparteLegalSelect
+          value={contraparte}
+          onChange={setContraparte}
+          className={campo}
+          permitirObra={!acceso.standalone}
+        />
         <div>
           <label className="text-xs font-semibold uppercase text-zinc-500">Resumen</label>
           <textarea

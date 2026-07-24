@@ -118,6 +118,42 @@ export async function POST(req: Request) {
   const despachoAbogado =
     body.despacho_abogado != null ? String(body.despacho_abogado).trim() || null : null;
 
+  let clienteId =
+    body.cliente_id != null && String(body.cliente_id).trim()
+      ? String(body.cliente_id).trim()
+      : null;
+  let clienteNombre =
+    body.cliente_nombre != null ? String(body.cliente_nombre).trim() || null : null;
+
+  if (clienteId) {
+    const { data: cust, error: custErr } = await gate.admin
+      .from('customers')
+      .select('id, nombre, razon_social')
+      .eq('id', clienteId)
+      .maybeSingle();
+    if (custErr || !cust) {
+      return NextResponse.json(
+        {
+          error: 'Cliente no encontrado en el módulo Clientes',
+          hint: custErr?.message,
+        },
+        { status: 400 },
+      );
+    }
+    const label =
+      (typeof cust.nombre === 'string' && cust.nombre.trim()) ||
+      (typeof cust.razon_social === 'string' && cust.razon_social.trim()) ||
+      null;
+    if (label) clienteNombre = label;
+  }
+
+  const metadata =
+    body.metadata != null &&
+    typeof body.metadata === 'object' &&
+    !Array.isArray(body.metadata)
+      ? (body.metadata as Record<string, unknown>)
+      : {};
+
   const row = {
     org_id: orgId,
     titulo,
@@ -129,8 +165,8 @@ export async function POST(req: Request) {
     contraparte: body.contraparte != null ? String(body.contraparte).trim() || null : null,
     contraparte_rif:
       body.contraparte_rif != null ? String(body.contraparte_rif).trim() || null : null,
-    cliente_nombre:
-      body.cliente_nombre != null ? String(body.cliente_nombre).trim() || null : null,
+    cliente_id: clienteId,
+    cliente_nombre: clienteNombre,
     despacho_abogado: esAmbitoCasoExterno(ambito) ? despachoAbogado : null,
     proyecto_id: body.proyecto_id ? String(body.proyecto_id) : null,
     entidad_id: body.entidad_id ? String(body.entidad_id) : null,
@@ -138,6 +174,7 @@ export async function POST(req: Request) {
     creado_por: gate.userId,
     asignado_a: gate.userId,
     codigo,
+    metadata,
     numero_expediente:
       body.numero_expediente != null ? String(body.numero_expediente).trim() || null : null,
     organo_tribunal:
@@ -167,9 +204,11 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
-    const hintColumna = /despacho_abogado|ambito/i.test(error.message)
-      ? 'Ejecute la migración 284_ci_legal_casos_ambitos_entidad.sql en Supabase SQL Editor.'
-      : HINT_283;
+    const hintColumna = /cliente_id/i.test(error.message)
+      ? 'Ejecute la migración 285_ci_legal_casos_cliente_id.sql en Supabase SQL Editor.'
+      : /despacho_abogado|ambito/i.test(error.message)
+        ? 'Ejecute la migración 284_ci_legal_casos_ambitos_entidad.sql en Supabase SQL Editor.'
+        : HINT_283;
     return NextResponse.json({ error: error.message, hint: hintColumna }, { status: 500 });
   }
 

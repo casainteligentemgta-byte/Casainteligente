@@ -79,6 +79,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     'contraparte',
     'contraparte_rif',
     'cliente_nombre',
+    'cliente_id',
     'despacho_abogado',
     'proyecto_id',
     'entidad_id',
@@ -111,6 +112,35 @@ export async function PATCH(req: Request, ctx: Ctx) {
     !('despacho_abogado' in body)
   ) {
     patch.despacho_abogado = null;
+  }
+  if ('cliente_id' in patch) {
+    const rawId = patch.cliente_id;
+    const clienteId =
+      rawId == null || String(rawId).trim() === '' ? null : String(rawId).trim();
+    patch.cliente_id = clienteId;
+    if (clienteId) {
+      const { data: cust, error: custErr } = await gate.admin
+        .from('customers')
+        .select('id, nombre, razon_social')
+        .eq('id', clienteId)
+        .maybeSingle();
+      if (custErr || !cust) {
+        return NextResponse.json(
+          {
+            error: 'Cliente no encontrado en el módulo Clientes',
+            hint: custErr?.message,
+          },
+          { status: 400 },
+        );
+      }
+      const label =
+        (typeof cust.nombre === 'string' && cust.nombre.trim()) ||
+        (typeof cust.razon_social === 'string' && cust.razon_social.trim()) ||
+        null;
+      if (label && !('cliente_nombre' in body)) {
+        patch.cliente_nombre = label;
+      }
+    }
   }
 
   if (patch.estado === 'resuelto' && patch.fecha_cierre == null) {
