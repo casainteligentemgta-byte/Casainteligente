@@ -23,7 +23,7 @@ export function NexusSidebar({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        'flex w-64 shrink-0 flex-col border-r border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.75)] backdrop-blur-[20px]',
+        'flex w-64 shrink-0 flex-col border-l border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.75)] backdrop-blur-[20px]',
         'min-h-screen pt-6 pb-8',
         className,
       )}
