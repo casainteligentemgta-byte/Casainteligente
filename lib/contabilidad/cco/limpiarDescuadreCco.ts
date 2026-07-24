@@ -10,6 +10,21 @@ import {
 import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
 import { idsIngresosGemelosAEliminar } from '@/lib/contabilidad/cco/dedupeIngresosGemelos';
 
+/** Par de gastos gemelos: el que se conserva vs el duplicado a quitar. */
+export type GastoGemeloPar = {
+  conservarId: string;
+  eliminarId: string;
+  fecha: string;
+  proveedor: string;
+  monto_usd: number;
+  concepto: string;
+  invoice_key: string;
+  /** Campos de negocio que coinciden entre ambos. */
+  coinciden: string[];
+  conservarResumen: string;
+  eliminarResumen: string;
+};
+
 export type LimpiezaDescuadreResult = {
   auditoriaEliminada: number;
   duplicadosEliminados: number;
@@ -18,8 +33,32 @@ export type LimpiezaDescuadreResult = {
   devaluacionDespues: number | null;
   devaluacionCorregida: boolean;
   idsEliminados: string[];
+  /** Pares gemelos detectados (dry-run o tras marcar a borrar). */
+  gastosGemelos: GastoGemeloPar[];
   errores: string[];
 };
+
+function resumenGastoCorto(r: Record<string, unknown>): string {
+  const fecha = String(r.fecha ?? '').slice(0, 10) || 'sin fecha';
+  const prov = String(r.supplier_name ?? '').trim() || 'Sin proveedor';
+  const monto = Math.round(num(r.monto_usd) * 100) / 100;
+  const inv = String(r.invoice_number ?? '').trim();
+  const id = String(r.id ?? '').slice(0, 8);
+  const invPart = inv ? ` · ${inv.slice(0, 24)}` : '';
+  return `${fecha} · ${prov} · $${monto.toFixed(2)}${invPart} (#${id})`;
+}
+
+function camposQueCoinciden(clave: string): string[] {
+  // clave = fecha|prov|monto|notas|invKey
+  const parts = clave.split('|');
+  const out: string[] = [];
+  if (parts[0]) out.push('fecha');
+  if (parts[1]) out.push('proveedor');
+  if (parts[2] != null && parts[2] !== '') out.push('monto');
+  if (parts[3]) out.push('concepto');
+  if (parts[4]) out.push('factura CCO-V4');
+  return out.length ? out : ['fecha', 'proveedor', 'monto', 'concepto'];
+}
 
 function num(v: unknown): number {
   const n = Number(v);
@@ -112,6 +151,7 @@ export async function limpiarDescuadreCco(
     devaluacionDespues: null,
     devaluacionCorregida: false,
     idsEliminados: [],
+    gastosGemelos: [],
     errores: [],
   };
 
@@ -160,7 +200,7 @@ export async function limpiarDescuadreCco(
   }
 
   const idsDup: string[] = [];
-  for (const group of Array.from(grupos.values())) {
+  for (const [clave, group] of Array.from(grupos.entries())) {
     if (group.length < 2) continue;
     const ranked = [...group].sort((a, b) => {
       const aV4 = a.origen_v4_id != null ? 1 : 0;
@@ -171,10 +211,34 @@ export async function limpiarDescuadreCco(
       if (bInv !== aInv) return bInv - aInv;
       return String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
     });
+    const keep = ranked[0]!;
+    const coinciden = camposQueCoinciden(clave);
+    const parts = clave.split('|');
+    const fecha = parts[0] ?? '';
+    const proveedor = String(keep.supplier_name ?? '').trim() || parts[1] || 'Sin proveedor';
+    const monto_usd = Math.round(num(keep.monto_usd) * 100) / 100;
+    const concepto =
+      String(keep.notas ?? '')
+        .replace(/^CCO-V4-\d+\s*/i, '')
+        .trim()
+        .slice(0, 80) || '(sin concepto)';
+    const invoice_key = parts[4] ?? '';
     for (const drop of ranked.slice(1)) {
       // No borrar si tiene purchase_invoice_id (Telegram/procurement).
       if (drop.purchase_invoice_id) continue;
       idsDup.push(String(drop.id));
+      result.gastosGemelos.push({
+        conservarId: String(keep.id),
+        eliminarId: String(drop.id),
+        fecha,
+        proveedor,
+        monto_usd,
+        concepto,
+        invoice_key,
+        coinciden,
+        conservarResumen: resumenGastoCorto(keep),
+        eliminarResumen: resumenGastoCorto(drop),
+      });
     }
   }
 

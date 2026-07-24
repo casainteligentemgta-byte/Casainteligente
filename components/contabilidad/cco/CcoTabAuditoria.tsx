@@ -10,6 +10,82 @@ import {
   type CcoSnapshotMeta,
 } from '@/lib/contabilidad/cco/snapshotsUi';
 
+function resumenHallazgo(h: CcoHallazgo): string {
+  // Primera frase / resumen corto (antes de "Lista:" o "1) Gemelo")
+  const d = h.detalle ?? '';
+  const corteLista = d.search(/\s(?:Lista:|1\)\s)/);
+  if (corteLista > 0) return d.slice(0, corteLista).trim();
+  if (d.length <= 220) return d;
+  return `${d.slice(0, 220)}…`;
+}
+
+function detalleEstructuradoHallazgo(h: CcoHallazgo): React.ReactNode {
+  if (h.codigo === 'higiene_gastos_duplicados') {
+    const pares = Array.isArray(h.meta?.pares)
+      ? (h.meta.pares as Array<Record<string, unknown>>)
+      : [];
+    if (!pares.length) return null;
+    return (
+      <ul style={{ margin: '6px 0 0', paddingLeft: 16, color: '#334155', fontSize: 12 }}>
+        {pares.map((p, idx) => {
+          const coinciden = Array.isArray(p.coinciden)
+            ? (p.coinciden as string[]).join(', ')
+            : 'fecha, proveedor, monto, concepto';
+          const valores = [
+            p.fecha ? String(p.fecha) : null,
+            p.proveedor ? String(p.proveedor) : null,
+            p.monto_usd != null ? `$${Number(p.monto_usd).toFixed(2)}` : null,
+            p.concepto ? String(p.concepto).slice(0, 70) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <li key={`${String(p.eliminarId)}-${idx}`} style={{ marginBottom: 6 }}>
+              <div>
+                <strong>Gemelo a quitar:</strong> {String(p.eliminarResumen ?? p.eliminarId)}
+              </div>
+              <div>
+                <strong>Par de (conservar):</strong> {String(p.conservarResumen ?? p.conservarId)}
+              </div>
+              <div style={{ color: '#64748B' }}>
+                Coinciden ({coinciden}): {valores || '—'}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  if (h.codigo === 'pagos_contratista_huerfanos') {
+    const pagos = Array.isArray(h.meta?.pagos)
+      ? (h.meta.pagos as Array<Record<string, unknown>>)
+      : [];
+    if (!pagos.length) return null;
+    return (
+      <ul style={{ margin: '6px 0 0', paddingLeft: 16, color: '#334155', fontSize: 12 }}>
+        {pagos.map((p, idx) => (
+          <li key={`${String(p.id)}-${idx}`} style={{ marginBottom: 4 }}>
+            <strong>Huérfano:</strong>{' '}
+            {[
+              p.fecha ? String(p.fecha) : 'sin fecha',
+              p.proveedor ? String(p.proveedor) : 'Sin proveedor',
+              p.monto_usd != null ? `$${Number(p.monto_usd).toFixed(2)}` : null,
+              p.descripcion ? String(p.descripcion).slice(0, 60) : null,
+              p.tipo_gasto_cco ? String(p.tipo_gasto_cco) : null,
+              p.id ? `#${String(p.id).slice(0, 8)}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return null;
+}
+
 export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -255,7 +331,7 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
         {hallazgos.length > 0 ? (
           <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
             {hallazgos.map((h, i) => (
-              <li key={`${h.codigo}-${i}`} style={{ marginBottom: 6 }}>
+              <li key={`${h.codigo}-${i}`} style={{ marginBottom: 10 }}>
                 <span
                   style={{
                     display: 'inline-block',
@@ -282,7 +358,10 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
                   {h.severidad}
                 </span>
                 <strong>{h.titulo}</strong>
-                <span style={{ color: '#64748B' }}> — {h.detalle}</span>
+                <div style={{ color: '#64748B', marginTop: 4, whiteSpace: 'pre-wrap' }}>
+                  {resumenHallazgo(h)}
+                </div>
+                {detalleEstructuradoHallazgo(h)}
               </li>
             ))}
           </ul>
