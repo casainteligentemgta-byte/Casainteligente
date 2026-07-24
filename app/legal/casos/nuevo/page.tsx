@@ -42,6 +42,9 @@ export default function LegalCasoNuevoPage() {
   const [cliente, setCliente] = useState('');
   const [resumen, setResumen] = useState('');
   const [fechaLimite, setFechaLimite] = useState('');
+  const [numeroExpediente, setNumeroExpediente] = useState('');
+  const [organoTribunal, setOrganoTribunal] = useState('');
+  const [faseActual, setFaseActual] = useState('');
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +67,9 @@ export default function LegalCasoNuevoPage() {
           cliente_nombre: cliente.trim() || null,
           resumen: resumen.trim() || null,
           fecha_limite: fechaLimite || null,
+          numero_expediente: numeroExpediente.trim() || null,
+          organo_tribunal: organoTribunal.trim() || null,
+          fase_actual: faseActual.trim() || null,
         }),
       });
       const data = (await res.json()) as { error?: string; caso?: { id: string } };
@@ -143,6 +149,38 @@ export default function LegalCasoNuevoPage() {
               className={campo}
               value={fechaLimite}
               onChange={(e) => setFechaLimite(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="text-xs font-semibold uppercase text-zinc-500">
+              N° expediente (opcional)
+            </label>
+            <input
+              className={campo}
+              value={numeroExpediente}
+              onChange={(e) => setNumeroExpediente(e.target.value)}
+              placeholder="Exp. N° …"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase text-zinc-500">
+              Órgano / tribunal
+            </label>
+            <input
+              className={campo}
+              value={organoTribunal}
+              onChange={(e) => setOrganoTribunal(e.target.value)}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="text-xs font-semibold uppercase text-zinc-500">Fase actual</label>
+            <input
+              className={campo}
+              value={faseActual}
+              onChange={(e) => setFaseActual(e.target.value)}
+              placeholder="Preparatoria"
             />
           </div>
         </div>

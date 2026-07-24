@@ -44,6 +44,17 @@ export const LEGAL_TIPOS_ACTUACION = [
   { value: 'otro', label: 'Otro' },
 ] as const;
 
+/** Tipos de lapso procesal (tareas con fecha límite). */
+export const LEGAL_TIPOS_LAPSO = [
+  { value: 'Contestación', label: 'Contestación' },
+  { value: 'Apelación', label: 'Apelación' },
+  { value: 'Pruebas', label: 'Pruebas' },
+  { value: 'Oposición', label: 'Oposición' },
+  { value: 'Audiencia', label: 'Audiencia' },
+  { value: 'Ejecución', label: 'Ejecución' },
+  { value: 'Otro', label: 'Otro' },
+] as const;
+
 export function etiquetaDe<T extends { value: string; label: string }>(
   lista: readonly T[],
   value: string,

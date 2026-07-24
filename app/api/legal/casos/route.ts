@@ -71,6 +71,15 @@ export async function POST(req: Request) {
     creado_por: gate.userId,
     asignado_a: gate.userId,
     codigo: body.codigo != null ? String(body.codigo).trim() || null : null,
+    numero_expediente:
+      body.numero_expediente != null ? String(body.numero_expediente).trim() || null : null,
+    organo_tribunal:
+      body.organo_tribunal != null ? String(body.organo_tribunal).trim() || null : null,
+    fase_actual: body.fase_actual != null ? String(body.fase_actual).trim() || null : null,
+    google_drive_folder_id:
+      body.google_drive_folder_id != null
+        ? String(body.google_drive_folder_id).trim() || null
+        : null,
   };
 
   const { data, error } = await gate.admin.from('ci_legal_casos').insert(row).select('*').single();

@@ -28,7 +28,19 @@ export async function GET(_req: Request, ctx: Ctx) {
     .order('ocurrio_at', { ascending: false })
     .limit(100);
 
-  return NextResponse.json({ ok: true, caso, actuaciones: actuaciones ?? [] });
+  const { data: tareas } = await gate.admin
+    .from('ci_legal_tareas')
+    .select('*')
+    .eq('caso_id', id)
+    .eq('org_id', gate.acceso.orgId!)
+    .order('fecha_limite_lapso', { ascending: true });
+
+  return NextResponse.json({
+    ok: true,
+    caso,
+    actuaciones: actuaciones ?? [],
+    tareas: tareas ?? [],
+  });
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
@@ -58,6 +70,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     'fecha_limite',
     'fecha_cierre',
     'codigo',
+    'numero_expediente',
+    'organo_tribunal',
+    'fase_actual',
+    'google_drive_folder_id',
   ] as const;
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
