@@ -56,13 +56,18 @@ export default function ClienteLegalSelect({ valueId, onChange, className }: Pro
 
   const filtrados = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter(
-      (c) =>
-        c.label.toLowerCase().includes(needle) ||
-        c.rif.toLowerCase().includes(needle),
-    );
-  }, [items, q]);
+    const base = !needle
+      ? items
+      : items.filter(
+          (c) =>
+            c.label.toLowerCase().includes(needle) ||
+            c.rif.toLowerCase().includes(needle),
+        );
+    if (!valueId) return base;
+    if (base.some((c) => c.id === valueId)) return base;
+    const selected = items.find((c) => c.id === valueId);
+    return selected ? [selected, ...base] : base;
+  }, [items, q, valueId]);
 
   return (
     <div className="space-y-2">
