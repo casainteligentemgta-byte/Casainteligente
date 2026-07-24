@@ -1,14 +1,22 @@
 /**
  * Auditor continuo CCO: revisión de tablas (higiene) + contratos + caja.
- * Solo lectura / dry-run; notifica por Telegram si hay hallazgos.
+ * Solo lectura / dry-run; notifica al bot ERP Casa Inteligente si hay hallazgos.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { enviarTelegramHtml } from '@/lib/alerts/telegramParadojaCeo';
+import {
+  cargarAlertasConfig,
+  canalAdminTelegramDesdeEnv,
+} from '@/lib/alertas/alertasConfig';
 import { conciliarContratosPorProveedor } from '@/lib/contabilidad/cco/conciliacionContratos';
 import { cargarJerarquiaContratos } from '@/lib/contabilidad/cco/contratosJerarquia';
 import { calcularKpisOficiales } from '@/lib/contabilidad/cco/kpisOficiales';
 import { limpiarDescuadreCco } from '@/lib/contabilidad/cco/limpiarDescuadreCco';
 import { obtenerConfigCco } from '@/lib/contabilidad/cco/proyectoConfig';
+import {
+  getTelegramAllowedChatIds,
+  getTelegramBotToken,
+  sendTelegramMessage,
+} from '@/lib/telegram/botApi';
 
 export type CcoHallazgoSeveridad = 'alta' | 'media' | 'baja';
 
@@ -309,18 +317,59 @@ export async function auditarObraCco(
   }
 }
 
+/**
+ * Destino del aviso: bot ERP Casa Inteligente (`TELEGRAM_BOT_TOKEN`).
+ * Prioridad: TELEGRAM_CCO_CHAT_ID → canal admin (config/env) → TELEGRAM_CHAT_ID → whitelist única.
+ */
+export async function resolverChatBotErpCco(
+  supabase: SupabaseClient,
+): Promise<{ chatId: string | null; fuente: string }> {
+  const cco = process.env.TELEGRAM_CCO_CHAT_ID?.trim();
+  if (cco) return { chatId: cco, fuente: 'TELEGRAM_CCO_CHAT_ID' };
+
+  try {
+    const meta = await cargarAlertasConfig(supabase);
+    if (meta.canalAdminEfectivo) {
+      return {
+        chatId: meta.canalAdminEfectivo,
+        fuente: meta.config.telegram.canalAdminId
+          ? 'ci_alertas_config.canal_admin_id'
+          : 'TELEGRAM_ADMIN_CHANNEL_ID',
+      };
+    }
+  } catch {
+    const adminEnv = canalAdminTelegramDesdeEnv();
+    if (adminEnv) return { chatId: adminEnv, fuente: 'TELEGRAM_ADMIN_CHANNEL_ID' };
+  }
+
+  const chatCeo = process.env.TELEGRAM_CHAT_ID?.trim();
+  if (chatCeo) return { chatId: chatCeo, fuente: 'TELEGRAM_CHAT_ID' };
+
+  const allowed = getTelegramAllowedChatIds();
+  if (allowed.size === 1) {
+    return {
+      chatId: Array.from(allowed)[0] ?? null,
+      fuente: 'TELEGRAM_ALLOWED_CHAT_IDS',
+    };
+  }
+
+  return { chatId: null, fuente: 'sin_destino' };
+}
+
 export function construirMensajeTelegramAuditorCco(
   result: CcoAuditorContinuoResult,
 ): string {
   const base = baseUrlApp();
+  const botUser = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, '') || '';
   const lineas: string[] = [
-    `🔎 <b>AUDITOR CCO — hallazgos</b>`,
+    `🔎 <b>AUDITOR CCO — Casa Inteligente ERP</b>`,
+    botUser ? `<i>Bot @${escapeHtml(botUser)}</i>` : '',
     '',
     `Obras revisadas: <b>${result.revisadas}</b>`,
     `Con hallazgos: <b>${result.con_hallazgos}</b>`,
     `Total hallazgos: <b>${result.total_hallazgos}</b>`,
     '',
-  ];
+  ].filter((l, i, arr) => !(l === '' && arr[i - 1] === ''));
 
   for (const obra of result.obras.filter((o) => o.hallazgos.length > 0).slice(0, 8)) {
     const link = base
@@ -341,9 +390,53 @@ export function construirMensajeTelegramAuditorCco(
   }
 
   lineas.push(
-    `<i>Revisión automática de tablas CCO y contratos. Solo avisa si algo está mal.</i>`,
+    `<i>Revisión automática CCO (tablas + contratos). Aviso del bot ERP solo si hay hallazgos.</i>`,
   );
   return lineas.join('\n');
+}
+
+async function notificarBotErpCco(
+  supabase: SupabaseClient,
+  result: CcoAuditorContinuoResult,
+): Promise<{ ok: boolean; razon: string; chatId?: string }> {
+  if (!getTelegramBotToken()) {
+    return {
+      ok: false,
+      razon: 'TELEGRAM_BOT_TOKEN no configurado (bot Casa Inteligente ERP)',
+    };
+  }
+
+  const dest = await resolverChatBotErpCco(supabase);
+  if (!dest.chatId) {
+    return {
+      ok: false,
+      razon:
+        'Sin chat destino: configure TELEGRAM_CCO_CHAT_ID, TELEGRAM_ADMIN_CHANNEL_ID o TELEGRAM_CHAT_ID',
+    };
+  }
+
+  const text = construirMensajeTelegramAuditorCco(result);
+  try {
+    await sendTelegramMessage(dest.chatId, text, {
+      parse_mode: 'HTML',
+      skipLogEspejo: false,
+      contextoLogEspejo: 'Auditor CCO continuo',
+      rolDestinatario: 'Admin / CCO',
+      accionLogDestinatario: 'solo_notificacion',
+    });
+    return {
+      ok: true,
+      razon: `erp_bot_ok:${dest.fuente}`,
+      chatId: dest.chatId,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'error_telegram';
+    return {
+      ok: false,
+      razon: `erp_bot_error:${dest.fuente}: ${msg.slice(0, 200)}`,
+      chatId: dest.chatId,
+    };
+  }
 }
 
 async function persistirEventos(
@@ -460,13 +553,12 @@ export async function ejecutarAuditorContinuoCco(
     return result;
   }
 
-  const text = construirMensajeTelegramAuditorCco(result);
-  const tg = await enviarTelegramHtml(text);
+  const tg = await notificarBotErpCco(supabase, result);
   if (tg.ok) {
     result.notificado = true;
-    result.notify_razon = 'telegram_ok';
+    result.notify_razon = tg.razon;
   } else {
-    result.notify_razon = `telegram_error_${tg.status}: ${tg.body.slice(0, 200)}`;
+    result.notify_razon = tg.razon;
   }
 
   return result;

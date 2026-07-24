@@ -223,7 +223,7 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
               checked={notificarTelegram}
               onChange={(e) => setNotificarTelegram(e.target.checked)}
             />
-            Notificar por Telegram si hay errores
+            Notificar al bot ERP si hay errores
           </label>
           <button
             type="button"
@@ -245,8 +245,9 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
         <p style={muted}>
           Revisa higiene de tablas (auditoría mal importada, duplicados, ingresos gemelos,
           devaluación), conciliación de contratos (pagado de más, anticipos, pagos huérfanos)
-          y saldo en caja. El cron diario (~00:15 Caracas) hace lo mismo en todas las obras y
-          solo te avisa si algo está mal.
+          y saldo en caja. El cron diario (~00:15 Caracas) hace lo mismo en todas las obras y,
+          si algo falla, avisa por el <strong>bot Casa Inteligente ERP</strong> (canal admin /
+          TELEGRAM_CCO_CHAT_ID).
           {!proyectoId ? ' Selecciona una obra arriba.' : null}
         </p>
         {auditorError ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{auditorError}</p> : null}
