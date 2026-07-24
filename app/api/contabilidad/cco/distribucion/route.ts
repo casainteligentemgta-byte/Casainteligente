@@ -12,6 +12,7 @@ import {
   type CcoSplitParte,
 } from '@/lib/contabilidad/cco/splitGasto';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,9 @@ type Body = {
  */
 export async function POST(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('editar');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
@@ -146,6 +150,9 @@ export async function POST(req: Request) {
 /** GET ?proyecto= — capítulos sugeridos (estructura + usados). */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 

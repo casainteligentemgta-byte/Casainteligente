@@ -4,6 +4,7 @@ import { cargarJerarquiaContratos } from '@/lib/contabilidad/cco/contratosJerarq
 import { cargarPresupuestosCco } from '@/lib/contabilidad/cco/cargarPresupuestos';
 import { generarExcelMaestroXml } from '@/lib/contabilidad/cco/exportExcelMaestro';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,6 +12,9 @@ export const runtime = 'nodejs';
 /** GET ?proyecto= — Excel SpreadsheetML (Gastos/Ingresos/Contratos/Presupuestos). */
 export async function GET(req: Request) {
   try {
+    const accesoCco = await requireCcoAcceso('ver');
+    if (!accesoCco.ok) return accesoCco.response;
+
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
