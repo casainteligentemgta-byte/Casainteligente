@@ -1536,7 +1536,12 @@ function VentasContent() {
 
                         {/* Clear button */}
                         <button
-                            onClick={() => { if (confirm('¿Limpiar el presupuesto?')) setItems([]); }}
+                            onClick={() => {
+                                if (confirm('¿Limpiar el presupuesto?')) {
+                                    setItems([]);
+                                    setShowProductSearch(true);
+                                }
+                            }}
                             style={{
                                 width: '100%',
                                 marginTop: '10px',
