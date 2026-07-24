@@ -792,6 +792,34 @@
       font-size: 1.35rem;
     }
   }
+
+  /* Editor de Markdown UIW */
+  .markdown-editor-container .w-md-editor {
+    background-color: rgba(24, 24, 27, 0.8) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #f4f4f5 !important;
+  }
+  .markdown-editor-container .w-md-editor-toolbar {
+    background-color: rgba(39, 39, 42, 0.9) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  }
+  .markdown-editor-container .w-md-editor-toolbar li > button {
+    color: #d4d4d8 !important;
+  }
+  .markdown-editor-container .w-md-editor-toolbar li > button:hover {
+    color: #fbbf24 !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  .markdown-editor-container .w-md-editor-text-pre > code,
+  .markdown-editor-container .w-md-editor-text-input {
+    color: #f4f4f5 !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+  }
+  .markdown-editor-container .wmde-markdown {
+    background-color: transparent !important;
+    color: #f4f4f5 !important;
+  }
 }
 
 @keyframes splitFlapFlipDown {

@@ -1,5 +1,8 @@
 'use client';
 
+import '@uiw/react-md-editor/markdown-editor.css';
+import '@uiw/react-markdown-preview/markdown.css';
+import MDEditor from '@uiw/react-md-editor';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -301,14 +304,20 @@ export default function DocumentoDetallePage() {
         )}
 
         {modo === 'markdown' && (
-          <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-2">
-            Cuerpo (markdown)
-            <textarea
-              className={`${campo} min-h-[420px] font-mono text-[13px] leading-relaxed`}
-              value={cuerpo}
-              onChange={(e) => setCuerpo(e.target.value)}
-            />
-          </label>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-1.5">
+              Cuerpo (Editor Avanzado)
+            </label>
+            <div data-color-mode="dark" className="markdown-editor-container">
+              <MDEditor
+                value={cuerpo}
+                onChange={(val) => setCuerpo(val || '')}
+                height={450}
+                preview="edit"
+                className="!bg-zinc-900/80 !border-white/10"
+              />
+            </div>
+          </div>
         )}
 
         {modo === 'json' && (

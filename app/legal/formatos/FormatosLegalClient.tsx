@@ -1,5 +1,8 @@
 'use client';
 
+import '@uiw/react-md-editor/markdown-editor.css';
+import '@uiw/react-markdown-preview/markdown.css';
+import MDEditor from '@uiw/react-md-editor';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -337,15 +340,20 @@ export default function FormatosLegalClient() {
         ) : null}
 
         <div>
-          <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Cuerpo Markdown {file && !editId ? '(opcional — si vacío, se extrae del archivo)' : ''}
-          </label>
-          <textarea
-            className={`${campo} min-h-[180px] font-mono text-xs`}
-            value={cuerpo}
-            onChange={(e) => setCuerpo(e.target.value)}
-            placeholder={'# Título\n\nEntre {{contraparte_nombre}} y…'}
-          />
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Cuerpo Markdown {file && !editId ? '(opcional — si vacío, se extrae del archivo)' : ''}
+            </label>
+          </div>
+          <div data-color-mode="dark" className="markdown-editor-container">
+            <MDEditor
+              value={cuerpo}
+              onChange={(val) => setCuerpo(val || '')}
+              height={300}
+              preview="edit"
+              className="!bg-zinc-900/80 !border-white/10"
+            />
+          </div>
         </div>
 
         <button

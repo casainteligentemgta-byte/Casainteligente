@@ -1,5 +1,8 @@
 'use client';
 
+import '@uiw/react-md-editor/markdown-editor.css';
+import '@uiw/react-markdown-preview/markdown.css';
+import MDEditor from '@uiw/react-md-editor';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -76,6 +79,8 @@ function DocumentoNuevoForm() {
 
   const [valores, setValores] = useState<Record<string, string>>({});
   const [jsonEstructurado, setJsonEstructurado] = useState('');
+  const [cuerpoEditado, setCuerpoEditado] = useState('');
+  const [usarCuerpoEditado, setUsarCuerpoEditado] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -274,6 +279,13 @@ function DocumentoNuevoForm() {
     });
   }, [nuevaEntidad, entidadSeleccionadaId, variables]);
 
+  // Actualizar el cuerpo editado inicial cuando cambian las variables
+  useEffect(() => {
+    if (!usarCuerpoEditado && plantilla?.cuerpo_markdown) {
+      setCuerpoEditado(aplicarVariablesPlantilla(plantilla.cuerpo_markdown, valores));
+    }
+  }, [valores, plantilla, usarCuerpoEditado]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!titulo.trim() && !jsonEstructurado.trim()) {
@@ -320,9 +332,11 @@ function DocumentoNuevoForm() {
         }
       }
 
-      const cuerpo = plantilla?.cuerpo_markdown
-        ? aplicarVariablesPlantilla(plantilla.cuerpo_markdown, valores)
-        : '';
+      const cuerpo = usarCuerpoEditado 
+        ? cuerpoEditado 
+        : (plantilla?.cuerpo_markdown
+            ? aplicarVariablesPlantilla(plantilla.cuerpo_markdown, valores)
+            : '');
       const res = await fetch(apiUrl('/api/legal/documentos'), {
         method: 'POST',
         credentials: 'include',
@@ -648,6 +662,38 @@ function DocumentoNuevoForm() {
             )}
           </div>
         )}
+
+        <div className="space-y-2 border-t border-white/10 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-200/70">
+              Previsualización y Edición del Documento
+            </p>
+            <button
+              type="button"
+              className="text-xs text-amber-300 hover:underline"
+              onClick={() => setUsarCuerpoEditado(true)}
+            >
+              Habilitar edición manual
+            </button>
+          </div>
+          <div data-color-mode="dark" className="markdown-editor-container">
+            <MDEditor
+              value={usarCuerpoEditado ? cuerpoEditado : (plantilla?.cuerpo_markdown ? aplicarVariablesPlantilla(plantilla.cuerpo_markdown, valores) : '')}
+              onChange={(val) => {
+                setUsarCuerpoEditado(true);
+                setCuerpoEditado(val || '');
+              }}
+              height={350}
+              preview={usarCuerpoEditado ? "edit" : "preview"}
+              className="!bg-zinc-900/80 !border-white/10"
+            />
+          </div>
+          {!usarCuerpoEditado && plantilla?.cuerpo_markdown && (
+            <p className="text-[11px] text-zinc-500">
+              El documento se actualiza automáticamente con las variables. Haz clic en "Habilitar edición manual" o escribe en el editor para modificar el texto libremente.
+            </p>
+          )}
+        </div>
 
         <div className="space-y-2 border-t border-white/10 pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
