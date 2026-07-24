@@ -36,6 +36,10 @@ type MatchSoporteEgreso = {
   };
   motivo: string;
   error?: string;
+  paginas?: number[];
+  adjuntoBase64?: string;
+  adjuntoMime?: string;
+  adjuntoFileName?: string;
 };
 
 type FilaEgreso = CcoLibroFila & { _agrupada?: boolean };
@@ -66,6 +70,26 @@ function labelEgreso(f: FilaEgreso | undefined, id: string | null): string {
   if (!f) return id ? `Egreso ${id.slice(0, 8)}…` : '—';
   const fecha = f.fecha || 's/f';
   return `#${f.display_id} · ${f.proveedor} · ${fecha} · ${fmtMonto(f.monto_orig)} ${f.moneda}`;
+}
+
+function fileDesdeMatch(
+  m: MatchSoporteEgreso,
+  byId: Map<string, File>,
+): File | undefined {
+  if (m.adjuntoBase64 && m.adjuntoFileName) {
+    try {
+      const bin = Uint8Array.from(atob(m.adjuntoBase64), (c) => c.charCodeAt(0));
+      return new File([bin], m.adjuntoFileName, {
+        type: m.adjuntoMime || 'application/pdf',
+      });
+    } catch {
+      /* fallback abajo */
+    }
+  }
+  if (byId.has(m.archivoId)) return byId.get(m.archivoId);
+  const origen = m.archivoId.split('#')[0];
+  if (origen && byId.has(origen)) return byId.get(origen);
+  return undefined;
 }
 
 /**
@@ -220,13 +244,13 @@ export default function EgresoEmparejarSoportesModal({
       const byId = new Map(archivos.map((a) => [a.id, a.file]));
       const enriched: MatchUi[] = json.matches.map((m) => ({
         ...m,
-        file: byId.get(m.archivoId),
+        file: fileDesdeMatch(m, byId),
       }));
       setMatches(enriched);
       setResumen(json.resumen ?? null);
       setFase('resultado');
 
-      // Auto-asignar matches claros
+      // Auto-asignar matches claros (adjunta el PDF de la página/grupo, no el lote entero)
       setAsignando(true);
       let autoOk = 0;
       for (const m of enriched) {
@@ -330,9 +354,9 @@ export default function EgresoEmparejarSoportesModal({
         </div>
 
         <p style={hint}>
-          Suba PDFs o fotos de facturas (carpeta local o sincronizada de Google Drive / OneDrive).
-          El agente lee proveedor, fecha y monto; si coinciden con un egreso sin soporte, la
-          asigna. Si hay duda, le pregunta en un popup.
+          Suba PDFs o fotos (carpeta local o sincronizada de Drive). Si un PDF trae varias
+          facturas, se parte por página, se agrupan las de la misma factura y cada una se
+          empareja por proveedor, fecha y monto. Match claro → auto; duda → popup.
         </p>
 
         <p style={{ margin: '0 0 12px', fontSize: 13, color: '#334155' }}>
@@ -441,6 +465,11 @@ export default function EgresoEmparejarSoportesModal({
                     <strong style={{ fontSize: 13 }}>{m.fileName}</strong>
                     <BadgeDecision decision={m.decision} asignado={m.asignado} />
                   </div>
+                  {m.paginas && m.paginas.length > 0 ? (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0F766E' }}>
+                      Página{m.paginas.length > 1 ? 's' : ''} {m.paginas.join(', ')}
+                    </span>
+                  ) : null}
                   <span style={{ fontSize: 12, color: '#475569' }}>
                     OCR: {m.leido.supplier_name || '—'} · {m.leido.fecha || 's/f'} ·{' '}
                     {fmtMonto(m.leido.total_amount)}
@@ -488,6 +517,11 @@ export default function EgresoEmparejarSoportesModal({
               <div>
                 <strong>Archivo:</strong> {dudaActual.fileName}
               </div>
+              {dudaActual.paginas && dudaActual.paginas.length > 0 ? (
+                <div>
+                  <strong>Página(s):</strong> {dudaActual.paginas.join(', ')}
+                </div>
+              ) : null}
               <div>
                 <strong>Proveedor leído:</strong> {dudaActual.leido.supplier_name || '—'}
               </div>
