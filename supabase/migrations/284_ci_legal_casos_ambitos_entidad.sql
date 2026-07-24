@@ -6,13 +6,14 @@ alter table public.ci_legal_casos
 comment on column public.ci_legal_casos.despacho_abogado is
   'Nombre del despacho o abogado cuando el ámbito es caso externo.';
 
+-- Soltar el check ANTES de migrar valores (el legado solo permitía obra/despacho/externo).
+alter table public.ci_legal_casos
+  drop constraint if exists ci_legal_casos_ambito_check;
+
 -- Migrar legado "obra" → entidad Casa Inteligente
 update public.ci_legal_casos
 set ambito = 'casa_inteligente'
 where ambito = 'obra';
-
-alter table public.ci_legal_casos
-  drop constraint if exists ci_legal_casos_ambito_check;
 
 alter table public.ci_legal_casos
   add constraint ci_legal_casos_ambito_check
