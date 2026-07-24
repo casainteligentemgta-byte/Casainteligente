@@ -342,7 +342,8 @@ export async function cargarDashboardDesdeRegistrosGastos(
         c.insumos +
         c.mano +
         c.transporte +
-        c.permiso,
+        c.permiso +
+        c.proyecto,
     })),
     jerarquiaCapitulos,
     subCapitulosStack,

@@ -69,6 +69,7 @@ type NavEntry = ({ kind?: 'item' } & NavLeaf) | NavGroup;
 /** Menú lateral CCO V4 — módulos operativos + importación/configuración. */
 const NAV_ITEMS: NavEntry[] = [
   { id: 'dashboard', label: 'Dashboard', ready: true, hint: 'Gráficos y KPIs' },
+  { id: 'sincronizar-bd', label: 'Sincronizar BD', ready: true, hint: 'Base de Datos Principal' },
   { id: 'datos', label: 'Datos gráficos', ready: true },
   { id: 'rubros', label: 'Lista de rubros', ready: true },
   { id: 'egresos', label: 'Egresos', ready: true },
@@ -84,7 +85,6 @@ const NAV_ITEMS: NavEntry[] = [
     id: 'importar',
     label: 'Importar',
     children: [
-      { id: 'sincronizar-bd', label: 'Sincronizar BD', ready: true, hint: 'FDW · BD suegro' },
       { id: 'importar-csv', label: 'CSV', ready: true, hint: 'OneDrive / maestro' },
       { id: 'importar-pdf', label: 'PDF', ready: true, hint: 'OCR / tabla' },
       { id: 'importar-v4', label: 'V4 SQLite', ready: true, hint: 'JSON ETL' },
@@ -94,7 +94,7 @@ const NAV_ITEMS: NavEntry[] = [
   { id: 'ajustes', label: 'Ajustes CCO', ready: true },
 ];
 
-const IMPORTAR_NAV_IDS: NavId[] = ['sincronizar-bd', 'importar-csv', 'importar-pdf', 'importar-v4'];
+const IMPORTAR_NAV_IDS: NavId[] = ['importar-csv', 'importar-pdf', 'importar-v4'];
 
 /** Módulos que necesitan selector de obra fuera del dashboard. */
 const MODULOS_CON_OBRA: NavId[] = [

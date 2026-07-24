@@ -63,7 +63,16 @@ BEGIN
 END $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.registros_gastos TO authenticated, service_role;
-GRANT USAGE, SELECT ON SEQUENCE public.registros_gastos_id_seq TO authenticated, service_role;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'registros_gastos_id_seq'
+  ) THEN
+    EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE public.registros_gastos_id_seq TO authenticated, service_role';
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.registros_gastos_staging (
   LIKE public.registros_gastos INCLUDING DEFAULTS

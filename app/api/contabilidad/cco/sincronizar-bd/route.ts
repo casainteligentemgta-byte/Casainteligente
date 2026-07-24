@@ -7,6 +7,7 @@ export const maxDuration = 120;
 
 /**
  * POST — Sincroniza libro CCO desde BD remota del suegro (FDW suegro_db → registros_gastos).
+ * Misma RPC que funcionaba el 23 jul: ci_sincronizar_desde_suegro.
  * Body: { proyectoId: string }
  */
 export async function POST(request: Request) {
@@ -22,13 +23,7 @@ export async function POST(request: Request) {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
 
-    let body: { proyectoId?: string };
-    try {
-      body = (await request.json()) as { proyectoId?: string };
-    } catch {
-      return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 });
-    }
-
+    const body = (await request.json()) as { proyectoId?: string };
     const proyectoId = String(body.proyectoId ?? '').trim();
     if (!proyectoId) {
       return NextResponse.json({ ok: false, error: 'Falta proyectoId' }, { status: 400 });
@@ -48,6 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
+    // La RPC ya devuelve { ok, mensaje, registros_borrados, registros_insertados }
     return NextResponse.json(data ?? { ok: false, error: 'Sin respuesta del RPC' });
   } catch (error) {
     console.error('Error inesperado en sincronización:', error);
