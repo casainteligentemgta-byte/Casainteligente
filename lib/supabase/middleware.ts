@@ -17,6 +17,7 @@ const RUTAS_PROTEGIDAS = [
   '/configuracion',
   '/admin',
   '/proyectos',
+  '/netvision',
   '/rrhh',
   '/procura',
   '/legal',
