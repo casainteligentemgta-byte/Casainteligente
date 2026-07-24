@@ -253,7 +253,7 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
         {auditorError ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{auditorError}</p> : null}
         {auditorMsg ? <p style={{ color: '#15803D', fontSize: 13 }}>{auditorMsg}</p> : null}
         {hallazgos.length > 0 ? (
-          <ul style={{ margin: '8px 0 0', paddingLeft: 18, displaySize: 13 }}>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
             {hallazgos.map((h, i) => (
               <li key={`${h.codigo}-${i}`} style={{ marginBottom: 6 }}>
                 <span

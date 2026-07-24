@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       actor: body.actor?.trim() || 'cco_ui',
     });
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ...result, ok: true });
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : 'No se pudo ejecutar el auditor CCO.';
@@ -68,7 +68,7 @@ export async function GET(req: Request) {
       actor: 'cco_ui_get',
     });
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ...result, ok: true });
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : 'No se pudo ejecutar el auditor CCO.';
