@@ -1,14 +1,20 @@
 /**
  * Higiene CCO: quita auditoría mal importada como gasto, deduplica gemelos
- * (mismo día/proveedor/monto/concepto) y normaliza devaluación brecha→V4.
+ * (fila suelta o egreso agrupado / dividido) y normaliza devaluación brecha→V4.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   esCompraSoloAuditoriaCco,
   esDescripcionAuditoriaCco,
 } from '@/lib/contabilidad/compraEsAuditoriaCco';
+import {
+  detectarParesGastosGemelos,
+  type GastoGemeloPar,
+} from '@/lib/contabilidad/cco/detectarGastosGemelos';
 import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
 import { idsIngresosGemelosAEliminar } from '@/lib/contabilidad/cco/dedupeIngresosGemelos';
+
+export type { GastoGemeloPar };
 
 export type LimpiezaDescuadreResult = {
   auditoriaEliminada: number;
@@ -18,40 +24,14 @@ export type LimpiezaDescuadreResult = {
   devaluacionDespues: number | null;
   devaluacionCorregida: boolean;
   idsEliminados: string[];
+  /** Pares gemelos detectados (dry-run o tras marcar a borrar). */
+  gastosGemelos: GastoGemeloPar[];
   errores: string[];
 };
 
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function normTexto(s: string): string {
-  return String(s ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toUpperCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function claveDuplicado(r: {
-  fecha?: string | null;
-  supplier_name?: string | null;
-  monto_usd?: number | null;
-  notas?: string | null;
-  invoice_number?: string | null;
-}): string {
-  const fecha = String(r.fecha ?? '').slice(0, 10);
-  const prov = normTexto(String(r.supplier_name ?? ''));
-  const monto = Math.round(num(r.monto_usd) * 100) / 100;
-  const notas = normTexto(String(r.notas ?? ''))
-    .replace(/^CCO-V4-\d+\s*/, '')
-    .slice(0, 80);
-  // No usar invoice SIN-* (suelen diferir entre gemelos del mismo CSV).
-  const inv = String(r.invoice_number ?? '').trim().toUpperCase();
-  const invKey = inv.startsWith('CCO-V4-') ? inv : '';
-  return `${fecha}|${prov}|${monto}|${notas}|${invKey}`;
 }
 
 async function fetchAllComprasProyecto(
@@ -112,6 +92,7 @@ export async function limpiarDescuadreCco(
     devaluacionDespues: null,
     devaluacionCorregida: false,
     idsEliminados: [],
+    gastosGemelos: [],
     errores: [],
   };
 
@@ -144,39 +125,23 @@ export async function limpiarDescuadreCco(
   const auditSet = new Set(idsAuditoria);
   const vivos = compras.filter((r) => !auditSet.has(String(r.id)));
 
-  // Dedup: conservar la que tenga origen_v4_id / CCO-V4; si empatan, la más antigua.
-  const grupos = new Map<string, Record<string, unknown>[]>();
-  for (const r of vivos) {
-    if (num(r.monto_usd) <= 0) continue;
-    const k = claveDuplicado({
+  // Dedup a nivel unidad (fila suelta o egreso agrupado / split), como en Egresos → Agrupar.
+  const pares = detectarParesGastosGemelos(
+    vivos.map((r) => ({
+      id: String(r.id),
       fecha: r.fecha != null ? String(r.fecha) : null,
       supplier_name: r.supplier_name != null ? String(r.supplier_name) : null,
-      monto_usd: num(r.monto_usd),
       notas: r.notas != null ? String(r.notas) : null,
+      descripcion: r.notas != null ? String(r.notas) : null,
       invoice_number: r.invoice_number != null ? String(r.invoice_number) : null,
-    });
-    if (!grupos.has(k)) grupos.set(k, []);
-    grupos.get(k)!.push(r);
-  }
-
-  const idsDup: string[] = [];
-  for (const group of Array.from(grupos.values())) {
-    if (group.length < 2) continue;
-    const ranked = [...group].sort((a, b) => {
-      const aV4 = a.origen_v4_id != null ? 1 : 0;
-      const bV4 = b.origen_v4_id != null ? 1 : 0;
-      if (bV4 !== aV4) return bV4 - aV4;
-      const aInv = String(a.invoice_number ?? '').toUpperCase().startsWith('CCO-V4-') ? 1 : 0;
-      const bInv = String(b.invoice_number ?? '').toUpperCase().startsWith('CCO-V4-') ? 1 : 0;
-      if (bInv !== aInv) return bInv - aInv;
-      return String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
-    });
-    for (const drop of ranked.slice(1)) {
-      // No borrar si tiene purchase_invoice_id (Telegram/procurement).
-      if (drop.purchase_invoice_id) continue;
-      idsDup.push(String(drop.id));
-    }
-  }
+      monto_usd: num(r.monto_usd),
+      origen_v4_id: r.origen_v4_id as string | number | null | undefined,
+      created_at: r.created_at != null ? String(r.created_at) : null,
+      purchase_invoice_id: r.purchase_invoice_id != null ? String(r.purchase_invoice_id) : null,
+    })),
+  );
+  result.gastosGemelos = pares;
+  const idsDup = Array.from(new Set(pares.flatMap((p) => p.eliminarIds)));
 
   const aBorrar = Array.from(new Set([...idsAuditoria, ...idsDup]));
   if (!dryRun) {

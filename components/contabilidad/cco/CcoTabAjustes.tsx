@@ -115,6 +115,15 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
       });
       const json = await res.json();
       if (!res.ok || json.ok === false) throw new Error(json.error ?? 'No se pudo reparar');
+      const gemelosExtra = Array.isArray(json.gastosGemelos)
+        ? (json.gastosGemelos as Array<{ eliminarResumen?: string; conservarResumen?: string; coinciden?: string[] }>)
+            .slice(0, 3)
+            .map((p) => {
+              const coinciden = Array.isArray(p.coinciden) ? p.coinciden.join(', ') : 'fecha/proveedor/monto/concepto';
+              return `«${p.eliminarResumen ?? '?'}» gemelo de «${p.conservarResumen ?? '?'}» (coinciden: ${coinciden})`;
+            })
+            .join('; ')
+        : '';
       const partes = [
         json.auditoriaEliminada
           ? `${json.auditoriaEliminada} auditoría(s) eliminada(s)`
@@ -131,7 +140,7 @@ export default function CcoTabAjustes({ proyectoId, onSaved }: Props) {
       ].filter(Boolean);
       setOkMsg(
         partes.length
-          ? `Reparación OK: ${partes.join(' · ')}. Recarga el dashboard.`
+          ? `Reparación OK: ${partes.join(' · ')}.${gemelosExtra ? ` Detalle: ${gemelosExtra}.` : ''} Recarga el dashboard.`
           : 'Sin cambios: libro ya limpio.',
       );
       if (json.devaluacionDespues != null) {

@@ -179,12 +179,50 @@ export async function auditarObraCco(
       });
     }
     if (higiene.duplicadosEliminados > 0) {
+      const pares = higiene.gastosGemelos ?? [];
+      const lineasPares = pares.slice(0, 8).map((p, i) => {
+        const coinciden =
+          p.coinciden.length > 0
+            ? p.coinciden.join(', ')
+            : 'fecha, proveedor, monto, concepto';
+        const valores = [
+          p.fecha || null,
+          p.proveedor || null,
+          p.monto_usd != null ? fmtUsd(p.monto_usd) : null,
+          p.concepto ? p.concepto.slice(0, 60) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        const agrupado =
+          p.esAgrupado
+            ? ` [egreso agrupado: quitar ${p.partesEliminar} parte(s) / conservar ${p.partesConservar}]`
+            : '';
+        return (
+          `${i + 1}) Gemelo a quitar: ${p.eliminarResumen}. ` +
+          `Par de: ${p.conservarResumen}. ` +
+          `Coinciden (${coinciden}): ${valores}.${agrupado}`
+        );
+      });
+      const extra =
+        pares.length > 8 ? ` … +${pares.length - 8} par(es) más.` : '';
+      const nAgrupados = pares.filter((p) => p.esAgrupado).length;
       hallazgos.push({
         codigo: 'higiene_gastos_duplicados',
         severidad: 'alta',
         titulo: 'Gastos gemelos / duplicados',
-        detalle: `${higiene.duplicadosEliminados} gasto(s) duplicado(s) detectado(s) (mismo día/proveedor/monto/concepto).`,
-        meta: { count: higiene.duplicadosEliminados },
+        detalle:
+          `${higiene.duplicadosEliminados} gasto(s) gemelo(s) detectado(s) ` +
+          `(mismo día/proveedor/monto/concepto` +
+          (nAgrupados > 0 ? `; ${nAgrupados} como egreso agrupado` : '') +
+          `).` +
+          (lineasPares.length
+            ? ` ${lineasPares.join(' ')}${extra}`
+            : ''),
+        meta: {
+          count: higiene.duplicadosEliminados,
+          pares: pares.slice(0, 20),
+          agrupados: nAgrupados,
+        },
       });
     }
     if (higiene.ingresosGemelosEliminados > 0) {
@@ -251,12 +289,35 @@ export async function auditarObraCco(
 
     if (jer.huerfanos.length > 0) {
       const montoHuerfanos = jer.huerfanos.reduce((a, p) => a + (Number(p.monto_usd) || 0), 0);
+      const lista = jer.huerfanos.slice(0, 10).map((p, i) => {
+        const fecha = p.fecha || 'sin fecha';
+        const desc = (p.descripcion || 'Pago').slice(0, 50);
+        const tipo = p.tipo_gasto_cco || 'CONTRATISTA';
+        return `${i + 1}) ${fecha} · ${p.proveedor} · ${fmtUsd(p.monto_usd)} · ${desc} · ${tipo} (#${p.id.slice(0, 8)})`;
+      });
+      const extra =
+        jer.huerfanos.length > 10
+          ? ` … +${jer.huerfanos.length - 10} más.`
+          : '';
       hallazgos.push({
         codigo: 'pagos_contratista_huerfanos',
         severidad: jer.huerfanos.length >= 5 ? 'alta' : 'media',
-        titulo: 'Pagos CONTRATISTA sin contrato',
-        detalle: `${jer.huerfanos.length} pago(s) sin vincular (${fmtUsd(montoHuerfanos)}). Revise la pestaña Contratos.`,
-        meta: { count: jer.huerfanos.length, monto_usd: montoHuerfanos },
+        titulo: 'Datos huérfanos: pagos CONTRATISTA sin contrato',
+        detalle:
+          `${jer.huerfanos.length} pago(s) huérfano(s) sin vincular (${fmtUsd(montoHuerfanos)}). ` +
+          `Revise la pestaña Contratos. Lista: ${lista.join(' · ')}${extra}`,
+        meta: {
+          count: jer.huerfanos.length,
+          monto_usd: montoHuerfanos,
+          pagos: jer.huerfanos.slice(0, 30).map((p) => ({
+            id: p.id,
+            fecha: p.fecha,
+            proveedor: p.proveedor,
+            monto_usd: p.monto_usd,
+            descripcion: p.descripcion,
+            tipo_gasto_cco: p.tipo_gasto_cco,
+          })),
+        },
       });
     }
 
@@ -378,8 +439,14 @@ export function construirMensajeTelegramAuditorCco(
     lineas.push(`🏗 <b>${escapeHtml(obra.obra_label)}</b>`);
     for (const h of obra.hallazgos.slice(0, 6)) {
       const icon = h.severidad === 'alta' ? '🔴' : h.severidad === 'media' ? '🟡' : '⚪';
+      // Gemelos / huérfanos: más contexto en Telegram (pares y lista).
+      const maxDet =
+        h.codigo === 'higiene_gastos_duplicados' ||
+        h.codigo === 'pagos_contratista_huerfanos'
+          ? 900
+          : 180;
       lineas.push(
-        `${icon} ${escapeHtml(h.titulo)} — ${escapeHtml(h.detalle.slice(0, 180))}`,
+        `${icon} ${escapeHtml(h.titulo)} — ${escapeHtml(h.detalle.slice(0, maxDet))}`,
       );
     }
     if (obra.hallazgos.length > 6) {
