@@ -354,9 +354,11 @@ export default function EgresoEmparejarSoportesModal({
         </div>
 
         <p style={hint}>
-          Suba PDFs o fotos (carpeta local o sincronizada de Drive). Si un PDF trae varias
-          facturas, se parte por página, se agrupan las de la misma factura y cada una se
-          empareja por proveedor, fecha y monto. Match claro → auto; duda → popup.
+          Lote: suba un PDF con varias facturas (o varios PDF/fotos). Se parte por página,
+          se agrupan las de la misma factura y cada una se enlaza al egreso que coincida en
+          proveedor, fecha y monto. Match claro → automático; si hay duda → popup para
+          confirmar. Para una sola factura también puede usar <strong>Adjuntar</strong> en la
+          columna LINK FACTURA.
         </p>
 
         <p style={{ margin: '0 0 12px', fontSize: 13, color: '#334155' }}>
