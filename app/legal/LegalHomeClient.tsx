@@ -211,10 +211,10 @@ export default function LegalHomeClient() {
   return (
     <div className="space-y-7">
       <section className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-[#0c1018] to-[#07090f] p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
             <p className="flex items-center gap-2 text-sm text-amber-200/80">
-              <Scale className="h-4 w-4" />
+              <Scale className="h-4 w-4 shrink-0" />
               {acceso.standalone
                 ? 'Resumen · módulo abogado'
                 : 'Resumen · gestión de expedientes'}
@@ -230,7 +230,7 @@ export default function LegalHomeClient() {
           </div>
           <Link
             href="/legal/casos/nuevo"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-amber-900/30"
+            className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-amber-900/30 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Nuevo expediente
@@ -340,20 +340,20 @@ export default function LegalHomeClient() {
                   key={c.id}
                   className="rounded-2xl border border-white/10 bg-[#0c1018] px-4 py-3"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {c.codigo ? (
-                          <span className="font-mono text-[10px] font-semibold tracking-wide text-amber-300/90">
-                            {c.codigo}
-                          </span>
-                        ) : null}
-                        <Link
-                          href={`/legal/casos/${c.id}`}
-                          className="font-semibold text-zinc-100 hover:text-amber-100"
-                        >
-                          {c.titulo}
-                        </Link>
+                  <div className="space-y-3">
+                    <div className="min-w-0">
+                      {c.codigo ? (
+                        <p className="font-mono text-[10px] font-semibold tracking-wide text-amber-300/90">
+                          {c.codigo}
+                        </p>
+                      ) : null}
+                      <Link
+                        href={`/legal/casos/${c.id}`}
+                        className="mt-0.5 block text-base font-semibold leading-snug text-zinc-100 hover:text-amber-100"
+                      >
+                        {c.titulo}
+                      </Link>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <span
                           className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${badgeEstado(c.estado)}`}
                         >
@@ -376,7 +376,7 @@ export default function LegalHomeClient() {
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-1 text-xs text-zinc-500">
+                      <p className="mt-2 text-xs text-zinc-500">
                         {etiquetaDe(LEGAL_TIPOS_CASO, c.tipo)} ·{' '}
                         {etiquetaDe(LEGAL_AMBITOS, c.ambito)}
                         {c.contraparte ? ` · ${c.contraparte}` : ''}
@@ -390,10 +390,14 @@ export default function LegalHomeClient() {
                       ) : null}
                     </div>
 
-                    <div className="flex flex-wrap gap-1.5">
+                    <div
+                      className="flex flex-wrap gap-1.5 border-t border-white/5 pt-3"
+                      role="group"
+                      aria-label="Acciones del expediente"
+                    >
                       <Link
                         href={`/legal/casos/${c.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/20"
+                        className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/20 sm:flex-none"
                       >
                         Continuar
                         <ArrowRight className="h-3.5 w-3.5" />
@@ -403,7 +407,7 @@ export default function LegalHomeClient() {
                           type="button"
                           disabled={busy}
                           onClick={() => void cambiarEstado(c, 'en_gestion')}
-                          className="inline-flex items-center gap-1 rounded-lg border border-sky-500/35 bg-sky-950/30 px-2.5 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-900/40 disabled:opacity-50"
+                          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-sky-500/35 bg-sky-950/30 px-2.5 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-900/40 disabled:opacity-50 sm:flex-none"
                         >
                           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                           En gestión
@@ -413,7 +417,7 @@ export default function LegalHomeClient() {
                         type="button"
                         disabled={busy}
                         onClick={() => void cambiarEstado(c, 'resuelto')}
-                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-950/35 px-2.5 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/45 disabled:opacity-50"
+                        className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-950/35 px-2.5 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/45 disabled:opacity-50 sm:flex-none"
                       >
                         {busy ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
