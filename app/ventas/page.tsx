@@ -79,7 +79,7 @@ function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
     }
 }
 
-const MARGIN_PRESETS = [0, 10, 15, 20, 25, 30];
+const MARGIN_PRESETS = [10, 15, 20];
 
 function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -112,6 +112,8 @@ function CategoryBadge({ cat }: { cat: string | null }) {
 function VentasContent() {
     const searchParams = useSearchParams();
     const [items, setItems] = useState<LineItem[]>([]);
+    /** Con productos en la lista, el buscador se oculta hasta “Agregar producto”. */
+    const [showProductSearch, setShowProductSearch] = useState(true);
     const [globalMargin, setGlobalMargin] = useState(20);
     const [clientName, setClientName] = useState('');
     const [clientRif, setClientRif] = useState('');
@@ -317,6 +319,7 @@ function VentasContent() {
                             };
                         });
                         setItems(loadedItems);
+                        if (loadedItems.length > 0) setShowProductSearch(false);
                     }
                 });
         }
@@ -463,6 +466,7 @@ function VentasContent() {
                     }
                     : i
             ));
+            setShowProductSearch(false);
             return;
         }
         const basePrice = product.precio ?? 0;
@@ -476,6 +480,7 @@ function VentasContent() {
             inventoryItemIds: [],
             serialNumbers: [],
         }]);
+        setShowProductSearch(false);
     };
 
     const updateQty = (id: string, qty: number) => {
@@ -685,22 +690,24 @@ function VentasContent() {
                         <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                             Cliente
                         </label>
-                        <Link
-                            href="/clientes"
-                            style={{ fontSize: '11px', fontWeight: 600, color: '#007AFF', textDecoration: 'none' }}
-                        >
-                            Gestionar cliente
-                        </Link>
+                        {!customerId ? (
+                            <Link
+                                href="/clientes"
+                                style={{ fontSize: '11px', fontWeight: 600, color: '#007AFF', textDecoration: 'none' }}
+                            >
+                                Gestionar cliente
+                            </Link>
+                        ) : null}
                     </div>
 
                     {customerId ? (
                         <div style={{
-                            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             gap: '12px',
                             background: 'rgba(52,199,89,0.08)', border: '1px solid rgba(52,199,89,0.2)',
                             borderRadius: '12px', padding: '12px 14px',
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
                                 <div style={{
                                     width: '32px', height: '32px', borderRadius: '8px',
                                     background: 'rgba(52,199,89,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -710,21 +717,19 @@ function VentasContent() {
                                         <circle cx="12" cy="7" r="4" stroke="#34C759" strokeWidth="2" />
                                     </svg>
                                 </div>
-                                <div style={{ minWidth: 0 }}>
-                                    <p style={{ color: '#34C759', fontSize: '14px', fontWeight: 700 }}>{clientName}</p>
-                                    {clientRif ? (
-                                        <p style={{ color: 'rgba(52,199,89,0.75)', fontSize: '11px', marginTop: '4px' }}>RIF {clientRif}</p>
-                                    ) : null}
-                                    {clientPhone ? (
-                                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>{clientPhone}</p>
-                                    ) : null}
-                                    {clientEmail ? (
-                                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px', wordBreak: 'break-all' }}>{clientEmail}</p>
-                                    ) : null}
-                                    {clientDireccion ? (
-                                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', marginTop: '4px', lineHeight: 1.35 }}>{clientDireccion}</p>
-                                    ) : null}
-                                </div>
+                                <p
+                                    style={{
+                                        color: '#34C759',
+                                        fontSize: '15px',
+                                        fontWeight: 700,
+                                        margin: 0,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {clientName || 'Cliente'}
+                                </p>
                             </div>
                             <button
                                 type="button"
@@ -872,56 +877,128 @@ function VentasContent() {
                     )}
                 </div>
 
-                {/* ── Product Search ── */}
-                <div style={{ marginBottom: '20px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '10px' }}>
-                        Agregar Producto
-                    </label>
-                    <ProductSearch onSelect={addProduct} />
-                </div>
-
-                {/* ── Margin Presets ── */}
-                <div style={{ marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                            Margen Global
-                        </label>
-                        <span style={{ fontSize: '13px', color: '#34C759', fontWeight: 700 }}>{globalMargin}%</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {MARGIN_PRESETS.map(m => (
-                            <button
-                                key={m}
-                                onClick={() => applyGlobalMargin(m)}
+                {/* ── Márgenes (antes de agregar, o al ampliar buscador) ── */}
+                {(items.length === 0 || showProductSearch) ? (
+                    <div style={{ marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                Margen Global
+                            </label>
+                            <span style={{ fontSize: '13px', color: '#34C759', fontWeight: 700 }}>{globalMargin}%</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            {MARGIN_PRESETS.map(m => (
+                                <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => applyGlobalMargin(m)}
+                                    style={{
+                                        padding: '7px 14px',
+                                        borderRadius: '10px',
+                                        border: globalMargin === m ? '1px solid #34C759' : '1px solid rgba(255,255,255,0.12)',
+                                        background: globalMargin === m ? 'rgba(52,199,89,0.15)' : 'rgba(255,255,255,0.05)',
+                                        color: globalMargin === m ? '#34C759' : 'var(--label-secondary)',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        fontFamily: 'inherit',
+                                        transition: 'all 0.2s',
+                                    }}
+                                >
+                                    {m}%
+                                </button>
+                            ))}
+                            <div
                                 style={{
-                                    padding: '7px 14px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    background: !MARGIN_PRESETS.includes(globalMargin)
+                                        ? 'rgba(52,199,89,0.12)'
+                                        : 'rgba(255,255,255,0.05)',
+                                    border: !MARGIN_PRESETS.includes(globalMargin)
+                                        ? '1px solid rgba(52,199,89,0.45)'
+                                        : '1px solid rgba(255,255,255,0.12)',
                                     borderRadius: '10px',
-                                    border: globalMargin === m ? '1px solid #34C759' : '1px solid rgba(255,255,255,0.12)',
-                                    background: globalMargin === m ? 'rgba(52,199,89,0.15)' : 'rgba(255,255,255,0.05)',
-                                    color: globalMargin === m ? '#34C759' : 'var(--label-secondary)',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    fontFamily: 'inherit',
-                                    transition: 'all 0.2s',
+                                    padding: '4px 10px',
                                 }}
+                                title="Porcentaje personalizado"
                             >
-                                {m === 0 ? 'Sin margen' : `+${m}%`}
-                            </button>
-                        ))}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', padding: '4px 10px' }}>
-                            <input
-                                type="number"
-                                min={0}
-                                max={200}
-                                value={globalMargin}
-                                onChange={e => applyGlobalMargin(Number(e.target.value))}
-                                style={{ width: '40px', background: 'transparent', border: 'none', outline: 'none', color: '#34C759', fontSize: '13px', fontWeight: 700, fontFamily: 'inherit', textAlign: 'center' }}
-                            />
-                            <span style={{ color: 'var(--label-secondary)', fontSize: '13px' }}>%</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={200}
+                                    inputMode="decimal"
+                                    value={globalMargin}
+                                    onChange={e => applyGlobalMargin(Number(e.target.value))}
+                                    aria-label="Margen personalizado"
+                                    style={{
+                                        width: '48px',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        outline: 'none',
+                                        color: '#34C759',
+                                        fontSize: '13px',
+                                        fontWeight: 700,
+                                        fontFamily: 'inherit',
+                                        textAlign: 'center',
+                                    }}
+                                />
+                                <span style={{ color: 'var(--label-secondary)', fontSize: '13px' }}>%</span>
+                            </div>
                         </div>
                     </div>
-                </div>
+                ) : null}
+
+                {/* ── Product Search (se oculta al tener productos) ── */}
+                {items.length === 0 || showProductSearch ? (
+                    <div style={{ marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                Agregar Producto
+                            </label>
+                            {items.length > 0 && showProductSearch ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowProductSearch(false)}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'rgba(255,255,255,0.45)',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        fontFamily: 'inherit',
+                                    }}
+                                >
+                                    Cerrar
+                                </button>
+                            ) : null}
+                        </div>
+                        <ProductSearch onSelect={addProduct} />
+                    </div>
+                ) : (
+                    <div style={{ marginBottom: '14px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowProductSearch(true)}
+                            style={{
+                                width: '100%',
+                                padding: '12px 14px',
+                                borderRadius: '12px',
+                                border: '1px dashed rgba(255,255,255,0.2)',
+                                background: 'rgba(255,255,255,0.04)',
+                                color: 'rgba(255,255,255,0.75)',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            + Agregar producto
+                        </button>
+                    </div>
+                )}
 
                 {/* ── Line Items ── */}
                 {items.length === 0 ? (
