@@ -21,7 +21,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!caso) return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 });
 
-  const [{ data: actuaciones }, { data: documentos }] = await Promise.all([
+  const [{ data: actuaciones }, { data: documentos }, { data: tareas }] = await Promise.all([
     gate.admin
       .from('ci_legal_actuaciones')
       .select('*')
@@ -35,6 +35,12 @@ export async function GET(_req: Request, ctx: Ctx) {
       .eq('caso_id', id)
       .order('updated_at', { ascending: false })
       .limit(100),
+    gate.admin
+      .from('ci_legal_tareas')
+      .select('*')
+      .eq('caso_id', id)
+      .eq('org_id', gate.acceso.orgId!)
+      .order('fecha_limite_lapso', { ascending: true }),
   ]);
 
   return NextResponse.json({
@@ -43,6 +49,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     expediente: caso,
     actuaciones: actuaciones ?? [],
     documentos: documentos ?? [],
+    tareas: tareas ?? [],
   });
 }
 
@@ -74,6 +81,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     'fecha_cierre',
     'codigo',
     'asignado_a',
+    'numero_expediente',
+    'organo_tribunal',
+    'fase_actual',
+    'google_drive_folder_id',
   ] as const;
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

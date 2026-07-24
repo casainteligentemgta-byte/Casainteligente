@@ -6,8 +6,8 @@ import { siguienteCodigoExpedienteDesdeLista } from '@/lib/legal/codigoExpedient
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const HINT_281 =
-  'Ejecute la migración 281_ci_legal_expedientes_ramas_codigo.sql en Supabase SQL Editor.';
+const HINT_283 =
+  'Ejecute la migración 283_ci_legal_expedientes_ramas_codigo.sql en Supabase SQL Editor.';
 
 async function generarCodigoExpediente(
   admin: SupabaseClient,
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: e instanceof Error ? e.message : 'No se pudo generar código',
-          hint: HINT_281,
+          hint: HINT_283,
         },
         { status: 500 },
       );
@@ -121,6 +121,15 @@ export async function POST(req: Request) {
     creado_por: gate.userId,
     asignado_a: gate.userId,
     codigo,
+    numero_expediente:
+      body.numero_expediente != null ? String(body.numero_expediente).trim() || null : null,
+    organo_tribunal:
+      body.organo_tribunal != null ? String(body.organo_tribunal).trim() || null : null,
+    fase_actual: body.fase_actual != null ? String(body.fase_actual).trim() || null : null,
+    google_drive_folder_id:
+      body.google_drive_folder_id != null
+        ? String(body.google_drive_folder_id).trim() || null
+        : null,
   };
 
   const { data, error } = await gate.admin.from('ci_legal_casos').insert(row).select('*').single();
@@ -137,11 +146,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, caso: retry.data, expediente: retry.data }, { status: 201 });
       }
       return NextResponse.json(
-        { error: retry.error?.message || error.message, hint: HINT_281 },
+        { error: retry.error?.message || error.message, hint: HINT_283 },
         { status: 500 },
       );
     }
-    return NextResponse.json({ error: error.message, hint: HINT_281 }, { status: 500 });
+    return NextResponse.json({ error: error.message, hint: HINT_283 }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, caso: data, expediente: data }, { status: 201 });

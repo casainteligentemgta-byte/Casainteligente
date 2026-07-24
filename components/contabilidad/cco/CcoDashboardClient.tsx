@@ -36,6 +36,7 @@ import CcoTabIngresos from '@/components/contabilidad/cco/CcoTabIngresos';
 import CcoTabPresupuestos from '@/components/contabilidad/cco/CcoTabPresupuestos';
 import CcoTabRubros from '@/components/contabilidad/cco/CcoTabRubros';
 import CcoTabDatosGraficos from '@/components/contabilidad/cco/CcoTabDatosGraficos';
+import CcoSincronizarBdPanel from '@/components/contabilidad/cco/CcoSincronizarBdPanel';
 
 type NavId =
   | 'dashboard'
@@ -49,6 +50,7 @@ type NavId =
   | 'importar-csv'
   | 'importar-pdf'
   | 'importar-v4'
+  | 'sincronizar-bd'
   | 'libro'
   | 'editor'
   | 'presupuestos'
@@ -67,6 +69,7 @@ type NavEntry = ({ kind?: 'item' } & NavLeaf) | NavGroup;
 /** Menú lateral CCO V4 — módulos operativos + importación/configuración. */
 const NAV_ITEMS: NavEntry[] = [
   { id: 'dashboard', label: 'Dashboard', ready: true, hint: 'Gráficos y KPIs' },
+  { id: 'sincronizar-bd', label: 'Sincronizar BD', ready: true, hint: 'Base de Datos Principal' },
   { id: 'datos', label: 'Datos gráficos', ready: true },
   { id: 'rubros', label: 'Lista de rubros', ready: true },
   { id: 'egresos', label: 'Egresos', ready: true },
@@ -105,6 +108,7 @@ const MODULOS_CON_OBRA: NavId[] = [
   'presupuestos',
   'libro',
   'editor',
+  'sincronizar-bd',
   'importar-v4',
   'auditoria',
   'ajustes',
@@ -362,6 +366,23 @@ export default function CcoDashboardClient() {
   const menuInicializadoRef = React.useRef(false);
   /** Submenú Importar: CSV / PDF / V4 SQLite. */
   const [importarOpen, setImportarOpen] = useState(false);
+
+  /** Deep-link: ?proyecto=&nav=auditoria (p. ej. aviso Telegram del auditor continuo). */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const proy = sp.get('proyecto')?.trim();
+      const navQ = sp.get('nav')?.trim() as NavId | null;
+      if (proy) setProyectoId(proy);
+      if (navQ && (NAV_ITEMS.some((e) => ('children' in e ? e.children.some((c) => c.id === navQ) : e.id === navQ)) || navQ === 'dashboard')) {
+        setNav(navQ);
+        if (navQ === 'auditoria') setTab('auditoria');
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const setMenuOpenPersisted = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
     setMenuOpen((prev) => {
@@ -820,6 +841,16 @@ export default function CcoDashboardClient() {
           proyectoIdInicial={proyectoId || null}
           onImportado={(pid) => {
             if (pid) setProyectoId(pid);
+            void cargar();
+            setNav('dashboard');
+          }}
+        />
+      ) : null}
+
+      {nav === 'sincronizar-bd' ? (
+        <CcoSincronizarBdPanel
+          proyectoId={proyectoId}
+          onDone={() => {
             void cargar();
             setNav('dashboard');
           }}
