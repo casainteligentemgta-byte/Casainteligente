@@ -26,6 +26,7 @@ import { useAccesoLegal } from '@/lib/legal/AccesoLegalContext';
 
 type Caso = {
   id: string;
+  codigo?: string | null;
   titulo: string;
   tipo: string;
   estado: string;
@@ -216,15 +217,15 @@ export default function LegalHomeClient() {
               <Scale className="h-4 w-4" />
               {acceso.standalone
                 ? 'Resumen · módulo abogado'
-                : 'Resumen · resolver casos'}
+                : 'Resumen · gestión de expedientes'}
             </p>
             <h2 className="mt-2 text-2xl font-bold text-white">
               {acceso.standalone ? 'Tu despacho' : 'Panel legal'}
             </h2>
             <p className="mt-1 max-w-xl text-sm text-zinc-500">
               {acceso.standalone
-                ? 'Producto Legal independiente: gestiona casos, documentos y cálculos sin el CRM de obras.'
-                : 'Prioriza lo abierto, gestiona actuaciones y cierra casos. El resumen muestra la cola de trabajo lista para resolver.'}
+                ? 'Producto Legal independiente: expedientes EXP-YYYY-XXX, asesoría multi-rama, documentos y cálculos.'
+                : 'Prioriza lo abierto, asocia contratos/cartas, registra actuaciones y cierra expedientes.'}
             </p>
           </div>
           <Link
@@ -232,7 +233,7 @@ export default function LegalHomeClient() {
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-amber-900/30"
           >
             <Plus className="h-4 w-4" />
-            Nuevo caso
+            Nuevo expediente
           </Link>
         </div>
 
@@ -303,7 +304,7 @@ export default function LegalHomeClient() {
             href="/legal/casos"
             className="text-xs font-semibold text-amber-400/90 hover:text-amber-300"
           >
-            Ver todos los casos
+            Ver todos los expedientes
           </Link>
         </div>
 
@@ -315,17 +316,17 @@ export default function LegalHomeClient() {
           <div className="rounded-2xl border border-dashed border-white/15 px-5 py-10 text-center">
             <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400/80" />
             <p className="mt-3 text-sm font-medium text-zinc-200">
-              No hay casos abiertos por resolver
+              No hay expedientes abiertos por resolver
             </p>
             <p className="mt-1 text-xs text-zinc-500">
-              Crea un caso nuevo o revisa los resueltos recientes.
+              Crea un expediente nuevo o revisa los resueltos recientes.
             </p>
             <Link
               href="/legal/casos/nuevo"
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-zinc-950"
             >
               <Plus className="h-4 w-4" />
-              Nuevo caso
+              Nuevo expediente
             </Link>
           </div>
         ) : (
@@ -342,6 +343,11 @@ export default function LegalHomeClient() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
+                        {c.codigo ? (
+                          <span className="font-mono text-[10px] font-semibold tracking-wide text-amber-300/90">
+                            {c.codigo}
+                          </span>
+                        ) : null}
                         <Link
                           href={`/legal/casos/${c.id}`}
                           className="font-semibold text-zinc-100 hover:text-amber-100"

@@ -19,26 +19,36 @@ export async function GET(_req: Request, ctx: Ctx) {
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!caso) return NextResponse.json({ error: 'Caso no encontrado' }, { status: 404 });
+  if (!caso) return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 });
 
-  const { data: actuaciones } = await gate.admin
-    .from('ci_legal_actuaciones')
-    .select('*')
-    .eq('caso_id', id)
-    .order('ocurrio_at', { ascending: false })
-    .limit(100);
-
-  const { data: tareas } = await gate.admin
-    .from('ci_legal_tareas')
-    .select('*')
-    .eq('caso_id', id)
-    .eq('org_id', gate.acceso.orgId!)
-    .order('fecha_limite_lapso', { ascending: true });
+  const [{ data: actuaciones }, { data: documentos }, { data: tareas }] = await Promise.all([
+    gate.admin
+      .from('ci_legal_actuaciones')
+      .select('*')
+      .eq('caso_id', id)
+      .order('ocurrio_at', { ascending: false })
+      .limit(100),
+    gate.admin
+      .from('ci_legal_documentos')
+      .select('id, titulo, tipo, estado, contraparte, caso_id, plantilla_id, created_at, updated_at')
+      .eq('org_id', gate.acceso.orgId!)
+      .eq('caso_id', id)
+      .order('updated_at', { ascending: false })
+      .limit(100),
+    gate.admin
+      .from('ci_legal_tareas')
+      .select('*')
+      .eq('caso_id', id)
+      .eq('org_id', gate.acceso.orgId!)
+      .order('fecha_limite_lapso', { ascending: true }),
+  ]);
 
   return NextResponse.json({
     ok: true,
     caso,
+    expediente: caso,
     actuaciones: actuaciones ?? [],
+    documentos: documentos ?? [],
     tareas: tareas ?? [],
   });
 }
@@ -70,6 +80,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     'fecha_limite',
     'fecha_cierre',
     'codigo',
+    'asignado_a',
     'numero_expediente',
     'organo_tribunal',
     'fase_actual',
@@ -94,7 +105,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data) return NextResponse.json({ error: 'Caso no encontrado' }, { status: 404 });
+  if (!data) return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 });
 
-  return NextResponse.json({ ok: true, caso: data });
+  return NextResponse.json({ ok: true, caso: data, expediente: data });
 }

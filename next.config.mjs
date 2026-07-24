@@ -17,6 +17,8 @@ const nextConfig = {
       'create-hash',
       'fast-xml-parser',
       'pako',
+      'puppeteer',
+      'handlebars',
     ],
   },
 
