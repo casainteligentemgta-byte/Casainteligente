@@ -204,6 +204,8 @@ type PatchCambio = {
   subcapitulo?: string;
   estado?: string;
   forma_pago?: string | null;
+  /** Nº factura / control; null o "" limpia el campo. */
+  invoice_number?: string | null;
 };
 
 type PatchBody = {
@@ -447,6 +449,10 @@ export async function PATCH(req: Request) {
       if (c.estado != null) patch.cco_estado = String(c.estado).trim() || 'PAGADO';
       if (c.forma_pago !== undefined) {
         patch.forma_pago_cco = c.forma_pago ? String(c.forma_pago).trim() : null;
+      }
+      if (c.invoice_number !== undefined) {
+        const inv = c.invoice_number != null ? String(c.invoice_number).trim() : '';
+        patch.invoice_number = inv || null;
       }
 
       const { error: upErr } = await db.from('contabilidad_compras').update(patch).eq('id', id);

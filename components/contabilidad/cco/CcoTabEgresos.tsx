@@ -63,6 +63,7 @@ type Draft = {
   subcapitulo: string;
   estado: string;
   forma_pago: string;
+  invoice_number: string;
 };
 
 type VistaFila = CcoLibroFila & {
@@ -86,6 +87,7 @@ function toDraft(f: CcoLibroFila): Draft {
     subcapitulo: f.subcapitulo === '—' ? '' : f.subcapitulo,
     estado: f.estado || 'PAGADO',
     forma_pago: f.forma_pago ?? '',
+    invoice_number: f.invoice_number?.trim() || '',
   };
 }
 
@@ -517,6 +519,7 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           fecha: draft.fecha || f.fecha,
           proveedor: draft.proveedor,
           descripcion: draft.descripcion,
+          invoice_number: draft.invoice_number.trim() || null,
         };
       }),
     );
@@ -572,6 +575,7 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           subcapitulo: d.subcapitulo,
           estado: d.estado,
           forma_pago: d.forma_pago || null,
+          invoice_number: d.invoice_number.trim() || null,
         };
       });
     if (cambios.length === 0) {
@@ -1148,7 +1152,19 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                         if (c.key === 'factura') {
                           return (
                             <td key={c.key} style={cell}>
-                              {f.invoice_number || 'None'}
+                              {readonly ? (
+                                noneLabel(d.invoice_number || f.invoice_number)
+                              ) : (
+                                <input
+                                  value={d.invoice_number}
+                                  placeholder="None"
+                                  onChange={(e) =>
+                                    patchDraft(f.id, { invoice_number: e.target.value })
+                                  }
+                                  style={{ ...inputCell, minWidth: 100 }}
+                                  title="Número de factura / control fiscal"
+                                />
+                              )}
                             </td>
                           );
                         }
