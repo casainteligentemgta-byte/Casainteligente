@@ -26,7 +26,8 @@ function jsonError(message: string, status: number) {
  *  - files "soporte" (repetido)
  *  - soporte_ids (JSON array alineado, opcional)
  *
- * Lee cada PDF/imagen con OCR y empareja por proveedor + fecha + monto.
+ * PDF multipágina: parte por página, OCR cabecera, agrupa misma factura,
+ * empareja por proveedor + fecha + monto. Devuelve adjuntoBase64 por match.
  */
 export async function POST(req: Request) {
   try {
