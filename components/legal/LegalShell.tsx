@@ -82,28 +82,33 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
             </span>
           )}
         </div>
-        <nav className="mx-auto flex max-w-5xl flex-wrap gap-1.5 px-4 pb-3">
-          {NAV.map((item) => {
-            const active = item.exact
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition sm:px-3 sm:py-2 sm:text-sm',
-                  active
-                    ? 'bg-amber-500/15 text-amber-200'
-                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300',
-                )}
-              >
-                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav
+          className="mx-auto max-w-5xl overflow-x-auto overscroll-x-contain px-4 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          aria-label="Secciones del departamento legal"
+        >
+          <div className="flex w-max min-w-full items-center gap-1 sm:flex-wrap sm:w-auto">
+            {NAV.map((item) => {
+              const active = item.exact
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition sm:px-3 sm:py-2 sm:text-sm',
+                    active
+                      ? 'bg-amber-500/15 text-amber-200'
+                      : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6 pb-16">{children}</main>
