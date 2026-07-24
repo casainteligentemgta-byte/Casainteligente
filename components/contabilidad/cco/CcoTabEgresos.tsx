@@ -12,6 +12,7 @@ import {
   HelpCircle,
   Loader2,
   Save,
+  Sparkles,
 } from 'lucide-react';
 import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
@@ -31,6 +32,7 @@ import {
 } from '@/lib/contabilidad/cco/egresosVista';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 import EgresoFacturaCell from '@/components/contabilidad/cco/EgresoFacturaCell';
+import EgresoEmparejarSoportesModal from '@/components/contabilidad/cco/EgresoEmparejarSoportesModal';
 
 function fmtUsd(n: number): string {
   return n.toLocaleString('en-US', {
@@ -295,6 +297,7 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
   const [visible, setVisible] = useState<Record<EgresosColKey, boolean>>(defaultVisibleCols);
   const [sortKey, setSortKey] = useState<EgresosColKey>('id');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [emparejarOpen, setEmparejarOpen] = useState(false);
 
   useEffect(() => {
     if (!proyectoId || typeof window === 'undefined') return;
@@ -721,10 +724,40 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           />
           Filtrar SIN DISTRIBUCIÓN
         </label>
+        <button
+          type="button"
+          onClick={() => setEmparejarOpen(true)}
+          style={btnEmparejar}
+          disabled={loading}
+          title="Suba PDFs/imágenes de facturas; el agente las enlaza por proveedor, fecha y monto"
+        >
+          <Sparkles size={14} />
+          Enlazar facturas (IA)
+        </button>
         <button type="button" onClick={() => void cargar()} style={btnGhost} disabled={loading}>
           Actualizar
         </button>
       </div>
+
+      <EgresoEmparejarSoportesModal
+        open={emparejarOpen}
+        onClose={() => setEmparejarOpen(false)}
+        filas={filas}
+        onAdjuntado={(compraId, name) => {
+          setFilas((prev) =>
+            prev.map((row) =>
+              row.id === compraId
+                ? {
+                    ...row,
+                    tiene_documento: true,
+                    document_file_name: name,
+                    link_factura: `/api/contabilidad/compras/${compraId}/document`,
+                  }
+                : row,
+            ),
+          );
+        }}
+      />
 
       <div style={box}>
         <button
@@ -1290,6 +1323,19 @@ const btnGhost: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: 12,
   color: '#1D4ED8',
+};
+const btnEmparejar: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  border: '1px solid #0F766E',
+  background: '#0F766E',
+  borderRadius: 8,
+  padding: '6px 12px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontSize: 12,
+  color: '#fff',
 };
 const btnSave: React.CSSProperties = {
   display: 'inline-flex',
