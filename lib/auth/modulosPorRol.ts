@@ -16,7 +16,8 @@ export type ModuloNavId =
   | 'contabilidad'
   | 'cco'
   | 'equipo'
-  | 'legal';
+  | 'legal'
+  | 'agenda';
 
 export type ModuloNavDef = {
   id: ModuloNavId;
@@ -40,6 +41,7 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'almacen', href: '/almacen', label: 'Almacenes' },
   { id: 'contabilidad', href: '/contabilidad', label: 'Conta' },
   { id: 'cco', href: '/contabilidad/cco', label: 'CCO' },
+  { id: 'agenda', href: '/agenda', label: 'Agenda' },
 ];
 
 const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
@@ -56,6 +58,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
     'rrhh',
     'almacen',
     'contabilidad',
+    'agenda',
   ],
   pm_obra: [
     'inicio',
@@ -65,12 +68,13 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
     'domotica',
     'almacen',
     'contabilidad',
+    'agenda',
   ],
-  contador: ['inicio', 'proyectos', 'contabilidad'],
-  comprador: ['inicio', 'proyectos', 'almacen', 'contabilidad'],
-  almacen_central: ['inicio', 'almacen', 'contabilidad'],
-  rrhh: ['inicio', 'rrhh', 'proyectos', 'equipo'],
-  solo_lectura: ['inicio', 'proyectos', 'domotica', 'contabilidad', 'almacen'],
+  contador: ['inicio', 'proyectos', 'contabilidad', 'agenda'],
+  comprador: ['inicio', 'proyectos', 'almacen', 'contabilidad', 'agenda'],
+  almacen_central: ['inicio', 'almacen', 'contabilidad', 'agenda'],
+  rrhh: ['inicio', 'rrhh', 'proyectos', 'equipo', 'agenda'],
+  solo_lectura: ['inicio', 'proyectos', 'domotica', 'contabilidad', 'almacen', 'agenda'],
   /** Suegro / invitado: solo Control Contable de Obra (lectura). */
   cco_lectura: ['inicio', 'cco'],
 };
@@ -169,6 +173,7 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
   },
   { modulo: 'cco', match: (p) => esRutaCco(p) },
   { modulo: 'legal', match: (p) => p === '/legal' || p.startsWith('/legal/') },
+  { modulo: 'agenda', match: (p) => p === '/agenda' || p.startsWith('/agenda/') },
 ];
 
 /**

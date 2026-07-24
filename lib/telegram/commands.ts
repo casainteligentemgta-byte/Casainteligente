@@ -38,6 +38,10 @@ export type ComandoTelegramResult = {
   comandoEmergencia?: boolean;
   /** Solicitud de procura / abastecimiento. */
   comandoProcura?: boolean;
+  /** Modo agenda personal (IA). */
+  comandoAgenda?: boolean;
+  /** Borrar historial de agenda. */
+  comandoLimpiarAgenda?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -143,6 +147,22 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         'Elige la obra abajo y envía una <b>nota de voz</b> con avances y novedades.\n' +
         'Gemini transcribirá y guardará el reporte.',
     };
+  }
+
+  if (cmd === '/agenda') {
+    return {
+      handled: true,
+      contexto: 'agenda',
+      comandoAgenda: true,
+      mensaje:
+        '📅 <b>Modo agenda activo.</b>\n' +
+        'Guarda o consulta cumpleaños, citas y recordatorios.\n' +
+        'Recuerdo los últimos mensajes. Usa /limpiar_agenda para reiniciar.',
+    };
+  }
+
+  if (cmd === '/limpiar_agenda' || cmd === '/limpiar') {
+    return { handled: true, comandoLimpiarAgenda: true };
   }
 
   if (cmd === '/stock') {

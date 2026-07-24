@@ -305,6 +305,31 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
+  {
+    id: 'agenda',
+    href: '/agenda',
+    label: 'Agenda',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect
+          x="3"
+          y="4"
+          width="18"
+          height="18"
+          rx="2"
+          stroke={active ? '#FF9500' : '#8E8E93'}
+          strokeWidth="2"
+          fill={active ? 'rgba(255,149,0,0.12)' : 'none'}
+        />
+        <path
+          d="M16 2v4M8 2v4M3 10h18"
+          stroke={active ? '#FF9500' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
 ];
 
 function navItemActive(pathname: string, href: string): boolean {

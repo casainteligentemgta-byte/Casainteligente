@@ -14,6 +14,10 @@ import {
 } from '@/lib/telegram/estados';
 import { interpretarTextoTelegramGemini } from '@/lib/telegram/geminiIntent';
 import {
+  limpiarHistorialAgendaTelegram,
+  manejarAgendaTelegram,
+} from '@/lib/telegram/agendaHandler';
+import {
   manejarFacturaTelegram,
   manejarFotoObraTelegram,
   manejarGastoObraTelegram,
@@ -330,6 +334,11 @@ async function aplicarComando(
 
   if (cmd.comandoStockConsulta) {
     await manejarComandoStockConsultaTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoLimpiarAgenda) {
+    await limpiarHistorialAgendaTelegram(chatId);
     return;
   }
 
@@ -1082,12 +1091,22 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       }
 
       const estado = await getTelegramEstado(supabase, chatId);
+
+      if (estado.contexto === 'agenda') {
+        await manejarAgendaTelegram(chatId, texto);
+        return NextResponse.json({ ok: true, agenda: true });
+      }
+
       const intent = await interpretarTextoTelegramGemini(texto, estado.contexto);
       if (intent?.contexto) {
         await setTelegramContexto(supabase, chatId, {
           contexto: intent.contexto,
           ...(intent.proyecto_id !== undefined ? { proyecto_id: intent.proyecto_id } : {}),
         });
+        if (intent.contexto === 'agenda') {
+          await manejarAgendaTelegram(chatId, texto);
+          return NextResponse.json({ ok: true, agenda: true, gemini_intent: 'agenda' });
+        }
         const reply =
           intent.reply ??
           `Modo <b>${etiquetaContexto(intent.contexto)}</b> activado (Gemini).`;

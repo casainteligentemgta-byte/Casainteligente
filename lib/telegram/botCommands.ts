@@ -15,6 +15,7 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'menu', description: 'Menú principal de Casa Inteligente' },
   { command: 'ayuda', description: 'Lista completa de comandos' },
   ...TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO,
+  { command: 'agenda', description: 'Cumpleaños, citas y recordatorios (IA)' },
   { command: 'ingreso', description: 'Menú ingreso: factura, nota, sin nota, precargadas' },
   { command: 'salida', description: 'Menú salidas: obra, almacén o préstamo/traspaso' },
   { command: 'bitacora', description: 'Bitácora de obra por nota de voz' },
@@ -49,6 +50,9 @@ export const MENSAJE_MENU_TELEGRAM =
   '<b>Consultas</b>\n' +
   '• /stock — guiado (entidad → obra → almacén)\n' +
   '• /stock &lt;obra&gt; o /stock &lt;material&gt;\n\n' +
+  '<b>Agenda personal</b>\n' +
+  '• /agenda — guardar o consultar fechas especiales (IA)\n' +
+  '• /limpiar_agenda — borrar historial del chat\n\n' +
   '• /cancelar — volver al menú';
 
 export const MENSAJE_AYUDA_TELEGRAM =
@@ -58,6 +62,7 @@ export const MENSAJE_AYUDA_TELEGRAM =
   '<b>Ingresos</b>: /ingreso\n' +
   '<b>Salidas</b>: /salida\n' +
   '<b>Campo</b>: /bitacora /agua\n' +
+  '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
   '<b>Stock</b>: /stock · /stock rancho flamboyant · /stock cemento\n\n' +
   '<b>Atajos</b> (sin menú): /nota /entrada /emergencia /ingresofactura /egreso\n\n' +
   '/menu — menú · /cancelar — reiniciar';
