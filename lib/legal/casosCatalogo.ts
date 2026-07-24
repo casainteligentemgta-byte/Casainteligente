@@ -5,6 +5,8 @@ export const LEGAL_TIPOS_CASO = [
   { value: 'proveedor', label: 'Proveedor / compras' },
   { value: 'civil', label: 'Civil' },
   { value: 'mercantil', label: 'Mercantil' },
+  { value: 'tributario', label: 'Tributario' },
+  { value: 'corporativo', label: 'Corporativo' },
   { value: 'administrativo', label: 'Administrativo' },
   { value: 'externo', label: 'Externo (despacho)' },
   { value: 'otro', label: 'Otro' },
