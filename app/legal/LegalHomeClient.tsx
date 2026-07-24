@@ -211,30 +211,21 @@ export default function LegalHomeClient() {
   return (
     <div className="space-y-7">
       <section className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-[#0c1018] to-[#07090f] p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-sm text-amber-200/80">
-              <Scale className="h-4 w-4 shrink-0" />
-              {acceso.standalone
-                ? 'Resumen · módulo abogado'
-                : 'Resumen · gestión de expedientes'}
-            </p>
-            <h2 className="mt-2 text-2xl font-bold text-white">
-              {acceso.standalone ? 'Tu despacho' : 'Panel legal'}
-            </h2>
-            <p className="mt-1 max-w-xl text-sm text-zinc-500">
-              {acceso.standalone
-                ? 'Producto Legal independiente: expedientes EXP-YYYY-XXX, asesoría multi-rama, documentos y cálculos.'
-                : 'Prioriza lo abierto, asocia contratos/cartas, registra actuaciones y cierra expedientes.'}
-            </p>
-          </div>
-          <Link
-            href="/legal/casos/nuevo"
-            className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-700 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-amber-900/30 sm:w-auto"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo expediente
-          </Link>
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm text-amber-200/80">
+            <Scale className="h-4 w-4 shrink-0" />
+            {acceso.standalone
+              ? 'Resumen · módulo abogado'
+              : 'Resumen · gestión de expedientes'}
+          </p>
+          <h2 className="mt-2 text-2xl font-bold text-white">
+            {acceso.standalone ? 'Tu despacho' : 'Panel legal'}
+          </h2>
+          <p className="mt-1 max-w-xl text-sm text-zinc-500">
+            {acceso.standalone
+              ? 'Producto Legal independiente: expedientes EXP-YYYY-XXX, asesoría multi-rama, documentos y cálculos.'
+              : 'Prioriza lo abierto, asocia contratos/cartas, registra actuaciones y cierra expedientes.'}
+          </p>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
