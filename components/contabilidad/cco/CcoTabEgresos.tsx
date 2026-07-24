@@ -29,6 +29,10 @@ import {
   storageKeyColumnas,
   type EgresosColKey,
 } from '@/lib/contabilidad/cco/egresosVista';
+import {
+  detectarParesGastosGemelos,
+  type GastoGemeloPar,
+} from '@/lib/contabilidad/cco/detectarGastosGemelos';
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 import EgresoFacturaCell from '@/components/contabilidad/cco/EgresoFacturaCell';
 
@@ -461,6 +465,47 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
     return sorted;
   }, [filas, agrupar, filtroSinDist, sortKey, sortDir]);
 
+  /** Gemelos a nivel unidad (incluye egresos divididos / agrupados). */
+  const gemelosPorId = useMemo(() => {
+    const pares = detectarParesGastosGemelos(
+      filas.map((f) => ({
+        id: f.id,
+        fecha: f.fecha,
+        proveedor: f.proveedor,
+        descripcion: f.descripcion,
+        monto_base_usd: f.monto_base_usd,
+        invoice_number: f.invoice_number,
+        split_group_key: f.split_group_key,
+        origen_v4_id: f.origen_v4_id,
+        display_id: f.display_id,
+      })),
+    );
+    const map = new Map<string, { rol: 'quitar' | 'conservar'; par: GastoGemeloPar }>();
+    for (const p of pares) {
+      for (const id of p.eliminarIds) {
+        map.set(id, { rol: 'quitar', par: p });
+      }
+      for (const id of p.conservarIds) {
+        if (!map.has(id)) map.set(id, { rol: 'conservar', par: p });
+      }
+    }
+    return { pares, map };
+  }, [filas]);
+
+  const gemeloDeFila = useCallback(
+    (f: VistaFila): { rol: 'quitar' | 'conservar'; par: GastoGemeloPar } | null => {
+      if (f._agrupada && f._groupIds?.length) {
+        for (const id of f._groupIds) {
+          const hit = gemelosPorId.map.get(id);
+          if (hit) return hit;
+        }
+        return null;
+      }
+      return gemelosPorId.map.get(f.id) ?? null;
+    },
+    [gemelosPorId],
+  );
+
   const kpis = useMemo(() => {
     const rows = filasVista;
     const montoOrig = rows.reduce((s, r) => {
@@ -691,7 +736,7 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
             cursor: 'pointer',
             userSelect: 'none',
           }}
-          title="Combina filas de un mismo gasto dividido (split) en una sola línea."
+          title="Combina filas de un mismo gasto dividido (split) en una sola línea. También facilita revisar gastos gemelos/duplicados."
         >
           <input
             type="checkbox"
@@ -701,6 +746,22 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
           Agrupar Gastos Divididos
           <HelpCircle size={14} color="#64748B" />
         </label>
+        {gemelosPorId.pares.length > 0 ? (
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#9A3412',
+              background: '#FFEDD5',
+              borderRadius: 8,
+              padding: '4px 10px',
+            }}
+            title="Duplicados detectados (mismo día/proveedor/monto/concepto). Con Agrupar se ven como egreso completo."
+          >
+            {gemelosPorId.pares.length} gemelo(s)
+            {gemelosPorId.pares.some((p) => p.esAgrupado) ? ' · hay egresos agrupados' : ''}
+          </span>
+        ) : null}
         <label
           style={{
             display: 'inline-flex',
@@ -839,13 +900,28 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                   const readonly = !!f._agrupada || agrupar;
                   const rowKey = f._agrupada ? `g-${f.split_group_key}` : f.id;
                   const checked = seleccion.has(rowKey);
+                  const gemelo = gemeloDeFila(f);
+                  const bgGemelo =
+                    gemelo?.rol === 'quitar'
+                      ? '#FEF2F2'
+                      : gemelo?.rol === 'conservar'
+                        ? '#FFFBEB'
+                        : undefined;
                   return (
                     <tr
                       key={rowKey}
                       style={{
                         borderTop: '1px solid #E2E8F0',
-                        background: f.dirty ? '#FFF7ED' : idx % 2 ? '#F8FAFC' : '#fff',
+                        background:
+                          bgGemelo ?? (f.dirty ? '#FFF7ED' : idx % 2 ? '#F8FAFC' : '#fff'),
                       }}
+                      title={
+                        gemelo
+                          ? gemelo.rol === 'quitar'
+                            ? `Gemelo a quitar · par de: ${gemelo.par.conservarResumen} · coinciden: ${gemelo.par.coinciden.join(', ')}`
+                            : `Conservar · tiene gemelo: ${gemelo.par.eliminarResumen} · coinciden: ${gemelo.par.coinciden.join(', ')}`
+                          : undefined
+                      }
                     >
                       <td style={{ ...td, textAlign: 'center' }}>
                         <input
@@ -875,6 +951,23 @@ export default function CcoTabEgresos({ proyectoId }: { proyectoId: string }) {
                               {f._agrupada ? (
                                 <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>
                                   {f._groupIds?.length} partes
+                                </span>
+                              ) : null}
+                              {gemelo ? (
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    marginTop: 2,
+                                    padding: '1px 6px',
+                                    borderRadius: 4,
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    background: gemelo.rol === 'quitar' ? '#FECACA' : '#FDE68A',
+                                    color: gemelo.rol === 'quitar' ? '#991B1B' : '#92400E',
+                                  }}
+                                >
+                                  {gemelo.rol === 'quitar' ? 'GEMELO' : 'PAR'}
+                                  {gemelo.par.esAgrupado ? ' · agrupado' : ''}
                                 </span>
                               ) : null}
                             </td>

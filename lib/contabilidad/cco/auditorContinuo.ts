@@ -193,27 +193,35 @@ export async function auditarObraCco(
         ]
           .filter(Boolean)
           .join(' · ');
+        const agrupado =
+          p.esAgrupado
+            ? ` [egreso agrupado: quitar ${p.partesEliminar} parte(s) / conservar ${p.partesConservar}]`
+            : '';
         return (
           `${i + 1}) Gemelo a quitar: ${p.eliminarResumen}. ` +
           `Par de: ${p.conservarResumen}. ` +
-          `Coinciden (${coinciden}): ${valores}.`
+          `Coinciden (${coinciden}): ${valores}.${agrupado}`
         );
       });
       const extra =
         pares.length > 8 ? ` … +${pares.length - 8} par(es) más.` : '';
+      const nAgrupados = pares.filter((p) => p.esAgrupado).length;
       hallazgos.push({
         codigo: 'higiene_gastos_duplicados',
         severidad: 'alta',
         titulo: 'Gastos gemelos / duplicados',
         detalle:
           `${higiene.duplicadosEliminados} gasto(s) gemelo(s) detectado(s) ` +
-          `(mismo día/proveedor/monto/concepto).` +
+          `(mismo día/proveedor/monto/concepto` +
+          (nAgrupados > 0 ? `; ${nAgrupados} como egreso agrupado` : '') +
+          `).` +
           (lineasPares.length
             ? ` ${lineasPares.join(' ')}${extra}`
             : ''),
         meta: {
           count: higiene.duplicadosEliminados,
           pares: pares.slice(0, 20),
+          agrupados: nAgrupados,
         },
       });
     }

@@ -43,9 +43,19 @@ function detalleEstructuradoHallazgo(h: CcoHallazgo): React.ReactNode {
             <li key={`${String(p.eliminarId)}-${idx}`} style={{ marginBottom: 6 }}>
               <div>
                 <strong>Gemelo a quitar:</strong> {String(p.eliminarResumen ?? p.eliminarId)}
+                {p.esAgrupado ? (
+                  <span style={{ color: '#B45309', marginLeft: 6, fontWeight: 700 }}>
+                    (egreso agrupado · {Number(p.partesEliminar) || '?'} partes)
+                  </span>
+                ) : null}
               </div>
               <div>
                 <strong>Par de (conservar):</strong> {String(p.conservarResumen ?? p.conservarId)}
+                {p.esAgrupado && p.partesConservar ? (
+                  <span style={{ color: '#64748B', marginLeft: 6 }}>
+                    ({Number(p.partesConservar)} partes)
+                  </span>
+                ) : null}
               </div>
               <div style={{ color: '#64748B' }}>
                 Coinciden ({coinciden}): {valores || '—'}
