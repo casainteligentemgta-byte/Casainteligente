@@ -124,6 +124,30 @@ const ITEMS_ONLY_SCHEMA = {
   required: ['items'],
 };
 
+const HEADER_ONLY_PROMPT = `Extrae SOLO la cabecera de esta factura o nota de entrega venezolana (puede ser UNA página de un PDF).
+
+Devuelve:
+- invoice_number (nº factura/control; "" si no aparece en esta página)
+- supplier_rif (emisor; "" si no)
+- supplier_name (emisor; "" si no)
+- date (YYYY-MM-DD; "" si no)
+- total_amount (total en Bs si aparece en esta página; 0 si no hay total visible — p. ej. página de continuación)
+
+NO inventes. NO listes ítems. El proveedor es quien EMITE, no el comprador.
+Si esta página es solo detalle/continuación sin encabezado, deja invoice_number vacío y copia el emisor solo si es legible.`;
+
+const HEADER_ONLY_SCHEMA = {
+  type: 'object',
+  properties: {
+    invoice_number: { type: 'string' },
+    supplier_rif: { type: 'string' },
+    supplier_name: { type: 'string' },
+    date: { type: 'string' },
+    total_amount: { type: 'number' },
+  },
+  required: ['invoice_number', 'supplier_rif', 'supplier_name', 'date', 'total_amount'],
+};
+
 export function mimeFromFile(file: { type: string; name: string }): string | null {
   const t = file.type?.trim().toLowerCase();
   if (t && ALLOWED_MIME.has(t)) return t;
@@ -581,6 +605,73 @@ export async function extractPurchaseInvoiceFromFile(file: {
   }
 
   return { data: extracted, fromGemini: true, modelUsed };
+}
+
+/**
+ * OCR barato: solo cabecera (sin ítems). Ideal para emparejar / páginas de PDF.
+ */
+export async function extractPurchaseInvoiceHeaderFromFile(file: {
+  buffer: Buffer;
+  mimeType: string;
+  fileName: string;
+}): Promise<{ data: ExtractedPurchaseInvoice; fromGemini: boolean; modelUsed: string }> {
+  if (file.buffer.length > MAX_BYTES) {
+    throw new Error('El archivo supera el límite de 12 MB.');
+  }
+  if (!process.env.GEMINI_API_KEY?.trim()) {
+    throw new Error(
+      'GEMINI_API_KEY no está configurada. Añádala en .env.local para usar el modo IA.',
+    );
+  }
+
+  const base64 = file.buffer.toString('base64');
+  const models = procurementModelCandidates();
+  let text = '';
+  let modelUsed = '';
+  let lastError: Error | null = null;
+
+  for (const model of models) {
+    try {
+      text = await geminiGenerateWithDocument({
+        model,
+        prompt: HEADER_ONLY_PROMPT,
+        mimeType: file.mimeType,
+        base64,
+        systemInstruction:
+          'Eres un lector de cabecera de facturas venezolanas. Responde SOLO JSON de cabecera, sin ítems.',
+        temperature: 0,
+        maxOutputTokens: 768,
+        responseSchema: HEADER_ONLY_SCHEMA,
+      });
+      modelUsed = model;
+      break;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const retryable = (err as { retryable?: boolean }).retryable === true;
+      if (!retryable) break;
+    }
+  }
+
+  if (!text) {
+    throw (
+      lastError ??
+      new Error('No se pudo leer la cabecera de la factura con Gemini.')
+    );
+  }
+
+  const extracted = parseExtractedPurchaseInvoice(text);
+  const data: ExtractedPurchaseInvoice = {
+    ...extracted,
+    items: [],
+  };
+
+  if (!data.invoice_number && !data.supplier_name && data.total_amount == null) {
+    throw new Error(
+      'No se pudieron leer datos de cabecera. Use una foto más nítida o un PDF legible.',
+    );
+  }
+
+  return { data, fromGemini: true, modelUsed };
 }
 
 async function callGeminiExtract(
