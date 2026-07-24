@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
+  esAmbitoCasoExterno,
   etiquetaDe,
   LEGAL_AMBITOS,
   LEGAL_ESTADOS,
@@ -22,6 +23,7 @@ type Caso = {
   prioridad: string;
   contraparte: string | null;
   cliente_nombre: string | null;
+  despacho_abogado?: string | null;
   fecha_limite: string | null;
   updated_at: string;
 };
@@ -33,6 +35,7 @@ export default function LegalCasosListClient() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroAmbito, setFiltroAmbito] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroDespachoAbogado, setFiltroDespachoAbogado] = useState('');
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -42,6 +45,9 @@ export default function LegalCasosListClient() {
       if (filtroEstado) qs.set('estado', filtroEstado);
       if (filtroAmbito) qs.set('ambito', filtroAmbito);
       if (filtroTipo) qs.set('tipo', filtroTipo);
+      if (esAmbitoCasoExterno(filtroAmbito) && filtroDespachoAbogado.trim()) {
+        qs.set('despacho_abogado', filtroDespachoAbogado.trim());
+      }
       const res = await fetch(apiUrl(`/api/legal/casos?${qs}`), {
         credentials: 'include',
         cache: 'no-store',
@@ -58,7 +64,7 @@ export default function LegalCasosListClient() {
     } finally {
       setLoading(false);
     }
-  }, [filtroEstado, filtroAmbito, filtroTipo]);
+  }, [filtroEstado, filtroAmbito, filtroTipo, filtroDespachoAbogado]);
 
   useEffect(() => {
     void cargar();
@@ -97,16 +103,31 @@ export default function LegalCasosListClient() {
         </select>
         <select
           value={filtroAmbito}
-          onChange={(e) => setFiltroAmbito(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setFiltroAmbito(next);
+            if (!esAmbitoCasoExterno(next)) setFiltroDespachoAbogado('');
+          }}
           className="rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-200"
+          aria-label="Filtrar por entidad"
         >
-          <option value="">Todos los ámbitos</option>
+          <option value="">Todas las entidades</option>
           {LEGAL_AMBITOS.map((e) => (
             <option key={e.value} value={e.value}>
               {e.label}
             </option>
           ))}
         </select>
+        {esAmbitoCasoExterno(filtroAmbito) ? (
+          <input
+            type="search"
+            value={filtroDespachoAbogado}
+            onChange={(e) => setFiltroDespachoAbogado(e.target.value)}
+            placeholder="Despacho o abogado"
+            aria-label="Filtrar por despacho o abogado"
+            className="min-w-[12rem] flex-1 rounded-lg border border-amber-500/30 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
+          />
+        ) : null}
         <select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
@@ -153,6 +174,7 @@ export default function LegalCasosListClient() {
                       <p className="mt-0.5 text-xs text-zinc-500">
                         {etiquetaDe(LEGAL_TIPOS_CASO, c.tipo)} ·{' '}
                         {etiquetaDe(LEGAL_AMBITOS, c.ambito)}
+                        {c.despacho_abogado ? ` · ${c.despacho_abogado}` : ''}
                         {c.cliente_nombre ? ` · ${c.cliente_nombre}` : ''}
                         {c.contraparte ? ` · vs ${c.contraparte}` : ''}
                       </p>

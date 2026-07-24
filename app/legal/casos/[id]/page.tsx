@@ -31,6 +31,7 @@ type Caso = {
   resumen: string | null;
   contraparte: string | null;
   cliente_nombre: string | null;
+  despacho_abogado?: string | null;
   fecha_limite: string | null;
   numero_expediente: string | null;
   organo_tribunal: string | null;
@@ -414,6 +415,10 @@ export default function LegalCasoDetallePage() {
         </p>
         <h2 className="mt-1 text-2xl font-bold text-white">{caso.titulo}</h2>
         <p className="mt-1 text-sm text-zinc-500">
+          {caso.despacho_abogado ? `Despacho / abogado: ${caso.despacho_abogado}` : null}
+          {caso.despacho_abogado && (caso.cliente_nombre || caso.contraparte || caso.fecha_limite)
+            ? ' · '
+            : null}
           {caso.cliente_nombre ? `Cliente: ${caso.cliente_nombre}` : null}
           {caso.contraparte ? ` · Contraparte: ${caso.contraparte}` : null}
           {caso.fecha_limite ? ` · Límite: ${caso.fecha_limite}` : null}

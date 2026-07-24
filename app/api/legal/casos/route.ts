@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireAccesoLegal } from '@/lib/legal/requireAccesoLegal';
 import { siguienteCodigoExpedienteDesdeLista } from '@/lib/legal/codigoExpediente';
+import {
+  esAmbitoCasoExterno,
+  normalizarAmbitoLegal,
+} from '@/lib/legal/casosCatalogo';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -40,8 +44,10 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const estado = url.searchParams.get('estado')?.trim() || null;
-  const ambito = url.searchParams.get('ambito')?.trim() || null;
+  const ambitoRaw = url.searchParams.get('ambito')?.trim() || null;
+  const ambito = ambitoRaw ? normalizarAmbitoLegal(ambitoRaw) : null;
   const tipo = url.searchParams.get('tipo')?.trim() || null;
+  const despachoAbogado = url.searchParams.get('despacho_abogado')?.trim() || null;
 
   let q = gate.admin
     .from('ci_legal_casos')
@@ -53,13 +59,17 @@ export async function GET(req: Request) {
   if (estado) q = q.eq('estado', estado);
   if (ambito) q = q.eq('ambito', ambito);
   if (tipo) q = q.eq('tipo', tipo);
+  if (despachoAbogado) {
+    q = q.ilike('despacho_abogado', `%${despachoAbogado}%`);
+  }
 
   const { data, error } = await q;
   if (error) {
     return NextResponse.json(
       {
         error: error.message,
-        hint: 'Ejecute la migración 266_ci_departamento_legal.sql en Supabase SQL Editor.',
+        hint:
+          'Ejecute las migraciones 266 y 284 (ámbitos por entidad) en Supabase SQL Editor.',
       },
       { status: 500 },
     );
@@ -102,11 +112,17 @@ export async function POST(req: Request) {
     }
   }
 
+  const ambito = normalizarAmbitoLegal(
+    String(body.ambito ?? 'externo').trim() || 'externo',
+  );
+  const despachoAbogado =
+    body.despacho_abogado != null ? String(body.despacho_abogado).trim() || null : null;
+
   const row = {
     org_id: orgId,
     titulo,
     tipo: String(body.tipo ?? 'otro').trim() || 'otro',
-    ambito: String(body.ambito ?? 'externo').trim() || 'externo',
+    ambito,
     estado: String(body.estado ?? 'abierto').trim() || 'abierto',
     prioridad: String(body.prioridad ?? 'media').trim() || 'media',
     resumen: body.resumen != null ? String(body.resumen).trim() || null : null,
@@ -115,6 +131,7 @@ export async function POST(req: Request) {
       body.contraparte_rif != null ? String(body.contraparte_rif).trim() || null : null,
     cliente_nombre:
       body.cliente_nombre != null ? String(body.cliente_nombre).trim() || null : null,
+    despacho_abogado: esAmbitoCasoExterno(ambito) ? despachoAbogado : null,
     proyecto_id: body.proyecto_id ? String(body.proyecto_id) : null,
     entidad_id: body.entidad_id ? String(body.entidad_id) : null,
     fecha_limite: body.fecha_limite ? String(body.fecha_limite) : null,
@@ -150,7 +167,10 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
-    return NextResponse.json({ error: error.message, hint: HINT_283 }, { status: 500 });
+    const hintColumna = /despacho_abogado|ambito/i.test(error.message)
+      ? 'Ejecute la migración 284_ci_legal_casos_ambitos_entidad.sql en Supabase SQL Editor.'
+      : HINT_283;
+    return NextResponse.json({ error: error.message, hint: hintColumna }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, caso: data, expediente: data }, { status: 201 });
