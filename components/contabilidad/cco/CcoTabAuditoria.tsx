@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, RotateCcw, Save } from 'lucide-react';
+import { Loader2, RotateCcw, Save, ShieldCheck } from 'lucide-react';
 import type { CcoAuditoriaEvento } from '@/lib/contabilidad/cco/cargarAuditoria';
+import type { CcoHallazgo } from '@/lib/contabilidad/cco/auditorContinuo';
 import {
   fmtBytes,
   fmtResumen,
@@ -19,6 +20,11 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
   const [snapLoading, setSnapLoading] = useState(false);
   const [snapBusy, setSnapBusy] = useState<string | null>(null);
   const [snapError, setSnapError] = useState<string | null>(null);
+  const [auditorBusy, setAuditorBusy] = useState(false);
+  const [auditorError, setAuditorError] = useState<string | null>(null);
+  const [auditorMsg, setAuditorMsg] = useState<string | null>(null);
+  const [hallazgos, setHallazgos] = useState<CcoHallazgo[]>([]);
+  const [notificarTelegram, setNotificarTelegram] = useState(true);
 
   const cargarEventos = useCallback(async () => {
     setLoading(true);
@@ -71,6 +77,52 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
   useEffect(() => {
     void cargarSnapshots();
   }, [cargarSnapshots]);
+
+  const ejecutarAuditor = async () => {
+    if (!proyectoId) return;
+    setAuditorBusy(true);
+    setAuditorError(null);
+    setAuditorMsg(null);
+    setHallazgos([]);
+    try {
+      const res = await fetch('/api/contabilidad/cco/auditor-continuo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proyecto_id: proyectoId,
+          notificar: notificarTelegram,
+          persistir: true,
+          actor: 'cco_ui',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        throw new Error([json.error, json.hint].filter(Boolean).join(' · ') || 'Error');
+      }
+      const obra = Array.isArray(json.obras) ? json.obras[0] : null;
+      const lista = (obra?.hallazgos ?? []) as CcoHallazgo[];
+      setHallazgos(lista);
+      const total = Number(json.total_hallazgos ?? lista.length) || 0;
+      if (total === 0) {
+        setAuditorMsg(
+          'Revisión OK: tablas y contratos sin hallazgos. Cron diario avisará por Telegram solo si algo falla.',
+        );
+      } else {
+        const notify =
+          json.notificado
+            ? ' Telegram notificado.'
+            : json.notify_razon
+              ? ` Aviso: ${String(json.notify_razon).slice(0, 80)}`
+              : '';
+        setAuditorMsg(`${total} hallazgo(s) en esta obra.${notify}`);
+      }
+      await cargarEventos();
+    } catch (e) {
+      setAuditorError(e instanceof Error ? e.message : 'Error al ejecutar auditor');
+    } finally {
+      setAuditorBusy(false);
+    }
+  };
 
   const crearPunto = async () => {
     if (!proyectoId) return;
@@ -150,6 +202,93 @@ export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Auditor continuo */}
+      <div style={box}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, flex: 1 }}>
+            Auditor continuo CCO
+          </h3>
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              color: '#475569',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={notificarTelegram}
+              onChange={(e) => setNotificarTelegram(e.target.checked)}
+            />
+            Notificar al bot ERP si hay errores
+          </label>
+          <button
+            type="button"
+            onClick={() => void ejecutarAuditor()}
+            disabled={!proyectoId || auditorBusy}
+            style={{
+              ...btnPrimary,
+              opacity: !proyectoId || auditorBusy ? 0.55 : 1,
+            }}
+          >
+            {auditorBusy ? (
+              <Loader2 className="animate-spin" size={14} />
+            ) : (
+              <ShieldCheck size={14} />
+            )}
+            Revisar ahora
+          </button>
+        </div>
+        <p style={muted}>
+          Revisa higiene de tablas (auditoría mal importada, duplicados, ingresos gemelos,
+          devaluación), conciliación de contratos (pagado de más, anticipos, pagos huérfanos)
+          y saldo en caja. El cron diario (~00:15 Caracas) hace lo mismo en todas las obras y,
+          si algo falla, avisa por el <strong>bot Casa Inteligente ERP</strong> (canal admin /
+          TELEGRAM_CCO_CHAT_ID).
+          {!proyectoId ? ' Selecciona una obra arriba.' : null}
+        </p>
+        {auditorError ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{auditorError}</p> : null}
+        {auditorMsg ? <p style={{ color: '#15803D', fontSize: 13 }}>{auditorMsg}</p> : null}
+        {hallazgos.length > 0 ? (
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
+            {hallazgos.map((h, i) => (
+              <li key={`${h.codigo}-${i}`} style={{ marginBottom: 6 }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    marginRight: 6,
+                    padding: '1px 6px',
+                    borderRadius: 4,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    background:
+                      h.severidad === 'alta'
+                        ? '#FEE2E2'
+                        : h.severidad === 'media'
+                          ? '#FEF3C7'
+                          : '#F1F5F9',
+                    color:
+                      h.severidad === 'alta'
+                        ? '#991B1B'
+                        : h.severidad === 'media'
+                          ? '#92400E'
+                          : '#475569',
+                  }}
+                >
+                  {h.severidad}
+                </span>
+                <strong>{h.titulo}</strong>
+                <span style={{ color: '#64748B' }}> — {h.detalle}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
       {/* Puntos de restauración */}
       <div style={box}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 10 }}>

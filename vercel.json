@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/cco-snapshots-diarios",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/cco-auditor-diario",
+      "schedule": "15 4 * * *"
     }
   ]
 }
