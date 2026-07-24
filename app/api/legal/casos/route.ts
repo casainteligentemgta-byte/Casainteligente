@@ -147,6 +147,13 @@ export async function POST(req: Request) {
     if (label) clienteNombre = label;
   }
 
+  const metadata =
+    body.metadata != null &&
+    typeof body.metadata === 'object' &&
+    !Array.isArray(body.metadata)
+      ? (body.metadata as Record<string, unknown>)
+      : {};
+
   const row = {
     org_id: orgId,
     titulo,
@@ -167,6 +174,7 @@ export async function POST(req: Request) {
     creado_por: gate.userId,
     asignado_a: gate.userId,
     codigo,
+    metadata,
     numero_expediente:
       body.numero_expediente != null ? String(body.numero_expediente).trim() || null : null,
     organo_tribunal:
