@@ -1,0 +1,76 @@
+---
+description: Contexto global Casa Inteligente — compras, almacén, Telegram, Supabase
+alwaysApply: true
+---
+
+# Casa Inteligente — contexto de aplicación
+
+Plataforma web + bot Telegram para **obras de construcción en Venezuela**. Gestiona compras/contabilidad, almacén/inventario, recepción en campo, despacho, RRHH/talento y proyectos/obras.
+
+## Stack y despliegue
+
+- **Next.js 14** (App Router), **Supabase** (Postgres + RLS), **Telegram** webhook
+- Producción: https://casainteligente.company
+- Rama habitual: `integracion-diseno-vercel-funcionalidad-local`
+- Deploy: `npx vercel --prod --yes`
+- Migraciones: `supabase/migrations/`; algunas manual en SQL Editor + `notify pgrst, 'reload schema';`
+
+## Contabilidad / compras (`/contabilidad/compras`)
+
+- Cuadro: facturas, proveedor, entidad, obra, líneas (artículo, cantidad, Bs/USD).
+- Fuentes: app, Telegram OCR, ingreso manual.
+- Filtros: URL + `localStorage` (`ci-compras-cuadro-filtros-v1`). Export CSV/Excel.
+- Telegram: `/comprasdia`, `/comprassemana`, `/comprasmes`.
+
+## Almacén (`/almacen`)
+
+- `global_inventory` + `inventario_stock` por `inv_ubicaciones`.
+- Filtros: entidad, proyecto, almacén, partida Lulo.
+- **Stock editable inline** en tabla → `PATCH /api/almacen/inventario/[id]/stock` → movimiento `ajuste`.
+- Recepción campo: `/almacen/recepcion`, `ci_recepciones_campo`.
+
+## Telegram `/ingreso`
+
+| Opción | Efecto |
+|--------|--------|
+| Ingreso manual factura | 9 pasos → **stock + contabilidad** (cuadro compras) |
+| Ingreso automático OCR | Comprador → contabilidad; depositario ingresa después |
+| Facturas precargadas 📥 | Cantidades → `ingresoAlmacenDesdePendienteCanal` |
+| Nota / sin nota / emergencia | Recepción campo + stock; compra contable vía conciliación |
+
+## Flujo contable ↔ almacén
+
+- `contabilidad_compras` + `contabilidad_compra_lineas` = cuadro compras.
+- `purchase_invoices` → `compras_facturas` → stock (trigger al `registrada`).
+- Ingreso manual factura: `ci_registrar_ingreso_manual_campo` + `registrarCompraDesdeIngresoManualFactura` (**sin duplicar stock**).
+- `ingresado_almacen_at` = primer ingreso físico.
+
+## Tablas / RPC clave
+
+`global_inventory`, `inventario_stock`, `inv_ubicaciones`, `contabilidad_compras`, `contabilidad_compra_lineas`, `purchase_invoices`, `compras_facturas`, `compras_factura_lineas`, `ci_recepciones_campo`, `ci_facturas_canal_pendientes`.
+
+RPC: `ci_registrar_ingreso_manual_campo`, `inv_stock_apply_delta`, `get_stock_real_obra` (207).
+
+## Reglas de negocio
+
+- **No duplicar stock**: tras recepción campo, `compras_facturas` INSERT directo en `registrada` (evitar trigger UPDATE).
+- **FK Telegram**: `pending_factura_id` → solo `ci_facturas_canal_pendientes`; contabilidad usa `cc:{id}` en metadata.
+- **Entidad**: `ci_proyectos.entidad_id` al elegir obra.
+- **Idioma**: español (Venezuela).
+- **Commit/deploy**: solo si el usuario lo pide.
+
+## Archivos frecuentes
+
+- `app/contabilidad/compras/page.tsx`
+- `app/almacen/page.tsx`
+- `lib/telegram/ingresoManualTelegram.ts`
+- `lib/telegram/ingresoFacturaTelegram.ts`
+- `lib/contabilidad/registrarCompraDesdeIngresoManualFactura.ts`
+- `lib/almacen/fijarStockMaterialUbicacion.ts`
+- `lib/contabilidad/sincronizarLogisticaCompraContable.ts`
+
+## Al implementar
+
+- Cambios mínimos; convenciones del repo.
+- Probar: Telegram → stock → cuadro compras → cuadro almacén.
+- Schema error → indicar migración pendiente (199, 207, 210, 211, …).

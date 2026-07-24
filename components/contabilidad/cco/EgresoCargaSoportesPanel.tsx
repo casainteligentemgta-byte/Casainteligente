@@ -1,0 +1,289 @@
+'use client';
+
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { CloudUpload, FileUp, Loader2, Plus } from 'lucide-react';
+import CertificarFacturaAdjuntaModal, {
+  type OcrAdjuntarResult,
+} from '@/components/contabilidad/CertificarFacturaAdjuntaModal';
+import {
+  adjuntarFacturaConOcr,
+  esOcrAdjuntarOk,
+} from '@/lib/contabilidad/adjuntarFacturaConOcrClient';
+import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
+
+type FilaSoporte = CcoLibroFila & { _agrupada?: boolean };
+
+type Props = {
+  filas: FilaSoporte[];
+  onAdjuntado: (compraId: string, fileName: string) => void;
+};
+
+/**
+ * Carga Manual de Soportes (estilo referencia):
+ * 1) Seleccione el egreso  2) Elegir archivo imagen/PDF  3) Enlazar + OCR
+ */
+export default function EgresoCargaSoportesPanel({ filas, onAdjuntado }: Props) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const sinDoc = useMemo(
+    () => filas.filter((f) => f.fuente === 'compra' && !f._agrupada && !f.tiene_documento),
+    [filas],
+  );
+  const todas = useMemo(
+    () => filas.filter((f) => f.fuente === 'compra' && !f._agrupada),
+    [filas],
+  );
+
+  const [compraId, setCompraId] = useState('');
+  const [filasExtra, setFilasExtra] = useState(1);
+  const [subiendo, setSubiendo] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [ocrPendiente, setOcrPendiente] = useState<OcrAdjuntarResult | null>(null);
+  const [ocrFileName, setOcrFileName] = useState<string | null>(null);
+
+  const opciones = sinDoc.length > 0 ? sinDoc : todas;
+
+  const subir = async (file: File) => {
+    if (!compraId) {
+      setErr('Seleccione el egreso (soporte) al que enlazar la factura.');
+      return;
+    }
+    setSubiendo(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const data = await adjuntarFacturaConOcr(compraId, file);
+      if (!data.ok) throw new Error(data.error || 'No se pudo cargar el soporte');
+      const name = data.fileName || file.name;
+      onAdjuntado(compraId, name);
+      setOcrFileName(name);
+
+      if (esOcrAdjuntarOk(data.ocr)) {
+        if (data.ocr.requiere_confirmacion) {
+          setOcrPendiente(data.ocr);
+          const faltaFiscal =
+            data.ocr.requiere_numero_factura ||
+            data.ocr.certificacion.requiere_numero_factura ||
+            data.ocr.requiere_rif ||
+            data.ocr.certificacion.requiere_rif;
+          setMsg(
+            faltaFiscal
+              ? `Soporte enlazado (${name}). Confirme nº de factura y RIF.`
+              : `Soporte enlazado (${name}). Revise disparidades CCO vs factura.`,
+          );
+        } else if (data.ocr.aplicado) {
+          const nro = data.ocr.aplicado.invoice_number
+            ? ` · Nº ${data.ocr.aplicado.invoice_number}`
+            : '';
+          const rif = data.ocr.aplicado.supplier_rif
+            ? ` · RIF ${data.ocr.aplicado.supplier_rif}`
+            : '';
+          setMsg(
+            `Soporte enlazado y certificado (${name}) · ${data.ocr.aplicado.items} ítem(s)${nro}${rif}.`,
+          );
+        } else {
+          setMsg(`Soporte enlazado (${name}).`);
+        }
+      } else if (data.ocr && 'error' in data.ocr) {
+        setMsg(`Soporte enlazado (${name}). OCR: ${data.ocr.error}`);
+      } else {
+        setMsg(`Soporte enlazado (${name}).`);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Error al subir');
+    } finally {
+      setSubiendo(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div
+      style={{
+        background: '#fff',
+        borderRadius: 14,
+        border: '1px solid #E2E8F0',
+        padding: 16,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <CloudUpload size={20} color="#1D4ED8" />
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+          Carga Manual de Soportes
+        </h3>
+      </div>
+      <p
+        style={{
+          margin: '0 0 14px',
+          padding: '10px 12px',
+          borderRadius: 10,
+          background: '#EFF6FF',
+          border: '1px solid #BFDBFE',
+          fontSize: 13,
+          color: '#1E3A8A',
+          lineHeight: 1.45,
+        }}
+      >
+        Presione en el ícono + para subir archivos adicionales o según pida el siguiente formulario.
+        Formatos: <strong>PNG, JPG, BMP, PDF</strong>
+        {sinDoc.length > 0 ? (
+          <>
+            {' '}
+            · <strong>{sinDoc.length}</strong> egreso(s) sin soporte.
+          </>
+        ) : null}
+      </p>
+
+      {Array.from({ length: filasExtra }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 12,
+            alignItems: 'end',
+            marginBottom: 12,
+            paddingBottom: 12,
+            borderBottom: i < filasExtra - 1 ? '1px dashed #E2E8F0' : undefined,
+          }}
+        >
+          <div>
+            <label style={label}>1. Seleccione Soporte</label>
+            <select
+              value={i === 0 ? compraId : ''}
+              onChange={(e) => {
+                if (i === 0) setCompraId(e.target.value);
+              }}
+              style={select}
+              disabled={opciones.length === 0 || i > 0}
+            >
+              <option value="">Seleccione Soporte</option>
+              {opciones.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.fecha ?? 's/f'} · {f.proveedor.slice(0, 24)} ·{' '}
+                  {(f.invoice_number || f.descripcion).slice(0, 32)} ·{' '}
+                  {f.monto_base_usd.toLocaleString('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={label}>Cargar Soporte como imagen</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                ref={i === 0 ? inputRef : undefined}
+                type="file"
+                accept="image/*,application/pdf,.bmp,.zip"
+                disabled={subiendo || !compraId || i > 0}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f && i === 0) void subir(f);
+                }}
+                style={{ ...select, padding: '8px 10px' }}
+              />
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94A3B8' }}>
+              PNG, JPG, BMP, PDF, ZIP
+            </p>
+          </div>
+          {i === 0 ? (
+            <div>
+              <button
+                type="button"
+                disabled={subiendo || !compraId}
+                onClick={() => inputRef.current?.click()}
+                style={{
+                  ...btn,
+                  opacity: subiendo || !compraId ? 0.55 : 1,
+                }}
+              >
+                {subiendo ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
+                {subiendo ? 'Leyendo…' : 'Elegir'}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={() => setFilasExtra((n) => Math.min(n + 1, 5))}
+        style={btnAdd}
+      >
+        <Plus size={16} /> Añadir Fila
+      </button>
+
+      {err ? <p style={{ color: '#B91C1C', fontSize: 13, margin: '10px 0 0' }}>{err}</p> : null}
+      {msg ? <p style={{ color: '#15803D', fontSize: 13, margin: '10px 0 0' }}>{msg}</p> : null}
+
+      {ocrPendiente && compraId ? (
+        <CertificarFacturaAdjuntaModal
+          open
+          compraId={compraId}
+          fileName={ocrFileName}
+          ocr={ocrPendiente}
+          onClose={() => setOcrPendiente(null)}
+          onAplicado={({ items, decision, invoice_number, supplier_rif }) => {
+            setOcrPendiente(null);
+            const nro = invoice_number ? ` · Nº ${invoice_number}` : '';
+            const rif = supplier_rif ? ` · RIF ${supplier_rif}` : '';
+            setMsg(
+              decision === 'usar_factura'
+                ? `Datos de factura aplicados · ${items} ítem(s)${nro}${rif}.`
+                : `CCO conservado · ${items} ítem(s)${nro}${rif}.`,
+            );
+            if (ocrFileName) onAdjuntado(compraId, ocrFileName);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+const label: CSSProperties = {
+  display: 'block',
+  fontSize: 12,
+  fontWeight: 700,
+  color: '#64748B',
+  marginBottom: 4,
+};
+const select: CSSProperties = {
+  width: '100%',
+  border: '1px solid #CBD5E1',
+  borderRadius: 8,
+  padding: '8px 10px',
+  fontSize: 13,
+  color: '#0F172A',
+  background: '#fff',
+};
+const btn: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  border: 'none',
+  background: '#1D4ED8',
+  color: '#fff',
+  borderRadius: 10,
+  padding: '10px 14px',
+  fontWeight: 800,
+  fontSize: 13,
+  cursor: 'pointer',
+  width: '100%',
+  justifyContent: 'center',
+};
+const btnAdd: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  border: '1px dashed #93C5FD',
+  background: '#EFF6FF',
+  color: '#1D4ED8',
+  borderRadius: 10,
+  padding: '8px 12px',
+  fontWeight: 800,
+  fontSize: 13,
+  cursor: 'pointer',
+};

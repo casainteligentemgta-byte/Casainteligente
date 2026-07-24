@@ -1,4 +1,5 @@
-export type UnitType = 'UND' | 'M3' | 'KG' | 'L' | 'M' | 'M2';
+/** Código de unidad almacenado en global_inventory.unit (catálogo inventory_units). */
+export type UnitType = string;
 
 export interface MaterialCategory {
     id: string;
@@ -19,6 +20,11 @@ export interface InventoryItem {
     reorder_point: number;
     average_weighted_cost: number;
     location: string | null;
+    /** FK opcional a `products.id` (catálogo comercial); prioridad para miniatura en listados. */
+    product_id?: number | null;
+    deposit_id?: string | null;
+    furniture_id?: string | null;
+    shelf_number?: number | null;
     image_url: string | null;
     last_purchase_date: string | null;
     last_purchase_price: number | null;
@@ -29,6 +35,29 @@ export interface InventoryItem {
     serial_number?: string;
     observations?: string;
     status?: 'OPERATIVO' | 'EN REPARACION' | 'BAJA';
+    /** Entidad legal (ci_entidades). */
+    entidad_id?: string | null;
+    /** Proyecto de obra (ci_proyectos). */
+    proyecto_id?: string | null;
+    /** OpEx: operacional, administrativo o servicio (nivel entidad). */
+    clasificacion_gasto_entidad?: string | null;
+    /** Partida presupuesto Lulo (ci_presupuesto_partidas). */
+    presupuesto_partida_id?: string | null;
+    entidad?: { id: string; nombre: string; rif?: string | null } | null;
+    proyecto?: {
+        id: string;
+        nombre: string;
+        entidad_id?: string | null;
+        naturaleza_proyecto?: string | null;
+        clasificacion_gasto_entidad?: string | null;
+    } | null;
+    partida?: {
+        id: string;
+        codigo_partida: string;
+        descripcion: string;
+        proyecto_id?: string;
+    } | null;
+    category?: { id: string; name: string } | null;
     created_at?: string;
     updated_at?: string;
 }
@@ -45,7 +74,7 @@ export interface InventoryMovement {
     previous_cost: number;
     new_cost: number;
     reference_id: string | null;
-    user_id: string;
+    user_id: string | null;
     created_at?: string;
 }
 

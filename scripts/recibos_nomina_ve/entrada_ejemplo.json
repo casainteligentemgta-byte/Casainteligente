@@ -1,0 +1,11 @@
+{
+  "tasa_bcv": 55.42,
+  "fecha_pago": "2026-05-08",
+  "trabajadores": [
+    {
+      "nombre": "Juan Pérez López",
+      "cedula": "V-12345678",
+      "cargo": "Obrero general"
+    }
+  ]
+}

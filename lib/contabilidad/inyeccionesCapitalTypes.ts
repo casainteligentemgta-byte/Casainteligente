@@ -1,0 +1,23 @@
+export type InyeccionCapitalRow = {
+  id: string;
+  proyecto_id: string;
+  origen_fondo: string;
+  monto_recibido: number;
+  moneda_recibida: 'USD' | 'VES';
+  monto_usd: number;
+  monto_ves: number;
+  tasa_bcv: number | null;
+  tasa_aplicada: number;
+  tipo_tasa: 'BCV' | 'PERSONALIZADA';
+  metodo_pago: 'TRANSFERENCIA' | 'EFECTIVO';
+  banco_origen: string | null;
+  cuenta_bancaria_destino: string | null;
+  referencia_bancaria: string | null;
+  soporte_storage_path: string | null;
+  soporte_url: string | null;
+  seriales_billetes: string[];
+  creado_por: string | null;
+  creado_al: string;
+  fecha_ingreso: string | null;
+  proyecto_nombre: string | null;
+};

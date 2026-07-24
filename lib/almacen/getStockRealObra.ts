@@ -1,0 +1,272 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  listarUbicacionesInventario,
+  propagarObraIdFlat,
+} from '@/lib/almacen/ubicacionesInventario';
+import {
+  esUbicacionAlmacenFisico,
+  expandirDescendientesUbicacion,
+  expandirUbicacionesHermanoObra,
+  ubicacionIdsRaizYDescendientes,
+  ubicacionPerteneceAProyecto,
+} from '@/lib/almacen/inventarioFiltroUbicacion';
+import type { StockProyectoItem } from '@/lib/almacen/listarStockProyecto';
+
+type RpcStockRow = {
+  material_id: string;
+  ubicacion_id: string;
+  ubicacion_nombre: string | null;
+  ubicacion_tipo?: string | null;
+  cantidad_disponible: number | null;
+  material_name: string | null;
+  material_unit: string | null;
+  material_sap_code: string | null;
+  categoria_nombre: string | null;
+};
+
+function mapRpcStockRows(rows: RpcStockRow[]): StockProyectoItem[] {
+  return rows.map((row) => ({
+    material_id: String(row.material_id),
+    ubicacion_id: String(row.ubicacion_id),
+    ubicacion_nombre: String(row.ubicacion_nombre ?? 'Almacén'),
+    ubicacion_tipo: row.ubicacion_tipo ?? null,
+    nombre: String(row.material_name ?? 'Material'),
+    unidad: String(row.material_unit ?? 'UND'),
+    sap_code: row.material_sap_code ?? null,
+    categoria: row.categoria_nombre ?? null,
+    cantidad_disponible: Number(row.cantidad_disponible ?? 0),
+  }));
+}
+
+/** Une filas por ubicación+material; conserva la mayor cantidad y metadatos más completos. */
+export function mergeStockProyectoItems(...listas: StockProyectoItem[][]): StockProyectoItem[] {
+  const byKey = new Map<string, StockProyectoItem>();
+  for (const lista of listas) {
+    for (const item of lista) {
+      if (!item.material_id || !item.ubicacion_id) continue;
+      const qty = Number(item.cantidad_disponible ?? 0);
+      const key = `${item.ubicacion_id}:${item.material_id}`;
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, item);
+        continue;
+      }
+      byKey.set(key, {
+        ...prev,
+        ...item,
+        ubicacion_nombre: item.ubicacion_nombre || prev.ubicacion_nombre,
+        ubicacion_tipo: item.ubicacion_tipo ?? prev.ubicacion_tipo,
+        nombre: item.nombre || prev.nombre,
+        unidad: item.unidad || prev.unidad,
+        sap_code: item.sap_code ?? prev.sap_code,
+        categoria: item.categoria ?? prev.categoria,
+        cantidad_disponible: Math.max(prev.cantidad_disponible, qty),
+      });
+    }
+  }
+  return Array.from(byKey.values()).sort((a, b) =>
+    a.nombre.localeCompare(b.nombre, 'es'),
+  );
+}
+
+/** Stock real en frentes de obra: RPC + inventario_stock por ubicaciones de la obra (unión). */
+export async function getStockRealObra(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  opts?: {
+    /** Filtro exacto legacy (se expande a subsitios si no hay ubicacionIds). */
+    ubicacionId?: string;
+    /** Varias ubicaciones (p. ej. almacén central + bodegas hijas). */
+    ubicacionIds?: string[];
+    materialId?: string;
+    soloConStock?: boolean;
+    proyectoNombre?: string;
+  },
+): Promise<StockProyectoItem[]> {
+  let proyectoNombre = opts?.proyectoNombre?.trim();
+  if (!proyectoNombre) {
+    const { data: prRow } = await supabase
+      .from('ci_proyectos')
+      .select('nombre')
+      .eq('id', proyectoId)
+      .maybeSingle();
+    proyectoNombre = String(prRow?.nombre ?? '').trim() || undefined;
+  }
+
+  let ubicacionIds = opts?.ubicacionIds?.filter(Boolean);
+  if (!ubicacionIds?.length && opts?.ubicacionId?.trim()) {
+    const todas = await listarUbicacionesInventario(supabase, { soloActivas: true });
+    ubicacionIds = ubicacionIdsRaizYDescendientes(todas, opts.ubicacionId.trim());
+  }
+
+  const tablaOpts = { ...opts, proyectoNombre, ubicacionIds };
+
+  const [{ data, error }, desdeTablas] = await Promise.all([
+    supabase.rpc('get_stock_real_obra', {
+      p_proyecto_id: proyectoId,
+      /** La RPC solo filtra por ID exacto; el alcance (incl. subsitios) se aplica después. */
+      p_ubicacion_id: null,
+      p_material_id: opts?.materialId ?? null,
+      p_solo_con_stock: opts?.soloConStock !== false,
+    }),
+    listarStockProyectoDesdeTablas(supabase, proyectoId, tablaOpts),
+  ]);
+
+  const desdeRpc = !error && (data ?? []).length ? mapRpcStockRows((data ?? []) as RpcStockRow[]) : [];
+
+  let merged = mergeStockProyectoItems(desdeTablas, desdeRpc);
+
+  if (ubicacionIds?.length) {
+    const scope = new Set(ubicacionIds);
+    merged = merged.filter((i) => scope.has(i.ubicacion_id));
+  }
+
+  if (opts?.soloConStock !== false) {
+    merged = merged.filter((i) => i.cantidad_disponible > 0);
+  }
+  if (opts?.materialId) {
+    merged = merged.filter((i) => i.material_id === opts.materialId);
+  }
+
+  return merged;
+}
+
+/** Suma de cantidad_disponible por material en toda la obra. */
+export async function getStockAgregadoPorMaterialObra(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  proyectoNombre?: string,
+): Promise<Map<string, number>> {
+  const filas = await getStockRealObra(supabase, proyectoId, {
+    soloConStock: false,
+    proyectoNombre,
+  });
+  const map = new Map<string, number>();
+  for (const f of filas) {
+    map.set(f.material_id, (map.get(f.material_id) ?? 0) + f.cantidad_disponible);
+  }
+  return map;
+}
+
+/** Stock disponible solo en almacenes (excluye ubicación tipo obra donde va el material egresado). */
+export async function getStockAgregadoAlmacenPorMaterialObra(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  proyectoNombre?: string,
+): Promise<Map<string, number>> {
+  const filas = await getStockRealObra(supabase, proyectoId, {
+    soloConStock: false,
+    proyectoNombre,
+  });
+  const map = new Map<string, number>();
+  for (const f of filas) {
+    if (!esUbicacionAlmacenFisico(f.ubicacion_tipo)) continue;
+    map.set(f.material_id, (map.get(f.material_id) ?? 0) + f.cantidad_disponible);
+  }
+  return map;
+}
+
+/** Fallback si la RPC aún no está en Supabase (migr. 187). */
+async function listarStockProyectoDesdeTablas(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  opts?: {
+    ubicacionId?: string;
+    ubicacionIds?: string[];
+    soloConStock?: boolean;
+    proyectoNombre?: string;
+  },
+): Promise<StockProyectoItem[]> {
+  let proyectoNombre = opts?.proyectoNombre?.trim();
+  if (!proyectoNombre) {
+    const { data: prRow } = await supabase
+      .from('ci_proyectos')
+      .select('nombre')
+      .eq('id', proyectoId)
+      .maybeSingle();
+    proyectoNombre = String(prRow?.nombre ?? '').trim() || undefined;
+  }
+
+  const todas = await listarUbicacionesInventario(supabase, { soloActivas: true });
+  propagarObraIdFlat(todas);
+  let ubicacionesObra = todas.filter((u) =>
+    ubicacionPerteneceAProyecto(u, proyectoId, proyectoNombre),
+  );
+  ubicacionesObra = expandirUbicacionesHermanoObra(todas, ubicacionesObra);
+  ubicacionesObra = expandirDescendientesUbicacion(todas, ubicacionesObra);
+  const scopeIds = opts?.ubicacionIds?.filter(Boolean);
+  if (scopeIds?.length) {
+    const scope = new Set(scopeIds);
+    ubicacionesObra = ubicacionesObra.filter((u) => scope.has(u.id));
+  } else if (opts?.ubicacionId?.trim()) {
+    const scope = new Set(ubicacionIdsRaizYDescendientes(todas, opts.ubicacionId.trim()));
+    ubicacionesObra = ubicacionesObra.filter((u) => scope.has(u.id));
+  }
+  if (!ubicacionesObra.length) return [];
+
+  const nombrePorId = new Map(ubicacionesObra.map((u) => [u.id, u.nombre]));
+  const tipoPorId = new Map(ubicacionesObra.map((u) => [u.id, u.tipo]));
+  const ids = ubicacionesObra.map((u) => u.id);
+  const items: StockProyectoItem[] = [];
+  const BATCH = 40;
+
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    let q = supabase
+      .from('inventario_stock')
+      .select(
+        `
+        ubicacion_id,
+        cantidad_disponible,
+        material:global_inventory ( id, name, unit, sap_code, category:material_categories ( name ) )
+      `,
+      )
+      .in('ubicacion_id', batch);
+    if (opts?.soloConStock !== false) {
+      q = q.gt('cantidad_disponible', 0);
+    }
+    const { data, error } = await q;
+    if (error?.code === '42P01') return [];
+    if (error) throw new Error(error.message);
+
+    for (const row of data ?? []) {
+      const ubId = String(row.ubicacion_id);
+      const raw = row.material as
+        | {
+            id: string;
+            name: string;
+            unit: string;
+            sap_code: string | null;
+            category: { name: string } | Array<{ name: string }> | null;
+          }
+        | Array<{
+            id: string;
+            name: string;
+            unit: string;
+            sap_code: string | null;
+            category: { name: string } | Array<{ name: string }> | null;
+          }>
+        | null;
+      const mat = Array.isArray(raw) ? raw[0] : raw;
+      if (!mat?.id) continue;
+      const catRaw = mat.category;
+      const cat = Array.isArray(catRaw) ? catRaw[0] : catRaw;
+      const qty = Number(row.cantidad_disponible ?? 0);
+      if (opts?.soloConStock !== false && qty <= 0) continue;
+      items.push({
+        material_id: mat.id,
+        ubicacion_id: String(row.ubicacion_id),
+        ubicacion_nombre: nombrePorId.get(ubId) ?? 'Almacén',
+        ubicacion_tipo: tipoPorId.get(ubId) ?? null,
+        nombre: mat.name ?? 'Material',
+        unidad: mat.unit ?? 'UND',
+        sap_code: mat.sap_code ?? null,
+        categoria: cat?.name ?? null,
+        cantidad_disponible: qty,
+      });
+    }
+  }
+
+  items.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  return items;
+}

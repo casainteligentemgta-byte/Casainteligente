@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flujos — Casa Inteligente</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1a1f;
+      --muted: #5c5c66;
+      --accent: #007aff;
+      --border: #e5e5ea;
+      --bg: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      margin: 0;
+      padding: 32px 40px;
+      line-height: 1.5;
+      font-size: 11pt;
+    }
+    h1 { font-size: 22pt; margin: 0 0 8px; color: var(--ink); }
+    h2 {
+      font-size: 14pt;
+      margin: 28px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--accent);
+      page-break-after: avoid;
+    }
+    h3 { font-size: 11pt; margin: 16px 0 8px; color: var(--muted); page-break-after: avoid; }
+    .meta { color: var(--muted); font-size: 10pt; margin-bottom: 24px; }
+    .section { margin-bottom: 24px; page-break-inside: avoid; }
+    .mermaid {
+      background: #f8f9fb;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      overflow: visible;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10pt;
+      margin: 12px 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f0f4f8; font-weight: 600; }
+    ul { margin: 8px 0; padding-left: 20px; }
+    li { margin: 4px 0; }
+    .toc a { color: var(--accent); text-decoration: none; }
+    .toc li { margin: 6px 0; }
+    @media print {
+      body { padding: 16px 24px; }
+      h2 { page-break-before: auto; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Casa Inteligente — Mapa de flujos</h1>
+  <p class="meta">
+    Documento de revisión · Generado automáticamente ·
+    <span id="fecha"></span> · Producción: casainteligente.company
+  </p>
+
+  <div class="section toc">
+    <h2>Índice</h2>
+    <ol>
+      <li><a href="#arquitectura">Arquitectura general</a></li>
+      <li><a href="#procura">Procura Telegram (/procura)</a></li>
+      <li><a href="#aprobacion">Aprobación y abastecimiento</a></li>
+      <li><a href="#compras">Compras, facturas e ingreso almacén</a></li>
+      <li><a href="#despacho">Despacho y salidas</a></li>
+      <li><a href="#web">Módulos web principales</a></li>
+      <li><a href="#roles">Roles y permisos</a></li>
+      <li><a href="#estados">Estados de procura (FSM)</a></li>
+    </ol>
+  </div>
+
+  <div class="section" id="arquitectura">
+    <h2>1. Arquitectura general</h2>
+    <div class="mermaid">
+flowchart LR
+  subgraph usuarios [Usuarios]
+    TG[Telegram]
+    WEB[Navegador Web]
+  end
+  subgraph app [Casa Inteligente]
+    NEXT[Next.js App Router]
+    API[API Routes]
+    LIB[lib/ dominio]
+  end
+  subgraph ext [Servicios]
+    SB[(Supabase Postgres)]
+    OCR[Gemini OCR]
+    BOT[Telegram Bot API]
+  end
+  TG --> BOT --> API
+  WEB --> NEXT --> API
+  API --> LIB --> SB
+  LIB --> OCR
+  LIB --> BOT
+    </div>
+    <p>El bot de Telegram y la web comparten la misma base de datos y lógica de negocio en <code>lib/</code>.</p>
+  </div>
+
+  <div class="section page-break" id="procura">
+    <h2>2. Procura Telegram (/procura)</h2>
+    <p>Solicitud de material por obra. Roles: Solicitante, Comprador, Aprobador, Administrador.</p>
+    <div class="mermaid">
+flowchart TD
+  A["/procura"] --> B["1 Capítulo APU"]
+  B --> C["2 Escribe material"]
+  C --> D{"Catálogo SAP"}
+  D -->|Coincidencia| E["Elige material"]
+  D -->|Ingresa Material| F["Texto libre POR VERIFICAR"]
+  E --> G["3 Cantidad"]
+  F --> G
+  G --> H["4 Unidad UND SACOS Litros Metros..."]
+  H --> I["5 Prioridad Baja Media Alta"]
+  I --> J["6 CONFIRMACIÓN"]
+  J -->|CONFIRMAR| K["PROCURA REGISTRADA"]
+  K --> L{"Vía rápida?"}
+  L -->|Sí consumible/monto bajo| M["aprobada_directa + OC automática"]
+  L -->|No| N["solicitada + alerta PM y Admin"]
+    </div>
+  </div>
+
+  <div class="section" id="aprobacion">
+    <h2>3. Aprobación PM y abastecimiento almacén</h2>
+    <div class="mermaid">
+flowchart TD
+  N["Procura solicitada"] --> O["Alerta Telegram PM + Administrador"]
+  O --> P{"PM aprueba?"}
+  P -->|Rechazar| R["rechazada"]
+  P -->|Aprobar| Q["Estado aprobada"]
+  Q --> S["Consulta stock almacén proyecto"]
+  S --> T["Orden verificación al depositario"]
+  T --> U{"Depositario confirma"}
+  U --> V{"Stock vs cantidad"}
+  V -->|Stock completo| W["Orden despacho SAL a obra"]
+  W --> X["recibida"]
+  V -->|Sin stock| Y["Orden de compra"]
+  Y --> Z["en_compra"]
+  V -->|Parcial| W2["Despacho cantidad disponible"]
+  W2 --> Y2["OC por saldo"]
+  Y2 --> Z2["en_compra + recibida_parcial"]
+    </div>
+    <table>
+      <thead>
+        <tr><th>Escenario</th><th>Despacho</th><th>Compra</th><th>Estado final</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Stock suficiente</td><td>Transferencia almacén → obra</td><td>—</td><td>recibida</td></tr>
+        <tr><td>Sin stock</td><td>—</td><td>OC a compradores</td><td>en_compra</td></tr>
+        <tr><td>Stock parcial</td><td>Lo disponible</td><td>OC por saldo</td><td>en_compra</td></tr>
+        <tr><td>Sin material_id catálogo</td><td>—</td><td>OC total</td><td>en_compra</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section page-break" id="compras">
+    <h2>4. Compras, facturas e ingreso almacén</h2>
+    <h3>4.1 Facturas (/facturas)</h3>
+    <div class="mermaid">
+flowchart LR
+  F1["Foto/PDF factura"] --> F2["OCR Gemini"]
+  F2 --> F3["contabilidad_compras"]
+  F3 --> F4["Precarga almacén / cuarentena"]
+  F4 --> F5["Depositario verifica físico"]
+    </div>
+    <h3>4.2 Ingreso manual (/ingreso, /recepcion)</h3>
+    <div class="mermaid">
+flowchart TD
+  I1["/ingreso menú"] --> I2["Factura manual"]
+  I1 --> I3["Nota entrega"]
+  I1 --> I4["Sin nota"]
+  I2 --> I5["Stock + contabilidad"]
+  I3 --> I5
+  R1["/recepcion"] --> R2["Sincronía web recepción campo"]
+  R2 --> I5
+    </div>
+    <h3>4.3 Recepción vinculada a procura</h3>
+    <p>Tras compra (<code>en_compra</code>), ingreso en campo con <code>procura_id</code> actualiza estado a <code>recibida</code> o <code>recibida_parcial</code>.</p>
+  </div>
+
+  <div class="section" id="despacho">
+    <h2>5. Despacho y salidas</h2>
+    <div class="mermaid">
+flowchart TD
+  D1["/salida Telegram"] --> D2["OCR o catálogo"]
+  D2 --> D3["Transferencia salida_obra"]
+  W1["Web /almacen/despacho"] --> W2["Líneas + imputación partida"]
+  W2 --> D3
+  D3 --> D4["Stock almacén disminuye · obra aumenta"]
+  T1["/traspaso"] --> T2["Entre almacenes u obras"]
+    </div>
+  </div>
+
+  <div class="section page-break" id="web">
+    <h2>6. Módulos web principales</h2>
+    <table>
+      <thead>
+        <tr><th>Ruta</th><th>Función</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>/proyectos/modulo</td><td>Obras, botón BOT (usuarios Telegram), Fast-Track</td></tr>
+        <tr><td>/contabilidad/procuras</td><td>Cuadro procuras, lote estados, aprobación web</td></tr>
+        <tr><td>/contabilidad/compras</td><td>Facturas, ingreso almacén, imputación</td></tr>
+        <tr><td>/almacen</td><td>Stock, despacho, recepción, movimientos, trazabilidad</td></tr>
+        <tr><td>/configuracion/telegram</td><td>Usuarios sistema compras, whitelist</td></tr>
+        <tr><td>/talento, /rrhh</td><td>Contratos, reclutamiento, hojas de vida</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section" id="roles">
+    <h2>7. Roles Telegram y web</h2>
+    <table>
+      <thead>
+        <tr><th>Rol</th><th>Telegram</th><th>Acciones clave</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Solicitante</td><td>/procura</td><td>Crear solicitudes PR-…</td></tr>
+        <tr><td>Aprobador (PM)</td><td>Botones en alerta</td><td>Aprobar / rechazar procura</td></tr>
+        <tr><td>Administrador</td><td>Canal admin + DM</td><td>Alertas, aprobación, configuración</td></tr>
+        <tr><td>Comprador</td><td>OC, /facturas</td><td>Ejecutar compras, registrar facturas</td></tr>
+        <tr><td>Depositario</td><td>/liberar, verificación</td><td>Recepción física, verificación stock procura</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section" id="estados">
+    <h2>8. Estados de procura (FSM)</h2>
+    <div class="mermaid">
+stateDiagram-v2
+  [*] --> solicitada: Registrar
+  solicitada --> aprobada: PM aprueba
+  solicitada --> aprobada_directa: Vía rápida
+  solicitada --> rechazada: Rechazo
+  aprobada --> recibida: Despacho total almacén
+  aprobada --> en_compra: Sin stock / saldo compra
+  aprobada --> recibida_parcial: Despacho parcial
+  aprobada_directa --> en_compra: OC automática
+  en_compra --> recibida_parcial: Recepción parcial
+  en_compra --> recibida: Recepción total
+  recibida_parcial --> recibida: Cierre recepción
+  recibida_parcial --> en_compra: Nueva compra saldo
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-VE', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      flowchart: { curve: 'basis', padding: 12 },
+      securityLevel: 'loose'
+    });
+  </script>
+</body>
+</html>

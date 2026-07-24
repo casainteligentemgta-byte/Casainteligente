@@ -1,0 +1,553 @@
+'use client';
+
+import React, { useCallback, useEffect, useState } from 'react';
+import { Loader2, RotateCcw, Save, ShieldCheck } from 'lucide-react';
+import type { CcoAuditoriaEvento } from '@/lib/contabilidad/cco/cargarAuditoria';
+import type { CcoHallazgo } from '@/lib/contabilidad/cco/auditorContinuo';
+import {
+  fmtBytes,
+  fmtResumen,
+  type CcoSnapshotMeta,
+} from '@/lib/contabilidad/cco/snapshotsUi';
+
+export default function CcoTabAuditoria({ proyectoId }: { proyectoId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [eventos, setEventos] = useState<CcoAuditoriaEvento[]>([]);
+  const [snapshots, setSnapshots] = useState<CcoSnapshotMeta[]>([]);
+  const [snapLoading, setSnapLoading] = useState(false);
+  const [snapBusy, setSnapBusy] = useState<string | null>(null);
+  const [snapError, setSnapError] = useState<string | null>(null);
+  const [auditorBusy, setAuditorBusy] = useState(false);
+  const [auditorError, setAuditorError] = useState<string | null>(null);
+  const [auditorMsg, setAuditorMsg] = useState<string | null>(null);
+  const [hallazgos, setHallazgos] = useState<CcoHallazgo[]>([]);
+  const [notificarTelegram, setNotificarTelegram] = useState(true);
+
+  const cargarEventos = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const qs = new URLSearchParams({ limit: '400' });
+      if (proyectoId) qs.set('proyecto', proyectoId);
+      if (q.trim()) qs.set('q', q.trim());
+      const res = await fetch(`/api/contabilidad/cco/auditoria?${qs}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? 'Error');
+      setEventos(json.eventos ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+      setEventos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [proyectoId, q]);
+
+  const cargarSnapshots = useCallback(async () => {
+    if (!proyectoId) {
+      setSnapshots([]);
+      return;
+    }
+    setSnapLoading(true);
+    setSnapError(null);
+    try {
+      const res = await fetch(
+        `/api/contabilidad/cco/snapshots?proyecto=${encodeURIComponent(proyectoId)}`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        throw new Error([json.error, json.hint].filter(Boolean).join(' · ') || 'Error');
+      }
+      setSnapshots(json.snapshots ?? []);
+    } catch (e) {
+      setSnapError(e instanceof Error ? e.message : 'Error');
+      setSnapshots([]);
+    } finally {
+      setSnapLoading(false);
+    }
+  }, [proyectoId]);
+
+  useEffect(() => {
+    void cargarEventos();
+  }, [cargarEventos]);
+
+  useEffect(() => {
+    void cargarSnapshots();
+  }, [cargarSnapshots]);
+
+  const ejecutarAuditor = async () => {
+    if (!proyectoId) return;
+    setAuditorBusy(true);
+    setAuditorError(null);
+    setAuditorMsg(null);
+    setHallazgos([]);
+    try {
+      const res = await fetch('/api/contabilidad/cco/auditor-continuo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proyecto_id: proyectoId,
+          notificar: notificarTelegram,
+          persistir: true,
+          actor: 'cco_ui',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        throw new Error([json.error, json.hint].filter(Boolean).join(' · ') || 'Error');
+      }
+      const obra = Array.isArray(json.obras) ? json.obras[0] : null;
+      const lista = (obra?.hallazgos ?? []) as CcoHallazgo[];
+      setHallazgos(lista);
+      const total = Number(json.total_hallazgos ?? lista.length) || 0;
+      if (total === 0) {
+        setAuditorMsg(
+          'Revisión OK: tablas y contratos sin hallazgos. Cron diario avisará por Telegram solo si algo falla.',
+        );
+      } else {
+        const notify =
+          json.notificado
+            ? ' Telegram notificado.'
+            : json.notify_razon
+              ? ` Aviso: ${String(json.notify_razon).slice(0, 80)}`
+              : '';
+        setAuditorMsg(`${total} hallazgo(s) en esta obra.${notify}`);
+      }
+      await cargarEventos();
+    } catch (e) {
+      setAuditorError(e instanceof Error ? e.message : 'Error al ejecutar auditor');
+    } finally {
+      setAuditorBusy(false);
+    }
+  };
+
+  const crearPunto = async () => {
+    if (!proyectoId) return;
+    setSnapBusy('create');
+    setOkMsg(null);
+    setSnapError(null);
+    try {
+      const res = await fetch('/api/contabilidad/cco/snapshots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proyecto_id: proyectoId, motivo: 'manual' }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        throw new Error([json.error, json.hint].filter(Boolean).join(' · ') || 'No se pudo crear');
+      }
+      setOkMsg(`Punto de restauración creado: ${json.snapshot?.label ?? 'ok'}`);
+      await Promise.all([cargarSnapshots(), cargarEventos()]);
+    } catch (e) {
+      setSnapError(e instanceof Error ? e.message : 'Error al crear snapshot');
+    } finally {
+      setSnapBusy(null);
+    }
+  };
+
+  const restaurar = async (snap: CcoSnapshotMeta) => {
+    if (!proyectoId) return;
+    const ok = window.confirm(
+      [
+        `¿Restablecer el libro CCO de esta obra al punto:`,
+        `«${snap.label ?? snap.id.slice(0, 8)}»`,
+        `(${String(snap.punto_en_tiempo).slice(0, 19).replace('T', ' ')})?`,
+        '',
+        'Se creará un snapshot de seguridad antes.',
+        'No se modifica stock/almacén.',
+        'Gastos de Telegram/canal protegidos no se borran.',
+      ].join('\n'),
+    );
+    if (!ok) return;
+
+    setSnapBusy(snap.id);
+    setOkMsg(null);
+    setSnapError(null);
+    try {
+      const res = await fetch(`/api/contabilidad/cco/snapshots/${snap.id}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proyecto_id: proyectoId, confirmar: true }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        const aviso =
+          Array.isArray(json.avisos) && json.avisos.length
+            ? ` Avisos: ${json.avisos.slice(0, 2).join('; ')}`
+            : '';
+        throw new Error((json.error || 'Restauración incompleta') + aviso);
+      }
+      const r = json.restaurado ?? {};
+      setOkMsg(
+        [
+          `Restaurado «${snap.label ?? ''}».`,
+          `Gastos ${Number(r.gastos_upsert ?? 0) + Number(r.gastos_insert ?? 0)}`,
+          `ingresos ${r.ingresos ?? 0}`,
+          `contratos ${r.contratos ?? 0}`,
+          r.gastos_protegidos ? `(${r.gastos_protegidos} protegidos)` : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      );
+      await Promise.all([cargarSnapshots(), cargarEventos()]);
+    } catch (e) {
+      setSnapError(e instanceof Error ? e.message : 'Error al restaurar');
+    } finally {
+      setSnapBusy(null);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Auditor continuo */}
+      <div style={box}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, flex: 1 }}>
+            Auditor continuo CCO
+          </h3>
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              color: '#475569',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={notificarTelegram}
+              onChange={(e) => setNotificarTelegram(e.target.checked)}
+            />
+            Notificar al bot ERP si hay errores
+          </label>
+          <button
+            type="button"
+            onClick={() => void ejecutarAuditor()}
+            disabled={!proyectoId || auditorBusy}
+            style={{
+              ...btnPrimary,
+              opacity: !proyectoId || auditorBusy ? 0.55 : 1,
+            }}
+          >
+            {auditorBusy ? (
+              <Loader2 className="animate-spin" size={14} />
+            ) : (
+              <ShieldCheck size={14} />
+            )}
+            Revisar ahora
+          </button>
+        </div>
+        <p style={muted}>
+          Revisa higiene de tablas (auditoría mal importada, duplicados, ingresos gemelos,
+          devaluación), conciliación de contratos (pagado de más, anticipos, pagos huérfanos)
+          y saldo en caja. El cron diario (~00:15 Caracas) hace lo mismo en todas las obras y,
+          si algo falla, avisa por el <strong>bot Casa Inteligente ERP</strong> (canal admin /
+          TELEGRAM_CCO_CHAT_ID).
+          {!proyectoId ? ' Selecciona una obra arriba.' : null}
+        </p>
+        {auditorError ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{auditorError}</p> : null}
+        {auditorMsg ? <p style={{ color: '#15803D', fontSize: 13 }}>{auditorMsg}</p> : null}
+        {hallazgos.length > 0 ? (
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
+            {hallazgos.map((h, i) => (
+              <li key={`${h.codigo}-${i}`} style={{ marginBottom: 6 }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    marginRight: 6,
+                    padding: '1px 6px',
+                    borderRadius: 4,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    background:
+                      h.severidad === 'alta'
+                        ? '#FEE2E2'
+                        : h.severidad === 'media'
+                          ? '#FEF3C7'
+                          : '#F1F5F9',
+                    color:
+                      h.severidad === 'alta'
+                        ? '#991B1B'
+                        : h.severidad === 'media'
+                          ? '#92400E'
+                          : '#475569',
+                  }}
+                >
+                  {h.severidad}
+                </span>
+                <strong>{h.titulo}</strong>
+                <span style={{ color: '#64748B' }}> — {h.detalle}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      {/* Puntos de restauración */}
+      <div style={box}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, flex: 1 }}>
+            Puntos de restauración
+          </h3>
+          <button
+            type="button"
+            onClick={() => void crearPunto()}
+            disabled={!proyectoId || snapBusy === 'create'}
+            style={{
+              ...btnPrimary,
+              opacity: !proyectoId || snapBusy === 'create' ? 0.55 : 1,
+            }}
+          >
+            {snapBusy === 'create' ? (
+              <Loader2 className="animate-spin" size={14} />
+            ) : (
+              <Save size={14} />
+            )}
+            Crear punto ahora
+          </button>
+          <button type="button" onClick={() => void cargarSnapshots()} style={btn}>
+            Actualizar
+          </button>
+        </div>
+        <p style={muted}>
+          Guarda el libro CCO de la obra (gastos obra, ingresos, contratos, presupuestos, config) para
+          volver a un día o momento anterior. <strong>No toca stock</strong>. Cron diario a las 00:00
+          Caracas aprox. Requiere migración <code>275</code>.
+          {!proyectoId ? ' Selecciona una obra arriba.' : null}
+        </p>
+        {snapError ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{snapError}</p> : null}
+        {okMsg ? <p style={{ color: '#15803D', fontSize: 13 }}>{okMsg}</p> : null}
+        {!proyectoId ? (
+          <p style={muted}>Selecciona una obra para ver y crear puntos de restauración.</p>
+        ) : snapLoading ? (
+          <div style={{ display: 'flex', gap: 8, color: '#64748B', alignItems: 'center' }}>
+            <Loader2 className="animate-spin" size={16} /> Cargando puntos…
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto', maxHeight: 280 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
+                  {['FECHA', 'ETIQUETA', 'MOTIVO', 'CONTENIDO', 'TAMAÑO', 'ACTOR', ''].map((h) => (
+                    <th
+                      key={h || 'act'}
+                      style={{ padding: '8px 6px', position: 'sticky', top: 0, background: '#F1F5F9' }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {snapshots.map((s) => (
+                  <tr key={s.id} style={{ borderTop: '1px solid #E2E8F0' }}>
+                    <td style={{ ...td, whiteSpace: 'nowrap', color: '#64748B' }}>
+                      {String(s.punto_en_tiempo).slice(0, 19).replace('T', ' ')}
+                    </td>
+                    <td style={{ ...td, fontWeight: 700 }}>{s.label ?? '—'}</td>
+                    <td style={td}>
+                      <span style={motivoBadge(s.motivo)}>{s.motivo}</span>
+                    </td>
+                    <td style={td}>{fmtResumen(s.resumen)}</td>
+                    <td style={td}>{fmtBytes(s.bytes_aprox)}</td>
+                    <td style={td}>{s.creado_por ?? '—'}</td>
+                    <td style={td}>
+                      <button
+                        type="button"
+                        onClick={() => void restaurar(s)}
+                        disabled={snapBusy === s.id}
+                        style={{
+                          ...btnRestore,
+                          opacity: snapBusy === s.id ? 0.55 : 1,
+                        }}
+                        title="Restablecer libro CCO a este punto"
+                      >
+                        {snapBusy === s.id ? (
+                          <Loader2 className="animate-spin" size={13} />
+                        ) : (
+                          <RotateCcw size={13} />
+                        )}
+                        Restablecer
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {snapshots.length === 0 ? (
+              <p style={muted}>Sin puntos aún. Crea uno manual o espera el cron diario.</p>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* Eventos */}
+      <div style={box}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 10,
+            alignItems: 'center',
+            marginBottom: 12,
+            borderBottom: 'none',
+            paddingBottom: 0,
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, flex: 1, borderBottom: 'none' }}>
+            Auditoría
+          </h3>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar acción / detalle / actor…"
+            style={input}
+          />
+          <button type="button" onClick={() => void cargarEventos()} style={btn}>
+            Actualizar
+          </button>
+        </div>
+        {error ? <p style={{ color: '#B91C1C', fontSize: 13 }}>{error}</p> : null}
+        {loading ? (
+          <div style={{ display: 'flex', gap: 8, color: '#64748B', alignItems: 'center' }}>
+            <Loader2 className="animate-spin" size={16} /> Cargando…
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto', maxHeight: 420 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#F1F5F9', textAlign: 'left' }}>
+                  {['FECHA', 'ACTOR', 'ACCIÓN', 'DETALLE'].map((h) => (
+                    <th
+                      key={h}
+                      style={{ padding: '8px 6px', position: 'sticky', top: 0, background: '#F1F5F9' }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {eventos.map((e) => (
+                  <tr key={e.id} style={{ borderTop: '1px solid #E2E8F0' }}>
+                    <td style={{ ...td, whiteSpace: 'nowrap', color: '#64748B' }}>{e.fecha || '—'}</td>
+                    <td style={td}>
+                      <span style={actorBadge}>{e.actor?.trim() || 'Sin actor'}</span>
+                    </td>
+                    <td style={td}>
+                      <span style={badge}>{e.accion}</span>
+                    </td>
+                    <td style={{ ...td, maxWidth: 420 }} title={e.detalle ?? ''}>
+                      {(e.detalle ?? '—').slice(0, 200)}
+                      {(e.detalle ?? '').length > 200 ? '…' : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {eventos.length === 0 ? <p style={muted}>Sin eventos para el filtro actual.</p> : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function motivoBadge(motivo: string): React.CSSProperties {
+  const bg =
+    motivo === 'diario'
+      ? '#DBEAFE'
+      : motivo === 'pre_restore'
+        ? '#FEF3C7'
+        : motivo === 'manual'
+          ? '#DCFCE7'
+          : '#F1F5F9';
+  return {
+    display: 'inline-block',
+    padding: '2px 6px',
+    borderRadius: 6,
+    background: bg,
+    fontWeight: 800,
+    fontSize: 10,
+    textTransform: 'uppercase',
+  };
+}
+
+const box: React.CSSProperties = {
+  background: '#fff',
+  borderRadius: 14,
+  border: '1px solid #E2E8F0',
+  padding: 20,
+};
+const muted: React.CSSProperties = { color: '#64748B', fontSize: 13, margin: '0 0 12px' };
+const td: React.CSSProperties = { padding: '7px 6px', verticalAlign: 'top', color: '#334155' };
+const input: React.CSSProperties = {
+  padding: '6px 10px',
+  borderRadius: 8,
+  border: '1px solid #CBD5E1',
+  fontSize: 13,
+  minWidth: 200,
+};
+const btn: React.CSSProperties = {
+  border: '1px solid #CBD5E1',
+  background: '#fff',
+  borderRadius: 8,
+  padding: '6px 12px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontSize: 13,
+};
+const btnPrimary: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  border: 'none',
+  background: '#0F172A',
+  color: '#fff',
+  borderRadius: 8,
+  padding: '7px 12px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontSize: 13,
+};
+const btnRestore: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  border: '1px solid #F59E0B',
+  background: '#FFFBEB',
+  color: '#92400E',
+  borderRadius: 8,
+  padding: '5px 10px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontSize: 11,
+};
+const badge: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '2px 6px',
+  borderRadius: 6,
+  background: '#EEF2FF',
+  color: '#3730A3',
+  fontWeight: 800,
+  fontSize: 10,
+};
+const actorBadge: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '3px 8px',
+  borderRadius: 8,
+  background: '#ECFDF5',
+  color: '#065F46',
+  fontWeight: 700,
+  fontSize: 11,
+  maxWidth: 160,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};

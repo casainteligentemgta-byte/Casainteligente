@@ -1,0 +1,98 @@
+{
+  "depthsCm": {
+    "pedestrian": 30,
+    "vehicle": 60,
+    "road_crossing": 80,
+    "railway": 120
+  },
+  "maxChamberSpacingM": 30,
+  "minChamberDiameterCm": 60,
+  "maxOccupancy": 0.4,
+  "pipes": [
+    {
+      "id": "pvc-50",
+      "label": "Tubería PVC Ø50 mm",
+      "innerMm": 50,
+      "maxCat6": 4,
+      "usdPerM": 1.8,
+      "material": "PVC"
+    },
+    {
+      "id": "pvc-75",
+      "label": "Tubería PVC Ø75 mm",
+      "innerMm": 75,
+      "maxCat6": 8,
+      "usdPerM": 2.6,
+      "material": "PVC"
+    },
+    {
+      "id": "pvc-110",
+      "label": "Tubería PVC Ø110 mm",
+      "innerMm": 110,
+      "maxCat6": 14,
+      "usdPerM": 4.2,
+      "material": "PVC"
+    },
+    {
+      "id": "hdpe-110",
+      "label": "HDPE corrugado Ø110 mm",
+      "innerMm": 110,
+      "maxCat6": 12,
+      "usdPerM": 5.5,
+      "material": "HDPE"
+    },
+    {
+      "id": "pvc-160",
+      "label": "Tubería PVC Ø160 mm",
+      "innerMm": 160,
+      "maxCat6": 24,
+      "usdPerM": 7.8,
+      "material": "PVC"
+    }
+  ],
+  "chambers": [
+    {
+      "id": "ch-pe",
+      "label": "Cámara acceso PE Ø60 cm",
+      "material": "polietileno",
+      "usdEach": 85
+    },
+    {
+      "id": "ch-concrete",
+      "label": "Cámara hormigón Ø60 cm",
+      "material": "hormigón",
+      "usdEach": 120
+    },
+    {
+      "id": "ch-frp",
+      "label": "Cámara fibra de vidrio Ø60 cm",
+      "material": "fibra_vidrio",
+      "usdEach": 145
+    }
+  ],
+  "excavation": {
+    "trenchWidthM": 0.4,
+    "usdPerM3": {
+      "soft": 18,
+      "medium": 28,
+      "rocky": 55
+    },
+    "m3PerHour": {
+      "soft": 8,
+      "medium": 5,
+      "rocky": 2.5
+    },
+    "shoringRequiredDepthCm": 80,
+    "equipment": {
+      "soft": ["retroexcavadora compacta", "compactadora"],
+      "medium": ["retroexcavadora", "compactadora"],
+      "rocky": ["retroexcavadora", "martillo hidráulico", "compactadora"]
+    },
+    "permits": {
+      "pedestrian": ["aviso municipal ocupación vía"],
+      "vehicle": ["permiso excavación vial", "señalización temporal"],
+      "road_crossing": ["permiso vial", "plan de tráfico", "señalización"],
+      "railway": ["autorización ferroviaria", "plan de seguridad"]
+    }
+  }
+}

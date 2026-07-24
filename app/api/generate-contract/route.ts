@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase-admin';
 import {
@@ -26,8 +25,7 @@ function isSupabaseConnectionError(error: unknown): boolean {
 
 export async function POST(req: NextRequest) {
     try {
-        const cookieStore = cookies();
-        const supabase = createClient(cookieStore);
+        const supabase = await createClient();
 
         const {
             data: { user },

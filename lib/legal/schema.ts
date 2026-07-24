@@ -10,29 +10,50 @@ export const contractSchema = z
 
         // Financieros
         project_cost: z
-            .number({ error: 'El costo del proyecto es obligatorio' })
+            .number({
+                required_error: 'El costo del proyecto es obligatorio',
+                invalid_type_error: 'El costo del proyecto debe ser un número',
+            })
             .positive('El costo del proyecto debe ser mayor a 0'),
         discount_amount: z
-            .number({ error: 'La rebaja es obligatoria' })
+            .number({
+                required_error: 'La rebaja es obligatoria',
+                invalid_type_error: 'La rebaja debe ser un número',
+            })
             .min(0, 'La rebaja no puede ser negativa'),
         fee_percentage: z
-            .number({ error: 'El porcentaje es obligatorio' })
+            .number({
+                required_error: 'El porcentaje es obligatorio',
+                invalid_type_error: 'El porcentaje debe ser un número',
+            })
             .min(0, 'El porcentaje no puede ser negativo')
             .max(100, 'El porcentaje no puede superar 100'),
         monthly_min_fee: z
-            .number({ error: 'El mínimo mensual es obligatorio' })
+            .number({
+                required_error: 'El mínimo mensual es obligatorio',
+                invalid_type_error: 'El mínimo mensual debe ser un número',
+            })
             .min(0, 'El mínimo mensual no puede ser negativo'),
         working_capital: z
-            .number({ error: 'La caja chica es obligatoria' })
+            .number({
+                required_error: 'La caja chica es obligatoria',
+                invalid_type_error: 'La caja chica debe ser un número',
+            })
             .min(0, 'La caja chica no puede ser negativa'),
         payroll_guarantee_weeks: z
-            .number({ error: 'Las semanas de garantía son obligatorias' })
+            .number({
+                required_error: 'Las semanas de garantía son obligatorias',
+                invalid_type_error: 'Las semanas deben ser un número',
+            })
             .int('Debe ser un número entero')
             .min(0, 'Las semanas no pueden ser negativas'),
 
         // Plazos
         contract_deadline_months: z
-            .number({ error: 'El plazo es obligatorio' })
+            .number({
+                required_error: 'El plazo es obligatorio',
+                invalid_type_error: 'El plazo debe ser un número',
+            })
             .int('Debe ser un número entero')
             .positive('El plazo debe ser al menos 1 mes'),
     })
