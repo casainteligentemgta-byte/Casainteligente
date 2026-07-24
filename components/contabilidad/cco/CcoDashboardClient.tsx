@@ -100,6 +100,7 @@ const IMPORTAR_NAV_IDS: NavId[] = ['importar-csv', 'importar-pdf', 'importar-v4'
 
 /** Módulos de escritura / configuración ocultos en modo solo visualización. */
 const NAV_SOLO_ESCRITURA: NavId[] = [
+  'sincronizar-bd',
   'importar-csv',
   'importar-pdf',
   'importar-v4',
