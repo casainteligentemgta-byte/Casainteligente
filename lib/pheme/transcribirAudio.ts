@@ -1,4 +1,3 @@
-import { createPartFromUri, createUserContent } from '@google/genai';
 import {
   getGeminiAiClient,
   getGeminiApiKey,
@@ -98,10 +97,15 @@ export async function transcribirAudioConDiarizacion(opts: {
 
     const response = await ai.models.generateContent({
       model,
-      contents: createUserContent([
-        createPartFromUri(uploaded.uri, uploaded.mimeType),
-        PROMPT_DIARIZACION,
-      ]),
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { fileData: { fileUri: uploaded.uri, mimeType: uploaded.mimeType } },
+            { text: PROMPT_DIARIZACION },
+          ],
+        },
+      ],
       config: {
         temperature: 0.2,
         maxOutputTokens: 8192,
