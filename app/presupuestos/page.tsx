@@ -335,17 +335,17 @@ export default function PresupuestosPage() {
     const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
     const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
     const [stats, setStats] = useState({
-        /** Suma $ de presupuestos aceptados (aprobado + cobrado + pagado). */
+        /** Suma $ de presupuestos aceptados (aprobado + por pagar + pagado). */
         totalAprobado: 0,
-        /** Suma $ ya ingresada (cobrado + pagado). */
-        totalCobrado: 0,
-        /** Suma $ aprobada pendiente de cobro. */
-        totalPorCobrar: 0,
+        /** Suma $ ya ingresada (solo pagado). */
+        totalPagado: 0,
+        /** Suma $ aceptada aún sin pago (aprobado + por pagar). */
+        totalPorPagar: 0,
         noEnviado: 0,
         enviado: 0,
         aprobados: 0,
         noAprobados: 0,
-        cobrados: 0,
+        porPagar: 0,
         pagados: 0,
     });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
@@ -448,21 +448,21 @@ export default function PresupuestosPage() {
                 sorted.reduce((acc, b) => (pred(b) ? acc + (Number(b.subtotal) || 0) : acc), 0);
 
             const s = {
-                // Aprobado comercial = aceptado por el cliente (incluye ya cobrados).
+                // Aprobado comercial = aceptado por el cliente (incluye por pagar y pagados).
                 totalAprobado: sumSubtotal((b) =>
                     b.status === 'aprobado' || b.status === 'cobrado' || b.status === 'pagado',
                 ),
-                // Cobrado = dinero recibido (cobrado y pagado en el flujo actual).
-                totalCobrado: sumSubtotal(
-                    (b) => b.status === 'cobrado' || b.status === 'pagado',
+                // Pagado = dinero ya recibido.
+                totalPagado: sumSubtotal((b) => b.status === 'pagado'),
+                // Por pagar = aceptado aún sin pago (aprobado + status interno cobrado).
+                totalPorPagar: sumSubtotal(
+                    (b) => b.status === 'aprobado' || b.status === 'cobrado',
                 ),
-                // Por cobrar = aprobado aún sin cobro.
-                totalPorCobrar: sumSubtotal((b) => b.status === 'aprobado'),
                 noEnviado: sorted.filter((b) => b.status === 'no_enviado').length,
                 enviado: sorted.filter((b) => b.status === 'enviado').length,
                 aprobados: sorted.filter((b) => b.status === 'aprobado').length,
                 noAprobados: sorted.filter((b) => b.status === 'no_aprobado').length,
-                cobrados: sorted.filter((b) => b.status === 'cobrado').length,
+                porPagar: sorted.filter((b) => b.status === 'cobrado').length,
                 pagados: sorted.filter((b) => b.status === 'pagado').length,
             };
             setStats(s);
@@ -597,7 +597,7 @@ export default function PresupuestosPage() {
             </div>
 
             <div style={{ padding: '16px' }}>
-                {/* KPIs comerciales: aprobado / cobrado / por cobrar */}
+                {/* KPIs comerciales: aprobado / por pagar / pagado */}
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
@@ -642,7 +642,7 @@ export default function PresupuestosPage() {
                             letterSpacing: '0.02em',
                             lineHeight: 1.2,
                         }}>
-                            Total cobrado
+                            Por pagar
                         </p>
                         <p style={{
                             color: '#F59E0B',
@@ -651,13 +651,13 @@ export default function PresupuestosPage() {
                             marginTop: '6px',
                             wordBreak: 'break-word',
                         }}>
-                            ${formatUSD(stats.totalCobrado)}
+                            ${formatUSD(stats.totalPorPagar)}
                         </p>
                     </div>
                     <div style={{
                         ...glass,
                         padding: '12px 10px',
-                        background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(0,0,0,0) 100%)',
+                        background: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(0,0,0,0) 100%)',
                     }}>
                         <p style={{
                             color: 'rgba(255,255,255,0.45)',
@@ -667,16 +667,16 @@ export default function PresupuestosPage() {
                             letterSpacing: '0.02em',
                             lineHeight: 1.2,
                         }}>
-                            Por cobrar
+                            Total pagado
                         </p>
                         <p style={{
-                            color: '#EF4444',
+                            color: '#10B981',
                             fontSize: '15px',
                             fontWeight: 800,
                             marginTop: '6px',
                             wordBreak: 'break-word',
                         }}>
-                            ${formatUSD(stats.totalPorCobrar)}
+                            ${formatUSD(stats.totalPagado)}
                         </p>
                     </div>
                 </div>
