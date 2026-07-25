@@ -19,23 +19,28 @@ function extOf(file: File): string {
   return 'png';
 }
 
+/** kind: logo | sello | acta | rif | permiso-<id> */
+export type EntidadAssetKind = string;
+
 /**
- * Sube logo o sello del patrono bajo `ci-entidades/{entidadId}/…`.
+ * Sube logo, sello, acta, RIF o PDF de permisología bajo `ci-entidades/{entidadId}/…`.
  * Requiere bucket público (misma cadena que otros módulos).
  */
 export async function uploadEntidadAsset(
   supabase: SupabaseClient,
   entidadId: string,
-  kind: 'logo' | 'sello',
+  kind: EntidadAssetKind,
   file: File,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const ext = extOf(file);
-  const path = `ci-entidades/${entidadId}/${kind}-${crypto.randomUUID()}.${ext}`;
+  const safeKind = (kind || 'doc').replace(/[^a-z0-9_-]/gi, '').slice(0, 48) || 'doc';
+  const path = `ci-entidades/${entidadId}/${safeKind}-${crypto.randomUUID()}.${ext}`;
   let last = '';
   for (const bucket of bucketsChain()) {
     const { error } = await supabase.storage.from(bucket).upload(path, file, {
       cacheControl: '3600',
       upsert: false,
+      contentType: file.type || undefined,
     });
     if (!error) {
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);

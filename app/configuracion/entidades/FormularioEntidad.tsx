@@ -19,6 +19,11 @@ import { toast } from 'sonner';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
+  nuevoPermisoPersonalizado,
+  permisologiaDesdeItems,
+  permisosDesdePermisologia,
+} from '@/lib/configuracion/permisologiaItems';
+import {
   edadDesdeFechaNacimiento,
   esCedulaVenezolana,
   letraCedula,
@@ -26,7 +31,6 @@ import {
 } from '@/lib/configuracion/representanteCedula';
 import {
   formatRifMascara,
-  permisologiaDesdeCampos,
   registroMercantilDesdeCampos,
   validarEntidadPatrono,
   vencimientoAlertaNaranja,
@@ -34,7 +38,15 @@ import {
 import { apiUrl } from '@/lib/http/apiUrl';
 import { uploadEntidadAsset } from '@/lib/supabase/entidad-assets';
 import { createClient } from '@/lib/supabase/client';
-import type { CiEntidad, PermisologiaCi, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
+import type {
+  CiEntidad,
+  PermisoPatronoItem,
+  PermisologiaCi,
+  RegistroMercantilCi,
+  RepresentanteMercantilCi,
+} from '@/types/ci-entidad';
+
+type PermFormRow = PermisoPatronoItem & { file: File | null };
 
 const inputClass =
   'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-orange-500 focus:ring-1 focus:ring-orange-500/40';
@@ -210,14 +222,22 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const [rmFecha, setRmFecha] = useState('');
   const [rmCirc, setRmCirc] = useState('');
 
-  const [permIvss, setPermIvss] = useState('');
-  const [permInces, setPermInces] = useState('');
-  const [permSol, setPermSol] = useState('');
+  const [permFilas, setPermFilas] = useState<PermFormRow[]>(() =>
+    permisosDesdePermisologia({}).map((p) => ({ ...p, file: null })),
+  );
+  const [nuevoPermisoNombre, setNuevoPermisoNombre] = useState('');
 
   const [logoUrl, setLogoUrl] = useState('');
   const [selloUrl, setSelloUrl] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [selloFile, setSelloFile] = useState<File | null>(null);
+
+  /** Actas ya guardadas (URL pública). */
+  const [rmActas, setRmActas] = useState<{ url: string; nombre?: string }[]>([]);
+  /** Archivos de actas pendientes de subir al guardar. */
+  const [actaFilesPendientes, setActaFilesPendientes] = useState<File[]>([]);
+  const [rmRifDocUrl, setRmRifDocUrl] = useState('');
+  const [rifDocFile, setRifDocFile] = useState<File | null>(null);
 
   const resetDesdeEntidad = useCallback(() => {
     const e = entidad;
@@ -237,6 +257,27 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     setRmNumero(strField(rm, 'numero'));
     setRmFecha(strField(rm, 'fecha'));
     setRmCirc(strField(rm, 'circunscripcion'));
+
+    const actasRaw = rm.actas;
+    if (Array.isArray(actasRaw)) {
+      setRmActas(
+        actasRaw
+          .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+            const o = item as Record<string, unknown>;
+            const url = typeof o.url === 'string' ? o.url.trim() : '';
+            if (!url) return null;
+            const nombre = typeof o.nombre === 'string' ? o.nombre.trim() : '';
+            return { url, nombre: nombre || undefined };
+          })
+          .filter((x): x is { url: string; nombre?: string } => Boolean(x)),
+      );
+    } else {
+      setRmActas([]);
+    }
+    setRmRifDocUrl(strField(rm, 'rif_documento_url'));
+    setActaFilesPendientes([]);
+    setRifDocFile(null);
 
     const repsRm = parseRepresentantesRm(rm.representantes);
     if (repsRm.length > 0) {
@@ -267,10 +308,10 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       }
     }
 
-    const p = asRecord(e?.permisologia ?? null);
-    setPermIvss(strField(p, 'ivss_vence'));
-    setPermInces(strField(p, 'inces_vence'));
-    setPermSol(strField(p, 'solvencia_laboral_vence'));
+    setPermFilas(
+      permisosDesdePermisologia(e?.permisologia ?? null).map((p) => ({ ...p, file: null })),
+    );
+    setNuevoPermisoNombre('');
 
     setLogoUrl((e?.logo_url ?? '').trim());
     setSelloUrl((e?.sello_url ?? '').trim());
@@ -282,10 +323,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     if (!open) return;
     resetDesdeEntidad();
   }, [open, resetDesdeEntidad]);
-
-  const alertIvss = permIvss.trim() ? vencimientoAlertaNaranja(permIvss.trim()) : false;
-  const alertInces = permInces.trim() ? vencimientoAlertaNaranja(permInces.trim()) : false;
-  const alertSol = permSol.trim() ? vencimientoAlertaNaranja(permSol.trim()) : false;
 
   const inputPermClass = (alert: boolean) =>
     `${inputClass} ${alert ? 'border-orange-500/70 ring-1 ring-orange-500/30' : ''}`;
@@ -330,22 +367,37 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         };
       });
 
-      const registroMercantil: RegistroMercantilCi = registroMercantilDesdeCampos({
-        domicilioEmpresa: rmDomicilioEmpresa,
-        domicilioEstadoRegistro: rmEstadoRegistro,
-        domicilioMunicipioRegistro: rmMunicipioRegistro,
-        domicilioSectorRegistro: rmSectorRegistro,
-        tomo: rmTomo,
-        numero: rmNumero,
-        fecha: rmFecha,
-        circunscripcion: rmCirc,
-        representantes: representantesPayload,
-      });
-      const permisologia: PermisologiaCi = permisologiaDesdeCampos({
-        ivss: permIvss,
-        inces: permInces,
-        solvenciaLaboral: permSol,
-      });
+      let actasGuardadas = [...rmActas];
+      let rifDocUrl = rmRifDocUrl.trim();
+
+      const buildRegistro = (
+        actas: { url: string; nombre?: string }[],
+        rifUrl: string,
+      ): RegistroMercantilCi =>
+        registroMercantilDesdeCampos({
+          domicilioEmpresa: rmDomicilioEmpresa,
+          domicilioEstadoRegistro: rmEstadoRegistro,
+          domicilioMunicipioRegistro: rmMunicipioRegistro,
+          domicilioSectorRegistro: rmSectorRegistro,
+          tomo: rmTomo,
+          numero: rmNumero,
+          fecha: rmFecha,
+          circunscripcion: rmCirc,
+          representantes: representantesPayload,
+          actas,
+          rifDocumentoUrl: rifUrl,
+        });
+
+      let registroMercantil = buildRegistro(actasGuardadas, rifDocUrl);
+
+      let permItems: PermisoPatronoItem[] = permFilas.map((row) => ({
+        id: row.id,
+        nombre: row.nombre.trim() || 'Permiso',
+        vence: (row.vence ?? '').trim().slice(0, 10) || undefined,
+        documento_url: (row.documento_url ?? '').trim() || undefined,
+        fijo: row.fijo,
+      }));
+      let permisologia: PermisologiaCi = permisologiaDesdeItems(permItems);
 
       const primera = repFilas[0];
       const repLegalNombre = primera?.nombre.trim() || null;
@@ -408,6 +460,8 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
       let nextLogo = logoUrl.trim() || null;
       let nextSello = selloUrl.trim() || null;
+      let docsChanged = false;
+      let permDocsChanged = false;
 
       if (logoFile) {
         const up = await uploadEntidadAsset(supabase, id, 'logo', logoFile);
@@ -420,16 +474,68 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         else if (up.publicUrl) nextSello = up.publicUrl;
       }
 
-      if (logoFile || selloFile) {
+      for (const file of actaFilesPendientes) {
+        const up = await uploadEntidadAsset(supabase, id, 'acta', file);
+        if (up.error) toast.error(`Acta «${file.name}»: ${up.error}`);
+        else if (up.publicUrl) {
+          actasGuardadas = [...actasGuardadas, { url: up.publicUrl, nombre: file.name }];
+          docsChanged = true;
+        }
+      }
+      if (rifDocFile) {
+        const up = await uploadEntidadAsset(supabase, id, 'rif', rifDocFile);
+        if (up.error) toast.error(`RIF: ${up.error}`);
+        else if (up.publicUrl) {
+          rifDocUrl = up.publicUrl;
+          docsChanged = true;
+        }
+      }
+
+      const nextPermFilas: PermFormRow[] = [];
+      for (const row of permFilas) {
+        let docUrl = (row.documento_url ?? '').trim();
+        if (row.file) {
+          const up = await uploadEntidadAsset(supabase, id, `permiso-${row.id}`, row.file);
+          if (up.error) toast.error(`${row.nombre}: ${up.error}`);
+          else if (up.publicUrl) {
+            docUrl = up.publicUrl;
+            permDocsChanged = true;
+          }
+        }
+        nextPermFilas.push({ ...row, documento_url: docUrl || undefined, file: null });
+      }
+      if (permDocsChanged) {
+        permItems = nextPermFilas.map((row) => ({
+          id: row.id,
+          nombre: row.nombre.trim() || 'Permiso',
+          vence: (row.vence ?? '').trim().slice(0, 10) || undefined,
+          documento_url: (row.documento_url ?? '').trim() || undefined,
+          fijo: row.fijo,
+        }));
+        permisologia = permisologiaDesdeItems(permItems);
+        setPermFilas(nextPermFilas);
+      }
+
+      if (docsChanged) {
+        registroMercantil = buildRegistro(actasGuardadas, rifDocUrl);
+        setRmActas(actasGuardadas);
+        setRmRifDocUrl(rifDocUrl);
+        setActaFilesPendientes([]);
+        setRifDocFile(null);
+      }
+
+      if (logoFile || selloFile || docsChanged || permDocsChanged) {
         const { error: upImg } = await supabase
           .from('ci_entidades')
           .update({
             logo_url: nextLogo,
             sello_url: nextSello,
+            ...(docsChanged ? { registro_mercantil: registroMercantil } : {}),
+            ...(permDocsChanged ? { permisologia } : {}),
             updated_at: new Date().toISOString(),
           })
           .eq('id', id);
-        if (upImg) toast.error(upImg.message ?? 'No se pudieron guardar las URLs de imagen.');
+        if (upImg) toast.error(upImg.message ?? 'No se pudieron guardar archivos o URLs.');
       }
 
       toast.success(
@@ -439,7 +545,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       );
 
       // Avisa a Telegram / Departamento Legal si hay vencimientos en ventana.
-      if (id && (permIvss.trim() || permInces.trim() || permSol.trim())) {
+      if (id && permItems.some((p) => (p.vence ?? '').trim())) {
         void fetch(apiUrl('/api/configuracion/entidades/permisologia/notificar'), {
           method: 'POST',
           credentials: 'include',
@@ -795,6 +901,107 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="mercantil" className="space-y-4 outline-none">
+                <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#FFD60A]/80">
+                    Documentos
+                  </p>
+                  <div>
+                    <label className={labelClass}>Actas (constitutiva / asambleas)</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      multiple
+                      className="mt-1 w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
+                      onChange={(e) => {
+                        const list = e.target.files ? Array.from(e.target.files) : [];
+                        if (list.length) {
+                          setActaFilesPendientes((prev) => [...prev, ...list]);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    {rmActas.length > 0 || actaFilesPendientes.length > 0 ? (
+                      <ul className="mt-2 space-y-1.5">
+                        {rmActas.map((a) => (
+                          <li
+                            key={a.url}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs"
+                          >
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                            >
+                              {a.nombre || 'Acta'}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setRmActas((prev) => prev.filter((x) => x.url !== a.url))}
+                              className="shrink-0 text-red-300 hover:text-red-200"
+                            >
+                              Quitar
+                            </button>
+                          </li>
+                        ))}
+                        {actaFilesPendientes.map((f, idx) => (
+                          <li
+                            key={`pend-${f.name}-${idx}`}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-[#FF9500]/35 bg-[#FF9500]/5 px-2.5 py-1.5 text-xs text-zinc-300"
+                          >
+                            <span className="min-w-0 truncate">{f.name} (pendiente)</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActaFilesPendientes((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              className="shrink-0 text-red-300 hover:text-red-200"
+                            >
+                              Quitar
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-zinc-500">PDF o imagen. Puede subir varias.</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelClass}>RIF (documento)</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      className="mt-1 w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
+                      onChange={(e) => setRifDocFile(e.target.files?.[0] ?? null)}
+                    />
+                    {rmRifDocUrl ? (
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs">
+                        <a
+                          href={rmRifDocUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                        >
+                          Ver RIF cargado
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRmRifDocUrl('');
+                            setRifDocFile(null);
+                          }}
+                          className="shrink-0 text-red-300 hover:text-red-200"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ) : null}
+                    {rifDocFile ? (
+                      <p className="mt-1 text-[11px] text-zinc-400">Nuevo archivo: {rifDocFile.name}</p>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div>
                   <label className={labelClass}>Registro</label>
                   <input
@@ -872,47 +1079,142 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="permisos" className="space-y-4 outline-none">
-                <p className="text-xs text-zinc-500">
-                  Fechas de vencimiento (YYYY-MM-DD). Si faltan menos de 30 días, el campo se resalta en
-                  naranja. Al guardar, se notifica por <strong className="text-zinc-400">Telegram</strong> al
-                  Departamento Legal y queda visible en{' '}
-                  <a
-                    href="/legal/cumplimiento"
-                    className="font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
-                  >
-                    Legal → Cumplimiento
-                  </a>
-                  .
-                </p>
-                <div>
-                  <label className={labelClass}>IVSS — vence</label>
-                  <input
-                    type="date"
-                    value={permIvss}
-                    onChange={(e) => setPermIvss(e.target.value)}
-                    className={inputPermClass(alertIvss)}
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>INCES — vence</label>
-                  <input
-                    type="date"
-                    value={permInces}
-                    onChange={(e) => setPermInces(e.target.value)}
-                    className={inputPermClass(alertInces)}
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Solvencia laboral — vence</label>
-                  <input
-                    type="date"
-                    value={permSol}
-                    onChange={(e) => setPermSol(e.target.value)}
-                    className={inputPermClass(alertSol)}
-                    style={{ colorScheme: 'dark' }}
-                  />
+                {permFilas.map((row) => {
+                  const alert = row.vence?.trim()
+                    ? vencimientoAlertaNaranja(row.vence.trim())
+                    : false;
+                  return (
+                    <div
+                      key={row.id}
+                      className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        {row.fijo ? (
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-[#FFD60A]/80">
+                            {row.nombre}
+                          </p>
+                        ) : (
+                          <div className="min-w-0 flex-1">
+                            <label className={labelClass}>Nombre del permiso</label>
+                            <input
+                              value={row.nombre}
+                              onChange={(e) =>
+                                setPermFilas((prev) =>
+                                  prev.map((r) =>
+                                    r.id === row.id ? { ...r, nombre: e.target.value } : r,
+                                  ),
+                                )
+                              }
+                              className={inputClass}
+                              placeholder="Ej. Bomberos, SENIAT…"
+                            />
+                          </div>
+                        )}
+                        {!row.fijo ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPermFilas((prev) => prev.filter((r) => r.id !== row.id))
+                            }
+                            className="mt-5 inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-950/30 px-2 py-1 text-[11px] font-semibold text-red-200 hover:bg-red-950/45"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Quitar
+                          </button>
+                        ) : null}
+                      </div>
+                      <label className={labelClass}>Vence</label>
+                      <input
+                        type="date"
+                        value={row.vence ?? ''}
+                        onChange={(e) =>
+                          setPermFilas((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id ? { ...r, vence: e.target.value } : r,
+                            ),
+                          )
+                        }
+                        className={inputPermClass(alert)}
+                        style={{ colorScheme: 'dark' }}
+                      />
+                      <label className={labelClass}>PDF del permiso</label>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
+                        onChange={(e) =>
+                          setPermFilas((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id
+                                ? { ...r, file: e.target.files?.[0] ?? null }
+                                : r,
+                            ),
+                          )
+                        }
+                      />
+                      {row.documento_url ? (
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs">
+                          <a
+                            href={row.documento_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                          >
+                            Ver PDF cargado
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPermFilas((prev) =>
+                                prev.map((r) =>
+                                  r.id === row.id
+                                    ? { ...r, documento_url: undefined, file: null }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="shrink-0 text-red-300 hover:text-red-200"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : null}
+                      {row.file ? (
+                        <p className="text-[11px] text-zinc-400">Nuevo archivo: {row.file.name}</p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                <div className="rounded-xl border border-dashed border-white/20 bg-white/[0.02] p-3">
+                  <label className={labelClass}>Nuevo permiso</label>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      value={nuevoPermisoNombre}
+                      onChange={(e) => setNuevoPermisoNombre(e.target.value)}
+                      className={inputClass}
+                      placeholder="Nombre (ej. Bomberos)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const n = nuevoPermisoNombre.trim();
+                        if (!n) {
+                          toast.error('Indica el nombre del permiso.');
+                          return;
+                        }
+                        setPermFilas((prev) => [
+                          ...prev,
+                          { ...nuevoPermisoPersonalizado(n), file: null },
+                        ]);
+                        setNuevoPermisoNombre('');
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/15 px-3 py-2 text-xs font-bold text-[#FFD60A] hover:bg-[#FF9500]/25"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Añadir
+                    </button>
+                  </div>
                 </div>
               </Tabs.Content>
 
