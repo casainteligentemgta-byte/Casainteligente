@@ -96,6 +96,9 @@ export default function EntidadesPatronoClient() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-white">ENTIDADES</h1>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Abre MENÚ en un patrono para datos, permisología y Equipo (roles).
+                </p>
               </div>
             </div>
           </div>

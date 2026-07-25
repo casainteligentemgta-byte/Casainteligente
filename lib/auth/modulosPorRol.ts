@@ -35,7 +35,8 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
-  { id: 'equipo', href: '/configuracion/equipo', label: 'Equipo' },
+  /** Equipo se gestiona en el MENÚ de cada entidad; se mantiene el id por compatibilidad de roles. */
+  { id: 'equipo', href: '/configuracion/entidades', label: 'Equipo' },
   { id: 'legal', href: '/legal', label: 'Legal' },
   { id: 'rrhh', href: '/rrhh/hojas-vida', label: 'RRHH' },
   { id: 'almacen', href: '/almacen', label: 'Almacenes' },
@@ -54,7 +55,6 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
     'proyectos',
     'domotica',
     'entidades',
-    'equipo',
     'rrhh',
     'almacen',
     'contabilidad',
@@ -73,7 +73,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
   contador: ['inicio', 'proyectos', 'contabilidad', 'agenda'],
   comprador: ['inicio', 'proyectos', 'almacen', 'contabilidad', 'agenda'],
   almacen_central: ['inicio', 'almacen', 'contabilidad', 'agenda'],
-  rrhh: ['inicio', 'rrhh', 'proyectos', 'equipo', 'agenda'],
+  rrhh: ['inicio', 'rrhh', 'proyectos', 'entidades', 'agenda'],
   solo_lectura: ['inicio', 'proyectos', 'domotica', 'contabilidad', 'almacen', 'agenda'],
   /** Suegro / invitado: solo Control Contable de Obra (lectura). */
   cco_lectura: ['inicio', 'cco'],
@@ -106,7 +106,6 @@ export function ampliarModulosPorPermisos(
   const ps = new Set(permisos as Iterable<Permiso | string>);
   if (ps.has('admin.config') || ps.has('equipo.gestionar')) {
     set.add('entidades');
-    set.add('equipo');
   }
   if (
     ps.has('compra.registrar') ||
@@ -150,11 +149,9 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
   {
     modulo: 'entidades',
     match: (p) =>
-      p.startsWith('/configuracion/entidades') || p === '/entidades' || p.startsWith('/entidades/'),
-  },
-  {
-    modulo: 'equipo',
-    match: (p) =>
+      p.startsWith('/configuracion/entidades') ||
+      p === '/entidades' ||
+      p.startsWith('/entidades/') ||
       p.startsWith('/configuracion/equipo') ||
       p.startsWith('/configuracion/telegram') ||
       p === '/configuracion',
