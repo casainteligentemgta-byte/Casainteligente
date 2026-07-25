@@ -36,6 +36,9 @@ const tabClass = (active: boolean, accent: 'orange' | 'emerald' = 'orange') => {
   return 'bg-[#FF9500]/20 border border-[#FF9500]/40 text-[#FF9500] shadow-[0_0_20px_rgba(255,149,0,0.15)]';
 };
 
+const linkBase =
+  'flex min-w-0 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-center text-[9px] font-black uppercase leading-[1.15] tracking-wide transition-all sm:flex-row sm:gap-1.5 sm:px-2 sm:py-2.5 sm:text-[10px] md:text-[11px] md:tracking-wider';
+
 export default function AlmacenCuadroNav({
   activo,
   search = '',
@@ -48,18 +51,15 @@ export default function AlmacenCuadroNav({
 }) {
   return (
     <nav
-      className="flex flex-wrap gap-2 mb-4 p-2 sm:p-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04] backdrop-blur-xl"
+      className="mb-4 box-border grid w-full max-w-full grid-cols-3 gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1.5 backdrop-blur-xl"
       aria-label="Vistas de almacén"
     >
       <Link
         href="/almacen/lo-comprado"
-        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${tabClass(
-          loCompradoActivo,
-          'emerald',
-        )}`}
+        className={`${linkBase} ${tabClass(loCompradoActivo, 'emerald')}`}
       >
-        <Package size={14} />
-        Lo comprado
+        <Package size={14} className="shrink-0" aria-hidden />
+        <span className="min-w-0 max-w-full break-words hyphens-auto">Lo comprado</span>
       </Link>
       {TABS.map(({ id, label, icon: Icon }) => {
         const active = !loCompradoActivo && activo === id;
@@ -67,12 +67,10 @@ export default function AlmacenCuadroNav({
           <Link
             key={id}
             href={hrefCuadro(id, search)}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${tabClass(
-              active,
-            )}`}
+            className={`${linkBase} ${tabClass(active)}`}
           >
-            <Icon size={14} />
-            {label}
+            <Icon size={14} className="shrink-0" aria-hidden />
+            <span className="min-w-0 max-w-full break-words hyphens-auto">{label}</span>
           </Link>
         );
       })}
