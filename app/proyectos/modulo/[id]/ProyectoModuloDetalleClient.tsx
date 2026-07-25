@@ -11,7 +11,6 @@ import ModalNuevaVacante from './components/ModalNuevaVacante';
 import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
-import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
@@ -540,14 +539,18 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       );
     }
     return (
-      <>
-
-        <SugerenciaCuadrilla
-          nombreObra={proyecto.nombre}
-          ubicacionObra={proyecto.ubicacion_texto}
-          proyectoModuloId={id}
-        />
-      </>
+      <div className="rounded-2xl border border-violet-500/25 bg-violet-950/20 px-4 py-4">
+        <p className="text-sm font-semibold text-violet-100">Configuración de equipo recomendada</p>
+        <p className="mt-1 text-xs text-violet-100/75">
+          La composición ideal de cuadrilla (DISC + fase de obra) está en RRHH.
+        </p>
+        <Link
+          href={hrefRrhhHub({ proyectoModuloId: id })}
+          className="mt-3 inline-flex rounded-xl border border-violet-400/40 bg-violet-600/30 px-3 py-2 text-xs font-bold text-violet-50 hover:bg-violet-600/45"
+        >
+          Abrir en RRHH →
+        </Link>
+      </div>
     );
   }, [proyecto, id, rrhhVacantesTick, tabUrl, tabSolicitados]);
 
