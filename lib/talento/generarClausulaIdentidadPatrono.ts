@@ -1,3 +1,4 @@
+import { edadDesdeFechaNacimiento } from '@/lib/configuracion/representanteCedula';
 import { ubicacionEmpresaResueltaParaPdf } from '@/lib/talento/patronoDomicilioReglas';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import {
@@ -99,7 +100,8 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const repMunicipioRes = str(repRm?.municipio_residencia);
   const repEstadoRes = str(repRm?.estado_residencia);
   const repProfesion = str(repRm?.profesion);
-  const repEdad = str(repRm?.edad);
+  const repEdad =
+    str(repRm?.edad) || edadDesdeFechaNacimiento(str(repRm?.fecha_nacimiento));
   const fragEdadRep = repEdad ? `, de ${repEdad} años de edad` : ', mayor de edad';
 
   const bloqueNombre = nombreLegal ? nombreLegal.toUpperCase() : '[NOMBRE LEGAL NO REGISTRADO]';

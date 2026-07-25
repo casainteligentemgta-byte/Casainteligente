@@ -1,3 +1,4 @@
+import { edadDesdeFechaNacimiento } from '@/lib/configuracion/representanteCedula';
 import { domicilioPatronoParaEntidad } from '@/lib/talento/patronoDomicilioReglas';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 import type { RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
@@ -77,7 +78,8 @@ export function planillaPatronoDesdeEntidadRow(input: {
     proyectoNombre: trimStr(input.proyectoNombre),
     representanteNombreApellido: trimStr(rep.nombre),
     representanteCi: trimStr(rep.cedula),
-    representanteEdad: trimStr(rep.edad),
+    representanteEdad:
+      trimStr(rep.edad) || edadDesdeFechaNacimiento(trimStr(rep.fecha_nacimiento)),
     representanteEstadoCivil: trimStr(rep.estado_civil),
     representanteCargo: trimStr(rep.cargo),
     representanteNacionalidad: trimStr(rep.nacionalidad),

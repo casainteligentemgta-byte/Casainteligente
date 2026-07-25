@@ -38,12 +38,16 @@ function representanteTieneDatos(r: RepresentanteMercantilCi): boolean {
   return Boolean(
     (r.nombre ?? '').trim() ||
       (r.cedula ?? '').trim() ||
+      (r.fecha_nacimiento ?? '').trim() ||
       (r.edad ?? '').trim() ||
       (r.estado_civil ?? '').trim() ||
       (r.nacionalidad ?? '').trim() ||
       (r.cargo ?? '').trim() ||
       (r.domicilio ?? '').trim() ||
-      (r.profesion ?? '').trim(),
+      (r.municipio_residencia ?? '').trim() ||
+      (r.estado_residencia ?? '').trim() ||
+      (r.profesion ?? '').trim() ||
+      r.genero,
   );
 }
 
@@ -51,12 +55,16 @@ function limpiarRepresentante(r: RepresentanteMercantilCi): RepresentanteMercant
   const out: RepresentanteMercantilCi = {
     nombre: r.nombre?.trim() || undefined,
     cedula: r.cedula?.trim() || undefined,
+    fecha_nacimiento: r.fecha_nacimiento?.trim() || undefined,
     edad: r.edad?.trim() || undefined,
     estado_civil: r.estado_civil?.trim() || undefined,
     nacionalidad: r.nacionalidad?.trim() || undefined,
     cargo: r.cargo?.trim() || undefined,
     domicilio: r.domicilio?.trim() || undefined,
+    municipio_residencia: r.municipio_residencia?.trim() || undefined,
+    estado_residencia: r.estado_residencia?.trim() || undefined,
     profesion: r.profesion?.trim() || undefined,
+    genero: r.genero === 'F' ? 'F' : r.genero === 'M' ? 'M' : undefined,
   };
   return representanteTieneDatos(out) ? out : null;
 }

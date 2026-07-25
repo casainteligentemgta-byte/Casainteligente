@@ -1,11 +1,30 @@
 'use client';
 
 import * as Tabs from '@radix-ui/react-tabs';
-import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, Truck, Users, X } from 'lucide-react';
+import {
+  Building2,
+  Calendar,
+  ChevronLeft,
+  FileText,
+  ImageIcon,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Truck,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
+import {
+  edadDesdeFechaNacimiento,
+  esCedulaVenezolana,
+  letraCedula,
+  nacionalidadDesdeCedula,
+} from '@/lib/configuracion/representanteCedula';
 import {
   formatRifMascara,
   permisologiaDesdeCampos,
@@ -23,8 +42,42 @@ const inputClass =
 
 const labelClass = 'block text-[10px] font-bold uppercase tracking-wide text-zinc-500';
 
-const tabTriggerClass =
-  'flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-xs font-semibold text-zinc-400 transition data-[state=active]:border-[#FF9500]/40 data-[state=active]:bg-[#FF9500]/10 data-[state=active]:text-[#FFD60A]';
+type SeccionPatronoId =
+  | 'datos'
+  | 'representante'
+  | 'mercantil'
+  | 'permisos'
+  | 'medios'
+  | 'equipo'
+  | 'maquinaria';
+
+type SeccionPatronoItem = {
+  id: SeccionPatronoId;
+  label: string;
+  icon: LucideIcon;
+  soloEdicion?: boolean;
+};
+
+/** Submenús del modal «Ficha del patrono». */
+const SECCIONES_PATRONO: SeccionPatronoItem[] = [
+  { id: 'datos', label: 'Datos', icon: Building2 },
+  { id: 'representante', label: 'Representantes', icon: ShieldCheck },
+  { id: 'mercantil', label: 'Mercantil', icon: FileText },
+  { id: 'permisos', label: 'Permisología', icon: Calendar },
+  { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
+  { id: 'equipo', label: 'Equipo', icon: Users, soloEdicion: true },
+  { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
+];
+
+const LABEL_SECCION: Record<SeccionPatronoId, string> = {
+  datos: 'Datos',
+  representante: 'Representantes',
+  mercantil: 'Mercantil',
+  permisos: 'Permisología',
+  medios: 'Logo / sello',
+  equipo: 'Equipo',
+  maquinaria: 'Maquinaria',
+};
 
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -44,11 +97,11 @@ type RepFormRow = {
   id: string;
   nombre: string;
   cedula: string;
-  edad: string;
+  /** ISO YYYY-MM-DD */
+  fecha_nacimiento: string;
   estado_civil: string;
-  esVenezolano: boolean;
+  /** Solo si la cédula no es V (extranjero u otro). */
   nacionalidadOtro: string;
-  nacionalidad: string;
   municipio_residencia: string;
   estado_residencia: string;
   cargo: string;
@@ -63,11 +116,9 @@ function emptyRepFormRow(): RepFormRow {
     id: newRepRowId(),
     nombre: '',
     cedula: '',
-    edad: '',
+    fecha_nacimiento: '',
     estado_civil: '',
-    esVenezolano: true,
     nacionalidadOtro: '',
-    nacionalidad: '',
     municipio_residencia: '',
     estado_residencia: '',
     cargo: '',
@@ -78,17 +129,16 @@ function emptyRepFormRow(): RepFormRow {
 }
 
 function repFormDesdeMercantil(r: RepresentanteMercantilCi): RepFormRow {
+  const cedula = (r.cedula ?? '').trim();
   const nat = (r.nacionalidad ?? '').trim();
-  const esVen = !nat || /^venezol/i.test(nat);
+  const esVen = esCedulaVenezolana(cedula) || (!cedula && (!nat || /^venezol/i.test(nat)));
   return {
     id: newRepRowId(),
     nombre: (r.nombre ?? '').trim(),
-    cedula: (r.cedula ?? '').trim(),
-    edad: (r.edad ?? '').trim(),
+    cedula,
+    fecha_nacimiento: (r.fecha_nacimiento ?? '').trim().slice(0, 10),
     estado_civil: (r.estado_civil ?? '').trim(),
-    esVenezolano: esVen,
     nacionalidadOtro: esVen ? '' : nat,
-    nacionalidad: esVen ? 'Venezolano' : nat,
     municipio_residencia: (r.municipio_residencia ?? '').trim(),
     estado_residencia: (r.estado_residencia ?? '').trim(),
     cargo: (r.cargo ?? '').trim(),
@@ -113,6 +163,7 @@ function parseRepresentantesRm(raw: unknown): RepresentanteMercantilCi[] {
     out.push({
       nombre: typeof o.nombre === 'string' ? o.nombre : undefined,
       cedula: typeof o.cedula === 'string' ? o.cedula : undefined,
+      fecha_nacimiento: typeof o.fecha_nacimiento === 'string' ? o.fecha_nacimiento : undefined,
       edad: typeof o.edad === 'string' ? o.edad : undefined,
       estado_civil: typeof o.estado_civil === 'string' ? o.estado_civil : undefined,
       nacionalidad: typeof o.nacionalidad === 'string' ? o.nacionalidad : undefined,
@@ -139,7 +190,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const supabase = useMemo(() => createClient(), []);
   const esEdicion = Boolean(entidad?.id);
 
-  const [tab, setTab] = useState('datos');
+  const [tab, setTab] = useState<SeccionPatronoId>('datos');
+  /** false = solo lista de submenús; true = contenido de la sección elegida. */
+  const [enSeccion, setEnSeccion] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const [nombreLegal, setNombreLegal] = useState('');
@@ -170,6 +223,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const resetDesdeEntidad = useCallback(() => {
     const e = entidad;
     setTab('datos');
+    setEnSeccion(false);
     setNombreLegal((e?.nombre ?? '').trim());
     setNombreComercial((e?.nombre_comercial ?? '').trim());
     setRif(formatRifMascara((e?.rif ?? '').trim()));
@@ -198,11 +252,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             id: newRepRowId(),
             nombre: nom,
             cedula: ced,
-            edad: '',
+            fecha_nacimiento: '',
             estado_civil: '',
-            esVenezolano: true,
             nacionalidadOtro: '',
-            nacionalidad: '',
             municipio_residencia: '',
             estado_residencia: '',
             cargo: car,
@@ -248,20 +300,26 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       if (errs.rif) toast.error(errs.rif);
       if (errs.general) toast.error(errs.general);
       setTab('datos');
+      setEnSeccion(true);
       return;
     }
 
     setGuardando(true);
     try {
       const representantesPayload: RepresentanteMercantilCi[] = repFilas.map((row) => {
+        const cedula = row.cedula.trim();
+        const fechaNac = row.fecha_nacimiento.trim().slice(0, 10);
+        const nacionalidadAuto = nacionalidadDesdeCedula(cedula);
         const nacionalidad =
-          row.esVenezolano
-            ? 'Venezolano'
-            : row.nacionalidadOtro.trim() || row.nacionalidad.trim() || undefined;
+          nacionalidadAuto ??
+          (row.nacionalidadOtro.trim() || undefined);
+        const edad =
+          edadDesdeFechaNacimiento(fechaNac) || undefined;
         return {
           nombre: row.nombre.trim() || undefined,
-          cedula: row.cedula.trim() || undefined,
-          edad: row.edad.trim() || undefined,
+          cedula: cedula || undefined,
+          fecha_nacimiento: fechaNac || undefined,
+          edad,
           estado_civil: row.estado_civil.trim() || undefined,
           nacionalidad,
           cargo: row.cargo.trim() || undefined,
@@ -417,19 +475,32 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         onClick={(ev) => ev.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10">
-              <Building2 className="h-5 w-5 text-[#FFD60A]" aria-hidden />
-            </div>
-            <div>
-              <h2 id="form-entidad-titulo" className="text-lg font-bold tracking-tight text-white">
-                {esEdicion ? 'Menú del patrono' : 'Nueva entidad legal'}
+          <div className="flex min-w-0 items-center gap-3">
+            {enSeccion ? (
+              <button
+                type="button"
+                onClick={() => setEnSeccion(false)}
+                aria-label="Volver al menú"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 transition hover:bg-[#FF9500]/20"
+              >
+                <ChevronLeft className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+              </button>
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10">
+                <Building2 className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h2 id="form-entidad-titulo" className="truncate text-lg font-bold tracking-tight text-white">
+                {enSeccion
+                  ? LABEL_SECCION[tab]
+                  : esEdicion
+                    ? 'Ficha del patrono'
+                    : 'Nueva entidad'}
               </h2>
-              <p className="text-[11px] text-zinc-500">
-                {esEdicion
-                  ? 'Datos del patrono, permisología y asignación de roles.'
-                  : 'Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).'}
-              </p>
+              {enSeccion && esEdicion && entidad?.nombre ? (
+                <p className="truncate text-[11px] text-zinc-500">{entidad.nombre}</p>
+              ) : null}
             </div>
           </div>
           <button
@@ -443,41 +514,37 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         </div>
 
         <div className="flex max-h-[calc(92vh-5rem)] flex-col">
-          <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-            <Tabs.List className="flex shrink-0 flex-wrap gap-1 border-b border-white/10 bg-white/[0.02] px-3 py-2">
-              <Tabs.Trigger value="datos" className={tabTriggerClass}>
-                <Building2 className="h-3.5 w-3.5" />
-                Datos
-              </Tabs.Trigger>
-              <Tabs.Trigger value="representante" className={tabTriggerClass}>
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Representantes
-              </Tabs.Trigger>
-              <Tabs.Trigger value="mercantil" className={tabTriggerClass}>
-                <FileText className="h-3.5 w-3.5" />
-                Mercantil
-              </Tabs.Trigger>
-              <Tabs.Trigger value="permisos" className={tabTriggerClass}>
-                <Calendar className="h-3.5 w-3.5" />
-                Permisología
-              </Tabs.Trigger>
-              <Tabs.Trigger value="medios" className={tabTriggerClass}>
-                Logo / sello
-              </Tabs.Trigger>
-              {esEdicion && entidad?.id ? (
-                <Tabs.Trigger value="equipo" className={tabTriggerClass}>
-                  <Users className="h-3.5 w-3.5" />
-                  Equipo
-                </Tabs.Trigger>
-              ) : null}
-              {esEdicion && entidad?.id ? (
-                <Tabs.Trigger value="maquinaria" className={tabTriggerClass}>
-                  <Truck className="h-3.5 w-3.5" />
-                  Maquinaria
-                </Tabs.Trigger>
-              ) : null}
-            </Tabs.List>
-
+          {!enSeccion ? (
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {SECCIONES_PATRONO.filter((s) => !s.soloEdicion || (esEdicion && entidad?.id)).map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab(s.id);
+                          setEnSeccion(true);
+                        }}
+                        className="flex w-full flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-5 text-center transition hover:border-[#FF9500]/40 hover:bg-[#FF9500]/10"
+                      >
+                        <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#FF9500]/30 bg-[#FF9500]/10">
+                          <Icon className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+                        </span>
+                        <span className="text-sm font-semibold text-zinc-100">{s.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : (
+          <Tabs.Root
+            value={tab}
+            onValueChange={(v) => setTab(v as SeccionPatronoId)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <Tabs.Content value="datos" className="space-y-4 outline-none">
                 <div>
@@ -522,14 +589,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="representante" className="space-y-5 outline-none">
-                <p className="text-xs text-zinc-500">
-                  Comparecencia en el contrato obrero (PDF): el <strong className="text-zinc-400">primer representante</strong>{' '}
-                  aporta tratamiento (<strong className="text-zinc-400">Sr. / Sra.</strong>), nombre, cédula,{' '}
-                  <strong className="text-zinc-400">nacionalidad</strong> y <strong className="text-zinc-400">estado civil</strong>{' '}
-                  (frase «de nacionalidad …, de estado civil …» tras el nombre). Si marca «Es venezolano», la nacionalidad en
-                  el contrato será «Venezolano». También alimentan planilla y <code className="text-zinc-400">rep_legal_*</code>{' '}
-                  en base (nombre, cédula y cargo del primero).
-                </p>
                 {repFilas.map((row, idx) => (
                   <div
                     key={row.id}
@@ -591,24 +650,36 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                           value={row.cedula}
                           onChange={(e) =>
                             setRepFilas((prev) =>
-                              prev.map((r) => (r.id === row.id ? { ...r, cedula: e.target.value } : r)),
+                              prev.map((r) =>
+                                r.id === row.id
+                                  ? {
+                                      ...r,
+                                      cedula: e.target.value,
+                                      nacionalidadOtro: esCedulaVenezolana(e.target.value)
+                                        ? ''
+                                        : r.nacionalidadOtro,
+                                    }
+                                  : r,
+                              ),
                             )
                           }
                           className={inputClass}
+                          placeholder="V-12345678 o E-…"
                         />
                       </div>
                       <div>
-                        <label className={labelClass}>Edad (años)</label>
+                        <label className={labelClass}>Fecha de nacimiento</label>
                         <input
-                          value={row.edad}
+                          type="date"
+                          value={row.fecha_nacimiento}
                           onChange={(e) =>
                             setRepFilas((prev) =>
-                              prev.map((r) => (r.id === row.id ? { ...r, edad: e.target.value } : r)),
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, fecha_nacimiento: e.target.value } : r,
+                              ),
                             )
                           }
                           className={inputClass}
-                          inputMode="numeric"
-                          placeholder="Ej. 42"
                         />
                       </div>
                       <div>
@@ -625,29 +696,13 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                         />
                       </div>
                     </div>
-                    <label className="flex items-center gap-2 text-sm text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={row.esVenezolano}
-                        onChange={(e) =>
-                          setRepFilas((prev) =>
-                            prev.map((r) =>
-                              r.id === row.id
-                                ? { ...r, esVenezolano: e.target.checked, nacionalidadOtro: e.target.checked ? '' : r.nacionalidadOtro }
-                                : r,
-                            ),
-                          )
-                        }
-                        className="rounded border-zinc-500"
-                      />
-                      Es venezolano
-                    </label>
-                    {row.esVenezolano ? (
+                    {esCedulaVenezolana(row.cedula) ? (
                       <p className="text-[11px] text-zinc-500">
-                        Nacionalidad en contrato y registro: <span className="text-zinc-300">Venezolano</span>
+                        Nacionalidad (cédula V): <span className="text-zinc-300">Venezolano</span>
                       </p>
                     ) : null}
-                    {!row.esVenezolano ? (
+                    {letraCedula(row.cedula) === 'E' ||
+                    (row.cedula.trim() !== '' && !esCedulaVenezolana(row.cedula) && letraCedula(row.cedula) == null) ? (
                       <div>
                         <label className={labelClass}>Nacionalidad</label>
                         <input
@@ -921,25 +976,38 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               ) : null}
             </div>
           </Tabs.Root>
+          )}
 
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-white/10 bg-white/[0.02] px-5 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
-            >
-              {tab === 'equipo' || tab === 'maquinaria' ? 'Cerrar' : 'Cancelar'}
-            </button>
-            {tab !== 'equipo' && tab !== 'maquinaria' ? (
+            {!enSeccion ? (
               <button
                 type="button"
-                disabled={guardando}
-                onClick={() => void onSubmit()}
-                className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
+                onClick={onClose}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
               >
-                {guardando ? 'Guardando…' : 'Guardar'}
+                Cerrar
               </button>
-            ) : null}
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEnSeccion(false)}
+                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
+                >
+                  {tab === 'equipo' || tab === 'maquinaria' ? 'Volver' : 'Menú'}
+                </button>
+                {tab !== 'equipo' && tab !== 'maquinaria' ? (
+                  <button
+                    type="button"
+                    disabled={guardando}
+                    onClick={() => void onSubmit()}
+                    className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
+                  >
+                    {guardando ? 'Guardando…' : 'Guardar'}
+                  </button>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </div>
