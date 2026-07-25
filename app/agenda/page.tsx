@@ -135,7 +135,12 @@ export default function AgendaPage() {
       <div className="px-5 pt-14 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p style={{ fontSize: '15px', color: 'var(--label-tertiary)', margin: 0 }}>Personal</p>
+            <p style={{ fontSize: '15px', color: 'var(--label-tertiary)', margin: 0 }}>
+              Personal ·{' '}
+              <Link href="/pheme" className="underline opacity-90 hover:opacity-100">
+                Pheme (minutas)
+              </Link>
+            </p>
             <h1
               className="font-bold tracking-tight"
               style={{ fontSize: '34px', color: 'var(--label-primary)', margin: '4px 0 0' }}
