@@ -1,40 +1,64 @@
 -- Pheme: reuniones, análisis estructurado y embeddings (pgvector).
 -- Bucket privado: reuniones-audio
 -- Embedding model: OpenAI text-embedding-3-small (1536 dims)
+-- Idempotente: si `reuniones` ya existía con otro esquema, añade columnas faltantes.
 
 create extension if not exists vector;
 
 -- ---------------------------------------------------------------------------
--- reuniones
+-- reuniones (crear si no existe + alinear columnas)
 -- ---------------------------------------------------------------------------
 create table if not exists public.reuniones (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
+  user_id uuid references auth.users (id) on delete cascade,
   titulo text not null default 'Reunión sin título',
-  audio_path text,
-  audio_bucket text not null default 'reuniones-audio',
-  mime_type text,
-  file_name text,
-  file_size_bytes bigint,
-  duracion_segundos integer,
-  estado text not null default 'pendiente'
-    check (estado in (
-      'pendiente',
-      'subida',
-      'transcribiendo',
-      'analizando',
-      'indexando',
-      'listo',
-      'error'
-    )),
-  transcripcion_raw text,
-  stt_provider text,
-  stt_model text,
-  error_message text,
-  metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.reuniones
+  add column if not exists user_id uuid references auth.users (id) on delete cascade,
+  add column if not exists titulo text not null default 'Reunión sin título',
+  add column if not exists audio_path text,
+  add column if not exists audio_bucket text not null default 'reuniones-audio',
+  add column if not exists mime_type text,
+  add column if not exists file_name text,
+  add column if not exists file_size_bytes bigint,
+  add column if not exists duracion_segundos integer,
+  add column if not exists estado text not null default 'pendiente',
+  add column if not exists transcripcion_raw text,
+  add column if not exists stt_provider text,
+  add column if not exists stt_model text,
+  add column if not exists error_message text,
+  add column if not exists metadata jsonb not null default '{}'::jsonb,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+-- CHECK de estado (solo si no existe ya una constraint equivalente)
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'reuniones_estado_check'
+      and conrelid = 'public.reuniones'::regclass
+  ) then
+    alter table public.reuniones
+      add constraint reuniones_estado_check
+      check (estado in (
+        'pendiente',
+        'subida',
+        'transcribiendo',
+        'analizando',
+        'indexando',
+        'listo',
+        'error'
+      ));
+  end if;
+exception
+  when duplicate_object then null;
+end;
+$$;
 
 comment on table public.reuniones is
   'Grabaciones de reuniones estratégicas vinculadas al usuario (agente Pheme).';
@@ -181,10 +205,24 @@ comment on table public.pheme_embeddings is
 create index if not exists idx_pheme_embeddings_reunion_id
   on public.pheme_embeddings (reunion_id);
 
-create index if not exists idx_pheme_embeddings_embedding_ivfflat
-  on public.pheme_embeddings
-  using ivfflat (embedding vector_cosine_ops)
-  with (lists = 100);
+-- IVFFlat solo si aún no existe (puede fallar en tablas vacías en algunas versiones)
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public'
+      and indexname = 'idx_pheme_embeddings_embedding_ivfflat'
+  ) then
+    create index idx_pheme_embeddings_embedding_ivfflat
+      on public.pheme_embeddings
+      using ivfflat (embedding vector_cosine_ops)
+      with (lists = 100);
+  end if;
+exception
+  when others then
+    raise notice 'Índice ivfflat omitido (se puede crear después de haber filas): %', SQLERRM;
+end;
+$$;
 
 alter table public.pheme_embeddings enable row level security;
 
