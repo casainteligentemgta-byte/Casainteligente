@@ -118,16 +118,34 @@ grant select, insert, update, delete on public.reuniones to authenticated, servi
 -- ---------------------------------------------------------------------------
 create table if not exists public.pheme_analisis (
   id uuid primary key default gen_random_uuid(),
-  reunion_id uuid not null references public.reuniones (id) on delete cascade,
-  resumen_ejecutivo jsonb not null default '{}'::jsonb,
-  matriz_viabilidad jsonb not null default '{}'::jsonb,
-  mapa_mental_mermaid text not null default '',
-  analisis_comunicacion jsonb not null default '{}'::jsonb,
-  modelo text,
-  raw_response jsonb,
-  created_at timestamptz not null default now(),
-  unique (reunion_id)
+  reunion_id uuid references public.reuniones (id) on delete cascade,
+  created_at timestamptz not null default now()
 );
+
+alter table public.pheme_analisis
+  add column if not exists reunion_id uuid references public.reuniones (id) on delete cascade,
+  add column if not exists resumen_ejecutivo jsonb not null default '{}'::jsonb,
+  add column if not exists matriz_viabilidad jsonb not null default '{}'::jsonb,
+  add column if not exists mapa_mental_mermaid text not null default '',
+  add column if not exists analisis_comunicacion jsonb not null default '{}'::jsonb,
+  add column if not exists modelo text,
+  add column if not exists raw_response jsonb,
+  add column if not exists created_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'pheme_analisis_reunion_id_key'
+      and conrelid = 'public.pheme_analisis'::regclass
+  ) then
+    alter table public.pheme_analisis
+      add constraint pheme_analisis_reunion_id_key unique (reunion_id);
+  end if;
+exception when others then
+  raise notice 'unique pheme_analisis.reunion_id omitido: %', SQLERRM;
+end;
+$$;
 
 comment on table public.pheme_analisis is
   'Informe JSON estructurado del agente Pheme por reunión.';
@@ -190,14 +208,33 @@ grant select, insert, update, delete on public.pheme_analisis to authenticated, 
 -- ---------------------------------------------------------------------------
 create table if not exists public.pheme_embeddings (
   id uuid primary key default gen_random_uuid(),
-  reunion_id uuid not null references public.reuniones (id) on delete cascade,
-  chunk_index integer not null default 0,
-  content text not null,
-  embedding vector(1536),
-  metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  unique (reunion_id, chunk_index)
+  reunion_id uuid references public.reuniones (id) on delete cascade,
+  created_at timestamptz not null default now()
 );
+
+alter table public.pheme_embeddings
+  add column if not exists reunion_id uuid references public.reuniones (id) on delete cascade,
+  add column if not exists chunk_index integer not null default 0,
+  add column if not exists content text not null default '',
+  add column if not exists embedding vector(1536),
+  add column if not exists metadata jsonb not null default '{}'::jsonb,
+  add column if not exists created_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'pheme_embeddings_reunion_id_chunk_index_key'
+      and conrelid = 'public.pheme_embeddings'::regclass
+  ) then
+    alter table public.pheme_embeddings
+      add constraint pheme_embeddings_reunion_id_chunk_index_key
+      unique (reunion_id, chunk_index);
+  end if;
+exception when others then
+  raise notice 'unique pheme_embeddings (reunion_id, chunk_index) omitido: %', SQLERRM;
+end;
+$$;
 
 comment on table public.pheme_embeddings is
   'Chunks de transcripción (~500 palabras) con embeddings text-embedding-3-small.';
