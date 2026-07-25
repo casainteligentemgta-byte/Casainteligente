@@ -15,14 +15,32 @@ create table if not exists public.pruebas (
   objetivo_evaluacion text not null default '',
   es_clinico boolean not null default false,
   -- Banco de examen Casa Inteligente asociado (opcional).
-  rol_examen_sugerido text null
-    check (
-      rol_examen_sugerido is null
-      or rol_examen_sugerido in ('programador', 'tecnico', 'obrero', 'vigilante')
-    ),
+  rol_examen_sugerido text null,
   activa boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+-- Si `pruebas` ya existía (CREATE TABLE IF NOT EXISTS no añade columnas), completar schema.
+alter table public.pruebas
+  add column if not exists descripcion text not null default '';
+alter table public.pruebas
+  add column if not exists objetivo_evaluacion text not null default '';
+alter table public.pruebas
+  add column if not exists es_clinico boolean not null default false;
+alter table public.pruebas
+  add column if not exists rol_examen_sugerido text null;
+alter table public.pruebas
+  add column if not exists activa boolean not null default true;
+alter table public.pruebas
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.pruebas drop constraint if exists pruebas_rol_examen_sugerido_check;
+alter table public.pruebas
+  add constraint pruebas_rol_examen_sugerido_check
+  check (
+    rol_examen_sugerido is null
+    or rol_examen_sugerido in ('programador', 'tecnico', 'obrero', 'vigilante')
+  );
 
 create index if not exists idx_pruebas_categoria on public.pruebas (id_categoria);
 create index if not exists idx_pruebas_rol_examen on public.pruebas (rol_examen_sugerido)
