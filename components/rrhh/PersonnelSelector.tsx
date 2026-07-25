@@ -102,7 +102,7 @@ export default function PersonnelSelector({
   const destinoTrasAsignar = useMemo(
     () =>
       redirectAfterAssignHref?.trim() ||
-      `/proyectos/modulo/${encodeURIComponent(projectId)}?tab=solicitados`,
+      `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(projectId)}`,
     [redirectAfterAssignHref, projectId],
   );
 

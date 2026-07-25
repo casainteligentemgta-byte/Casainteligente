@@ -1081,9 +1081,9 @@ export default function ResumenObrerosProyectoModulo({
                             <td className="px-3 py-2 font-medium text-zinc-100">
                               {esEmpleadoContratoExpress(row) ? (
                                 <Link
-                                  href={`/proyectos/modulo/${encodeURIComponent(proyectoModuloId)}?tab=solicitados`}
+                                  href={`/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(proyectoModuloId)}`}
                                   className="text-amber-200 underline decoration-amber-500/40 hover:text-amber-100"
-                                  title="Contrato express: cuadro en el módulo (Solicitados)"
+                                  title="Contrato express: abrir en RRHH"
                                 >
                                   {nombre}
                                 </Link>

@@ -533,7 +533,10 @@ export default function ModuloProyectosPage() {
                         </button>
                       </Link>
                       {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}?tab=solicitados`} title="Activos, solicitados y listas del cuadro">
+                        <Link
+                          href={`/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(r.id)}`}
+                          title="Abrir RRHH — mismo hub del menú inferior"
+                        >
                           <button
                             type="button"
                             style={{
