@@ -221,7 +221,7 @@ language sql
 stable
 security invoker
 set search_path = public
-as $$
+as $psique$
   select distinct
     p.id_prueba,
     p.nombre_prueba,
@@ -239,7 +239,7 @@ as $$
       where btrim(coalesce(x, '')) <> ''
     )
   order by p.nombre_prueba;
-$$;
+$psique$;
 
 comment on function public.ci_recomendar_pruebas_psique(text[]) is
   'Recomienda pruebas Psique (catálogo ci_psique_*) según palabras clave del cargo.';
