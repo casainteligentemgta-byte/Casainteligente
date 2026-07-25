@@ -87,13 +87,14 @@ export function rangoMesActual(): { desde: string; hasta: string } {
 
 export async function cargarResumenBalanceContabilidad(
   supabase: SupabaseClient,
-  params?: { fechaDesde?: string; fechaHasta?: string },
+  params?: { fechaDesde?: string; fechaHasta?: string; proyectoId?: string },
 ): Promise<ResumenBalanceContabilidad> {
   const rango = rangoMesActual();
   const fechaDesde = (params?.fechaDesde ?? rango.desde).slice(0, 10);
   const fechaHasta = (params?.fechaHasta ?? rango.hasta).slice(0, 10);
+  const proyectoId = params?.proyectoId?.trim() || '';
 
-  const { data: compras, error: cErr } = await supabase
+  let comprasQ = supabase
     .from('contabilidad_compras')
     .select('id,proyecto_id,monto_usd,monto_ves,total_amount,imputacion')
     .gte('fecha', fechaDesde)
@@ -101,6 +102,9 @@ export async function cargarResumenBalanceContabilidad(
     .not('proyecto_id', 'is', null)
     .neq('imputacion', IMPUTACION_ENTIDAD)
     .limit(5000);
+  if (proyectoId) comprasQ = comprasQ.eq('proyecto_id', proyectoId);
+
+  const { data: compras, error: cErr } = await comprasQ;
 
   if (cErr) throw cErr;
 
@@ -152,22 +156,26 @@ export async function cargarResumenBalanceContabilidad(
   let totalInyeccionesBs = 0;
   let countInyecciones = 0;
 
+  let inyConFechaQ = supabase
+    .from('ci_inyecciones_capital')
+    .select('id,proyecto_id,monto_usd,monto_ves,monto_recibido,moneda_recibida,fecha_ingreso,creado_al')
+    .gte('fecha_ingreso', fechaDesde)
+    .lte('fecha_ingreso', fechaHasta)
+    .limit(5000);
+  let inySinFechaQ = supabase
+    .from('ci_inyecciones_capital')
+    .select('id,proyecto_id,monto_usd,monto_ves,monto_recibido,moneda_recibida,fecha_ingreso,creado_al')
+    .is('fecha_ingreso', null)
+    .gte('creado_al', `${fechaDesde}T00:00:00`)
+    .lte('creado_al', `${fechaHasta}T23:59:59.999Z`)
+    .limit(5000);
+  if (proyectoId) {
+    inyConFechaQ = inyConFechaQ.eq('proyecto_id', proyectoId);
+    inySinFechaQ = inySinFechaQ.eq('proyecto_id', proyectoId);
+  }
+
   const [{ data: inyConFecha, error: iErr }, { data: inySinFecha, error: iErr2 }] =
-    await Promise.all([
-      supabase
-        .from('ci_inyecciones_capital')
-        .select('id,proyecto_id,monto_usd,monto_ves,monto_recibido,moneda_recibida,fecha_ingreso,creado_al')
-        .gte('fecha_ingreso', fechaDesde)
-        .lte('fecha_ingreso', fechaHasta)
-        .limit(5000),
-      supabase
-        .from('ci_inyecciones_capital')
-        .select('id,proyecto_id,monto_usd,monto_ves,monto_recibido,moneda_recibida,fecha_ingreso,creado_al')
-        .is('fecha_ingreso', null)
-        .gte('creado_al', `${fechaDesde}T00:00:00`)
-        .lte('creado_al', `${fechaHasta}T23:59:59.999Z`)
-        .limit(5000),
-    ]);
+    await Promise.all([inyConFechaQ, inySinFechaQ]);
 
   if ((iErr && !esTablaInyeccionesFaltante(iErr)) || (iErr2 && !esTablaInyeccionesFaltante(iErr2))) {
     throw iErr ?? iErr2;

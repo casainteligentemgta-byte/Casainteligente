@@ -9,6 +9,8 @@ import type {
     ResumenBalanceContabilidad,
 } from '@/lib/contabilidad/resumenBalanceContabilidad';
 
+const OBRA_CONSULTA_LS = 'ci-contabilidad-obra-consulta-v1';
+
 type ModuloContabilidad = {
     title: string;
     description: string;
@@ -17,6 +19,8 @@ type ModuloContabilidad = {
     color: string;
     active: boolean;
 };
+
+type ObraOpcion = { id: string; nombre: string };
 
 function fmtUsd(n: number): string {
     return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -174,12 +178,49 @@ export default function ContabilidadPage() {
     const [balance, setBalance] = useState<ResumenBalanceContabilidad | null>(null);
     const [loadingBalance, setLoadingBalance] = useState(true);
     const [errorBalance, setErrorBalance] = useState<string | null>(null);
+    const [obras, setObras] = useState<ObraOpcion[]>([]);
+    const [obraConsulta, setObraConsulta] = useState('');
 
-    const cargarBalance = useCallback(async () => {
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(OBRA_CONSULTA_LS)?.trim() ?? '';
+            if (saved) setObraConsulta(saved);
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch('/api/almacen/proyectos', { cache: 'no-store' });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    proyectos?: Array<{ id: string; nombre: string }>;
+                };
+                if (cancelled || !res.ok || !json.proyectos) return;
+                setObras(
+                    json.proyectos.map((p) => ({
+                        id: String(p.id),
+                        nombre: String(p.nombre ?? 'Obra').trim() || 'Obra',
+                    })),
+                );
+            } catch {
+                /* catálogo opcional */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const cargarBalance = useCallback(async (proyectoId: string) => {
         setLoadingBalance(true);
         setErrorBalance(null);
         try {
-            const res = await fetch('/api/contabilidad/balance-mensual', { cache: 'no-store' });
+            const qs = proyectoId ? `?proyecto=${encodeURIComponent(proyectoId)}` : '';
+            const res = await fetch(`/api/contabilidad/balance-mensual${qs}`, { cache: 'no-store' });
             const json = (await res.json()) as ResumenBalanceContabilidad & { ok?: boolean; error?: string };
             if (!res.ok || json.ok === false) {
                 throw new Error(json.error ?? 'No se pudo cargar el balance');
@@ -194,18 +235,24 @@ export default function ContabilidadPage() {
     }, []);
 
     useEffect(() => {
-        void cargarBalance();
-    }, [cargarBalance]);
+        void cargarBalance(obraConsulta);
+    }, [cargarBalance, obraConsulta]);
+
+    const onObraConsultaChange = (value: string) => {
+        setObraConsulta(value);
+        try {
+            if (value) localStorage.setItem(OBRA_CONSULTA_LS, value);
+            else localStorage.removeItem(OBRA_CONSULTA_LS);
+        } catch {
+            /* ignore */
+        }
+    };
+
+    const hrefCco = obraConsulta
+        ? `/contabilidad/cco?proyecto=${encodeURIComponent(obraConsulta)}`
+        : '/contabilidad/cco';
 
     const modules: ModuloContabilidad[] = [
-        {
-            title: 'CCO Obra',
-            description: 'Libro maestro · KPIs y gráficos V4',
-            icon: '📒',
-            href: '/contabilidad/cco',
-            color: '#2563EB',
-            active: true,
-        },
         {
             title: 'Procuras',
             description: 'Gestión de abastecimiento y pedidos',
@@ -223,11 +270,27 @@ export default function ContabilidadPage() {
             active: true,
         },
         {
+            title: 'CCO Obra',
+            description: 'Control contable: KPIs, libro maestro, hitos y gráficos',
+            icon: '📒',
+            href: hrefCco,
+            color: '#2563EB',
+            active: true,
+        },
+        {
             title: 'Gastos entidad',
             description: 'OpEx del patrono por tipo y periodo',
             icon: '🏢',
             href: '/contabilidad/gastos-entidad',
             color: '#AF52DE',
+            active: true,
+        },
+        {
+            title: 'Inyecciones de capital',
+            description: 'Auditoría: transferencias y efectivo en patio',
+            icon: '💰',
+            href: '/contabilidad/inyecciones',
+            color: '#FF9500',
             active: true,
         },
         {
@@ -245,14 +308,6 @@ export default function ContabilidadPage() {
             href: '#',
             color: '#007AFF',
             active: false,
-        },
-        {
-            title: 'Inyecciones de capital',
-            description: 'Auditoría: transferencias y efectivo en patio',
-            icon: '💰',
-            href: '/contabilidad/inyecciones',
-            color: '#FF9500',
-            active: true,
         },
         {
             title: 'Tesorería',
@@ -377,6 +432,9 @@ export default function ContabilidadPage() {
 
     const balanceUsd = balance?.balanceUsd ?? 0;
     const balancePositivo = balanceUsd >= 0;
+    const egresosHref = obraConsulta
+        ? `/contabilidad/compras?proyecto=${encodeURIComponent(obraConsulta)}&periodo=mes`
+        : '/contabilidad/compras?periodo=mes';
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
@@ -395,38 +453,6 @@ export default function ContabilidadPage() {
             </div>
 
             <div style={{ padding: '20px' }}>
-                <Link
-                    href="/contabilidad/cco"
-                    style={{
-                        display: 'block',
-                        textDecoration: 'none',
-                        marginBottom: '16px',
-                        padding: '14px 16px',
-                        borderRadius: '16px',
-                        border: '1px solid rgba(37,99,235,0.45)',
-                        background: 'linear-gradient(135deg, rgba(37,99,235,0.22) 0%, rgba(0,0,0,0) 100%)',
-                    }}
-                >
-                    <p
-                        style={{
-                            color: '#93C5FD',
-                            fontSize: '10px',
-                            fontWeight: 800,
-                            letterSpacing: '0.07em',
-                            textTransform: 'uppercase',
-                            marginBottom: '4px',
-                        }}
-                    >
-                        Principal · CCO V4
-                    </p>
-                    <p style={{ color: 'white', fontSize: '15px', fontWeight: 700 }}>
-                        Control Contable de Obra
-                    </p>
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', marginTop: '2px' }}>
-                        KPIs BCV/Real, gráficos y menú como tu sistema · datos vivos →
-                    </p>
-                </Link>
-
                 <div
                     style={{
                         ...glass,
@@ -435,6 +461,53 @@ export default function ContabilidadPage() {
                         background: 'linear-gradient(135deg, rgba(88,86,214,0.1) 0%, rgba(0,0,0,0) 100%)',
                     }}
                 >
+                    <div style={{ marginBottom: '14px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', fontWeight: 600 }}>
+                            BALANCE MENSUAL
+                        </p>
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '2px' }}>
+                            {balance ? etiquetaMes(balance.fechaDesde) : 'Cargando…'}
+                        </p>
+                        <label
+                            htmlFor="obra-consulta-balance"
+                            style={{
+                                display: 'block',
+                                color: 'rgba(255,255,255,0.45)',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                marginTop: '12px',
+                                marginBottom: '6px',
+                            }}
+                        >
+                            Obra a consultar
+                        </label>
+                        <select
+                            id="obra-consulta-balance"
+                            value={obraConsulta}
+                            onChange={(e) => onObraConsultaChange(e.target.value)}
+                            style={{
+                                width: '100%',
+                                maxWidth: '420px',
+                                appearance: 'none',
+                                background: 'rgba(0,0,0,0.35)',
+                                border: '1px solid rgba(255,255,255,0.14)',
+                                borderRadius: '12px',
+                                color: 'white',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                padding: '10px 12px',
+                                outline: 'none',
+                            }}
+                        >
+                            <option value="">Todas las obras</option>
+                            {obras.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                    {o.nombre}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div
                         style={{
                             display: 'flex',
@@ -445,14 +518,8 @@ export default function ContabilidadPage() {
                         }}
                     >
                         <div>
-                            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', fontWeight: 600 }}>
-                                BALANCE MENSUAL
-                            </p>
-                            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginTop: '2px' }}>
-                                {balance ? etiquetaMes(balance.fechaDesde) : 'Cargando…'}
-                            </p>
                             {loadingBalance ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                                     <Loader2 size={20} color="#5856D6" className="animate-spin" />
                                     <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>Calculando…</span>
                                 </div>
@@ -504,11 +571,15 @@ export default function ContabilidadPage() {
                         />
                         <PanelDesglose
                             titulo="EGRESOS"
-                            subtitulo="Compras imputadas · por obra"
+                            subtitulo={
+                                obraConsulta
+                                    ? 'Compras imputadas · obra seleccionada'
+                                    : 'Compras imputadas · por obra'
+                            }
                             color="#FF3B30"
                             filas={balance?.egresosPorObra ?? []}
                             vacio="Sin compras de obra este mes"
-                            verMasHref="/contabilidad/compras?periodo=mes"
+                            verMasHref={egresosHref}
                             renderHref={(f) => {
                                 const obra = f as FilaEgresoObra;
                                 return `/contabilidad/compras?proyecto=${encodeURIComponent(obra.proyecto_id)}&periodo=mes`;

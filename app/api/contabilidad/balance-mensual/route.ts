@@ -13,10 +13,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const desde = searchParams.get('desde')?.trim() || undefined;
     const hasta = searchParams.get('hasta')?.trim() || undefined;
+    const proyectoId = searchParams.get('proyecto')?.trim() || undefined;
 
     const resumen = await cargarResumenBalanceContabilidad(admin.client, {
       fechaDesde: desde,
       fechaHasta: hasta,
+      proyectoId,
     });
 
     return NextResponse.json({ ok: true, ...resumen });
