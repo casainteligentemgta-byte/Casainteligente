@@ -460,7 +460,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <Tabs.Content value="datos" className="space-y-4 outline-none">
                 <div>
-                  <label className={labelClass}>Nombre legal *</label>
+                  <label className={labelClass}>Razón social *</label>
                   <input
                     required
                     value={nombreLegal}
@@ -470,7 +470,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Nombre comercial</label>
+                  <label className={labelClass}>Denominación comercial</label>
                   <input
                     value={nombreComercial}
                     onChange={(e) => setNombreComercial(e.target.value)}
