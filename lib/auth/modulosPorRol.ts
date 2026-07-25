@@ -156,9 +156,14 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
       p.startsWith('/configuracion/entidades') ||
       p === '/entidades' ||
       p.startsWith('/entidades/') ||
-      p.startsWith('/configuracion/equipo') ||
       p.startsWith('/configuracion/telegram') ||
       p === '/configuracion',
+  },
+  {
+    modulo: 'equipo',
+    match: (p) =>
+      p.startsWith('/configuracion/equipo') ||
+      /\/proyectos\/modulo\/[^/]+\/control-obra\/equipo/.test(p),
   },
   {
     modulo: 'rrhh',
